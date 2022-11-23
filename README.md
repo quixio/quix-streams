@@ -13,7 +13,7 @@
 
 ## What is Quix Streams 🏎
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process high volumes of <b>time-series data</b> in nanoseconds precision. It uses a message broker like <b>Kafka</b> under the hood instead of a database, so you can process time-series data on the flight for high performance and resource savings.
+<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process high volumes of <b>time-series data</b> in nanoseconds with precision. It uses a message broker - such as <b>Apache Kafka</b> - under the hood instead of a database, so you can process time-series data on the fly for high performance and resource savings.
 
 Quix Streams does not use any Domain Specific Language or Embedded framework, it's just another library that you can use in your code base. This means you can use any data processing library of your favourite language together with Quix Streams.
 
@@ -21,7 +21,7 @@ Quix Streams is currently available in:
 - Python 
 - C#
 
-Using Quix Streams, you currently can:
+Using Quix Streams, you can currently:
 
 - Write time-series and non time-series data to a Kafka Topic
 
@@ -40,9 +40,9 @@ You can <b>install</b> the library using the package manager for Python Packages
 pip install quix-streams
 ```
 
-### Prepare your Kafka
+### Prepare your Kafka Cluster
 
-This library needs a message broker under the hood to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because is the major message broker in the industry with enough performance to support high volumes of time-series data with minimum latency.
+This library needs a message broker under the hood to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the major message broker in the industry with enough performance to support high volumes of time-series data with minimum latency.
 
 ### Writing time-series data
 Now you can start writing some time-series data into a Kafka Topic. Here's an example of how to <b>Write</b> time-series data into a Kafka Topic with Python.
@@ -82,7 +82,7 @@ stream.close()
 ```
 
 ### Reading time-series data
-Once we have setup our producer it's time to see how to read data from a topic. Here's an example of how to <b>Read</b> time-series data from a Kafka Topic with Python:
+Once we have setup our producer, it's time to see how to read data from a topic. Here's an example of how to <b>Read</b> time-series data from a Kafka Topic with Python:
 
 ```python
 import pandas as pd
@@ -187,14 +187,14 @@ For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/
 
 ## Using Quix Streams with Quix SaaS
 
-This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of box during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, etc.
+This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, etc.
 
 ## Contribution Guide ✍️
 
-We are very open to any feedback or contributions to this OSS project ❤️. Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. You can contribute by [reporting a bug or submitting a feature request](CONTRIBUTING.md).
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read our [Contributing File](CONTRIBUTING.md) for how you can best give feedback and contribute. 
 
 ## Need help? 🙋‍♀️
-If you run into any problems, ask on #quixhelp in The Stream Slack channel or open a question on our [discussion board](URL)
+If you run into any problems, ask on #quixhelp in [The Stream Slack channel](https://quix.io/slack-invite) or open a question on our [discussion board](URL)
 
 ## Roadmap 🚗
 
@@ -214,4 +214,4 @@ Quix Streams is licensed under the Apache 2.0 license. View a copy of the Licens
 
 You can follow us on [Twitter](https://twitter.com/quix_io) and [Linkedin](https://www.linkedin.com/company/70925173) where we share what's new, forthcoming community events and the occasional meme.  
 
-If you have any questions or feedback - [write to us](https://quix.io/company/#get-in-touch)!
+If you have any questions or feedback - write to us at support@quix.ai!
