@@ -1,6 +1,6 @@
 # Contributing to Quix Streams
 
-We love your input! We want to make contributing to this project as easy and transparent as possible, whether it's:
+Thanks for considering to contribute! We would love your input. We want to make contributing to this project as easy and transparent as possible, whether that's:
 
 - Reporting a bug
 - Discussing the current state of the code
@@ -8,11 +8,11 @@ We love your input! We want to make contributing to this project as easy and tra
 - Proposing new features
 - Becoming a maintainer
 
-If you want to participate more in-depth in extending the code base, reach out to us on [The Stream]((https://quix.io/slack-invite)) community. We'll show you the current architecture and you can suggest changes.
+If you want to participate more in-depth, for example, extending the code base, reach out to us on [The Stream](https://quix.io/slack-invite) community. We'll show you the current architecture and you can suggest changes.
 
 ## Create an issue
 
-We love receiving contributions to this project. If you're new to Open Source, contributing can be a great way to give back to a project. We strive to be a welcoming and friendly OSS project. Before making significant contributions to this project, consider outlining your solution first. You can do this by [generating an issue](/issues) in the form of a bug report or a feature request.
+Before making significant contributions to this project, consider outlining your solution first. You can do this by [generating an issue](/issues) in the form of a bug report or a feature request.
 
 Issues should be used to report problems with the library, request a new feature, or to discuss potential changes before a PR is created. When you create a new Issue, a template will be loaded that will guide you through collecting and providing the information we need to investigate.
 
