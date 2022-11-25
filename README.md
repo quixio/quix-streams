@@ -8,8 +8,7 @@
 [![Events](https://img.shields.io/badge/-Events-blueviolet)](https://quix.io/community#events)
 [![YouTube](https://img.shields.io/badge/YouTube-FF0000.svg?logo=youtube)](https://www.youtube.com/channel/UCrijXvbQg67m9-le28c7rPA)
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/sdk/introduction.html)
-[![Roadmap](https://img.shields.io/badge/-Roadmap-red)](BLANKroadmap.url)
-[![Discussions](https://img.shields.io/badge/-Discussions-green)](BLANKdiscussions)
+[![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixai/projects/1)
 
 ## What is Quix Streams 🏎
 
@@ -191,14 +190,14 @@ This library doesn't have any dependency to any comercial product, but if you us
 
 ## Contribution Guide ✍️
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read our [Contributing File](CONTRIBUTING.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
 
 ## Need help? 🙋‍♀️
-If you run into any problems, ask on #quixhelp in [The Stream Slack channel](https://quix.io/slack-invite) or open a question on our [discussion board](URL)
+If you run into any problems, ask on #quixhelp in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixai/quix-streams/issues)
 
 ## Roadmap 🚗
 
-You can find out more about future features in the [public roadmap](URL)
+You can view and contribute to our feature roadmap [here](https://github.com/orgs/quixai/projects/1)
 
 ## Community 👭
 
@@ -208,10 +207,10 @@ Join other software engineers in [The Stream](https://quix.io/slack-invite), an 
 
 ## License 📄
 
-Quix Streams is licensed under the Apache 2.0 license. View a copy of the License file [here](LICENSE.MD).
+Quix Streams is licensed under the Apache 2.0 license. View a copy of the License file [here](https://github.com/quixai/quix-streams/blob/main/LICENSE).
 
 ## Stay in touch 👋
 
-You can follow us on [Twitter](https://twitter.com/quix_io) and [Linkedin](https://www.linkedin.com/company/70925173) where we share what's new, forthcoming community events and the occasional meme.  
+You can follow us on [Twitter](https://twitter.com/quix_io) and [Linkedin](https://www.linkedin.com/company/70925173) where we share our latest tutorials, forthcoming community events and the occasional meme.  
 
 If you have any questions or feedback - write to us at support@quix.ai!
