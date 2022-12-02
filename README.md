@@ -1,4 +1,4 @@
-![Quix - Build realtime applications, faster](https://github.com/quixai/.github/blob/main/profile/Quix-GitHub-banner.jpg)
+![Quix - Build realtime applications, faster](https://github.com/quixai/.github/blob/main/profile/quixstreams-banner.jpg)
 
 [//]: <> (This will be a banner image w/ the name e.g. Quix Streams.)
 
