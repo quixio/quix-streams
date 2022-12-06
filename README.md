@@ -117,7 +117,7 @@ Quix Streams allows multiple configurations to leverage resources while reading 
 
 For full documentation of how to [<b>Read</b>](https://www.quix.io/docs/sdk/read.html) and [<b>Write</b>](https://www.quix.io/docs/sdk/read.html) time-series and non time-series data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
-### Features 💍
+## Library features 💍
 
 This library provides several features and solves common problems you face when developing real-time streaming applications. 
 
@@ -127,12 +127,17 @@ This library provides several features and solves common problems you face when 
 </details>
 
 <details>
+    <summary><b>Data serialization and de-serialization</b></summary>
+    Serialization can be painful, especially if it is done with performance in mind. Quix streams serialize and deserialize time-series data using different codecs so you don’t have to worry about that.
+</details>
+
+<details>
     <summary><b>Built-in time-series buffers</b></summary>
     If you’re sending data at high frequency, processing each message can be costly. The library provides built-in time-series buffers for reading and writing allowing several configurations for balancing between latency and cost.
 </details>
 
 <details>
-    <summary><b>Support for data frames</b></summary>
+    <summary><b>Support for time-series data frames</b></summary>
     In many use cases, multiple time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. This library uses an optimized tabular system and can work for instance with Pandas DataFrames natively. Each row has a timestamp and user-defined tags as indexes.
 </details>
 
@@ -157,11 +162,6 @@ This library provides several features and solves common problems you face when 
 </details>
 
 <details>
-    <summary><b>Data serialization and de-serialization</b></summary>
-    Serialization can be painful, especially if it is done with performance in mind. Quix streams serialize and deserialize native types using different codecs so you don’t have to worry about that.
-</details>
-
-<details>
     <summary><b>Message Broker configuration</b></summary>
     Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time. The library take care about Kafka configuration by default allowing refined configuration only when needed.
 </details>
@@ -178,15 +178,84 @@ This library provides several features and solves common problems you face when 
 
 For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/sdk/introduction.html)
 
+### Comming soon
+
+This library is actively in developing process. We have very cool features planned in the road map of the library comming soon:
+
+
 
 ## Library architecture notes
 
+### Interoperability wrappers
 
+Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement other languages support like <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. (Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/))
 
+You can generate this AoT compiled code + Wrappers again using the `batch scripts` provided for each platform inside the language specific client. For instance for Python:
 
-## Using Quix Streams with Quix SaaS
+- `/PythonClient/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
+- `/PythonClient/buildlinux.bat`: Generates Python Interop wrappers for Linux platform.
 
-This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, etc.
+These batch scripts are compiling the C# core library as AoT compiling mode and then using the `InteropGenerator` project to generate the Interops wrappers around that. The result is an structure like this:
+
+```
+
+   ┌───────────────────────────┐
+   │  Python client library    │    /PythonClient/lib/quixstreaming
+   └─────────────┬─────────────┘
+                 │
+                 │
+   ┌─────────────▼─────────────┐
+   │  Python Interop wrapper   │    /PythonClient/lib/quixstreaming/native/Python  (auto-generated)
+   └─────────────┬─────────────┘
+                 │
+                 │
+   ┌─────────────▼─────────────┐
+   │  C# AoT compiled library  │    /PythonClient/lib/quixstreaming/native/win64   (auto-generated)
+   └───────────────────────────┘
+
+```
+
+The non auto-generated `Python client library` still need to be implemented manually but it is something expected because each language has his own language specific features and naming conventions that we want to keep aligned with the language user expectations. If you want to add a new feature of the library that is common to all the languages you should implement that feature in the C# base library first, re-generate the Interop wrappers, and then modify the Python client library to wire up the new feature of the base library.
+
+### Base library
+
+Quix Streams base library is implemented in C#, therefore if your target language is C# you will use directly that base library without any [Interoperability wrapper](#interoperability-wrappers) involved on the execution. 
+
+This base library is organized in 3 main layers:
+
+```
+
+   ┌───────────────────────────┐
+   │      Streaming layer      │    /CSharpClient/Quix.Streams.Streaming
+   └─────────────┬─────────────┘
+                 │
+                 │
+   ┌─────────────▼─────────────┐
+   │       Process layer       │    /CSharpClient/Quix.Streams.Process
+   └─────────────┬─────────────┘
+                 │
+                 │
+   ┌─────────────▼─────────────┐
+   │      Transport layer      │    /CSharpClient/Quix.Streams.Transport
+   ├───────────────────────────┤
+   │   Kafka Transport layer   │    /CSharpClient/Quix.Streams.Transport.Kafka
+   └───────────────────────────┘
+
+```
+
+ Each layer has his own responsabilities:
+ 
+- Streaming layer: It is the main layer of the library that users should use by default. It includes among others, all the `syntax sugar` needed to have a pleasant experience with the library. Another important responsability of this layer is the `embedded time-series buffer` system.
+
+- Process layer: This layer is responsible of implementing the Codecs serialization and de-serialization of all the `Telemetry` messages of the Quix Streams protocol like time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as the creating the [Stream context](#library-features-💍) scopes responsible of the separation between data comming from different sources. This layer also implement a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
+
+- Transport layer: This layer is responsible of the `communication with the message broker` and implementing some features to deal with the own message broker features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible to implement a `wrapping messages system` to allow different messages types of the library Protocol and to define the base classes for the `Codecs` implementation of each messages of that Protocol on ther upper layers of the library. For Kafka support this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), that at the same time uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka) under the hood.
+
+For wider information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
+
+## Using Quix Streams with Quix SaaS platform
+
+This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of box during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics and more.
 
 ## Contribution Guide ✍️
 
