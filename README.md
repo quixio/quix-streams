@@ -30,7 +30,7 @@ Using Quix Streams, you can currently:
 
 - Group data by Streams attaching metadata to them
 
-## Getting Started 🏎
+## Getting Started 🏄
 
 ### Installing the library
 You can <b>install</b> the library using the package manager for Python Packages:
@@ -184,7 +184,7 @@ This library is actively in developing process. We have cool features planned in
 
 
 
-## Library architecture notes
+## Library architecture notes 📐
 
 ### Interoperability wrappers
 
@@ -253,7 +253,7 @@ This base library is organized in 3 main layers:
 
 For wider information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
 
-## Using Quix Streams with Quix SaaS platform
+## Using Quix Streams with Quix SaaS platform 💎
 
 This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of box during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics and more.
 
