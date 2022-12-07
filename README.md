@@ -12,7 +12,7 @@
 
 ## What is Quix Streams
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process high volumes of <b>time-series data</b> in nanoseconds with precision. It uses a message broker - such as <b>Apache Kafka</b> - under the hood instead of a database, so you can process time-series data on the fly for high performance and resource savings.
+<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volume</b> of time-series data in nanoseconds precision. It uses a message broker - such as <b>Apache Kafka</b> - under the hood instead of a database, so you can process time-series data on the fly for high performance and resource savings.
 
 Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's just another library that you can use in your code base. This means you can use any data processing library of your chosen language together with Quix Streams.
 
