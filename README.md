@@ -16,11 +16,11 @@
 
 Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's just another library that you can use in your code base. This means you can use any data processing library of your chosen language together with Quix Streams.
 
-Quix Streams is currently available in:
+Quix Streams is [designed to be extended](#interoperability-wrappers) to multiple programming languages. We currently support the following languages:
 - Python 
 - C#
 
-Using Quix Streams, you can currently:
+Using Quix Streams, you can:
 
 - Write time-series and non time-series data to a Kafka Topic
 - Read time-series and non time-series data from a Kafka Topic
