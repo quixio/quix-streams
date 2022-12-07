@@ -10,11 +10,11 @@
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/sdk/introduction.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixai/projects/1)
 
-## What is Quix Streams 🏎
+## What is Quix Streams
 
 <b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process high volumes of <b>time-series data</b> in nanoseconds with precision. It uses a message broker - such as <b>Apache Kafka</b> - under the hood instead of a database, so you can process time-series data on the fly for high performance and resource savings.
 
-Quix Streams does not use any Domain Specific Language or Embedded framework, it's just another library that you can use in your code base. This means you can use any data processing library of your favourite language together with Quix Streams.
+Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's just another library that you can use in your code base. This means you can use any data processing library of your favourite language together with Quix Streams.
 
 Quix Streams is currently available in:
 - Python 
@@ -23,11 +23,8 @@ Quix Streams is currently available in:
 Using Quix Streams, you can currently:
 
 - Write time-series and non time-series data to a Kafka Topic
-
 - Read time-series and non time-series data from a Kafka Topic
-
-- Process data by reading it from one Kafka Topic and writing back the results to another one.
-
+- Process data by reading it from one Kafka Topic, process it and writing back the results to another one.
 - Group data by Streams attaching metadata to them
 
 ## Getting Started 🏄
@@ -115,20 +112,25 @@ App.run()
 
 Quix Streams allows multiple configurations to leverage resources while reading and writing data from a Topic depending on the use case, frequencies, language and data types. 
 
-For full documentation of how to [<b>Read</b>](https://www.quix.io/docs/sdk/read.html) and [<b>Write</b>](https://www.quix.io/docs/sdk/read.html) time-series and non time-series data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
+For full documentation of how to [<b>Read</b>](https://www.quix.io/docs/sdk/read.html) and [<b>Write</b>](https://www.quix.io/docs/sdk/write.html) time-series and non time-series data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
-## Library features 💍
+## Library features
 
 This library provides several features and solves common problems you face when developing real-time streaming applications. 
 
 <details>
-    <summary><b>Streaming context</b></summary>
-    Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. This allows you to attach metadata to streams.
+    <summary><b>Stream context</b></summary>
+    Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. This allows message broker parelalize loads properly between multiple consumers. 
+</details>
+
+<details>
+    <summary><b>Stream metadata</b></summary>
+    Quix Streams allows to assign metadata attached to a Stream context and to the definition of his Parameters and Events. The library manage that metadata communication behind the scenes only sending and receiving it when necessary.
 </details>
 
 <details>
     <summary><b>Data serialization and de-serialization</b></summary>
-    Serialization can be painful, especially if it is done with performance in mind. Quix streams serialize and deserialize time-series data using different codecs so you don’t have to worry about that.
+    Quix streams serialize and deserialize time-series data using different codecs and optimizations to minimize payloads in order to increase throughtput and reduce latency.
 </details>
 
 <details>
@@ -180,22 +182,22 @@ For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/
 
 ### Comming soon
 
-This library is actively in developing process. We have cool features planned in the [road map](https://github.com/orgs/quixai/projects/1) of the library comming soon:
+This library is actively in developing process. We have some features planned in the [road map](https://github.com/orgs/quixai/projects/1) of the library comming soon:
 
+(WIP)
 
-
-## Library architecture notes 📐
+## Library architecture notes
 
 ### Interoperability wrappers
 
 Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement other languages support like <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. (Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/))
 
-You can generate this AoT compiled code + Wrappers again using the `batch scripts` provided for each platform inside the language specific client. For instance for Python:
+You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language specific client. For instance for Python:
 
 - `/PythonClient/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
-- `/PythonClient/buildlinux.bat`: Generates Python Interop wrappers for Linux platform.
+- `/PythonClient/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
 
-These batch scripts are compiling the C# core library as AoT compiling mode and then using the `InteropGenerator` project to generate the Interops wrappers around that. The result is an structure like this:
+These scripts are compiling the C# base library and then using the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is an structure like this:
 
 ```
 
@@ -236,9 +238,9 @@ This base library is organized in 3 main layers:
                  │
                  │
    ┌─────────────▼─────────────┐
-   │      Transport layer      │    /CSharpClient/Quix.Streams.Transport
-   ├───────────────────────────┤
    │   Kafka Transport layer   │    /CSharpClient/Quix.Streams.Transport.Kafka
+   ├───────────────────────────┤
+   │      Transport layer      │    /CSharpClient/Quix.Streams.Transport
    └───────────────────────────┘
 
 ```
@@ -253,18 +255,18 @@ This base library is organized in 3 main layers:
 
 For wider information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
 
-## Using Quix Streams with Quix SaaS platform 💎
+## Using Quix Streams with Quix SaaS platform
 
 This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of box during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics and more.
 
-## Contribution Guide ✍️
+## Contribution Guide
 
 Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
 
-## Need help? 🙋‍♀️
+## Need help?
 If you run into any problems, ask on #quixhelp in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixai/quix-streams/issues)
 
-## Roadmap 🚗
+## Roadmap
 
 You can view and contribute to our feature roadmap [here](https://github.com/orgs/quixai/projects/1)
 
@@ -274,7 +276,7 @@ Join other software engineers in [The Stream](https://quix.io/slack-invite), an 
 
 🙌  [Join our Slack community!](https://quix.io/slack-invite)
 
-## License 📄
+## License
 
 Quix Streams is licensed under the Apache 2.0 license. View a copy of the License file [here](https://github.com/quixai/quix-streams/blob/main/LICENSE).
 
