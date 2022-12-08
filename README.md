@@ -48,10 +48,10 @@ import time
 import datetime
 import math
 
-from quixstreaming import StreamingClient
+from quixstreams import KafkaStreamingClient
 
 # Client connecting to Kafka instance locally without authentication. 
-client = StreamingClient('127.0.0.1:9092')
+client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the output topic where to write data to.
 output_topic = client.open_output_topic("your-kafka-topic")
@@ -83,11 +83,11 @@ Once we have setup our producer, it's time to see how to read data from a topic.
 ```python
 import pandas as pd
 
-from quixstreaming import *
-from quixstreaming.app import App
+from quixstreams import *
+from quixstreams.app import App
 
 # Client connecting to Kafka instance locally without authentication. 
-client = StreamingClient('127.0.0.1:9092')
+client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the input topic where to read data from.
 # For testing purposes we remove consumer group and always read from latest data.
@@ -194,30 +194,30 @@ Quix Streams base library is developed in C#. We use Interoperability wrappers a
 
 You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language specific client. For instance for Python:
 
-- `/PythonClient/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
-- `/PythonClient/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
+- `/Python/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
+- `/Python/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
 
 These scripts are compiling the C# base library and then using the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is an structure like this:
 
 ```
 
    ┌───────────────────────────┐
-   │  Python client library    │    /PythonClient/lib/quixstreaming
+   │   Python client library   │    /Python/lib/quixstreaming
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │  Python Interop wrapper   │    /PythonClient/lib/quixstreaming/native/Python  (auto-generated)
+   │  Python Interop wrapper   │    /Python/lib/quixstreaming/native/Python  (auto-generated)
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │  C# AoT compiled library  │    /PythonClient/lib/quixstreaming/native/win64   (auto-generated)
+   │  C# AoT compiled library  │    /Python/lib/quixstreaming/native/win64   (auto-generated)
    └───────────────────────────┘
 
 ```
 
-The non auto-generated `Python client library` still need to be implemented manually but it is something expected because each language has his own language specific features and naming conventions that we want to keep aligned with the language user expectations. If you want to add a new feature of the library that is common to all the languages you should implement that feature in the C# base library first, re-generate the Interop wrappers, and then modify the Python client library to wire up the new feature of the base library.
+The non auto-generated `Python client library` still need to be maintained manually but it is something expected because each language has his own language specific features and naming conventions that we want to keep aligned with the language user expectations. If you want to add a new feature of the library that is common to all the languages you should implement that feature in the C# base library first, re-generate the Interop wrappers, and then modify the Python client library to wire up the new feature of the base library.
 
 ### Base library
 
@@ -228,19 +228,19 @@ This base library is organized in 3 main layers:
 ```
 
    ┌───────────────────────────┐
-   │      Streaming layer      │    /CSharpClient/Quix.Streams.Streaming
+   │      Streaming layer      │    /CSharp/Quix.Streams.Streaming
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │       Process layer       │    /CSharpClient/Quix.Streams.Process
+   │      Telemetry layer      │    /CSharp/Quix.Streams.Telemetry
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │   Kafka Transport layer   │    /CSharpClient/Quix.Streams.Transport.Kafka
+   │   Kafka Transport layer   │    /CSharp/Quix.Streams.Transport.Kafka
    ├───────────────────────────┤
-   │      Transport layer      │    /CSharpClient/Quix.Streams.Transport
+   │      Transport layer      │    /CSharp/Quix.Streams.Transport
    └───────────────────────────┘
 
 ```
@@ -249,7 +249,7 @@ This base library is organized in 3 main layers:
  
 - <b>Streaming layer</b>: It is the main layer of the library that users should use by default. It includes among others, all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsability of this layer is the <b>embedded time-series buffer</b> system.
 
-- <b>Process layer</b>: This layer is responsible of implementing the `Codecs` serialization and de-serialization of all the <b>Telemetry messages</b> of the Quix Streams protocol like time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as the creating the [Stream context](#library-features-) scopes responsible of the separation between data comming from different sources. This layer also implement a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
+- <b>Telemetry layer</b>: This layer is responsible of implementing the `Codecs` serialization and de-serialization of all the <b>Telemetry messages</b> of the Quix Streams protocol like time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as the creating the [Stream context](#library-features-) scopes responsible of the separation between data comming from different sources. This layer also implement a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
 
 - <b>Transport layer</b>: This layer is responsible of the <b>communication with the message broker</b> and implementing some features to deal with the own message broker features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible to implement a `wrapping messages system` to allow different messages types of the library Protocol and to define the base classes for the `Codecs` implementation of each messages of that Protocol on ther upper layers of the library. For <b>Kafka</b> support this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), that at the same time uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka) under the hood.
 
@@ -261,7 +261,7 @@ This library doesn't have any dependency to any comercial product, but if you us
 
 ## Contribution Guide
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read first our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
 
 ## Need help?
 If you run into any problems, ask on #quixhelp in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixai/quix-streams/issues)
