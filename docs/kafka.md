@@ -94,7 +94,7 @@ will start reading from the start of the Kafka queue.
 
 !!! note
 
-	When you open a topic you can also choose where to start reading data from. Either read all the data from the start or only read the new data as it arrives. Read more [here](read.md#_open_a_topic_for_reading)
+	When you open a topic you can also choose where to start reading data from. Either read all the data from the start or only read the new data as it arrives. Read more [here](/sdk/read.md#_open_a_topic_for_reading)
 
 #### Data Grouping
 

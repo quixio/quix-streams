@@ -22,13 +22,13 @@ here because you literally don’t need them if you use the Quix SDK.
 
 With the Quix SDK, you are not tied to complicated Functions, Lambdas,
 Maps or Query libraries to be able to deploy and process data in real
-time. You just need to know how to [read](read.md) and
-[write](write.md) data with the SDK — that’s it, the rest is up to
+time. You just need to know how to [read](/sdk/read.md) and
+[write](/sdk/write.md) data with the SDK — that’s it, the rest is up to
 you and your imagination.
 
 Let’s see some examples of how to read and write data in a Data
-processor using the Quix SDK. We just [read](read.md) data from the
-message broker, process it, and [write](write.md) it back to the
+processor using the Quix SDK. We just [read](/sdk/read.md) data from the
+message broker, process it, and [write](/sdk/write.md) it back to the
 stream.
 
 

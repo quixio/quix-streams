@@ -1,7 +1,7 @@
 # Horizontal scaling
 
 The Quix SDK provides horizontal scaling out of the box via the
-[streaming context](streaming-context.md). This means a data
+[streaming context](/sdk/features/streaming-context.md). This means a data
 scientist or data engineer does not have to implement parallel
 processing themselves.
 
@@ -116,7 +116,7 @@ to decide which consumers receive which messages. Partitions and the
 Kafka rebalancing protocol are internal details of the Kafka
 implementation behind the Quix SDK. You don’t need to worry about them
 because everything is abstracted within the [Streaming
-Context](streaming-context.md) feature of the SDK. The
+Context](/sdk/features/streaming-context.md) feature of the SDK. The
 events described above will remain the same, even if the SDK uses
 another Message Broker technology or another rebalancing mechanism in
 the future.
