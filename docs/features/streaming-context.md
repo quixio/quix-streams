@@ -19,7 +19,7 @@ from different streams more easily than with the key-value approach and
 single messages used by other technologies.
 
 The SDK also allows you to [attach
-metadata](/write/#create_attach_to_a_stream) to streams, like ids,
+metadata](/sdk/write/#create_attach_to_a_stream) to streams, like ids,
 references, or any other type of information related to the data source.
 
 ![Attach metadata to streams using Quix SDK](../images/QuixSdkMetadata.png)

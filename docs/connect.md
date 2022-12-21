@@ -69,7 +69,7 @@ option on Quix Portal.
 
 The following code shows you how to set up the `SecurityOptions` for
 your connection and how to create a `StreamingClient` instance to
-start [Reading](read.md) and [Writing](write.md) real-time
+start [Reading](/sdk/read.md) and [Writing](/sdk/write.md) real-time
 time series data with Quix:
     
 ### Set Up the Security Options for Your Connection

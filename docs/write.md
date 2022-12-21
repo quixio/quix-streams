@@ -39,7 +39,7 @@ constructor of the SDK.
 
 
 You can find more advanced information on how to connect to Quix in the
-[Connect to Quix](connect.md) section.
+[Connect to Quix](/sdk/connect.md) section.
 
 ## Open a topic
 
@@ -69,11 +69,11 @@ client’s `open_output_topic` method, passing the `TOPIC_ID` or the
 
 ## Create / Attach to a Stream
 
-[Streams](./features/streaming-context.md) are the central context of
+[Streams](/sdk/features/streaming-context.md) are the central context of
 data in Quix. Streams make easy to manage, discover, and work with your
 data. They are key to good data governance in your organisation. Also,
 Streams are vital for
-[parallelizing](./features/horizontal-scaling.md) huge data loads
+[parallelizing](/sdk/features/horizontal-scaling.md) huge data loads
 with an infinite number of data sources.
 
 You can create as many streams as you want using the `create_stream`
