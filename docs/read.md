@@ -36,7 +36,7 @@ constructor of the SDK.
     ```
 
 You can find more advanced information on how to connect to Quix in the
-[Connect to Quix](/sdk/connect.md) section.
+[Connect to Quix](/sdk/connect) section.
 
 ## Open a topic for reading
 
@@ -67,7 +67,7 @@ the client’s `open_input_topic` method, passing the `TOPIC_ID` or the
 ### Consumer group
 
 The **Consumer group** is a concept used when you want to [scale
-horizontally](/sdk/features/horizontal-scaling.md). Each consumer group is
+horizontally](/sdk/features/horizontal-scaling). Each consumer group is
 identified using an ID, which you set optionally when opening a
 connection to the topic for reading:
 
@@ -88,7 +88,7 @@ connection to the topic for reading:
 
 
 When you want to enable [horizontal
-scalability](/sdk/features/horizontal-scaling.md), all the replicas of
+scalability](/sdk/features/horizontal-scaling), all the replicas of
 your process should use the same `ConsumerId`. This is how the message
 broker knows that all the replicas of your process want to share the
 load of the incoming streams between replicas. Each replica will receive
@@ -643,7 +643,7 @@ broker. Committing allows one to mark how far data has been processed,
 also known as creating a checkpoint. In the event of a restart or
 rebalance, the client only processes messages from the last commit
 position. In Kafka this is equivalent to commits for a [consumer
-group](/sdk/read.md/#consumer-groups).
+group](/sdk/read/#consumer-groups).
 
 Commits are done for each consumer group, so if you have several
 consumer groups in use, they do not affect each another when committing
@@ -653,7 +653,7 @@ to one of them.
 
 	Commits are done at a partition level when you use Kafka as a Message Broker, which means that streams that belong to the same partition are committed using the same position. The SDK currently does not expose the option to subscribe to only specific partitions of a topic, but commits will only ever affect partitions that are currently assigned to your client.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of the Quix SDK. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context.md) feature of the SDK.
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of the Quix SDK. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context) feature of the SDK.
 
 ### Automatic committing
 
@@ -817,7 +817,7 @@ avoidable reprocessing of messages.
 
 	Kafka revokes entire partitions, but the SDK makes it easy to determine which streams are affected by providing two events you can listen to.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of the Quix SDK. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context.md) feature of the SDK.
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of the Quix SDK. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context) feature of the SDK.
 
 ### Streams revoking
 

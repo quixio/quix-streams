@@ -137,11 +137,11 @@ this documentation for more information.
 ## Horizontal scaling
 
 The Quix SDK provides horizontal scale out of the box via the [streaming
-context](/sdk/features/streaming-context.md) feature. This means a data
+context](/sdk/features/streaming-context) feature. This means a data
 scientist or data engineer does not have to implement parallel
 processing themselves. You can scale the processing models, from one
 replica to many and back to one, and use the [callback system inside the
-SDK](/sdk/read.md#_parallel_processing) to ensure that your data load is
+SDK](/sdk/read#_parallel_processing) to ensure that your data load is
 always shared between your model replicas.
 
 Refer to the [Horizontal scaling](/sdk/features/horizontal-scaling)
@@ -174,7 +174,7 @@ However, in some cases, you simply do not have the ability to run the
 Quix SDK on both sides.
 
 To cater for these cases we added the ability to both
-[write](/sdk/write.md#write-raw-kafka-messages) and [read](/sdk/read.md#read-raw-kafka-messages)
+[write](/sdk/write#write-raw-kafka-messages) and [read](/sdk/read#read-raw-kafka-messages)
 the raw, unformatted, messages as byte array. This is giving you the
 freedom to implement the protocol as needed ( e.g. JSON, comma-separated
 rows ).

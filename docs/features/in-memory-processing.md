@@ -14,7 +14,7 @@ time, traditional database-centric architectures just explode.
 
 The Quix SDK uses a message broker and it puts it at the very center of
 the application, enabling a new approach for [processing
-data](/sdk/process.md) without the need to save and pass all the
+data](/sdk/process) without the need to save and pass all the
 information through a database. By using [in-memory
 processing](#in-memory-processing), you can persist only the data you’re
 really interested in keeping.
@@ -27,5 +27,5 @@ possible approach when you need to process a huge amount of data per
 second with low latency requirements.
 
 The SDK offers you a very simple way of processing time-series data in
-real-time. Refer to the [Processing data](/sdk/process.md) section of
+real-time. Refer to the [Processing data](/sdk/process) section of
 this documentation for further details.
