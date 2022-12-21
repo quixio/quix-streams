@@ -119,7 +119,7 @@ For example:
 
 #### Data Governance
 
-Topics are key to good data governance. Use them to organise your data
+Topics are key to good data governance. Use them to organize your data
 by:
 
   - Group data streams by type or source.
@@ -140,5 +140,5 @@ of cars, wearables or apps in production, all on the same topic.
 #### Security
 
 Our topics are secured with industry standard SSL data encryption and
-SASL ACL authorisation and authentication. You can safely send data over
+SASL ACL authorization and authentication. You can safely send data over
 public networks and trust that it is encrypted in-flight.

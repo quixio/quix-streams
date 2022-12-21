@@ -27,5 +27,5 @@ possible approach when you need to process a huge amount of data per
 second with low latency requirements.
 
 The SDK offers you a very simple way of processing time-series data in
-real-time. Refer to the [Processing data](#../process.md) section of
+real-time. Refer to the [Processing data](../../process/) section of
 this documentation for further details.

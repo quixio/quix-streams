@@ -11,8 +11,8 @@ application.
 Starting with 0.4.0, we’re offering QuixStreamingClient, which handles
 the cumbersome part of setting up your streaming credentials using the
 Quix Api. When you’re running the app in the [online
-IDE](../platform/definitions.md#_online_ide) or as a
-[deployment](../platform/definitions.md#_deployment), all you have to
+IDE](/platform/definitions/#online-ide) or as a
+[deployment](/platform/definitions#deployment), all you have to
 do is the following:
 
 
@@ -32,7 +32,7 @@ do is the following:
 
 If you wish to run the same code locally, you’ll have to provide an
 OAuth2.0 bearer token. We have created a purpose made token for this,
-called [SDK token](../platform/how-to/use-sdk-token.md). Once you have
+called [SDK token](/platform/how-to/use-sdk-token). Once you have
 the token you will have to provide it as an argument to
 QuixStreamingClient or set
 `Quix__Sdk__Token`

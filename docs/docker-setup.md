@@ -1,7 +1,7 @@
 # Set up docker environment
 
 Docker is an alternative to the classic environment setup for local
-development ( see [Set up your local IDE](python-setup.md) )
+development ( see [Set up your local IDE](/python-setup) )
 
 !!! note
 

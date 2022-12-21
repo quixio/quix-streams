@@ -1,7 +1,7 @@
 # Support for Data Frames
 
-The Quix SDK supports [reading](#../read.adoc#_using_data_frames) and
-[writing](#../write.adoc#_using_data_frames) data using [Pandas
+The Quix SDK supports [reading](../../read/#using_data_frames) and
+[writing](../../write/#using-data-frames) data using [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe).
 If you use the Python version of the SDK you can make use of this
 library together with Quix, ensuring maximum optimization for your
@@ -11,7 +11,7 @@ The SDK uses Pandas DataFrames just as a representation of the common
 [ParameterData](#parameter-data-format) format used to read and write
 data to Quix.
 
-For example, the following [ParameterData](#parameter-data-format):
+For example, the following [ParameterData](../../read/#parameter-data-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |
@@ -38,6 +38,6 @@ with [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe).
 
 Please refer to the sections [Using Data Frames for reading from
-Quix](#../read.adoc#_using_data_frames) and [Using Data Frames for
-writing to Quix](#../read.adoc#_using_data_frames) for extended
+Quix](../../read/#using-data-frames) and [Using Data Frames for
+writing to Quix](../../write/#using-data-frames) for extended
 information.

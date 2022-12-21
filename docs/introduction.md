@@ -8,12 +8,12 @@ The SDK is available for Python and C\#.
 
 Using the Quix SDK, you can:
 
-  - [Write time-series data](write.md) to a Kafka Topic
+  - [Write time-series data](/write) to a Kafka Topic
 
-  - [Read time-series data](read.md) from a Kafka Topic
+  - [Read time-series data](/read) from a Kafka Topic
 
-  - [Process data](process.md) by [reading](read.md) it from one
-    Topic and [writing](write.md) the results to another one.
+  - [Process data](/process) by [reading](/read) it from one
+    Topic and [writing](/write) the results to another one.
 
 To support these operations, the SDK provides several useful features
 out of the box, and solves all the common problems you should face when
@@ -21,7 +21,7 @@ developing real-time streaming applications:
 
 ## Streaming context
 
-The Quix SDK handles [stream contexts](features/streaming-context.md)
+The Quix SDK handles [stream contexts](/features/streaming-context)
 for you, so all the data from one data source is bundled in the same
 scope. This allows you to attach metadata to streams.
 
@@ -30,19 +30,19 @@ the reading side. When processing stream data, you can identify data
 from different streams more easily than with the key-value approach used
 by other technologies.
 
-Refer to the [Streaming context](features/streaming-context.md)
+Refer to the [Streaming context](/features/streaming-context)
 section of this documentation for more information.
 
 ## In-memory data processing
 
 The Quix SDK is designed to make [in-memory data
-processing](features/in-memory-processing.md) extremely efficient. We
+processing](/features/in-memory-processing) extremely efficient. We
 use high-performance SDK features in conjunction with the message broker
 capabilities to achieve maximum throughput with the very minimum
 latency.
 
 Refer to the [In-memory data
-processing](features/in-memory-processing.md) section of this
+processing](/features/in-memory-processing) section of this
 documentation for more information.
 
 ## Built-in buffers
@@ -52,7 +52,7 @@ costly. The SDK provides a built-in buffers features for reading and
 writing to give you absolute freedom in balancing between latency and
 cost.
 
-Refer to the [Built-in buffers](features/builtin-buffers.md) section
+Refer to the [Built-in buffers](/features/builtin-buffers) section
 of this documentation for more information.
 
 ## Support for data frames
@@ -63,7 +63,7 @@ The SDK uses a rows system, and can work with [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
 natively. Each row has a timestamp and user-defined tags as indexes.
 
-Refer to the [Support for Data Frames](features/data-frames.md)
+Refer to the [Support for Data Frames](/features/data-frames)
 section of this documentation for more information.
 
 ## Message splitting
@@ -73,7 +73,7 @@ splitting them up if required. You no longer need to worry about Kafka
 message limits. On the consumer side, those messages are automatically
 merged back.
 
-Refer to the [Message splitting](features/message-splitting.md)
+Refer to the [Message splitting](/features/message-splitting)
 section of this documentation for more information.
 
 ## Message compression
@@ -86,7 +86,7 @@ converting strings to flags, and in general reduces payload size for
 each message. This happens before compression is applied, so the final
 compression ratio is even higher.
 
-Refer to the [Message compression](features/message-compression.md)
+Refer to the [Message compression](/features/message-compression)
 section of this documentation for more information.
 
 ## Data serialization and de-serialization
@@ -98,7 +98,7 @@ without worrying about conversion. Serialization can be painful,
 especially if it is done with performance in mind. We serialize native
 types using our codecs so you don’t have to worry about that.
 
-Refer to the [Data serialization](features/data-serialization.md)
+Refer to the [Data serialization](/features/data-serialization)
 section of this documentation for more information.
 
 ## Multiple data types
@@ -107,7 +107,7 @@ The SDK allows you to attach any type of data to your timestamps, like
 Numbers, Strings or even raw Binary data. This gives the SDK the ability
 to adapt to any streaming application use case.
 
-Refer to the [Multiple data types](features/multiple-data-types.md)
+Refer to the [Multiple data types](/features/multiple-data-types)
 section of this documentation for more information.
 
 ## Message Broker configuration including authentication and authorization
@@ -118,7 +118,7 @@ configuration settings are needed to use Kafka at its best, and the
 ideal configuration takes time\! We take care of this in the SDK so you
 don’t have to.
 
-Refer to the [Broker configuration](features/broker-configuration.md)
+Refer to the [Broker configuration](/features/broker-configuration)
 section of this documentation for more information.
 
 ## Checkpointing
@@ -131,7 +131,7 @@ have already processed messages up to one point, usually called a
 This is a very important concept when you are developing high
 performance streaming applications.
 
-Refer to the [Checkpointing](features/checkpointing.md) section of
+Refer to the [Checkpointing](/features/checkpointing) section of
 this documentation for more information.
 
 ## Horizontal scaling
@@ -144,7 +144,7 @@ replica to many and back to one, and use the [callback system inside the
 SDK](read.md#_parallel_processing) to ensure that your data load is
 always shared between your model replicas.
 
-Refer to the [Horizontal scaling](features/horizontal-scaling.md)
+Refer to the [Horizontal scaling](/features/horizontal-scaling)
 section of this documentation for more information.
 
 ## Integrations
@@ -153,7 +153,7 @@ The SDK offers integrations out of the box, including data persistence
 and historic or real-time APIs with other systems. That means you don’t
 have to implement them by yourself.
 
-Refer to the [Integrations](features/integrations.md) section of this
+Refer to the [Integrations](/features/integrations) section of this
 documentation for more information.
 
 ## Portability
@@ -161,7 +161,7 @@ documentation for more information.
 The Quix SDK is an abstraction layer over a concrete broker technology.
 You’re not locked into a specific broker and can innovate over time.
 
-Refer to the [Portability](features/portability.md) section of this
+Refer to the [Portability](/features/portability) section of this
 documentation for more information.
 
 ## Raw messages
@@ -174,7 +174,7 @@ However, in some cases, you simply do not have the ability to run the
 Quix SDK on both sides.
 
 To cater for these cases we added the ability to both
-[write](write.md#raw-messages) and [read](read.md#raw-messages)
+[write](write.md#write-raw-kafka-messages) and [read](read.md#read-raw-kafka-messages)
 the raw, unformatted, messages as byte array. This is giving you the
 freedom to implement the protocol as needed ( e.g. JSON, comma-separated
 rows ).

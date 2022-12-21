@@ -23,5 +23,5 @@ Our templates come with pre-configured client certificates and
 connection settings, so you don’t need to worry about this configuration
 complexity.
 
-Refer to the [Connecting to Quix](#../connect.md) section for more
+Refer to the [Connecting to Quix](../connect.md) section for more
 information.
