@@ -39,7 +39,7 @@ constructor of the SDK.
 
 
 You can find more advanced information on how to connect to Quix in the
-[Connect to Quix](/sdk/connect.md) section.
+[Connect to Quix](/sdk/connect) section.
 
 ## Open a topic
 
@@ -69,11 +69,11 @@ client’s `open_output_topic` method, passing the `TOPIC_ID` or the
 
 ## Create / Attach to a Stream
 
-[Streams](/sdk/features/streaming-context.md) are the central context of
+[Streams](/sdk/features/streaming-context) are the central context of
 data in Quix. Streams make easy to manage, discover, and work with your
 data. They are key to good data governance in your organisation. Also,
 Streams are vital for
-[parallelizing](/sdk/features/horizontal-scaling.md) huge data loads
+[parallelizing](/sdk/features/horizontal-scaling) huge data loads
 with an infinite number of data sources.
 
 You can create as many streams as you want using the `create_stream`
@@ -341,7 +341,7 @@ to the stream:
 
 Although Quix allows you to send ParameterData to a stream directly,
 without any buffering, we recommended you use the built-in
-[Buffer](#_buffer) feature to achieve high throughput speeds. The
+[Buffer](#buffer) feature to achieve high throughput speeds. The
 following code would send the same ParameterData through a buffer:
 
 

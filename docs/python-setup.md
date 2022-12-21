@@ -121,7 +121,7 @@ To get started, install the SDK dependencies.
     
     !!! note
     
-		Because of the variability between linux distributions we highly recommend using a Docker environment ( see [Docker setup](/sdk/docker-setup.md) ) in case you experience any issues during the installation.
+		Because of the variability between linux distributions we highly recommend using a Docker environment ( see [Docker setup](/sdk/docker-setup) ) in case you experience any issues during the installation.
     
       - Install and configure PythonNet dependencies - Ubuntu 20.04
         
