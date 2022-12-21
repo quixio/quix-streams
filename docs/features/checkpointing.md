@@ -19,7 +19,7 @@ all the messages from the last Checkpoint when you reconnect to the
 topic.
 
 Refer to the [Committing /
-checkpointing](#../read.adoc#_committing_checkpointing) section of this
+checkpointing](../../read/#committing-checkpointing) section of this
 documentation to find out how to do Checkpointing when reading data with
 the Quix Sdk.
 

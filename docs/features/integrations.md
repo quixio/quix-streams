@@ -8,13 +8,14 @@ use the Quix SDK directly, like Web applications:
   - Data persistence: Make any Topic persist all the streaming data it
     receives, with the click of a button on Quix Portal.
 
-  - [Query API](#apis::data-catalogue-api/intro.md): Query historical
+  - [Query API](/apis/data-catalogue-api/intro): Query historical
     data with powerful filters and aggregation capabilities.
 
-  - [Streaming Reader API](#apis::streaming-reader-api/intro.md):
+  - [Streaming Reader API](/apis/streaming-reader-api/intro):
     Consume stream data in real time with a Websockets interface. Used
     for Web applications use cases.
 
-  - [Streaming Writer API](#apis::streaming-writer-api/intro.md): Push
+  - [Streaming Writer API](/apis/streaming-writer-api/intro): Push
     streaming data into a Topic using REST via HTTP endpoints. Used for
     Web applications use cases.
+

@@ -149,7 +149,7 @@ receive a new stream in your Topic.
 
 For instance, in the following example we read and print the first
 timestamp and value of the parameter `ParameterA` received in the
-[ParameterData](##_parameter_data_format) packet:
+[ParameterData](#parameter-data-format) packet:
 
 
 
@@ -188,21 +188,21 @@ timestamp and value of the parameter `ParameterA` received in the
 
 
 
-We use [ParameterData](##_parameter_data_format) packages to read data
+We use [ParameterData](#parameter-data-format) packages to read data
 from the stream. This class handles reading and writing of time series
 data. The Quix SDK provides multiple helpers for reading and writing
-data using [ParameterData](##_parameter_data_format).
+data using [ParameterData](#parameter-data-format).
 
 !!! tip
 
-	If you’re using Python you can convert [ParameterData](##_parameter_data_format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) or read them directly from the SDK. Refer to [Using Data Frames](##_using_data_frames){target=_blank} for more information.
+	If you’re using Python you can convert [ParameterData](#parameter-data-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
 
 ### Parameter Data format
 
-[ParameterData](##_parameter_data_format) is the formal class in the SDK
+[ParameterData](#parameter-data-format) is the formal class in the SDK
 which represents a time series data packet in memory.
 
-[ParameterData](##_parameter_data_format) consists of a list of
+[ParameterData](#parameter-data-format) consists of a list of
 Timestamps with their corresponding Parameter Names and Values for each
 timestamp.
 
@@ -337,7 +337,7 @@ timestamp inside the buffer reaches 100 milliseconds:
 
 
 Reading data from that buffer is as simple as using its `OnRead` event.
-For each [ParameterData](##_parameter_data_format) packet released from
+For each [ParameterData](#parameter-data-format) packet released from
 the buffer, the SDK will execute the `OnRead` event with the parameter
 data as a given parameter. For example the following code prints the
 ParameterA value of the first timestamp of each packet released from the
@@ -503,12 +503,12 @@ If you use the Python version of the SDK you can use [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
 for reading and writing ParameterData to Quix. The Pandas DataFrames
 format is just a representation of
-[ParameterData](##_parameter_data_format) format, where the Timestamp is
+[ParameterData](#parameter-data-format) format, where the Timestamp is
 mapped to a column named `time` and the rest of the parameters are
 mapped as columns named as the ParameterId of the parameter. Tags are
 mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
-For example, the following [ParameterData](##_parameter_data_format):
+For example, the following [ParameterData](#parameter-data-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |
@@ -551,7 +551,7 @@ input_topic.start_reading()
 ```
 
 Alternatively, you can always convert a
-[ParameterData](##_parameter_data_format) to a Pandas DataFrame using
+[ParameterData](#parameter-data-format) to a Pandas DataFrame using
 the method `to_panda_frame`:
 
 ``` python
@@ -573,7 +573,7 @@ input_topic.start_reading()
 
 !!! tip
 
-	The conversions from [ParameterData](##_parameter_data_format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you probably want to use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
+	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you probably want to use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
 
 ## Reading Events
 

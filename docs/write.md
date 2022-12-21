@@ -251,22 +251,22 @@ Possible end types
 ## Writing Parameter Data
 
 You can now start writing data to your stream.
-[ParameterData](##_parameter_data_format) is the formal class in the SDK
+[ParameterData](#parameter-data-format) is the formal class in the SDK
 which represents a time-series data packet in memory.
-[ParameterData](##_parameter_data_format) is meant to be used for
+[ParameterData](#parameter-data-format) is meant to be used for
 time-series data coming from sources that generate data at a regular
 time basis and with a fixed number of Parameters.
 
 !!! tip
 
-	If your data source generates data at irregular time intervals and you don’t have a defined list of regular Parameters, the [EventData](##_event_data_format) format is probably a better fit for your time-series data.
+	If your data source generates data at irregular time intervals and you don’t have a defined list of regular Parameters, the [EventData](#event-data-format) format is probably a better fit for your time-series data.
 
 ### Parameter Data format
 
-[ParameterData](##_parameter_data_format) is the formal class in the SDK
+[ParameterData](#parameter-data-format) is the formal class in the SDK
 which represents a time series data packet in memory.
 
-[ParameterData](##_parameter_data_format) consists of a list of
+[ParameterData](#parameter-data-format) consists of a list of
 Timestamps with their corresponding Parameter Names and Values for each
 timestamp.
 
@@ -360,7 +360,7 @@ following code would send the same ParameterData through a buffer:
 
 
 
-Visit the [Buffer](##_buffer) section of this documentation to find out
+Visit the [Buffer](#buffer) section of this documentation to find out
 more about the built-in Buffer feature.
 
 The Quix SDK allows you to attach any type of data — Numbers, Strings,
@@ -551,7 +551,7 @@ packet when the size of the buffer reaches 100 timestamps:
 
 
 
-Writing a [ParameterData](##_parameter_data_format) to that buffer is as
+Writing a [ParameterData](#parameter-data-format) to that buffer is as
 simple as using the `Write` method of that built-in `Buffer`, passing
 the ParameterData to write:
 
@@ -886,12 +886,12 @@ If you use the Python version of the SDK you can use [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
 for reading and writing ParameterData to Quix. The Pandas DataFrames
 format is just a representation of
-[ParameterData](##_parameter_data_format) format, where the Timestamp is
+[ParameterData](#parameter-data-format) format, where the Timestamp is
 mapped to a column named `time` and the rest of the parameters are
 mapped as columns named as the ParameterId of the parameter. Tags are
 mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
-For example, the following [ParameterData](##_parameter_data_format):
+For example, the following [ParameterData](#parameter-data-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |
@@ -917,7 +917,7 @@ The SDK allows you to write data to Quix using [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
 directly. You just need to use the common `write` methods of the
 `stream.parameters` and `buffer`, passing the Data Frame instead of a
-[ParameterData](##_parameter_data_format):
+[ParameterData](#parameter-data-format):
 
 ``` python
 df = data.to_panda_frame()
@@ -925,7 +925,7 @@ stream.parameters.buffer.write(df)
 ```
 
 Alternatively, you can convert a Pandas Data Frame to a
-[ParameterData](##_parameter_data_format) using the method
+[ParameterData](#parameter-data-format) using the method
 `from_panda_frame`:
 
 ``` python
@@ -935,7 +935,7 @@ stream.parameters.buffer.write(data)
 
 !!! tip
 
-	The conversions from Pandas DataFrames to [ParameterData](##_parameter_data_format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you probably want to directly use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
+	The conversions from Pandas DataFrames to [ParameterData](#parameter-data-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you probably want to directly use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
 
 ## Writing Events
 
@@ -946,10 +946,10 @@ a defined structure.
 
 !!! tip
 
-	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [ParameterData](##_parameter_data_format) format is probably a better fit for your time-series data.
+	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [ParameterData](#parameter-data-format) format is probably a better fit for your time-series data.
 
 Writing Events to a stream is identical to writing
-[ParameterData](##_parameter_data_format) values, although you don’t
+[ParameterData](#parameter-data-format) values, although you don’t
 need to use buffering features because events don’t need high
 performance throughput.
 
@@ -1009,7 +1009,7 @@ previous example and send it to the stream:
 
 The Quix SDK lets you write Events without creating EventData instances
 explicitly. To do so, you can use the same helpers present in
-[ParameterData](##_parameter_data_format) format like `add_timestamp`,
+[ParameterData](#parameter-data-format) format like `add_timestamp`,
 `add_value` or `add_tag`. At the end, use the `write` method to write
 that timestamp to the stream.
 

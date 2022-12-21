@@ -1,7 +1,7 @@
 # Set up local environment
 
 The Quix Portal offers you an [online
-IDE](../platform/definitions.md#_online_ide), ready to use **without
+IDE](/platform/definitions#online-ide), ready to use **without
 any additional setup** to develop or deploy your applications. However,
 you might sometimes want to work with your application in a local IDE.
 
