@@ -285,7 +285,7 @@ An example of ParameterData
 
 !!! tip
 
-	The Timestamp column plus the [Tags](@tags) assigned to it work as the index of that table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
+	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of that table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
 The Quix SDK provides several helpers to create and send ParameterData
 packets through the stream.

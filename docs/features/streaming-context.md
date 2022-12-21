@@ -8,7 +8,7 @@ independently, without any relationship between them.
 The Quix SDK handles stream context for you, so all the data from one
 data source is bundled in the same scope. This supports, among other
 things, [automatic horizontal
-scaling](horizontal-scaling) of your models when you
+scaling](/sdk/features/horizontal-scaling) of your models when you
 deal with a undetermined or big number of data sources.
 
 ![Horizontal scalability using Quix SDK](../images/QuixSdkScaling.png)
