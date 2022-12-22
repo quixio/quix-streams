@@ -10,13 +10,14 @@
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/sdk/introduction.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixai/projects/1)
 
-## What is Quix Streams
+## What is Quix Streams?
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volume</b> of time-series data in nanoseconds precision. It uses a message broker - such as <b>Apache Kafka</b> - under the hood instead of a database, so you can process time-series data on the fly for high performance and resource savings.
+<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volume</b> of time-series data in nanoseconds precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data for high performance and resource savings.
 
-Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's just another library that you can use in your code base. This means you can use any data processing library of your chosen language together with Quix Streams.
+Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language ,together with Quix Streams.
 
-We currently support the following languages:
+Quix Streams currently supports the following languages:
+
 - Python 
 - C#
 
@@ -24,14 +25,14 @@ Quix Streams is [designed to be extended](#interoperability-wrappers) to multipl
 
 Using Quix Streams, you can:
 
-- Write time-series and non time-series data to a Kafka Topic
-- Read time-series and non time-series data from a Kafka Topic
-- Process data by reading it from one Kafka Topic, process it and writing back the results to another one.
-- Group data by Streams attaching metadata to them
+- Write time-series and non time-series data to a Kafka Topic.
+- Read time-series and non time-series data from a Kafka Topic.
+- Process data by reading it from one Kafka Topic, process it, and then writing the results back to another Kafka Topic.
+- Group data by Streams attaching metadata to them.
 
-## What is time-series data
+## What is time-series data?
 
-Time series data is a series of data points indexed in time order. Typically, time series data is collected at regular intervals, such as days, hours, minutes, seconds or milliseconds. In a data frame representation, each row of the data frame corresponds to a single time point, and each column contains a different variable or observation measured at that time point.
+Time-series data is a series of data points indexed in time order. Typically, time-series data is collected at regular intervals, such as days, hours, minutes, seconds, or milliseconds. In a data frame representation, each row of the data frame corresponds to a single time point, and each column contains a different variable or observation measured at that time point.
 
 ```
 timestamp            value1   value2   value3   value4   value5   value6   value7
@@ -44,19 +45,20 @@ timestamp            value1   value2   value3   value4   value5   value6   value
 ...                  ...      ...      ...      ...      ...      ...      ...   
 ```
 
-Time series data is often plotted on a graph with the x-axis representing the time at which the data was collected and the y-axis representing the value of the data point.
+Time-series data is often plotted on a graph with the x-axis representing the time at which the data was collected and the y-axis representing the value of the data point.
 
 ![Telemetry](./images/telemetry.png)
 
 ### High-frequency data
 
-High frequency data is a type of <b>time series data</b> that is collected at a very high rate, often at intervals of less than a second. Because high frequency data is collected at such a high rate, it can be difficult to analyze and visualize using traditional methods. As a result, specialized techniques and tools are often used to process and analyze high frequency data.
+High-frequency data is a type of <b>time-series data</b> that is collected at a very high rate, often at intervals of less than a second. Because high-frequency data is collected at such a high rate, it can be difficult to analyze and visualize using traditional methods. As a result, specialized techniques and tools are often used to process and analyze high-frequency data.
 
-Quix streams is a library specialized in processing <b>high-frequency data</b> although it can be used to process and analyze any kind of time-series or non-timeseries data.
+Quix streams is a library specialized in processing <b>high-frequency data</b>, although it can be used to process and analyze any kind of time-series or non-timeseries data.
 
 ## Getting Started 🏄
 
 ### Installing the library
+
 You can <b>install</b> the library using the package manager for Python Packages:
 
 ```shell
@@ -65,9 +67,10 @@ pip install quix-streams
 
 ### Prepare your Kafka Cluster
 
-This library needs a message broker under the hood to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the major message broker in the industry with enough performance to support high volumes of time-series data with minimum latency.
+This library needs to utilize a message broker to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
 ### Writing time-series data
+
 Now you can start writing some time-series data into a Kafka Topic. Here's an example of how to <b>Write</b> time-series data into a Kafka Topic with Python.
 
 ```python
@@ -105,6 +108,7 @@ stream.close()
 ```
 
 ### Reading time-series data
+
 Once we have setup our producer, it's time to see how to read data from a topic. Here's an example of how to <b>Read</b> time-series data from a Kafka Topic with Python:
 
 ```python
@@ -137,7 +141,7 @@ print("Listening to streams. Press CTRL-C to exit.")
 App.run()
 ```
 
-Quix Streams allows multiple configurations to leverage resources while reading and writing data from a Topic depending on the use case, frequencies, language and data types. 
+Quix Streams allows multiple configurations to leverage resources while reading and writing data from a Topic depending on the use case, frequencies, language, and data types. 
 
 For full documentation of how to [<b>Read</b>](https://www.quix.io/docs/sdk/read.html) and [<b>Write</b>](https://www.quix.io/docs/sdk/write.html) time-series and non time-series data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
@@ -147,13 +151,13 @@ This library provides several features and solves common problems you face when 
 
 - <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. This allows sending <b>multiple streams</b> through the same topic and message broker <b>parallelize loads</b> properly between multiple consumers. 
 
-- <b>Stream metadata</b>: Quix Streams allows to assign metadata attached to a Stream context and to the definition of his Parameters and Events. The library manage that <b>metadata communication</b> behind the scenes only sending and receiving it when necessary.
+- <b>Stream metadata</b>: Quix Streams allows you to assign metadata attached to a Stream context and to the definition of Parameters and Events. The library manages that <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary.
 
-- <b>Time-series data serialization and de-serialization</b>: Quix streams serialize and deserialize time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughtput and reduce latency.
+- <b>Time-series data serialization and de-serialization</b>: Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughtput and reduce latency.
 
-- <b>No schema registry needed</b>: Quix streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b>.
+- <b>No schema registry needed</b>: Quix Streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b>.
 
-- <b>Built-in time-series buffers</b>: If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for reading and writing allowing several configurations for balancing between latency and cost.
+- <b>Built-in time-series buffers</b>: If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for reading and writing, allowing several configurations for balancing between latency and cost.
 
 - <b>Support for data frames</b>: In many use cases, multiple time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. The library uses a tabular system that can work for instance with <b>Pandas DataFrames</b> natively. Each row has a timestamp and <b>user-defined tags</b> as indexes.
 
@@ -165,13 +169,13 @@ This library provides several features and solves common problems you face when 
 
 - <b>Checkpointing</b>: Quix Streams allows manual or automatic checkpointing when you read data from a Kafka Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point.
 
-- <b>Horizontal scaling</b>: Quix Streams handles horizontal scale out of the box via the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas consistenly.
+- <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas consistently.
 
 For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/sdk/introduction.html)
 
-### Comming soon
+### Coming soon
 
-This library is actively in developing process. We have some features planned in the [road map](https://github.com/orgs/quixai/projects/1) of the library comming soon:
+This library is actively in developing process. We have some features planned in the [road map](https://github.com/orgs/quixai/projects/1) of the library coming soon:
 
 (WIP)
 
@@ -179,14 +183,14 @@ This library is actively in developing process. We have some features planned in
 
 ### Interoperability wrappers
 
-Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement other languages support like <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. (Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/))
+The Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement support for other languages such as <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/).
 
-You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language specific client. For instance for Python:
+You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language-specific client. For instance for Python:
 
 - `/Python/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
 - `/Python/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
 
-These scripts are compiling the C# base library and then using the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is an structure like this:
+These scripts compile the C# base library and then use the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is a structure like this:
 
 ```
 
@@ -206,11 +210,11 @@ These scripts are compiling the C# base library and then using the `InteropGener
 
 ```
 
-The non auto-generated `Python client library` still need to be maintained manually but it is something expected because each language has his own language specific features and naming conventions that we want to keep aligned with the language user expectations. If you want to add a new feature of the library that is common to all the languages you should implement that feature in the C# base library first, re-generate the Interop wrappers, and then modify the Python client library to wire up the new feature of the base library.
+The non auto-generated `Python client library` still needs to be maintained manually, but this is expected because each language has its own language-specific features and naming conventions that we want to keep aligned with the language user expectations. If you want to add a new feature of the library that is common to all the languages, you should implement that feature in the C# base library first, re-generate the Interop wrappers, and then modify the Python client library to wire up the new feature of the base library.
 
 ### Base library
 
-Quix Streams base library is implemented in C#, therefore if your target language is C# you will use directly that base library without any [Interoperability wrapper](#interoperability-wrappers) involved on the execution. 
+Quix Streams base library is implemented in C#, therefore if your target language is C#, you will use that base library without any [Interoperability wrapper](#interoperability-wrappers) involved on the execution. 
 
 This base library is organized in 3 main layers:
 
@@ -234,26 +238,27 @@ This base library is organized in 3 main layers:
 
 ```
 
- Each layer has his own responsabilities:
+Each layer has his own responsibilities:
  
-- <b>Streaming layer</b>: It is the main layer of the library that users should use by default. It includes among others, all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsability of this layer is the <b>embedded time-series buffer</b> system.
+- <b>Streaming layer</b>: This is the main layer of the library that users should use by default. It includes all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsibility of this layer is the <b>embedded time-series buffer</b> system.
 
-- <b>Telemetry layer</b>: This layer is responsible of implementing the `Codecs` serialization and de-serialization of all the <b>Telemetry messages</b> of the Quix Streams protocol like time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as the creating the [Stream context](#library-features-) scopes responsible of the separation between data comming from different sources. This layer also implement a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
+- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of the Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
 
-- <b>Transport layer</b>: This layer is responsible of the <b>communication with the message broker</b> and implementing some features to deal with the own message broker features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible to implement a `wrapping messages system` to allow different messages types of the library Protocol and to define the base classes for the `Codecs` implementation of each messages of that Protocol on ther upper layers of the library. For <b>Kafka</b> support this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), that at the same time uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka) under the hood.
+- <b>Transport layer</b>: This layer is responsible for the <b>communication with the message broker</b> and implementing some features to deal with the message broker's features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible for implementing a `wrapping messages system` to allow different message types of the library Protocol, and to define the base classes for the `Codecs` implementation of each messages of that Protocol on the upper layers of the library. For <b>Kafka</b> support, this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), which uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka).
 
-For wider information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
+For more information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
 
 ## Using Quix Streams with Quix SaaS platform
 
-This library doesn't have any dependency to any comercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of box during your development process like auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics and more.
+This library doesn't have any dependency on any commercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of the box during your development process such as auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics, and more.
 
 ## Contribution Guide
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Read first our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
 
 ## Need help?
-If you run into any problems, ask on #quixhelp in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixai/quix-streams/issues)
+
+If you run into any problems, ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixai/quix-streams/issues)
 
 ## Roadmap
 
