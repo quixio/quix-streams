@@ -13,4 +13,4 @@ consumer side, in a totally transparent way.
 ![High level of splitting / merging flow](../images/QuixSdkSplitting.png)
 
 This feature gives you an unlimited message size, independent of the
-Message Broker used behind.
+Message Broker used.

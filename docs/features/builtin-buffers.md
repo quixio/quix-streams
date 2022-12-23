@@ -34,4 +34,4 @@ conversions between raw transport packages and
 low CPU and memory consumption, and high throughput. We are happy to say
 that we have achieved these three things in the SDK — simplicity, low
 resource consumption, and very high performance — and you don’t need to
-even worry about buffering because it’s provided out-of-box.
+even worry about buffering because it’s provided in the SDK.

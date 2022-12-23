@@ -8,7 +8,7 @@ of data to process was relatively low, and the latency needed was on the
 scale of "days". But with a world changing to more real-time use cases
 where you need results on the scale of seconds or nanoseconds, and where
 you can get millions of IoT devices sending data to process at the same
-time, traditional database-centric architectures just explode.
+time, traditional database-centric architectures don't scale.
 
 ![Traditional architecture for data processing](../images/InMemoryProcessing1.png)
 

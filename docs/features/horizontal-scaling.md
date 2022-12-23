@@ -1,6 +1,6 @@
 # Horizontal scaling
 
-The Quix SDK provides horizontal scaling out of the box via the
+The Quix SDK provides horizontal scaling with the
 [streaming context](/sdk/features/streaming-context). This means a data
 scientist or data engineer does not have to implement parallel
 processing themselves.
@@ -22,8 +22,6 @@ assigned automatically to the blue replica.
 
 This situation will trigger an event on the SDK in the blue replica
 indicating that "stream 4" has been received:
-
-
 
 === "Python"
     
@@ -57,8 +55,6 @@ takes back control of "stream 4".
 This will trigger two events, one in the blue replica indicating that
 "stream 4" has been revoked, and one in the purple replica indicating
 that "stream 4" has been assigned again:
-
-
 
 === "Python"
     
@@ -105,7 +101,7 @@ New stream received: stream 4
 
 The same behaviour will happen if we scale the "Process" deployment up
 or down, increasing or decreasing the number of replicas. Kafka will
-trigger the rebalacing mechanism internally and this will trigger the
+trigger the rebalancing mechanism internally and this will trigger the
 same events on the Quix SDK.
 
 ## Rebalancing mechanism and Partitions
