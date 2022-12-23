@@ -1,7 +1,7 @@
 # Introduction
 
 The Quix SDK makes it quick and easy to develop streaming applications.
-It’s designed to be used for high performance telemetry services where
+It’s designed to be used for high-performance telemetry services where
 you need to process high volumes of data in a nanosecond response time.
 
 The SDK is available for Python and C\#.
@@ -15,9 +15,7 @@ Using the Quix SDK, you can:
   - [Process data](/sdk/process) by [reading](/sdk/read) it from one
     Topic and [writing](/sdk/write) the results to another one.
 
-To support these operations, the SDK provides several useful features
-out of the box, and solves all the common problems you should face when
-developing real-time streaming applications:
+To support these operations, the SDK provides several useful features, and solves all the common problems you may face when developing real-time streaming applications:
 
 ## Streaming context
 
@@ -94,9 +92,9 @@ section of this documentation for more information.
 The Quix SDK automatically serializes data from native types in your
 language. You can work with familiar data types, such as [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe),
-without worrying about conversion. Serialization can be painful,
+without worrying about conversion. Serialization can be difficult,
 especially if it is done with performance in mind. We serialize native
-types using our codecs so you don’t have to worry about that.
+types using our codecs so you don’t have to implement that.
 
 Refer to the [Data serialization](/sdk/features/data-serialization)
 section of this documentation for more information.
@@ -136,7 +134,7 @@ this documentation for more information.
 
 ## Horizontal scaling
 
-The Quix SDK provides horizontal scale out of the box via the [streaming
+The Quix SDK provides horizontal scale using the [streaming
 context](/sdk/features/streaming-context) feature. This means a data
 scientist or data engineer does not have to implement parallel
 processing themselves. You can scale the processing models, from one
@@ -149,7 +147,7 @@ section of this documentation for more information.
 
 ## Integrations
 
-The SDK offers integrations out of the box, including data persistence
+The SDK offers integrations, including data persistence
 and historic or real-time APIs with other systems. That means you don’t
 have to implement them by yourself.
 
@@ -168,7 +166,7 @@ documentation for more information.
 
 The Quix SDK uses an internal protocol which is both data and speed
 optimized so we do encourage you to use it. For that you need to use the
-SDK on both producer ( writer ) and consumer ( reader ) sides.
+SDK on both producer (writer) and consumer (reader) sides.
 
 However, in some cases, you simply do not have the ability to run the
 Quix SDK on both sides.
@@ -176,5 +174,5 @@ Quix SDK on both sides.
 To cater for these cases we added the ability to both
 [write](/sdk/write#write-raw-kafka-messages) and [read](/sdk/read#read-raw-kafka-messages)
 the raw, unformatted, messages as byte array. This is giving you the
-freedom to implement the protocol as needed ( e.g. JSON, comma-separated
-rows ).
+freedom to implement the protocol as needed (e.g. JSON, comma-separated
+rows).

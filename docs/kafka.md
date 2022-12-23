@@ -2,16 +2,16 @@
 
 The Quix SDK helps you to leverage Kafka’s powerful features with ease.
 
-### Why this is important
+## Why this is important
 
 Kafka is a powerful but complex technology to master. Using the Quix
 SDK, you can leverage the power of Kafka without worrying about
 mastering it. There are just a couple of important concepts to grasp,
 the rest is handled in the background by the SDK.
 
-### Concepts
+## Concepts
 
-#### Topic replica
+### Topic replica
 
 Each topic can be set to replicate over the Kafka cluster for increased
 resilience, so a failure of a node will not cause downtime of your
@@ -22,14 +22,14 @@ you send to the topic will be replicated twice in the cluster.
 
 	If you set replication to two, data streamed to the cluster is billed twice.
 
-#### Topic retention
+### Topic retention
 
 Each topic has temporary storage. Every message sent to the topic will
 live in Kafka for a configured amount of time or size. That means that a
 consumer can join the topic later and still consume messages. If your
 processing pipeline has downtime, no data is lost.
 
-#### Topic partitions
+### Topic partitions
 
 Each Kafka topic is created with a number of partitions. You can add
 more partitions later, but you can’t remove them. Each partition is an
@@ -39,7 +39,7 @@ That means that inside one stream, a consumer can rely on the order of
 messages. Partitions are spread across your Kafka cluster, over
 different Kafka nodes, for improved performance.
 
-##### Redistribution of load
+#### Redistribution of load
 
 Streams are redistributed over available partitions. With an increasing
 number of streams, each partition will end up with approximately the
@@ -49,7 +49,7 @@ same number of streams.
 
 	The number of partitions sets the limit for how many parallel instances of one model can process the topic. For example: A topic with three partitions can be processed with up to 3 instances of a model. The fourth instance will remain idle.
 
-#### Consumer group
+### Consumer group
 
 The **Consumer group** is a concept of how to horizontally scale topic
 processing. Each consumer group has an ID, which you set when opening a
@@ -69,7 +69,7 @@ will share partitions between each other and therefore share the load.
   - If you decrease the number, partitions left by leaving instances get
     reassigned to remaining processing instances in the consumer group.
 
-#### Checkpointing
+### Checkpointing
 
 We can think of Kafka temporary storage as a processing queue for each
 partition. Consumer groups read from this queue and regularly commit
@@ -96,7 +96,7 @@ will start reading from the start of the Kafka queue.
 
 	When you open a topic you can also choose where to start reading data from. Either read all the data from the start or only read the new data as it arrives. Read more [here](/sdk/read#_open_a_topic_for_reading)
 
-#### Data Grouping
+### Data Grouping
 
 Topics group data streams from a single type of source. The golden rule
 for maximum performance is to always maintain one schema per topic.
@@ -117,7 +117,7 @@ For example:
     of the pipeline ie raw-data-topic → cleaning model →
     clean-data-topic → ML model → results topic
 
-#### Data Governance
+### Data Governance
 
 Topics are key to good data governance. Use them to organize your data
 by:
@@ -129,7 +129,7 @@ by:
   - Create prototyping topics to publish results of models in
     development.
 
-#### Scale
+### Scale
 
 Topics automatically scale. We have designed the underlying
 infrastructure to automatically stream any amount of data from any
@@ -137,7 +137,7 @@ number of sources. With Quix you can connect one source - like a car,
 wearable or web app - to do R\&D, then scale your solution to millions
 of cars, wearables or apps in production, all on the same topic.
 
-#### Security
+### Security
 
 Our topics are secured with industry standard SSL data encryption and
 SASL ACL authorization and authentication. You can safely send data over

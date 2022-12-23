@@ -52,7 +52,7 @@ environment variable.
     var client = new Quix.Sdk.Streaming.QuixStreamingClient("your_token");
     ```
 
-Using the streaming client is another way to talk with a broker. It
+Using the streaming client is another way to communicate with a broker. It
 is a Kafka specific client implementation that requires some
 explicit configuration but allows you to connect to any Kafka
 cluster even outside Quix platform. It involves the following steps:
@@ -72,7 +72,7 @@ your connection and how to create a `StreamingClient` instance to
 start [Reading](/sdk/read.md) and [Writing](/sdk/write.md) real-time
 time series data with Quix:
     
-### Set Up the Security Options for Your Connection
+### Set up the SecurityOptions for your connection
     
 === "Python"
 	
@@ -88,7 +88,7 @@ time series data with Quix:
 	var client = new Quix.Sdk.Streaming.StreamingClient("kafka-k1.quix.ai:9093,kafka-k2.quix.ai:9093,kafka-k3.quix.ai:9093", security);
 	```
 
-=== "Javascript"
+=== "JavaScript"
 
 	Quix web APIs are secured with OAuth2.0 bearer scheme.
 	Therefore, all HTTP requests to Quix must contain a valid bearer

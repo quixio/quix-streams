@@ -98,7 +98,7 @@ only a subset of the streams incoming to the Input Topic.
 
 	If you want to consume data from the topic locally for debugging purposes, and the model is also deployed in the Quix serverless environment, make sure that you change the consumer group ID to prevent clashing with the cloud deployment. If the clash happens, only one instance will be able to read data of the Stream at a time, and you will probably notice that your code is not receiving data at some point, either locally or in the cloud environment.
 
-## Reading Streams
+## Reading streams
 
 
 

@@ -17,7 +17,7 @@ Python environment on Linux, Mac or Windows.
 
 	Make sure you’re using Python version 3.7\>=, \<3.9
 
-## Install Dependencies
+## Install dependencies
 
 To get started, install the SDK dependencies.
 
@@ -121,7 +121,7 @@ To get started, install the SDK dependencies.
     
     !!! note
     
-		Because of the variability between linux distributions we highly recommend using a Docker environment ( see [Docker setup](/sdk/docker-setup) ) in case you experience any issues during the installation.
+		Because of the variability between Linux distributions we highly recommend using a Docker environment ( see [Docker setup](/sdk/docker-setup) ) in case you experience any issues during the installation.
     
       - Install and configure PythonNet dependencies - Ubuntu 20.04
         
@@ -137,7 +137,7 @@ To get started, install the SDK dependencies.
     sudo apt install mono-devel
     ```
     
-    For other linux distributions, please see the Mono [current release
+    For other Linux distributions, please see the Mono [current release
     page](https://www.mono-project.com/download/stable/#download-lin)
     and [older Releases
     page](https://www.mono-project.com/docs/getting-started/install/linux/#accessing-older-releases)
@@ -151,9 +151,9 @@ To get started, install the SDK dependencies.
     python3 -m pip install pycparser
     ```
     
-    In some distributions librdkafka-dev will not be readily available
+    In some distributions `librdkafka-dev` will not be readily available
     and guide (<https://github.com/edenhill/librdkafka>) must be
-    followed. For ubuntu 20.04, the following steps are readily curated
+    followed. For Ubuntu 20.04, the following steps are readily curated
     for you:
     
     ``` bash
@@ -167,15 +167,9 @@ To get started, install the SDK dependencies.
 
 
 
-## Create New Python Environment
+## Create new Python environment
 
-It’s good practice to use a python virtual environment and it is doubly
-true when using the Quix streaming library. The library currently relies
-on some dll redirecting, which is achieved by adding a file to your
-python environment. This is done automatically, but if you have other
-python application(s)/package(s) that also rely on similar redirection
-then a virtual environment is advised.
-
+It’s good practice to use a Python virtual environment, especially when using the Quix streaming library. The library currently relies on some DLL redirecting, which is achieved by adding a file to your Python environment. This is done automatically, but if you have other Python application(s)/package(s) that also rely on similar redirection, then a virtual environment is advised.
 
 
 === "MacOS"
@@ -229,9 +223,7 @@ then a virtual environment is advised.
     the virtual environment activated or are happy to install globally.
 
 
-
 ## Install code requirements
-
 
 
 === "MacOS"
@@ -262,9 +254,7 @@ then a virtual environment is advised.
     ```
 
 
-
-Your environment should be ready to run the code\!
-
+Your environment should be ready to run the code:
 
 
 === "MacOS"
@@ -284,5 +274,4 @@ Your environment should be ready to run the code\!
     ``` bash
     python3 main.py
     ```
-
 

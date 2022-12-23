@@ -1,7 +1,7 @@
 # Set up docker environment
 
 Docker is an alternative to the classic environment setup for local
-development ( see [Set up your local IDE](/sdk/python-setup) )
+development. See also [Set up your local IDE](/sdk/python-setup).
 
 !!! note
 
@@ -15,10 +15,10 @@ Isolation is achieved by creating a lightweight container (Docker
 Container) which behaves like a virtual machine (in our case Ubuntu
 Linux).
 
-## Install Prerequisities
+## Install prerequisites
 
 In order to use the Quix SDK in Docker you need to have installed these
-prerequisities.
+prerequisites.
 
   - Docker (tested on version 20.10.17)
 
@@ -47,7 +47,7 @@ To install docker-compose, please follow the guide [here (
 
 	If you are on Windows then you can skip this step because the Docker installation package from the step 1 already contains the docker-compose tool.
 
-## Start with downloading a couple of things
+## Download requirements
 
   - Download the project then navigate to your solution’s root folder.
 

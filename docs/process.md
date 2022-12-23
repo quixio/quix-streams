@@ -1,6 +1,6 @@
 # Processing data
 
-The Quix SDK is specifically designed to make real time data processing
+The Quix SDK is specifically designed to make real-time data processing
 very easy. We provide high-performance technology, inherited from F1, in
 a way that anybody with basic development skills can understand and use
 it very quickly.
