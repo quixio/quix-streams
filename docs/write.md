@@ -20,7 +20,7 @@ client, `QuixStreamingClient`. This is the central point where you
 interact with the main SDK operations.
 
 You can create an instance of `QuixStreamingClient` using the proper
-constructor of the SDK.
+constructor of the SDK, as shown here:
 
 
 
@@ -70,14 +70,14 @@ client’s `open_output_topic` method, passing the `TOPIC_ID` or the
 ## Create / Attach to a Stream
 
 [Streams](/sdk/features/streaming-context) are the central context of
-data in Quix. Streams make easy to manage, discover, and work with your
-data. They are key to good data governance in your organisation. Also,
+data in Quix. Streams make it easy to manage, discover, and work with your
+data. They are key to good data governance in your organization. Also,
 Streams are vital for
 [parallelizing](/sdk/features/horizontal-scaling) huge data loads
 with an infinite number of data sources.
 
 You can create as many streams as you want using the `create_stream`
-method of your `OutputTopic` instance.
+method of your `OutputTopic` instance:
 
 
 
@@ -95,8 +95,8 @@ method of your `OutputTopic` instance.
 
 
 
-A stream ID is auto-generated but you can also pass a `StreamId` to the
-method to append or update data of an existing stream.
+A stream ID is auto-generated, but you can also pass a `StreamId` to the
+method to append or update data of an existing stream:
 
 
 
@@ -120,7 +120,7 @@ As an option, you can add context to your streams by adding a name, some
 metadata, or a default location.
 
 You can add this metadata to a stream using the `Properties` options of
-the generated `stream` instance.
+the generated `stream` instance:
 
 
 
@@ -210,11 +210,11 @@ arrive, but they can and should be closed when you know that you have
 all the data you need. They will also be closed automatically when your
 service stops.
 
-However, sometimes a stream can be closed for other reasons e.g. if an
-error occurrs in the writer code or something unexpected happens.
+However, sometimes a stream can be closed for other reasons, such as if an
+error occurs in the writer code, or something unexpected happens.
 
 These snippets show you how to close a stream and how to specify the
-StreamEndType.
+`StreamEndType`:
 
 
 
@@ -238,15 +238,13 @@ StreamEndType.
 
 
 
-The StreamEndType can be one of:
+The `StreamEndType` can be one of the following possible end types:
 
 | StreamEndType | Description                                                         |
 | ------------- | ------------------------------------------------------------------- |
 | Closed        | The stream was closed normally                                      |
 | Aborted       | The stream was aborted by your code for your own reasons            |
 | Terminated    | The stream was terminated unexpectedly while data was being written |
-
-Possible end types
 
 ## Writing Parameter Data
 
@@ -264,7 +262,7 @@ time basis and with a fixed number of Parameters.
 ### Parameter Data format
 
 [ParameterData](#parameter-data-format) is the formal class in the SDK
-which represents a time series data packet in memory.
+which represents a time-series data packet in memory.
 
 [ParameterData](#parameter-data-format) consists of a list of
 Timestamps with their corresponding Parameter Names and Values for each
@@ -274,6 +272,8 @@ You should imagine a Parameter Data as a table where the Timestamp is
 the first column of that table and where the Parameters are the columns
 for the Values of that table.
 
+The following table shows an example of Parameter Data:
+
 | Timestamp | Speed | Gear |
 | --------- | ----- | ---- |
 | 1         | 120   | 3    |
@@ -281,16 +281,14 @@ for the Values of that table.
 | 3         | 125   | 3    |
 | 6         | 110   | 2    |
 
-An example of ParameterData
-
 !!! tip
 
 	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of that table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
-The Quix SDK provides several helpers to create and send ParameterData
+The Quix SDK provides several helpers to create and send `ParameterData`
 packets through the stream.
 
-The following code would generate the previous ParameterData and send it
+The following code would generate the previous `ParameterData` and send it
 to the stream:
 
 
@@ -339,10 +337,10 @@ to the stream:
 
 
 
-Although Quix allows you to send ParameterData to a stream directly,
-without any buffering, we recommended you use the built-in
+Although Quix allows you to send `ParameterData` to a stream directly,
+without any buffering, Quix recommendeds you use the built-in
 [Buffer](#buffer) feature to achieve high throughput speeds. The
-following code would send the same ParameterData through a buffer:
+following code would send the same `ParameterData` through a buffer:
 
 
 
@@ -450,7 +448,7 @@ to the stream. You can use any value you like to act as a base, from
 which point timestamps will be relative to.
 
 The following code indicates to the SDK to add the current date/time to
-each timestamp added to the stream.
+each timestamp added to the stream:
 
 
 
@@ -526,13 +524,9 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
 
 ### Buffer
 
-The Quix SDK provides a built in `Buffer` to help you achieve high
-performance data streaming without the complexity of managing underlying
-streaming technologies. Instead, you just have to configure the buffer
-with your requirements using the property `Buffer` present in the
-`Parameters` property of your stream.
+The Quix SDK provides a built in `Buffer` to help you achieve high-performance data streaming without the complexity of managing underlying streaming technologies. Instead, you just have to configure the buffer with your requirements using the property `Buffer` present in the `Parameters` property of your stream.
 
-For example the following configuration means that the SDK will send a
+For example, the following configuration means that the SDK will send a
 packet when the size of the buffer reaches 100 timestamps:
 
 
@@ -553,7 +547,7 @@ packet when the size of the buffer reaches 100 timestamps:
 
 Writing a [ParameterData](#parameter-data-format) to that buffer is as
 simple as using the `Write` method of that built-in `Buffer`, passing
-the ParameterData to write:
+the `ParameterData` to write:
 
 
 
@@ -574,10 +568,10 @@ the ParameterData to write:
 The Quix SDK also allows you to write data to the buffer without
 creating a `ParameterData` instance explicitly. To do so, you can use
 the same helper methods that are supported by the `ParameterData` class
-like `add_timestamp`, `add_value` or `add_tag`. At the end, use the
+like `add_timestamp`, `add_value` or `add_tag`. Then use the
 `write` method to write that timestamp to the buffer.
 
-This is an example of how to write data to the buffer without using an
+The following code is an example of how to write data to the buffer without using an
 explicit `ParameterData` instance:
 
 
@@ -620,7 +614,7 @@ release a new packet of data and that data is cleared from the buffer:
         elapsed from the last data received in the buffer.
     
       - `buffer.packet_size`: The maximum packet size in terms of number
-        of timestamps. Each time the buffer has this amount of
+        of timestamps. Each time the buffer has this number of
         timestamps, the packet of data is released.
     
       - `buffer.time_span_in_nanoseconds`: The maximum time between
@@ -657,7 +651,7 @@ release a new packet of data and that data is cleared from the buffer:
         elapsed from the last data received in the buffer.
     
       - `Buffer.PacketSize`: The maximum packet size in terms of number
-        of timestamps. Each time the buffer has this amount of
+        of timestamps. Each time the buffer has this number of
         timestamps, the packet of data is released.
     
       - `Buffer.TimeSpanInNanoseconds`: The maximum time between
@@ -690,9 +684,9 @@ release a new packet of data and that data is cleared from the buffer:
 
 #### Examples
 
-This buffer configuration will send data every 100ms or, if no data is
-buffered in the 1 second timout period, it will flush and empty the
-buffer anyway.
+The following buffer configuration will send data every 100ms or, if no data is
+buffered in the 1 second timeout period, it will flush and empty the
+buffer anyway:
 
 
 
@@ -712,8 +706,8 @@ buffer anyway.
 
 
 
-This buffer configuration will send data every 100ms window or if
-critical data arrives.
+The following buffer configuration will send data every 100ms window or if
+critical data arrives:
 
 
 
@@ -738,8 +732,8 @@ critical data arrives.
 The Quix SDK allows you to define metadata for parameters and events, to
 describe them. You can define things like human readable names,
 descriptions, acceptable ranges of values, etc. Quix uses some of this
-configuration when visualising data on the platform, but you can use
-also them in your own models, bridges or visualization implementations.
+configuration when visualizing data on the platform, but you can also use
+them in your own models, bridges, or visualization implementations.
 
 
 
@@ -764,7 +758,7 @@ also them in your own models, bridges or visualization implementations.
 
 
 Once you have added a new definition, you can attach some additional
-configuration to it. This is the whole list of visualization and
+configuration to it. This is the list of visualization and
 metadata options you can attach to a `ParameterDefinition`:
 
 
@@ -834,9 +828,9 @@ visualisation view. This definition:
 
 
 
-Will set up this view in Visualise:
+Will set up this view in Visualize:
 
-![visualise](images/visualisationdefinition.png)
+![visualize](images/visualisationdefinition.png)
 
 Adding additional `Definitions` for each parameter allows you to see
 data with different ranges on the same waveform view:
@@ -876,7 +870,7 @@ For example, setting this parameter location:
 
 
 Will result in this parameter hierarchy in the parameter selection
-dialogue:
+dialog:
 
 ![parameterlocation](images/parameterlocationexample.png)
 
@@ -900,8 +894,6 @@ For example, the following [ParameterData](#parameter-data-format):
 | 3         | car-1       | 125   | 3    |
 | 6         | car-2       | 110   | 2    |
 
-An example of ParameterData
-
 Is represented as the following Pandas DataFrame:
 
 | time | TAG\_\_CarId | Speed | Gear |
@@ -910,8 +902,6 @@ Is represented as the following Pandas DataFrame:
 | 2    | car-2        | 123   | 3    |
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
-
-A representation of ParameterData in a Pandas DataFrame
 
 The SDK allows you to write data to Quix using [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
@@ -935,32 +925,31 @@ stream.parameters.buffer.write(data)
 
 !!! tip
 
-	The conversions from Pandas DataFrames to [ParameterData](#parameter-data-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you probably want to directly use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
+	The conversions from Pandas DataFrames to [ParameterData](#parameter-data-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
 
 ## Writing Events
 
-EventData is the formal class in the SDK which represents an Event data
-packet in memory. EventData is meant to be used for time series data
+`EventData` is the formal class in the SDK which represents an Event data
+packet in memory. `EventData` is meant to be used for time-series data
 coming from sources that generate data at irregular intervals or without
 a defined structure.
 
 !!! tip
 
-	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [ParameterData](#parameter-data-format) format is probably a better fit for your time-series data.
+	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [ParameterData](#parameter-data-format) format is a better fit for your time-series data.
 
 Writing Events to a stream is identical to writing
 [ParameterData](#parameter-data-format) values, although you don’t
-need to use buffering features because events don’t need high
-performance throughput.
+need to use buffering features because events don’t need high-performance throughput.
 
 ### Event Data format
 
-EventData consists of a record with a Timestamp, an EventId and an
-EventValue.
+`EventData` consists of a record with a `Timestamp`, an `EventId` and an
+`EventValue`.
 
-You should imagine a list of Event Data instances as a simple table of
-three columns where the Timestamp is the first column of that table and
-the EventId and EventValue are the second and third columns.
+You should imagine a list of `EventData` instances as a simple table of
+three columns where the `Timestamp` is the first column of that table and
+the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
 
 | Timestamp | EventId     | EventValue                 |
 | --------- | ----------- | -------------------------- |
@@ -969,12 +958,10 @@ the EventId and EventValue are the second and third columns.
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-An example of a list of EventData
-
-The Quix SDK provides several helpers to create and send EventData
+The Quix SDK provides several helpers to create and send `EventData`
 packets through the stream.
 
-The following code would generate the list of EventData shown in the
+The following code would generate the list of `EventData` shown in the
 previous example and send it to the stream:
 
 
@@ -1007,14 +994,14 @@ previous example and send it to the stream:
 
 
 
-The Quix SDK lets you write Events without creating EventData instances
+The Quix SDK lets you write Events without creating `EventData` instances
 explicitly. To do so, you can use the same helpers present in
-[ParameterData](#parameter-data-format) format like `add_timestamp`,
-`add_value` or `add_tag`. At the end, use the `write` method to write
+[ParameterData](#parameter-data-format) format such as `add_timestamp`,
+`add_value` or `add_tag`. Then use the `write` method to write
 that timestamp to the stream.
 
 This is an example of how to write Events to the stream without using
-explicit EventData instances:
+explicit `EventData` instances:
 
 
 
@@ -1097,13 +1084,13 @@ Severity level for the `EventA`:
 
 ## Tags
 
-The Quix SDK allows you to tag data for ParameterData and EventData
+The Quix SDK allows you to tag data for `ParameterData` and `EventData`
 packets. Using tags alongside parameters and events helps when indexing
 persisted data in the database. Tags allow you to filter and group data
 with fast queries.
 
-Tags work as a part of the primary key inside ParameterData and
-EventData, in combination with the default Timestamp key. If you add
+Tags work as a part of the primary key inside `ParameterData` and
+`EventData`, in combination with the default Timestamp key. If you add
 data values with the same Timestamps, but a different combination of
 Tags, the timestamp will be treated as a separate row.
 
@@ -1177,7 +1164,7 @@ For example, the following code:
 
 
 
-Will generate the following ParameterData packet:
+Will generate the following `ParameterData` packet with tagged data:
 
 | Timestamp | CarId | Speed | Gear |
 | --------- | ----- | ----- | ---- |
@@ -1188,14 +1175,12 @@ Will generate the following ParameterData packet:
 | 3         | car1  | 125   | 3    |
 | 3         | car2  | 105   | 2    |
 
-ParameterData with tagged data
-
 !!! warning
 
 	Tags have to be chosen carefully as excessive cardinality leads to performance degradation in the database. You should use tags only for identifiers and not cardinal values.
 
-Good tagging: This will allow you to query the maximum speed for driver
-identifier "Peter".
+The following example of good tagging practice enables you to query the maximum speed for driver
+identifier "Peter":
 
 
 
@@ -1225,8 +1210,8 @@ identifier "Peter".
 
 
 
-Bad tagging: This will lead to excessive cardinality as there will be a
-massive number of different values for the specified tag, Speed.
+The following example of bad tagging practice will lead to excessive cardinality as there will be a
+large number of different values for the specified tag, Speed:
 
 
 
@@ -1255,7 +1240,7 @@ massive number of different values for the specified tag, Speed.
 ## Minimal example
 
 This is a minimal code example you can use to write data to a topic
-using the Quix SDK.
+using the Quix SDK:
 
 
 
@@ -1334,23 +1319,21 @@ using the Quix SDK.
 
 
 
-## Write raw kafka messages
+## Write raw Kafka messages
 
 The Quix SDK uses the message brokers' internal protocol for data
 transmission. This protocol is both data and speed optimized so we do
 encourage you to use it. For that you need to use the SDK on both
-producer ( writer ) and consumer ( reader ) sides.
+producer (writer) and consumer (reader) sides.
 
 However, in some cases, you simply do not have the ability to run the
 Quix SDK on both sides.
 
 To cater for these cases we added the ability to write the raw,
 unformatted, messages as a byte array. This gives you the freedom to
-implement the protocol as needed ( e.g. JSON, comma-separated rows ).
+implement the protocol as needed, such as JSON, or comma-separated rows.
 
-You can write messages with or without a key. In the following example,
-we show you how to write 2 messages to Kafka, one message with a key and
-one without.
+You can write messages with or without a key. The following example demonstrates how to write two messages to Kafka, one message with a key, and one without:
 
 
 
