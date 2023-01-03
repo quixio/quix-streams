@@ -19,7 +19,7 @@ Quix client, `QuixStreamingClient`. This is the central point where you
 interact with the main SDK operations.
 
 You can create an instance of `QuixStreamingClient` using the proper
-constructor of the SDK.
+constructor of the SDK, as shown here:
 
 
 
@@ -210,6 +210,8 @@ You should imagine a Parameter Data as a table where the Timestamp is
 the first column of that table and where the Parameters are the columns
 for the Values of that table.
 
+The following table shows an example of Parameter Data:
+
 | Timestamp | Speed | Gear |
 | --------- | ----- | ---- |
 | 1         | 120   | 3    |
@@ -217,9 +219,7 @@ for the Values of that table.
 | 3         | 125   | 3    |
 | 6         | 110   | 2    |
 
-An example of ParameterData
-
-You can use the `timestamps` property of a ParameterData instance to
+You can use the `timestamps` property of a `ParameterData` instance to
 access each row of that table, and the `parameters` property to access
 the values of that timestamp.
 
@@ -253,7 +253,7 @@ use the proper property depending of the value type of your Parameter:
 
 
 This is a simple example showing how to read Speed values of the
-ParameterData used in the previous example:
+`ParameterData` used in the previous example:
 
 
 
@@ -290,10 +290,7 @@ Speed - 6: 110
 
 ### Buffer
 
-The Quix SDK provides you with a programmable buffer which you can
-tailor to your needs. Using buffers to read data enhances the throughput
-of your application. This helps you to develop Models with a high
-performance throughput.
+The Quix SDK provides you with a programmable buffer which you can tailor to your needs. Using buffers to read data enhances the throughput of your application. This helps you to develop Models with a high-performance throughput.
 
 You can use the `buffer` property embedded in the `Parameters` property
 of your `stream`, or create a separate instance of that buffer using the
@@ -339,7 +336,7 @@ timestamp inside the buffer reaches 100 milliseconds:
 Reading data from that buffer is as simple as using its `OnRead` event.
 For each [ParameterData](#parameter-data-format) packet released from
 the buffer, the SDK will execute the `OnRead` event with the parameter
-data as a given parameter. For example the following code prints the
+data as a given parameter. For example, the following code prints the
 ParameterA value of the first timestamp of each packet released from the
 buffer:
 
@@ -453,9 +450,9 @@ release a new packet of data and that data is cleared from the buffer:
 
 #### Examples
 
-This buffer configuration will send data every 100ms or, if no data is
+The following buffer configuration will send data every 100ms or, if no data is
 buffered in the 1 second timeout period, it will empty the buffer and
-send the pending data anyway.
+send the pending data anyway:
 
 
 
@@ -475,8 +472,8 @@ send the pending data anyway.
 
 
 
-This buffer configuration will send data every 100ms window or if
-critical data arrives.
+The following buffer configuration will send data every 100ms window or if
+critical data arrives:
 
 
 
@@ -517,8 +514,6 @@ For example, the following [ParameterData](#parameter-data-format):
 | 3         | car-1       | 125   | 3    |
 | 6         | car-2       | 110   | 2    |
 
-An example of ParameterData
-
 Is represented as the following Pandas DataFrame:
 
 | time | TAG\_\_CarId | Speed | Gear |
@@ -527,8 +522,6 @@ Is represented as the following Pandas DataFrame:
 | 2    | car-2        | 123   | 3    |
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
-
-A representation of ParameterData in a Pandas DataFrame
 
 One simple way to read data from Quix using [Pandas
 DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
@@ -573,23 +566,23 @@ input_topic.start_reading()
 
 !!! tip
 
-	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you probably want to use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
+	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
 
 ## Reading Events
 
-EventData is the formal class in the SDK which represents an Event data
-packet in memory. EventData is meant to be used for time series data
+`EventData` is the formal class in the SDK which represents an Event data
+packet in memory. `EventData` is meant to be used for time-series data
 coming from sources that generate data at irregular intervals or without
 a defined structure.
 
 ### Event Data format
 
-EventData consists of a record with a Timestamp, an EventId and an
-EventValue.
+`EventData` consists of a record with a `Timestamp`, an `EventId` and an
+`EventValue`.
 
-You should imagine a list of Event Data instances as a simple table of
-three columns where the Timestamp is the first column of that table and
-the EventId and EventValue are the second and third columns.
+You should imagine a list of `EventData` instances as a simple table of
+three columns where the `Timestamp` is the first column of that table and
+the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
 
 | Timestamp | EventId     | EventValue                 |
 | --------- | ----------- | -------------------------- |
@@ -598,12 +591,7 @@ the EventId and EventValue are the second and third columns.
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-An example of a list of EventData
-
-Reading events from a stream is as easy as reading parameter data. In
-this case, the SDK does not use a Buffer because we don’t need high
-performance throughput, but the way we read Event Data from a `Stream`
-is identical.
+Reading events from a stream is as easy as reading parameter data. In this case, the SDK does not use a Buffer because we don’t need high-performance throughput, but the way we read Event Data from a `Stream` is identical.
 
 
 
@@ -639,7 +627,7 @@ Event read for stream. Event Id: race-event3
 ## Committing / checkpointing
 
 It is important to be aware of the commit concept when working with a
-broker. Committing allows one to mark how far data has been processed,
+broker. Committing allows you to mark how far data has been processed,
 also known as creating a checkpoint. In the event of a restart or
 rebalance, the client only processes messages from the last commit
 position. In Kafka this is equivalent to commits for a [consumer
@@ -772,17 +760,15 @@ this event using the following code:
 ### Auto Offset Reset
 
 You can control the offset that data is read from by optionally
-specifying AutoOffsetReset when you open the topic.
+specifying `AutoOffsetReset` when you open the topic.
 
-When setting the AutoOffsetReset you can specify one of three options.
+When setting the `AutoOffsetReset` you can specify one of three options:
 
 | Option   | Description                                                      |
 | -------- | ---------------------------------------------------------------- |
 | Latest   | Read only the latest data as it arrives, dont include older data |
 | Earliest | Read from the beginning, i.e. as much as possible                |
 | Error    | Throws exception if no previous offset is found                  |
-
-The possible options for AutoOffsetReset
 
 
 
@@ -909,7 +895,7 @@ required.
 
 
 
-The StreamEndType can be one of:
+The `StreamEndType` can be one of:
 
 | StreamEndType | Description                                                         |
 | ------------- | ------------------------------------------------------------------- |
@@ -917,12 +903,10 @@ The StreamEndType can be one of:
 | Aborted       | The stream was aborted by your code for your own reasons            |
 | Terminated    | The stream was terminated unexpectedly while data was being written |
 
-Possible end types
-
 ## Minimal example
 
 This is a minimal code example you can use to read data from a topic
-using the Quix SDK.
+using the Quix SDK:
 
 
 
@@ -1015,12 +999,12 @@ using the Quix SDK.
 
 
 
-## Read raw kafka messages
+## Read raw Kafka messages
 
 The Quix SDK uses the message brokers' internal protocol for data
 transmission. This protocol is both data and speed optimized so we do
 encourage you to use it. For that you need to use the SDK on both
-producer ( writer ) and consumer ( reader ) sides.
+producer (writer) and consumer (reader) sides.
 
 However, in some cases, you simply do not have the ability to run the
 Quix SDK on both sides and you need to have the ability to connect to
@@ -1030,7 +1014,7 @@ To cater for these cases we added the ability to read the raw,
 unformatted, messages. Using this feature you have the ability to access
 the raw, unmodified content of each Kafka message from the topic. The
 data is a byte array, giving you the freedom to implement the protocol
-as needed ( e.g. JSON, comma-separated rows ).
+as needed, such as JSON, or comma-separated rows.
 
 
 
