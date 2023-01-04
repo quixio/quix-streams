@@ -1,13 +1,8 @@
 # Writing data
 
-You write data to Quix using streams in your topic. The Quix SDK allows
-you to create new streams, append data to existing streams, organize
-streams in folders, and add context data to the streams.
+You write data to Quix using streams in your topic. The Quix SDK allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
 
-All the necessary code to write data to your Quix Workspace is
-auto-generated when you create a project using the existing templates.
-In this section, we explain more in-depth how to write data using the
-Quix SDK.
+All the necessary code to write data to your Quix Workspace is auto-generated when you create a project using the existing templates. In this section, we explain more in-depth how to write data using the Quix SDK.
 
 !!! tip
 
@@ -15,14 +10,9 @@ Quix SDK.
 
 ## Connect to Quix
 
-In order to start writing data to Quix you need an instance of the Quix
-client, `QuixStreamingClient`. This is the central point where you
-interact with the main SDK operations.
+In order to start writing data to Quix you need an instance of the Quix client, `QuixStreamingClient`. This is the central point where you interact with the main SDK operations.
 
-You can create an instance of `QuixStreamingClient` using the proper
-constructor of the SDK, as shown here:
-
-
+You can create an instance of `QuixStreamingClient` using the proper constructor of the SDK, as shown here:
 
 === "Python"
     
@@ -36,22 +26,13 @@ constructor of the SDK, as shown here:
     var client = new Quix.Sdk.Streaming.QuixStreamingClient();
     ```
 
-
-
-You can find more advanced information on how to connect to Quix in the
-[Connect to Quix](/sdk/connect) section.
+You can find more advanced information on how to connect to Quix in the [Connect to Quix](/sdk/connect) section.
 
 ## Open a topic
 
-Topics are the default environment for input/output real-time operations
-on Quix.
+Topics are the default environment for input/output real-time operations on Quix.
 
-In order to access that topic for writing you need an instance of
-`OutputTopic`. You can create an instance of `OutputTopic` using the
-client’s `open_output_topic` method, passing the `TOPIC_ID` or the
-`TOPIC_NAME` as a parameter.
-
-
+In order to access that topic for writing you need an instance of `OutputTopic`. You can create an instance of `OutputTopic` using the client’s `open_output_topic` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
 
 === "Python"
     
@@ -65,21 +46,11 @@ client’s `open_output_topic` method, passing the `TOPIC_ID` or the
     var outputTopic = client.OpenOutputTopic(TOPIC_ID);
     ```
 
-
-
 ## Create / Attach to a Stream
 
-[Streams](/sdk/features/streaming-context) are the central context of
-data in Quix. Streams make it easy to manage, discover, and work with your
-data. They are key to good data governance in your organization. Also,
-Streams are vital for
-[parallelizing](/sdk/features/horizontal-scaling) huge data loads
-with an infinite number of data sources.
+[Streams](/sdk/features/streaming-context) are the central context of data in Quix. Streams make it easy to manage, discover, and work with your data. They are key to good data governance in your organization. Also, Streams are vital for [parallelizing](/sdk/features/horizontal-scaling) huge data loads with an infinite number of data sources.
 
-You can create as many streams as you want using the `create_stream`
-method of your `OutputTopic` instance:
-
-
+You can create as many streams as you want using the `create_stream` method of your `OutputTopic` instance:
 
 === "Python"
     
@@ -93,12 +64,7 @@ method of your `OutputTopic` instance:
     var stream = outputTopic.CreateStream();
     ```
 
-
-
-A stream ID is auto-generated, but you can also pass a `StreamId` to the
-method to append or update data of an existing stream:
-
-
+A stream ID is auto-generated, but you can also pass a `StreamId` to the method to append or update data of an existing stream:
 
 === "Python"
     
@@ -112,17 +78,11 @@ method to append or update data of an existing stream:
     var stream = outputTopic.CreateStream("existing-stream-id");
     ```
 
-
-
 ### Stream Properties
 
-As an option, you can add context to your streams by adding a name, some
-metadata, or a default location.
+As an option, you can add context to your streams by adding a name, some metadata, or a default location.
 
-You can add this metadata to a stream using the `Properties` options of
-the generated `stream` instance:
-
-
+You can add this metadata to a stream using the `Properties` options of the generated `stream` instance:
 
 === "Python"
     
@@ -142,17 +102,11 @@ the generated `stream` instance:
     stream.Properties.Metadata["working"] = "well";
     ```
 
-
-
 ### Stream Name
 
-The stream name is the display name of your stream in the platform. If
-you specify one, Quix will use it instead of the Stream Id to represent
-your stream inside the platform.
+The stream name is the display name of your stream in the platform. If you specify one, Quix will use it instead of the Stream Id to represent your stream inside the platform.
 
 For example, the following name:
-
-
 
 === "Python"
     
@@ -166,21 +120,15 @@ For example, the following name:
     stream.Properties.Name = "Hello World my first stream";
     ```
 
-
-
-Would result in this visualization in the list of streams of your
-workspace:
+Would result in this visualization in the list of streams of your workspace:
 
 ![hierarchy](images/NameProperty.png)
 
 ### Stream Location
 
-The stream location property defines a default folder for the stream in
-the folder structure of your Persisted steams.
+The stream location property defines a default folder for the stream in the folder structure of your Persisted steams.
 
 For example, the following location:
-
-
 
 === "Python"
     
@@ -194,29 +142,19 @@ For example, the following location:
     stream.Properties.Location = $"/Game/Codemasters/F1-2019/{track}"
     ```
 
-
-
 Would result in this hierarchy:
 
 ![hierarchy](images/LocationProperties.png)
 
-Any streams sent without a location property will be located under the
-"Root" level by default.
+Any streams sent without a location property will be located under the "Root" level by default.
 
 ## Close a Stream
 
-Streams can be left open 24/7 if you aren’t sure when the next data will
-arrive, but they can and should be closed when you know that you have
-all the data you need. They will also be closed automatically when your
-service stops.
+Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you have all the data you need. They will also be closed automatically when your service stops.
 
-However, sometimes a stream can be closed for other reasons, such as if an
-error occurs in the writer code, or something unexpected happens.
+However, sometimes a stream can be closed for other reasons, such as if an error occurs in the writer code, or something unexpected happens.
 
-These snippets show you how to close a stream and how to specify the
-`StreamEndType`:
-
-
+These snippets show you how to close a stream and how to specify the `StreamEndType`:
 
 === "Python"
     
@@ -236,8 +174,6 @@ These snippets show you how to close a stream and how to specify the
     stream.Close(StreamEndType.Terminated);
     ```
 
-
-
 The `StreamEndType` can be one of the following possible end types:
 
 | StreamEndType | Description                                                         |
@@ -248,12 +184,7 @@ The `StreamEndType` can be one of the following possible end types:
 
 ## Writing Parameter Data
 
-You can now start writing data to your stream.
-[ParameterData](#parameter-data-format) is the formal class in the SDK
-which represents a time-series data packet in memory.
-[ParameterData](#parameter-data-format) is meant to be used for
-time-series data coming from sources that generate data at a regular
-time basis and with a fixed number of Parameters.
+You can now start writing data to your stream. [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory. [ParameterData](#parameter-data-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
 
 !!! tip
 
@@ -261,16 +192,11 @@ time basis and with a fixed number of Parameters.
 
 ### Parameter Data format
 
-[ParameterData](#parameter-data-format) is the formal class in the SDK
-which represents a time-series data packet in memory.
+[ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory.
 
-[ParameterData](#parameter-data-format) consists of a list of
-Timestamps with their corresponding Parameter Names and Values for each
-timestamp.
+[ParameterData](#parameter-data-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
 
-You should imagine a Parameter Data as a table where the Timestamp is
-the first column of that table and where the Parameters are the columns
-for the Values of that table.
+You should imagine a Parameter Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
 
 The following table shows an example of Parameter Data:
 
@@ -285,13 +211,9 @@ The following table shows an example of Parameter Data:
 
 	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of that table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
-The Quix SDK provides several helpers to create and send `ParameterData`
-packets through the stream.
+The Quix SDK provides several helpers to create and send `ParameterData` packets through the stream.
 
-The following code would generate the previous `ParameterData` and send it
-to the stream:
-
-
+The following code would generate the previous `ParameterData` and send it to the stream:
 
 === "Python"
     
@@ -335,14 +257,7 @@ to the stream:
     stream.Parameters.Write(data);
     ```
 
-
-
-Although Quix allows you to send `ParameterData` to a stream directly,
-without any buffering, Quix recommendeds you use the built-in
-[Buffer](#buffer) feature to achieve high throughput speeds. The
-following code would send the same `ParameterData` through a buffer:
-
-
+Although Quix allows you to send `ParameterData` to a stream directly, without any buffering, Quix recommendeds you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `ParameterData` through a buffer:
 
 === "Python"
     
@@ -356,16 +271,9 @@ following code would send the same `ParameterData` through a buffer:
     stream.Parameters.Buffer.Write(data);
     ```
 
+Visit the [Buffer](#buffer) section of this documentation to find out more about the built-in Buffer feature.
 
-
-Visit the [Buffer](#buffer) section of this documentation to find out
-more about the built-in Buffer feature.
-
-The Quix SDK allows you to attach any type of data — Numbers, Strings,
-or raw Binary data — to your timestamps. The following code will attach
-one of each to the same timestamp:
-
-
+The Quix SDK allows you to attach any type of data — Numbers, Strings, or raw Binary data — to your timestamps. The following code will attach one of each to the same timestamp:
 
 === "Python"
     
@@ -389,68 +297,39 @@ one of each to the same timestamp:
         .AddValue("ParameterC", Encoding.ASCII.GetBytes("Hello Quix!")); // Write binary data as a byte array.
     ```
 
-
-
 ### Timestamps
 
-The Quix SDK supports common date and time formats for timestamps when
-adding data to a stream.
+The Quix SDK supports common date and time formats for timestamps when adding data to a stream.
 
-The SDK gives you several helper functions to add new timestamps to
-`Buffer`, `ParamaterData`, and `EventData` instances with several types
-of date/time formats.
+The SDK gives you several helper functions to add new timestamps to `Buffer`, `ParamaterData`, and `EventData` instances with several types of date/time formats.
 
 These are all the common helper functions:
 
-
-
 === "Python"
     
-      - `add_timestamp(datetime: datetime)` : Add a new timestamp in
-        `datetime` format. Default `epoch` will never be added to this.
+      - `add_timestamp(datetime: datetime)` : Add a new timestamp in `datetime` format. Default `epoch` will never be added to this.
     
-      - `add_timestamp(time: timedelta)` : Add a new timestamp in
-        `timedelta` format since the default `epoch` determined in the
-        stream.
+      - `add_timestamp(time: timedelta)` : Add a new timestamp in `timedelta` format since the default `epoch` determined in the stream.
     
-      - `add_timestamp_milliseconds(milliseconds: int)` : Add a new
-        timestamp in milliseconds since the default `epoch` determined
-        in the stream.
+      - `add_timestamp_milliseconds(milliseconds: int)` : Add a new timestamp in milliseconds since the default `epoch` determined in the stream.
     
-      - `add_timestamp_nanoseconds(nanoseconds: int)` : Add a new
-        timestamp in nanoseconds since the default `epoch` determined in
-        the stream.
+      - `add_timestamp_nanoseconds(nanoseconds: int)` : Add a new timestamp in nanoseconds since the default `epoch` determined in the stream.
 
 === "C\#"
     
-      - `AddTimestamp(DateTime dateTime)` : Add a new timestamp in
-        `DateTime` format. Default `Epoch` will never be added to this.
+      - `AddTimestamp(DateTime dateTime)` : Add a new timestamp in `DateTime` format. Default `Epoch` will never be added to this.
     
-      - `AddTimestamp(TimeSpan timeSpan)` : Add a new timestamp in
-        `TimeSpan` format since the default `Epoch` determined in the
-        stream.
+      - `AddTimestamp(TimeSpan timeSpan)` : Add a new timestamp in `TimeSpan` format since the default `Epoch` determined in the stream.
     
-      - `AddTimestampMilliseconds(long timeMilliseconds)` : Add a new
-        timestamp in milliseconds since the default `Epoch` determined
-        in the stream.
+      - `AddTimestampMilliseconds(long timeMilliseconds)` : Add a new timestamp in milliseconds since the default `Epoch` determined in the stream.
     
-      - `AddTimestampNanoseconds(long timeNanoseconds)` : Add a new
-        timestamp in nanoseconds since the default `Epoch` determined in
-        the stream.
-
-
+      - `AddTimestampNanoseconds(long timeNanoseconds)` : Add a new timestamp in nanoseconds since the default `Epoch` determined in the stream.
 
 #### Epoch
 
-There is a stream property called `Epoch` (set to 0 by default) that is
-added to every timestamp (except for datetime formats) when it’s added
-to the stream. You can use any value you like to act as a base, from
-which point timestamps will be relative to.
+There is a stream property called `Epoch` (set to 0 by default) that is added to every timestamp (except for datetime formats) when it’s added to the stream. You can use any value you like to act as a base, from which point timestamps will be relative to.
 
-The following code indicates to the SDK to add the current date/time to
-each timestamp added to the stream:
-
-
+The following code indicates to the SDK to add the current date/time to each timestamp added to the stream:
 
 === "Python"
     
@@ -464,11 +343,7 @@ each timestamp added to the stream:
     stream.Epoch = DateTime.Today;
     ```
 
-
-
 Adding data without using Epoch property:
-
-
 
 === "Python"
     
@@ -490,11 +365,7 @@ Adding data without using Epoch property:
         .Write();
     ```
 
-
-
 Or we can add a timestamp 1000ms from the epoch *"Today"*:
-
-
 
 === "Python"
     
@@ -520,16 +391,11 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
         .Write();
     ```
 
-
-
 ### Buffer
 
 The Quix SDK provides a built in `Buffer` to help you achieve high-performance data streaming without the complexity of managing underlying streaming technologies. Instead, you just have to configure the buffer with your requirements using the property `Buffer` present in the `Parameters` property of your stream.
 
-For example, the following configuration means that the SDK will send a
-packet when the size of the buffer reaches 100 timestamps:
-
-
+For example, the following configuration means that the SDK will send a packet when the size of the buffer reaches 100 timestamps:
 
 === "Python"
     
@@ -543,13 +409,7 @@ packet when the size of the buffer reaches 100 timestamps:
     stream.Parameters.Buffer.PacketSize = 100;
     ```
 
-
-
-Writing a [ParameterData](#parameter-data-format) to that buffer is as
-simple as using the `Write` method of that built-in `Buffer`, passing
-the `ParameterData` to write:
-
-
+Writing a [ParameterData](#parameter-data-format) to that buffer is as simple as using the `Write` method of that built-in `Buffer`, passing the `ParameterData` to write:
 
 === "Python"
     
@@ -563,18 +423,9 @@ the `ParameterData` to write:
     stream.Parameters.Buffer.Write(data);
     ```
 
+The Quix SDK also allows you to write data to the buffer without creating a `ParameterData` instance explicitly. To do so, you can use the same helper methods that are supported by the `ParameterData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the buffer.
 
-
-The Quix SDK also allows you to write data to the buffer without
-creating a `ParameterData` instance explicitly. To do so, you can use
-the same helper methods that are supported by the `ParameterData` class
-like `add_timestamp`, `add_value` or `add_tag`. Then use the
-`write` method to write that timestamp to the buffer.
-
-The following code is an example of how to write data to the buffer without using an
-explicit `ParameterData` instance:
-
-
+The following code is an example of how to write data to the buffer without using an explicit `ParameterData` instance:
 
 === "Python"
     
@@ -598,97 +449,43 @@ explicit `ParameterData` instance:
         .Write();
     ```
 
-
-
-You can configure multiple conditions to determine when the Buffer has
-to release data. If any of these conditions become true, the buffer will
-release a new packet of data and that data is cleared from the buffer:
-
-
+You can configure multiple conditions to determine when the Buffer has to release data. If any of these conditions become true, the buffer will release a new packet of data and that data is cleared from the buffer:
 
 === "Python"
     
-      - `buffer.buffer_timeout`: The maximum duration in milliseconds
-        for which the buffer will be held before releasing the data. A
-        packet of data is released when the configured timeout value has
-        elapsed from the last data received in the buffer.
+      - `buffer.buffer_timeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.
     
-      - `buffer.packet_size`: The maximum packet size in terms of number
-        of timestamps. Each time the buffer has this number of
-        timestamps, the packet of data is released.
+      - `buffer.packet_size`: The maximum packet size in terms of number of timestamps. Each time the buffer has this number of timestamps, the packet of data is released.
     
-      - `buffer.time_span_in_nanoseconds`: The maximum time between
-        timestamps in nanoseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released.
+      - `buffer.time_span_in_nanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.
     
-      - `buffer.time_span_in_milliseconds`: The maximum time between
-        timestamps in milliseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released. Note: This is a millisecond
-        converter on top of `time_span_in_nanoseconds`. They both work
-        with the same underlying value.
+      - `buffer.time_span_in_milliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.
     
-      - `buffer.custom_trigger_before_enqueue`: A custom function which
-        is invoked **before** adding a new timestamp to the buffer. If
-        it returns true, the packet of data is released before adding
-        the timestamp to it.
+      - `buffer.custom_trigger_before_enqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.
     
-      - `buffer.custom_trigger`: A custom function which is invoked
-        **after** adding a new timestamp to the buffer. If it returns
-        true, the packet of data is released with the entire buffer
-        content.
+      - `buffer.custom_trigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.
     
-      - `buffer.filter`: A custom function to filter the incoming data
-        before adding it to the buffer. If it returns true, data is
-        added, otherwise it isn’t.
+      - `buffer.filter`: A custom function to filter the incoming data before adding it to the buffer. If it returns true, data is added, otherwise it isn’t.
 
 === "C\#"
     
-      - `Buffer.BufferTimeout`: The maximum duration in milliseconds for
-        which the buffer will be held before releasing the data. A
-        packet of data is released when the configured timeout value has
-        elapsed from the last data received in the buffer.
+      - `Buffer.BufferTimeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.
     
-      - `Buffer.PacketSize`: The maximum packet size in terms of number
-        of timestamps. Each time the buffer has this number of
-        timestamps, the packet of data is released.
+      - `Buffer.PacketSize`: The maximum packet size in terms of number of timestamps. Each time the buffer has this number of timestamps, the packet of data is released.
     
-      - `Buffer.TimeSpanInNanoseconds`: The maximum time between
-        timestamps in nanoseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released.
+      - `Buffer.TimeSpanInNanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.
     
-      - `Buffer.TimeSpanInMilliseconds`: The maximum time between
-        timestamps in milliseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released. Note: This is a millisecond
-        converter on top of `time_span_in_nanoseconds`. They both work
-        with the same underlying value.
+      - `Buffer.TimeSpanInMilliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.
     
-      - `Buffer.CustomTriggerBeforeEnqueue`: A custom function which is
-        invoked **before** adding a new timestamp to the buffer. If it
-        returns true, the packet of data is released before adding the
-        timestamp to it.
+      - `Buffer.CustomTriggerBeforeEnqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.
     
-      - `Buffer.CustomTrigger`: A custom function which is invoked
-        **after** adding a new timestamp to the buffer. If it returns
-        true, the packet of data is released with the entire buffer
-        content.
+      - `Buffer.CustomTrigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.
     
-      - `Buffer.Filter`: A custom function to filter the incoming data
-        before adding it to the buffer. If it returns true, data is
-        added, otherwise it isn’t.
-
-
+      - `Buffer.Filter`: A custom function to filter the incoming data before adding it to the buffer. If it returns true, data is added, otherwise it isn’t.
 
 #### Examples
 
-The following buffer configuration will send data every 100ms or, if no data is
-buffered in the 1 second timeout period, it will flush and empty the
-buffer anyway:
-
-
+The following buffer configuration will send data every 100ms or, if no data is buffered in the 1 second timeout period, it will flush and empty the buffer anyway:
 
 === "Python"
     
@@ -704,12 +501,7 @@ buffer anyway:
     stream.Parameters.Buffer.BufferTimeout = 1000;
     ```
 
-
-
-The following buffer configuration will send data every 100ms window or if
-critical data arrives:
-
-
+The following buffer configuration will send data every 100ms window or if critical data arrives:
 
 === "Python"
     
@@ -725,55 +517,35 @@ critical data arrives:
     stream.Parameters.Buffer.CustomTrigger = data => data.Timestamps[0].Tags["is_critical"] == "True";
     ```
 
-
-
 ### Parameter Definitions
 
-The Quix SDK allows you to define metadata for parameters and events, to
-describe them. You can define things like human readable names,
-descriptions, acceptable ranges of values, etc. Quix uses some of this
-configuration when visualizing data on the platform, but you can also use
-them in your own models, bridges, or visualization implementations.
-
-
+The Quix SDK allows you to define metadata for parameters and events, to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, etc. Quix uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
 
 === "Python"  
-    We call this parameter metadata `ParameterDefinitions`, and all you
-    need to do is to use the `add_definition` helper function of the
-    `stream.parameters` property:
+    We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `add_definition` helper function of the `stream.parameters` property:
     
     ``` python
     parameters.add_definition(parameter_id: str, name: str = None, description: str = None)
     ```
 
 === "C\#"  
-    We call this parameter metadata `ParameterDefinitions`, and all you
-    need to do is to use the `AddDefinition` helper function of the
-    `stream.Parameters` property:
+    We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `AddDefinition` helper function of the `stream.Parameters` property:
     
     ``` cs
     Parameters.AddDefinition(parameterId: string, name: string = null, description: string = null)
     ```
 
-
-
-Once you have added a new definition, you can attach some additional
-configuration to it. This is the list of visualization and
-metadata options you can attach to a `ParameterDefinition`:
-
-
+Once you have added a new definition, you can attach some additional configuration to it. This is the list of visualization and metadata options you can attach to a `ParameterDefinition`:
 
 === "Python"
     
-      - `set_range(minimum_value: float, maximum_value: float)` : Set
-        the minimum and maximum range of the parameter.
+      - `set_range(minimum_value: float, maximum_value: float)` : Set the minimum and maximum range of the parameter.
     
       - `set_unit(unit: str)` : Set the unit of the parameter.
     
       - `set_format(format: str)` : Set the format of the parameter.
     
-      - `set_custom_properties(custom_properties: str)` : Set the custom
-        properties of the parameter.
+      - `set_custom_properties(custom_properties: str)` : Set the custom properties of the parameter.
     
     Example:
     
@@ -787,15 +559,13 @@ metadata options you can attach to a `ParameterDefinition`:
 
 === "C\#"
     
-      - `SetRange(double minimumValue, double maximumValue)` : Set the
-        minimum and maximum range of the parameter.
+      - `SetRange(double minimumValue, double maximumValue)` : Set the minimum and maximum range of the parameter.
     
       - `SetUnit(string unit)` : Set the unit of the parameter.
     
       - `SetFormat(string format)` : Set the format of the parameter.
     
-      - `SetCustomProperties(string customProperties)` : Set the custom
-        properties of the parameter.
+      - `SetCustomProperties(string customProperties)` : Set the custom properties of the parameter.
     
     Example:
     
@@ -807,12 +577,7 @@ metadata options you can attach to a `ParameterDefinition`:
         .SetRange(0, 400);
     ```
 
-
-
-The Min and Max range definition sets the Y axis range in the waveform
-visualisation view. This definition:
-
-
+The Min and Max range definition sets the Y axis range in the waveform visualisation view. This definition:
 
 === "Python"
     
@@ -826,26 +591,17 @@ visualisation view. This definition:
     .AddDefinition("Speed").SetRange(0, 400)
     ```
 
-
-
 Will set up this view in Visualize:
 
 ![visualize](images/visualisationdefinition.png)
 
-Adding additional `Definitions` for each parameter allows you to see
-data with different ranges on the same waveform view:
+Adding additional `Definitions` for each parameter allows you to see data with different ranges on the same waveform view:
 
 ![ranges](images/visualisationdefinitionrangeexample.png)
 
-You can also define a `Location` before adding parameter and event
-definitions. Locations are used to organize the Parameters and Events in
-hierarchy groups in the data catalogue. To add a Location you should use
-the `add_location` method before adding the definitions you want to
-include in that group.
+You can also define a `Location` before adding parameter and event definitions. Locations are used to organize the Parameters and Events in hierarchy groups in the data catalogue. To add a Location you should use the `add_location` method before adding the definitions you want to include in that group.
 
 For example, setting this parameter location:
-
-
 
 === "Python"
     
@@ -867,23 +623,13 @@ For example, setting this parameter location:
         .AddDefinition("Yaw");
     ```
 
-
-
-Will result in this parameter hierarchy in the parameter selection
-dialog:
+Will result in this parameter hierarchy in the parameter selection dialog:
 
 ![parameterlocation](images/parameterlocationexample.png)
 
 ### Using Data Frames
 
-If you use the Python version of the SDK you can use [Pandas
-DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
-for reading and writing ParameterData to Quix. The Pandas DataFrames
-format is just a representation of
-[ParameterData](#parameter-data-format) format, where the Timestamp is
-mapped to a column named `time` and the rest of the parameters are
-mapped as columns named as the ParameterId of the parameter. Tags are
-mapped as columns with the prefix `TAG__` and the TagId of the tag.
+If you use the Python version of the SDK you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing ParameterData to Quix. The Pandas DataFrames format is just a representation of [ParameterData](#parameter-data-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
 For example, the following [ParameterData](#parameter-data-format):
 
@@ -903,20 +649,14 @@ Is represented as the following Pandas DataFrame:
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
 
-The SDK allows you to write data to Quix using [Pandas
-DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
-directly. You just need to use the common `write` methods of the
-`stream.parameters` and `buffer`, passing the Data Frame instead of a
-[ParameterData](#parameter-data-format):
+The SDK allows you to write data to Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} directly. You just need to use the common `write` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [ParameterData](#parameter-data-format):
 
 ``` python
 df = data.to_panda_frame()
 stream.parameters.buffer.write(df)
 ```
 
-Alternatively, you can convert a Pandas Data Frame to a
-[ParameterData](#parameter-data-format) using the method
-`from_panda_frame`:
+Alternatively, you can convert a Pandas Data Frame to a [ParameterData](#parameter-data-format) using the method `from_panda_frame`:
 
 ``` python
 data = ParameterData.from_panda_frame(df)
@@ -929,27 +669,19 @@ stream.parameters.buffer.write(data)
 
 ## Writing Events
 
-`EventData` is the formal class in the SDK which represents an Event data
-packet in memory. `EventData` is meant to be used for time-series data
-coming from sources that generate data at irregular intervals or without
-a defined structure.
+`EventData` is the formal class in the SDK which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
 
 !!! tip
 
 	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [ParameterData](#parameter-data-format) format is a better fit for your time-series data.
 
-Writing Events to a stream is identical to writing
-[ParameterData](#parameter-data-format) values, although you don’t
-need to use buffering features because events don’t need high-performance throughput.
+Writing Events to a stream is identical to writing [ParameterData](#parameter-data-format) values, although you don’t need to use buffering features because events don’t need high-performance throughput.
 
 ### Event Data format
 
-`EventData` consists of a record with a `Timestamp`, an `EventId` and an
-`EventValue`.
+`EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
-You should imagine a list of `EventData` instances as a simple table of
-three columns where the `Timestamp` is the first column of that table and
-the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
+You should imagine a list of `EventData` instances as a simple table of three columns where the `Timestamp` is the first column of that table and the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
 
 | Timestamp | EventId     | EventValue                 |
 | --------- | ----------- | -------------------------- |
@@ -958,13 +690,9 @@ the `EventId` and `EventValue` are the second and third columns, as shown in the
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-The Quix SDK provides several helpers to create and send `EventData`
-packets through the stream.
+The Quix SDK provides several helpers to create and send `EventData` packets through the stream.
 
-The following code would generate the list of `EventData` shown in the
-previous example and send it to the stream:
-
-
+The following code would generate the list of `EventData` shown in the previous example and send it to the stream:
 
 === "Python"
     
@@ -992,18 +720,9 @@ previous example and send it to the stream:
     stream.Events.Write(events)
     ```
 
+The Quix SDK lets you write Events without creating `EventData` instances explicitly. To do so, you can use the same helpers present in [ParameterData](#parameter-data-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the stream.
 
-
-The Quix SDK lets you write Events without creating `EventData` instances
-explicitly. To do so, you can use the same helpers present in
-[ParameterData](#parameter-data-format) format such as `add_timestamp`,
-`add_value` or `add_tag`. Then use the `write` method to write
-that timestamp to the stream.
-
-This is an example of how to write Events to the stream without using
-explicit `EventData` instances:
-
-
+This is an example of how to write Events to the stream without using explicit `EventData` instances:
 
 === "Python"
     
@@ -1047,24 +766,17 @@ explicit `EventData` instances:
         .Write();
     ```
 
-
-
 ### Event Definitions
 
 As with parameters, you can attach `Definitions` to each event.
 
-This is the whole list of visualization and metadata options we can
-attach to a `EventDefinition`:
+This is the whole list of visualization and metadata options we can attach to a `EventDefinition`:
 
   - `set_level(level: EventLevel)` : Set severity level of the event.
 
-  - `set_custom_properties(custom_properties: str)` : Set the custom
-    properties of the event.
+  - `set_custom_properties(custom_properties: str)` : Set the custom properties of the event.
 
-For example, the following code defines a human readable name and a
-Severity level for the `EventA`:
-
-
+For example, the following code defines a human readable name and a Severity level for the `EventA`:
 
 === "Python"
     
@@ -1080,23 +792,13 @@ Severity level for the `EventA`:
     stream.Events.AddDefinition("EventA", "The Event A").SetLevel(EventLevel.Critical);
     ```
 
-
-
 ## Tags
 
-The Quix SDK allows you to tag data for `ParameterData` and `EventData`
-packets. Using tags alongside parameters and events helps when indexing
-persisted data in the database. Tags allow you to filter and group data
-with fast queries.
+The Quix SDK allows you to tag data for `ParameterData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags allow you to filter and group data with fast queries.
 
-Tags work as a part of the primary key inside `ParameterData` and
-`EventData`, in combination with the default Timestamp key. If you add
-data values with the same Timestamps, but a different combination of
-Tags, the timestamp will be treated as a separate row.
+Tags work as a part of the primary key inside `ParameterData` and `EventData`, in combination with the default Timestamp key. If you add data values with the same Timestamps, but a different combination of Tags, the timestamp will be treated as a separate row.
 
 For example, the following code:
-
-
 
 === "Python"
     
@@ -1162,8 +864,6 @@ For example, the following code:
         .AddValue("Gear", 2);
     ```
 
-
-
 Will generate the following `ParameterData` packet with tagged data:
 
 | Timestamp | CarId | Speed | Gear |
@@ -1179,10 +879,7 @@ Will generate the following `ParameterData` packet with tagged data:
 
 	Tags have to be chosen carefully as excessive cardinality leads to performance degradation in the database. You should use tags only for identifiers and not cardinal values.
 
-The following example of good tagging practice enables you to query the maximum speed for driver
-identifier "Peter":
-
-
+The following example of good tagging practice enables you to query the maximum speed for driver identifier "Peter":
 
 === "Python"
     
@@ -1208,12 +905,7 @@ identifier "Peter":
         .Write();
     ```
 
-
-
-The following example of bad tagging practice will lead to excessive cardinality as there will be a
-large number of different values for the specified tag, Speed:
-
-
+The following example of bad tagging practice will lead to excessive cardinality as there will be a large number of different values for the specified tag, Speed:
 
 === "Python"
     
@@ -1235,14 +927,9 @@ large number of different values for the specified tag, Speed:
         .Write();
     ```
 
-
-
 ## Minimal example
 
-This is a minimal code example you can use to write data to a topic
-using the Quix SDK:
-
-
+This is a minimal code example you can use to write data to a topic using the Quix SDK:
 
 === "Python"
     
@@ -1317,25 +1004,15 @@ using the Quix SDK:
     }
     ```
 
-
-
 ## Write raw Kafka messages
 
-The Quix SDK uses the message brokers' internal protocol for data
-transmission. This protocol is both data and speed optimized so we do
-encourage you to use it. For that you need to use the SDK on both
-producer (writer) and consumer (reader) sides.
+The Quix SDK uses the message brokers' internal protocol for data transmission. This protocol is both data and speed optimized so we do encourage you to use it. For that you need to use the SDK on both producer (writer) and consumer (reader) sides.
 
-However, in some cases, you simply do not have the ability to run the
-Quix SDK on both sides.
+However, in some cases, you simply do not have the ability to run the Quix SDK on both sides.
 
-To cater for these cases we added the ability to write the raw,
-unformatted, messages as a byte array. This gives you the freedom to
-implement the protocol as needed, such as JSON, or comma-separated rows.
+To cater for these cases we added the ability to write the raw, unformatted, messages as a byte array. This gives you the freedom to implement the protocol as needed, such as JSON, or comma-separated rows.
 
 You can write messages with or without a key. The following example demonstrates how to write two messages to Kafka, one message with a key, and one without:
-
-
 
 === "Python"
     
@@ -1375,5 +1052,3 @@ You can write messages with or without a key. The following example demonstrates
     
     inp.StartReading()
     ```
-
-

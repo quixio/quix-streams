@@ -1,12 +1,8 @@
 # Reading data
 
-The Quix SDK allows you to read data in real time from the existing
-streams of your Topics.
+The Quix SDK allows you to read data in real time from the existing streams of your Topics.
 
-All the necessary code to read data from your Quix Workspace is
-auto-generated when you create a project using the existing templates.
-In this section, we explain more in-depth how to read data using the
-Quix SDK.
+All the necessary code to read data from your Quix Workspace is auto-generated when you create a project using the existing templates. In this section, we explain more in-depth how to read data using the Quix SDK.
 
 !!! tip
 
@@ -14,14 +10,9 @@ Quix SDK.
 
 ## Connect to Quix
 
-In order to start reading data from Quix you need an instance of the
-Quix client, `QuixStreamingClient`. This is the central point where you
-interact with the main SDK operations.
+In order to start reading data from Quix you need an instance of the Quix client, `QuixStreamingClient`. This is the central point where you interact with the main SDK operations.
 
-You can create an instance of `QuixStreamingClient` using the proper
-constructor of the SDK, as shown here:
-
-
+You can create an instance of `QuixStreamingClient` using the proper constructor of the SDK, as shown here:
 
 === "Python"
     
@@ -35,20 +26,13 @@ constructor of the SDK, as shown here:
     var client = new Quix.Sdk.Streaming.QuixStreamingClient();
     ```
 
-You can find more advanced information on how to connect to Quix in the
-[Connect to Quix](/sdk/connect) section.
+You can find more advanced information on how to connect to Quix in the [Connect to Quix](/sdk/connect) section.
 
 ## Open a topic for reading
 
 Topics are the default environment for input/output operations on Quix.
 
-In order to access that topic for reading you need an instance of
-`InputTopic`. This instance allow you to read all the incoming streams
-on the specified Topic. You can create an instance of `InputTopic` using
-the client’s `open_input_topic` method, passing the `TOPIC_ID` or the
-`TOPIC_NAME` as a parameter.
-
-
+In order to access that topic for reading you need an instance of `InputTopic`. This instance allow you to read all the incoming streams on the specified Topic. You can create an instance of `InputTopic` using the client’s `open_input_topic` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
 
 === "Python"
     
@@ -62,16 +46,9 @@ the client’s `open_input_topic` method, passing the `TOPIC_ID` or the
     var inputTopic = client.OpenInputTopic(TOPIC_ID);
     ```
 
-
-
 ### Consumer group
 
-The **Consumer group** is a concept used when you want to [scale
-horizontally](/sdk/features/horizontal-scaling). Each consumer group is
-identified using an ID, which you set optionally when opening a
-connection to the topic for reading:
-
-
+The **Consumer group** is a concept used when you want to [scale horizontally](/sdk/features/horizontal-scaling). Each consumer group is identified using an ID, which you set optionally when opening a connection to the topic for reading:
 
 === "Python"
     
@@ -85,14 +62,7 @@ connection to the topic for reading:
     var inputTopic = client.OpenInputTopic("{topic}","{your-consumer-group-id}");
     ```
 
-
-
-When you want to enable [horizontal
-scalability](/sdk/features/horizontal-scaling), all the replicas of
-your process should use the same `ConsumerId`. This is how the message
-broker knows that all the replicas of your process want to share the
-load of the incoming streams between replicas. Each replica will receive
-only a subset of the streams incoming to the Input Topic.
+When you want to enable [horizontal scalability](/sdk/features/horizontal-scaling), all the replicas of your process should use the same `ConsumerId`. This is how the message broker knows that all the replicas of your process want to share the load of the incoming streams between replicas. Each replica will receive only a subset of the streams incoming to the Input Topic.
 
 !!! warning
 
@@ -100,15 +70,8 @@ only a subset of the streams incoming to the Input Topic.
 
 ## Reading streams
 
-
-
 === "Python"  
-    Once you have the `InputTopic` instance you can start reading
-    streams. For each stream received to the specified topic,
-    `InputTopic` will execute the event `on_stream_received`. You can
-    attach a callback to this event to execute code that reacts when you
-    receive a new Stream. For example, the following code prints the
-    StreamId for each `newStream` received on that Topic:
+    Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `on_stream_received`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example, the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` python
     def read_stream(new_stream: StreamReader):
@@ -119,12 +82,7 @@ only a subset of the streams incoming to the Input Topic.
     ```
 
 === "C\#"
-    Once you have the `InputTopic` instance you can start reading
-    streams. For each stream received to the specified topic,
-    `InputTopic` will execute the event `OnStreamReceived`. You can
-    attach a callback to this event to execute code that reacts when you
-    receive a new Stream. For example the following code prints the
-    StreamId for each `newStream` received on that Topic:
+    Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` cs
     inputTopic.OnStreamReceived += (s, newStream) =>
@@ -135,23 +93,15 @@ only a subset of the streams incoming to the Input Topic.
     inputTopic.StartReading();
     ```
 
-
-
 !!! tip
 
 	The `StartReading` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
 
 ## Reading Parameter Data
 
-You can read real-time data from Streams using the `on_read` event of
-the `StreamReader` instance received in the previous callback when you
-receive a new stream in your Topic.
+You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
 
-For instance, in the following example we read and print the first
-timestamp and value of the parameter `ParameterA` received in the
-[ParameterData](#parameter-data-format) packet:
-
-
+For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [ParameterData](#parameter-data-format) packet:
 
 === "Python"
     
@@ -186,29 +136,19 @@ timestamp and value of the parameter `ParameterA` received in the
     inputTopic.StartReading();
     ```
 
-
-
-We use [ParameterData](#parameter-data-format) packages to read data
-from the stream. This class handles reading and writing of time series
-data. The Quix SDK provides multiple helpers for reading and writing
-data using [ParameterData](#parameter-data-format).
+We use [ParameterData](#parameter-data-format) packages to read data from the stream. This class handles reading and writing of time series data. The Quix SDK provides multiple helpers for reading and writing data using [ParameterData](#parameter-data-format).
 
 !!! tip
 
-	If you’re using Python you can convert [ParameterData](#parameter-data-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
+	If you’re using Python you can convert [ParameterData](#parameter-data-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
 
 ### Parameter Data format
 
-[ParameterData](#parameter-data-format) is the formal class in the SDK
-which represents a time series data packet in memory.
+[ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time series data packet in memory.
 
-[ParameterData](#parameter-data-format) consists of a list of
-Timestamps with their corresponding Parameter Names and Values for each
-timestamp.
+[ParameterData](#parameter-data-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
 
-You should imagine a Parameter Data as a table where the Timestamp is
-the first column of that table and where the Parameters are the columns
-for the Values of that table.
+You should imagine a Parameter Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
 
 The following table shows an example of Parameter Data:
 
@@ -219,43 +159,27 @@ The following table shows an example of Parameter Data:
 | 3         | 125   | 3    |
 | 6         | 110   | 2    |
 
-You can use the `timestamps` property of a `ParameterData` instance to
-access each row of that table, and the `parameters` property to access
-the values of that timestamp.
+You can use the `timestamps` property of a `ParameterData` instance to access each row of that table, and the `parameters` property to access the values of that timestamp.
 
-The Quix SDK supports Numeric, String, and Binary values and you should
-use the proper property depending of the value type of your Parameter:
-
-
+The Quix SDK supports Numeric, String, and Binary values and you should use the proper property depending of the value type of your Parameter:
 
 === "Python"
     
-      - `numeric_value`: Returns the Numeric value of the Parameter,
-        represented as a `float` type.
+      - `numeric_value`: Returns the Numeric value of the Parameter, represented as a `float` type.
     
-      - `string_value`: Returns the String value of the Parameter,
-        represented as a `string` type.
+      - `string_value`: Returns the String value of the Parameter, represented as a `string` type.
     
-      - `binary_value`: Returns the Binary value of the Parameter,
-        represented as a `bytearray` type.
+      - `binary_value`: Returns the Binary value of the Parameter, represented as a `bytearray` type.
 
 === "C\#"
     
-      - `NumericValue`: Returns the Numeric value of the Parameter,
-        represented as a `double` type.
+      - `NumericValue`: Returns the Numeric value of the Parameter, represented as a `double` type.
     
-      - `StringValue`: Returns the String value of the Parameter,
-        represented as a `string` type.
+      - `StringValue`: Returns the String value of the Parameter, represented as a `string` type.
     
-      - `BinaryValue`: Returns the Binary value of the Parameter,
-        represented as an array of `byte`.
+      - `BinaryValue`: Returns the Binary value of the Parameter, represented as an array of `byte`.
 
-
-
-This is a simple example showing how to read Speed values of the
-`ParameterData` used in the previous example:
-
-
+This is a simple example showing how to read Speed values of the `ParameterData` used in the previous example:
 
 === "Python"
     
@@ -277,8 +201,6 @@ This is a simple example showing how to read Speed values of the
     }
     ```
 
-
-
 output:
 
 ``` console
@@ -292,11 +214,7 @@ Speed - 6: 110
 
 The Quix SDK provides you with a programmable buffer which you can tailor to your needs. Using buffers to read data enhances the throughput of your application. This helps you to develop Models with a high-performance throughput.
 
-You can use the `buffer` property embedded in the `Parameters` property
-of your `stream`, or create a separate instance of that buffer using the
-`create_buffer` method:
-
-
+You can use the `buffer` property embedded in the `Parameters` property of your `stream`, or create a separate instance of that buffer using the `create_buffer` method:
 
 === "Python"
     
@@ -310,14 +228,7 @@ of your `stream`, or create a separate instance of that buffer using the
     var buffer = newStream.Parameters.CreateBuffer();
     ```
 
-
-
-You can configure a buffer’s input requirements using built-in
-properties. For example, the following configuration means that the
-Buffer will release a packet when the time span between first and last
-timestamp inside the buffer reaches 100 milliseconds:
-
-
+You can configure a buffer’s input requirements using built-in properties. For example, the following configuration means that the Buffer will release a packet when the time span between first and last timestamp inside the buffer reaches 100 milliseconds:
 
 === "Python"
     
@@ -331,16 +242,7 @@ timestamp inside the buffer reaches 100 milliseconds:
     buffer.TimeSpanInMilliseconds = 100;
     ```
 
-
-
-Reading data from that buffer is as simple as using its `OnRead` event.
-For each [ParameterData](#parameter-data-format) packet released from
-the buffer, the SDK will execute the `OnRead` event with the parameter
-data as a given parameter. For example, the following code prints the
-ParameterA value of the first timestamp of each packet released from the
-buffer:
-
-
+Reading data from that buffer is as simple as using its `OnRead` event. For each [ParameterData](#parameter-data-format) packet released from the buffer, the SDK will execute the `OnRead` event with the parameter data as a given parameter. For example, the following code prints the ParameterA value of the first timestamp of each packet released from the buffer:
 
 === "Python"
     
@@ -364,97 +266,43 @@ buffer:
     };
     ```
 
-
-
-You can configure multiple conditions to determine when the Buffer has
-to release data, if any of these conditions become true, the buffer will
-release a new packet of data and that data is cleared from the buffer:
-
-
+You can configure multiple conditions to determine when the Buffer has to release data, if any of these conditions become true, the buffer will release a new packet of data and that data is cleared from the buffer:
 
 === "Python"
     
-      - `buffer.buffer_timeout`: The maximum duration in milliseconds
-        for which the buffer will be held before releasing the data. A
-        packet of data is released when the configured timeout value has
-        elapsed from the last data received in the buffer.
+      - `buffer.buffer_timeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.
     
-      - `buffer.packet_size`: The maximum packet size in terms of number
-        of timestamps. Each time the buffer has this amount of
-        timestamps, the packet of data is released.
+      - `buffer.packet_size`: The maximum packet size in terms of number of timestamps. Each time the buffer has this amount of timestamps, the packet of data is released.
     
-      - `buffer.time_span_in_nanoseconds`: The maximum time between
-        timestamps in nanoseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released.
+      - `buffer.time_span_in_nanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.
     
-      - `buffer.time_span_in_milliseconds`: The maximum time between
-        timestamps in milliseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released. Note: This is a millisecond
-        converter on top of `time_span_in_nanoseconds`. They both work
-        with the same underlying value.
+      - `buffer.time_span_in_milliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.
     
-      - `buffer.custom_trigger_before_enqueue`: A custom function which
-        is invoked **before** adding a new timestamp to the buffer. If
-        it returns true, the packet of data is released before adding
-        the timestamp to it.
+      - `buffer.custom_trigger_before_enqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.
     
-      - `buffer.custom_trigger`: A custom function which is invoked
-        **after** adding a new timestamp to the buffer. If it returns
-        true, the packet of data is released with the entire buffer
-        content.
+      - `buffer.custom_trigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.
     
-      - `buffer.filter`: A custom function to filter the incoming data
-        before adding it to the buffer. If it returns true, data is
-        added, otherwise it isn’t.
+      - `buffer.filter`: A custom function to filter the incoming data before adding it to the buffer. If it returns true, data is added, otherwise it isn’t.
 
 === "C\#"
     
-      - `Buffer.BufferTimeout`: The maximum duration in milliseconds for
-        which the buffer will be held before releasing the data. A
-        packet of data is released when the configured timeout value has
-        elapsed from the last data received in the buffer.
+      - `Buffer.BufferTimeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.
     
-      - `Buffer.PacketSize`: The maximum packet size in terms of number
-        of timestamps. Each time the buffer has this amount of
-        timestamps, the packet of data is released.
+      - `Buffer.PacketSize`: The maximum packet size in terms of number of timestamps. Each time the buffer has this amount of timestamps, the packet of data is released.
     
-      - `Buffer.TimeSpanInNanoseconds`: The maximum time between
-        timestamps in nanoseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released.
+      - `Buffer.TimeSpanInNanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.
     
-      - `Buffer.TimeSpanInMilliseconds`: The maximum time between
-        timestamps in milliseconds. When the difference between the
-        earliest and latest buffered timestamp surpasses this number,
-        the packet of data is released. Note: This is a millisecond
-        converter on top of `time_span_in_nanoseconds`. They both work
-        with the same underlying value.
+      - `Buffer.TimeSpanInMilliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.
     
-      - `Buffer.CustomTriggerBeforeEnqueue`: A custom function which is
-        invoked **before** adding a new timestamp to the buffer. If it
-        returns true, the packet of data is released before adding the
-        timestamp to it.
+      - `Buffer.CustomTriggerBeforeEnqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.
     
-      - `Buffer.CustomTrigger`: A custom function which is invoked
-        **after** adding a new timestamp to the buffer. If it returns
-        true, the packet of data is released with the entire buffer
-        content.
+      - `Buffer.CustomTrigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.
     
-      - `Buffer.Filter`: A custom function to filter the incoming data
-        before adding it to the buffer. If it returns true, data is
-        added, otherwise it isn’t.
-
-
+      - `Buffer.Filter`: A custom function to filter the incoming data before adding it to the buffer. If it returns true, data is added, otherwise it isn’t.
 
 #### Examples
 
-The following buffer configuration will send data every 100ms or, if no data is
-buffered in the 1 second timeout period, it will empty the buffer and
-send the pending data anyway:
-
-
+The following buffer configuration will send data every 100ms or, if no data is buffered in the 1 second timeout period, it will empty the buffer and send the pending data anyway:
 
 === "Python"
     
@@ -470,12 +318,7 @@ send the pending data anyway:
     stream.Parameters.Buffer.BufferTimeout = 1000;
     ```
 
-
-
-The following buffer configuration will send data every 100ms window or if
-critical data arrives:
-
-
+The following buffer configuration will send data every 100ms window or if critical data arrives:
 
 === "Python"
     
@@ -492,18 +335,11 @@ critical data arrives:
     ["is_critical"] == "True";
     ```
 
-
-
 ### Using Data Frames
 
-If you use the Python version of the SDK you can use [Pandas
-DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
-for reading and writing ParameterData to Quix. The Pandas DataFrames
-format is just a representation of
-[ParameterData](#parameter-data-format) format, where the Timestamp is
-mapped to a column named `time` and the rest of the parameters are
-mapped as columns named as the ParameterId of the parameter. Tags are
-mapped as columns with the prefix `TAG__` and the TagId of the tag.
+If you use the Python version of the SDK you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing `ParameterData` to Quix. 
+
+The Pandas DataFrames format is just a representation of [ParameterData](#parameter-data-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
 For example, the following [ParameterData](#parameter-data-format):
 
@@ -523,11 +359,7 @@ Is represented as the following Pandas DataFrame:
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
 
-One simple way to read data from Quix using [Pandas
-DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe)
-is using the event `on_read_pandas` instead of the common event
-`on_read` when reading from a `stream`, or when reading data from a
-buffer:
+One simple way to read data from Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} is using the event `on_read_pandas` instead of the common event `on_read` when reading from a `stream`, or when reading data from a buffer:
 
 ``` python
 def read_stream(new_stream: StreamReader):
@@ -543,9 +375,7 @@ input_topic.on_stream_received += read_stream
 input_topic.start_reading()
 ```
 
-Alternatively, you can always convert a
-[ParameterData](#parameter-data-format) to a Pandas DataFrame using
-the method `to_panda_frame`:
+Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_frame`:
 
 ``` python
 def read_stream(new_stream: StreamReader):
@@ -570,19 +400,13 @@ input_topic.start_reading()
 
 ## Reading Events
 
-`EventData` is the formal class in the SDK which represents an Event data
-packet in memory. `EventData` is meant to be used for time-series data
-coming from sources that generate data at irregular intervals or without
-a defined structure.
+`EventData` is the formal class in the SDK which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
 
 ### Event Data format
 
-`EventData` consists of a record with a `Timestamp`, an `EventId` and an
-`EventValue`.
+`EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
-You should imagine a list of `EventData` instances as a simple table of
-three columns where the `Timestamp` is the first column of that table and
-the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
+You should imagine a list of `EventData` instances as a simple table of three columns where the `Timestamp` is the first column of that table and the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
 
 | Timestamp | EventId     | EventValue                 |
 | --------- | ----------- | -------------------------- |
@@ -592,8 +416,6 @@ the `EventId` and `EventValue` are the second and third columns, as shown in the
 | 6         | race-event3 | Race has finished          |
 
 Reading events from a stream is as easy as reading parameter data. In this case, the SDK does not use a Buffer because we don’t need high-performance throughput, but the way we read Event Data from a `Stream` is identical.
-
-
 
 === "Python"
     
@@ -613,8 +435,6 @@ Reading events from a stream is as easy as reading parameter data. In this case,
     };
     ```
 
-
-
 output:
 
 ``` console
@@ -626,16 +446,9 @@ Event read for stream. Event Id: race-event3
 
 ## Committing / checkpointing
 
-It is important to be aware of the commit concept when working with a
-broker. Committing allows you to mark how far data has been processed,
-also known as creating a checkpoint. In the event of a restart or
-rebalance, the client only processes messages from the last commit
-position. In Kafka this is equivalent to commits for a [consumer
-group](/sdk/read/#consumer-groups).
+It is important to be aware of the commit concept when working with a broker. Committing allows you to mark how far data has been processed, also known as creating a checkpoint. In the event of a restart or rebalance, the client only processes messages from the last commit position. In Kafka this is equivalent to commits for a [consumer group](/sdk/read/#consumer-groups).
 
-Commits are done for each consumer group, so if you have several
-consumer groups in use, they do not affect each another when committing
-to one of them.
+Commits are done for each consumer group, so if you have several consumer groups in use, they do not affect each another when committing to one of them.
 
 !!! tip
 
@@ -645,15 +458,9 @@ to one of them.
 
 ### Automatic committing
 
-By default, the SDK automatically commits messages for which all
-handlers returned at a regular default interval, which is every 5
-seconds or 5,000 messages, whichever happens sooner. However this is
-subject to change.
+By default, the SDK automatically commits messages for which all handlers returned at a regular default interval, which is every 5 seconds or 5,000 messages, whichever happens sooner. However this is subject to change.
 
-If you wish to use different automatic commit intervals, use the
-following code:
-
-
+If you wish to use different automatic commit intervals, use the following code:
 
 === "Python"
     
@@ -678,19 +485,11 @@ following code:
     });
     ```
 
-
-
-The code above will commit every 100 processed messages or 500 ms,
-whichever is sooner.
+The code above will commit every 100 processed messages or 500 ms, whichever is sooner.
 
 ### Manual committing
 
-Some use cases need manual committing to mark completion of work, for
-example when you wish to batch process data, so the frequency of commit
-depends on the data. This can be achieved by first enabling manual
-commit for the topic:
-
-
+Some use cases need manual committing to mark completion of work, for example when you wish to batch process data, so the frequency of commit depends on the data. This can be achieved by first enabling manual commit for the topic:
 
 === "Python"
     
@@ -706,11 +505,7 @@ commit for the topic:
     client.OpenInputTopic(topic, consumerGroup, CommitMode.Manual);
     ```
 
-
-
 Then, whenever your commit condition fulfils, call:
-
-
 
 === "Python"
     
@@ -724,18 +519,11 @@ Then, whenever your commit condition fulfils, call:
     inputTopic.Commit();
     ```
 
-
-
-The piece of code above will commit anything – like parameter, event or
-metadata - read and served to you from the input topic up to this point.
+The piece of code above will commit anything – like parameter, event or metadata - read and served to you from the input topic up to this point.
 
 ### Commit callback
 
-Whenever a commit occurs, an event is raised to let you know. This event
-is raised for both manual and automatic commits. You can subscribe to
-this event using the following code:
-
-
+Whenever a commit occurs, an event is raised to let you know. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
 
 === "Python"
     
@@ -755,12 +543,9 @@ this event using the following code:
     };
     ```
 
-
-
 ### Auto Offset Reset
 
-You can control the offset that data is read from by optionally
-specifying `AutoOffsetReset` when you open the topic.
+You can control the offset that data is read from by optionally specifying `AutoOffsetReset` when you open the topic.
 
 When setting the `AutoOffsetReset` you can specify one of three options:
 
@@ -769,8 +554,6 @@ When setting the `AutoOffsetReset` you can specify one of three options:
 | Latest   | Read only the latest data as it arrives, dont include older data |
 | Earliest | Read from the beginning, i.e. as much as possible                |
 | Error    | Throws exception if no previous offset is found                  |
-
-
 
 === "Python"
     
@@ -788,16 +571,9 @@ When setting the `AutoOffsetReset` you can specify one of three options:
     var inputTopic = client.OpenInputTopic("MyTopic", autoOffset: AutoOffsetReset.Earliest);
     ```
 
-
-
 ## Revocation
 
-When working with a broker, you have a certain number of topic streams
-assigned to your consumer. Over the course of the client’s lifetime,
-there may be several events causing a stream to be revoked, like another
-client joining or leaving the consumer group, so your application should
-be prepared to handle these scenarios in order to avoid data loss and/or
-avoidable reprocessing of messages.
+When working with a broker, you have a certain number of topic streams assigned to your consumer. Over the course of the client’s lifetime, there may be several events causing a stream to be revoked, like another client joining or leaving the consumer group, so your application should be prepared to handle these scenarios in order to avoid data loss and/or avoidable reprocessing of messages.
 
 !!! tip
 
@@ -807,11 +583,7 @@ avoidable reprocessing of messages.
 
 ### Streams revoking
 
-One or more streams are about to be revoked from your client, but you
-have a limited time frame – according to your broker configuration – to
-react to this and even commit to the broker:
-
-
+One or more streams are about to be revoked from your client, but you have a limited time frame – according to your broker configuration – to react to this and even commit to the broker:
 
 === "Python"
     
@@ -831,15 +603,9 @@ react to this and even commit to the broker:
         };
     ```
 
-
-
 ### Streams Revoked
 
-One or more streams are revoked from your client. You can no longer
-commit to these streams, you can only handle the revocation in your
-client.
-
-
+One or more streams are revoked from your client. You can no longer commit to these streams, you can only handle the revocation in your client.
 
 === "Python"
     
@@ -862,15 +628,9 @@ client.
         };
     ```
 
-
-
 ## Stream Closure
 
-You can detect stream closure with the stream closed callback which
-receives the StreamEndType, to help determine the closure reason if
-required.
-
-
+You can detect stream closure with the stream closed callback which receives the StreamEndType, to help determine the closure reason if required.
 
 === "Python"
     
@@ -893,8 +653,6 @@ required.
     };
     ```
 
-
-
 The `StreamEndType` can be one of:
 
 | StreamEndType | Description                                                         |
@@ -905,10 +663,7 @@ The `StreamEndType` can be one of:
 
 ## Minimal example
 
-This is a minimal code example you can use to read data from a topic
-using the Quix SDK:
-
-
+This is a minimal code example you can use to read data from a topic using the Quix SDK:
 
 === "Python"
     
@@ -997,26 +752,13 @@ using the Quix SDK:
     }
     ```
 
-
-
 ## Read raw Kafka messages
 
-The Quix SDK uses the message brokers' internal protocol for data
-transmission. This protocol is both data and speed optimized so we do
-encourage you to use it. For that you need to use the SDK on both
-producer (writer) and consumer (reader) sides.
+The Quix SDK uses the message brokers' internal protocol for data transmission. This protocol is both data and speed optimized so we do encourage you to use it. For that you need to use the SDK on both producer (writer) and consumer (reader) sides.
 
-However, in some cases, you simply do not have the ability to run the
-Quix SDK on both sides and you need to have the ability to connect to
-the data in different ways.
+However, in some cases, you simply do not have the ability to run the Quix SDK on both sides and you need to have the ability to connect to the data in different ways.
 
-To cater for these cases we added the ability to read the raw,
-unformatted, messages. Using this feature you have the ability to access
-the raw, unmodified content of each Kafka message from the topic. The
-data is a byte array, giving you the freedom to implement the protocol
-as needed, such as JSON, or comma-separated rows.
-
-
+To cater for these cases we added the ability to read the raw, unformatted, messages. Using this feature you have the ability to access the raw, unmodified content of each Kafka message from the topic. The data is a byte array, giving you the freedom to implement the protocol as needed, such as JSON, or comma-separated rows.
 
 === "Python"
     
@@ -1046,5 +788,3 @@ as needed, such as JSON, or comma-separated rows.
     
     inp.StartReading()
     ```
-
-

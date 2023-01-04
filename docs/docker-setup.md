@@ -1,24 +1,18 @@
 # Set up docker environment
 
-Docker is an alternative to the classic environment setup for local
-development. See also [Set up your local IDE](/sdk/python-setup).
+Docker is an alternative to the classic environment setup for local development. See also [Set up your local IDE](/sdk/python-setup).
 
 !!! note
 
 	Docker knowledge is not required to develop or deploy applications with Quix. This guide is only for people that prefer using local development environments using Docker.
 
-It enables you to install and run your project in isolation from the
-rest of the system which provides the advantage of removing system
-dependencies and conflicts.
+It enables you to install and run your project in isolation from the rest of the system which provides the advantage of removing system dependencies and conflicts.
 
-Isolation is achieved by creating a lightweight container (Docker
-Container) which behaves like a virtual machine (in our case Ubuntu
-Linux).
+Isolation is achieved by creating a lightweight container (Docker Container) which behaves like a virtual machine (in our case Ubuntu Linux).
 
 ## Install prerequisites
 
-In order to use the Quix SDK in Docker you need to have installed these
-prerequisites.
+In order to use the Quix SDK in Docker you need to have installed these prerequisites.
 
   - Docker (tested on version 20.10.17)
 
@@ -26,9 +20,7 @@ prerequisites.
 
 ### Install Docker ( step 1 )
 
-To install the Docker on your environment you need to follow this guide
-[here
-(<https://docs.docker.com/get-docker/>)](https://docs.docker.com/get-docker/).
+To install the Docker on your environment you need to follow this guide [here](https://docs.docker.com/get-docker/){target=_blank}.
 
 !!! note
 
@@ -36,12 +28,9 @@ To install the Docker on your environment you need to follow this guide
 
 ### Install docker-compose ( step 2 )
 
-We’ll be using the docker-compose tool which is designed for easy
-configuration of local Docker setups.
+We’ll be using the docker-compose tool which is designed for easy configuration of local Docker setups.
 
-To install docker-compose, please follow the guide [here (
-<https://docs.docker.com/compose/install/>
-)](https://docs.docker.com/compose/install/).
+To install docker-compose, please follow the guide [here](https://docs.docker.com/compose/install/){target=_blank}.
 
 !!! note
 
@@ -51,9 +40,7 @@ To install docker-compose, please follow the guide [here (
 
   - Download the project then navigate to your solution’s root folder.
 
-  - Navigate to
-    [quix-library](https://github.com/quixai/quix-library/tree/main/python/local-development){target=_blank}
-    and download `/docker/` folder content.
+  - Navigate to [quix-library](https://github.com/quixai/quix-library/tree/main/python/local-development){target=_blank} and download `/docker/` folder content.
 
 ## Build and run project
 
@@ -69,20 +56,15 @@ docker-compose run --rm server
 
 	On the first run the compile script may take while (around 10 minutes) to build all the project dependencies. The subsequent builds will be much faster.
 
-Using the docker file provided, you should now be in a running server,
-which has all requirements installed for Quix. As the running image is
-nothing more than the `quixpythonbaseimage` with your code folder
-mounted at `/app`, in order to get your application working, you’ll need
-to install your python requirements.
+Using the docker file provided, you should now be in a running server, which has all requirements installed for Quix. As the running image is nothing more than the `quixpythonbaseimage` with your code folder mounted at `/app`, in order to get your application working, you’ll need to install your python requirements.
 
-You can do this using the following, executed in the `/app` folder
+You can do this using the following, executed in the `/app` folder:
 
 ``` bash
 python3 -m pip install -r requirements.txt --extra-index-url https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/pypi/simple/
 ```
 
-Use the resulting environment as you would your own machine, such as run
-your python application by executing `python3 main.py`
+Use the resulting environment as you would your own machine, such as run your python application by executing `python3 main.py`
 
 !!! note
 
@@ -94,11 +76,8 @@ your python application by executing `python3 main.py`
 
 ### Additional documentation
 
-To get the additional information on Docker and Docker compose commands
-please follow up with the documentation:
+To get the additional information on Docker and Docker compose commands please follow up with the documentation:
 
-  - [Docker documentation ( <https://docs.docker.com/reference/>
-    )](https://docs.docker.com/reference/)
+  - [Docker documentation](https://docs.docker.com/reference/){target=_blank}
 
-  - [Docker compose documentation ( <https://docs.docker.com/compose/>
-    )](https://docs.docker.com/compose/)
+  - [Docker compose documentation](https://docs.docker.com/compose/){target=_blank}

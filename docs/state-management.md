@@ -1,30 +1,14 @@
 # State management
 
-A Quix deployment and its underlying code can be restarted multiple
-times. This can happen because of either user intervention (manually
-stopping and starting the deployment) or because of a runtime error in
-the code. In the second case, where a runtime error is detected, the
-Quix Serverless Environment automatically detects the problem and
-restarts the underlying service in an attempt to recover from the fault.
+A Quix deployment and its underlying code can be restarted multiple times. This can happen because of either user intervention (manually stopping and starting the deployment) or because of a runtime error in the code. In the second case, where a runtime error is detected, the Quix Serverless Environment automatically detects the problem and restarts the underlying service in an attempt to recover from the fault.
 
-Due to the code being run in memory, each time a deployment restarts,
-internal variables will be reset. For example, if you were to calculate
-the count of the elements in the stream, this counter would get reset on
-each restart. The counter would then starts at the default variable not
-knowing what was the last known value in the state of previous run
-before program stopped working.
+Due to the code being run in memory, each time a deployment restarts, internal variables will be reset. For example, if you were to calculate the count of the elements in the stream, this counter would get reset on each restart. The counter would then starts at the default variable not knowing what was the last known value in the state of previous run before program stopped working.
 
-The Quix SDK has state management built in to allow values to be used
-and persisted across restarts of a given deployment. We persist the
-state to dedicated and private key-value pair storage in your workspace.
-== Usage
+The Quix SDK has state management built in to allow values to be used and persisted across restarts of a given deployment. We persist the state to dedicated and private key-value pair storage in your workspace.
 
-To use the SDK’s state management feature create an instance of
-*LocalFileStorage*. This is in *quixstreaming.state.localfilestorage*.
-Then use the set, get, containsKey and clear methods to manipulate the
-state as needed.
+## Usage
 
-
+To use the SDK’s state management feature create an instance of *LocalFileStorage*. This is in *quixstreaming.state.localfilestorage*. Then use the set, get, containsKey and clear methods to manipulate the state as needed.
 
 === "Python"
     
@@ -120,5 +104,3 @@ state as needed.
     //list all keys in the storage
     await storage.GetAllKeysAsync();
     ```
-
-

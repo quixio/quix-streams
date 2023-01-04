@@ -1,37 +1,18 @@
 # Processing data
 
-The Quix SDK is specifically designed to make real-time data processing
-very easy. We provide high-performance technology, inherited from F1, in
-a way that anybody with basic development skills can understand and use
-it very quickly.
+The Quix SDK is specifically designed to make real-time data processing very easy. We provide high-performance technology, inherited from F1, in a way that anybody with basic development skills can understand and use it very quickly.
 
 !!! tip
 
 	The [Quix Portal](https://portal.platform.quix.ai){target=_blank} offers you easy-to-use, auto-generated examples for reading, writing, and processing data. These examples work directly with your workspace Topics. You can deploy these examples in our serverless environment with just a few clicks. For a quick test of the capabilities of the SDK, we recommend starting with those auto-generated examples.
 
-Other streaming platforms are tied to a narrow set of functions,
-queries, or syntax to set up a data processor or Model. This limited
-approach is often only suitable for some use cases, and tends to have a
-steep learning curve. The feature limitations and time investment
-required form a barrier to entry for inexperienced developers and Data
-scientists alike.
+Other streaming platforms are tied to a narrow set of functions, queries, or syntax to set up a data processor or Model. This limited approach is often only suitable for some use cases, and tends to have a steep learning curve. The feature limitations and time investment required form a barrier to entry for inexperienced developers and Data scientists alike.
 
-Our approach is simpler and far more powerful than other streaming
-solutions. So much so that we can’t show you any SDK related functions
-here because you literally don’t need them if you use the Quix SDK.
+Our approach is simpler and far more powerful than other streaming solutions. So much so that we can’t show you any SDK related functions here because you literally don’t need them if you use the Quix SDK.
 
-With the Quix SDK, you are not tied to complicated Functions, Lambdas,
-Maps or Query libraries to be able to deploy and process data in real
-time. You just need to know how to [read](/sdk/read) and
-[write](/sdk/write) data with the SDK — that’s it, the rest is up to
-you and your imagination.
+With the Quix SDK, you are not tied to complicated Functions, Lambdas, Maps or Query libraries to be able to deploy and process data in real time. You just need to know how to [read](/sdk/read) and [write](/sdk/write) data with the SDK — that’s it, the rest is up to you and your imagination.
 
-Let’s see some examples of how to read and write data in a Data
-processor using the Quix SDK. We just [read](/sdk/read) data from the
-message broker, process it, and [write](/sdk/write) it back to the
-stream.
-
-
+Let’s see some examples of how to read and write data in a Data processor using the Quix SDK. We just [read](/sdk/read) data from the message broker, process it, and [write](/sdk/write) it back to the stream.
 
 === "Python - Data Frame"
     
@@ -84,10 +65,6 @@ stream.
     };
     ```
 
-So, because you are not tied to any narrow processing architecture, you
-can use any methods, classes or libraries that you are already familiar
-with to implement your model or data processor.
+So, because you are not tied to any narrow processing architecture, you can use any methods, classes or libraries that you are already familiar with to implement your model or data processor.
 
-Check the complete [code
-example](https://github.com/quixai/car-data-model) in GitHub for further
-information.
+Check the complete [code example](https://github.com/quixai/car-data-model) in GitHub for further information.
