@@ -12,7 +12,6 @@ nav:
       - 'Built-in buffers': 'features/builtin-buffers.md'
       - 'Support for Data Frames': 'features/data-frames.md'
       - 'Message splitting': 'features/message-splitting.md'
-      - 'Message compression': 'features/message-compression.md'
       - 'Data serialization': 'features/data-serialization.md'
       - 'Multiple data types': 'features/multiple-data-types.md'
       - 'Broker configuration': 'features/broker-configuration.md'

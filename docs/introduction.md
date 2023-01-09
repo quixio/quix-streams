@@ -76,19 +76,6 @@ merged back.
 Refer to the [Message splitting](/sdk/features/message-splitting)
 section of this documentation for more information.
 
-## Message compression
-
-The Quix SDK automatically compresses your messages, reducing them by an
-average factor of 10 times. You save money via added efficiency.
-
-The SDK also sends parameter values as the delta between timestamps,
-converting strings to flags, and in general reduces payload size for
-each message. This happens before compression is applied, so the final
-compression ratio is even higher.
-
-Refer to the [Message compression](/sdk/features/message-compression)
-section of this documentation for more information.
-
 ## Data serialization and de-serialization
 
 The Quix SDK automatically serializes data from native types in your
