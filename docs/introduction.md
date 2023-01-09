@@ -156,14 +156,6 @@ have to implement them by yourself.
 Refer to the [Integrations](/sdk/features/integrations) section of this
 documentation for more information.
 
-## Portability
-
-The Quix SDK is an abstraction layer over a concrete broker technology.
-You’re not locked into a specific broker and can innovate over time.
-
-Refer to the [Portability](/sdk/features/portability) section of this
-documentation for more information.
-
 ## Raw messages
 
 The Quix SDK uses an internal protocol which is both data and speed

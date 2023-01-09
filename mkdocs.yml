@@ -19,7 +19,6 @@ nav:
       - 'Checkpointing': 'features/checkpointing.md'
       - 'Horizontal scaling': 'features/horizontal-scaling.md'
       - 'Integrations': 'features/integrations.md'
-      - 'Portability': 'features/portability.md'
     - 'Connect to Quix': 'connect.md'
     - 'Writing data': 'write.md'
     - 'Reading data': 'read.md'
