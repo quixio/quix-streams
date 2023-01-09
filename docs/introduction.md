@@ -134,15 +134,6 @@ always shared between your model replicas.
 Refer to the [Horizontal scaling](/sdk/features/horizontal-scaling)
 section of this documentation for more information.
 
-## Integrations
-
-The SDK offers integrations out of the box, including data persistence
-and historic or real-time APIs with other systems. That means you don’t
-have to implement them by yourself.
-
-Refer to the [Integrations](/sdk/features/integrations) section of this
-documentation for more information.
-
 ## Raw messages
 
 The Quix SDK uses an internal protocol which is both data and speed
