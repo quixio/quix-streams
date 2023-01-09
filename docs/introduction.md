@@ -33,18 +33,6 @@ by other technologies.
 Refer to the [Streaming context](/sdk/features/streaming-context)
 section of this documentation for more information.
 
-## In-memory data processing
-
-The Quix SDK is designed to make [in-memory data
-processing](/sdk/features/in-memory-processing) extremely efficient. We
-use high-performance SDK features in conjunction with the message broker
-capabilities to achieve maximum throughput with the very minimum
-latency.
-
-Refer to the [In-memory data
-processing](/sdk/features/in-memory-processing) section of this
-documentation for more information.
-
 ## Built-in buffers
 
 If you’re sending data at high frequency, processing each message can be

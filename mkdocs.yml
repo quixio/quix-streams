@@ -8,7 +8,6 @@ nav:
     - 'Kafka and Quix SDK': 'kafka.md'
     - 'Features overview':
       - 'Streaming context': 'features/streaming-context.md'
-      - 'In-memory processing': 'features/in-memory-processing.md'
       - 'Built-in buffers': 'features/builtin-buffers.md'
       - 'Support for Data Frames': 'features/data-frames.md'
       - 'Message splitting': 'features/message-splitting.md'
