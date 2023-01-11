@@ -1,0 +1,238 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+using System.IO;
+using Quix.Sdk.State.Serializers;
+using Quix.Sdk.State.Storage.FileStorage;
+
+namespace Quix.Sdk.State.Storage.FileStorage
+{
+    /// <summary>
+    /// The directory storage containing the file storage for the single process access purposes
+    /// The locking is implemented via the in-memory mutex
+    /// </summary>
+    public abstract class BaseFileStorage : IStateStorage
+    {
+        private string storageDirectory;
+
+        private static string DefaultDir = Path.Combine(".", "state");
+        private static string FileNameSpecialCharacter = "~";
+
+        /// <summary>
+        /// Initializes a new instance of <see cref="BaseFileStorage"/>
+        /// </summary>
+        /// <param name="storageDirectory">Directory where to store the state</param>
+        /// <param name="autoCreateDir">Create the directory if it doesn't exist</param>
+        public BaseFileStorage(string storageDirectory = null, bool autoCreateDir = true)
+        {
+            this.storageDirectory = storageDirectory != null ? storageDirectory : DefaultDir;
+
+            if (autoCreateDir)
+            {
+                if (!Directory.Exists(this.storageDirectory))
+                {
+                    Directory.CreateDirectory(this.storageDirectory);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Lock type of the File Storage 
+        /// </summary>
+        protected enum LockType {
+
+            /// <summary>
+            /// Lock for read operations
+            /// </summary>
+            Reader,
+
+            /// <summary>
+            /// Locl for write operations
+            /// </summary>
+            Writer
+        }
+        
+        /// <summary>
+        /// Check if the key is valid for the constraints ( e.g. all keys must be lowercase )
+        /// Throws exception if the key is not valid
+        /// </summary>
+        /// <param name="key">Storage key</param>
+        /// <returns></returns>
+        protected abstract void AssertKey(string key);
+
+        /// <summary>
+        /// Get file path from the storage key
+        /// </summary>
+        /// <param name="key">Storage key</param>
+        /// <returns>File path</returns>
+        private string GetFilePath(string key)
+        {
+            key = key.ToLower();
+            return Path.Combine(storageDirectory, key);
+        }
+
+        /// <summary>
+        /// Get storage key from the director file path
+        /// </summary>
+        /// <param name="path">Director file path</param>
+        /// <returns>Storage element key</returns>
+        protected string GetKeyFromPath(string path)
+        {
+            return path.Substring(path.LastIndexOf(Path.DirectorySeparatorChar) + 1);
+        }
+
+
+        /// <summary>
+        /// Save raw data into the key
+        /// This function is written in the asynchronous manner and returns Task
+        /// </summary>
+        /// <param name="key">Key of the element</param>
+        /// <param name="data">Raw byte[] representation of data</param>
+        public async Task SaveRaw(string key, byte[] data)
+        {
+            // lock on the directory
+            using (await this.LockInternalKey("", LockType.Reader))
+            {
+                // lock on the key
+                using (await this.LockInternalKey(key, LockType.Writer))
+                {
+                    using (FileStream sourceStream = File.Open(GetFilePath(key), FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        await sourceStream.WriteAsync(data, 0, data.Length);
+                        await sourceStream.FlushAsync();
+                        sourceStream.Close();
+                        sourceStream.Dispose();
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Load raw data from the key
+        /// This function is written in the asynchronous manner and returns Task
+        /// </summary>
+        /// <param name="key">Key of the element</param>
+        /// <returns>Raw byte[] representation of data</returns>
+        public async Task<byte[]> LoadRaw(string key)
+        {
+            this.AssertKey(key);
+
+            byte[] result;
+
+            // lock on the directory
+            using (await this.LockInternalKey("", LockType.Reader))
+            {
+                // lock writing
+                using (await this.LockInternalKey(key, LockType.Reader))
+                {
+                    using (var sourceStream = File.Open(GetFilePath(key), FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        result = new byte[sourceStream.Length];
+                        await sourceStream.ReadAsync(result, 0, (int) sourceStream.Length);
+                        sourceStream.Close();
+                        sourceStream.Dispose();
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Remove key from the storage
+        /// This function is written in the asynchronous manner and returns Task
+        /// </summary>
+        /// <param name="key">Key of the element</param>
+        public async Task RemoveAsync(string key)
+        {
+            using ( await this.LockInternalKey("", LockType.Writer) )
+            {
+                var path = GetFilePath(key);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Check if storage contains key
+        /// This function is written in the asynchronous manner and returns Task
+        /// </summary>
+        /// <param name="key">Key of the element</param>
+        /// <returns>Whether the storage contains the key</returns>
+        public Task<bool> ContainsKeyAsync(string key)
+        {
+            return Task.FromResult(
+                File.Exists(GetFilePath(key))
+            );
+        }
+
+        /// <summary>
+        /// Recursively delete content of directory
+        /// </summary>
+        /// <param name="FolderName">Directory path to remove</param>
+        protected void clearFolder(string FolderName)
+        {
+            DirectoryInfo dir = new DirectoryInfo(FolderName);
+
+            foreach (FileInfo fi in dir.GetFiles())
+            {
+                fi.Delete();
+            }
+
+            foreach (DirectoryInfo di in dir.GetDirectories())
+            {
+                clearFolder(di.FullName);
+                di.Delete();
+            }
+        }
+
+        /// <summary>
+        /// Clear the storage / remove all keys from the storage
+        /// This function is written in the asynchronous manner and returns Task
+        /// </summary>
+        public async Task ClearAsync()
+        {
+            using ( await this.LockInternalKey("", LockType.Writer) )
+            {
+                clearFolder(this.storageDirectory);
+            }
+        }
+
+        /// <summary>
+        /// Get all keys in the storage ( used internally )
+        /// This function is written in the asynchronous manner
+        /// </summary>
+        /// <returns>List of keys in the storage</returns>
+        public async Task<HashSet<string>> GetAllKeysAsync()
+        {
+            //TODO: rewrite this function to the non-blocking Task fashion
+            HashSet<string> result = new HashSet<string>();
+
+            using(await this.LockInternalKey("", LockType.Reader))
+            {
+                string[] fileEntries = Directory.GetFiles(storageDirectory);
+                foreach (string fileName in fileEntries)
+                {
+                    if (Path.GetFileName(fileName).Contains(FileNameSpecialCharacter))
+                    {
+                        //is internal ( special ) file
+                        continue;
+                    }
+                    result.Add(GetKeyFromPath(fileName));
+                }
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Perform internal lock on the single storage key
+        /// This function is written in the asynchronous manner and returns Task
+        /// </summary>
+        /// <returns>IDisposable for disposing the lock</returns>
+        protected abstract Task<IDisposable> LockInternalKey(string key, LockType type);
+
+    }
+}

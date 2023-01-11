@@ -1,0 +1,4 @@
+include quixstreaming/dotnet/**/*
+exclude quixstreaming/dotnet/**/*.pdb
+exclude tests/**/*
+exclude main.py

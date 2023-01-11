@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <Configurations>Debug;Release;Python</Configurations>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.17.0" />
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quix.Sdk.Logging\Quix.Sdk.Logging.csproj" />
+    <ProjectReference Include="..\Quix.Sdk.Transport\Quix.Sdk.Transport.csproj" />
+    <ProjectReference Include="..\Quix.Sdk.Transport.Kafka\Quix.Sdk.Transport.Kafka.csproj" />
+  </ItemGroup>
+
+</Project>
