@@ -1,4 +1,4 @@
-![Quix - Build realtime applications, faster](https://github.com/quixai/.github/blob/main/profile/quixstreams-banner.jpg)
+![Quix - React to data, fast](https://github.com/quixai/.github/blob/main/profile/quixstreams-banner.jpg)
 
 [//]: <> (This will be a banner image w/ the name e.g. Quix Streams.)
 
@@ -12,7 +12,7 @@
 
 ## What is Quix Streams?
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volume</b> of time-series data in nanoseconds precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data for high performance and resource savings.
+<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and resource savings.
 
 Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language ,together with Quix Streams.
 
@@ -25,9 +25,9 @@ Quix Streams is [designed to be extended](#interoperability-wrappers) to multipl
 
 Using Quix Streams, you can:
 
-- Write time-series and non time-series data to a Kafka Topic.
-- Read time-series and non time-series data from a Kafka Topic.
-- Process data by reading it from one Kafka Topic, process it, and then writing the results back to another Kafka Topic.
+- Produce time-series and event data to a Kafka Topic.
+- Consume time-series and event data from a Kafka Topic.
+- Process data by consuming it from one Kafka Topic, process it, and then producing the results back to another Kafka Topic.
 - Group data by Streams attaching metadata to them.
 
 ## What is time-series data?
@@ -69,9 +69,9 @@ pip install quix-streams
 
 This library needs to utilize a message broker to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
-### Writing time-series data
+### Producing time-series data
 
-Now you can start writing some time-series data into a Kafka Topic. Here's an example of how to <b>Write</b> time-series data into a Kafka Topic with Python.
+Now you can start producing time-series data into a Kafka Topic. Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
 
 ```python
 import time
@@ -83,7 +83,7 @@ from quixstreams import KafkaStreamingClient
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the output topic where to write data to.
+# Open the output topic where to produce data to.
 output_topic = client.open_output_topic("your-kafka-topic")
 
 stream = output_topic.create_stream()
@@ -107,9 +107,9 @@ print("Closing stream")
 stream.close()
 ```
 
-### Reading time-series data
+### Consuming time-series data
 
-Once we have setup our producer, it's time to see how to read data from a topic. Here's an example of how to <b>Read</b> time-series data from a Kafka Topic with Python:
+Once we have setup our producer, it's time to see how to consume data from a topic. Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
 
 ```python
 import pandas as pd
@@ -120,14 +120,14 @@ from quixstreams.app import App
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the input topic where to read data from.
+# Open the input topic where to consume data from.
 # For testing purposes we remove consumer group and always read from latest data.
 input_topic = client.open_input_topic("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
-# read streams
+# consume streams
 def on_stream(input_stream: StreamReader):
 
-    # read data (as Pandas DataFrame)
+    # consume data (as Pandas DataFrame)
     def on_read_pandas(df: pd.DataFrame):
         print(df.to_string())
 
@@ -141,35 +141,35 @@ print("Listening to streams. Press CTRL-C to exit.")
 App.run()
 ```
 
-Quix Streams allows multiple configurations to leverage resources while reading and writing data from a Topic depending on the use case, frequencies, language, and data types. 
+Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>Read</b>](https://www.quix.io/docs/sdk/read.html) and [<b>Write</b>](https://www.quix.io/docs/sdk/write.html) time-series and non time-series data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/read.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/write.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
 ## Library features
 
 This library provides several features and solves common problems you face when developing real-time streaming applications. 
 
-- <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. This allows sending <b>multiple streams</b> through the same topic and message broker <b>parallelize loads</b> properly between multiple consumers. 
+- <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. It let's you produce <b>multiple streams</b> through the same topic and enables the message broker to <b>parallelize loads</b> reliably across multiple consumers. 
 
-- <b>Stream metadata</b>: Quix Streams allows you to assign metadata attached to a Stream context and to the definition of Parameters and Events. The library manages that <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary.
+- <b>Stream metadata</b>: Quix Streams allows you to attached metadata to a Stream context and to the definition of Parameters and Events. The library manages the <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary to improve efficiency.
 
 - <b>Time-series data serialization and de-serialization</b>: Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughtput and reduce latency.
 
 - <b>No schema registry needed</b>: Quix Streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b>.
 
-- <b>Built-in time-series buffers</b>: If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for reading and writing, allowing several configurations for balancing between latency and cost.
+- <b>Built-in time-series buffers</b>: If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for producing and consuming, allowing several configurations for balancing between latency and cost.
 
 - <b>Support for data frames</b>: In many use cases, multiple time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. The library uses a tabular system that can work for instance with <b>Pandas DataFrames</b> natively. Each row has a timestamp and <b>user-defined tags</b> as indexes.
 
-- <b>Multiple data types</b>: This library allows you to send and receive different types of mixed data in the same timestamp, like <b>Numbers</b>, <b>Strings</b> or <b>Binary data</b>.
+- <b>Multiple data types</b>: This library allows you to produce and consume different types of mixed data in the same timestamp, like <b>Numbers</b>, <b>Strings</b> or <b>Binary data</b>.
 
 - <b>Message splitting</b>: Quix Streams automatically handles <b>large messages</b> on the producer side, splitting them up if required. You no longer need to worry about Kafka message limits. On the consumer side, those messages are automatically merged back.
 
-- <b>Message Broker configuration</b>: Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time. The library take care about Kafka configuration by default allowing refined configuration only when needed.
+- <b>Message Broker configuration</b>: Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time. The library take care of Kafka configuration by default allowing refined configuration only when needed.
 
-- <b>Checkpointing</b>: Quix Streams allows manual or automatic checkpointing when you read data from a Kafka Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point.
+- <b>Checkpointing</b>: Quix Streams allows manual or automatic checkpointing when you consume data from a Kafka Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point.
 
-- <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas consistently.
+- <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.
 
 For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/sdk/introduction.html)
 
