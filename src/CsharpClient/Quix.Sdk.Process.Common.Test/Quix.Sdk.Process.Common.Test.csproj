@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Configurations>Debug;Release;Python</Configurations>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quix.Sdk.Process\Quix.Sdk.Process.csproj" />
+    <ProjectReference Include="..\Quix.Sdk.Transport\Quix.Sdk.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

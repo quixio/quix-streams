@@ -1,0 +1,16 @@
+*.orig
+#Ignore Rider files
+.idea/
+
+#ignore environment
+env/
+
+#ignore build results
+lib/state
+lib/data
+lib/dist
+*egg-info
+lib/**/dotnet
+*.whl
+
+*.pyc

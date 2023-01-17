@@ -23,12 +23,6 @@ The SDK simplifies the processing of streams by providing callbacks on the readi
 
 Refer to the [Streaming context](/sdk/features/streaming-context) section of this documentation for more information.
 
-## In-memory data processing
-
-The Quix SDK is designed to make [in-memory data processing](/sdk/features/in-memory-processing) extremely efficient. We use high-performance SDK features in conjunction with the message broker capabilities to achieve maximum throughput with the very minimum latency.
-
-Refer to the [In-memory data processing](/sdk/features/in-memory-processing) section of this documentation for more information.
-
 ## Built-in buffers
 
 If you’re sending data at high frequency, processing each message can be costly. The SDK provides a built-in buffers features for reading and writing to give you absolute freedom in balancing between latency and cost.
@@ -46,14 +40,6 @@ Refer to the [Support for Data Frames](/sdk/features/data-frames) section of thi
 The SDK automatically handles large messages on the producer side, splitting them up if required. You no longer need to worry about Kafka message limits. On the consumer side, those messages are automatically merged back.
 
 Refer to the [Message splitting](/sdk/features/message-splitting) section of this documentation for more information.
-
-## Message compression
-
-The Quix SDK automatically compresses your messages, reducing them by an average factor of 10 times. You save money via added efficiency.
-
-The SDK also sends parameter values as the delta between timestamps, converting strings to flags, and in general reduces payload size for each message. This happens before compression is applied, so the final compression ratio is even higher.
-
-Refer to the [Message compression](/sdk/features/message-compression) section of this documentation for more information.
 
 ## Data serialization and de-serialization
 
@@ -86,18 +72,6 @@ Refer to the [Checkpointing](/sdk/features/checkpointing) section of this docume
 The Quix SDK provides horizontal scale using the [streaming context](/sdk/features/streaming-context) feature. This means a data scientist or data engineer does not have to implement parallel processing themselves. You can scale the processing models, from one replica to many and back to one, and use the [callback system inside the SDK](/sdk/read#_parallel_processing) to ensure that your data load is always shared between your model replicas.
 
 Refer to the [Horizontal scaling](/sdk/features/horizontal-scaling) section of this documentation for more information.
-
-## Integrations
-
-The SDK offers integrations, including data persistence and historic or real-time APIs with other systems. That means you don’t have to implement them by yourself.
-
-Refer to the [Integrations](/sdk/features/integrations) section of this documentation for more information.
-
-## Portability
-
-The Quix SDK is an abstraction layer over a concrete broker technology. You’re not locked into a specific broker and can innovate over time.
-
-Refer to the [Portability](/sdk/features/portability) section of this documentation for more information.
 
 ## Raw messages
 

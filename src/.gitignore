@@ -1,0 +1,6 @@
+*.orig
+#Ignore Rider files
+.idea/
+#ignore stored data directories from the test runs
+PythonClient/lib/data
+PythonClient/lib/tests/data
