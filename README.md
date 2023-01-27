@@ -1,4 +1,4 @@
-![Quix - React to data, fast](https://github.com/quixai/.github/blob/main/profile/quixstreams-banner.jpg)
+![Quix - React to data, fast](https://github.com/quixio/.github/blob/main/profile/quixstreams-banner.jpg)
 
 [//]: <> (This will be a banner image w/ the name e.g. Quix Streams.)
 
