@@ -15,7 +15,7 @@ markdown_extensions:
       alternate_style: true 
 
 nav:
-    - 'Introduction': '../sdk-intro.md'
+    - 'Introduction': './sdk-intro.html'
     - 'Kafka and Quix SDK': 'kafka.md'
     - 'Features overview':
       - 'Streaming context': 'features/streaming-context.md'
