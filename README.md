@@ -1,4 +1,4 @@
-![Quix - React to data, fast](https://github.com/quixio/quix-streams/blob/main/images/quixstreams-banner.jpg)
+![Quix - React to data, fast](https://github.com/quixio/.github/blob/main/profile/quixstreams-banner.jpg)
 
 [//]: <> (This will be a banner image w/ the name e.g. Quix Streams.)
 
@@ -47,7 +47,7 @@ timestamp            value1   value2   value3   value4   value5   value6   value
 
 Time-series data is often plotted on a graph with the x-axis representing the time at which the data was collected and the y-axis representing the value of the data point.
 
-![Telemetry](https://github.com/quixio/quix-streams/blob/main/images/telemetry.png)
+![Telemetry](./images/telemetry.png)
 
 ### High-frequency data
 
