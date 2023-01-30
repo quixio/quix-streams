@@ -47,7 +47,7 @@ timestamp            value1   value2   value3   value4   value5   value6   value
 
 Time-series data is often plotted on a graph with the x-axis representing the time at which the data was collected and the y-axis representing the value of the data point.
 
-![Telemetry](./images/telemetry.png)
+![Telemetry](https://github.com/quixio/quix-streams/blob/main/images/telemetry.png)
 
 ### High-frequency data
 
