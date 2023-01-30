@@ -10,7 +10,7 @@
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/sdk/introduction.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixai/projects/1)
 
-## What is Quix Streams?
+# What is Quix Streams?
 
 <b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and resource savings.
 
