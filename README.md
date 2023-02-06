@@ -62,7 +62,7 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 You can <b>install</b> the library using the package manager for Python Packages:
 
 ```shell
-pip install quix-streams
+pip install quixstreams
 ```
 
 ### Prepare your Kafka Cluster
