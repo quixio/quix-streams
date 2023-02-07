@@ -10,9 +10,9 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
     /// <summary>
     /// Observable dictionary based on https://codereview.stackexchange.com/questions/202663/simple-observabledictionary-implementation
     /// </summary>
-    public class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>, INotifyCollectionChanged, INotifyPropertyChanged
+    public class ObservableDictionary<TKey, TValue> : IDictionary, IDictionary<TKey, TValue>, IReadOnlyDictionary<TKey, TValue>, INotifyCollectionChanged, INotifyPropertyChanged
     {
-        private IDictionary<TKey, TValue> Dictionary { get; }
+        private Dictionary<TKey, TValue> Dictionary { get; }
 
         #region Constants (standart constants for collection/dictionary)
 
@@ -75,7 +75,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
 
         #region IDictionary<TKey, TValue> Implementation
 
-        /// <inheritdoc/>
+        /// <inheritdoc cref="IDictionary{TKey,TValue}.this" />
         public TValue this[TKey key]
         {
             get
@@ -112,11 +112,68 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// <inheritdoc/>
         public ICollection<TValue> Values => Dictionary.Values;
 
-        /// <inheritdoc/>
+        /// <inheritdoc cref="ICollection.Count" />
         public int Count => Dictionary.Count;
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        public bool IsReadOnly => ((IDictionary)Dictionary).IsReadOnly;
+        
+        #region IDictionary
+
         /// <inheritdoc/>
-        public bool IsReadOnly => Dictionary.IsReadOnly;
+        ICollection IDictionary.Values => Dictionary.Values;
+
+        /// <inheritdoc/>
+        ICollection IDictionary.Keys => Dictionary.Keys;
+
+        /// <inheritdoc/>
+        public void CopyTo(Array array, int index)
+        {
+            ((IDictionary)Dictionary).CopyTo(array, index);
+        }
+        
+        /// <inheritdoc/>
+        public bool IsSynchronized => ((IDictionary)Dictionary).IsSynchronized;
+        
+        /// <inheritdoc/>
+        public object SyncRoot => ((IDictionary)Dictionary).SyncRoot;
+        
+        /// <inheritdoc/>
+        public object this[object key]
+        {
+            get => ((IDictionary)Dictionary)[key];
+            set => ((IDictionary)Dictionary)[key] = value;
+        }
+        
+        /// <inheritdoc/>
+        public void Add(object key, object value)
+        {
+            ((IDictionary)Dictionary).Add(key, value);
+        }
+        
+        /// <inheritdoc/>
+        public bool Contains(object key)
+        {
+            return ((IDictionary)Dictionary).Contains(key);
+        }
+
+        /// <inheritdoc/>
+        IDictionaryEnumerator IDictionary.GetEnumerator()
+        {
+            return ((IDictionary)Dictionary).GetEnumerator();
+        }
+
+        
+        /// <inheritdoc/>
+        public void Remove(object key)
+        {
+            ((IDictionary)Dictionary).Remove(key);
+        }
+
+        /// <inheritdoc/>
+        public bool IsFixedSize => ((IDictionary)Dictionary).IsFixedSize;
+
+        #endregion
 
         /// <inheritdoc/>
         public void Add(TKey key, TValue value)
@@ -175,9 +232,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// <inheritdoc/>
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
-            Dictionary.CopyTo(
-                array: array,
-                arrayIndex: arrayIndex);
+            ((IDictionary<TKey, TValue>)Dictionary).CopyTo(array: array, arrayIndex: arrayIndex);
         }
 
         /// <inheritdoc/>
@@ -204,7 +259,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// <inheritdoc/>
         public bool Remove(KeyValuePair<TKey, TValue> item)
         {
-            if (Dictionary.Remove(item))
+            if (((IDictionary<TKey, TValue>)Dictionary).Remove(item))
             {
                 OnCollectionChanged(
                     action: NotifyCollectionChangedAction.Remove,

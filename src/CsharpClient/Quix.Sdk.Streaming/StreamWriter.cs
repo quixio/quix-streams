@@ -69,7 +69,7 @@ namespace Quix.Sdk.Streaming
         /// <inheritdoc />
         public event EventHandler<Exception> OnWriteException;
 
-        /// <inheritdoc />
+        /// <inheritdoc cref="IStreamWriter.Epoch" />
         public DateTime Epoch
         {
             get

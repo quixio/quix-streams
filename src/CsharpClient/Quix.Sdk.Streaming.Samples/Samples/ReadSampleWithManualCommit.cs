@@ -20,7 +20,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             };
             timer.Start();
             
-            var client = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+            var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
             var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
 
             inputTopic.OnStreamReceived += (sender, streamReader) =>

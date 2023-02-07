@@ -24,14 +24,15 @@ namespace Quix.Sdk.Streaming.IntegrationTests
     public class StreamingClientIntegrationTests
     {
         private readonly ITestOutputHelper output;
-        private readonly StreamingClient client;
+        private readonly KafkaStreamingClient client;
         private int MaxTestRetry = 3;
 
         public StreamingClientIntegrationTests(ITestOutputHelper output, KafkaDockerTestFixture kafkaDockerTestFixture)
         {
             this.output = output;
             Quix.Sdk.Logging.Factory = output.CreateLoggerFactory();
-            client = new StreamingClient(kafkaDockerTestFixture.BrokerList, kafkaDockerTestFixture.SecurityOptions);
+            client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, kafkaDockerTestFixture.SecurityOptions);
+            output.WriteLine($"Created client with brokerlist '{kafkaDockerTestFixture.BrokerList}'");
         }
         
         private static ParameterDataRaw GenerateParameterData(int offset)
@@ -634,6 +635,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 catch
                 {
                     this.output.WriteLine($"Attempt {count} failed");
+                    if (count == MaxTestRetry) throw;
                 }
             }
         }

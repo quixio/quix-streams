@@ -37,7 +37,7 @@ namespace Quix.Sdk.Streaming.Utils
         }
 
         /// <summary>
-        /// Retreive a Timestamp by index
+        /// Retrieve a Timestamp by index
         /// </summary>
         /// <param name="index">Index of the timestamp</param>
         /// <returns>Timestamp data at the given index</returns>

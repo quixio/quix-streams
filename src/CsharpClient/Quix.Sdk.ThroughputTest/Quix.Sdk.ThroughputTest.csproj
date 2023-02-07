@@ -12,8 +12,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="4.7.0" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0-rc.1.22426.10" />
+        <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="4.7.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="7.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
     </ItemGroup>
 
     <ItemGroup>

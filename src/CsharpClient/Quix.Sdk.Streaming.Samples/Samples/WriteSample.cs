@@ -11,7 +11,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
         {
             Task.Run(() =>
             {
-                var client = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+                var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
                 var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);
 
                 using (var stream = outputTopic.CreateStream(streamId))
