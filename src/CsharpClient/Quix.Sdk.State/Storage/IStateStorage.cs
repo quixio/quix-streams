@@ -46,7 +46,7 @@ namespace Quix.Sdk.State.Storage
         /// This function is written in the asynchronous manner
         /// </summary>
         /// <returns>Awaitable result for the keys as a hash set</returns>
-        public Task<HashSet<string>> GetAllKeysAsync();
+        public Task<string[]> GetAllKeysAsync();
 
         /// <summary>
         /// Clear the storage / remove all keys from the storage

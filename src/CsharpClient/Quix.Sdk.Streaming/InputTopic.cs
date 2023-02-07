@@ -42,7 +42,7 @@ namespace Quix.Sdk.Streaming
         }
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamingClient"/>
+        /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
         /// <param name="kafkaReader">Kafka reader from Process layer</param>
         public InputTopic(KafkaReader kafkaReader)

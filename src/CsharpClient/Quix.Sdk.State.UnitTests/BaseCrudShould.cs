@@ -17,6 +17,7 @@ namespace Quix.Sdk.State.UnitTests
 
         protected async Task testLong(BaseFileStorage storage, string key, long inp)
         {
+            var value = Environment.GetEnvironmentVariable("stuff");
             await storage.SetAsync(key, inp);
             var ret = await storage.GetLongAsync(key);
             Assert.AreEqual(inp, ret);

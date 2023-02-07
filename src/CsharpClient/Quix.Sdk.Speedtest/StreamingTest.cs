@@ -19,7 +19,7 @@ namespace Quix.Sdk.Speedtest
 
             const string parameterName = "TimeParameter";
             
-            var client = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+            var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
             var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
             var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);

@@ -25,13 +25,13 @@ namespace Quix.Sdk.Streaming.IntegrationTests
     public class StreamingRawIntegrationTests
     {
         private readonly ITestOutputHelper output;
-        private readonly StreamingClient client;
+        private readonly KafkaStreamingClient client;
 
         public StreamingRawIntegrationTests(ITestOutputHelper output, KafkaDockerTestFixture kafkaDockerTestFixture)
         {
             this.output = output;
             Quix.Sdk.Logging.Factory = output.CreateLoggerFactory();
-            client = new StreamingClient(kafkaDockerTestFixture.BrokerList, kafkaDockerTestFixture.SecurityOptions);
+            client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, kafkaDockerTestFixture.SecurityOptions);
         }
 
 

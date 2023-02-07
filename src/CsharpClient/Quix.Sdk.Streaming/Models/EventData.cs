@@ -14,8 +14,6 @@ namespace Quix.Sdk.Streaming.Models
     /// </summary>
     public class EventData
     {
-        private IDictionary<string, string> tags;
-
         /// <summary>
         /// Create a new empty Event Data instance
         /// </summary>
@@ -74,8 +72,7 @@ namespace Quix.Sdk.Streaming.Models
 
         internal void SetTags(IDictionary<string, string> newTags)
         {
-            this.tags = newTags;
-            this.Tags = new DefaultReadOnlyDictionary<string, string>(this.tags);
+            this.Tags = newTags;
         }
 
         private void LoadFromProcessData(Process.Models.EventDataRaw rawData)
@@ -122,7 +119,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Tags on that event. When key is not found, returns null
         /// </summary>
-        public IReadOnlyDictionary<string, string> Tags { get; private set; }
+        public IDictionary<string, string> Tags { get; private set; }
 
         /// <summary>
         /// Add a new Tag to the event
@@ -134,7 +131,7 @@ namespace Quix.Sdk.Streaming.Models
         {
             if (string.IsNullOrWhiteSpace(tagId)) throw new ArgumentNullException(nameof(tagId), "Tag id can't be null or empty");
             if (string.IsNullOrWhiteSpace(tagValue)) throw new ArgumentNullException(nameof(tagValue), $"Tag ({tagId}) value can't be null or empty");
-            this.tags[tagId] = tagValue;
+            this.Tags[tagId] = tagValue;
 
             return this;
         }
@@ -164,7 +161,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <returns>This instance</returns>
         public EventData RemoveTag(string tagId)
         {
-            this.tags.Remove(tagId);
+            this.Tags.Remove(tagId);
 
             return this;
         }

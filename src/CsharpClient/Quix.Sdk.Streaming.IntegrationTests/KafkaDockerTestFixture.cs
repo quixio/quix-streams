@@ -17,7 +17,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         public readonly int ZookeeperPort;
         public readonly int KafkaPort;
         public readonly string BrokerList;
-        public SecurityOptions SecurityOptions;
+        public SecurityOptions SecurityOptions = null;
 
         public KafkaDockerTestFixture()
         {
@@ -32,11 +32,21 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             {
                 this.kafkaContainer = new Builder()
                     .UseContainer()
-                    .UseImage("spotify/kafka")
-                    .ExposePort(ZookeeperPort, 2181)
-                    .ExposePort(KafkaPort, 9092)
-                    .WithEnvironment($"ADVERTISED_HOST={host}")
-                    .WithEnvironment($"ADVERTISED_PORT={KafkaPort}")
+                    .UseImage("lensesio/fast-data-dev:3.3.1")
+                    .ExposePort(ZookeeperPort, ZookeeperPort)
+                    .ExposePort(KafkaPort, KafkaPort)
+                    .WithEnvironment(
+                        $"BROKER_PORT={KafkaPort}", 
+                        $"ZK_PORT={ZookeeperPort}",
+                        $"ADV_HOST={host}",
+                        "REST_PORT=0",
+                        "WEB_PORT=0",
+                        "CONNECT_PORT=0",
+                        "REGISTRY_PORT=0",
+                        "RUNTESTS=0",
+                        "SAMPLEDATA=0",
+                        "FORWARDLOGS=0",
+                        "SUPERVISORWEB=0")
                     .Build()
                     .Start();
                 this.kafkaContainer.WaitForRunning();

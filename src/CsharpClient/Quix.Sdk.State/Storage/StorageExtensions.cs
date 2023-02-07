@@ -314,7 +314,7 @@ namespace Quix.Sdk.State.Storage
         /// Get list of all keys in the storage
         /// </summary>
         /// <param name="stateStorage">Storage instance</param>
-        public static HashSet<string> GetAllKeys(this IStateStorage stateStorage)
+        public static string[] GetAllKeys(this IStateStorage stateStorage)
         {
             return stateStorage.GetAllKeysAsync().GetAwaiter().GetResult();
         }

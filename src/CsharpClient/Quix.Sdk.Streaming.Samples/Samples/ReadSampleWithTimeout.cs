@@ -24,7 +24,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             };
             timer.Start();
             
-            var client = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security, new Dictionary<string, string>()
+            var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security, new Dictionary<string, string>()
             {
                 {"max.poll.interval.ms", "10000"}
             });

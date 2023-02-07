@@ -8,6 +8,8 @@
     <Configurations>Debug;Release;Python</Configurations>
 
     <Platforms>AnyCPU</Platforms>
+
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
