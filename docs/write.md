@@ -660,7 +660,8 @@ Alternatively, you can convert a Pandas Data Frame to a [ParameterData](#paramet
 
 ``` python
 data = ParameterData.from_panda_frame(df)
-stream.parameters.buffer.write(data)
+with data:
+    stream.parameters.buffer.write(data)
 ```
 
 !!! tip
