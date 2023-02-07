@@ -11,7 +11,7 @@ with open("README.md", "r") as fh:
 
 def get_data_files():
     licenses = [file for file in os.listdir('.') if file.startswith('LICENSE')]
-    licenses.append('../LICENSE')
+    licenses.append('../../LICENSE')
     return licenses
 
 
