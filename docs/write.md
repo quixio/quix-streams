@@ -938,7 +938,7 @@ This is a minimal code example you can use to write data to a topic using the Qu
     import datetime
     import math
     
-    from quixstreaming import *
+    from quixstreams import *
     
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()

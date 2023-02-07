@@ -195,17 +195,17 @@ These scripts compile the C# base library and then use the `InteropGenerator` pr
 ```
 
    ┌───────────────────────────┐
-   │   Python client library   │    /Python/lib/quixstreaming
+   │   Python client library   │    /Python/lib/quixstreams
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │  Python Interop wrapper   │    /Python/lib/quixstreaming/native/Python  (auto-generated)
+   │  Python Interop wrapper   │    /Python/lib/quixstreams/native/Python  (auto-generated)
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │  C# AoT compiled library  │    /Python/lib/quixstreaming/native/win64   (auto-generated)
+   │  C# AoT compiled library  │    /Python/lib/quixstreams/native/win64   (auto-generated)
    └───────────────────────────┘
 
 ```

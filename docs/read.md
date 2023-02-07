@@ -465,7 +465,7 @@ If you wish to use different automatic commit intervals, use the following code:
 === "Python"
     
     ``` python
-    from quixstreaming import CommitOptions
+    from quixstreams import CommitOptions
     
     commit_settings = CommitOptions()
     commit_settings.commit_every = 100 # note, you can set this to none
@@ -494,7 +494,7 @@ Some use cases need manual committing to mark completion of work, for example wh
 === "Python"
     
     ``` python
-    from quixstreaming import CommitMode
+    from quixstreams import CommitMode
     
     input_topic = client.open_input_topic('yourtopic', commit_settings=CommitMode.Manual)
     ```
@@ -610,7 +610,7 @@ One or more streams are revoked from your client. You can no longer commit to th
 === "Python"
     
     ``` python
-    from quixstreaming import StreamReader
+    from quixstreams import StreamReader
     
     def on_streams_revoked_handler(readers: [StreamReader]):
         for reader in readers:
@@ -668,9 +668,9 @@ This is a minimal code example you can use to read data from a topic using the Q
 === "Python"
     
     ``` python
-    from quixstreaming import *
-    from quixstreaming.app import App
-    from quixstreaming.models.parametersbufferconfiguration import ParametersBufferConfiguration
+    from quixstreams import *
+    from quixstreams.app import App
+    from quixstreams.models.parametersbufferconfiguration import ParametersBufferConfiguration
     import sys
     import signal
     import threading

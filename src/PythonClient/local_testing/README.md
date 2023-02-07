@@ -9,7 +9,7 @@ scp -r ./lib user@targetip:~/app/lib
         python3 -m virtualenv env && \
         chmod +x ./env/bin/activate && \
         # NOTE: for command below, use whichever python you have
-        mv ./quixstreaming ./env/lib/python3.8/site-packages/ && \
+        mv ./quixstreams ./env/lib/python3.8/site-packages/ && \
         . ./env/bin/activate
         python3 -m pip install -r requirements.txt --extra-index-url https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/pypi/simple/
 
