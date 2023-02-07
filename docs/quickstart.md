@@ -122,7 +122,7 @@ The code will wait for published messages and then print information about any m
 
     1. Imports the [Pandas library](https://pandas.pydata.org/){target=_blank} can be used to handle tabular data in Quix Streams. This library is supported because it is widely used.
     2. Connects to a Kafka server. In this case the Kafka server is running locally.
-    3. Opens the specified toppic for reading.
+    3. Opens the specified topic for reading.
     4. A function definition for the stream callback. This stream event handler will be called for all stream events across all streams.
     5. This function defines a Pandas data event callback.
     6. The function simply prints a Pandas data frame in this example.
