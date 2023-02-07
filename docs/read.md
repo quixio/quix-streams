@@ -422,7 +422,8 @@ Reading events from a stream is as easy as reading parameter data. In this case,
     
     ``` python
     def on_event_data_handler(data: EventData):
-        print("Event read for stream. Event Id: " + data.Id)
+        with data:
+            print("Event read for stream. Event Id: " + data.Id)
     
     new_stream.events.on_read += on_event_data_handler
     ```
