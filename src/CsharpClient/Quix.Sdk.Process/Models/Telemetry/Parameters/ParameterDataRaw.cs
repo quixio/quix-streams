@@ -27,20 +27,20 @@ namespace Quix.Sdk.Process.Models
         /// Create a new Parameter Data Raw instance with predefined values
         /// </summary>
         public ParameterDataRaw(
-            long Epoch, 
-            long[] Timestamps,
-            Dictionary<string, double?[]> NumericValues,
-            Dictionary<string, string[]> StringValues,
-            Dictionary<string, byte[][]> BinaryValues,
-            Dictionary<string, string[]> TagValues
+            long epoch, 
+            long[] timestamps,
+            Dictionary<string, double?[]> numericValues,
+            Dictionary<string, string[]> stringValues,
+            Dictionary<string, byte[][]> binaryValues,
+            Dictionary<string, string[]> tagValues
         )
         {
-            this.Epoch = Epoch;
-            this.Timestamps = Timestamps;
-            this.NumericValues = NumericValues;
-            this.StringValues = StringValues;
-            this.BinaryValues = BinaryValues;
-            this.TagValues = TagValues;
+            this.Epoch = epoch;
+            this.Timestamps = timestamps;
+            this.NumericValues = numericValues;
+            this.StringValues = stringValues;
+            this.BinaryValues = binaryValues;
+            this.TagValues = tagValues;
         }
 
         /// <summary>

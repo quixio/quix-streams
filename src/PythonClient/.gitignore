@@ -1,16 +1,17 @@
 *.orig
-#Ignore Rider files
+#Ignore PyCharm files
 .idea/
 
 #ignore environment
 env/
 
-#ignore build results
-lib/state
-lib/data
-lib/dist
-*egg-info
-lib/**/dotnet
-*.whl
+#ignore native
+src/quixstreams/native/
+tests/quixstreams/manual/certificates/
 
-*.pyc
+#ignore build results
+build/
+dist/
+*egg-info
+**/__pycache__/**
+tests/state-files/

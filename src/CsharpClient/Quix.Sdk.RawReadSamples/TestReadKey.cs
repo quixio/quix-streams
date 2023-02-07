@@ -9,7 +9,7 @@ namespace Quix.Sdk.RawReadSamples
     {
         public static void Run()
         {
-            var streamingClient = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+            var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
             var rawReader = streamingClient.OpenRawInputTopic("RawSampleKey");
 
 

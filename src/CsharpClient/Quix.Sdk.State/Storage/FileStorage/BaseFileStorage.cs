@@ -14,17 +14,17 @@ namespace Quix.Sdk.State.Storage.FileStorage
     /// </summary>
     public abstract class BaseFileStorage : IStateStorage
     {
-        private string storageDirectory;
+        private readonly string storageDirectory;
 
-        private static string DefaultDir = Path.Combine(".", "state");
-        private static string FileNameSpecialCharacter = "~";
+        private static readonly string DefaultDir = Path.Combine(".", "state");
+        private static readonly string FileNameSpecialCharacter = "~";
 
         /// <summary>
         /// Initializes a new instance of <see cref="BaseFileStorage"/>
         /// </summary>
         /// <param name="storageDirectory">Directory where to store the state</param>
         /// <param name="autoCreateDir">Create the directory if it doesn't exist</param>
-        public BaseFileStorage(string storageDirectory = null, bool autoCreateDir = true)
+        protected BaseFileStorage(string storageDirectory = null, bool autoCreateDir = true)
         {
             this.storageDirectory = storageDirectory != null ? storageDirectory : DefaultDir;
 
@@ -77,7 +77,7 @@ namespace Quix.Sdk.State.Storage.FileStorage
         /// </summary>
         /// <param name="path">Director file path</param>
         /// <returns>Storage element key</returns>
-        protected string GetKeyFromPath(string path)
+        private string GetKeyFromPath(string path)
         {
             return path.Substring(path.LastIndexOf(Path.DirectorySeparatorChar) + 1);
         }
@@ -173,7 +173,7 @@ namespace Quix.Sdk.State.Storage.FileStorage
         /// Recursively delete content of directory
         /// </summary>
         /// <param name="FolderName">Directory path to remove</param>
-        protected void clearFolder(string FolderName)
+        private void clearFolder(string FolderName)
         {
             DirectoryInfo dir = new DirectoryInfo(FolderName);
 
@@ -206,14 +206,14 @@ namespace Quix.Sdk.State.Storage.FileStorage
         /// This function is written in the asynchronous manner
         /// </summary>
         /// <returns>List of keys in the storage</returns>
-        public async Task<HashSet<string>> GetAllKeysAsync()
+        public async Task<string[]> GetAllKeysAsync()
         {
             //TODO: rewrite this function to the non-blocking Task fashion
-            HashSet<string> result = new HashSet<string>();
 
             using(await this.LockInternalKey("", LockType.Reader))
             {
                 string[] fileEntries = Directory.GetFiles(storageDirectory);
+                List<string> result = new List<string>();
                 foreach (string fileName in fileEntries)
                 {
                     if (Path.GetFileName(fileName).Contains(FileNameSpecialCharacter))
@@ -223,8 +223,9 @@ namespace Quix.Sdk.State.Storage.FileStorage
                     }
                     result.Add(GetKeyFromPath(fileName));
                 }
+
+                return result.ToArray();
             }
-            return result;
         }
 
         /// <summary>

@@ -1,7 +1,6 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
 using Serilog;
-using Serilog.Core;
 using Serilog.Sinks.SystemConsole.Themes;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 

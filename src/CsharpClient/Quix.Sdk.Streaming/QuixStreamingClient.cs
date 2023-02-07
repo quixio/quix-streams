@@ -43,11 +43,10 @@ namespace Quix.Sdk.Streaming
         private readonly string token;
         private readonly bool autoCreateTopics;
         private readonly bool debug;
-        private readonly ConcurrentDictionary<string, StreamingClient> wsToStreamingClientDict = new ConcurrentDictionary<string, StreamingClient>();
+        private readonly ConcurrentDictionary<string, KafkaStreamingClient> wsToStreamingClientDict = new ConcurrentDictionary<string, KafkaStreamingClient>();
         private readonly ConcurrentDictionary<string, Workspace> topicToWorkspaceDict = new ConcurrentDictionary<string, Workspace>();
         private Lazy<HttpClient> httpClient;
         private HttpClientHandler handler;
-        private readonly MemoryCache cache = new MemoryCache(nameof(QuixStreamingClient));
         private const string WorkspaceIdEnvironmentKey = "Quix__Workspace__Id";
         private const string PortalApiEnvironmentKey = "Quix__Portal__Api";
         private const string SdkTokenKey = "Quix__Sdk__Token";
@@ -71,7 +70,7 @@ namespace Quix.Sdk.Streaming
         public TokenValidationConfiguration TokenValidationConfig { get; set; } = new TokenValidationConfiguration();
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamingClient"/> that is capable of creating input and output topics for reading and writing
+        /// Initializes a new instance of <see cref="KafkaStreamingClient"/> that is capable of creating input and output topics for reading and writing
         /// </summary>
         /// <param name="token">The token to use when talking to Quix. When not provided, Quix__Sdk__Token environment variable will be used</param>
         /// <param name="autoCreateTopics">Whether topics should be auto created if they don't exist yet</param>
@@ -206,7 +205,7 @@ namespace Quix.Sdk.Streaming
             return (consumerGroup, newCommitOptions);
         }
 
-        private async Task<(StreamingClient client, string topicId)> ValidateTopicAndCreateClient(string topicIdOrName)
+        private async Task<(KafkaStreamingClient client, string topicId)> ValidateTopicAndCreateClient(string topicIdOrName)
         {
             CheckToken(token);
             topicIdOrName = topicIdOrName.Trim();
@@ -361,14 +360,14 @@ namespace Quix.Sdk.Streaming
 
             if (possibleWorkspaces.Count > 0)
             {
-                throw new InvalidConfigurationException($"Could not find the workspace for topic {topicIdOrName}. Verify that the workspace exists, token provided has access to it or use {nameof(StreamingClient)} instead of {nameof(QuixStreamingClient)}. Similar workspaces found: {string.Join(", ", possibleWorkspaces)}");
+                throw new InvalidConfigurationException($"Could not find the workspace for topic {topicIdOrName}. Verify that the workspace exists, token provided has access to it or use {nameof(KafkaStreamingClient)} instead of {nameof(QuixStreamingClient)}. Similar workspaces found: {string.Join(", ", possibleWorkspaces)}");
 
             }
 
-            throw new InvalidConfigurationException($"No workspace could be identified for topic {topicIdOrName}. Verify the topic id or name is correct. If name is provided then {WorkspaceIdEnvironmentKey} environment variable or token with access to 1 workspace only must be provided. Current token has access to {workspaces.Count} workspaces and env var is unset. Alternatively use {nameof(StreamingClient)} instead of {nameof(QuixStreamingClient)}.");
+            throw new InvalidConfigurationException($"No workspace could be identified for topic {topicIdOrName}. Verify the topic id or name is correct. If name is provided then {WorkspaceIdEnvironmentKey} environment variable or token with access to 1 workspace only must be provided. Current token has access to {workspaces.Count} workspaces and env var is unset. Alternatively use {nameof(KafkaStreamingClient)} instead of {nameof(QuixStreamingClient)}.");
         }
 
-        private async Task<StreamingClient> CreateStreamingClientForWorkspace(Workspace ws)
+        private async Task<KafkaStreamingClient> CreateStreamingClientForWorkspace(Workspace ws)
         {
             if (this.wsToStreamingClientDict.TryGetValue(ws.WorkspaceId, out var sc))
             {
@@ -418,7 +417,7 @@ namespace Quix.Sdk.Streaming
                 securityOptions.UseSasl = false;
             }
 
-            var client = new StreamingClient(ws.Broker.Address, securityOptions, brokerProperties, debug);
+            var client = new KafkaStreamingClient(ws.Broker.Address, securityOptions, brokerProperties, debug);
             return wsToStreamingClientDict.GetOrAdd(ws.WorkspaceId, client);
         }
 
@@ -592,21 +591,6 @@ namespace Quix.Sdk.Streaming
         {
             var uri = new Uri(ApiUrl, path);
             var cacheKey = $"API:GET:{uri.AbsolutePath}";
-            if (readFromCache)
-            {
-                var cached = this.cache.Get(cacheKey);
-                if (cached != null)
-                {
-                    if (!(cached is T typedCached))
-                    {
-                        logger.LogTrace("Found cached item for key {0}, but it could not be converted to type {1}", cacheKey, typeof(T).FullName);
-                    }
-                    else
-                    {
-                        return typedCached;
-                    }
-                }
-            }
 
             var response = await SendRequestToApi(HttpMethod.Get, uri);
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -614,10 +598,6 @@ namespace Quix.Sdk.Streaming
             try
             {
                 var converted = JsonConvert.DeserializeObject<T>(responseContent);
-                if (saveToCache)
-                {
-                    this.cache.Add(cacheKey, converted, DateTimeOffset.UtcNow.Add(CachePeriod));
-                }
 
                 return converted;
             }

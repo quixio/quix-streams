@@ -35,7 +35,7 @@ namespace Quix.Sdk.Streaming.Utils
         }
 
         /// <summary>
-        /// Retreives a Tag value by its Tag key
+        /// Retrieves a Tag value by its Tag key
         /// </summary>
         /// <param name="key">Key of the tag</param>
         /// <returns></returns>

@@ -25,7 +25,7 @@ namespace Quix.Sdk.PerformanceTest
             var datetime = DateTime.UtcNow.ToUnixNanoseconds();
 
             // Create a client which holds generic details for creating input and output topics
-            var client = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+            var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
             using var outputTopic = client.OpenOutputTopic("test");
 

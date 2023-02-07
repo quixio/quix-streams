@@ -11,7 +11,7 @@ namespace Quix.Sdk.RawReadSamples
     {
         public static void Run()
         {
-            var streamingClient = new StreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+            var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
             var rawWriter = streamingClient.OpenRawOutputTopic("RawSampleKey");
 
             for (var i = 0; i < 100; i++)
