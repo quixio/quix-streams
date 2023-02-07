@@ -109,10 +109,10 @@ For instance, in the following example we read and print the first timestamp and
     def on_stream_received_handler(new_stream: StreamReader):
     
         def on_parameter_data_handler(data: ParameterData):
-    
-            timestamp = data.timestamps[0].timestamp
-            num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
-            print("ParameterA - " + str(timestamp) + ": " + str(num_value))
+            with data:
+                timestamp = data.timestamps[0].timestamp
+                num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
+                print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
         new_stream.on_read += on_parameter_data_handler
     
@@ -248,9 +248,10 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
     
     ``` python
     def on_parameter_data_handler(data: ParameterData):
-        timestamp = data.timestamps[0].timestamp
-        num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
-        print("ParameterA - " + str(timestamp) + ": " + str(num_value))
+        with data:
+            timestamp = data.timestamps[0].timestamp
+            num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
+            print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
     buffer.on_read += on_parameter_data_handler
     ```
@@ -383,10 +384,10 @@ def read_stream(new_stream: StreamReader):
     buffer = new_stream.parameters.create_buffer()
 
     def on_parameter_data_handler(data: ParameterData):
-
-        # read from input stream
-        df = data.to_panda_frame()
-        print(df.to_string())
+        with data:
+            # read from input stream
+            df = data.to_panda_frame()
+            print(df.to_string())
 
     buffer.on_read += on_parameter_data_handler
 
@@ -421,7 +422,8 @@ Reading events from a stream is as easy as reading parameter data. In this case,
     
     ``` python
     def on_event_data_handler(data: EventData):
-        print("Event read for stream. Event Id: " + data.Id)
+        with data:
+            print("Event read for stream. Event Id: " + data.Id)
     
     new_stream.events.on_read += on_event_data_handler
     ```
@@ -465,7 +467,7 @@ If you wish to use different automatic commit intervals, use the following code:
 === "Python"
     
     ``` python
-    from quixstreaming import CommitOptions
+    from quixstreams import CommitOptions
     
     commit_settings = CommitOptions()
     commit_settings.commit_every = 100 # note, you can set this to none
@@ -494,7 +496,7 @@ Some use cases need manual committing to mark completion of work, for example wh
 === "Python"
     
     ``` python
-    from quixstreaming import CommitMode
+    from quixstreams import CommitMode
     
     input_topic = client.open_input_topic('yourtopic', commit_settings=CommitMode.Manual)
     ```
@@ -610,7 +612,7 @@ One or more streams are revoked from your client. You can no longer commit to th
 === "Python"
     
     ``` python
-    from quixstreaming import StreamReader
+    from quixstreams import StreamReader
     
     def on_streams_revoked_handler(readers: [StreamReader]):
         for reader in readers:
@@ -668,9 +670,9 @@ This is a minimal code example you can use to read data from a topic using the Q
 === "Python"
     
     ``` python
-    from quixstreaming import *
-    from quixstreaming.app import App
-    from quixstreaming.models.parametersbufferconfiguration import ParametersBufferConfiguration
+    from quixstreams import *
+    from quixstreams.app import App
+    from quixstreams.models.parametersbufferconfiguration import ParametersBufferConfiguration
     import sys
     import signal
     import threading
@@ -686,9 +688,9 @@ This is a minimal code example you can use to read data from a topic using the Q
         buffer = new_stream.parameters.create_buffer()
     
         def on_parameter_data_handler(data: ParameterData):
-    
-            df = data.to_panda_frame()
-            print(df.to_string())
+            with data:
+                df = data.to_panda_frame()
+                print(df.to_string())
     
         buffer.on_read += on_parameter_data_handler
     

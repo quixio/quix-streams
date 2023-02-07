@@ -660,7 +660,8 @@ Alternatively, you can convert a Pandas Data Frame to a [ParameterData](#paramet
 
 ``` python
 data = ParameterData.from_panda_frame(df)
-stream.parameters.buffer.write(data)
+with data:
+    stream.parameters.buffer.write(data)
 ```
 
 !!! tip
@@ -938,7 +939,7 @@ This is a minimal code example you can use to write data to a topic using the Qu
     import datetime
     import math
     
-    from quixstreaming import *
+    from quixstreams import *
     
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()

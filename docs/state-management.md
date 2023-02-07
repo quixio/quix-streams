@@ -8,12 +8,12 @@ The Quix SDK has state management built in to allow values to be used and persis
 
 ## Usage
 
-To use the SDK’s state management feature create an instance of *LocalFileStorage*. This is in *quixstreaming.state.localfilestorage*. Then use the set, get, containsKey and clear methods to manipulate the state as needed.
+To use the SDK’s state management feature create an instance of *LocalFileStorage*. This is in *quixstreams.state.localfilestorage*. Then use the `set`, `get`, `containsKey` (`contains_key` for Python), and `clear` methods to manipulate the state as needed.
 
 === "Python"
     
     ``` python
-    from quixstreaming.state.localfilestorage import LocalFileStorage
+    from quixstreams.state.localfilestorage import LocalFileStorage
     
     storage = LocalFileStorage()
     
@@ -30,7 +30,7 @@ To use the SDK’s state management feature create an instance of *LocalFileStor
     storage.set("KEY4", False)
     
     #check if the storage contains key
-    storage.containsKey("KEY1")
+    storage.contains_key("KEY1")
     
     #get value
     value = storage.get("KEY1")
