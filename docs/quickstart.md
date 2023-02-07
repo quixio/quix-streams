@@ -276,6 +276,8 @@ This connects to the Quix Platform, rather than your local Kafka installation, w
 
 Try one of the following resources to continue your Quix learning journey:
 
+* [Get a free Quix account](https://portal.platform.quix.ai/self-sign-up){target=_blank}
+
 * [Quix definitions](../../definitions.md)
 
 * [The Stream community on Slack](https://quix.io/slack-invite){target=_blank}
@@ -284,4 +286,4 @@ Try one of the following resources to continue your Quix learning journey:
 
 * [Sentiment analysis tutorial](../sentiment-analysis/index.md)
 
-* [Kafka blog post]() TBD!!
+* [Kafka setup blog post](https://www.quix.io/blog/send-timeseries-data-to-kafka-python/?returnUrl=https://www.quix.io/blog/tutorial/){target=_blank}
