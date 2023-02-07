@@ -93,6 +93,16 @@ namespace Quix.Sdk.Streaming.QuixApi.Portal
         /// SSL secured ACL role system.
         /// </summary>
         SaslSsl,
+
+        /// <summary>
+        /// Plain Text mode
+        /// </summary>
+        PlainText,
+
+        /// <summary>
+        /// ACL role system
+        /// </summary>
+        Sasl
     }
 
     /// <summary>

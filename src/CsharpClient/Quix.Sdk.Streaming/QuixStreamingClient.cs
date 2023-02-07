@@ -28,6 +28,7 @@ using AutoOffsetReset = Quix.Sdk.Process.Kafka.AutoOffsetReset;
 using Quix.Sdk.Streaming.Raw;
 using Quix.Sdk.Streaming.Utils;
 using Exception = System.Exception;
+using Quix.Sdk.Process.Configuration;
 
 namespace Quix.Sdk.Streaming
 {
@@ -208,7 +209,7 @@ namespace Quix.Sdk.Streaming
         private async Task<(StreamingClient client, string topicId)> ValidateTopicAndCreateClient(string topicIdOrName)
         {
             CheckToken(token);
-            topicIdOrName = topicIdOrName.ToLowerInvariant().Trim();;
+            topicIdOrName = topicIdOrName.Trim();
             var sw = Stopwatch.StartNew();
             var ws = await GetWorkspaceFromConfiguration(topicIdOrName);
             var client = await this.CreateStreamingClientForWorkspace(ws);
@@ -232,7 +233,7 @@ namespace Quix.Sdk.Streaming
         {
             this.logger.LogTrace("Checking if topic {0} is already created.", topicIdOrName);
             var topics = await this.GetTopics(workspace, true);
-            var existingTopic = topics.FirstOrDefault(y => y.Id.Equals(topicIdOrName, StringComparison.InvariantCultureIgnoreCase)) ?? topics.FirstOrDefault(y=> y.Name.Equals(topicIdOrName, StringComparison.InvariantCultureIgnoreCase)); // id prio
+            var existingTopic = topics.FirstOrDefault(y => y.Id.Equals(topicIdOrName, StringComparison.InvariantCulture)) ?? topics.FirstOrDefault(y=> y.Name.Equals(topicIdOrName, StringComparison.InvariantCulture)); // id prio
             var topicName = existingTopic?.Name;
             if (topicName == null)
             {
@@ -388,13 +389,36 @@ namespace Quix.Sdk.Streaming
                 logger.LogWarning("Workspace {0} is in state {1} instead of {2}.", ws.WorkspaceId, ws.Status, WorkspaceStatus.Ready);
             }
 
-            var certPath = await GetWorkspaceCertificatePath(ws);
-            if (!Enum.TryParse(ws.Broker.SaslMechanism.ToString(), true, out SaslMechanism parsed))
+            var securityOptions = new SecurityOptions();
+
+            if (ws.Broker.SecurityMode == BrokerSecurityMode.Ssl || ws.Broker.SecurityMode == BrokerSecurityMode.SaslSsl)
             {
-                throw new ArgumentOutOfRangeException(nameof(ws.Broker.SaslMechanism), "Unsupported sasl mechanism " + ws.Broker.SaslMechanism);
+                securityOptions.UseSsl = true;
+                securityOptions.SslCertificates = await GetWorkspaceCertificatePath(ws);
+            }
+            else
+            {
+                securityOptions.UseSsl = false;
             }
 
-            var client = new StreamingClient(ws.Broker.Address, new SecurityOptions(certPath, ws.Broker.Username, ws.Broker.Password, parsed), brokerProperties, debug);
+            if (ws.Broker.SecurityMode == BrokerSecurityMode.Sasl || ws.Broker.SecurityMode == BrokerSecurityMode.SaslSsl)
+            {
+                if (!Enum.TryParse(ws.Broker.SaslMechanism.ToString(), true, out SaslMechanism parsed))
+                {
+                    throw new ArgumentOutOfRangeException(nameof(ws.Broker.SaslMechanism), "Unsupported sasl mechanism " + ws.Broker.SaslMechanism);
+                }
+
+                securityOptions.UseSasl = true;
+                securityOptions.SaslMechanism = parsed;
+                securityOptions.Username = ws.Broker.Username;
+                securityOptions.Password = ws.Broker.Password;
+            } 
+            else
+            {
+                securityOptions.UseSasl = false;
+            }
+
+            var client = new StreamingClient(ws.Broker.Address, securityOptions, brokerProperties, debug);
             return wsToStreamingClientDict.GetOrAdd(ws.WorkspaceId, client);
         }
 

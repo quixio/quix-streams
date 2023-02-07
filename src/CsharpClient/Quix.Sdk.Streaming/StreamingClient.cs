@@ -13,6 +13,7 @@ using AutoOffsetReset = Quix.Sdk.Process.Kafka.AutoOffsetReset;
 using Quix.Sdk.Streaming.Raw;
 using Quix.Sdk.Streaming.Utils;
 using SaslMechanism = Confluent.Kafka.SaslMechanism;
+using Quix.Sdk.Streaming.QuixApi.Portal;
 
 namespace Quix.Sdk.Streaming
 {
@@ -41,12 +42,34 @@ namespace Quix.Sdk.Streaming
             }
             else
             {
-                if (!Enum.TryParse(securityOptions.SaslMechanism.ToString(), true, out SaslMechanism parsed))
+                var securityOptionsBuilder = new SecurityOptionsBuilder();
+
+                if (securityOptions.UseSsl)
                 {
-                    throw new ArgumentOutOfRangeException(nameof(securityOptions.SaslMechanism), "Unsupported sasl mechanism " + securityOptions.SaslMechanism);
+                    securityOptionsBuilder.SetSslEncryption(securityOptions.SslCertificates);
                 }
-                this.brokerProperties = new SecurityOptionsBuilder().SetSslEncryption(securityOptions.SslCertificates).SetSaslAuthentication(securityOptions.Username, securityOptions.Password, parsed).Build();                
+                else
+                {
+                    securityOptionsBuilder.SetNoEncryption();
+                }
+
+                if (securityOptions.UseSasl)
+                {
+                    if (!Enum.TryParse(securityOptions.SaslMechanism.ToString(), true, out Confluent.Kafka.SaslMechanism parsed))
+                    {
+                        throw new ArgumentOutOfRangeException(nameof(securityOptions.SaslMechanism), "Unsupported sasl mechanism " + securityOptions.SaslMechanism);
+                    }
+
+                    securityOptionsBuilder.SetSaslAuthentication(securityOptions.Username, securityOptions.Password, parsed);
+                }
+                else
+                {
+                    securityOptionsBuilder.SetNoAuthentication();
+                }
+
+                this.brokerProperties = securityOptionsBuilder.Build();
             }
+
             if (properties != null)
             {
                 foreach (var property in properties)
