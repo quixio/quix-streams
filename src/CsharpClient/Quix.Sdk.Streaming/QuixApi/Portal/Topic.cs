@@ -18,7 +18,7 @@ namespace Quix.Sdk.Streaming.QuixApi.Portal
             set
             {
                 if (value == null) throw new ArgumentNullException(nameof(Id));
-                this.id = value.ToLowerInvariant();
+                this.id = value;
             }
         }
 

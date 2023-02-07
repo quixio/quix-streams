@@ -4,6 +4,7 @@ using System.Threading;
 using Quix.Sdk.Process.Managers;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process.Models.Utility;
+using Quix.Sdk.Streaming.Exceptions;
 
 namespace Quix.Sdk.Streaming.Models.StreamWriter
 {
@@ -22,6 +23,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         private bool timerEnabled = false; // Here because every now and then reseting its due time to never doesn't work
         private bool isDisposed;
         private const int TimerInterval = 20;
+        private readonly object flushLock = new object();
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamParametersWriter"/>
@@ -218,8 +220,19 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             {
                 throw new ObjectDisposedException(nameof(StreamParametersWriter));
             }
-            this.FlushDefinitions();
-            this.Buffer.Flush();
+
+            try
+            {
+                lock (flushLock)
+                {
+                    this.FlushDefinitions();
+                    this.Buffer.Flush();
+                }
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogError(ex, "Exception occurred while trying to flush parameter data buffer.");
+            }
         }
 
         private void ResetFlushDefinitionsTimer()
@@ -231,10 +244,14 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
 
         private void OnFlushDefinitionsTimerEvent(object state)
         {
-            if (!timerEnabled) return;
+            if (!this.timerEnabled) return;
             try
             {
                 this.FlushDefinitions();
+            }
+            catch (StreamClosedException exception) when (this.isDisposed)
+            {
+                // Ignore exception because the timer flush definition may finish executing only after closure due to how close lock works in streamWriter
             }
             catch (Exception ex)
             {

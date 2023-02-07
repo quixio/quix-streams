@@ -6,6 +6,7 @@ using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Process.Managers;
 using System.Linq;
+using Quix.Sdk.Streaming.Exceptions;
 
 namespace Quix.Sdk.Streaming.Models.StreamWriter
 {
@@ -306,7 +307,18 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         private void OnFlushDefinitionsTimerEvent(object state)
         {
             if (!timerEnabled) return;
-            this.FlushDefinitions();
+            try
+            {
+                this.FlushDefinitions();
+            }
+            catch (StreamClosedException exception) when (this.isDisposed)
+            {
+                // Ignore exception because the timer flush definition may finish executing only after closure due to how close lock works in streamWriter
+            }
+            catch (Exception ex)
+            {
+                this.logger.Log(LogLevel.Error, ex, "Exception occurred while trying to flush event definition buffer.");
+            }
         }
 
 
