@@ -19,16 +19,17 @@ Let’s see some examples of how to read and write data in a Data processor usin
     ``` python
     # Callback triggered for each new data frame
     def on_parameter_data_handler(data: ParameterData):
+        with data:
     
-        df = data.to_panda_frame()  # Input data frame
-        output_df = pd.DataFrame()
-        output_df["time"] = df["time"]
-        output_df["TAG__LapNumber"] = df["TAG__LapNumber"]
-    
-        # If braking force applied is more than 50%, we mark HardBraking with True
-        output_df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
-    
-        stream_output.parameters.write(output_df)  # Send data back to the stream
+            df = data.to_panda_frame()  # Input data frame
+            output_df = pd.DataFrame()
+            output_df["time"] = df["time"]
+            output_df["TAG__LapNumber"] = df["TAG__LapNumber"]
+        
+            # If braking force applied is more than 50%, we mark HardBraking with True
+            output_df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
+        
+            stream_output.parameters.write(output_df)  # Send data back to the stream
     ```
 
 === "Python - Plain"
@@ -36,16 +37,16 @@ Let’s see some examples of how to read and write data in a Data processor usin
     ``` python
     # Callback triggered for each new data frame
     def on_parameter_data_handler(data: ParameterData):
-    
-        for row in data.timestamps:
-            # If braking force applied is more than 50%, we mark HardBraking with True
-            hard_braking = row.parameters["Brake"].numeric_value > 0.5
-    
-            stream_output.parameters \
-                .add_timestamp(row.timestamp) \
-                .add_tag("LapNumber", row.tags["LapNumber"]) \
-                .add_value("HardBraking", hard_braking) \
-                .write()
+        with data:
+            for row in data.timestamps:
+                # If braking force applied is more than 50%, we mark HardBraking with True
+                hard_braking = row.parameters["Brake"].numeric_value > 0.5
+        
+                stream_output.parameters \
+                    .add_timestamp(row.timestamp) \
+                    .add_tag("LapNumber", row.tags["LapNumber"]) \
+                    .add_value("HardBraking", hard_braking) \
+                    .write()
     ```
 
 === "C\#"

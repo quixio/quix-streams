@@ -109,10 +109,10 @@ For instance, in the following example we read and print the first timestamp and
     def on_stream_received_handler(new_stream: StreamReader):
     
         def on_parameter_data_handler(data: ParameterData):
-    
-            timestamp = data.timestamps[0].timestamp
-            num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
-            print("ParameterA - " + str(timestamp) + ": " + str(num_value))
+            with data:
+                timestamp = data.timestamps[0].timestamp
+                num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
+                print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
         new_stream.on_read += on_parameter_data_handler
     
@@ -248,9 +248,10 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
     
     ``` python
     def on_parameter_data_handler(data: ParameterData):
-        timestamp = data.timestamps[0].timestamp
-        num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
-        print("ParameterA - " + str(timestamp) + ": " + str(num_value))
+        with data:
+            timestamp = data.timestamps[0].timestamp
+            num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
+            print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
     buffer.on_read += on_parameter_data_handler
     ```
@@ -383,10 +384,10 @@ def read_stream(new_stream: StreamReader):
     buffer = new_stream.parameters.create_buffer()
 
     def on_parameter_data_handler(data: ParameterData):
-
-        # read from input stream
-        df = data.to_panda_frame()
-        print(df.to_string())
+        with data:
+            # read from input stream
+            df = data.to_panda_frame()
+            print(df.to_string())
 
     buffer.on_read += on_parameter_data_handler
 
@@ -686,9 +687,9 @@ This is a minimal code example you can use to read data from a topic using the Q
         buffer = new_stream.parameters.create_buffer()
     
         def on_parameter_data_handler(data: ParameterData):
-    
-            df = data.to_panda_frame()
-            print(df.to_string())
+            with data:
+                df = data.to_panda_frame()
+                print(df.to_string())
     
         buffer.on_read += on_parameter_data_handler
     
