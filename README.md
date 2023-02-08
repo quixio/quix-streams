@@ -69,7 +69,7 @@ pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.d
 
 To install Quix Streams on M1 and M2-based Macs, follow these instructions: 
 
-1. Make sure you have Rosetta installed. Open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
+1. To make sure you have Rosetta installed, open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
 
 2. If you don't have Brew installed, install it using the instructions on the [Brew homepage](https://brew.sh). Make sure that after the install script runs, that you perform any configuration recommended by the script.
 
@@ -124,7 +124,7 @@ To install Quix Streams on M1 and M2-based Macs, follow these instructions:
 19. Install Quix Streams:
 
     ```
-    pip3 install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
+    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
     ```
 
 20. You can now run your code that uses Quix Streams:
