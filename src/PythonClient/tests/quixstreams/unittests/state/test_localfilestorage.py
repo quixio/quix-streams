@@ -1,8 +1,8 @@
 import math
 import unittest
 
-from quixstreams.state.statevalue import StateValue
-from quixstreams.state.localfilestorage import LocalFileStorage
+from src.quixstreams.state.statevalue import StateValue
+from src.quixstreams.state.localfilestorage import LocalFileStorage
 
 
 class StateTest(unittest.TestCase):

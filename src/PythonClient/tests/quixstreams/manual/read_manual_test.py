@@ -4,7 +4,7 @@
 
 import pandas as pd
 
-from quixstreams.logging import Logging, LogLevel
+from src.quixstreams.logging import Logging, LogLevel
 
 from src import quixstreams as qx
 from src.quixstreams.models.parametervalue import ParameterValueType
