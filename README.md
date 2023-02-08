@@ -57,13 +57,83 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 
 ## Getting Started 🏄
 
-### Installing the library
+### Installing the library on Intel
 
-You can <b>install</b> the library using the package manager for Python Packages:
+You can <b>install</b> the library for Intel-based platforms using the package manager for Python Packages:
 
 ```shell
-pip install quixstreams
+pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
 ```
+
+### Installing on M1/M2 on Mac
+
+To install Quix Streams on M1 and M2-based Macs, follow these instructions: 
+
+1. Make sure you have Rosetta installed. Open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
+
+2. If you don't have Brew installed, install it using the instructions on the [Brew homepage](https://brew.sh). Make sure that after the install script runs, that you perform any configuration recommended by the script.
+
+3. Install an additional terminal, such as iTerm2. You could do this, for example, with `brew install iterm2`.
+
+4. Open finder, go to Applications, and locate iTerm2.
+
+5. Right-click the iTerm2 application icon to display the context-sensitive menu, and select the menu item `Duplicate`.
+
+6. Rename the duplicate created to `iTerm2 rosetta`.
+
+7. Right-click `iTerm2 rosetta` again and select `Get Info`.
+
+8. Tick the `Open using rosetta` checkbox, so that iTerm2 is always opened using Rosetta.
+
+9. Launch `iTerm2 rosetta` by double-clicking it.
+
+10. On the command line, run the `arch` command. This will display `i386`. If not, check your steps so far.
+
+11. Install Brew again. This will install a new copy of Brew to a new directory structure.
+
+12. Open your Zsh profile file, `~/.zprofile`, using a text editor such as Nano. For example, with the command `nano ~/.zprofile`.
+
+13. Add the following code to `~/.zprofile`:
+
+    ```
+    if [ $(arch) = "i386" ]; then
+        alias brew="/usr/local/bin/brew"
+    fi
+    ```
+
+    This will ensure that when you open `iTerm2 rosetta`, your `brew` command will point at the correct (x86_64) Brew installation.
+
+14. Reload your Zsh profile by running `source ~/.zprofile`, or opening a new instance of `iTerm2 rosetta`.
+
+15. Install Python with the command `brew install python3`.
+
+16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`.
+
+17. Open your `~/.zprofile` file again, and add the following line inside the `if` statement:
+
+    ```
+    if [ $(arch) = "i386" ]; then
+        ...
+        alias python3="/usr/local/Cellar/python@3.10/3.10.9/bin/python3"
+        ...
+    fi
+    ```
+
+18. Reload your Zsh profile by running `source ~/.zprofile`, or by starting a new instance of `iTerm2 rosetta`.
+
+19. Install Quix Streams:
+
+    ```
+    pip3 install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev9 --user
+    ```
+
+20. You can now run your code that uses Quix Streams:
+    
+    ```
+    python3 yourcode.py
+    ```
+
+You have now successfully installed Quix Streams on M1/M2 architectures.
 
 ### Prepare your Kafka Cluster
 
