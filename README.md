@@ -59,13 +59,13 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 
 ### Installing the library on Intel
 
-You can <b>install</b> the library for Intel-based platforms using the package manager for Python Packages:
+You can install the library for Intel-based platforms using the package manager for Python Packages:
 
 ```shell
 pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
 ```
 
-### Installing on M1/M2 on Mac
+### Installing on M1/M2 Mac
 
 To install Quix Streams on M1 and M2-based Macs, follow these instructions: 
 
@@ -89,7 +89,7 @@ To install Quix Streams on M1 and M2-based Macs, follow these instructions:
 
 10. On the command line, run the `arch` command. This will display `i386`. If not, check your steps so far.
 
-11. Install Brew again. This will install a new copy of Brew to a new directory structure.
+11. Install Brew again. This installs a new copy of Brew to a new directory structure.
 
 12. Open your Zsh profile file, `~/.zprofile`, using a text editor such as Nano. For example, with the command `nano ~/.zprofile`.
 
@@ -124,7 +124,7 @@ To install Quix Streams on M1 and M2-based Macs, follow these instructions:
 19. Install Quix Streams:
 
     ```
-    pip3 install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev9 --user
+    pip3 install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
     ```
 
 20. You can now run your code that uses Quix Streams:
