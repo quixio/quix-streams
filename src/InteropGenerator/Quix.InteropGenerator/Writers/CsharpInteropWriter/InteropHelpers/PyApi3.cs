@@ -65,26 +65,29 @@ internal static class DllLoader
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            Console.WriteLine($"Checking mac folders");
+            Console.WriteLine($"Checking mac folders for {RuntimeInformation.OSArchitecture}, rid: {RuntimeInformation.RuntimeIdentifier}, {RuntimeInformation.ProcessArchitecture}");
             // x64_86 /usr/local/Cellar/python@3.10/3.10.9/Frameworks/Python.framework/Versions/3.10/lib
-            if (RuntimeInformation.OSArchitecture == Architecture.X64)
+            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
             {
                 const string x64dir = "/usr/local/Cellar";
 
                 void SetX64() // for early returns
                 {
+                    
+                    Console.WriteLine($"x64-0: {x64dir}");
                     if (!Directory.Exists(x64dir)) return;
-                    var dirs = Directory.GetDirectories(x64dir).Where(y => y.StartsWith("python@3")).ToList();
-                    dirs.ForEach(x=> Console.WriteLine($"x64-1: {x}"));
+                    Console.WriteLine($"x64-1 exists");
+                    var dirs = Directory.GetDirectories(x64dir).Where(y => Path.GetFileName(y).StartsWith("python@3")).ToList();
+                    dirs.ForEach(x=> Console.WriteLine($"x64-2: {x}"));
                     if (!dirs.Any()) return;
                     var frameworkDirs = dirs.SelectMany(Directory.GetDirectories)
                         .Select(x => Path.Combine(x, "Frameworks"))
                         .Where(Directory.Exists).ToList();
-                    frameworkDirs.ForEach(x=> Console.WriteLine($"x64-2: {x}"));
+                    frameworkDirs.ForEach(x=> Console.WriteLine($"x64-3: {x}"));
                     if (!frameworkDirs.Any()) return;
                     var versions = frameworkDirs.Select(x => Path.Combine(x, "Python.framework", "Versions"))
                         .SelectMany(Directory.GetDirectories).Select(x=> Path.Combine(x, "lib")).Where(Directory.Exists).ToList();
-                    versions.ForEach(x=> Console.WriteLine($"x64-3: {x}"));
+                    versions.ForEach(x=> Console.WriteLine($"x64-4: {x}"));
                     if (!versions.Any()) return;
                     libFolders.AddRange(versions);
                 }
@@ -92,17 +95,20 @@ internal static class DllLoader
             }
             
             // universal /Library/Frameworks/Python.framework/Versions/Current/lib/python3.11/config-3.11-darwin/libpython3.11.dylib
-            const string universal = "/Library/Frameworks/Python.framework/Versions/Current/lib/";
+            const string universal = "/Library/Frameworks/Python.framework/Versions/Current/lib";
             void SetUniversal() // for early returns 
             {
+                Console.WriteLine($"uni-0 {universal}");
                 if (!Directory.Exists(universal)) return;
-                Console.WriteLine($"uni-1: {universal}");
-                var possibleUniversalDirs = Directory.GetDirectories(universal).Where(y => y.StartsWith("python3"))
-                    .SelectMany(Directory.GetDirectories).Where(y => y.StartsWith("config-") && y.EndsWith("-darwin")).ToList();
+                Console.WriteLine($"uni-1 exists");
+                var possibleUniversalDirs = Directory.GetDirectories(universal).Where(y => Path.GetFileName(y).StartsWith("python3"))
+                    .SelectMany(Directory.GetDirectories).Where(y => Path.GetFileName(y).StartsWith("config-") && Path.GetFileName(y).EndsWith("-darwin")).ToList();
                 possibleUniversalDirs.ForEach(x=> Console.WriteLine($"uni-2: {x}"));
                 if (!possibleUniversalDirs.Any()) return;
                 libFolders.AddRange(possibleUniversalDirs);
             }
+
+            SetUniversal();
         }
 
         foreach (var folder in libFolders)
