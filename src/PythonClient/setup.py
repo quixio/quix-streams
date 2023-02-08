@@ -1,6 +1,7 @@
 import platform
 import setuptools
 import os
+import os.path
 import re
 import fileinput
 
@@ -11,7 +12,10 @@ with open("README.md", "r") as fh:
 
 def get_data_files():
     licenses = [file for file in os.listdir('.') if file.startswith('LICENSE')]
-    licenses.append('../../LICENSE')
+    if os.path.isfile('../../LICENSE'):
+        licenses.append('../../LICENSE')  # non-docker build
+    else:
+        licenses.append('../LICENSE')  # docker build
     return licenses
 
 
