@@ -59,15 +59,15 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 
 ### Installing the library on Intel
 
-You can install the library for Intel-based platforms using the package manager for Python Packages:
+You can install the library for amd64 platforms using the package manager for Python Packages:
 
 ```shell
-pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
+pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev11 --user
 ```
 
 ### Installing on M1/M2 Mac
 
-To install Quix Streams on M1 and M2-based Macs, follow these instructions: 
+To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
 
 1. To make sure you have Rosetta installed, open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
 
@@ -124,7 +124,7 @@ To install Quix Streams on M1 and M2-based Macs, follow these instructions:
 19. Install Quix Streams:
 
     ```
-    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev10 --user
+    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev11 --user
     ```
 
 20. You can now run your code that uses Quix Streams:
