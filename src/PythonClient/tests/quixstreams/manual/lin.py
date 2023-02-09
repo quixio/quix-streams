@@ -1,4 +1,4 @@
-from quixstreams import QuixStreamingClient
+from src.quixstreams import QuixStreamingClient
 import time
 import datetime
 import math

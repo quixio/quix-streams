@@ -72,7 +72,7 @@ class InteropUtils(object):
             return c_void_p(None)
 
         bytes = string.encode('utf-8')  # will get GC'd
-        bytes_len = len(bytes) + 1  # +1 because ultimately we want a null terminated array of characters
+        bytes_len = len(bytes) + 1  # +1 because ultimately we want a null terminated array of bytes
         uptr = InteropUtils.allocate_uptr(bytes_len)
         ctypes.memmove(uptr, bytes, bytes_len)
         return uptr

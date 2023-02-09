@@ -41,7 +41,14 @@ class Array:
             if length == 0:
                 return []
 
-            ctypes_pointer = ctypes.cast(array_uptr.value + 4, ctypes.POINTER(valuetype))
+            # Allocate an array which will be managed by python. We move the values from unmanaged memory to
+            # the managed and free the unmanaged (see finally). Managed will be freed by python once no longer in use
+            arrsize = ctypes.sizeof(valuetype) * length
+            arr = bytes(arrsize)
+            arr_ptr = ctypes.c_char_p(arr)
+            ctypes.memmove(arr, array_uptr.value + 4, arrsize)
+            ctypes_pointer = ctypes.cast(arr_ptr, ctypes.POINTER(valuetype))
+            # print(f"ARR READ ({valuetype}): {bytes(arr).hex().upper()}")  # for testing
 
             if valuemapper == None:
                 return [ctypes_pointer[i] for i in range(length)]
@@ -62,16 +69,17 @@ class Array:
 
         blit_len = len(blittables)
         if blit_len == 0:
-            buffer_uptr = InteropUtils.allocate_uptr(4)
+            buffer_uptr = InteropUtils.allocate_uptr(4)  # 4 bytes for int32 length
         else:
 
             if valuemapper is not None:
                 blittables = [valuemapper(i) for i in blittables]
 
             arr = (valuetype * blit_len)(*blittables)
+            # print(f"ARR WROTE ({valuetype}): {bytes(arr).hex().upper()}")  # left here for testing purposes
 
             arrsize = ctypes.sizeof(valuetype) * blit_len
-            buffer_uptr = InteropUtils.allocate_uptr(4 + arrsize)
+            buffer_uptr = InteropUtils.allocate_uptr(4 + arrsize)  # 4 bytes for int32 length + whatever the rest needs
 
             ctypes.memmove(buffer_uptr.value + 4, arr, arrsize)
         size_bytes = ctypes.c_int32.from_address(buffer_uptr.value)

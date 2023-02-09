@@ -163,10 +163,10 @@ public class InteropUtils
         elementSize += underlyingElementSize;
         var size = elementSize * array.Length; 
         size += countSize; // for the item count as integer
-        var ptr = Marshal.AllocHGlobal(size);
+        var ptrStart = Marshal.AllocHGlobal(size);
 
-        var currentPtr = ptr;
-        LogDebug($"Array length: {array.Length} at ptr {ptr}, array starting at {ptr+countSize}, with element size {elementSize} for underlying type {underlyingType} | 5ac15");
+        var currentPtr = ptrStart;
+        LogDebug($"Array length: {array.Length} at ptr {ptrStart}, array starting at {ptrStart+countSize}, with element size {elementSize} for underlying type {underlyingType} | 5ac15");
         Marshal.StructureToPtr(array.Length, currentPtr, false);
         currentPtr += countSize;
 
@@ -186,8 +186,16 @@ public class InteropUtils
 
             index++;
         }
-        LogDebug("Allocated UPtr: {0}, type: {1}, {2}", ptr, underlyingType.FullName+"[]", "is not null");
-        return ptr;
+
+        if (DebugMode)
+        {
+            LogDebug("Allocated UPtr: {0}, type: {1}, {2}", ptrStart, underlyingType.FullName + "[]", "is not null");
+            var bytes = new byte[(long)currentPtr - (long)ptrStart];
+            Marshal.Copy(ptrStart, bytes, 0, bytes.Length);
+            LogDebug($"Bytes: {BitConverter.ToString(bytes).Replace("-","")} | 5ac15");
+        }
+        
+        return ptrStart;
     }
     
     public static T FromUPtr<T>(IntPtr ptr)
@@ -290,8 +298,14 @@ public class InteropUtils
         var currentPtr = ptr + countSize;
         var ptrEnd = ptr + countSize + elementSize * length;
         var array = Array.CreateInstance(underlyingType, length);
-        
-        LogDebug($"Array length: {array.Length} at ptr {ptr}, array starting at {ptr+countSize}, ending at {ptrEnd} with element size {elementSize} for underlying type {underlyingType} | 283a");
+
+        if (DebugMode)
+        {
+            LogDebug($"Array length: {array.Length} at ptr {ptr}, array starting at {ptr + countSize}, ending at {ptrEnd} with element size {elementSize} for underlying type {underlyingType} | 283a");
+            var bytes = new byte[(long)ptrEnd - (long)ptr];
+            Marshal.Copy(ptr, bytes, 0, bytes.Length);
+            LogDebug($"Bytes: {BitConverter.ToString(bytes).Replace("-", "")} | 283a");
+        }
 
         // Marshalling element by element because in native AOT we're limited in what we can do
         for(var index = 0; index < length; index ++)

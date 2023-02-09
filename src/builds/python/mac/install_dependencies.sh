@@ -9,7 +9,11 @@ _=$(dotnet --version)
 if [[ $? != 0 ]]; then
 	curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
 	chmod +x ./dotnet-install.sh
-	./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx
+    if [ $(arch) == "i386" ]; then
+        ./dotnet-install.sh --channel 7.0.1xx
+    else
+        ./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx
+    fi
 	echo "export DOTNET_ROOT=$HOME/.dotnet" >> ~/.zshrc
 	echo "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools" >> ~/.zshrc
 	source ~/.zshrc

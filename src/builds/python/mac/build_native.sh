@@ -9,14 +9,18 @@ _=$(dotnet --version)
 if [[ $? != 0 ]]; then
 	curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
 	chmod +x ./dotnet-install.sh
-	./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx
+    if [ $(arch) == "i386" ]; then
+        ./dotnet-install.sh --channel 7.0.1xx
+    else
+        ./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx
+    fi
 	echo "export DOTNET_ROOT=$HOME/.dotnet" >> ~/.zshrc
 	echo "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools" >> ~/.zshrc
 	source ~/.zshrc
 fi
 
 archname=$(uname -m)
-    pythonplatform=$(python3 -c 'import platform;plat=platform.uname();print(f"{plat.system}-{plat.machine}".lower())')
+pythonplatform=$(python3 -c 'import platform;plat=platform.uname();print(f"{plat.system}-{plat.machine}".lower())')
 # based on https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.NETCore.Platforms/src/runtime.json
 if [[ $archname == 'arm64' ]]; then
     dotnetruntime=osx.11.0-arm64
@@ -28,7 +32,7 @@ else
 fi
 
 echo "Building for Mac architecture $archname with dotnet runtime id $dotnetruntime with python platform $pythonplatform"
-
+sleep 1
 interopfolder=../../../InteropGenerator
 csharpfolder=../../../CsharpClient
 pythonfolder=../../../PythonClient
@@ -68,6 +72,8 @@ echo Build interop
 interopoutputcsharp=$interopoutput/Csharp
 for assemblydir in $interopoutputcsharp/* ; do
     assemblyname=$(basename $assemblydir)
+	echo dotnet publish $assemblydir/$assemblyname.csproj /p:NativeLib=Shared /p:SelfContained=true -r $dotnetruntime -c Debug -o $destPlatform/$assemblyname
+
     dotnet publish $assemblydir/$assemblyname.csproj /p:NativeLib=Shared /p:SelfContained=true -r $dotnetruntime -c Debug -o $destPlatform/$assemblyname
 	if [[ $? != 0 ]]; then
 		echo "Failed dotnet publish $assemblyname.csproj"

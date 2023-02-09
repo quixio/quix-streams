@@ -12,7 +12,6 @@ internal static class DllLoader
     public static IntPtr GetSymbol(IntPtr dll, string symbolName)
     {
         var res = NativeLibrary.GetExport(dll, symbolName);
-        Console.WriteLine($"Loading Symbol in {dll} with name {symbolName} and value {res}");
         if (res == IntPtr.Zero) throw new MissingMethodException($"Symbol {symbolName} was not found");
         return res;
     }
@@ -22,7 +21,6 @@ internal static class DllLoader
         // According to https://learn.microsoft.com/en-us/dotnet/standard/native-interop/cross-platform
         // and https://learn.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke-source-generation
         // This should also attempt to load the correct library on linux and macos
-        Console.WriteLine($"Loading {libName}");
         var dll = NativeLibrary.Load(libName);
         if (dll == IntPtr.Zero) throw new DllNotFoundException($"{libName} could not be loaded");
         return dll;
@@ -55,11 +53,49 @@ internal static class DllLoader
         }
 
         var libFolders = new List<string>();
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             libFolders.Add("/usr/lib/");
             libFolders.Add("/usr/local/lib/");
             if (envVariables.TryGetValue("HOME", out var homeEnvVar)) libFolders.Add(Path.Combine(homeEnvVar, ".local", "lib"));
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            // x64_86 /usr/local/Cellar/python@3.10/3.10.9/Frameworks/Python.framework/Versions/3.10/lib
+            if (RuntimeInformation.ProcessArchitecture == Architecture.X64)
+            {
+                const string x64dir = "/usr/local/Cellar";
+
+                void SetX64() // for early returns
+                {
+                    if (!Directory.Exists(x64dir)) return;
+                    var dirs = Directory.GetDirectories(x64dir).Where(y => Path.GetFileName(y).StartsWith("python@3")).ToList();
+                    if (!dirs.Any()) return;
+                    var frameworkDirs = dirs.SelectMany(Directory.GetDirectories)
+                        .Select(x => Path.Combine(x, "Frameworks"))
+                        .Where(Directory.Exists).ToList();
+                    if (!frameworkDirs.Any()) return;
+                    var versions = frameworkDirs.Select(x => Path.Combine(x, "Python.framework", "Versions"))
+                        .SelectMany(Directory.GetDirectories).Select(x=> Path.Combine(x, "lib")).Where(Directory.Exists).ToList();
+                    if (!versions.Any()) return;
+                    libFolders.AddRange(versions);
+                }
+                SetX64();
+            }
+            
+            // universal /Library/Frameworks/Python.framework/Versions/Current/lib/python3.11/config-3.11-darwin/libpython3.11.dylib
+            const string universal = "/Library/Frameworks/Python.framework/Versions/Current/lib";
+            void SetUniversal() // for early returns 
+            {
+                if (!Directory.Exists(universal)) return;
+                var possibleUniversalDirs = Directory.GetDirectories(universal).Where(y => Path.GetFileName(y).StartsWith("python3"))
+                    .SelectMany(Directory.GetDirectories).Where(y => Path.GetFileName(y).StartsWith("config-") && Path.GetFileName(y).EndsWith("-darwin")).ToList();
+                if (!possibleUniversalDirs.Any()) return;
+                libFolders.AddRange(possibleUniversalDirs);
+            }
+
+            SetUniversal();
         }
 
         foreach (var folder in libFolders)
@@ -133,7 +169,7 @@ public class PyApi3 : IDisposable
     private unsafe delegate* unmanaged<int, void> PyGILState_Release; // void PyGILState_Release(PyGILState_STATE)
 
 
-    #region exceptions
+    #region Exceptions
     private IntPtr exception;
     private IntPtr notImplementedError;
     #endregion
@@ -227,35 +263,21 @@ public class PyApi3 : IDisposable
 
     private unsafe void LoadVersionedFunctions()
     {
-        Console.WriteLine("A");
         PyGILState_Check = (delegate* unmanaged<int>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyGILState_Check));
-        Console.WriteLine("B");
         PyGILState_Ensure = (delegate* unmanaged<int>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyGILState_Ensure));
-        Console.WriteLine("C");
         PyGILState_Release = (delegate* unmanaged<int, void>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyGILState_Release));
-        Console.WriteLine("D");
         PyImport_ImportModule = (delegate* unmanaged<IntPtr, IntPtr>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyImport_ImportModule));
-        Console.WriteLine("E");
         PyObject_GetAttr = (delegate* unmanaged<IntPtr, IntPtr, IntPtr>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyObject_GetAttr));
-        Console.WriteLine("F");
         PyObject_GetAttrString = (delegate* unmanaged<IntPtr, IntPtr, IntPtr>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyObject_GetAttrString));
-        Console.WriteLine("G");
         
         PyErr_NoMemory = (delegate* unmanaged<void>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyErr_NoMemory));
-        Console.WriteLine("H");
         PyErr_SetString = (delegate* unmanaged<IntPtr, IntPtr, void>)DllLoader.GetSymbol(this.versionedLibPtr, nameof(PyErr_SetString));
-        Console.WriteLine("J");
         
         Initialize();
-        Console.WriteLine($"K {IsInitialized()}");
         using var GILState = EnsureGILState();
-        Console.WriteLine($"L {CheckGILState()}");
         IntPtr builtins_module = ImportModule("builtins");
-        Console.WriteLine("M");
         this.exception = GetAttributeString(builtins_module, "Exception");
-        Console.WriteLine("N");
         this.notImplementedError = GetAttributeString(builtins_module, "NotImplementedError");
-        Console.WriteLine("P");
     }
     
     public unsafe bool CheckGILState()
@@ -275,12 +297,8 @@ public class PyApi3 : IDisposable
 
     public unsafe IntPtr ImportModule(string moduleName)
     {
-        Console.WriteLine("ZZ");
         var moduleNamePtr = InteropUtils.Utf8StringToUPtr(moduleName);
-        Console.WriteLine($"ZZ2 {moduleName}");
-        Console.WriteLine($"ZZ2 {(IntPtr)PyImport_ImportModule}");
         var modulePtr = PyImport_ImportModule(moduleNamePtr);
-        Console.WriteLine($"ZZ3 {modulePtr}");
         return modulePtr;
     }
     
