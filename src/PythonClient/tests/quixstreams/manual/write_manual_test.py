@@ -10,7 +10,7 @@ import pandas as pd
 import time
 
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-InteropUtils.enable_debug()
+#InteropUtils.enable_debug()
 
 from src import quixstreams as qx
 from src.quixstreams.models.parametervalue import ParameterValueType
@@ -39,7 +39,6 @@ number_of_streamproperties_metadata = 5
 
 number_of_data_loop = 100
 number_of_data_points_per_loop = 10
-
 
 def on_write_exception_handler(ex: BaseException):
     print(ex.args[0])
@@ -105,7 +104,7 @@ for stream_number in range(number_of_stream):
 
     print(f"--- Sending data for stream {stream_number} ---")
     for loop_index in range(number_of_data_loop):
-        variant = 0
+        variant = loop_index % 3
 
         # use buffer
         if variant == 0:
@@ -151,27 +150,28 @@ for stream_number in range(number_of_stream):
         # use writer directly rather than via buffer
         if variant == 1:
             pdata = qx.ParameterData()
-            for points_index in range(number_of_data_points_per_loop):
-                # send parameters
-                pdts = pdata.add_timestamp(datetime.datetime.utcnow())
+            with pdata:
+                for points_index in range(number_of_data_points_per_loop):
+                    # send parameters
+                    pdts = pdata.add_timestamp(datetime.datetime.utcnow())
 
-                for parameter in parameter_names_numerics:
-                    pdts = pdts.add_value(parameter, random.uniform(-1000, 1000))
+                    for parameter in parameter_names_numerics:
+                        pdts = pdts.add_value(parameter, random.uniform(-1000, 1000))
 
-                for parameter in parameter_names_strings:
-                    numericrandom = round(random.random()*20)
-                    pdts = pdts.add_value(parameter, str(numericrandom))
+                    for parameter in parameter_names_strings:
+                        numericrandom = round(random.random()*20)
+                        pdts = pdts.add_value(parameter, str(numericrandom))
 
-                for parameter in parameter_names_binary:
-                    numericrandom = round(random.random() * 20)
-                    pdts = pdts.add_value(parameter, bytearray(str(numericrandom), "UTF-8"))
+                    for parameter in parameter_names_binary:
+                        numericrandom = round(random.random() * 20)
+                        pdts = pdts.add_value(parameter, bytearray(str(numericrandom), "UTF-8"))
 
-                for index, tag in enumerate(parameter_tags):
-                    if index == number_of_parameters_tag:
-                        break
-                    pdts.add_tag(tag, f"new parameter tag value {index}")
+                    for index, tag in enumerate(parameter_tags):
+                        if index == number_of_parameters_tag:
+                            break
+                        pdts.add_tag(tag, f"new parameter tag value {index}")
 
-            stream.parameters.write(pdata)
+                stream.parameters.write(pdata)
 
         if variant == 2:
 

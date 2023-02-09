@@ -129,7 +129,8 @@ class StreamParametersWriter(object):
             return
         if isinstance(packet, pd.DataFrame):
             data = ParameterDataRaw.from_panda_frame(packet)
-            self._interop.Write2(data.get_net_pointer())
+            with data:
+                self._interop.Write2(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")
 

@@ -8,9 +8,11 @@ from src.quixstreams.logging import Logging, LogLevel
 
 from src import quixstreams as qx
 from src.quixstreams.models.parametervalue import ParameterValueType
-#from src.quixstreams.logging import Logging, LogLevel
 from src.quixstreams.app import App
 from src.quixstreams.models.streampackage import StreamPackage
+
+from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+#InteropUtils.enable_debug()
 
 Logging.update_factory(LogLevel.Debug)
 client = qx.KafkaStreamingClient('127.0.0.1:9092', None)
