@@ -54,7 +54,6 @@ class Array:
                 return [ctypes_pointer[i] for i in range(length)]
 
             vals = [valuemapper(ctypes_pointer[i]) for i in range(length)]
-            print(vals)
             return vals
         finally:
             InteropUtils.free_uptr(array_uptr)
