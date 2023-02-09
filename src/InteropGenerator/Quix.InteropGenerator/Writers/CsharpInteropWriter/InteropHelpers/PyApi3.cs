@@ -53,7 +53,7 @@ internal static class DllLoader
         }
 
         var libFolders = new List<string>();
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             libFolders.Add("/usr/lib/");
             libFolders.Add("/usr/local/lib/");
