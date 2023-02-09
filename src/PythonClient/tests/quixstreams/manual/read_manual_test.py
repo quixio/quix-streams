@@ -76,7 +76,7 @@ def read_stream(new_stream : qx.StreamReader):
             print("Exception occurred in on_stream_closed_handler: " + sys.exc_info()[1])
     new_stream.on_stream_closed += on_stream_closed_handler
 
-    def on_stream_properties_changed_handler():
+    def on_stream_properties_changed_handler(stream: qx.StreamReader, properties: qx.streamreader.StreamPropertiesReader):
         try:
             print("Stream properties read for stream: " + new_stream.stream_id)
             print("Name", new_stream.properties.name, sep=": ")
@@ -91,13 +91,13 @@ def read_stream(new_stream : qx.StreamReader):
         except:
             print("Exception occurred in on_stream_properties_changed_handler: " + sys.exc_info()[1])
 
-    new_stream.properties.on_changed += on_stream_properties_changed_handler
+    #new_stream.properties.on_changed = on_stream_properties_changed_handler
 
     def on_parameters_pandas_dataframe_handler(data: pd.DataFrame):
         print("RECEIVED DATAFRAME")
         print(data)
 
-    new_stream.parameters.on_read_pandas += on_parameters_pandas_dataframe_handler
+    #new_stream.parameters.on_read_pandas += on_parameters_pandas_dataframe_handler
 
     def on_parameter_data_handler(data: qx.ParameterData):
         with data:
@@ -130,8 +130,8 @@ def read_stream(new_stream : qx.StreamReader):
             except:
                 print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
-    param_buffer = new_stream.parameters.create_buffer()
-    param_buffer.on_read += on_parameter_data_handler
+    #param_buffer = new_stream.parameters.create_buffer()
+    #param_buffer.on_read += on_parameter_data_handler
 
     def on_parameter_data_filtered_handler(data: qx.ParameterData):
         with data:
@@ -164,8 +164,8 @@ def read_stream(new_stream : qx.StreamReader):
             except:
                 print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
-    param_buffer_filtered = new_stream.parameters.create_buffer("numeric param 1", "string param 2")
-    param_buffer_filtered.on_read += on_parameter_data_filtered_handler
+    #param_buffer_filtered = new_stream.parameters.create_buffer("numeric param 1", "string param 2")
+    #param_buffer_filtered.on_read += on_parameter_data_filtered_handler
 
     def on_parameter_definitions_changed_handler():
         try:
@@ -189,7 +189,7 @@ def read_stream(new_stream : qx.StreamReader):
         except:
             print("Exception occurred in on_parameter_definitions_changed_handler: " + sys.exc_info()[1])
 
-    new_stream.parameters.on_definitions_changed += on_parameter_definitions_changed_handler
+    #new_stream.parameters.on_definitions_changed += on_parameter_definitions_changed_handler
 
     def on_event_definitions_changed_handler():
         try:
@@ -210,7 +210,7 @@ def read_stream(new_stream : qx.StreamReader):
         except:
             print("Exception occurred in on_event_definitions_changed_handler: " + sys.exc_info()[1])
 
-    new_stream.events.on_definitions_changed += on_event_definitions_changed_handler
+    #new_stream.events.on_definitions_changed += on_event_definitions_changed_handler
 
     def on_event_data_handler(data: qx.EventData):
         with data:
@@ -228,7 +228,7 @@ def read_stream(new_stream : qx.StreamReader):
             except:
                 print("Exception occurred in on_event_data_handler: " + sys.exc_info()[1])
 
-    new_stream.events.on_read += on_event_data_handler
+    #new_stream.events.on_read += on_event_data_handler
 
     def on_package_received_handler(sender: qx.StreamReader, package: StreamPackage):
         with package:

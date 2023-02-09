@@ -54,7 +54,7 @@ class RawInputTopic(object):
             # TODO fix unsub
             self._interop.remove_OnMessageRead(_on_error_occured_handler)
 
-        self.on_error_occurred = EventHook(_on_error_first_sub, _on_error_last_unsub, name="RawInputTopic.on_error_occured")
+        self.on_error_occurred = EventHook(_on_error_first_sub, _on_error_last_unsub, name="RawInputTopic.on_error_occurred")
 
     def _finalizerfunc(self):
         self._cfuncrefs = None

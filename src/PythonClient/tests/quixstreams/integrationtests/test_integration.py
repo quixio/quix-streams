@@ -86,10 +86,10 @@ class TestIntegration(unittest.TestCase):
                     print("---- Test stream read {} ----".format(stream.stream_id))
                     incoming_stream = stream
 
-                    def on_properties_changed():
+                    def on_properties_changed(stream: qx.StreamReader, properties: qx.streamreader.StreamPropertiesReader):
                         event.set()
 
-                    stream.properties.on_changed += on_properties_changed
+                    stream.properties.on_changed = on_properties_changed
 
             input_topic.on_stream_received += on_stream_received
 

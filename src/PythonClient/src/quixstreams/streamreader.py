@@ -102,7 +102,7 @@ class StreamReader(object):
     def properties(self) -> StreamPropertiesReader:
         """ Gets the reader for accessing the properties and metadata of the stream """
         if self._streamPropertiesReader is None:
-            self._streamPropertiesReader = StreamPropertiesReader(self._interop.get_Properties())
+            self._streamPropertiesReader = StreamPropertiesReader(self, self._interop.get_Properties())
         return self._streamPropertiesReader
 
     @property

@@ -66,7 +66,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     }
                 };
 
-                streamReader.Properties.OnChanged += () =>
+                streamReader.Properties.OnChanged += (sender, properties) =>
                 {
                     Console.WriteLine($"Stream properties -> StreamId '{streamReader.StreamId}' with name '{streamReader.Properties.Name}' located in '{streamReader.Properties.Location}'");
                 };
