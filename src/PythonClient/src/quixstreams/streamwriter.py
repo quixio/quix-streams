@@ -71,7 +71,7 @@ class StreamWriter(object):
         """
         self._on_write_exception = value
         if self._on_write_exception_ref is None:
-            self._on_write_exception_ref = self._interop.add_OnStreamReceived(self._on_write_exception_wrapper)
+            self._on_write_exception_ref = self._interop.add_OnWriteException(self._on_write_exception_wrapper)
 
     def _on_write_exception_wrapper(self, stream_hptr, exception_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -82,7 +82,7 @@ class StreamWriter(object):
 
     def _on_write_exception_dispose(self):
         if self._on_write_exception_ref is not None:
-            self._interop.remove_OnStreamReceived(self._on_write_exception_ref)
+            self._interop.remove_OnWriteException(self._on_write_exception_ref)
             self._on_write_exception_ref = None
     # endregion on_write_exception
 
