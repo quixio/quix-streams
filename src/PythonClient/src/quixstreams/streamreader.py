@@ -1,5 +1,4 @@
 import sys
-import traceback
 from typing import Callable
 
 from .models.streampackage import StreamPackage
