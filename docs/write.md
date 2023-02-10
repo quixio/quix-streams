@@ -1,4 +1,4 @@
-# Writing data
+# Writing time-series data
 
 You write data to Quix using streams in your topic. The Quix SDK allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
 
