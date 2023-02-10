@@ -1,6 +1,5 @@
 from typing import Callable
 
-from .eventhook import EventHook
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .streamwriter import StreamWriter
 import ctypes
@@ -25,30 +24,43 @@ class OutputTopic(object):
             net_object (.net object): The .net object representing a StreamingClient
         """
 
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
         self._interop = oti(net_pointer)
-
-        def _on_disposed_read_net_handler(sender):
-            self.on_disposed.fire(self)
-            InteropUtils.free_hptr(sender)
-
-        def _on_disposed_first_sub():
-            ref = self._interop.add_OnDisposed(_on_disposed_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_disposed_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnDisposed(_on_disposed_read_net_handler)
-
-        self.on_disposed = EventHook(_on_disposed_first_sub, _on_disposed_last_unsub, name="OutputTopic.on_disposed")
-        """
-        Raised when the resource finished disposing       
-         Parameters:
-            topic (OutputTopic): The OutputTopic which raises the event
-        """
+        
+        # define events and their ref holder
+        self._on_disposed = None
+        self._on_disposed_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._cfuncrefs = None
+        self._on_disposed_dispose()
+    
+    # region on_disposed
+    @property
+    def on_disposed(self) -> Callable[['OutputTopic'], None]:
+        """
+        Gets the handler for when the topic is disposed. First parameter is the topic which got disposed.
+        """
+        return self._on_disposed
+
+    @on_disposed.setter
+    def on_disposed(self, value: Callable[['OutputTopic'], None]) -> None:
+        """
+        Sets the handler for when the topic is disposed. First parameter is the topic which got disposed.
+        """
+        self._on_disposed = value
+        if self._on_disposed_ref is None:
+            self._on_disposed_ref = self._interop.add_OnDisposed(self._on_disposed_wrapper)
+
+    def _on_disposed_wrapper(self, stream_hptr, arg_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        self._on_disposed(self)
+        InteropUtils.free_hptr(stream_hptr)
+        InteropUtils.arg_hptr(arg_hptr)
+
+    def _on_disposed_dispose(self):
+        if self._on_disposed_ref is not None:
+            self._interop.remove_OnDisposed(self._on_disposed_ref)
+            self._on_disposed_ref = None
+    # endregion on_disposed
 
     def create_stream(self, stream_id: str = None) -> StreamWriter:
         """

@@ -572,7 +572,7 @@ class TestIntegration(unittest.TestCase):
             nonlocal callback_topic_disposed
             callback_topic_disposed = topic
 
-        output_topic.on_disposed += callback
+        output_topic.on_disposed = callback
 
         # Act
         output_topic.dispose()
