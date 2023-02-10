@@ -772,7 +772,7 @@ class TestIntegration(unittest.TestCase):
         input_topic.dispose()
 # endregion
 
-#region output topic integration tests
+# region output topic integration tests
     def test_get_or_create_stream_no_prev_stream_with_callback(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
@@ -848,7 +848,7 @@ class TestIntegration(unittest.TestCase):
         # Assert
         self.assertIsNotNone(retrieved)
         self.assertEqual(retrieved.stream_id, "test_stream_id")
-# region
+# endregion
 
 # region parameter data integration tests
     def test_parameters_write_binary_read_binary_is_of_bytes(self):

@@ -49,13 +49,13 @@ class CancellationToken:
 
 class App():
     """
-        Helper class to handle default streaming behaviours and handle automatic resource cleanup on shutdown
+        Helper class to handle default streaming behaviors and handle automatic resource cleanup on shutdown
     """
 
     @staticmethod
     def run(cancellation_token: CancellationToken = None, before_shutdown: Callable[[], None] = None):
         """
-            Helper method to handle default streaming behaviours and handle automatic resource cleanup on shutdown
+            Helper method to handle default streaming behaviors and handle automatic resource cleanup on shutdown
             It also ensures input topics defined at the time of invocation are opened for read.
 
             :param cancellation_token: An optional cancellation token to abort the application run with

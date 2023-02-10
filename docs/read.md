@@ -670,12 +670,8 @@ This is a minimal code example you can use to read data from a topic using the Q
 === "Python"
     
     ``` python
-    from quixstreams import *
+    from quixstream import *
     from quixstreams.app import App
-    from quixstreams.models.parametersbufferconfiguration import ParametersBufferConfiguration
-    import sys
-    import signal
-    import threading
     
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()
