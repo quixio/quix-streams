@@ -122,25 +122,25 @@ namespace Quix.Sdk.State.UnitTests
             await storage.SetAsync("VAL2", true);
             await storage.SetAsync("VAL3", "data");
 
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Count, 3);
+            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 3);
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL2"));
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL3"));
 
             await storage.RemoveAsync("VAL2");
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Count, 2);
+            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 2);
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
             Assert.IsFalse(await storage.ContainsKeyAsync("VAL2"));
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL3"));
 
             await storage.RemoveAsync("VAL3");
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Count, 1);
+            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 1);
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
             Assert.IsFalse(await storage.ContainsKeyAsync("VAL2"));
             Assert.IsFalse(await storage.ContainsKeyAsync("VAL3"));
 
             await storage.SetAsync("VAL3", "data2");
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Count, 2);
+            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 2);
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
             Assert.IsFalse(await storage.ContainsKeyAsync("VAL2"));
             Assert.IsTrue(await storage.ContainsKeyAsync("VAL3"));
@@ -155,25 +155,25 @@ namespace Quix.Sdk.State.UnitTests
             storage.Set("VAL2", true);
             storage.Set("VAL3", "data");
 
-            Assert.AreEqual((storage.GetAllKeys()).Count, 3);
+            Assert.AreEqual((storage.GetAllKeys()).Length, 3);
             Assert.IsTrue(storage.ContainsKey("VAL1"));
             Assert.IsTrue(storage.ContainsKey("VAL2"));
             Assert.IsTrue(storage.ContainsKey("VAL3"));
 
             storage.Remove("VAL2");
-            Assert.AreEqual((storage.GetAllKeys()).Count, 2);
+            Assert.AreEqual((storage.GetAllKeys()).Length, 2);
             Assert.IsTrue(storage.ContainsKey("VAL1"));
             Assert.IsFalse(storage.ContainsKey("VAL2"));
             Assert.IsTrue(storage.ContainsKey("VAL3"));
 
             storage.Remove("VAL3");
-            Assert.AreEqual((storage.GetAllKeys()).Count, 1);
+            Assert.AreEqual((storage.GetAllKeys()).Length, 1);
             Assert.IsTrue(storage.ContainsKey("VAL1"));
             Assert.IsFalse(storage.ContainsKey("VAL2"));
             Assert.IsFalse(storage.ContainsKey("VAL3"));
 
             storage.Set("VAL3", "data2");
-            Assert.AreEqual((storage.GetAllKeys()).Count, 2);
+            Assert.AreEqual((storage.GetAllKeys()).Length, 2);
             Assert.IsTrue(storage.ContainsKey("VAL1"));
             Assert.IsFalse(storage.ContainsKey("VAL2"));
             Assert.IsTrue(storage.ContainsKey("VAL3"));
@@ -188,10 +188,10 @@ namespace Quix.Sdk.State.UnitTests
             await storage.SetAsync("VAL2", true);
             await storage.SetAsync("VAL3", "data");
 
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Count, 3);
+            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 3);
 
             await storage.ClearAsync();
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Count, 0);
+            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 0);
         }
 
     }
