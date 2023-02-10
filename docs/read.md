@@ -97,7 +97,7 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 
 	The `StartReading` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
 
-## Reading time-series Data
+## Reading Time-series data
 
 You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
 
@@ -136,7 +136,7 @@ For instance, in the following example we read and print the first timestamp and
     inputTopic.StartReading();
     ```
 
-We use [ParameterData](#parameter-data-format) packages to read data from the stream. This class handles reading and writing of time series data. The Quix SDK provides multiple helpers for reading and writing data using [ParameterData](#parameter-data-format).
+We use [ParameterData](#parameter-data-format) packages to read data from the stream. This class handles reading and writing of <b>time series data</b>. The Quix SDK provides multiple helpers for reading and writing data using [ParameterData](#parameter-data-format).
 
 !!! tip
 

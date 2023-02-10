@@ -1,4 +1,4 @@
-# Writing time-series data
+# Writing data
 
 You write data to Quix using streams in your topic. The Quix SDK allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
 
@@ -182,9 +182,9 @@ The `StreamEndType` can be one of the following possible end types:
 | Aborted       | The stream was aborted by your code for your own reasons            |
 | Terminated    | The stream was terminated unexpectedly while data was being written |
 
-## Writing Parameter Data
+## Writing Time-series data
 
-You can now start writing data to your stream. [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory. [ParameterData](#parameter-data-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
+You can now start writing data to your stream. [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a <b>time-series data</b> packet in memory. [ParameterData](#parameter-data-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
 
 !!! tip
 
@@ -192,7 +192,7 @@ You can now start writing data to your stream. [ParameterData](#parameter-data-f
 
 ### Parameter Data format
 
-[ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory.
+[ParameterData](#parameter-data-format) is the formal class in the SDK which represents a <b>time-series data</b> packet in memory.
 
 [ParameterData](#parameter-data-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
 
