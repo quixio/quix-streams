@@ -2,8 +2,6 @@ from typing import Callable
 
 from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 
-from ..eventhook import EventHook
-
 from .rawmessage import RawMessage
 
 from ..native.Python.QuixSdkStreaming.Raw.RawInputTopic import RawInputTopic as riti

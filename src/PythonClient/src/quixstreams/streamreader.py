@@ -1,7 +1,6 @@
 import sys
+import traceback
 from typing import Callable
-
-from .eventhook import EventHook
 
 from .models.streampackage import StreamPackage
 from .models.streamreader.streampropertiesreader import StreamPropertiesReader
