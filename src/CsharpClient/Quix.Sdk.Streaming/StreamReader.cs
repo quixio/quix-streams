@@ -46,10 +46,10 @@ namespace Quix.Sdk.Streaming
         public StreamEventsReader Events => streamEventsReader;
 
         /// <inheritdoc />
-        public event Action<IStreamReader, Process.Models.StreamPackage> OnPackageReceived;
+        public event EventHandler<StreamPackage> OnPackageReceived;
 
         /// <inheritdoc />
-        public event Action<IStreamReader, Process.Models.StreamEndType> OnStreamClosed;
+        public event EventHandler<StreamEndType> OnStreamClosed;
 
 
         /// <inheritdoc />

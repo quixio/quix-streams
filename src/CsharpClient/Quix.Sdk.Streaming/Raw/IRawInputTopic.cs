@@ -16,7 +16,7 @@ namespace Quix.Sdk.Streaming.Raw
         /// <summary>
         /// Event raised when a message is read from the topic
         /// </summary>
-        public event Action<RawMessage> OnMessageRead;
+        public event EventHandler<RawMessage> OnMessageRead;
 
         /// <summary>
         /// Event raised when a new error occurs

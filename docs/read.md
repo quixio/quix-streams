@@ -632,18 +632,18 @@ One or more streams are revoked from your client. You can no longer commit to th
 
 ## Stream Closure
 
-You can detect stream closure with the stream closed callback which receives the StreamEndType, to help determine the closure reason if required.
-
 === "Python"
+You can detect stream closure with the `on_stream_closed` callback which has the stream and the StreamEndType to help determine the closure reason if required.
     
     ``` python
-    def on_stream_closed_handler(end_type: StreamEndType):
+    def on_stream_closed_handler(stream: StreamReader, end_type: StreamEndType):
             print("Stream closed with {}".format(end_type))
     
-    new_stream.on_stream_closed += on_stream_closed_handler
+    new_stream.on_stream_closed = on_stream_closed_handler
     ```
 
 === "C\#"
+You can detect stream closure with the stream closed event which has the sender and the StreamEndType to help determine the closure reason if required.
     
     ``` cs
     inputTopic.OnStreamReceived += (s, streamReader) =>
@@ -767,14 +767,14 @@ To cater for these cases we added the ability to read the raw, unformatted, mess
     ``` python
     inp = client.open_raw_input_topic(TOPIC_ID)
     
-    def on_raw_message(msg):
+    def on_raw_message(topic: RawInputTopic, msg: RawMessage):
         #bytearray containing bytes received from kafka
         data = msg.value
     
         #broker metadata as dict
         meta = msg.metadata
     
-    inp.on_message_read += on_raw_message
+    inp.on_message_read = on_raw_message
     inp.start_reading()
     ```
 
@@ -783,7 +783,7 @@ To cater for these cases we added the ability to read the raw, unformatted, mess
     ``` cs
     var inp = client.OpenRawInputTopic(TOPIC_ID)
     
-    inp.OnMessageRead += (message) =>
+    inp.OnMessageRead += (sender, message) =>
     {
         var data = (byte[])message.Value;
     };

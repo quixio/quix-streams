@@ -40,13 +40,13 @@ number_of_streamproperties_metadata = 5
 number_of_data_loop = 100
 number_of_data_points_per_loop = 10
 
-def on_write_exception_handler(ex: BaseException):
+def on_write_exception_handler(stream: qx.StreamWriter, ex: BaseException):
     print(ex.args[0])
 
 for stream_number in range(number_of_stream):
     print(f"--- Sending Stream {stream_number} ---")
     stream = output_topic.create_stream()
-    stream.on_write_exception += on_write_exception_handler
+    stream.on_write_exception = on_write_exception_handler
 
     print(f"--- Setting stream properties for stream {stream_number} ---")
     stream.properties.name = f"Stream {stream_number}"

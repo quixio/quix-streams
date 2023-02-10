@@ -1,4 +1,5 @@
 import sys
+from typing import Callable
 
 from .eventhook import EventHook
 
@@ -21,64 +22,38 @@ class StreamReader(object):
         Handles reading stream from a topic
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, net_pointer: ctypes.c_void_p, on_close_cb_always: Callable[['StreamReader'], None]):
         """
         Initializes a new instance of StreamReader.
         NOTE: Do not initialize this class manually, use StreamingClient.on_stream_received to read streams
         :param net_pointer: Pointer to an instance of a .net StreamReader
         """
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
         self._interop = sri(net_pointer)
         self._streamParametersReader = None  # Holding reference to avoid GC
         self._streamEventsReader = None  # Holding reference to avoid GC
         self._streamPropertiesReader = None  # Holding reference to avoid GC
 
-        def _on_stream_closed_read_net_handler(sender, end_type):
-            converted = ec.enum_to_another(end_type, StreamEndType)
-            self.on_stream_closed.fire(converted)
-
-            refcount = sys.getrefcount(self)
-            if refcount == 1:  # TODO figure out correct number
-                self.dispose()
-            InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
-
-        def _on_stream_closed_first_sub():
-            ref = self._interop.add_OnStreamClosed(_on_stream_closed_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_stream_closed_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnStreamClosed(_on_stream_closed_read_net_handler)
-
-        self.on_stream_closed = EventHook(_on_stream_closed_first_sub, _on_stream_closed_last_unsub, name="StreamReader.on_stream_closed")
-        """Raised when stream close is read.       
-         Parameters:
-            sender (StreamReader): The StreamReader to which the event belongs to.            
-            end_type (StreamEndType): The StreamEndType value read from the message.
-        """
-
-        def _on_package_received_net_handler(sender, package):
-            self.on_package_received.fire(self, StreamPackage(package))
-            InteropUtils.free_hptr(sender)   # another pointer is assigned to the same object as current, we don't need it
-
-        def _on_first_sub_on_package_received():
-            # TODO
-            raise Exception("StreamReader.on_package_received is not yet fully implemented")
-            ref = self._interop.add_OnPackageReceived(_on_package_received_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_unsub_on_package_received():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnPackageReceived(_on_package_received_net_handler)
-
-        self.on_package_received = EventHook(_on_first_sub_on_package_received, _on_last_unsub_on_package_received, name="StreamReader.on_package_received")
-        """Raised when stream package has been received.       
-         Parameters:
-            sender (StreamReader): The StreamReader to which the event belongs to.            
-            package (StreamPackage): The Package received.
-        """
+        # define events and their ref holder
+        self._on_stream_closed = None
+        self._on_stream_closed_ref = None  # keeping reference to avoid GC
+        
+        self._on_package_received = None
+        self._on_package_received_ref = None  # keeping reference to avoid GC
 
         self._streamId = None
+
+        if on_close_cb_always is not None:
+            def _on_close_cb_always_wrapper(sender_hptr, end_type):
+                # To avoid unnecessary overhead and complication, we're using the instances we already have
+                converted = ec.enum_to_another(end_type, StreamEndType)
+                on_close_cb_always(self, converted)
+
+                refcount = sys.getrefcount(self)
+                if refcount == -1:  # TODO figure out correct number
+                    self.dispose()
+                InteropUtils.free_hptr(sender_hptr)
+
+            self._on_close_cb_always_ref = self._interop.add_OnStreamClosed(_on_close_cb_always_wrapper)
 
     def _finalizerfunc(self):
         if self._streamParametersReader is not None:
@@ -87,7 +62,68 @@ class StreamReader(object):
             self._streamEventsReader.dispose()
         if self._streamPropertiesReader is not None:
             self._streamPropertiesReader.dispose()
-        self._cfuncrefs = None
+        self._on_stream_closed_dispose()
+        self._on_package_received_dispose()
+
+    # region on_stream_closed
+    @property
+    def on_stream_closed(self) -> Callable[['StreamReader', 'StreamEndType'], None]:
+        """
+        Gets the handler for when the stream closes. First parameter is the stream which closes, second is the close type.
+        """
+        return self._on_stream_closed
+
+    @on_stream_closed.setter
+    def on_stream_closed(self, value: Callable[['StreamReader', 'StreamEndType'], None]) -> None:
+        """
+        Sets the handler for when the stream closes. First parameter is the stream which closes, second is the close type.
+        """
+        self._on_stream_closed = value
+        if self._on_stream_closed_ref is None:
+            self._on_stream_closed_ref = self._interop.add_OnStreamClosed(self._on_stream_closed_wrapper)
+
+    def _on_stream_closed_wrapper(self, sender_hptr, end_type):
+        # To avoid unnecessary overhead and complication, we're using the instances we already have
+        converted = ec.enum_to_another(end_type, StreamEndType)
+        self.on_stream_closed(self, converted)
+        InteropUtils.free_hptr(sender_hptr)
+
+    def _on_stream_closed_dispose(self):
+        if self._on_stream_closed_ref is not None:
+            self._interop.remove_OnStreamClosed(self._on_stream_closed_ref)
+            self._on_stream_closed_ref = None
+    # endregion on_stream_closed
+    
+    # region on_package_received
+    @property
+    def on_package_received(self) -> Callable[['StreamReader', any], None]:
+        """
+        Gets the handler for when the stream receives a package of any type. First parameter is the stream which receives it, second is the package.
+        """
+        return self._on_package_received
+
+    @on_package_received.setter
+    def on_package_received(self, value: Callable[['StreamReader', any], None]) -> None:
+        """
+        Sets the handler for when the stream receives a package of any type. First parameter is the stream which receives it, second is the package.
+        """
+        # TODO
+        raise Exception("StreamReader.on_package_received is not yet fully implemented")
+        self._on_package_received = value
+        if self._on_package_received_ref is None:
+            self._on_package_received_ref = self._interop.add_OnPackageReceived(self._on_package_received_wrapper)
+
+    def _on_package_received_wrapper(self, sender_hptr, package_hptr):
+        # To avoid unnecessary overhead and complication, we're using the instances we already have
+        # TODO
+        InteropUtils.free_hptr(sender_hptr)
+        InteropUtils.free_hptr(package_hptr)  # ?
+
+    def _on_package_received_dispose(self):
+        if self._on_package_received_ref is not None:
+            self._interop.remove_OnPackageReceived(self._on_package_received_ref)
+            self._on_package_received_ref = None
+    # endregion on_package_received
 
     @property
     def stream_id(self) -> str:

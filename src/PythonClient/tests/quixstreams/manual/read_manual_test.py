@@ -68,14 +68,14 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
 
     print("New Stream read!" + str(datetime.datetime.now()))
 
-    def on_stream_closed_handler(end_type: qx.StreamEndType):
+    def on_stream_closed_handler(stream: qx.StreamReader, end_type: qx.StreamEndType):
         try:
             print("Stream", new_stream.stream_id, "closed with", end_type, " started at ", start, " finished at ", datetime.datetime.now())
             global test_close_count
             test_close_count = test_close_count + 1
         except:
             print("Exception occurred in on_stream_closed_handler: " + sys.exc_info()[1])
-    new_stream.on_stream_closed += on_stream_closed_handler
+    new_stream.on_stream_closed = on_stream_closed_handler
 
     def on_stream_properties_changed_handler(stream: qx.StreamReader, properties: qx.streamreader.StreamPropertiesReader):
         try:
@@ -239,7 +239,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 print("Exception occurred in on_package_received_handler: " + sys.exc_info()[1])
 
     # TODO implementation missing
-    #new_stream.on_package_received += on_package_received_handler
+    #new_stream.on_package_received = on_package_received_handler
 
 input_topic.on_stream_received = read_stream
 

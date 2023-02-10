@@ -683,13 +683,13 @@ class TestIntegration(unittest.TestCase):
             nonlocal last_stream_read
             last_stream_read = stream
 
-            def on_stream_closed(end_type: qx.StreamEndType):
+            def on_stream_closed(stream: qx.StreamReader, end_type: qx.StreamEndType):
                 print("---- Committing ----".format(stream.stream_id))
                 input_topic.commit()
                 print("---- Committed ----".format(stream.stream_id))
                 event.set()
 
-            stream.on_stream_closed += on_stream_closed
+            stream.on_stream_closed = on_stream_closed
 
         input_topic.on_stream_received = on_stream_received
 
@@ -744,12 +744,12 @@ class TestIntegration(unittest.TestCase):
 
             print("---- Stream read {} ----".format(stream.stream_id))
 
-            def on_stream_closed(end_type: qx.StreamEndType):
+            def on_stream_closed(stream: qx.StreamReader, end_type: qx.StreamEndType):
                 nonlocal end_type_received
                 end_type_received = end_type
                 event.set()
 
-            stream.on_stream_closed += on_stream_closed
+            stream.on_stream_closed = on_stream_closed
 
         input_topic.on_stream_received = on_stream_received
 

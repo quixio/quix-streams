@@ -32,12 +32,12 @@ namespace Quix.Sdk.Streaming
         /// <summary>
         /// Event raised when a stream package has been received.
         /// </summary>
-        event Action<IStreamReader, Process.Models.StreamPackage> OnPackageReceived;
+        event EventHandler<Process.Models.StreamPackage> OnPackageReceived;
 
         /// <summary>
         /// Event raised when the stream has closed.
         /// </summary>
-        event Action<IStreamReader, Process.Models.StreamEndType> OnStreamClosed;
+        event EventHandler<Process.Models.StreamEndType> OnStreamClosed;
 
 
     }

@@ -1,6 +1,6 @@
 import sys
+from typing import Callable
 
-from .eventhook import EventHook
 from .models import *
 from datetime import datetime
 from .models.streamwriter import *
@@ -34,30 +34,14 @@ class StreamWriter(object):
         if net_pointer is None:
             raise Exception("StreamWriter is none")
 
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
         self._interop = swi(net_pointer)
         self._streamParametersWriter = None  # Holding reference to avoid GC
         self._streamEventsWriter = None  # Holding reference to avoid GC
         self._streamPropertiesWriter = None  # Holding reference to avoid GC
-
-        def _on_write_exception_net_handler(sender: ctypes.c_void_p, arg: ctypes.c_void_p):
-            # TODO fix arg to be handled as exception
-            self.on_write_exception.fire(self, BaseException(arg.Message, type(arg)))
-            InteropUtils.free_hptr(sender)
-
-        def _on_first_sub_on_write_exception_net():
-            ref = self._interop.add_OnWriteException(_on_write_exception_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_unsub_on_write_exception_net():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnWriteException(_on_write_exception_net_handler)
-
-        self.on_write_exception = EventHook(_on_first_sub_on_write_exception_net, _on_last_unsub_on_write_exception_net, name="StreamWriter.on_write_exception")
-        """Raised when an exception occurred during the writing processes
-         Parameters:     
-            exception (BaseException): The occurred exception
-        """
+        
+        # define events and their ref holder
+        self._on_write_exception = None
+        self._on_write_exception_ref = None  # keeping reference to avoid GC
 
         self._stream_id = self._interop.get_StreamId()
 
@@ -68,7 +52,39 @@ class StreamWriter(object):
             self._streamEventsWriter.dispose()
         if self._streamPropertiesWriter is not None:
             self._streamPropertiesWriter.dispose()
-        self._cfuncrefs = None
+        self._on_write_exception_dispose()
+
+    # region on_write_exception
+    @property
+    def on_write_exception(self) -> Callable[['StreamWriter', BaseException], None]:
+        """
+        Gets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the stream
+         is received for, second is the exception.
+        """
+        return self._on_write_exception
+
+    @on_write_exception.setter
+    def on_write_exception(self, value: Callable[['StreamWriter', BaseException], None]) -> None:
+        """
+        Sets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the stream
+         is received for, second is the exception.
+        """
+        self._on_write_exception = value
+        if self._on_write_exception_ref is None:
+            self._on_write_exception_ref = self._interop.add_OnStreamReceived(self._on_write_exception_wrapper)
+
+    def _on_write_exception_wrapper(self, stream_hptr, exception_hptr):
+        # To avoid unnecessary overhead and complication, we're using the topic instance we already have
+        # TODO fix arg to be handled as exception
+        #self.on_write_exception.fire(self, BaseException(arg.Message, type(arg)))
+        InteropUtils.free_hptr(stream_hptr)
+        InteropUtils.free_hptr(exception_hptr)
+
+    def _on_write_exception_dispose(self):
+        if self._on_write_exception_ref is not None:
+            self._interop.remove_OnStreamReceived(self._on_write_exception_ref)
+            self._on_write_exception_ref = None
+    # endregion on_write_exception
 
     @property
     def stream_id(self) -> str:
@@ -123,6 +139,6 @@ class StreamWriter(object):
         self._interop.Close(dotnet_end_type)
 
         refcount = sys.getrefcount(self)
-        if refcount == 1:  # TODO figure out correct number
+        if refcount == -1:  # TODO figure out correct number
             self.dispose()
 
