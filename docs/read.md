@@ -97,7 +97,7 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 
 	The `StartReading` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
 
-## Reading Parameter Data
+## Reading time-series Data
 
 You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
 
