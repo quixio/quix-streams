@@ -114,9 +114,7 @@ namespace Quix.Sdk.Streaming
             kafkaReader.OnCommitted -= this.CommittedEventHandler;
             kafkaReader.OnCommitting -= this.CommittingEventHandler;
             this.kafkaReader.Dispose(); // TODO code smell, disposing external resource
-            Console.WriteLine("INVOKING ONDISPOSE");
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
-            Console.WriteLine("INVOKING ONDISPOSE 2");
         }
     }
 
