@@ -1,3 +1,5 @@
+from typing import Callable, List
+
 from .eventhook import EventHook
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .streamreader import StreamReader
@@ -22,110 +24,186 @@ class InputTopic(object):
 
             net_pointer (.net pointer): The .net pointer to InputTopic instance
         """
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
-        self._active_streams = []  # To clean up when closing topic else could end up with references
+        if net_pointer is None:
+            raise Exception("InputTopic is None")
+        
         self._interop = iti(net_pointer)
 
+        self._active_streams = []  # To clean up when closing topic else could end up with references
 
-        def _on_stream_received_read_net_handler(sender, arg):
-            stream = StreamReader(arg)
-            self._active_streams.append(stream)
-            stream.on_stream_closed += lambda x: self._active_streams.remove(stream)
-            self.on_stream_received.fire(stream)
-            InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
+        # define events and their ref holder
+        self._on_stream_received = None
+        self._on_stream_received_ref = None  # keeping reference to avoid GC
 
-        def _on_stream_received_first_sub():
-            ref = self._interop.add_OnStreamReceived(_on_stream_received_read_net_handler)
-            self._cfuncrefs.append(ref)
+        self._on_streams_revoked = None
+        self._on_streams_revoked_ref = None  # keeping reference to avoid GC
 
-        def _on_stream_received_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnStreamReceived(_on_stream_received_read_net_handler)
+        self._on_revoking = None
+        self._on_revoking_ref = None  # keeping reference to avoid GC
 
-        self.on_stream_received = EventHook(_on_stream_received_first_sub, _on_stream_received_last_unsub, name="InputTopic.on_stream_received")
-        """
-        Raised when a new stream is received.       
-         Parameters:
-            reader (StreamReader): The StreamReader which raises new packages related to stream
-        """
+        self._on_committed = None
+        self._on_committed_ref = None  # keeping reference to avoid GC
 
-        def _on_streams_revoked_read_net_handler(sender, arg):
-            # TODO
-            # revoked_arg = list(map(lambda x: StreamReader(Quix.Sdk.Streaming.IStreamReader(x)), arg))
-            # self.on_streams_revoked.fire(revoked_arg)
-            InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
-
-        def _on_streams_revoked_first_sub():
-            ref = self._interop.add_OnStreamsRevoked(_on_streams_revoked_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_streams_revoked_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnStreamsRevoked(_on_streams_revoked_read_net_handler)
-
-        self.on_streams_revoked = EventHook(_on_streams_revoked_first_sub, _on_streams_revoked_last_unsub, name="InputTopic.on_streams_revoked")
-        """
-        Raised when the underlying source of data became unavailable for the streams affected by it       
-         Parameters:
-            readers (StreamReader[]): The StreamReaders revoked
-        """
-
-        def _on_revoking_read_net_handler(sender, arg):
-            #TODO
-            #self.on_revoking.fire()
-            InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
-
-        def _on_revoking_first_sub():
-            ref = self._interop.add_OnRevoking(_on_revoking_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_revoking_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnRevoking(_on_revoking_read_net_handler)
-
-        self.on_revoking = EventHook(_on_revoking_first_sub, _on_revoking_last_unsub, name="InputTopic.on_revoking")
-        """
-        Raised when the underlying source of data will became unavailable, but depending on implementation commit might be possible at this point
-        """
-
-        def _on_committed_read_net_handler(sender, arg):
-            # TODO
-            #self.on_committed.fire()
-            InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
-
-        def _on_committed_first_sub():
-            ref = self._interop.add_OnCommitted(_on_committed_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_committed_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnCommitted(_on_committed_read_net_handler)
-
-        self.on_committed = EventHook(_on_committed_first_sub, _on_committed_last_unsub, name="InputTopic.on_committed")
-        """
-        Raised when underlying source committed data read up to this point
-        """
-
-        def _on_committing_read_net_handler(sender, arg):
-            # TODO
-            #self.on_committing.fire()
-            InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
-
-        def _on_committing_first_sub():
-            ref = self._interop.add_OnCommitting(_on_committing_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_committing_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnCommitting(_on_committing_read_net_handler)
-
-        self.on_committing = EventHook(_on_committing_first_sub, _on_committing_last_unsub, name="InputTopic.on_committing")
-        """
-        Raised when underlying source is about to commit data read up to this point
-        """
+        self._on_committing = None
+        self._on_committing_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._cfuncrefs = None
+        self._active_streams = None
+        self._on_stream_received_dispose()
+        self._on_streams_revoked_dispose()
+        self._on_revoking_dispose()
+        self._on_committing_dispose()
+        self._on_committed_dispose()
+
+    # region on_stream_received
+    @property
+    def on_stream_received(self) -> Callable[['InputTopic', 'StreamReader'], None]:
+        """
+        Gets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the stream.
+        """
+        return self._on_stream_received
+
+    @on_stream_received.setter
+    def on_stream_received(self, value: Callable[['InputTopic', 'StreamReader'], None]) -> None:
+        """
+        Sets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the stream.
+        """
+        self._on_stream_received = value
+        if self._on_stream_received_ref is None:
+            self._on_stream_received_ref = self._interop.add_OnStreamReceived(self._on_stream_received_wrapper)
+
+    def _on_stream_received_wrapper(self, topic_hptr, stream_hptr):
+        # To avoid unnecessary overhead and complication, we're using the topic instance we already have
+        stream = StreamReader(stream_hptr)
+        self._active_streams.append(stream)
+        stream.on_stream_closed += lambda x: self._active_streams.remove(stream)
+        self._on_stream_received(self, stream)
+        InteropUtils.free_hptr(topic_hptr)
+
+    def _on_stream_received_dispose(self):
+        if self._on_stream_received_ref is not None:
+            self._interop.remove_OnStreamReceived(self._on_stream_received_ref)
+            self._on_stream_received_ref = None
+    # endregion on_stream_received
+
+    # region on_streams_revoked
+    @property
+    def on_streams_revoked(self) -> Callable[['InputTopic', List['StreamReader']], None]:
+        """
+        Gets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the streams revoked.
+        """
+        return self._on_streams_revoked
+
+    @on_streams_revoked.setter
+    def on_streams_revoked(self, value: Callable[['InputTopic', List['StreamReader']], None]) -> None:
+        """
+        Sets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the streams revoked.
+        """
+        self._on_streams_revoked = value
+        if self._on_streams_revoked_ref is None:
+            self._on_streams_revoked_ref = self._interop.add_OnStreamsRevoked(self._on_streams_revoked_wrapper)
+
+    def _on_streams_revoked_wrapper(self, topic_hptr, streams_uptr):
+        # To avoid unnecessary overhead and complication, we're using the instances we already have
+        # TODO
+        # revoked_arg = list(map(lambda x: StreamReader(Quix.Sdk.Streaming.IStreamReader(x)), arg))
+        # self.on_streams_revoked.fire(revoked_arg)
+        streams = []
+        self._on_streams_revoked(self, streams)
+        InteropUtils.free_hptr(topic_hptr)
+
+    def _on_streams_revoked_dispose(self):
+        if self._on_streams_revoked_ref is not None:
+            self._interop.remove_OnStreamsRevoked(self._on_streams_revoked_ref)
+            self._on_streams_revoked_ref = None
+    # endregion on_streams_revoked
+    
+    # region on_revoking
+    @property
+    def on_revoking(self) -> Callable[['InputTopic'], None]:
+        """
+        Gets the handler for when topic is revoking. First parameter is the topic the revocation is happening for.
+        """
+        return self._on_revoking
+
+    @on_revoking.setter
+    def on_revoking(self, value: Callable[['InputTopic'], None]) -> None:
+        """
+        Sets the handler for when topic is revoking. First parameter is the topic the revocation is happening for.
+        """
+        self._on_revoking = value
+        if self._on_revoking_ref is None:
+            self._on_revoking_ref = self._interop.add_OnRevoking(self._on_revoking_wrapper)
+
+    def _on_revoking_wrapper(self, topic_hptr, args_hptr):
+        # To avoid unnecessary overhead and complication, we're using the topic instance we already have
+        self._on_revoking(self)
+        InteropUtils.free_hptr(topic_hptr)
+        InteropUtils.free_hptr(args_hptr)
+
+    def _on_revoking_dispose(self):
+        if self._on_revoking_ref is not None:
+            self._interop.remove_OnRevoking(self._on_revoking_ref)
+            self._on_revoking_ref = None
+    # endregion on_revoking
+    
+    # region on_committed
+    @property
+    def on_committed(self) -> Callable[['InputTopic'], None]:
+        """
+        Gets the handler for when the topic finished committing data read up to this point. First parameter is the topic the commit happened for.
+        """
+        return self._on_committed
+
+    @on_committed.setter
+    def on_committed(self, value: Callable[['InputTopic'], None]) -> None:
+        """
+        Sets the handler for when the topic finished committing data read up to this point. First parameter is the topic the commit happened for.
+        """
+        self._on_committed = value
+        if self._on_committed_ref is None:
+            self._on_committed_ref = self._interop.add_OnCommitted(self._on_committed_wrapper)
+
+    def _on_committed_wrapper(self, topic_hptr, args_hptr):
+        # To avoid unnecessary overhead and complication, we're using the topic instance we already have
+        self._on_committed(self)
+        InteropUtils.free_hptr(topic_hptr)
+        InteropUtils.free_hptr(args_hptr)
+
+    def _on_committed_dispose(self):
+        if self._on_committed_ref is not None:
+            self._interop.remove_OnCommitted(self._on_committed_ref)
+            self._on_committed_ref = None
+    # endregion on_committed
+    
+    # region on_committing
+    @property
+    def on_committing(self) -> Callable[['InputTopic'], None]:
+        """
+        Gets the handler for when the topic beginning to commit data read up to this point. First parameter is the topic the commit is happening for.
+        """
+        return self._on_committing
+
+    @on_committing.setter
+    def on_committing(self, value: Callable[['InputTopic'], None]) -> None:
+        """
+        Sets the handler for when the topic beginning to commit data read up to this point. First parameter is the topic the commit is happening for.
+        """
+        self._on_committing = value
+        if self._on_committing_ref is None:
+            self._on_committing_ref = self._interop.add_OnCommitting(self._on_committing_wrapper)
+
+    def _on_committing_wrapper(self, topic_hptr, args_hptr):
+        # To avoid unnecessary overhead and complication, we're using the topic instance we already have
+        self._on_committing(self)
+        InteropUtils.free_hptr(topic_hptr)
+        InteropUtils.free_hptr(args_hptr)
+
+    def _on_committing_dispose(self):
+        if self._on_committing_ref is not None:
+            self._interop.remove_OnCommitting(self._on_committing_ref)
+            self._on_committing_ref = None
+    # endregion on_committing
 
     def start_reading(self):
         """

@@ -21,7 +21,7 @@ commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
 input_topic = client.open_input_topic('generated-data', None, commit_settings=commit_settings, auto_offset_reset=qx.AutoOffsetReset.Earliest)
-def on_streams_revoked_handler(readers: [qx.StreamReader]):
+def on_streams_revoked_handler(topic: qx.InputTopic, readers: [qx.StreamReader]):
     try:
         for reader in readers:
             print("Stream " + reader.stream_id + " got revoked")
@@ -29,22 +29,22 @@ def on_streams_revoked_handler(readers: [qx.StreamReader]):
         print("Exception occurred in on_streams_revoked_handler: " + sys.exc_info()[1])
     print(readers)
 
-input_topic.on_streams_revoked += on_streams_revoked_handler
+input_topic.on_streams_revoked = on_streams_revoked_handler
 
-def on_committed_handler():
+def on_committed_handler(input_topic: qx.InputTopic):
     print("Committed!")
 
-input_topic.on_committed += on_committed_handler
+input_topic.on_committed = on_committed_handler
 
-def on_committing_handler():
+def on_committing_handler(input_topic: qx.InputTopic):
     print("Committing!")
 
-input_topic.on_committing += on_committing_handler
+input_topic.on_committing = on_committing_handler
 
-def on_revoking_handler():
+def on_revoking_handler(input_topic: qx.inputtopic):
     print("Revoking!")
 
-input_topic.on_revoking += on_revoking_handler
+input_topic.on_revoking = on_revoking_handler
 
 import sys
 
@@ -59,7 +59,8 @@ test_parameter_definition_count = 0
 
 start = None
 
-def read_stream(new_stream : qx.StreamReader):
+
+def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
     import datetime
     global start
     if start is None:
@@ -240,6 +241,6 @@ def read_stream(new_stream : qx.StreamReader):
     # TODO implementation missing
     #new_stream.on_package_received += on_package_received_handler
 
-input_topic.on_stream_received += read_stream
+input_topic.on_stream_received = read_stream
 
 App.run()
