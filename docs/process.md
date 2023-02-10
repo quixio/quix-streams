@@ -21,7 +21,7 @@ Let’s see some examples of how to read and write data in a Data processor usin
     def on_parameter_data_handler(data: ParameterData):
         with data:
     
-            df = data.to_panda_frame()  # Input data frame
+            df = data.to_panda_dataframe()  # Input data frame
             output_df = pd.DataFrame()
             output_df["time"] = df["time"]
             output_df["TAG__LapNumber"] = df["TAG__LapNumber"]

@@ -30,21 +30,21 @@ class ParameterDataRawTests(unittest.TestCase):
         ])
 
         # act
-        raw = ParameterDataRaw.from_panda_frame(df)
+        raw = ParameterDataRaw.from_panda_dataframe(df)
         data = raw.convert_to_parameterdata()
-        result = data.to_panda_frame()
+        result = data.to_panda_dataframe()
 
         # assert
         assert_frame_equal(df.sort_index(axis=1), result.sort_index(axis=1), check_names=True)
 
-    def test_from_panda_frame(self):
+    def test_from_panda_dataframe(self):
         # arrange
         df =  pandas.DataFrame([
             {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
         ])
 
         # act
-        raw = ParameterDataRaw.from_panda_frame(df)
+        raw = ParameterDataRaw.from_panda_dataframe(df)
         raw_ptr = raw.get_net_pointer()
         reloaded_from_csharp = ParameterDataRaw(raw_ptr)  # this will force us to load data back from the assigned values in c# rather than checking against potentially cached vals
 
@@ -56,8 +56,8 @@ class ParameterDataRawTests(unittest.TestCase):
         self.assertEqual(reloaded_from_csharp.binary_values, {'binary': [b'binary']})
         self.assertEqual(reloaded_from_csharp.epoch, 0)
 
-    def test_from_panda_dataframe_equals_to_panda_frame(self):
-        # test whether the from_panda_frame -> to_panda_frame equals
+    def test_from_panda_dataframe_equals_to_panda_dataframe(self):
+        # test whether the from_panda_dataframe -> to_panda_dataframe equals
         def _assert_test(pdf):
 
             def assertFrameEqual(df1, df2, **kwds ):
@@ -66,10 +66,10 @@ class ParameterDataRawTests(unittest.TestCase):
                 df2 = df2.reset_index(drop=True)
                 assert_frame_equal(df1.sort_index(axis=1), df2.sort_index(axis=1), check_names=True, **kwds )
 
-            parameter_data_raw = ParameterDataRaw.from_panda_frame(pdf)
+            parameter_data_raw = ParameterDataRaw.from_panda_dataframe(pdf)
             assertFrameEqual(
                         pdf,
-                        parameter_data_raw.to_panda_frame()
+                        parameter_data_raw.to_panda_dataframe()
                     )
 
 
@@ -94,7 +94,7 @@ class ParameterDataRawTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            parameter_data_raw = ParameterDataRaw.from_panda_frame(pdf).to_panda_frame()
+            parameter_data_raw = ParameterDataRaw.from_panda_dataframe(pdf).to_panda_dataframe()
             parsed_time=parameter_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 

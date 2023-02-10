@@ -108,9 +108,9 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 global test_parameter_data_count
                 print("Parameter data read for stream: " + new_stream.stream_id)
                 # can convert to panda if wanted
-                pf = data.to_panda_frame()
+                pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
-                pfdata = qx.ParameterData.from_panda_frame(pf)
+                pfdata = qx.ParameterData.from_panda_dataframe(pf)
                 with pfdata:
                     print("  Length:", len(data.timestamps))
                     for index, val in enumerate(data.timestamps):
@@ -142,9 +142,9 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 global test_parameter_data_filtered_count
                 print("Parameter data read for stream: " + new_stream.stream_id)
                 # can convert to panda if wanted
-                pf = data.to_panda_frame()
+                pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
-                pfdata = qx.ParameterData.from_panda_frame(pf)
+                pfdata = qx.ParameterData.from_panda_dataframe(pf)
                 with pfdata:
                     print("  Length:", len(pfdata.timestamps))
                     for index, val in enumerate(pfdata.timestamps):

@@ -129,7 +129,7 @@ class StreamParametersWriter(object):
             self._interop.Write2(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = ParameterDataRaw.from_panda_frame(packet)
+            data = ParameterDataRaw.from_panda_dataframe(packet)
             with data:
                 self._interop.Write2(data.get_net_pointer())
             return

@@ -1096,27 +1096,27 @@ class TestIntegration(unittest.TestCase):
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
         event_raw = threading.Event()  # used for assertion
-        event_pandas = threading.Event()  # used for assertion
+        event_pandas_dataframe = threading.Event()  # used for assertion
         read_data: pd.DataFrame = None
         read_data_raw: pd.DataFrame = None
-        read_data_pandas: pd.DataFrame = None
+        read_pandas_dataframe: pd.DataFrame = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
                 def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
                     nonlocal read_data
-                    read_data = data.to_panda_frame()
+                    read_data = data.to_panda_dataframe()
                     event.set()
 
                 def on_parameter_data_raw_handler(stream: qx.StreamReader, data: qx.ParameterDataRaw):
                     nonlocal read_data_raw
-                    read_data_raw = data.to_panda_frame()
+                    read_data_raw = data.to_panda_dataframe()
                     event_raw.set()
 
                 def on_parameter_dataframe_handler(stream: qx.StreamReader, data: pd.DataFrame):
-                    nonlocal read_data_pandas
-                    read_data_pandas = data
-                    event_pandas.set()
+                    nonlocal read_pandas_dataframe
+                    read_pandas_dataframe = data
+                    event_pandas_dataframe.set()
 
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.on_read = on_parameter_data_handler
@@ -1152,9 +1152,9 @@ class TestIntegration(unittest.TestCase):
         self.waitforresult(event_raw)
         print("------ READ RAW ------")
         print(read_data_raw)
-        self.waitforresult(event_pandas)
+        self.waitforresult(event_pandas_dataframe)
         print("------ READ PANDAS ------")
-        print(read_data_pandas)
+        print(read_pandas_dataframe)
         input_topic.dispose()  # cleanup
 
         def assertFrameEqual(df1, df2, **kwds):
@@ -1163,7 +1163,7 @@ class TestIntegration(unittest.TestCase):
             assert_frame_equal(df1.sort_index(axis=1), df2.sort_index(axis=1), check_names=True, **kwds)
 
         assertFrameEqual(read_data, read_data_raw)
-        assertFrameEqual(read_data_raw, read_data_pandas)
+        assertFrameEqual(read_data_raw, read_pandas_dataframe)
 
     def test_parameters_write_panda_via_buffer_and_read(self):
         # Arrange
@@ -1200,7 +1200,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("num_param", 83.756) \
             .add_value("binary_param", bytearray("binary_param", "UTF-8")) \
             .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8")))
-        pf = written_data.to_panda_frame()
+        pf = written_data.to_panda_dataframe()
 
         stream.parameters.buffer.add_timestamp(datetime.utcnow()).add_value("a", "b").write()
 
@@ -1212,7 +1212,7 @@ class TestIntegration(unittest.TestCase):
         input_topic.dispose()  # cleanup
         self.assertEqual(1, len(read_data.timestamps))
 
-    def test_parameters_write_compare_pandas_different_exports(self):
+    def test_parameters_write_compare_panda_dataframe_different_exports(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
@@ -1227,23 +1227,23 @@ class TestIntegration(unittest.TestCase):
         event3 = threading.Event()  # used for assertion
         read_data: qx.ParameterData = None
         read_data_raw: qx.ParameterDataRaw = None
-        read_data_pandas: pd.DataFrame = None
+        read_pandas_dataframe: pd.DataFrame = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
                 def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
                     nonlocal read_data
-                    read_data = data.to_panda_frame()
+                    read_data = data.to_panda_dataframe()
                     event.set()
 
                 def on_parameter_raw_handler(stream: qx.StreamReader, data):
                     nonlocal read_data_raw
-                    read_data_raw = data.to_panda_frame()
+                    read_data_raw = data.to_panda_dataframe()
                     event2.set()
 
                 def on_parameter_dataframe_handler(stream: qx.StreamReader, data):
-                    nonlocal read_data_pandas
-                    read_data_pandas = data
+                    nonlocal read_pandas_dataframe
+                    read_pandas_dataframe = data
                     event3.set()
 
                 param_buffer = reader.parameters.create_buffer()
@@ -1278,7 +1278,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param", bytearray("binary_paramer", "UTF-8")) \
             .add_value("binary_param2", bytes(bytearray("binary_param2_2", "UTF-8")))
 
-        pf = written_data.to_panda_frame()
+        pf = written_data.to_panda_dataframe()
 
         stream.parameters.buffer.write(pf)
 
@@ -1293,7 +1293,7 @@ class TestIntegration(unittest.TestCase):
         print(read_data_raw)
         self.waitforresult(event3)
         print("==== read_data pandas ====")
-        print(read_data_pandas)
+        print(read_pandas_dataframe)
         input_topic.dispose()  # cleanup
 
         def assertFrameEqual(df1, df2, **kwds):
@@ -1303,7 +1303,7 @@ class TestIntegration(unittest.TestCase):
 
         assertFrameEqual(pf, read_data)
         assertFrameEqual(read_data, read_data_raw)
-        assertFrameEqual(read_data_raw, read_data_pandas)
+        assertFrameEqual(read_data_raw, read_pandas_dataframe)
 
     def test_parameters_read_with_custom_trigger(self):
         return #TODO
@@ -1457,7 +1457,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag1", "tag1val") \
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
-        pf = written_data.to_panda_frame()
+        pf = written_data.to_panda_dataframe()
 
         stream.parameters.write(pf)
 

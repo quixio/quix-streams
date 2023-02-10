@@ -376,7 +376,7 @@ input_topic.on_stream_received = read_stream
 input_topic.start_reading()
 ```
 
-Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_frame`:
+Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_dataframe`:
 
 ``` python
 def read_stream(input_topic: InputTopic, new_stream: StreamReader):
@@ -386,7 +386,7 @@ def read_stream(input_topic: InputTopic, new_stream: StreamReader):
     def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
         with data:
             # read from input stream
-            df = data.to_panda_frame()
+            df = data.to_panda_dataframe()
             print(df.to_string())
 
     buffer.on_read = on_parameter_data_handler
@@ -689,7 +689,7 @@ This is a minimal code example you can use to read data from a topic using the Q
     
         def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
             with data:
-                df = data.to_panda_frame()
+                df = data.to_panda_dataframe()
                 print(df.to_string())
     
         buffer.on_read = on_parameter_data_handler

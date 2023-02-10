@@ -130,7 +130,7 @@ class ParametersBufferWriter(ParametersBuffer):
             self._interop.Write(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = ParameterData.from_panda_frame(packet)
+            data = ParameterData.from_panda_dataframe(packet)
             with data:
                 self._interop.Write(data.get_net_pointer())
             return

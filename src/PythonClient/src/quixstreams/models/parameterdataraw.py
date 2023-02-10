@@ -80,7 +80,7 @@ class ParameterDataRaw(object):
 
         return text
 
-    def to_panda_frame(self) -> pd.DataFrame:
+    def to_panda_dataframe(self) -> pd.DataFrame:
         """
         Converts ParameterDataRaw to Panda DataFrame
 
@@ -132,7 +132,7 @@ class ParameterDataRaw(object):
         return pd.DataFrame(rows, columns=headers)
 
     @staticmethod
-    def from_panda_frame(data_frame: pd.DataFrame, epoch: int = 0) -> 'ParameterDataRaw':
+    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'ParameterDataRaw':
         """
         Converts Panda DataFrame to ParameterData
 

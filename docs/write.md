@@ -652,14 +652,14 @@ Is represented as the following Pandas DataFrame:
 The SDK allows you to write data to Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} directly. You just need to use the common `write` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [ParameterData](#parameter-data-format):
 
 ``` python
-df = data.to_panda_frame()
+df = data.to_panda_dataframe()
 stream.parameters.buffer.write(df)
 ```
 
-Alternatively, you can convert a Pandas Data Frame to a [ParameterData](#parameter-data-format) using the method `from_panda_frame`:
+Alternatively, you can convert a Pandas Data Frame to a [ParameterData](#parameter-data-format) using the method `from_panda_dataframe`:
 
 ``` python
-data = ParameterData.from_panda_frame(df)
+data = ParameterData.from_panda_dataframe(df)
 with data:
     stream.parameters.buffer.write(data)
 ```

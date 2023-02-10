@@ -147,7 +147,7 @@ class ParametersBuffer(object):
     def _on_read_dataframe_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         pdr = ParameterDataRaw(data_hptr)
-        pdf = pdr.to_panda_frame()
+        pdf = pdr.to_panda_dataframe()
         pdr.dispose()
         self._on_read_dataframe(self._stream, pdf)
         InteropUtils.free_hptr(stream_hptr)
