@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process.Models;
@@ -31,26 +32,26 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         {
             var data = new EventData(eventDataRaw);
 
-            this.OnRead?.Invoke(data);
+            this.OnRead?.Invoke(this.streamReader, data);
         }
 
         private void OnEventDefinitionsChangedHandler(IStreamReaderInternal sender, EventDefinitions eventDefinitions)
         {
             this.LoadFromProcessDefinitions(eventDefinitions);
 
-            this.OnDefinitionsChanged?.Invoke();
+            this.OnDefinitionsChanged?.Invoke(this.streamReader, EventArgs.Empty);
         }
 
         /// <summary>
         /// Raised when an events data package is read for the stream
         /// </summary>
-        public event Action<EventData> OnRead;
+        public event EventHandler<EventData> OnRead;
 
         /// <summary>
         /// Raised when the even definitions have changed for the stream.
         /// See <see cref="Definitions"/> for the latest set of event definitions
         /// </summary>
-        public event Action OnDefinitionsChanged;
+        public event EventHandler OnDefinitionsChanged;
 
         /// <summary>
         /// Gets the latest set of event definitions

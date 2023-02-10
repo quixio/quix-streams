@@ -1,5 +1,4 @@
 # https://stackoverflow.com/a/1094423/2842217
-import sys
 import traceback
 
 class EventHook(object):

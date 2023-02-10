@@ -102,7 +102,7 @@ class StreamWriter(object):
         groups or values """
 
         if self._streamParametersWriter is None:
-            self._streamParametersWriter = StreamParametersWriter(self._interop.get_Parameters())
+            self._streamParametersWriter = StreamParametersWriter(self, self._interop.get_Parameters())
         return self._streamParametersWriter
 
     @property

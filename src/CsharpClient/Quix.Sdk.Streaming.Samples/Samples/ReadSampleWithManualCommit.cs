@@ -35,25 +35,25 @@ namespace Quix.Sdk.Streaming.Samples.Samples
 
                 var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += (data) =>
+                buffer.OnRead += (sender, data) =>
                 {
                     // inputTopic.Commit(data); this doesn't work just yet
                     Interlocked.Add(ref counter, data.Timestamps.Count);
                 };
 
-                streamReader.Parameters.OnRead += (data) =>
+                streamReader.Parameters.OnRead += (sender, data) =>
                 {
                     inputTopic.Commit();
                     Interlocked.Add(ref counter, data.Timestamps.Count);
                 };
 
-                streamReader.Events.OnRead += (data) =>
+                streamReader.Events.OnRead += (sender, data) =>
                 {
                     inputTopic.Commit();
                     Console.WriteLine($"Event data -> StreamId: '{streamReader.StreamId}' - Event '{data.Id}' with value '{data.Value}'");
                 };
 
-                streamReader.Parameters.OnDefinitionsChanged += () =>
+                streamReader.Parameters.OnDefinitionsChanged += (sender, args) =>
                 {
                     foreach (var definition in streamReader.Parameters.Definitions)
                     {
@@ -61,7 +61,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     }
                 };
 
-                streamReader.Events.OnDefinitionsChanged += () =>
+                streamReader.Events.OnDefinitionsChanged += (sender, args) =>
                 {
                     foreach (var definition in streamReader.Events.Definitions)
                     {

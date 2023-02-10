@@ -42,5 +42,14 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             this.WriteChunk(parameterDataRaw);
         }
 
+        protected override void InvokeOnRead(object sender, ParameterData parameterData)
+        {
+            base.InvokeOnRead(this.streamReader, parameterData);
+        }
+
+        protected override void InvokeOnReadRaw(object sender, ParameterDataRaw parameterDataRaw)
+        {
+            base.InvokeOnReadRaw(this.streamReader, parameterDataRaw);
+        }
     }
 }

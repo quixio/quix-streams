@@ -1,6 +1,5 @@
 from typing import Callable, List
 
-from .eventhook import EventHook
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .streamreader import StreamReader
 

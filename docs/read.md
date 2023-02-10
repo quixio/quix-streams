@@ -108,13 +108,13 @@ For instance, in the following example we read and print the first timestamp and
     ``` python
     def on_stream_received_handler(input_topic: InputTopic, new_stream: StreamReader):
     
-        def on_parameter_data_handler(data: ParameterData):
+        def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
             with data:
                 timestamp = data.timestamps[0].timestamp
                 num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
                 print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
-        new_stream.on_read += on_parameter_data_handler
+        new_stream.on_read = on_parameter_data_handler
     
     input_topic.on_stream_received = on_stream_received_handler
     input_topic.start_reading()
@@ -247,13 +247,13 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
 === "Python"
     
     ``` python
-    def on_parameter_data_handler(data: ParameterData):
+    def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
             print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
-    buffer.on_read += on_parameter_data_handler
+    buffer.on_read = on_parameter_data_handler
     ```
 
 === "C\#"
@@ -360,17 +360,17 @@ Is represented as the following Pandas DataFrame:
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
 
-One simple way to read data from Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} is using the event `on_read_pandas` instead of the common event `on_read` when reading from a `stream`, or when reading data from a buffer:
+One simple way to read data from Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} is using the event `on_read_dataframe` instead of the common callback `on_read` when reading from a `stream`, or when reading data from a buffer:
 
 ``` python
 def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_pandas_frame_handler(df: pd.DataFrame):
+    def on_dataframe_handler(stream: StreamReader, df: pd.DataFrame):
         print(df.to_string())
 
-    buffer.on_read_pandas += on_pandas_frame_handler
+    buffer.on_read_dataframe = on_dataframe_handler
 
 input_topic.on_stream_received = read_stream
 input_topic.start_reading()
@@ -383,13 +383,13 @@ def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_parameter_data_handler(data: ParameterData):
+    def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
         with data:
             # read from input stream
             df = data.to_panda_frame()
             print(df.to_string())
 
-    buffer.on_read += on_parameter_data_handler
+    buffer.on_read = on_parameter_data_handler
 
 input_topic.on_stream_received = read_stream
 input_topic.start_reading()
@@ -397,7 +397,7 @@ input_topic.start_reading()
 
 !!! tip
 
-	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
+	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_dataframe` callback provided by the SDK, which is optimized for doing as few conversions as possible.
 
 ## Reading Events
 
@@ -421,11 +421,11 @@ Reading events from a stream is as easy as reading parameter data. In this case,
 === "Python"
     
     ``` python
-    def on_event_data_handler(data: EventData):
+    def on_event_data_handler(stream: StreamReader, data: EventData):
         with data:
             print("Event read for stream. Event Id: " + data.Id)
     
-    new_stream.events.on_read += on_event_data_handler
+    new_stream.events.on_read = on_event_data_handler
     ```
 
 === "C\#"
@@ -687,12 +687,12 @@ This is a minimal code example you can use to read data from a topic using the Q
     
         buffer = new_stream.parameters.create_buffer()
     
-        def on_parameter_data_handler(data: ParameterData):
+        def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
             with data:
                 df = data.to_panda_frame()
                 print(df.to_string())
     
-        buffer.on_read += on_parameter_data_handler
+        buffer.on_read = on_parameter_data_handler
     
     # Hook up events before initiating read to avoid losing out on any data
     input_topic.on_stream_received = read_stream

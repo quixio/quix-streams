@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Callable
 
-from ...eventhook import EventHook
+import pandas
 
 from ..parameterdefinition import ParameterDefinition
 from ...models.parameterdataraw import ParameterDataRaw
@@ -20,7 +20,7 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamParametersReader(object):
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_reader, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamParametersReader.
             NOTE: Do not initialize this class manually, use StreamReader.parameters to access an instance of it
@@ -32,93 +32,146 @@ class StreamParametersReader(object):
         if net_pointer is None:
             raise Exception("StreamParametersReader is none")
 
-        #TODOTEMP self._weakref = weakref.ref(self, lambda x: print("De-referenced StreamParametersReader " + str(net_pointer)))
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
         self._interop = spri(net_pointer)
         self._buffers = []
 
-        def _on_definitions_changed_net_handler():
-            self.on_definitions_changed.fire()
+        self._stream_reader = stream_reader
 
-        def _on_first_definitons_sub():
-            ref = self._interop.add_OnDefinitionsChanged(_on_definitions_changed_net_handler)
-            self._cfuncrefs.append(ref)
+        # define events and their ref holder
+        self._on_read = None
+        self._on_read_ref = None  # keeping reference to avoid GC
 
-        def _on_last_definitons_unsub():
-            # TODO fix unsub
-            self._interop.remove_OnDefinitionsChanged(_on_definitions_changed_net_handler)
+        self._on_read_raw = None
+        self._on_read_raw_ref = None  # keeping reference to avoid GC
 
-        self.on_definitions_changed = EventHook(_on_first_definitons_sub, _on_last_definitons_unsub, name="StreamParametersReader.on_definitions_changed")
-        """
-        Raised when the definitions have changed for the stream. Access "definitions" for latest set of parameter definitions 
+        self._on_read_dataframe = None
+        self._on_read_dataframe_ref = None  # keeping reference to avoid GC
 
-        Has no arguments
-        """
-
-        def _on_read_net_handler(arg):
-            self.on_read.fire(ParameterData(arg))
-
-        def _on_first_sub():
-            ref = self._interop.add_OnRead(_on_read_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_unsub():
-            # TODO fix unsub
-            self._interop.remove_OnRead(_on_read_net_handler)
-
-        self.on_read = EventHook(_on_first_sub, _on_last_unsub, name="StreamParametersReader.on_read")
-        """
-        Event raised when data is available to read (without buffering) 
-        This event does not use Buffers and data will be raised as they arrive without any processing.
-
-        Has one argument of type ParameterData
-        """
-
-
-        def _on_read_raw_net_handler(arg):
-            converted = ParameterDataRaw(arg)
-            self.on_read_raw.fire(converted)
-
-        def _on_first_raw_sub():
-            ref = self._interop.add_OnReadRaw(_on_read_raw_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_raw_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnReadRaw(_on_read_raw_net_handler)
-
-        self.on_read_raw = EventHook(_on_first_raw_sub, _on_last_raw_unsub, name="StreamParametersReader.on_read_raw")
-        """
-        Event raised when data is available to read (without buffering) in raw transport format 
-        This event does not use Buffers and data will be raised as they arrive without any processing. 
-
-        Has one argument of type ParameterDataRaw 
-        """
-
-        def _on_read_df_net_handler(arg):
-            with (pdrw := ParameterDataRaw(arg)):
-                converted = pdrw.to_panda_frame()
-            self.on_read_pandas.fire(converted)
-
-        def _on_first_df_sub():
-            ref = self._interop.add_OnReadRaw(_on_read_df_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_df_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnReadRaw(_on_read_df_net_handler)
-
-        self.on_read_pandas = EventHook(_on_first_df_sub, _on_last_df_unsub, name="StreamParametersReader.on_read_pandas")
-        """
-        Event raised when data is available to read (without buffering) in raw transport format 
-        This event does not use Buffers and data will be raised as they arrive without any processing. 
-
-        Has one argument of type ParameterDataRaw 
-        """
+        self._on_definitions_changed = None
+        self._on_definitions_changed_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
         [buffer.dispose() for buffer in self._buffers]
-        self._cfuncrefs = None
+        self._on_read_dispose()
+        self._on_read_raw_dispose()
+        self._on_read_dataframe_dispose()
+        self._on_definitions_changed_dispose()
+
+    # region on_read
+    @property
+    def on_read(self) -> Callable[['StreamReader', ParameterData], None]:
+        """
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        """
+        return self._on_read
+
+    @on_read.setter
+    def on_read(self, value: Callable[['StreamReader', ParameterData], None]) -> None:
+        """
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        """
+        self._on_read = value
+        if self._on_read_ref is None:
+            self._on_read_ref = self._interop.add_OnRead(self._on_read_wrapper)
+
+    def _on_read_wrapper(self, stream_hptr, data_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        self._on_read(self._stream_reader, ParameterData(data_hptr))
+        InteropUtils.free_hptr(stream_hptr)
+
+    def _on_read_dispose(self):
+        if self._on_read_ref is not None:
+            self._interop.remove_OnRead(self._on_read_ref)
+            self._on_read_ref = None
+    # endregion on_read
+
+    # region on_read_raw
+    @property
+    def on_read_raw(self) -> Callable[['StreamReader', ParameterDataRaw], None]:
+        """
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        """
+        return self._on_read_raw
+
+    @on_read_raw.setter
+    def on_read_raw(self, value: Callable[['StreamReader', ParameterDataRaw], None]) -> None:
+        """
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        """
+        self._on_read_raw = value
+        if self._on_read_raw_ref is None:
+            self._on_read_raw_ref = self._interop.add_OnReadRaw(self._on_read_raw_wrapper)
+
+    def _on_read_raw_wrapper(self, stream_hptr, data_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        self._on_read_raw(self._stream_reader, ParameterDataRaw(data_hptr))
+        InteropUtils.free_hptr(stream_hptr)
+
+    def _on_read_raw_dispose(self):
+        if self._on_read_raw_ref is not None:
+            self._interop.remove_OnReadRaw(self._on_read_raw_ref)
+            self._on_read_raw_ref = None
+    # endregion on_read_raw
+
+    # region on_read_dataframe
+    @property
+    def on_read_dataframe(self) -> Callable[['StreamReader', pandas.DataFrame], None]:
+        """
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        """
+        return self._on_read_dataframe
+
+    @on_read_dataframe.setter
+    def on_read_dataframe(self, value: Callable[['StreamReader', pandas.DataFrame], None]) -> None:
+        """
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        """
+        self._on_read_dataframe = value
+        if self._on_read_dataframe_ref is None:
+            self._on_read_dataframe_ref = self._interop.add_OnReadRaw(self._on_read_dataframe_wrapper)
+
+    def _on_read_dataframe_wrapper(self, stream_hptr, data_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        pdr = ParameterDataRaw(data_hptr)
+        pdf = pdr.to_panda_frame()
+        pdr.dispose()
+        self._on_read_dataframe(self._stream_reader, pdf)
+        InteropUtils.free_hptr(stream_hptr)
+
+    def _on_read_dataframe_dispose(self):
+        if self._on_read_dataframe_ref is not None:
+            self._interop.remove_OnReadRaw(self._on_read_dataframe_ref)
+            self._on_read_dataframe_ref = None
+    # endregion on_read_dataframe
+
+    # region on_definitions_changed
+    @property
+    def on_definitions_changed(self) -> Callable[['StreamReader'], None]:
+        """
+        Gets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
+        """
+        return self._on_definitions_changed
+
+    @on_definitions_changed.setter
+    def on_definitions_changed(self, value: Callable[['StreamReader'], None]) -> None:
+        """
+        Sets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
+        """
+        self._on_definitions_changed = value
+        if self._on_definitions_changed_ref is None:
+            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(self._on_definitions_changed_wrapper)
+
+    def _on_definitions_changed_wrapper(self, stream_hptr, args_ptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        self._on_definitions_changed(self._stream_reader)
+        InteropUtils.free_hptr(stream_hptr)
+        InteropUtils.free_hptr(args_ptr)
+
+    def _on_definitions_changed_dispose(self):
+        if self._on_definitions_changed_ref is not None:
+            self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_ref)
+            self._on_definitions_changed_ref = None
+    # endregion on_definitions_changed
 
     @property
     def definitions(self) -> List[ParameterDefinition]:
@@ -157,9 +210,9 @@ class StreamParametersReader(object):
         buffer = None
         if buffer_configuration is not None:
             buffer_config_ptr = buffer_configuration.get_net_pointer()
-            buffer = ParametersBufferReader(self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
+            buffer = ParametersBufferReader(self._stream_reader, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
         else:
-            buffer = ParametersBufferReader(self._interop.CreateBuffer2(actual_filters_uptr))
+            buffer = ParametersBufferReader(self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
 
         if actual_filters_uptr is not None:
             InteropUtils.free_uptr(actual_filters_uptr)

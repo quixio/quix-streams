@@ -1,12 +1,10 @@
 from typing import Dict, List, Callable
 
-from ...eventhook import EventHook
 from datetime import datetime
 
 from ...native.Python.QuixSdkStreaming.Models.StreamReader.StreamPropertiesReader import StreamPropertiesReader as spri
 import ctypes
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
-from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ..netdict import NetDict
 from ..netlist import NetList
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils

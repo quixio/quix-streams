@@ -34,12 +34,12 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Event invoked when ParameterData is read from the buffer
         /// </summary>
-        public event Action<ParameterData> OnRead;
+        public event EventHandler<ParameterData> OnRead;
 
         /// <summary>
         /// Event invoked when ParameterDataRaw is read from the buffer
         /// </summary>
-        public event Action<ParameterDataRaw> OnReadRaw;
+        public event EventHandler<ParameterDataRaw> OnReadRaw;
 
         // List representing internal data structure of the buffer
         private List<ParameterDataRaw> bufferedFrames = new List<ParameterDataRaw>();
@@ -425,11 +425,11 @@ namespace Quix.Sdk.Streaming.Models
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
 
                     if (newPdrw.Timestamps.Length <= 0) return;
-                    this.OnReadRaw?.Invoke(newPdrw);
+                    this.InvokeOnReadRaw(this, newPdrw);
 
                     if (this.OnRead == null) return;
                     var data = new Streaming.Models.ParameterData(newPdrw, this.parametersFilter, false, false);
-                    this.OnRead.Invoke(data);
+                    this.InvokeOnRead(this, data);
                 }
 
                 RaiseData();
@@ -441,6 +441,16 @@ namespace Quix.Sdk.Streaming.Models
                 flushBufferTimeoutTimer.Change(Timeout.Infinite, Timeout.Infinite); // Disable flush timer
             }
         }
+
+        protected virtual void InvokeOnReadRaw(object sender, ParameterDataRaw parameterDataRaw)
+        {
+            this.OnReadRaw?.Invoke(this, parameterDataRaw);
+        } 
+        
+        protected virtual void InvokeOnRead(object sender, ParameterData parameterData)
+        {
+            this.OnRead?.Invoke(this, parameterData);
+        } 
 
         private void UpdateIfAllConditionsAreNull()
         {

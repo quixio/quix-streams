@@ -12,7 +12,7 @@ class ParametersBufferReader(ParametersBuffer):
         Class used to write to StreamWriter in a buffered manner
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p = None):
+    def __init__(self, stream_reader, net_pointer: ctypes.c_void_p = None):
         """
             Initializes a new instance of ParametersBufferReader.
             NOTE: Do not initialize this class manually, use StreamParametersReader.create_buffer to create it
@@ -25,7 +25,7 @@ class ParametersBufferReader(ParametersBuffer):
             raise Exception("ParametersBufferReader is none")
 
         self._interop = pbri(net_pointer)
-        ParametersBuffer.__init__(self, net_pointer)  # TODO VERIFY if needed
+        ParametersBuffer.__init__(self, stream_reader, net_pointer)
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         return self._interop.get_interop_ptr__()

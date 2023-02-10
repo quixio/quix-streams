@@ -30,7 +30,7 @@ namespace Quix.Sdk.PerformanceTest
             using var inputTopic = client.OpenInputTopic("test");
 
             // Hook up events before initiating read to avoid losing out on any data
-            inputTopic.OnStreamReceived += (s, streamReader) =>
+            inputTopic.OnStreamReceived += (topic, streamReader) =>
             {
                 Console.WriteLine($"New stream read: {streamReader.StreamId}");
 
@@ -41,7 +41,7 @@ namespace Quix.Sdk.PerformanceTest
 
                 var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += data =>
+                buffer.OnRead += (sender, data) =>
                 {
                     //var paramCount = data.NumericValues.Count + data.StringValues.Count + data.BinaryValues.Count;
 

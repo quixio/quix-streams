@@ -38,8 +38,7 @@ class StreamReader(object):
             self.on_stream_closed.fire(converted)
 
             refcount = sys.getrefcount(self)
-            print(f"REF COUNTER {refcount}")
-            if refcount == 1: # TODO figure out correct number
+            if refcount == 1:  # TODO figure out correct number
                 self.dispose()
             InteropUtils.free_hptr(sender)  # another pointer is assigned to the same object as current, we don't need it
 
@@ -111,7 +110,7 @@ class StreamReader(object):
         Gets the reader for accessing event related information of the stream such as definitions and event values
         """
         if self._streamEventsReader is None:
-            self._streamEventsReader = StreamEventsReader(self._interop.get_Events())
+            self._streamEventsReader = StreamEventsReader(self, self._interop.get_Events())
         return self._streamEventsReader
 
     @property
@@ -120,7 +119,7 @@ class StreamReader(object):
         Gets the reader for accessing parameter related information of the stream such as definitions and parameter values
         """
         if self._streamParametersReader is None:
-            self._streamParametersReader = StreamParametersReader(self._interop.get_Parameters())
+            self._streamParametersReader = StreamParametersReader(self, self._interop.get_Parameters())
         return self._streamParametersReader
 
     def get_net_pointer(self) -> ctypes.c_void_p:
