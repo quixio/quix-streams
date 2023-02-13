@@ -62,16 +62,16 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 input_topic = client.open_input_topic("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(input_stream: StreamReader):
+def on_stream(input_topic: InputTopic, input_stream: StreamReader):
 
     # consume data (as Pandas DataFrame)
-    def on_read_pandas(df: pd.DataFrame):
+    def on_read_dataframe(stream: StreamReader, df: pd.DataFrame):
         print(df.to_string())
 
-    input_stream.parameters.on_read_pandas += on_read_pandas
+    input_stream.parameters.on_read_dataframe = on_read_dataframe
 
 # Hook up events before initiating read to avoid losing out on any data
-input_topic.on_stream_received += on_stream
+input_topic.on_stream_received = on_stream
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit
@@ -104,16 +104,16 @@ The code will wait for published messages and then print information about any m
     input_topic = client.open_input_topic("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest) # (3)
 
     # consume streams
-    def on_stream(input_stream: StreamReader): # (4)
+    def on_stream(input_topic: InputTopic, input_stream: StreamReader): # (4)
 
         # consume data (as Pandas DataFrame)
-        def on_read_pandas(df: pd.DataFrame): # (5)
+        def on_read_dataframe(stream: StreamReader, df: pd.DataFrame): # (5)
             print(df.to_string()) # (6)
 
-        input_stream.parameters.on_read_pandas += on_read_pandas # (7)
+        input_stream.parameters.on_read_dataframe = on_read_dataframe # (7)
 
     # Hook up events before initiating read to avoid losing out on any data
-    input_topic.on_stream_received += on_stream # (8)
+    input_topic.on_stream_received = on_stream # (8)
 
     print("Listening to streams. Press CTRL-C to exit.")
     # Handle graceful exit
