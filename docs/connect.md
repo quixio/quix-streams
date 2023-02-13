@@ -23,7 +23,7 @@ Starting with 0.4.0, we’re offering QuixStreamingClient, which handles the cum
 
 If you wish to run the same code locally, you’ll have to provide an OAuth2.0 bearer token. We have created a purpose made token for this, called [SDK token](/platform/how-to/use-sdk-token). Once you have the token you will have to provide it as an argument to QuixStreamingClient or set `Quix__Sdk__Token` environment variable.
 
-### Initialize the Client with an SDK Token
+### Initialize the Client with an SDK token
 
 === "Python"
     

@@ -103,7 +103,7 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 
 	The `StartReading` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
 
-## Reading time-series Data
+## Reading time-series data
 
 You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
 
@@ -153,7 +153,7 @@ We use [ParameterData](#parameter-data-format) packages to read data from the st
 
 	If you’re using Python you can convert [ParameterData](#parameter-data-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
 
-### Parameter Data format
+### ParameterData format
 
 [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time series data packet in memory.
 
@@ -415,11 +415,11 @@ input_topic.start_reading()
 
     Find out more about [App.run()](app-management.md)
     
-## Reading Events
+## Reading events
 
 `EventData` is the formal class in the SDK which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
 
-### Event Data format
+### EventData format
 
 `EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
@@ -561,7 +561,7 @@ Whenever a commit occurs, an event is raised to let you know. This event is rais
     };
     ```
 
-### Auto Offset Reset
+### Auto offset reset
 
 You can control the offset that data is read from by optionally specifying `AutoOffsetReset` when you open the topic.
 
@@ -621,7 +621,7 @@ One or more streams are about to be revoked from your client, but you have a lim
         };
     ```
 
-### Streams Revoked
+### Streams revoked
 
 One or more streams are revoked from your client. You can no longer commit to these streams, you can only handle the revocation in your client.
 
@@ -646,7 +646,7 @@ One or more streams are revoked from your client. You can no longer commit to th
         };
     ```
 
-## Stream Closure
+## Stream closure
 
 You can detect stream closure with the stream closed callback which receives the StreamEndType, to help determine the closure reason if required.
 
