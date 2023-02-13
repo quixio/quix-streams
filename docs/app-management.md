@@ -1,19 +1,19 @@
 # App management
 
-In order to reduce the amount of boilerplate code we added to each of our samples, we developed the `App.run()` feature.
+In order to reduce the amount of boilerplate code Quix added to each of our samples, we developed the `App.run()` feature.
 
-App.run takes case of several small but important tasks in our Python apps.
-
-These are:
+`App.run` takes care of several small but important tasks in managing your Python apps. These include:
 
 * Start reading from input topics
 * Handle termination
 * Close streams and dispose topics
 * Keep alive
 
+Each of these is described in the following sections.
+
 ## Imports
 
-To use `App.run()` in your code, you will need this  import:
+To use `App.run()` in your code, you will need this import:
 
 ```py
 from quixstreams.app import App
@@ -21,7 +21,7 @@ from quixstreams.app import App
 
 ## Start reading
 
-In order to start reading from an input topic you need to make a call to the `start_reading()` method. Your Python code won’t be able to read any data from the broker if you have missed this step. It makes sense to add this call near the end of the code, just before your 'keep busy' 'while' loop.
+In order to start reading from an input topic you need to make a call to the `start_reading()` method. Your Python code won’t be able to read any data from the broker if you have missed this step. It makes sense to add this call near the end of the code, just before your 'keep busy' `while` loop.
 
 Your code might look something like this:
 
@@ -39,10 +39,10 @@ input_topic.on_stream_received += read_stream
 input_topic.start_reading()
 
 while(True)
-    print(“running”)
+    print('running')
 ```
 
-However, using `App.run()` you can skip this call because it's built in. 
+However, using `App.run()` you no longer need the call to `start_reading()`, because it is called for you. 
 
 So your code would look like this instead:
 
@@ -63,7 +63,7 @@ App.run()
 
 ## Termination
 
-Termination signals such as SIGINT, SIGTERM and SIGQUIT could be used to break out of the 'while' loop used to keep your code listening for data. In order to listen for these you’d need to add some code like this:
+Termination signals such as `SIGINT`, `SIGTERM` and `SIGQUIT` could be used to break out of the `while` loop used to keep your code listening for data. In order to listen for these you’d need to add some code like this:
 
 ```py
 # Handle graceful exit
@@ -83,11 +83,11 @@ while not event.is_set():
 print('Exiting')
 ```
 
-In this case, when the code runs it will subscribe to and handle SIGINT (an interrupt signal) and SIGTERM (a termination signal). If either of these is observed the code will call `signal_handler` and the while loop will terminate allowing the code execution to come to an end.
+In this case, when the code runs, it will subscribe to and handle `SIGINT` (an interrupt signal) and `SIGTERM` (a termination signal). If either of these signals is observed, the code will call `signal_handler`, and the `while` loop will terminate allowing the code execution to come to an end.
 
-App.run has this termination signal handling built in. It works on all popular platforms too.
+`App.run` has this termination signal handling built in. It works on all popular platforms too.
 
-Using App.run the above code becomes much simpler:
+Using `App.run` the above code becomes much simpler:
 
 ```py
 App.run()
@@ -107,9 +107,9 @@ input_topic.dispose()
 output_topic.dispose()
 ```
 
-Here, you dispose of the input topic, which stops new data from being received and then dispose of the output topic. This code is easy and straightforward, however it's just more boilerplate that you have to remember.
+Here, you dispose of the input topic, which stops new data from being received, and then dispose of the output topic. This code is easy and straightforward, however it's just more boilerplate that you have to remember.
 
-Once again, `App.run()` encapsulates this and takes it off your todo list:
+Once again, `App.run()` encapsulates this and handles this for you, so the code above becomes:
 
 ```py
 App.run()
@@ -117,22 +117,20 @@ App.run()
 
 ## Keep alive
 
-Unless we add an infinite loop or some code to prevent it, a Python code file will usually run each code statement then end.  
+Unless you add an infinite loop or similar code, a Python code file will usually run each code statement sequentially until the end of the file, and then exit.  
 
-In order to continuously handle data in our Python code we need to prevent the code file from terminating. There are several ways this could be achieved, for example we could use an infinite while loop to allow our code to run continuously. 
-
-For example, this code will continuously print "running" until the `end_condition` has been satisfied:
+In order to continuously handle data in your Python code, you need to prevent the code file from terminating. There are several ways this could be achieved. For example, you could use an infinite `while` loop to allow your code to run continuously. The following code will continuously print "running" until the `end_condition` has been satisfied:
 
 ```py
 run = True
 while(run):
-    print(“running”)
+    print('running')
     if(end_condition = True):
         run = False
-print(“ending”)
+print('ending')
 ```
 
-We used code very similar to this in our Quix Library items for quite a while. However, once we'd seen the same pattern being used over and over we decided to build this functionality into QuixStreams.
+Quix used code very similar to this in our Quix Library items for quite a while. However, once we'd seen the same pattern being used repeatedly, we decided to build this functionality into Quix Streams.
 
 This is how you can use it in your code:
 
@@ -142,15 +140,15 @@ App.run()
 
 # Bring it all together
 
-You have seen how you could start reading from streams, handle termination signals, dispose of input and output topics and how to keep your code running. 
+You have seen how you could start reading from streams, handle termination signals, dispose of input and output topics, and how to keep your code running. 
 
-To recap, here is the long form way to do it all in one snippet:
+To recap, here is an example of your code without using `App.run`, all in one snippet:
 
 ```py
 input_topic.start_reading()  # initiate read
 
 # Hook up to termination signal (for docker image) and CTRL-C
-print("Listening to streams. Press CTRL-C to exit.")
+print('Listening to streams. Press CTRL-C to exit.')
 
 # Below code is to handle graceful exit of the model.
 event = threading.Event() 
@@ -173,7 +171,7 @@ while not event.is_set():
 print('Exiting')
 ```
 
-If you use `App.run()` this is greatly simplified into the following much smaller snippet:
+If you use `App.run()`, this is greatly simplified into the following much smaller snippet:
 
 ```py
 # run a while loop
@@ -186,15 +184,15 @@ print('Exiting')
 
 ## Before shutdown
 
-Before we shutdown this page on `App.run()` we want revisit disposing of resources your app might have used. It's good practice to clean up after yourself! Dispose of any resources you might have used or tell external systems to close or de-allocate resources.
+It's good practice to make sure that your code cleans up during the shutdown phase. Cleanup includes disposing of any resources you might have used, or indicating to external systems that they need to close or deallocate resources.
 
-If you choose to implement the cleanup of other resources or simply need to log something immediately before the code ends, you can configure `App.run()` to call a function before it does all of the other built in actions.
+If you choose to implement the cleanup of other resources, or simply need to log something immediately before the code ends, you can configure `App.run()` to call a function before it does all of the other built-in actions. `App.run` provides the `before_shutdown` hook to enable this facility. The following code provides an example of this:
 
 ```py
 def before_shutdown():
-    print(‘before shutdown’)
+    print('before shutdown')
 
 App.run(before_shutdown=before_shutdown)
 ```
 
-In this snippet, `before_shutdown` is called before the app shuts down. That is before the 'while' loop inside App.run comes to an end. This allows you to close connections, tidy up and log your last messages before the app terminates.
+In this snippet, `before_shutdown` is called before the app shuts down. That is before the `while` loop inside `App.run` comes to an end. This allows you to close connections, tidy up, and log your last messages before the app terminates.
