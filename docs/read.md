@@ -81,6 +81,12 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
     input_topic.start_reading()
     ```
 
+    !!! note
+        `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+
+        Find out more about [App.run()](app-management.md)
+
+
 === "C\#"
     Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
     
@@ -119,6 +125,11 @@ For instance, in the following example we read and print the first timestamp and
     input_topic.on_stream_received += on_stream_received_handler
     input_topic.start_reading()
     ```
+
+    !!! note
+        `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+
+        Find out more about [App.run()](app-management.md)
 
 === "C\#"
     
@@ -375,7 +386,7 @@ def read_stream(new_stream: StreamReader):
 input_topic.on_stream_received += read_stream
 input_topic.start_reading()
 ```
-
+    
 Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_frame`:
 
 ``` python
@@ -399,6 +410,11 @@ input_topic.start_reading()
 
 	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
 
+!!! note
+    `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+
+    Find out more about [App.run()](app-management.md)
+    
 ## Reading Events
 
 `EventData` is the formal class in the SDK which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
@@ -670,12 +686,8 @@ This is a minimal code example you can use to read data from a topic using the Q
 === "Python"
     
     ``` python
-    from quixstreams import *
+    from quixstream import *
     from quixstreams.app import App
-    from quixstreams.models.parametersbufferconfiguration import ParametersBufferConfiguration
-    import sys
-    import signal
-    import threading
     
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()
@@ -703,6 +715,8 @@ This is a minimal code example you can use to read data from a topic using the Q
     # Handle graceful exit
     App.run()
     ```
+
+    Find out more about [App.run()](app-management.md)
 
 === "C\#"
     

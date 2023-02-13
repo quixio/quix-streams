@@ -28,6 +28,7 @@ nav:
       - 'Checkpointing': 'features/checkpointing.md'
       - 'Horizontal scaling': 'features/horizontal-scaling.md'
     - 'Connect to Quix': 'connect.md'
+    - 'App management': 'app-management.md'
     - 'Writing data': 'write.md'
     - 'Reading data': 'read.md'
     - 'Processing data': 'process.md'
