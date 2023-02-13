@@ -12,7 +12,7 @@ using Quix.Sdk.Streaming.Raw;
 namespace Quix.Sdk.Streaming
 {
     /// <summary>
-    /// Helper class to handle default streaming behaviours and handle automatic resource cleanup on shutdown
+    /// Helper class to handle default streaming behaviors and handle automatic resource cleanup on shutdown
     /// </summary>
     public static class App
     {
@@ -36,7 +36,7 @@ namespace Quix.Sdk.Streaming
         }
 
         /// <summary>
-        /// Helper method to handle default streaming behaviours and handle automatic resource cleanup on shutdown
+        /// Helper method to handle default streaming behaviors and handle automatic resource cleanup on shutdown
         /// It also ensures input topics defined at the time of invocation are opened for read.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token to abort. Use when you wish to manually stop streaming for other reason that shutdown.</param>

@@ -6,7 +6,7 @@ This is a very important concept when you are developing high-performance, strea
 
 Checkpointing lets you do some of this costly processing at a very low frequency, without having to worry about losing data. If, for some reason, your process is restarted or crashes and you haven’t saved all the in-memory data you are processing, the Message Broker will resend all the messages from the last Checkpoint when you reconnect to the topic.
 
-Refer to the [Committing /checkpointing](/sdk/read/#committing-checkpointing) section of this documentation to find out how to do Checkpointing when reading data with the Quix SDK.
+Refer to the [Committing / checkpointing](/sdk/read/#committing-checkpointing) section of this documentation to find out how to do Checkpointing when reading data with the Quix SDK.
 
 ## Checkpointing example
 

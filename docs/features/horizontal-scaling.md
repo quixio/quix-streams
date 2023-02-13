@@ -87,9 +87,9 @@ Output on the purple replica:
 New stream received: stream 4
 ```
 
-The same behaviour will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on the Quix SDK.
+The same behavior will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on the Quix SDK.
 
-## Rebalancing mechanism and Partitions
+## Rebalancing mechanism and partitions
 
 Kafka uses partitions and the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html) to decide which consumers receive which messages. 
 
