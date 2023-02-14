@@ -77,7 +77,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
             print("Exception occurred in on_stream_closed_handler: " + sys.exc_info()[1])
     new_stream.on_stream_closed = on_stream_closed_handler
 
-    def on_stream_properties_changed_handler(stream: qx.StreamReader, properties: qx.streamreader.StreamPropertiesReader):
+    def on_stream_properties_changed_handler(stream: qx.StreamReader):
         try:
             print("Stream properties read for stream: " + new_stream.stream_id)
             print("Name", new_stream.properties.name, sep=": ")

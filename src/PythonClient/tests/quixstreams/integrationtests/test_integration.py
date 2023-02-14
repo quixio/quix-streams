@@ -86,7 +86,7 @@ class TestIntegration(unittest.TestCase):
                     print("---- Test stream read {} ----".format(stream.stream_id))
                     incoming_stream = stream
 
-                    def on_properties_changed(stream: qx.StreamReader, properties: qx.streamreader.StreamPropertiesReader):
+                    def on_properties_changed(stream: qx.StreamReader):
                         event.set()
 
                     stream.properties.on_changed = on_properties_changed
@@ -701,6 +701,7 @@ class TestIntegration(unittest.TestCase):
         output_topic = client.open_output_topic(topic_name)
         output_stream = output_topic.create_stream()
         output_stream.close()
+        print(f"---- Write first stream {output_stream.stream_id} ----")
 
         self.waitforresult(event)
         event.clear()
@@ -712,6 +713,7 @@ class TestIntegration(unittest.TestCase):
         print("---- Write second stream ----")
         output_stream = output_topic.create_stream()  # output_stream points to second stream from now
         output_stream.close()
+        print(f"---- Write second stream {output_stream.stream_id} ----")
 
         # Assert
         self.waitforresult(event)

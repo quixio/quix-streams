@@ -35,14 +35,14 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             this.Metadata = streamProperties.Metadata;
             this.Parents = streamProperties.Parents;
 
-            this.OnChanged?.Invoke(this.streamReader, this);
+            this.OnChanged?.Invoke(this.streamReader, EventArgs.Empty);
         }
 
         /// <summary>
         /// Raised when the stream properties have changed
         /// Sender is the stream the properties changed for
         /// </summary>
-        public event EventHandler<StreamPropertiesReader> OnChanged;
+        public event EventHandler OnChanged;
 
         /// <summary>
         /// Gets the name of the stream

@@ -52,7 +52,7 @@ Let’s see some examples of how to read and write data in a Data processor usin
 === "C\#"
     
     ``` cs
-    buffer.OnRead += (data) =>
+    buffer.OnRead += (stream, data) =>
     {
         var outputData = new ParameterData();
     

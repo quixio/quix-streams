@@ -45,14 +45,14 @@ class StreamPropertiesReader(object):
 
     # region on_changed
     @property
-    def on_changed(self) -> Callable[['StreamReader', 'StreamPropertiesReader'], None]:
+    def on_changed(self) -> Callable[['StreamReader'], None]:
         """
         Gets the handler for when the stream properties changed. First parameter is the stream it is invoked for, second is the properties.
         """
         return self._on_changed
 
     @on_changed.setter
-    def on_changed(self, value: Callable[['StreamReader', 'StreamPropertiesReader'], None]) -> None:
+    def on_changed(self, value: Callable[['StreamReader'], None]) -> None:
         """
         Sets the handler for when the stream properties changed. First parameter is the stream it is invoked for, second is the properties.
         """
@@ -60,11 +60,11 @@ class StreamPropertiesReader(object):
         if self._on_changed_ref is None:
             self._on_changed_ref = self._interop.add_OnChanged(self._on_changed_wrapper)
 
-    def _on_changed_wrapper(self, sender_hptr, properties_hptr):
+    def _on_changed_wrapper(self, sender_hptr, args_ptr):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
-        self._on_changed(self._stream_reader, self)
+        self._on_changed(self._stream_reader)
         InteropUtils.free_hptr(sender_hptr)
-        InteropUtils.free_hptr(properties_hptr)
+        InteropUtils.free_hptr(args_ptr)
 
     def _on_changed_dispose(self):
         if self._on_changed_ref is not None:

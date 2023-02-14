@@ -26,7 +26,7 @@ This situation will trigger an event on the SDK in the blue replica indicating t
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, newStream) =>
+    inputTopic.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream received: {newStream.StreamId}");
     };

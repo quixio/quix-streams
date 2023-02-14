@@ -85,7 +85,7 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
     Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, newStream) =>
+    inputTopic.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream read: {newStream.StreamId}");
     };
@@ -123,9 +123,9 @@ For instance, in the following example we read and print the first timestamp and
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, streamReader) =>
+    inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
-        streamReader.Parameters.OnRead += parameterData =>
+        streamReader.Parameters.OnRead += (stream, parameterData) =>
         {
             var timestamp = parameterData.Timestamps[0].Timestamp;
             var numValue = parameterData.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -259,7 +259,7 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
 === "C\#"
     
     ``` cs
-    buffer.OnRead += (data) =>
+    buffer.OnRead += (stream, data) =>
     {
         var timestamp = data.Timestamps[0].Timestamp;
         var numValue = data.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -431,7 +431,7 @@ Reading events from a stream is as easy as reading parameter data. In this case,
 === "C\#"
     
     ``` cs
-    newStream.Events.OnRead += (data) =>
+    newStream.Events.OnRead += (stream, data) =>
     {
         Console.WriteLine($"Event read for stream. Event Id: {data.Id}");
     };
@@ -646,7 +646,7 @@ You can detect stream closure with the `on_stream_closed` callback which has the
 You can detect stream closure with the stream closed event which has the sender and the StreamEndType to help determine the closure reason if required.
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, streamReader) =>
+    inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
             streamReader.OnStreamClosed += (reader, type) =>
             {
@@ -730,13 +730,13 @@ This is a minimal code example you can use to read data from a topic using the Q
                 using var inputTopic = client.OpenInputTopic(TOPIC_ID);
     
                 // Hook up events before initiating read to avoid losing out on any data
-                inputTopic.OnStreamReceived += (s, streamReader) =>
+                inputTopic.OnStreamReceived += (topic, streamReader) =>
                 {
                     Console.WriteLine($"New stream read: {streamReader.StreamId}");
     
                     var buffer = streamReader.Parameters.CreateBuffer();
     
-                    buffer.OnRead += parameterData =>
+                    buffer.OnRead += (stream, parameterData) =>
                     {
                         Console.WriteLine(
                             $"ParameterA - {parameterData.Timestamps[0].Timestamp}: {parameterData.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
