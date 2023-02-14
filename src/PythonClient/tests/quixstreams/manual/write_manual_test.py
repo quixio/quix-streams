@@ -1,21 +1,16 @@
-# This is the very first integration test created for the python wrapper.
-# It tests most of the client and provides samples all around
-# Best would be to split it up with a revised method of test-suite, but for now will leave it here
-import pandas
 import datetime
 import random
-import threading
 
 import pandas as pd
-import time
 
-from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 #InteropUtils.enable_debug()
 
-from src import quixstreams as qx
-from src.quixstreams.models.parametervalue import ParameterValueType
-
-client = qx.KafkaStreamingClient('127.0.0.1:9092', None)
+import quixstreams as qx
+from quixstreams.models.parametervalue import ParameterValueType
+qx.logging.Logging.update_factory(qx.logging.LogLevel.Debug)
+client = qx.QuixStreamingClient('sdk-9e70ee4d555145af8431abdf1ccc34fb', debug=False)
+client.api_url = "https://portal-api.dev.quix.ai"
 commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
@@ -224,101 +219,3 @@ for stream_number in range(number_of_stream):
     stream.close(qx.StreamEndType.Aborted)
 
 output_topic.dispose()
-exit(0)
-
-print("---- Sending parameter data ----")
-stream.parameters.buffer.packet_size = 500
-stream.parameters.buffer.time_span_in_nanoseconds = 5e+9  # 5000 ms
-stream.parameters.buffer.buffer_timeout = 400
-stream.parameters.buffer.default_location = "/default"
-stream.parameters.buffer.default_tags["Tag1"] = "tag one"
-stream.parameters.buffer.default_tags["Tag2"] = "tag two"
-stream.parameters.buffer.epoch = datetime.datetime(2018, 1, 1)
-
-# Send parameter Data for datetime
-stream.parameters.buffer\
-    .add_timestamp(datetime.datetime.utcnow())\
-    .add_value("string_param", "value1")\
-    .add_value("num_param", 123.43) \
-    .add_value("binary_param", bytearray("binary_val1", "UTF-8")) \
-    .add_tag("Tag2", "tag two updated")\
-    .add_tag("Tag3", "tag three")\
-    .write()
-
-# Send parameter data in nanoseconds relative to epoch
-stream.parameters.buffer\
-    .add_timestamp_nanoseconds(123456789)\
-    .add_value("string_param", "value1")\
-    .add_value("num_param", 83.756) \
-    .add_value("binary_param", bytearray("binary_val2", "UTF-8")) \
-    .write()
-
-# Send parameter data in timedelta relative to a new epoch
-stream.parameters.buffer.epoch = datetime.datetime(2018, 1, 2)
-stream.parameters.buffer\
-    .add_timestamp(datetime.timedelta(seconds=1, milliseconds=555))\
-    .add_value("num_param", 123.32) \
-    .add_value("binary_param", bytearray("binary_val3", "UTF-8")) \
-    .write()
-
-# Send data as panda data frame in nanoseconds,
-# relative to stream.parameter.epoch, which by default is unix epoch 01/01/1970
-df = pd.DataFrame({'time': [1, 5, 10],
-                   'panda_param': [123.2, None, 12],
-                   'panda_param2': ["val1", "val2", None],
-                   'TAG__Tag1': ["v1", 2, "v3"],
-                   'TAG__Tag2': [1, 2, 3]})
-#    stream.parameters.write(df)
-
-# send parameter data without buffering
-parameterData = qx.ParameterData()
-parameterData.add_timestamp_nanoseconds(10)\
-    .add_value("bufferless_1", 1)\
-    .add_value("bufferless_2", "test") \
-    .add_value("bufferless_3", "test") \
-    .remove_value("bufferless_3")\
-    .add_tag("tag1", "tag1val")\
-    .add_tag("tag2", "tag2val")\
-    .remove_tag("tag2")
-
-stream.parameters.write(parameterData)
-
-
-print("---- Sending event definitions ----")
-stream.events.add_definition("event_at_root", "Root Event", "This is a root event as there is no default location")
-stream.events.default_location = "/Base"
-stream.events.add_definition("event_1", "Event One", "This is test event number one")\
-             .add_definition("event_2", description="This is event 2").set_level(qx.EventLevel.Debug).set_custom_properties("{test prop for event}")
-stream.events.add_location("/NotBase").add_definition("event_3").set_level(qx.EventLevel.Critical)
-print("---- Sending event data ----")
-stream.events.default_location = "/default"
-stream.events.default_tags["Tag1"] = "tag one"
-stream.events.default_tags["Tag2"] = "tag two"
-stream.events.epoch = datetime.datetime(2018, 1, 1)
-stream.events\
-    .add_timestamp(datetime.datetime.utcnow())\
-    .add_value("event_1", "event value 1")\
-    .add_tag("Tag2", "tag two updated")\
-    .add_tag("Tag3", "tag three")\
-    .write()
-stream.events\
-    .add_timestamp_nanoseconds(123456789)\
-    .add_value("event_1", "event value 1.1")\
-    .add_value("event_2", "event value 2")\
-    .write()
-stream.events.epoch = datetime.datetime(1970, 1, 1)
-stream.events\
-    .add_timestamp(datetime.timedelta(seconds=1, milliseconds=555))\
-    .add_value("event_3", "3232")\
-    .write()
-
-ed = qx.EventData("event4", 12345678, "direct event val")
-ed.add_tag("a", "b")\
-  .add_tag("b", "c")\
-  .add_tag("c", "d")\
-  .remove_tag("c")
-stream.events.write(ed)
-
-print("Closing")
-stream.close(qx.StreamEndType.Aborted)  # Comment this out when testing stream revocation & set time.sleep to higher
-print("Closed")

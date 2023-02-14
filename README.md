@@ -89,7 +89,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 
 10. On the command line, run the `arch` command. This will display `i386`. If not, check your steps so far.
 
-11. Install Brew again. This installs a new copy of Brew to a new directory structure.
+11. Install Brew again. This installs a new copy of Brew to a new directory structure for i386 (x86_64).
 
 12. Open your Zsh profile file, `~/.zprofile`, using a text editor such as Nano. For example, with the command `nano ~/.zprofile`.
 
@@ -98,6 +98,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
     ```
     if [ $(arch) = "i386" ]; then
         PATH="/usr/local/bin/brew:${PATH}"
+        eval "$(/usr/local/bin/brew shellenv)"
     fi
     ```
 
@@ -107,13 +108,12 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 
 15. Install Python with the command `brew install python3`.
 
-16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`.
+16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`. If not sure, check with `ls /usr/local/Cellar`.
 
 17. Open your `~/.zprofile` file again, and add the following line inside the `if` statement:
 
     ```
     if [ $(arch) = "i386" ]; then
-        ...
         PATH="/usr/local/Cellar/python@3.10/3.10.9/bin:${PATH}"
         ...
     fi
