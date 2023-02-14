@@ -62,7 +62,7 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 You can install the library for amd64 platforms using the package manager for Python Packages:
 
 ```shell
-pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev16 --user
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev16 --user
 ```
 
 ### Installing on M1/M2 Mac
@@ -97,7 +97,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 
     ```
     if [ $(arch) = "i386" ]; then
-        alias brew="/usr/local/bin/brew"
+        PATH="/usr/local/bin/brew:${PATH}"
     fi
     ```
 
@@ -114,7 +114,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
     ```
     if [ $(arch) = "i386" ]; then
         ...
-        alias python3="/usr/local/Cellar/python@3.10/3.10.9/bin/python3"
+        PATH="/usr/local/Cellar/python@3.10/3.10.9/bin:${PATH}"
         ...
     fi
     ```
