@@ -23,6 +23,51 @@ class ParameterDataRawTests(unittest.TestCase):
         # assert by no exception
 
 
+    def test_set_values(self):
+        # act
+        parameter_data = ParameterDataRaw()
+        parameter_data.set_values(
+            epoch=0,
+            timestamps=[1, 2, 3],
+            numeric_values={"numeric": [3, 12.32, None]},
+            string_values={"string": ["one", None, "three"]},
+            binary_values={"binary": [bytes("byte1", "utf-8"), None, None]},
+            tag_values={"tag1": ["t1", "t2", None]},
+        )
+
+        # assert
+        expected_df = pandas.DataFrame([
+            {"time": 1, "TAG__tag1": "t1", "numeric": 3, "string": "one", "binary": bytes("byte1", "utf-8")},
+            {"time": 2, "TAG__tag1": "t2", "numeric": 12.32},
+            {"time": 3, "string": "three"}
+        ])
+
+        df_orig = parameter_data.to_panda_dataframe()
+        assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
+
+    def test_set_values_only_string(self):
+        # act
+        parameter_data = ParameterDataRaw()
+        parameter_data.set_values(
+            epoch=0,
+            timestamps=[1, 2, 3],
+            numeric_values={},
+            string_values={"string": ["one", None, "three"]},
+            binary_values={},  # to test Empty
+            tag_values=None  # to test None
+        )
+
+        # assert
+        expected_df = pandas.DataFrame([
+            {"time": 1, "string": "one"},
+            {"time": 2},
+            {"time": 3, "string": "three"}
+        ])
+
+        df_orig = parameter_data.to_panda_dataframe()
+        assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
+
+
     def test_convert_to_parameterdata(self):
         # arrange
         df = pandas.DataFrame([
@@ -39,7 +84,7 @@ class ParameterDataRawTests(unittest.TestCase):
 
     def test_from_panda_dataframe(self):
         # arrange
-        df =  pandas.DataFrame([
+        df = pandas.DataFrame([
             {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
         ])
 

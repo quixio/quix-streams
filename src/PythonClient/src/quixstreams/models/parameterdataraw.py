@@ -257,7 +257,7 @@ class ParameterDataRaw(object):
                         else:
                             _add_string(panda_col_label, row_index, str_val)
 
-        parameter_data_raw._set_values(
+        parameter_data_raw.set_values(
             epoch=epoch, 
             timestamps=timestamps,
             numeric_values=numeric_values,
@@ -268,18 +268,26 @@ class ParameterDataRaw(object):
 
         return parameter_data_raw
 
-    def _set_values(
+    def set_values(
             self, 
             epoch: int, 
-            timestamps:[int], 
+            timestamps: [int],
             numeric_values: Dict[str, List[float]],
             string_values: Dict[str, List[str]],
-            tag_values: Dict[str, List[str]],
-            binary_values: Dict[str, List[bytes]]
+            binary_values: Dict[str, List[bytes]],
+            tag_values: Dict[str, List[str]]
         ):
         """
-            The timestamps of values in nanoseconds since epoch.
-            Timestamps are matched by index to numeric_values, string_values, binary_values and tag_values
+            Sets the values of the parameter data from the provided dictionaries
+
+            Dictionary values are matched by index to the provided timestamps
+
+            :param epoch: The time from which all timestamps are measured from
+            :param timestamps: The timestamps of values in nanoseconds since epoch as an array
+            :param numeric_values: the numeric values where the dictionary key is the parameter name and the value is the array of values
+            :param string_values: the string values where the dictionary key is the parameter name and the value is the array of values
+            :param binary_values: the binary values where the dictionary key is the parameter name and the value is the array of values
+            :param tag_values: the tag values where the dictionary key is the parameter name and the value is the array of values
         """
 
         #set epoch
