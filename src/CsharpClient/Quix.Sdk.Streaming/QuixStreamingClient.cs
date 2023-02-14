@@ -90,7 +90,7 @@ namespace Quix.Sdk.Streaming
                 this.logger.LogTrace("Using token from environment variable {1}", SdkTokenKey);
             }
             this.autoCreateTopics = autoCreateTopics;
-            this.brokerProperties = properties;
+            this.brokerProperties = properties ?? new Dictionary<string, string>();
             this.debug = debug;
             if (httpClient == null)
             {
@@ -394,6 +394,10 @@ namespace Quix.Sdk.Streaming
             {
                 securityOptions.UseSsl = true;
                 securityOptions.SslCertificates = await GetWorkspaceCertificatePath(ws);
+                if (!brokerProperties.ContainsKey("ssl.endpoint.identification.algorithm"))
+                {
+                    brokerProperties["ssl.endpoint.identification.algorithm"] = "none"; // default back to None
+                }
             }
             else
             {
