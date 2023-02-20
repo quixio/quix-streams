@@ -107,14 +107,14 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 
 You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
 
-For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [ParameterData](#parameter-data-format) packet:
+For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
 
 === "Python"
     
     ``` python
     def on_stream_received_handler(input_topic: InputTopic, new_stream: StreamReader):
     
-        def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
+        def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
             with data:
                 timestamp = data.timestamps[0].timestamp
                 num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
@@ -136,10 +136,10 @@ For instance, in the following example we read and print the first timestamp and
     ``` cs
     inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
-        streamReader.Parameters.OnRead += (stream, parameterData) =>
+        streamReader.Parameters.OnRead += (stream, timeseriesData) =>
         {
-            var timestamp = parameterData.Timestamps[0].Timestamp;
-            var numValue = parameterData.Timestamps[0].Parameters["ParameterA"].NumericValue;
+            var timestamp = timeseriesData.Timestamps[0].Timestamp;
+            var numValue = timeseriesData.Timestamps[0].Parameters["ParameterA"].NumericValue;
             Console.WriteLine($"ParameterA - {timestamp}: {numValue}");
         };
     };
@@ -147,21 +147,21 @@ For instance, in the following example we read and print the first timestamp and
     inputTopic.StartReading();
     ```
 
-We use [ParameterData](#parameter-data-format) packages to read data from the stream. This class handles reading and writing of time series data. The Quix SDK provides multiple helpers for reading and writing data using [ParameterData](#parameter-data-format).
+We use [TimeseriesData](#timeseriesdata-format) packages to read data from the stream. This class handles reading and writing of time series data. The Quix SDK provides multiple helpers for reading and writing data using [TimeseriesData](#timeseriesdata-format).
 
 !!! tip
 
-	If you’re using Python you can convert [ParameterData](#parameter-data-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
+	If you’re using Python you can convert [TimeseriesData](#timeseriesdata-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
 
-### ParameterData format
+### TimeseriesData format
 
-[ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time series data packet in memory.
+[TimeseriesData](#timeseriesdata-format) is the formal class in the SDK which represents a time series data packet in memory.
 
-[ParameterData](#parameter-data-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
+[TimeseriesData](#timeseriesdata-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
 
-You should imagine a Parameter Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
+You should imagine a Timeseries Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
 
-The following table shows an example of Parameter Data:
+The following table shows an example of Timeseries Data:
 
 | Timestamp | Speed | Gear |
 | --------- | ----- | ---- |
@@ -170,7 +170,7 @@ The following table shows an example of Parameter Data:
 | 3         | 125   | 3    |
 | 6         | 110   | 2    |
 
-You can use the `timestamps` property of a `ParameterData` instance to access each row of that table, and the `parameters` property to access the values of that timestamp.
+You can use the `timestamps` property of a `TimeseriesData` instance to access each row of that table, and the `parameters` property to access the values of that timestamp.
 
 The Quix SDK supports Numeric, String, and Binary values and you should use the proper property depending of the value type of your Parameter:
 
@@ -190,7 +190,7 @@ The Quix SDK supports Numeric, String, and Binary values and you should use the 
     
       - `BinaryValue`: Returns the Binary value of the Parameter, represented as an array of `byte`.
 
-This is a simple example showing how to read Speed values of the `ParameterData` used in the previous example:
+This is a simple example showing how to read Speed values of the `TimeseriesData` used in the previous example:
 
 === "Python"
     
@@ -253,12 +253,12 @@ You can configure a buffer’s input requirements using built-in properties. For
     buffer.TimeSpanInMilliseconds = 100;
     ```
 
-Reading data from that buffer is as simple as using its `OnRead` event. For each [ParameterData](#parameter-data-format) packet released from the buffer, the SDK will execute the `OnRead` event with the parameter data as a given parameter. For example, the following code prints the ParameterA value of the first timestamp of each packet released from the buffer:
+Reading data from that buffer is as simple as using its `OnRead` event. For each [TimeseriesData](#timeseriesdata-format) packet released from the buffer, the SDK will execute the `OnRead` event with the timeseries data as a given parameter. For example, the following code prints the ParameterA value of the first timestamp of each packet released from the buffer:
 
 === "Python"
     
     ``` python
-    def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
+    def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
@@ -349,11 +349,11 @@ The following buffer configuration will send data every 100ms window or if criti
 
 ### Using Data Frames
 
-If you use the Python version of the SDK you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing `ParameterData` to Quix. 
+If you use the Python version of the SDK you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing `TimeseriesData` to Quix. 
 
-The Pandas DataFrames format is just a representation of [ParameterData](#parameter-data-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
+The Pandas DataFrames format is just a representation of [TimeseriesData](#timeseriesdata-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
-For example, the following [ParameterData](#parameter-data-format):
+For example, the following [TimeseriesData](#timeseriesdata-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |
@@ -387,14 +387,14 @@ input_topic.on_stream_received = read_stream
 input_topic.start_reading()
 ```
     
-Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_dataframe`:
+Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format) to a Pandas DataFrame using the method `to_panda_dataframe`:
 
 ``` python
 def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
+    def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
         with data:
             # read from input stream
             df = data.to_panda_dataframe()
@@ -408,7 +408,7 @@ input_topic.start_reading()
 
 !!! tip
 
-	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_dataframe` callback provided by the SDK, which is optimized for doing as few conversions as possible.
+	The conversions from [TimeseriesData](#timeseriesdata-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_dataframe` callback provided by the SDK, which is optimized for doing as few conversions as possible.
 
 !!! note
     `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
@@ -432,7 +432,7 @@ You should imagine a list of `EventData` instances as a simple table of three co
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-Reading events from a stream is as easy as reading parameter data. In this case, the SDK does not use a Buffer because we don’t need high-performance throughput, but the way we read Event Data from a `Stream` is identical.
+Reading events from a stream is as easy as reading timeseries data. In this case, the SDK does not use a Buffer because we don’t need high-performance throughput, but the way we read Event Data from a `Stream` is identical.
 
 === "Python"
     
@@ -699,7 +699,7 @@ This is a minimal code example you can use to read data from a topic using the Q
     
         buffer = new_stream.parameters.create_buffer()
     
-        def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
+        def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
             with data:
                 df = data.to_panda_dataframe()
                 print(df.to_string())
@@ -750,10 +750,10 @@ This is a minimal code example you can use to read data from a topic using the Q
     
                     var buffer = streamReader.Parameters.CreateBuffer();
     
-                    buffer.OnRead += (stream, parameterData) =>
+                    buffer.OnRead += (stream, timeseriesData) =>
                     {
                         Console.WriteLine(
-                            $"ParameterA - {parameterData.Timestamps[0].Timestamp}: {parameterData.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
+                            $"ParameterA - {timeseriesData.Timestamps[0].Timestamp}: {timeseriesData.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
                     };
                 };
     

@@ -106,7 +106,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 print("Committing")
                 # input_topic.commit()
                 global test_parameter_data_count
-                print("Parameter data read for stream: " + new_stream.stream_id)
+                print("Timeseries data read for stream: " + new_stream.stream_id)
                 # can convert to panda if wanted
                 pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
@@ -140,7 +140,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 def print(*args, **kwargs):
                     pass
                 global test_parameter_data_filtered_count
-                print("Parameter data read for stream: " + new_stream.stream_id)
+                print("Timeseries data read for stream: " + new_stream.stream_id)
                 # can convert to panda if wanted
                 pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:

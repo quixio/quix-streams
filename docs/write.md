@@ -184,21 +184,21 @@ The `StreamEndType` can be one of the following possible end types:
 
 ## Writing time-series data
 
-You can now start writing data to your stream. [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory. [ParameterData](#parameter-data-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
+You can now start writing data to your stream. [TimeseriesData](#timeseriesdata-format) is the formal class in the SDK which represents a time-series data packet in memory. [TimeseriesData](#timeseriesdata-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
 
 !!! tip
 
 	If your data source generates data at irregular time intervals and you don’t have a defined list of regular Parameters, the [EventData](#event-data-format) format is probably a better fit for your time-series data.
 
-### ParameterData format
+### TimeseriesData format
 
-[ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory.
+[TimeseriesData](#timeseriesdata-format) is the formal class in the SDK which represents a time-series data packet in memory.
 
-[ParameterData](#parameter-data-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
+[TimeseriesData](#timeseriesdata-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
 
-You should imagine a Parameter Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
+You should imagine a Timeseries Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
 
-The following table shows an example of Parameter Data:
+The following table shows an example of Timeseries Data:
 
 | Timestamp | Speed | Gear |
 | --------- | ----- | ---- |
@@ -211,14 +211,14 @@ The following table shows an example of Parameter Data:
 
 	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of that table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
-The Quix SDK provides several helpers to create and send `ParameterData` packets through the stream.
+The Quix SDK provides several helpers to create and send `TimeseriesData` packets through the stream.
 
-The following code would generate the previous `ParameterData` and send it to the stream:
+The following code would generate the previous `TimeseriesData` and send it to the stream:
 
 === "Python"
     
     ``` python
-    data = ParameterData()
+    data = TimeseriesData()
     
     data.add_timestamp_nanoseconds(1) \
         .add_value("Speed", 120) \
@@ -239,7 +239,7 @@ The following code would generate the previous `ParameterData` and send it to th
 === "C\#"
     
     ``` cs
-    var data = new ParameterData();
+    var data = new TimeseriesData();
     
     data.AddTimestampNanoseconds(1)
         .AddValue("Speed", 120)
@@ -257,7 +257,7 @@ The following code would generate the previous `ParameterData` and send it to th
     stream.Parameters.Write(data);
     ```
 
-Although Quix allows you to send `ParameterData` to a stream directly, without any buffering, Quix recommends you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `ParameterData` through a buffer:
+Although Quix allows you to send `TimeseriesData` to a stream directly, without any buffering, Quix recommends you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `TimeseriesData` through a buffer:
 
 === "Python"
     
@@ -278,7 +278,7 @@ The Quix SDK allows you to attach any type of data — Numbers, Strings, or raw 
 === "Python"
     
     ``` python
-    data = ParameterData()
+    data = TimeseriesData()
     
     data.add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", 10) \
@@ -289,7 +289,7 @@ The Quix SDK allows you to attach any type of data — Numbers, Strings, or raw 
 === "C\#"
     
     ``` cs
-    var data = new ParameterData();
+    var data = new TimeseriesData();
     
     data.AddTimestamp(DateTime.UtcNow)
         .AddValue("ParameterA", 10)
@@ -409,7 +409,7 @@ For example, the following configuration means that the SDK will send a packet w
     stream.Parameters.Buffer.PacketSize = 100;
     ```
 
-Writing a [ParameterData](#parameter-data-format) to that buffer is as simple as using the `Write` method of that built-in `Buffer`, passing the `ParameterData` to write:
+Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `Write` method of that built-in `Buffer`, passing the `TimeseriesData` to write:
 
 === "Python"
     
@@ -423,9 +423,9 @@ Writing a [ParameterData](#parameter-data-format) to that buffer is as simple as
     stream.Parameters.Buffer.Write(data);
     ```
 
-The Quix SDK also allows you to write data to the buffer without creating a `ParameterData` instance explicitly. To do so, you can use the same helper methods that are supported by the `ParameterData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the buffer.
+The Quix SDK also allows you to write data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the buffer.
 
-The following code is an example of how to write data to the buffer without using an explicit `ParameterData` instance:
+The following code is an example of how to write data to the buffer without using an explicit `TimeseriesData` instance:
 
 === "Python"
     
@@ -629,9 +629,9 @@ Will result in this parameter hierarchy in the parameter selection dialog:
 
 ### Using Data Frames
 
-If you use the Python version of the SDK you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing ParameterData to Quix. The Pandas DataFrames format is just a representation of [ParameterData](#parameter-data-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
+If you use the Python version of the SDK you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing TimeseriesData to Quix. The Pandas DataFrames format is just a representation of [TimeseriesData](#timeseriesdata-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
-For example, the following [ParameterData](#parameter-data-format):
+For example, the following [TimeseriesData](#timeseriesdata-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |
@@ -649,24 +649,24 @@ Is represented as the following Pandas DataFrame:
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
 
-The SDK allows you to write data to Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} directly. You just need to use the common `write` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [ParameterData](#parameter-data-format):
+The SDK allows you to write data to Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} directly. You just need to use the common `write` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
 
 ``` python
 df = data.to_panda_dataframe()
 stream.parameters.buffer.write(df)
 ```
 
-Alternatively, you can convert a Pandas Data Frame to a [ParameterData](#parameter-data-format) using the method `from_panda_dataframe`:
+Alternatively, you can convert a Pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
 
 ``` python
-data = ParameterData.from_panda_dataframe(df)
+data = TimeseriesData.from_panda_dataframe(df)
 with data:
     stream.parameters.buffer.write(data)
 ```
 
 !!! tip
 
-	The conversions from Pandas DataFrames to [ParameterData](#parameter-data-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
+	The conversions from Pandas DataFrames to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
 
 ## Writing events
 
@@ -674,9 +674,9 @@ with data:
 
 !!! tip
 
-	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [ParameterData](#parameter-data-format) format is a better fit for your time-series data.
+	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [TimeseriesData](#timeseriesdata-format) format is a better fit for your time-series data.
 
-Writing Events to a stream is identical to writing [ParameterData](#parameter-data-format) values, although you don’t need to use buffering features because events don’t need high-performance throughput.
+Writing Events to a stream is identical to writing [TimeseriesData](#timeseriesdata-format) values, although you don’t need to use buffering features because events don’t need high-performance throughput.
 
 ### EventData format
 
@@ -721,7 +721,7 @@ The following code would generate the list of `EventData` shown in the previous 
     stream.Events.Write(events)
     ```
 
-The Quix SDK lets you write Events without creating `EventData` instances explicitly. To do so, you can use the same helpers present in [ParameterData](#parameter-data-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the stream.
+The Quix SDK lets you write Events without creating `EventData` instances explicitly. To do so, you can use the same helpers present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the stream.
 
 This is an example of how to write Events to the stream without using explicit `EventData` instances:
 
@@ -795,16 +795,16 @@ For example, the following code defines a human readable name and a Severity lev
 
 ## Tags
 
-The Quix SDK allows you to tag data for `ParameterData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags allow you to filter and group data with fast queries.
+The Quix SDK allows you to tag data for `TimeseriesData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags allow you to filter and group data with fast queries.
 
-Tags work as a part of the primary key inside `ParameterData` and `EventData`, in combination with the default Timestamp key. If you add data values with the same Timestamps, but a different combination of Tags, the timestamp will be treated as a separate row.
+Tags work as a part of the primary key inside `TimeseriesData` and `EventData`, in combination with the default Timestamp key. If you add data values with the same Timestamps, but a different combination of Tags, the timestamp will be treated as a separate row.
 
 For example, the following code:
 
 === "Python"
     
     ``` python
-    data = ParameterData()
+    data = TimeseriesData()
     
     data.add_timestamp_nanoseconds(1) \
         .add_tag("CarId", "car1") \
@@ -836,7 +836,7 @@ For example, the following code:
 === "C\#"
     
     ``` cs
-    var data = new ParameterData();
+    var data = new TimeseriesData();
     
     data.AddTimestampNanoseconds(1)
         .AddTag("CarId", "car1")
@@ -865,7 +865,7 @@ For example, the following code:
         .AddValue("Gear", 2);
     ```
 
-Will generate the following `ParameterData` packet with tagged data:
+Will generate the following `TimeseriesData` packet with tagged data:
 
 | Timestamp | CarId | Speed | Gear |
 | --------- | ----- | ----- | ---- |

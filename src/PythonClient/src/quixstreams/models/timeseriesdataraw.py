@@ -19,7 +19,7 @@ import math
 @nativedecorator
 class TimeseriesDataRaw(object):
     """
-    Describes parameter data in a raw format for multiple timestamps. Class is intended for read only.
+    Describes timeseries data in a raw format for multiple timestamps. Class is intended for read only.
     """
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
@@ -278,7 +278,7 @@ class TimeseriesDataRaw(object):
             tag_values: Dict[str, List[str]]
         ):
         """
-            Sets the values of the parameter data from the provided dictionaries
+            Sets the values of the timeseries data from the provided dictionaries
 
             Dictionary values are matched by index to the provided timestamps
 

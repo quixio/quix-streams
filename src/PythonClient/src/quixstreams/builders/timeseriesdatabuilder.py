@@ -9,7 +9,7 @@ from ..helpers.nativedecorator import nativedecorator
 @nativedecorator
 class TimeseriesDataBuilder(object):
     """
-        Builder for creating parameter data packages for StreamPropertiesWriter
+        Builder for creating timeseries data packages for StreamPropertiesWriter
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):

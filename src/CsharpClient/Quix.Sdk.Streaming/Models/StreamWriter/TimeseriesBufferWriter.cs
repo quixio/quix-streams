@@ -54,28 +54,28 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// Note, <see cref="Epoch"/> is not used when invoking with <see cref="DateTime"/>
         /// </summary>
         /// <param name="dateTime">The datetime to use for adding new parameter values</param>
-        /// <returns>Parameter data builder to add parameter values at the provided time</returns>
+        /// <returns>Timeseries data builder to add parameter values at the provided time</returns>
         public TimeseriesDataBuilder AddTimestamp(DateTime dateTime) => this.AddTimestampNanoseconds(dateTime.ToUnixNanoseconds(), 0);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeSpan">The time since the default <see cref="Epoch"/> to add the parameter values at</param>
-        /// <returns>Parameter data builder to add parameter values at the provided time</returns>
+        /// <returns>Timeseries data builder to add parameter values at the provided time</returns>
         public TimeseriesDataBuilder AddTimestamp(TimeSpan timeSpan) => this.AddTimestampNanoseconds(timeSpan.ToNanoseconds());
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeMilliseconds">The time in milliseconds since the default <see cref="Epoch"/> to add the parameter values at</param>
-        /// <returns>Parameter data builder to add parameter values at the provided time</returns>
+        /// <returns>Timeseries data builder to add parameter values at the provided time</returns>
         public TimeseriesDataBuilder AddTimestampMilliseconds(long timeMilliseconds) => this.AddTimestampNanoseconds(timeMilliseconds * (long)1e6);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeNanoseconds">The time in nanoseconds since the default <see cref="Epoch"/> to add the parameter values at</param>
-        /// <returns>Parameter data builder to add parameter values at the provided time</returns>
+        /// <returns>Timeseries data builder to add parameter values at the provided time</returns>
         public TimeseriesDataBuilder AddTimestampNanoseconds(long timeNanoseconds)
         {
             return AddTimestampNanoseconds(timeNanoseconds, this.epoch);
@@ -91,7 +91,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
 
 
         /// <summary>
-        /// Write parameter data to the buffer
+        /// Write timeseries data to the buffer
         /// </summary>
         /// <param name="data">Data to write</param>
         public void Write(TimeseriesData data)

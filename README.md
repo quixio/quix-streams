@@ -195,16 +195,16 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 input_topic = client.open_input_topic("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(input_stream: StreamReader):
+def on_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     # consume data (as Pandas DataFrame)
-    def on_read_pandas(df: pd.DataFrame):
+    def on_dataframe(stream: StreamReader, df: pd.DataFrame):
         print(df.to_string())
 
-    input_stream.parameters.on_read_pandas += on_read_pandas
+    input_stream.parameters.on_read_dataframe = on_dataframe
 
 # Hook up events before initiating read to avoid losing out on any data
-input_topic.on_stream_received += on_stream
+input_topic.on_stream_received = on_stream
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit

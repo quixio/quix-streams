@@ -852,7 +852,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(retrieved.stream_id, "test_stream_id")
 # endregion
 
-# region parameter data integration tests
+# region timeseries data integration tests
     def test_parameters_write_binary_read_binary_is_of_bytes(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
@@ -942,7 +942,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("Tag3", "tag three") \
             .write()
 
-        # Send parameter data in nanoseconds relative to epoch
+        # Send timeseries data in nanoseconds relative to epoch
         stream.parameters.buffer \
             .add_timestamp_nanoseconds(123456789) \
             .add_value("string_param", "value1") \
@@ -950,7 +950,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param", bytearray("binary_param3", "UTF-8")) \
             .write()
 
-        # Send parameter data in timedelta relative to a new epoch
+        # Send timeseries data in timedelta relative to a new epoch
         stream.parameters.buffer.epoch = datetime(2018, 1, 2)
         stream.parameters.buffer \
             .add_timestamp(timedelta(seconds=1, milliseconds=555)) \

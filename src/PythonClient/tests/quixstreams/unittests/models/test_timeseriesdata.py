@@ -435,7 +435,7 @@ class TimeseriesDataTests(unittest.TestCase):
             for param_id_a, parameter_value_a in ts_a.parameters.items():
                 parameter_value_b = ts_b.parameters.get(param_id_a)
                 if parameter_value_b is None and parameter_value_a.value is None:
-                    # The value was removed from the sent parameter data at some point, and for performance reasons is just nulled out rather than cleaned up
+                    # The value was removed from the sent timeseries data at some point, and for performance reasons is just nulled out rather than cleaned up
                     continue
                 parameter_value_b = ts_b.parameters[param_id_a]
                 self.assertEqual(parameter_value_a.type, parameter_value_b.type, "Value type")

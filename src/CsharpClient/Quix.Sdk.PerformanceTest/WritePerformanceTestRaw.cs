@@ -35,7 +35,7 @@ namespace Quix.Sdk.PerformanceTest
             {
                 var time = datetime + (timeIteration * 100);
 
-                //Parameter Data Raw
+                //Timeseries Data Raw
                 if (!onlySent || iteration == 0)
                 {
                     raw = new TimeseriesDataRaw();

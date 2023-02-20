@@ -44,14 +44,14 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         }
 
         /// <summary>
-        /// Gets the buffer for writing parameter data
+        /// Gets the buffer for writing timeseries data
         /// </summary>
         public TimeseriesBufferWriter Buffer { get;  }
 
         /// <summary>
         /// Write data to stream without using Buffer
         /// </summary>
-        /// <param name="data">Parameter data to write</param>
+        /// <param name="data">Timeseries data to write</param>
         public void Write(TimeseriesData data)
         {
             if (isDisposed)
@@ -74,9 +74,9 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         }
 
         /// <summary>
-        /// Write data parameter data raw directly to stream
+        /// Write data timeseries data raw directly to stream
         /// </summary>
-        /// <param name="data">Parameter data to write</param>
+        /// <param name="data">Timeseries data to write</param>
         public void Write(Process.Models.TimeseriesDataRaw data)
         {
             if (isDisposed)
@@ -207,7 +207,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         }
 
         /// <summary>
-        /// Immediately writes the parameter data and definitions from the buffer without waiting for buffer condition to fulfill for either
+        /// Immediately writes the timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either
         /// </summary>
         public void Flush()
         {
@@ -231,7 +231,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             }
             catch (Exception ex)
             {
-                this.logger.LogError(ex, "Exception occurred while trying to flush parameter data buffer.");
+                this.logger.LogError(ex, "Exception occurred while trying to flush timeseries data buffer.");
             }
         }
 

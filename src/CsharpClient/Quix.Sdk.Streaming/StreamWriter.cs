@@ -116,7 +116,7 @@ namespace Quix.Sdk.Streaming
             }
             send.ContinueWith(t =>
             {
-                this.logger.LogError(t.Exception, "StreamWriter: Exception while sending parameter data");
+                this.logger.LogError(t.Exception, "StreamWriter: Exception while sending timeseries data");
             }, TaskContinuationOptions.OnlyOnFaulted);
         }
 

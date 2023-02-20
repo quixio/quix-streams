@@ -23,7 +23,7 @@ from ..helpers.nativedecorator import nativedecorator
 @nativedecorator
 class TimeseriesData(object):
     """
-    Describes parameter data for multiple timestamps
+    Describes timeseries data for multiple timestamps
     """
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
@@ -51,7 +51,7 @@ class TimeseriesData(object):
     #     """
     #         Creates a new instance of TimeseriesData with the provided timestamps rows.
     #
-    #         :param timestamps: The timestamps with parameter data.
+    #         :param timestamps: The timestamps with timeseries data.
     #         :param merge: Merge duplicated timestamps.
     #         :param clean: Clean timestamps without values.
     #
@@ -95,7 +95,7 @@ class TimeseriesData(object):
 
     def clone(self, parameter_filter: [str] = None):
         """
-            Initializes a new instance of parameter data with parameters matching the filter if one is provided
+            Initializes a new instance of timeseries data with parameters matching the filter if one is provided
 
             Parameters:
 

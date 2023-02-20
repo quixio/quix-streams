@@ -135,7 +135,7 @@ class TimeseriesBufferConfiguration(object):
     @property
     def custom_trigger_before_enqueue(self) -> Callable[[TimeseriesDataTimestamp], bool]:
         """
-            Gets the custom function which is invoked before adding the timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked before adding the timestamp to it.
+            Gets the custom function which is invoked before adding the timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked before adding the timestamp to it.
             Defaults to none (disabled).
         """
         return self._custom_trigger_before_enqueue
@@ -143,7 +143,7 @@ class TimeseriesBufferConfiguration(object):
     @custom_trigger_before_enqueue.setter
     def custom_trigger_before_enqueue(self, value: Callable[[TimeseriesDataTimestamp], bool]):
         """
-            Sets the custom function which is invoked before adding the timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked before adding the timestamp to it.
+            Sets the custom function which is invoked before adding the timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked before adding the timestamp to it.
             Defaults to none (disabled).
         """
         self._custom_trigger_before_enqueue = value
@@ -185,7 +185,7 @@ class TimeseriesBufferConfiguration(object):
     @property
     def custom_trigger(self) -> Callable[[TimeseriesData], bool]:
         """
-            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked with the entire buffer content
+            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         return self._custom_trigger
@@ -193,7 +193,7 @@ class TimeseriesBufferConfiguration(object):
     @custom_trigger.setter
     def custom_trigger(self, value: Callable[[TimeseriesData], bool]):
         """
-            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked with the entire buffer content
+            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         self._custom_trigger = value

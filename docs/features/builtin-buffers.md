@@ -6,10 +6,10 @@ On the other hand, an incorrect buffer strategy can introduce high-latency value
 
 The Quix SDK provides you with a very high performance, low-latency buffer, combined with easy-to-use configurations for [reading](../../read/#buffer) and [writing](../../write/#buffer) to give you absolute freedom in balancing between latency and cost.
 
-Buffers in the Quix SDK work at the timestamp level. A buffer accumulates certain timestamps with their related values. A packet containing those timestamps and values as a [ParameterData](../../read/#parameter-data-format) package is then released when certain configured conditions match.
+Buffers in the Quix SDK work at the timestamp level. A buffer accumulates certain timestamps with their related values. A packet containing those timestamps and values as a [TimeseriesData](../../read/#timeseriesdata-format) package is then released when certain configured conditions match.
 
 ![High level time-series buffering flow](../images/QuixBuffering.png)
 
 The logic looks simple, but it’s actually quite complicated when you try to reach a very high performance level, creating at the same time an easy interface for [reading](../../read/#buffer) and [writing](../../write/#buffer) time-series data.
 
-Our buffer implementation uses short memory allocations and minimizes conversions between raw transport packages and [ParameterData](../../read/#parameter-data-format) format to achieve low CPU and memory consumption, and high throughput. We are happy to say that we have achieved these three things in the SDK — simplicity, low resource consumption, and very high performance — and you don’t need to implement buffering because it’s provided in the SDK.
+Our buffer implementation uses short memory allocations and minimizes conversions between raw transport packages and [TimeseriesData](../../read/#timeseriesdata-format) format to achieve low CPU and memory consumption, and high throughput. We are happy to say that we have achieved these three things in the SDK — simplicity, low resource consumption, and very high performance — and you don’t need to implement buffering because it’s provided in the SDK.

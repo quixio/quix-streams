@@ -38,7 +38,7 @@ class StreamParametersWriter(object):
 
     def flush(self):
         """
-        Flushes the parameter data and definitions from the buffer without waiting for buffer condition to fulfill for either
+        Flushes the timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either
         """
         self._interop.Flush()
 
@@ -80,7 +80,7 @@ class StreamParametersWriter(object):
 
     @property
     def buffer(self) -> TimeseriesBufferWriter:
-        """Get the buffer for writing parameter data"""
+        """Get the buffer for writing timeseries data"""
 
         if self._buffer is None:
             self._buffer = TimeseriesBufferWriter(self._stream_writer, self._interop.get_Buffer())

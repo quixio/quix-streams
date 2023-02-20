@@ -191,7 +191,7 @@ class StreamParametersReader(object):
         Creates a new buffer for reading data according to the provided parameter_filter and buffer_configuration
         :param parameter_filter: 0 or more parameter identifier to filter as a whitelist. If provided, only these
             parameters will be available through this buffer
-        :param buffer_configuration: an optional ParameterBufferConfiguration.
+        :param buffer_configuration: an optional TimeseriesBufferConfiguration.
 
         :returns: a TimeseriesBufferReader which will raise new parameters read via .on_read event
         """

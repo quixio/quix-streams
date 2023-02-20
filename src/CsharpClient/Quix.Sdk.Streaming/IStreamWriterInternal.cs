@@ -28,12 +28,12 @@ namespace Quix.Sdk.Streaming
         void Write(Process.Models.StreamProperties properties);
 
         /// <summary>
-        /// Write a single Parameter data package to the stream
+        /// Write a single Timeseries data package to the stream
         /// </summary>
         void Write(Process.Models.TimeseriesDataRaw rawData);
 
         /// <summary>
-        /// Write a set of Parameter data packages to the stream
+        /// Write a set of Timeseries data packages to the stream
         /// </summary>
         void Write(List<Process.Models.TimeseriesDataRaw> data);
 

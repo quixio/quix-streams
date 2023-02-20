@@ -7,14 +7,14 @@ using Newtonsoft.Json;
 namespace Quix.Sdk.Process.Models
 {
     /// <summary>
-    /// Describes parameter data for multiple timestamps
+    /// Describes timeseries data for multiple timestamps
     /// </summary>
     [ModelKey("TimeseriesData")]
     public class TimeseriesDataRaw
     {
 
         /// <summary>
-        /// Create a new empty Parameter Data Raw instance
+        /// Create a new empty Timeseries Data Raw instance
         /// </summary>
         public TimeseriesDataRaw()
         {
@@ -24,7 +24,7 @@ namespace Quix.Sdk.Process.Models
         }
 
         /// <summary>
-        /// Create a new Parameter Data Raw instance with predefined values
+        /// Create a new Timeseries Data Raw instance with predefined values
         /// </summary>
         public TimeseriesDataRaw(
             long epoch, 

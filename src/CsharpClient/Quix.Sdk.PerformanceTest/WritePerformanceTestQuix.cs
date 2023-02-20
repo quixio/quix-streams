@@ -37,7 +37,7 @@ namespace Quix.Sdk.PerformanceTest
             {
                 var time = datetime + (timeIteration * 100);
 
-                // New Parameter Data
+                // New Timeseries Data
                 if (!onlySent || iteration == 0)
                 {
                     data = new TimeseriesData(100);

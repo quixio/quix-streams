@@ -4,9 +4,9 @@ The Quix SDK supports [reading](../../read/#using_data_frames) and [writing](../
 
 If you use the Python version of the SDK you can make use of this library together with Quix, ensuring maximum optimization for your real-time applications.
 
-The SDK uses Pandas DataFrames just as a representation of the common [ParameterData](#parameter-data-format) format used to read and write data to Quix.
+The SDK uses Pandas DataFrames just as a representation of the common [TimeseriesData](#timeseriesdata-format) format used to read and write data to Quix.
 
-For example, the following [ParameterData](../../read/#parameter-data-format):
+For example, the following [TimeseriesData](../../read/#timeseriesdata-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |

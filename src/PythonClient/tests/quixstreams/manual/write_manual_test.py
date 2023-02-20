@@ -143,11 +143,11 @@ for stream_number in range(number_of_stream):
 
         # use writer directly rather than via buffer
         if variant == 1:
-            pdata = qx.TimeseriesData()
-            with pdata:
+            tsdata = qx.TimeseriesData()
+            with tsdata:
                 for points_index in range(number_of_data_points_per_loop):
                     # send parameters
-                    pdts = pdata.add_timestamp(datetime.datetime.utcnow())
+                    pdts = tsdata.add_timestamp(datetime.datetime.utcnow())
 
                     for parameter in parameter_names_numerics:
                         pdts = pdts.add_value(parameter, random.uniform(-1000, 1000))
@@ -165,7 +165,7 @@ for stream_number in range(number_of_stream):
                             break
                         pdts.add_tag(tag, f"new parameter tag value {index}")
 
-                stream.parameters.write(pdata)
+                stream.parameters.write(tsdata)
 
         if variant == 2:
 
