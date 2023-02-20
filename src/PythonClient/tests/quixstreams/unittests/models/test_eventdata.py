@@ -16,9 +16,9 @@ class EventDataTests(unittest.TestCase):
         event_data = EventData("abcde", 123) \
           .add_tags({"tag1": "val1", "tag2": "val2"})
         # Assert
-        self.assertEqual(len(event_data.tags), 2)
-        self.assertEqual(event_data.tags["tag1"], "val1")
-        self.assertEqual(event_data.tags["tag2"], "val2")
+        self.assertEqual(2, len(event_data.tags))
+        self.assertEqual("val1", event_data.tags["tag1"])
+        self.assertEqual("val2", event_data.tags["tag2"])
 
     def test_constructor_with_time_as_nanoseconds_int(self):
         # Act

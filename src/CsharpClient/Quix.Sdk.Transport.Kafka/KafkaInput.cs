@@ -41,9 +41,9 @@ namespace Quix.Sdk.Transport.Kafka
         /// <param name="topicConfiguration">The topic configuration</param>
         public KafkaInput(PublisherConfiguration publisherConfiguration, InputTopicConfiguration topicConfiguration)
         {
-            SetConfigId(topicConfiguration);
             Action hbAction = null;
             this.config = publisherConfiguration.ToProducerConfig();
+            SetConfigId(topicConfiguration);
             if (topicConfiguration.Partition == Partition.Any)
             {
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicConfiguration.Topic, new Message<string, byte[]> { Key = key, Value = value }, handler);
@@ -119,6 +119,15 @@ namespace Quix.Sdk.Transport.Kafka
             logBuilder.AppendLine("=================== Kafka Producer Configuration =====================");
             logBuilder.AppendLine("= Configuration Id: " + this.configId);
             logBuilder.AppendLine($"= Topic: {topicConfiguration.Topic}{topicConfiguration.Partition}");
+            foreach (var keyValuePair in this.config)
+            {
+                if (keyValuePair.Key?.IndexOf("password", StringComparison.InvariantCultureIgnoreCase) > -1 ||
+                    keyValuePair.Key?.IndexOf("username", StringComparison.InvariantCultureIgnoreCase) > -1)
+                {
+                    logBuilder.AppendLine($"= {keyValuePair.Key}: [REDACTED]");
+                }
+                else logBuilder.AppendLine($"= {keyValuePair.Key}: {keyValuePair.Value}");
+            }
             logBuilder.Append("======================================================================");
             this.logger.LogDebug(logBuilder.ToString());
         }

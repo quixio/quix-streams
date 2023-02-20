@@ -71,11 +71,8 @@ class ParametersBufferWriter(ParametersBuffer):
             finally:
                 InteropUtils.free_hptr(netdate_hptr)  # dotnet will hold a reference to it, we no longer need it
         if isinstance(time, timedelta):
-            try:
-                nettimespan_uptr = dtc.timedelta_to_dotnet(time)
-                return ParameterDataBuilder(self._interop.AddTimestamp2(nettimespan_uptr))
-            finally:
-                InteropUtils.free_uptr(nettimespan_uptr)  # dotnet will hold a reference to it, we no longer need it
+            nettimespan_uptr = dtc.timedelta_to_dotnet(time)
+            return ParameterDataBuilder(self._interop.AddTimestamp2(nettimespan_uptr))
         raise ValueError("'time' must be either datetime or timedelta")
 
     def add_timestamp_nanoseconds(self, nanoseconds: int) -> ParameterDataBuilder:

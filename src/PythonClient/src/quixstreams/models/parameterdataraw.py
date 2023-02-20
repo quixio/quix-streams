@@ -258,7 +258,7 @@ class ParameterDataRaw(object):
                             _add_string(panda_col_label, row_index, str_val)
 
         parameter_data_raw.set_values(
-            epoch=epoch, 
+            epoch=epoch,
             timestamps=timestamps,
             numeric_values=numeric_values,
             string_values=string_values,
@@ -296,43 +296,28 @@ class ParameterDataRaw(object):
         #set timestamps
         self._timestamps = timestamps
         ts_uptr = Array.WriteLongs(timestamps)
-        try:
-            self._interop.set_Timestamps(ts_uptr)
-        finally:
-            InteropUtils.free_uptr(ts_uptr)
+        self._interop.set_Timestamps(ts_uptr)
 
         #set numeric values
         self._numeric_values = numeric_values
         nv_uptr = Dictionary.WriteStringNullableDoublesArray(numeric_values)
-        try:
-            self._interop.set_NumericValues(nv_uptr)
-        finally:
-            InteropUtils.free_uptr(nv_uptr)
+        self._interop.set_NumericValues(nv_uptr)
 
 
         #set string values
         self._string_values = string_values
         sv_uptr = Dictionary.WriteStringStringsArray(string_values)
-        try:
-            self._interop.set_StringValues(sv_uptr)
-        finally:
-            InteropUtils.free_uptr(sv_uptr)
+        self._interop.set_StringValues(sv_uptr)
 
         #set byte values
         self._binary_values = binary_values
         bv_uptr = Dictionary.WriteStringBytesArray(binary_values)
-        try:
-            self._interop.set_BinaryValues(bv_uptr)
-        finally:
-            InteropUtils.free_uptr(bv_uptr)
+        self._interop.set_BinaryValues(bv_uptr)
 
         #set tags values
         self._tag_values = tag_values
         tv_uptr = Dictionary.WriteStringStringsArray(tag_values)
-        try:
-            self._interop.set_TagValues(tv_uptr)
-        finally:
-            InteropUtils.free_uptr(tv_uptr)
+        self._interop.set_TagValues(tv_uptr)
 
     @property
     def epoch(self) -> int:

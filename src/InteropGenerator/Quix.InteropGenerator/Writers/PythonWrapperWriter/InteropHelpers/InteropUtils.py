@@ -55,7 +55,13 @@ class InteropUtils(object):
     def utf8_to_ptr(string) -> ctypes.c_char_p:
         if string is None:
             return None
-        return ctypes.c_char_p(string.encode('utf-8'))
+        # TODO this can likely be done eaiser with c_char_p or sth, but it has to be freeable using Marshal.FreeHGlobal
+        str_bytes = string.encode('utf-8')
+        uptr = InteropUtils.allocate_uptr(len(str_bytes) + 1) # must be null terminated
+        ctypes.memmove(uptr, str_bytes, len(str_bytes))
+        null_terminator = ctypes.c_ubyte.from_address(uptr.value + len(str_bytes))
+        null_terminator.value = 0 # allocate_uptr doesn't guarantee memory with all 0, must set manually
+        return uptr
 
 
     @staticmethod

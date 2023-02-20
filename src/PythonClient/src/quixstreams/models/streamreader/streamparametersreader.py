@@ -214,9 +214,6 @@ class StreamParametersReader(object):
         else:
             buffer = ParametersBufferReader(self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
 
-        if actual_filters_uptr is not None:
-            InteropUtils.free_uptr(actual_filters_uptr)
-
         self._buffers.append(buffer)
         return buffer
 

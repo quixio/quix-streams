@@ -198,20 +198,20 @@ public class InteropUtils
         return ptrStart;
     }
     
-    public static T FromUPtr<T>(IntPtr ptr)
+    public static T FromUPtr<T>(IntPtr uptr)
     {
-        return (T)FromUPtr(ptr, typeof(T));
+        return (T)FromUPtr(uptr, typeof(T));
     }
     
-    public static object FromUPtr(IntPtr ptr, Type objectType)
+    public static object FromUPtr(IntPtr uptr, Type objectType)
     {
-        if (ptr == IntPtr.Zero) return null;
+        if (uptr == IntPtr.Zero) return null;
 
         object obj;
         if (typeof(Array).IsAssignableFrom(objectType))
         {
             var elementType = objectType.GetElementType();
-            obj = FromArrayUPtr(ptr, elementType);
+            return FromArrayUPtr(uptr, elementType);
         }
         else
         {
@@ -219,20 +219,19 @@ public class InteropUtils
             var underlyingNullable = Nullable.GetUnderlyingType(objectType);
             if (underlyingNullable != null)
             {
-                return FromNullableUPtr(ptr, underlyingNullable);
+                return FromNullableUPtr(uptr, underlyingNullable);
             }
-            var size = Marshal.SizeOf(objectType);
-            // Copy the struct to the memory block
-            obj = Marshal.PtrToStructure(ptr, objectType);
+            obj = Marshal.PtrToStructure(uptr, objectType);
         }
         
-        LogDebug("Converted UPtr: {0}, type: {1}, {2}", ptr, objectType.FullName, "is not null");
+        LogDebug("Converted UPtr: {0}, type: {1}, {2}", uptr, objectType.FullName, "is not null");
+        FreeUPtr(uptr);
         return obj;
     }
 
-    public static Array FromArrayUPtr(IntPtr ptr, Type elementType)
+    public static Array FromArrayUPtr(IntPtr uptr, Type elementType)
     {
-        if (ptr == IntPtr.Zero) return null;
+        if (uptr == IntPtr.Zero) return null;
         if (elementType == null)
         {
             LogDebug(new System.Diagnostics.StackTrace().ToString());
@@ -241,17 +240,17 @@ public class InteropUtils
         var underlyingNullable = Nullable.GetUnderlyingType(elementType);
         if (underlyingNullable != null)
         {
-            return FromNullableArrayUPtr(ptr, underlyingNullable);
+            return FromNullableArrayUPtr(uptr, underlyingNullable);
         }
         // not checking for blittable, let the framework deal with it
         const int countSize = 4;
         var elementSize = Marshal.SizeOf(elementType);
-        var length = Marshal.PtrToStructure<int>(ptr);
-        var currentPtr = ptr + countSize;
-        var ptrEnd = ptr + countSize + elementSize * length;
+        var length = Marshal.PtrToStructure<int>(uptr);
+        var currentPtr = uptr + countSize;
+        var ptrEnd = uptr + countSize + elementSize * length;
         var array = Array.CreateInstance(elementType, length);
         
-        LogDebug($"Array length: {array.Length} at ptr {ptr}, array starting at {ptr+countSize}, ending at {ptrEnd} with element size {elementSize} | aa9d");
+        LogDebug($"Array length: {array.Length} at ptr {uptr}, array starting at {uptr+countSize}, ending at {ptrEnd} with element size {elementSize} | aa9d");
         
         // Marshalling element by element because in native AOT we're limited in what we can do
         // and System.Byte[] refused to marshal for me. Maybe there is a fix?
@@ -262,31 +261,21 @@ public class InteropUtils
             currentPtr += elementSize;
         }
 
+        FreeUPtr(uptr);
         return array;
     }
     
-    private static IntPtr FromNullableUPtr(object obj, Type underlyingType)
+    private static object FromNullableUPtr(IntPtr uptr, Type underlyingType)
     {
-        var elementSize = NullableHasValuePrefixSize;
+        var hasValue = Marshal.PtrToStructure<bool>(uptr);
+        var nullablePtr =  uptr + NullableHasValuePrefixSize;
+        var value = hasValue ? Marshal.PtrToStructure(nullablePtr, underlyingType) : null;
         
-        // not checking for blittable, let the framework deal with it
-        var underlyingElementSize = Marshal.SizeOf(underlyingType);
-        elementSize += underlyingElementSize;
-        var ptr = Marshal.AllocHGlobal(elementSize);
-
-        var currentPtr = ptr;
-        var hasValue = obj != null; 
-        Marshal.StructureToPtr(hasValue, currentPtr, false);
-        if (hasValue)
-        {
-            var actual = Convert.ChangeType(obj, underlyingType);
-            Marshal.StructureToPtr(actual, currentPtr, false);
-        }
-
-        return ptr;
+        FreeUPtr(uptr);
+        return value;
     }
     
-    private static Array FromNullableArrayUPtr(IntPtr ptr, Type underlyingType)
+    private static Array FromNullableArrayUPtr(IntPtr uptr, Type underlyingType)
     {
         var elementSize = NullableHasValuePrefixSize;
         
@@ -294,16 +283,16 @@ public class InteropUtils
         const int countSize = 4;
         var underlyingElementSize = Marshal.SizeOf(underlyingType);
         elementSize += underlyingElementSize;
-        var length = Marshal.PtrToStructure<int>(ptr);
-        var currentPtr = ptr + countSize;
-        var ptrEnd = ptr + countSize + elementSize * length;
+        var length = Marshal.PtrToStructure<int>(uptr);
+        var currentPtr = uptr + countSize;
+        var ptrEnd = uptr + countSize + elementSize * length;
         var array = Array.CreateInstance(underlyingType, length);
 
         if (DebugMode)
         {
-            LogDebug($"Array length: {array.Length} at ptr {ptr}, array starting at {ptr + countSize}, ending at {ptrEnd} with element size {elementSize} for underlying type {underlyingType} | 283a");
-            var bytes = new byte[(long)ptrEnd - (long)ptr];
-            Marshal.Copy(ptr, bytes, 0, bytes.Length);
+            LogDebug($"Array length: {array.Length} at ptr {uptr}, array starting at {uptr + countSize}, ending at {ptrEnd} with element size {elementSize} for underlying type {underlyingType} | 283a");
+            var bytes = new byte[(long)ptrEnd - (long)uptr];
+            Marshal.Copy(uptr, bytes, 0, bytes.Length);
             LogDebug($"Bytes: {BitConverter.ToString(bytes).Replace("-", "")} | 283a");
         }
 
@@ -320,7 +309,8 @@ public class InteropUtils
 
             currentPtr += underlyingElementSize;
         }
-        LogDebug($"Array done");
+        
+        FreeUPtr(uptr);
         return array;
     }
     
@@ -426,6 +416,11 @@ public class InteropUtils
     /// Free unmanaged memory pointer
     /// </summary>
     [UnmanagedCallersOnly(EntryPoint = "interoputils_free_uptr")]
+    public static void UnmanagedFreeUPtr(IntPtr ptr)
+    {
+        FreeUPtr(ptr);
+    }
+    
     public static void FreeUPtr(IntPtr ptr)
     {
         LogDebug("Invoked interoputils_free_uptr with UPtr: {0}", ptr);
@@ -439,6 +434,11 @@ public class InteropUtils
     /// Allocated unmanaged memory pointer of the desired size
     /// </summary>
     [UnmanagedCallersOnly(EntryPoint = "interoputils_alloc_uptr")]
+    public static IntPtr UnmanagedAllocateUPtr(int size)
+    {
+        return AllocateUPtr(size);
+    }
+    
     public static IntPtr AllocateUPtr(int size)
     {
         LogDebug("Allocating UPtr with size {0}", size);
@@ -447,27 +447,24 @@ public class InteropUtils
         return ptr;
     }
 
-    public static void PrintStrPtr(IntPtr ptr)
-    {
-        if (ptr == IntPtr.Zero) return;
-        Console.Write(Marshal.PtrToStringUTF8(ptr));
-    }
-
     public static IntPtr Utf8StringToUPtr(in string str)
     {
         if (str == null) return IntPtr.Zero;
         var bytes = Encoding.UTF8.GetBytes(str);
         var pointer = Marshal.AllocHGlobal(bytes.Length + 1);  // +1 due to being null terminated string
-        LogDebug("Allocated UPtr: {0}, type: {1}, {2}", pointer, typeof(byte[]), "is not null");
+        LogDebug("Allocated UPtr: {0}, type: {1}, {2}{3}", pointer, typeof(byte[]), "is not null", $",value {str}");
         Marshal.Copy(bytes, 0, pointer, bytes.Length);
         Marshal.WriteByte(pointer + bytes.Length, 0);
         return pointer;
     }
 
-    public static string PtrToStringUTF8(IntPtr pointer)
+    public static string PtrToStringUTF8(IntPtr uptr)
     {
-        if (pointer == IntPtr.Zero) return null;
-        return Marshal.PtrToStringUTF8(pointer);
+        if (uptr == IntPtr.Zero) return null;
+        var res =  Marshal.PtrToStringUTF8(uptr);
+        LogDebug("Converting UPtr->Str: {0}->{1}", uptr, res);
+        FreeUPtr(uptr);
+        return res;
     }
     
     public static IntPtr ObjectToPtr(object obj)

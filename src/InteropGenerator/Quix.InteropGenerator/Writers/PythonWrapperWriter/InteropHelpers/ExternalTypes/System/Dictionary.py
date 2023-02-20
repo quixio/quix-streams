@@ -38,6 +38,8 @@ class Dictionary:
         """
          Writes dictionary into unmanaged memory, returning a pointer with structure [[keys],[values]], each array with a 4 byte length prefix
          """
+        if dictionary is None:
+            return None
         keys = key_converter(dictionary.keys())
         values = value_converter(dictionary.values())
         return Array.WritePointers([keys, values])

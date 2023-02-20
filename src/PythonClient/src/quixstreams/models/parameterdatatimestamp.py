@@ -154,10 +154,7 @@ class ParameterDataTimestamp:
                 self._interop = new
         elif val_type is bytearray or val_type is bytes:
             uptr = ai.WriteBytes(value)
-            try:
-                new = pdti(self._interop.AddValue3(parameter_id, uptr))
-            finally:
-                iu.free_uptr(uptr)
+            new = pdti(self._interop.AddValue3(parameter_id, uptr))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new

@@ -109,10 +109,7 @@ class ParameterValue(object):
         self._value = value
 
         uptr = ai.WriteBytes(value)
-        try:
-            self._interop.set_BinaryValue(uptr)
-        finally:
-            InteropUtils.free_uptr(uptr)
+        self._interop.set_BinaryValue(uptr)
 
     @property
     def type(self) -> ParameterValueType:
