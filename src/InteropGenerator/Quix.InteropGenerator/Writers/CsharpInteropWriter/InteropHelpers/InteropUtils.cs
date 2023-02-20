@@ -452,7 +452,7 @@ public class InteropUtils
         if (str == null) return IntPtr.Zero;
         var bytes = Encoding.UTF8.GetBytes(str);
         var pointer = Marshal.AllocHGlobal(bytes.Length + 1);  // +1 due to being null terminated string
-        LogDebug("Allocated UPtr: {0}, type: {1}, {2}", pointer, typeof(byte[]), "is not null");
+        LogDebug("Allocated UPtr: {0}, type: {1}, {2}{3}", pointer, typeof(byte[]), "is not null", $",value {str}");
         Marshal.Copy(bytes, 0, pointer, bytes.Length);
         Marshal.WriteByte(pointer + bytes.Length, 0);
         return pointer;
@@ -462,6 +462,7 @@ public class InteropUtils
     {
         if (uptr == IntPtr.Zero) return null;
         var res =  Marshal.PtrToStringUTF8(uptr);
+        LogDebug("Converting UPtr->Str: {0}->{1}", uptr, res);
         FreeUPtr(uptr);
         return res;
     }
