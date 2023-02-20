@@ -41,9 +41,9 @@ namespace Quix.Sdk.Transport.Kafka
         /// <param name="topicConfiguration">The topic configuration</param>
         public KafkaInput(PublisherConfiguration publisherConfiguration, InputTopicConfiguration topicConfiguration)
         {
-            SetConfigId(topicConfiguration);
             Action hbAction = null;
             this.config = publisherConfiguration.ToProducerConfig();
+            SetConfigId(topicConfiguration);
             if (topicConfiguration.Partition == Partition.Any)
             {
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicConfiguration.Topic, new Message<string, byte[]> { Key = key, Value = value }, handler);
