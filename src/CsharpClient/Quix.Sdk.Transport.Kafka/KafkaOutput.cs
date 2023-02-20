@@ -142,7 +142,17 @@ namespace Quix.Sdk.Transport.Kafka
                 {
                     logBuilder.AppendLine($"= ConsumerInstanceId: {this.config.GroupInstanceId}");    
                 }
-            } 
+            }
+
+            foreach (var keyValuePair in this.config)
+            {
+                if (keyValuePair.Key?.IndexOf("password", StringComparison.InvariantCultureIgnoreCase) > -1 ||
+                    keyValuePair.Key?.IndexOf("username", StringComparison.InvariantCultureIgnoreCase) > -1)
+                {
+                    logBuilder.AppendLine($"= {keyValuePair.Key}: [REDACTED]");
+                }
+                else logBuilder.AppendLine($"= {keyValuePair.Key}: {keyValuePair.Value}");
+            }
             logBuilder.Append("======================================================================");
             this.logger.LogDebug(logBuilder.ToString());
         }

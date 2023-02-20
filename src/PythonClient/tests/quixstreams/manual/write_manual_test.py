@@ -3,14 +3,13 @@ import random
 
 import pandas as pd
 
-from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 #InteropUtils.enable_debug()
 
-import quixstreams as qx
-from quixstreams.models.parametervalue import ParameterValueType
+from src import quixstreams as qx
+from src.quixstreams.models.parametervalue import ParameterValueType
 qx.logging.Logging.update_factory(qx.logging.LogLevel.Debug)
-client = qx.QuixStreamingClient('sdk-9e70ee4d555145af8431abdf1ccc34fb', debug=False)
-client.api_url = "https://portal-api.dev.quix.ai"
+client = qx.KafkaStreamingClient('127.0.0.1:9092', None)
 commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
