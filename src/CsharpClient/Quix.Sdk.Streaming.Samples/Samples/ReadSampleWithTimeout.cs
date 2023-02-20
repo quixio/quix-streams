@@ -48,7 +48,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
 
                 var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += (data) =>
+                buffer.OnRead += (sender, data) =>
                 {
                     // Inline manipulation
                     //data.Timestamps.ForEach(timestamp =>
@@ -74,12 +74,12 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     }
                 };
 
-                streamReader.Events.OnRead += (data) =>
+                streamReader.Events.OnRead += (sender, data) =>
                 {
                     Console.WriteLine($"Event data -> StreamId: '{streamReader.StreamId}' - Event '{data.Id}' with value '{data.Value}'");
                 };
 
-                streamReader.Parameters.OnDefinitionsChanged += () =>
+                streamReader.Parameters.OnDefinitionsChanged += (sender, args) =>
                 {
                     foreach (var definition in streamReader.Parameters.Definitions)
                     {
@@ -87,7 +87,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     }
                 };
 
-                streamReader.Events.OnDefinitionsChanged += () =>
+                streamReader.Events.OnDefinitionsChanged += (sender, args) =>
                 {
                     foreach (var definition in streamReader.Events.Definitions)
                     {
@@ -95,7 +95,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     }
                 };
 
-                streamReader.Properties.OnChanged += () =>
+                streamReader.Properties.OnChanged += (stream, args) =>
                 {
                     Console.WriteLine($"Stream properties -> StreamId '{streamReader.StreamId}' with name '{streamReader.Properties.Name}' located in '{streamReader.Properties.Location}'");
                 };

@@ -18,7 +18,7 @@ namespace Quix.Sdk.Streaming.Raw
         bool errorHandlerRegistered = false;
 
         /// <inheritdoc />
-        public event Action<RawMessage> OnMessageRead;
+        public event EventHandler<RawMessage> OnMessageRead;
         
         /// <inheritdoc />
         public event EventHandler OnDisposed;
@@ -102,7 +102,7 @@ namespace Quix.Sdk.Streaming.Raw
                        }
                        return new ReadOnlyDictionary<string, string>(vals);
                    });
-                this.OnMessageRead?.Invoke(new RawMessage(package.GetKey(), message, meta));
+                this.OnMessageRead?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
             };
 
             kafkaOutput.Open();
@@ -116,7 +116,7 @@ namespace Quix.Sdk.Streaming.Raw
         /// <param name="ex"></param>
         void InternalErrorHandler(object source, Exception ex)
         {
-            this._errorHandler?.Invoke(source, ex);
+            this._errorHandler?.Invoke(this, ex);
         }
 
 

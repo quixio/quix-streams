@@ -8,9 +8,11 @@ from src.quixstreams.logging import Logging, LogLevel
 
 from src import quixstreams as qx
 from src.quixstreams.models.parametervalue import ParameterValueType
-#from src.quixstreams.logging import Logging, LogLevel
 from src.quixstreams.app import App
 from src.quixstreams.models.streampackage import StreamPackage
+
+from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+#InteropUtils.enable_debug()
 
 Logging.update_factory(LogLevel.Debug)
 client = qx.KafkaStreamingClient('127.0.0.1:9092', None)
@@ -19,7 +21,7 @@ commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
 input_topic = client.open_input_topic('generated-data', None, commit_settings=commit_settings, auto_offset_reset=qx.AutoOffsetReset.Earliest)
-def on_streams_revoked_handler(readers: [qx.StreamReader]):
+def on_streams_revoked_handler(topic: qx.InputTopic, readers: [qx.StreamReader]):
     try:
         for reader in readers:
             print("Stream " + reader.stream_id + " got revoked")
@@ -27,22 +29,22 @@ def on_streams_revoked_handler(readers: [qx.StreamReader]):
         print("Exception occurred in on_streams_revoked_handler: " + sys.exc_info()[1])
     print(readers)
 
-input_topic.on_streams_revoked += on_streams_revoked_handler
+input_topic.on_streams_revoked = on_streams_revoked_handler
 
-def on_committed_handler():
+def on_committed_handler(input_topic: qx.InputTopic):
     print("Committed!")
 
-input_topic.on_committed += on_committed_handler
+input_topic.on_committed = on_committed_handler
 
-def on_committing_handler():
+def on_committing_handler(input_topic: qx.InputTopic):
     print("Committing!")
 
-input_topic.on_committing += on_committing_handler
+input_topic.on_committing = on_committing_handler
 
-def on_revoking_handler():
+def on_revoking_handler(input_topic: qx.inputtopic):
     print("Revoking!")
 
-input_topic.on_revoking += on_revoking_handler
+input_topic.on_revoking = on_revoking_handler
 
 import sys
 
@@ -57,7 +59,8 @@ test_parameter_definition_count = 0
 
 start = None
 
-def read_stream(new_stream : qx.StreamReader):
+
+def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
     import datetime
     global start
     if start is None:
@@ -65,16 +68,16 @@ def read_stream(new_stream : qx.StreamReader):
 
     print("New Stream read!" + str(datetime.datetime.now()))
 
-    def on_stream_closed_handler(end_type: qx.StreamEndType):
+    def on_stream_closed_handler(stream: qx.StreamReader, end_type: qx.StreamEndType):
         try:
             print("Stream", new_stream.stream_id, "closed with", end_type, " started at ", start, " finished at ", datetime.datetime.now())
             global test_close_count
             test_close_count = test_close_count + 1
         except:
             print("Exception occurred in on_stream_closed_handler: " + sys.exc_info()[1])
-    new_stream.on_stream_closed += on_stream_closed_handler
+    new_stream.on_stream_closed = on_stream_closed_handler
 
-    def on_stream_properties_changed_handler():
+    def on_stream_properties_changed_handler(stream: qx.StreamReader):
         try:
             print("Stream properties read for stream: " + new_stream.stream_id)
             print("Name", new_stream.properties.name, sep=": ")
@@ -89,15 +92,15 @@ def read_stream(new_stream : qx.StreamReader):
         except:
             print("Exception occurred in on_stream_properties_changed_handler: " + sys.exc_info()[1])
 
-    new_stream.properties.on_changed += on_stream_properties_changed_handler
+    #new_stream.properties.on_changed = on_stream_properties_changed_handler
 
-    def on_parameters_pandas_dataframe_handler(data: pd.DataFrame):
+    def on_parameters_dataframe_handler(stream: qx.StreamReader, data: pd.DataFrame):
         print("RECEIVED DATAFRAME")
         print(data)
 
-    new_stream.parameters.on_read_pandas += on_parameters_pandas_dataframe_handler
+    #new_stream.parameters.on_read_dataframe = on_parameters_dataframe_handler
 
-    def on_parameter_data_handler(data: qx.ParameterData):
+    def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
         with data:
             try:
                 print("Committing")
@@ -105,9 +108,9 @@ def read_stream(new_stream : qx.StreamReader):
                 global test_parameter_data_count
                 print("Parameter data read for stream: " + new_stream.stream_id)
                 # can convert to panda if wanted
-                pf = data.to_panda_frame()
+                pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
-                pfdata = qx.ParameterData.from_panda_frame(pf)
+                pfdata = qx.ParameterData.from_panda_dataframe(pf)
                 with pfdata:
                     print("  Length:", len(data.timestamps))
                     for index, val in enumerate(data.timestamps):
@@ -128,10 +131,10 @@ def read_stream(new_stream : qx.StreamReader):
             except:
                 print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
-    param_buffer = new_stream.parameters.create_buffer()
-    param_buffer.on_read += on_parameter_data_handler
+    #param_buffer = new_stream.parameters.create_buffer()
+    #param_buffer.on_read = on_parameter_data_handler
 
-    def on_parameter_data_filtered_handler(data: qx.ParameterData):
+    def on_parameter_data_filtered_handler(stream: qx.StreamReader, data: qx.ParameterData):
         with data:
             try:
                 def print(*args, **kwargs):
@@ -139,9 +142,9 @@ def read_stream(new_stream : qx.StreamReader):
                 global test_parameter_data_filtered_count
                 print("Parameter data read for stream: " + new_stream.stream_id)
                 # can convert to panda if wanted
-                pf = data.to_panda_frame()
+                pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
-                pfdata = qx.ParameterData.from_panda_frame(pf)
+                pfdata = qx.ParameterData.from_panda_dataframe(pf)
                 with pfdata:
                     print("  Length:", len(pfdata.timestamps))
                     for index, val in enumerate(pfdata.timestamps):
@@ -162,10 +165,10 @@ def read_stream(new_stream : qx.StreamReader):
             except:
                 print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
-    param_buffer_filtered = new_stream.parameters.create_buffer("numeric param 1", "string param 2")
-    param_buffer_filtered.on_read += on_parameter_data_filtered_handler
+    #param_buffer_filtered = new_stream.parameters.create_buffer("numeric param 1", "string param 2")
+    #param_buffer_filtered.on_read = on_parameter_data_filtered_handler
 
-    def on_parameter_definitions_changed_handler():
+    def on_parameter_definitions_changed_handler(stream: qx.StreamReader):
         try:
             print("Parameter definitions read for stream: " + new_stream.stream_id)
 
@@ -187,9 +190,9 @@ def read_stream(new_stream : qx.StreamReader):
         except:
             print("Exception occurred in on_parameter_definitions_changed_handler: " + sys.exc_info()[1])
 
-    new_stream.parameters.on_definitions_changed += on_parameter_definitions_changed_handler
+    #new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler
 
-    def on_event_definitions_changed_handler():
+    def on_event_definitions_changed_handler(stream: qx.StreamReader):
         try:
             print("Event definitions read for stream: " + new_stream.stream_id)
 
@@ -208,9 +211,9 @@ def read_stream(new_stream : qx.StreamReader):
         except:
             print("Exception occurred in on_event_definitions_changed_handler: " + sys.exc_info()[1])
 
-    new_stream.events.on_definitions_changed += on_event_definitions_changed_handler
+    #new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
 
-    def on_event_data_handler(data: qx.EventData):
+    def on_event_data_handler(stream: qx.StreamReader, data: qx.EventData):
         with data:
             try:
                 print("Event data read for stream: " + new_stream.stream_id)
@@ -226,7 +229,7 @@ def read_stream(new_stream : qx.StreamReader):
             except:
                 print("Exception occurred in on_event_data_handler: " + sys.exc_info()[1])
 
-    new_stream.events.on_read += on_event_data_handler
+    #new_stream.events.on_read = on_event_data_handler
 
     def on_package_received_handler(sender: qx.StreamReader, package: StreamPackage):
         with package:
@@ -236,8 +239,8 @@ def read_stream(new_stream : qx.StreamReader):
                 print("Exception occurred in on_package_received_handler: " + sys.exc_info()[1])
 
     # TODO implementation missing
-    #new_stream.on_package_received += on_package_received_handler
+    #new_stream.on_package_received = on_package_received_handler
 
-input_topic.on_stream_received += read_stream
+input_topic.on_stream_received = read_stream
 
 App.run()

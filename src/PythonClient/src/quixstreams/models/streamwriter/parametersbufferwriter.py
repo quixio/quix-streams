@@ -21,7 +21,7 @@ class ParametersBufferWriter(ParametersBuffer):
         Class used to write to StreamWriter in a buffered manner
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_writer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of ParametersBufferWriter.
             NOTE: Do not initialize this class manually, use StreamParametersWriter.buffer to access an instance of it
@@ -33,8 +33,8 @@ class ParametersBufferWriter(ParametersBuffer):
         if net_pointer is None:
             raise Exception("ParametersBufferWriter is none")
 
-        ParametersBuffer.__init__(self, net_pointer)  # TODO is this necessary?
         self._interop = pbwi(net_pointer)
+        ParametersBuffer.__init__(self, stream_writer, net_pointer)
 
     @property
     def default_tags(self) -> Dict[str, str]:
@@ -130,7 +130,8 @@ class ParametersBufferWriter(ParametersBuffer):
             self._interop.Write(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = ParameterData.from_panda_frame(packet)
-            self._interop.Write(data.get_net_pointer())
+            data = ParameterData.from_panda_dataframe(packet)
+            with data:
+                self._interop.Write(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")

@@ -22,7 +22,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             var parametersReader = new Streaming.Models.StreamReader.StreamParametersReader(streamReader);
 
             var buffer = parametersReader.CreateBuffer();
-            buffer.OnRead += (data) =>
+            buffer.OnRead += (sender, data) =>
             {
                 receivedData.Add(data);
             };

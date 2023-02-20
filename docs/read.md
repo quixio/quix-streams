@@ -71,13 +71,13 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 ## Reading streams
 
 === "Python"  
-    Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `on_stream_received`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example, the following code prints the StreamId for each `newStream` received on that Topic:
+    Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the callback `on_stream_received`. This callback will be invoked every time you receive a new Stream. For example, the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` python
-    def read_stream(new_stream: StreamReader):
+    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
         print("New stream read:" + new_stream.stream_id)
     
-    input_topic.on_stream_received += read_stream
+    input_topic.on_stream_received = read_stream
     input_topic.start_reading()
     ```
 
@@ -91,7 +91,7 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
     Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, newStream) =>
+    inputTopic.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream read: {newStream.StreamId}");
     };
@@ -112,17 +112,17 @@ For instance, in the following example we read and print the first timestamp and
 === "Python"
     
     ``` python
-    def on_stream_received_handler(new_stream: StreamReader):
+    def on_stream_received_handler(input_topic: InputTopic, new_stream: StreamReader):
     
-        def on_parameter_data_handler(data: ParameterData):
+        def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
             with data:
                 timestamp = data.timestamps[0].timestamp
                 num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
                 print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
-        new_stream.on_read += on_parameter_data_handler
+        new_stream.on_read = on_parameter_data_handler
     
-    input_topic.on_stream_received += on_stream_received_handler
+    input_topic.on_stream_received = on_stream_received_handler
     input_topic.start_reading()
     ```
 
@@ -134,9 +134,9 @@ For instance, in the following example we read and print the first timestamp and
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, streamReader) =>
+    inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
-        streamReader.Parameters.OnRead += parameterData =>
+        streamReader.Parameters.OnRead += (stream, parameterData) =>
         {
             var timestamp = parameterData.Timestamps[0].Timestamp;
             var numValue = parameterData.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -258,19 +258,19 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
 === "Python"
     
     ``` python
-    def on_parameter_data_handler(data: ParameterData):
+    def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
             print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
-    buffer.on_read += on_parameter_data_handler
+    buffer.on_read = on_parameter_data_handler
     ```
 
 === "C\#"
     
     ``` cs
-    buffer.OnRead += (data) =>
+    buffer.OnRead += (stream, data) =>
     {
         var timestamp = data.Timestamps[0].Timestamp;
         var numValue = data.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -371,44 +371,44 @@ Is represented as the following Pandas DataFrame:
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
 
-One simple way to read data from Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} is using the event `on_read_pandas` instead of the common event `on_read` when reading from a `stream`, or when reading data from a buffer:
+One simple way to read data from Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} is using the event `on_read_dataframe` instead of the common callback `on_read` when reading from a `stream`, or when reading data from a buffer:
 
 ``` python
-def read_stream(new_stream: StreamReader):
+def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_pandas_frame_handler(df: pd.DataFrame):
+    def on_dataframe_handler(stream: StreamReader, df: pd.DataFrame):
         print(df.to_string())
 
-    buffer.on_read_pandas += on_pandas_frame_handler
+    buffer.on_read_dataframe = on_dataframe_handler
 
-input_topic.on_stream_received += read_stream
+input_topic.on_stream_received = read_stream
 input_topic.start_reading()
 ```
     
-Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_frame`:
+Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_dataframe`:
 
 ``` python
-def read_stream(new_stream: StreamReader):
+def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_parameter_data_handler(data: ParameterData):
+    def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
         with data:
             # read from input stream
-            df = data.to_panda_frame()
+            df = data.to_panda_dataframe()
             print(df.to_string())
 
-    buffer.on_read += on_parameter_data_handler
+    buffer.on_read = on_parameter_data_handler
 
-input_topic.on_stream_received += read_stream
+input_topic.on_stream_received = read_stream
 input_topic.start_reading()
 ```
 
 !!! tip
 
-	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_pandas` event provided by the SDK, which is optimized for doing as few conversions as possible.
+	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_dataframe` callback provided by the SDK, which is optimized for doing as few conversions as possible.
 
 !!! note
     `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
@@ -437,17 +437,17 @@ Reading events from a stream is as easy as reading parameter data. In this case,
 === "Python"
     
     ``` python
-    def on_event_data_handler(data: EventData):
+    def on_event_data_handler(stream: StreamReader, data: EventData):
         with data:
             print("Event read for stream. Event Id: " + data.Id)
     
-    new_stream.events.on_read += on_event_data_handler
+    new_stream.events.on_read = on_event_data_handler
     ```
 
 === "C\#"
     
     ``` cs
-    newStream.Events.OnRead += (data) =>
+    newStream.Events.OnRead += (stream, data) =>
     {
         Console.WriteLine($"Event read for stream. Event Id: {data.Id}");
     };
@@ -541,18 +541,18 @@ The piece of code above will commit anything – like parameter, event or metada
 
 ### Commit callback
 
-Whenever a commit occurs, an event is raised to let you know. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
-
 === "Python"
+Whenever a commit occurs, a callback is raised to let you know. This callback is invoked for both manual and automatic commits. You can set the callback using the following code:
     
     ``` python
-    def on_committed_handler():
+    def on_committed_handler(input_topic: InputTopic):
         # your code doing something when committed to broker
     
-    input_topic.on_committed += on_committed_handler
+    input_topic.on_committed = on_committed_handler
     ```
 
 === "C\#"
+Whenever a commit occurs, an event is raised to let you know. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
     
     ``` cs
     inputTopic.OnCommitted += (sender, args) =>
@@ -601,15 +601,15 @@ When working with a broker, you have a certain number of topic streams assigned 
 
 ### Streams revoking
 
-One or more streams are about to be revoked from your client, but you have a limited time frame – according to your broker configuration – to react to this and even commit to the broker:
+One or more streams are about to be revoked from your client, but you have a limited time frame – according to your broker configuration – to react to this and optionally commit to the broker:
 
 === "Python"
     
     ``` python
-    def on_revoking_handler():
+    def on_revoking_handler(input_topic: InputTopic):
         # your code
     
-    input_topic.on_revoking += on_revoking_handler
+    input_topic.on_revoking = on_revoking_handler
     ```
 
 === "C\#"
@@ -630,11 +630,11 @@ One or more streams are revoked from your client. You can no longer commit to th
     ``` python
     from quixstreams import StreamReader
     
-    def on_streams_revoked_handler(readers: [StreamReader]):
+    def on_streams_revoked_handler(input_topic: InputTopic, readers: [StreamReader]):
         for reader in readers:
             print("Stream " + reader.stream_id + " got revoked")
     
-    input_topic.on_streams_revoked += on_streams_revoked_handler
+    input_topic.on_streams_revoked = on_streams_revoked_handler
     ```
 
 === "C\#"
@@ -648,21 +648,21 @@ One or more streams are revoked from your client. You can no longer commit to th
 
 ## Stream closure
 
-You can detect stream closure with the stream closed callback which receives the StreamEndType, to help determine the closure reason if required.
-
 === "Python"
+You can detect stream closure with the `on_stream_closed` callback which has the stream and the StreamEndType to help determine the closure reason if required.
     
     ``` python
-    def on_stream_closed_handler(end_type: StreamEndType):
+    def on_stream_closed_handler(stream: StreamReader, end_type: StreamEndType):
             print("Stream closed with {}".format(end_type))
     
-    new_stream.on_stream_closed += on_stream_closed_handler
+    new_stream.on_stream_closed = on_stream_closed_handler
     ```
 
 === "C\#"
+You can detect stream closure with the stream closed event which has the sender and the StreamEndType to help determine the closure reason if required.
     
     ``` cs
-    inputTopic.OnStreamReceived += (s, streamReader) =>
+    inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
             streamReader.OnStreamClosed += (reader, type) =>
             {
@@ -695,19 +695,19 @@ This is a minimal code example you can use to read data from a topic using the Q
     input_topic = client.open_input_topic(TOPIC_ID)
     
     # read streams
-    def read_stream(new_stream: StreamReader):
+    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
     
         buffer = new_stream.parameters.create_buffer()
     
-        def on_parameter_data_handler(data: ParameterData):
+        def on_parameter_data_handler(stream: StreamReader, data: ParameterData):
             with data:
-                df = data.to_panda_frame()
+                df = data.to_panda_dataframe()
                 print(df.to_string())
     
-        buffer.on_read += on_parameter_data_handler
+        buffer.on_read = on_parameter_data_handler
     
     # Hook up events before initiating read to avoid losing out on any data
-    input_topic.on_stream_received += read_stream
+    input_topic.on_stream_received = read_stream
     
     # Hook up to termination signal (for docker image) and CTRL-C
     print("Listening to streams. Press CTRL-C to exit.")
@@ -744,13 +744,13 @@ This is a minimal code example you can use to read data from a topic using the Q
                 using var inputTopic = client.OpenInputTopic(TOPIC_ID);
     
                 // Hook up events before initiating read to avoid losing out on any data
-                inputTopic.OnStreamReceived += (s, streamReader) =>
+                inputTopic.OnStreamReceived += (topic, streamReader) =>
                 {
                     Console.WriteLine($"New stream read: {streamReader.StreamId}");
     
                     var buffer = streamReader.Parameters.CreateBuffer();
     
-                    buffer.OnRead += parameterData =>
+                    buffer.OnRead += (stream, parameterData) =>
                     {
                         Console.WriteLine(
                             $"ParameterA - {parameterData.Timestamps[0].Timestamp}: {parameterData.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
@@ -781,14 +781,14 @@ To cater for these cases we added the ability to read the raw, unformatted, mess
     ``` python
     inp = client.open_raw_input_topic(TOPIC_ID)
     
-    def on_raw_message(msg):
+    def on_raw_message(topic: RawInputTopic, msg: RawMessage):
         #bytearray containing bytes received from kafka
         data = msg.value
     
         #broker metadata as dict
         meta = msg.metadata
     
-    inp.on_message_read += on_raw_message
+    inp.on_message_read = on_raw_message
     inp.start_reading()
     ```
 
@@ -797,7 +797,7 @@ To cater for these cases we added the ability to read the raw, unformatted, mess
     ``` cs
     var inp = client.OpenRawInputTopic(TOPIC_ID)
     
-    inp.OnMessageRead += (message) =>
+    inp.OnMessageRead += (sender, message) =>
     {
         var data = (byte[])message.Value;
     };

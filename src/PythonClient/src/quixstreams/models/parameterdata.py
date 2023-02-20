@@ -188,7 +188,7 @@ class ParameterData(object):
 
         self.__wrapped.Timestamps = dotnet_list
 
-    def to_panda_frame(self) -> pd.DataFrame:
+    def to_panda_dataframe(self) -> pd.DataFrame:
         """
         Converts ParameterData to Panda DataFrame
 
@@ -265,7 +265,7 @@ class ParameterData(object):
         return df
 
     @staticmethod
-    def from_panda_frame(data_frame: pd.DataFrame, epoch: int = 0) -> 'ParameterData':
+    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'ParameterData':
         """
         Converts Panda DataFrame to ParameterData
 

@@ -1,7 +1,10 @@
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 import ctypes
 
-from ..eventhook import EventHook
+import pandas
+
+from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+
 from ..models.parameterdata import ParameterData
 from ..models.parameterdataraw import ParameterDataRaw
 from ..models.parameterdatatimestamp import ParameterDataTimestamp
@@ -18,7 +21,7 @@ class ParametersBuffer(object):
         When none of the buffer conditions are configured, the buffer does not buffer at all
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of ParametersBuffer.
             NOTE: Do not initialize this class manually, use StreamingClient.create_output to create it
@@ -30,8 +33,8 @@ class ParametersBuffer(object):
         if net_pointer is None:
             raise Exception("ParametersBuffer is none")
 
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
         self._interop_pb = pbi(net_pointer)
+        self._stream = stream
 
         def dummy():
             pass
@@ -51,52 +54,110 @@ class ParametersBuffer(object):
         else:
             self._custom_trigger = None
 
-        def _on_read_net_handler(arg):
-            self.on_read.fire(ParameterData(arg))
+        # define events and their ref holder
+        self._on_read = None
+        self._on_read_ref = None  # keeping reference to avoid GC
 
-        def _on_first_sub():
-            ref = self._interop_pb.add_OnRead(_on_read_net_handler)
-            self._cfuncrefs.append(ref)
+        self._on_read_raw = None
+        self._on_read_raw_ref = None  # keeping reference to avoid GC
 
-        def _on_last_unsub():
-            # TODO do unsign with previous handler
-            self._interop_pb.remove_OnRead(_on_read_net_handler)
-
-        self.on_read = EventHook(_on_first_sub, _on_last_unsub, name="ParametersBuffer.on_read")
-        """
-        Raised when a parameter data package is read and buffer conditions are met
-
-        Has one argument of type ParameterData
-        """
-
-        def _on_read_raw_net_handler(arg):
-            self.on_read_raw.fire(ParameterDataRaw(arg))
-
-        def _on_first_sub_raw():
-            ref = self._interop_pb.add_OnReadRaw(_on_read_raw_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_unsub_raw():
-            # TODO do unsign with previous handler
-            self._interop_pb.remove_OnReadRaw(_on_read_raw_net_handler)
-
-        self.on_read_raw = EventHook(_on_first_sub_raw, _on_last_unsub_raw, name="ParametersBuffer.on_read_raw")
-
-        def _on_read_pandas_net_handler(arg):
-            self.on_read_pandas.fire(ParameterDataRaw(arg).to_panda_frame())
-
-        def _on_first_sub_pandas():
-            ref = self._interop_pb.add_OnReadRaw(_on_read_pandas_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_unsub_pandas():
-            # TODO do unsign with previous handler
-            self._interop_pb.remove_OnReadRaw(_on_read_pandas_net_handler)
-
-        self.on_read_pandas = EventHook(_on_first_sub_pandas, _on_last_unsub_pandas, name="ParametersBuffer.on_read_pandas")
+        self._on_read_dataframe = None
+        self._on_read_dataframe_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._cfuncrefs = None
+        self._on_read_dispose()
+        self._on_read_raw_dispose()
+        self._on_read_dataframe_dispose()
+
+
+    # region on_read
+    @property
+    def on_read(self) -> Callable[[Union['StreamReader', 'StreamWriter'], ParameterData], None]:
+        """
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        """
+        return self._on_read
+
+    @on_read.setter
+    def on_read(self, value: Callable[[Union['StreamReader', 'StreamWriter'], ParameterData], None]) -> None:
+        """
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        """
+        self._on_read = value
+        if self._on_read_ref is None:
+            self._on_read_ref = self._interop_pb.add_OnRead(self._on_read_wrapper)
+
+    def _on_read_wrapper(self, stream_hptr, data_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        data = ParameterData(net_pointer=data_hptr)
+        self._on_read(self._stream, data)
+        InteropUtils.free_hptr(stream_hptr)
+
+    def _on_read_dispose(self):
+        if self._on_read_ref is not None:
+            self._interop_pb.remove_OnRead(self._on_read_ref)
+            self._on_read_ref = None
+    # endregion on_read
+    
+    # region on_read_raw
+    @property
+    def on_read_raw(self) -> Callable[[Union['StreamReader', 'StreamWriter'], ParameterDataRaw], None]:
+        """
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        """
+        return self._on_read_raw
+
+    @on_read_raw.setter
+    def on_read_raw(self, value: Callable[[Union['StreamReader', 'StreamWriter'], ParameterDataRaw], None]) -> None:
+        """
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        """
+        self._on_read_raw = value
+        if self._on_read_raw_ref is None:
+            self._on_read_raw_ref = self._interop_pb.add_OnReadRaw(self._on_read_raw_wrapper)
+
+    def _on_read_raw_wrapper(self, stream_hptr, data_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        self._on_read_raw(self._stream, ParameterDataRaw(data_hptr))
+        InteropUtils.free_hptr(stream_hptr)
+
+    def _on_read_raw_dispose(self):
+        if self._on_read_raw_ref is not None:
+            self._interop_pb.remove_OnReadRaw(self._on_read_raw_ref)
+            self._on_read_raw_ref = None
+    # endregion on_read_raw
+    
+    # region on_read_dataframe
+    @property
+    def on_read_dataframe(self) -> Callable[[Union['StreamReader', 'StreamWriter'], pandas.DataFrame], None]:
+        """
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        """
+        return self._on_read_dataframe
+
+    @on_read_dataframe.setter
+    def on_read_dataframe(self, value: Callable[[Union['StreamReader', 'StreamWriter'], pandas.DataFrame], None]) -> None:
+        """
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        """
+        self._on_read_dataframe = value
+        if self._on_read_dataframe_ref is None:
+            self._on_read_dataframe_ref = self._interop_pb.add_OnReadRaw(self._on_read_dataframe_wrapper)
+
+    def _on_read_dataframe_wrapper(self, stream_hptr, data_hptr):
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        pdr = ParameterDataRaw(data_hptr)
+        pdf = pdr.to_panda_dataframe()
+        pdr.dispose()
+        self._on_read_dataframe(self._stream, pdf)
+        InteropUtils.free_hptr(stream_hptr)
+
+    def _on_read_dataframe_dispose(self):
+        if self._on_read_dataframe_ref is not None:
+            self._interop_pb.remove_OnReadRaw(self._on_read_dataframe_ref)
+            self._on_read_dataframe_ref = None
+    # endregion on_read_dataframe
+
 
     @property
     def filter(self) -> Callable[[ParameterDataTimestamp], bool]:

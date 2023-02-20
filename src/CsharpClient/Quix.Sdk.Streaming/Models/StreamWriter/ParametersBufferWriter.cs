@@ -29,7 +29,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             this.OnReadRaw += OnReadDataRaw;
         }
 
-        private void OnReadDataRaw(ParameterDataRaw parameterDataRaw)
+        private void OnReadDataRaw(object sender, ParameterDataRaw parameterDataRaw)
         {
             this.streamWriter.Write(parameterDataRaw);
         }

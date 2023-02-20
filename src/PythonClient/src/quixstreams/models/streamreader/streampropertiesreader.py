@@ -1,12 +1,10 @@
-from typing import Dict, List
+from typing import Dict, List, Callable
 
-from ...eventhook import EventHook
 from datetime import datetime
 
 from ...native.Python.QuixSdkStreaming.Models.StreamReader.StreamPropertiesReader import StreamPropertiesReader as spri
 import ctypes
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
-from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ..netdict import NetDict
 from ..netlist import NetList
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -16,7 +14,7 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamPropertiesReader(object):
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_reader: 'StreamReader', net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamPropertiesReader.
             NOTE: Do not initialize this class manually, use StreamReader.properties to access an instance of it
@@ -28,26 +26,12 @@ class StreamPropertiesReader(object):
         if net_pointer is None:
             raise Exception("StreamPropertiesReader is none")
 
-        self._cfuncrefs = []  # exists to hold onto the references created by the interop layer to avoid GC'ing them
         self._interop = spri(net_pointer)
+        self._stream_reader = stream_reader
 
-        def _on_changed_net_handler():
-            self.on_changed.fire()
-
-        def _on_first_changed_sub():
-            ref = self._interop.add_OnChanged(_on_changed_net_handler)
-            self._cfuncrefs.append(ref)
-
-        def _on_last_changed_unsub():
-            # TODO do unsign with previous handler
-            self._interop.remove_OnChanged(_on_changed_net_handler)
-
-
-        self.on_changed = EventHook(_on_first_changed_sub, _on_last_changed_unsub, name="StreamPropertiesReader.on_changed")
-        """
-        Raised when stream properties changed. This is an event without parameters. Interrogate the class raising
-        it to get new state
-        """
+        # define events and their ref holder
+        self._on_changed = None
+        self._on_changed_ref = None  # keeping reference to avoid GC
 
         self._metadata = None
         self._parents = None
@@ -57,7 +41,36 @@ class StreamPropertiesReader(object):
             InteropUtils.free_hptr(self._metadata.get_net_pointer())
         if self._parents is not None:
             InteropUtils.free_hptr(self._parents.get_net_pointer())
-        self._cfuncrefs = None
+        self._on_changed_dispose()
+
+    # region on_changed
+    @property
+    def on_changed(self) -> Callable[['StreamReader'], None]:
+        """
+        Gets the handler for when the stream properties changed. First parameter is the stream it is invoked for, second is the properties.
+        """
+        return self._on_changed
+
+    @on_changed.setter
+    def on_changed(self, value: Callable[['StreamReader'], None]) -> None:
+        """
+        Sets the handler for when the stream properties changed. First parameter is the stream it is invoked for, second is the properties.
+        """
+        self._on_changed = value
+        if self._on_changed_ref is None:
+            self._on_changed_ref = self._interop.add_OnChanged(self._on_changed_wrapper)
+
+    def _on_changed_wrapper(self, sender_hptr, args_ptr):
+        # To avoid unnecessary overhead and complication, we're using the instances we already have
+        self._on_changed(self._stream_reader)
+        InteropUtils.free_hptr(sender_hptr)
+        InteropUtils.free_hptr(args_ptr)
+
+    def _on_changed_dispose(self):
+        if self._on_changed_ref is not None:
+            self._interop.remove_OnChanged(self._on_changed_ref)
+            self._on_changed_ref = None
+    # endregion on_changed
 
     @property
     def name(self) -> str:

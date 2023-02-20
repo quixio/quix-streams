@@ -53,7 +53,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             var received = new List<byte[]>();
 
 
-            inputTopic.OnMessageRead += (message) =>
+            inputTopic.OnMessageRead += (sender, message) =>
             {
                 received.Add(message.Value);
             };
@@ -90,7 +90,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             var received = new List<byte[]>();
 
 
-            inputTopic.OnMessageRead += (message) =>
+            inputTopic.OnMessageRead += (sender, message) =>
             {
                 received.Add(message.Value);
             };

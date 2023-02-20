@@ -31,7 +31,7 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         {
             this.LoadFromProcessDefinitions(parameterDefinitions);
 
-            this.OnDefinitionsChanged?.Invoke();
+            this.OnDefinitionsChanged?.Invoke(this.streamReader, EventArgs.Empty);
         }
 
         /// <summary>
@@ -65,19 +65,19 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// Raised when the parameter definitions have changed for the stream.
         /// See <see cref="Definitions"/> for the latest set of parameter definitions
         /// </summary>
-        public event Action OnDefinitionsChanged;
+        public event EventHandler OnDefinitionsChanged;
 
         /// <summary>
         /// Event raised when data is available to read (without buffering)
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event Action<ParameterData> OnRead;
+        public event EventHandler<ParameterData> OnRead;
 
         /// <summary>
         /// Event raised when data is available to read (without buffering) in raw transport format
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event Action<Sdk.Process.Models.ParameterDataRaw> OnReadRaw;
+        public event EventHandler<ParameterDataRaw> OnReadRaw;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -136,12 +136,13 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
 
         private void OnParameterData(IStreamReaderInternal streamReader, Process.Models.ParameterDataRaw parameterDataRaw)
         {
-            this.OnRead?.Invoke(new ParameterData(parameterDataRaw, null, false, false));
+            var pData = new ParameterData(parameterDataRaw, null, false, false);
+            this.OnRead?.Invoke(streamReader, pData);
         }
 
         private void OnParameterRawData(IStreamReaderInternal streamReader, Process.Models.ParameterDataRaw parameterDataRaw)
         {
-            this.OnReadRaw?.Invoke(parameterDataRaw);
+            this.OnReadRaw?.Invoke(streamReader, parameterDataRaw);
         }
 
         /// <inheritdoc/>

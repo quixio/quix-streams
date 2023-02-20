@@ -43,7 +43,7 @@ class ParameterDataTests(unittest.TestCase):
                       .add_value("param1", 3)
 
         # Act
-        pdf = parameter_data.to_panda_frame()
+        pdf = parameter_data.to_panda_dataframe()
         # Assert
         self.assertEqual(100, pdf["time"][0])
         self.assertEqual(1, pdf["param1"][0])
@@ -73,7 +73,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, 1] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         parameter_data_ptr = parameter_data.get_net_pointer()
         reloaded_from_csharp = ParameterData(parameter_data_ptr)  # this will force us to load data back from the assigned values in c#
 
@@ -110,7 +110,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[4, "param1"] = 5
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(1000000000) \
@@ -138,7 +138,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[1, "param1"] = 2
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(1000000000) \
@@ -161,7 +161,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[1, "param1"] = 2
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(1000000000) \
@@ -184,7 +184,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[1, "param1"] = 2
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         tz2 = datetime.now().astimezone().tzinfo
         expected1 = TimeConverter.to_unix_nanoseconds(time1.replace(tzinfo=tz2))
@@ -211,7 +211,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100) \
@@ -237,7 +237,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100) \
@@ -263,7 +263,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100) \
@@ -289,7 +289,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100) \
@@ -315,7 +315,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100) \
@@ -341,7 +341,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100) \
@@ -372,7 +372,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf)
+        parameter_data = ParameterData.from_panda_dataframe(pdf)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(100)\
@@ -404,7 +404,7 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[0, "param2"] = "two"
         pdf.at[0, "TAG__tag1"] = "val1"
         # Act
-        parameter_data = ParameterData.from_panda_frame(pdf, 2000)
+        parameter_data = ParameterData.from_panda_dataframe(pdf, 2000)
         # Assert
         expected = ParameterData()
         expected.add_timestamp_nanoseconds(2100)\
@@ -417,7 +417,7 @@ class ParameterDataTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            parameter_data_raw = ParameterData.from_panda_frame(pdf).to_panda_frame()
+            parameter_data_raw = ParameterData.from_panda_dataframe(pdf).to_panda_dataframe()
             parsed_time=parameter_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 

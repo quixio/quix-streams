@@ -89,7 +89,9 @@ public class EnumerableInterop
             var (elementCallback, elementConvertedType) = GetTypeConverterFromUnmanaged(elementType);
             return (y =>
             {
-                var array = InteropUtils.FromArrayUPtr((IntPtr)y, elementConvertedType);
+                var ptr = (IntPtr)y;
+                if (ptr == IntPtr.Zero) return null;
+                var array = InteropUtils.FromArrayUPtr(ptr, elementConvertedType);
                 var convertedElements = Array.CreateInstance(elementType, array.Length);
                 for (int ii = 0; ii < array.Length; ii++)
                 {

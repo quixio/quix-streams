@@ -16,7 +16,7 @@ class StreamParametersWriter(object):
         Group all the Parameters properties, builders and helpers that allow to stream parameter values and parameter definitions to the platform.
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_writer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamParametersWriter.
 
@@ -30,6 +30,7 @@ class StreamParametersWriter(object):
 
         self._interop = spwi(net_pointer)
         self._buffer = None
+        self._stream_writer = stream_writer
 
     def _finalizerfunc(self):
         if self._buffer is not None:
@@ -82,7 +83,7 @@ class StreamParametersWriter(object):
         """Get the buffer for writing parameter data"""
 
         if self._buffer is None:
-            self._buffer = ParametersBufferWriter(self._interop.get_Buffer())
+            self._buffer = ParametersBufferWriter(self._stream_writer, self._interop.get_Buffer())
         return self._buffer
 
     def write(self, packet: Union[ParameterData, pd.DataFrame, ParameterDataRaw]) -> None:
@@ -128,8 +129,9 @@ class StreamParametersWriter(object):
             self._interop.Write2(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = ParameterDataRaw.from_panda_frame(packet)
-            self._interop.Write2(data.get_net_pointer())
+            data = ParameterDataRaw.from_panda_dataframe(packet)
+            with data:
+                self._interop.Write2(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")
 

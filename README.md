@@ -62,7 +62,7 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 You can install the library for amd64 platforms using the package manager for Python Packages:
 
 ```shell
-pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev12 --user
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev16 --user
 ```
 
 ### Installing on M1/M2 Mac
@@ -89,7 +89,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 
 10. On the command line, run the `arch` command. This will display `i386`. If not, check your steps so far.
 
-11. Install Brew again. This installs a new copy of Brew to a new directory structure.
+11. Install Brew again. This installs a new copy of Brew to a new directory structure for i386 (x86_64).
 
 12. Open your Zsh profile file, `~/.zprofile`, using a text editor such as Nano. For example, with the command `nano ~/.zprofile`.
 
@@ -97,7 +97,8 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 
     ```
     if [ $(arch) = "i386" ]; then
-        alias brew="/usr/local/bin/brew"
+        PATH="/usr/local/bin/brew:${PATH}"
+        eval "$(/usr/local/bin/brew shellenv)"
     fi
     ```
 
@@ -107,14 +108,13 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 
 15. Install Python with the command `brew install python3`.
 
-16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`.
+16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`. If not sure, check with `ls /usr/local/Cellar`.
 
 17. Open your `~/.zprofile` file again, and add the following line inside the `if` statement:
 
     ```
     if [ $(arch) = "i386" ]; then
-        ...
-        alias python3="/usr/local/Cellar/python@3.10/3.10.9/bin/python3"
+        PATH="/usr/local/Cellar/python@3.10/3.10.9/bin:${PATH}"
         ...
     fi
     ```
@@ -124,7 +124,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 19. Install Quix Streams:
 
     ```
-    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev12 --user
+    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev16 --user
     ```
 
 20. You can now run your code that uses Quix Streams:

@@ -5,7 +5,7 @@ import os.path
 import re
 import fileinput
 
-package_version = "0.5.0.dev12"
+package_version = "0.5.0.dev16"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -16,7 +16,7 @@ def get_data_files():
         licenses.append('../../LICENSE')  # non-docker build
     else:
         licenses.append('../LICENSE')  # docker build
-    return licenses
+    return [('licences', licenses)]
 
 
 QUIXSTREAMS_PACKAGE_DATA = []
@@ -68,6 +68,7 @@ try:
         package_data={
             'quixstreams': QUIXSTREAMS_PACKAGE_DATA
         },
+        license="Apache 2.0",
         package_dir={'': 'src'},
         data_files=get_data_files(),
         classifiers=[

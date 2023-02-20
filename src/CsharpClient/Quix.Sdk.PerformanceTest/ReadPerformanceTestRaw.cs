@@ -21,7 +21,7 @@ namespace Quix.Sdk.PerformanceTest
 
             var buffer = new ParametersBuffer(null, null, true, false);
             buffer.PacketSize = bufferSize;
-            buffer.OnReadRaw += (data) =>
+            buffer.OnReadRaw += (sender, data) =>
             {
                 if (onlyReceive)
                 {

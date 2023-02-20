@@ -10,13 +10,13 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
     /// </summary>
     public class StreamPropertiesReader : IDisposable
     {
-        private readonly IStreamReaderInternal streamReader;
+        private readonly Streaming.StreamReader streamReader;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamPropertiesReader"/>
         /// </summary>
         /// <param name="streamReader">Stream reader owner</param>
-        internal StreamPropertiesReader(IStreamReaderInternal streamReader)
+        internal StreamPropertiesReader(Streaming.StreamReader streamReader)
         {
             this.streamReader = streamReader;
 
@@ -35,13 +35,14 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             this.Metadata = streamProperties.Metadata;
             this.Parents = streamProperties.Parents;
 
-            this.OnChanged?.Invoke();
+            this.OnChanged?.Invoke(this.streamReader, EventArgs.Empty);
         }
 
         /// <summary>
         /// Raised when the stream properties have changed
+        /// Sender is the stream the properties changed for
         /// </summary>
-        public event Action OnChanged;
+        public event EventHandler OnChanged;
 
         /// <summary>
         /// Gets the name of the stream

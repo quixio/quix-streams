@@ -30,7 +30,7 @@ namespace Quix.Sdk.PerformanceTest
             //{
             //    var buffer = stream.Parameters.CreateBuffer();
             //    buffer.PacketSize = readBufferSize;
-            //    buffer.OnRead += (data) => 
+            //    buffer.OnRead += (sender, data) => 
             //    {
             //        foreach(var t in data.Timestamps)
             //        {
