@@ -88,7 +88,7 @@ class OutputTopic(object):
         result_hptr = self._interop.GetStream(stream_id)
         if result_hptr is None:
             return None
-        # TODO retrieving same stream constantly might result in weird behaviour here
+        # TODO retrieving same stream constantly might result in weird behavior here
         return StreamWriter(result_hptr)
 
     def get_or_create_stream(self, stream_id: str, on_stream_created: Callable[[StreamWriter], None] = None) -> StreamWriter:

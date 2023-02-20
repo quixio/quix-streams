@@ -81,6 +81,12 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
     input_topic.start_reading()
     ```
 
+    !!! note
+        `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+
+        Find out more about [App.run()](app-management.md)
+
+
 === "C\#"
     Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
     
@@ -97,7 +103,7 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 
 	The `StartReading` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
 
-## Reading Parameter Data
+## Reading time-series data
 
 You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
 
@@ -119,6 +125,11 @@ For instance, in the following example we read and print the first timestamp and
     input_topic.on_stream_received = on_stream_received_handler
     input_topic.start_reading()
     ```
+
+    !!! note
+        `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+
+        Find out more about [App.run()](app-management.md)
 
 === "C\#"
     
@@ -142,7 +153,7 @@ We use [ParameterData](#parameter-data-format) packages to read data from the st
 
 	If you’re using Python you can convert [ParameterData](#parameter-data-format) to a [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} or read them directly from the SDK. Refer to [Using Data Frames](#using-data-frames){target=_blank} for more information.
 
-### Parameter Data format
+### ParameterData format
 
 [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time series data packet in memory.
 
@@ -375,7 +386,7 @@ def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 input_topic.on_stream_received = read_stream
 input_topic.start_reading()
 ```
-
+    
 Alternatively, you can always convert a [ParameterData](#parameter-data-format) to a Pandas DataFrame using the method `to_panda_dataframe`:
 
 ``` python
@@ -399,11 +410,16 @@ input_topic.start_reading()
 
 	The conversions from [ParameterData](#parameter-data-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_dataframe` callback provided by the SDK, which is optimized for doing as few conversions as possible.
 
-## Reading Events
+!!! note
+    `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+
+    Find out more about [App.run()](app-management.md)
+    
+## Reading events
 
 `EventData` is the formal class in the SDK which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
 
-### Event Data format
+### EventData format
 
 `EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
@@ -545,7 +561,7 @@ Whenever a commit occurs, an event is raised to let you know. This event is rais
     };
     ```
 
-### Auto Offset Reset
+### Auto offset reset
 
 You can control the offset that data is read from by optionally specifying `AutoOffsetReset` when you open the topic.
 
@@ -605,7 +621,7 @@ One or more streams are about to be revoked from your client, but you have a lim
         };
     ```
 
-### Streams Revoked
+### Streams revoked
 
 One or more streams are revoked from your client. You can no longer commit to these streams, you can only handle the revocation in your client.
 
@@ -630,7 +646,7 @@ One or more streams are revoked from your client. You can no longer commit to th
         };
     ```
 
-## Stream Closure
+## Stream closure
 
 === "Python"
 You can detect stream closure with the `on_stream_closed` callback which has the stream and the StreamEndType to help determine the closure reason if required.
@@ -670,12 +686,8 @@ This is a minimal code example you can use to read data from a topic using the Q
 === "Python"
     
     ``` python
-    from quixstreams import *
+    from quixstream import *
     from quixstreams.app import App
-    from quixstreams.models.parametersbufferconfiguration import ParametersBufferConfiguration
-    import sys
-    import signal
-    import threading
     
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()
@@ -703,6 +715,8 @@ This is a minimal code example you can use to read data from a topic using the Q
     # Handle graceful exit
     App.run()
     ```
+
+    Find out more about [App.run()](app-management.md)
 
 === "C\#"
     

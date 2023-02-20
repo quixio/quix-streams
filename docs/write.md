@@ -1,4 +1,4 @@
-# Writing data
+# Writing time-series data
 
 You write data to Quix using streams in your topic. The Quix SDK allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
 
@@ -46,7 +46,7 @@ In order to access that topic for writing you need an instance of `OutputTopic`.
     var outputTopic = client.OpenOutputTopic(TOPIC_ID);
     ```
 
-## Create / Attach to a Stream
+## Create / attach to a stream
 
 [Streams](/sdk/features/streaming-context) are the central context of data in Quix. Streams make it easy to manage, discover, and work with your data. They are key to good data governance in your organization. Also, Streams are vital for [parallelizing](/sdk/features/horizontal-scaling) huge data loads with an infinite number of data sources.
 
@@ -78,7 +78,7 @@ A stream ID is auto-generated, but you can also pass a `StreamId` to the method 
     var stream = outputTopic.CreateStream("existing-stream-id");
     ```
 
-### Stream Properties
+### Stream properties
 
 As an option, you can add context to your streams by adding a name, some metadata, or a default location.
 
@@ -102,7 +102,7 @@ You can add this metadata to a stream using the `Properties` options of the gene
     stream.Properties.Metadata["working"] = "well";
     ```
 
-### Stream Name
+### Stream name
 
 The stream name is the display name of your stream in the platform. If you specify one, Quix will use it instead of the Stream Id to represent your stream inside the platform.
 
@@ -124,7 +124,7 @@ Would result in this visualization in the list of streams of your workspace:
 
 ![hierarchy](images/NameProperty.png)
 
-### Stream Location
+### Stream location
 
 The stream location property defines a default folder for the stream in the folder structure of your Persisted steams.
 
@@ -148,7 +148,7 @@ Would result in this hierarchy:
 
 Any streams sent without a location property will be located under the "Root" level by default.
 
-## Close a Stream
+## Close a stream
 
 Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you have all the data you need. They will also be closed automatically when your service stops.
 
@@ -182,7 +182,7 @@ The `StreamEndType` can be one of the following possible end types:
 | Aborted       | The stream was aborted by your code for your own reasons            |
 | Terminated    | The stream was terminated unexpectedly while data was being written |
 
-## Writing Parameter Data
+## Writing time-series data
 
 You can now start writing data to your stream. [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory. [ParameterData](#parameter-data-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
 
@@ -190,7 +190,7 @@ You can now start writing data to your stream. [ParameterData](#parameter-data-f
 
 	If your data source generates data at irregular time intervals and you don’t have a defined list of regular Parameters, the [EventData](#event-data-format) format is probably a better fit for your time-series data.
 
-### Parameter Data format
+### ParameterData format
 
 [ParameterData](#parameter-data-format) is the formal class in the SDK which represents a time-series data packet in memory.
 
@@ -257,7 +257,7 @@ The following code would generate the previous `ParameterData` and send it to th
     stream.Parameters.Write(data);
     ```
 
-Although Quix allows you to send `ParameterData` to a stream directly, without any buffering, Quix recommendeds you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `ParameterData` through a buffer:
+Although Quix allows you to send `ParameterData` to a stream directly, without any buffering, Quix recommends you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `ParameterData` through a buffer:
 
 === "Python"
     
@@ -517,7 +517,7 @@ The following buffer configuration will send data every 100ms window or if criti
     stream.Parameters.Buffer.CustomTrigger = data => data.Timestamps[0].Tags["is_critical"] == "True";
     ```
 
-### Parameter Definitions
+### Parameter definitions
 
 The Quix SDK allows you to define metadata for parameters and events, to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, etc. Quix uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
 
@@ -668,7 +668,7 @@ with data:
 
 	The conversions from Pandas DataFrames to [ParameterData](#parameter-data-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use Pandas DataFrames methods provided by the SDK that are optimized for doing as few conversions as possible.
 
-## Writing Events
+## Writing events
 
 `EventData` is the formal class in the SDK which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
 
@@ -678,7 +678,7 @@ with data:
 
 Writing Events to a stream is identical to writing [ParameterData](#parameter-data-format) values, although you don’t need to use buffering features because events don’t need high-performance throughput.
 
-### Event Data format
+### EventData format
 
 `EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
@@ -767,7 +767,7 @@ This is an example of how to write Events to the stream without using explicit `
         .Write();
     ```
 
-### Event Definitions
+### Event definitions
 
 As with parameters, you can attach `Definitions` to each event.
 

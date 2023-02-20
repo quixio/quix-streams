@@ -65,7 +65,7 @@ The consumer group is playing an important role here as offset commits are assoc
 
 	When you open a topic you can also choose where to start reading data from. Either read all the data from the start or only read the new data as it arrives. Read more [here](/sdk/read#_open_a_topic_for_reading).
 
-### Data Grouping
+### Data grouping
 
 Topics group data streams from a single type of source. The golden rule for maximum performance is to always maintain one schema per topic.
 
@@ -79,7 +79,7 @@ For example:
 
   - For live ML pipelines you’ll want to create a topic for each stage of the pipeline ie raw-data-topic → cleaning model → clean-data-topic → ML model → results topic.
 
-### Data Governance
+### Data governance
 
 Topics are key to good data governance. Use them to organize your data by:
 
