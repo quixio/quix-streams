@@ -35,28 +35,25 @@ class Array:
                 original_valuemapper = valuemapper
                 valuemapper = lambda x: original_valuemapper(c_void_p(x) if x is not None else None)
 
-        try:
-            # first 4 bytes contains the length as int
-            length = int(ctypes.cast(array_uptr, ctypes.POINTER(ctypes.c_int32)).contents.value)
-            if length == 0:
-                return []
+        # first 4 bytes contains the length as int
+        length = int(ctypes.cast(array_uptr, ctypes.POINTER(ctypes.c_int32)).contents.value)
+        if length == 0:
+            return []
 
-            # Allocate an array which will be managed by python. We move the values from unmanaged memory to
-            # the managed and free the unmanaged (see finally). Managed will be freed by python once no longer in use
-            arrsize = ctypes.sizeof(valuetype) * length
-            arr = bytes(arrsize)
-            arr_ptr = ctypes.c_char_p(arr)
-            ctypes.memmove(arr, array_uptr.value + 4, arrsize)
-            ctypes_pointer = ctypes.cast(arr_ptr, ctypes.POINTER(valuetype))
-            # print(f"ARR READ ({valuetype}): {bytes(arr).hex().upper()}")  # for testing
+        # Allocate an array which will be managed by python. We move the values from unmanaged memory to
+        # the managed and free the unmanaged (see finally). Managed will be freed by python once no longer in use
+        arrsize = ctypes.sizeof(valuetype) * length
+        arr = bytes(arrsize)
+        arr_ptr = ctypes.c_char_p(arr)
+        ctypes.memmove(arr, array_uptr.value + 4, arrsize)
+        ctypes_pointer = ctypes.cast(arr_ptr, ctypes.POINTER(valuetype))
+        # print(f"ARR READ ({valuetype}): {bytes(arr).hex().upper()}")  # for testing
 
-            if valuemapper == None:
-                return [ctypes_pointer[i] for i in range(length)]
+        if valuemapper == None:
+            return [ctypes_pointer[i] for i in range(length)]
 
-            vals = [valuemapper(ctypes_pointer[i]) for i in range(length)]
-            return vals
-        finally:
-            InteropUtils.free_uptr(array_uptr)
+        vals = [valuemapper(ctypes_pointer[i]) for i in range(length)]
+        return vals
 
     @staticmethod
     def WriteBlittables(blittables: [any], valuetype, valuemapper=None) -> c_void_p:

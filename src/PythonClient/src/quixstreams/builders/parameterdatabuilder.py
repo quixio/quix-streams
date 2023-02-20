@@ -59,13 +59,10 @@ class ParameterDataBuilder(object):
                 self._interop = new
         elif val_type is bytes:
             arr_ptr = Array.WriteBytes(value)
-            try:
-                new = pdbi(self._interop.AddValue3(parameter_id, arr_ptr))
-                if new != self._interop:
-                    self._interop.dispose_ptr__()
-                    self._interop = new
-            finally:
-                InteropUtils.free_uptr(arr_ptr)
+            new = pdbi(self._interop.AddValue3(parameter_id, arr_ptr))
+            if new != self._interop:
+                self._interop.dispose_ptr__()
+                self._interop = new
         else:
             raise Exception("Invalid type " + str(val_type) + " passed as parameter value.")
         return self

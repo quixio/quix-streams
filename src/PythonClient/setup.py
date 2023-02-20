@@ -33,9 +33,9 @@ def rec_incl_with_filter(directory, filters, trim):
                     break
 
 
-rec_incl_with_filter('src/quixstreams', [r'.*\.py$'], 'src/quixstreams') # include all python files
+rec_incl_with_filter('src/quixstreams', [r'.*\.py$'], 'src/quixstreams')  # include all python files
 plat = platform.uname()
-platname = f"{plat.system}-{plat.machine}".lower()  # If changes, update build scriptts and __init__.py
+platname = f"{plat.system}-{plat.machine}".lower()  # If changes, update build scripts and __init__.py
 platpath = 'src/quixstreams/native/' + platname
 print("Platform {} build".format(plat))
 if plat.system.upper() == "WINDOWS":
