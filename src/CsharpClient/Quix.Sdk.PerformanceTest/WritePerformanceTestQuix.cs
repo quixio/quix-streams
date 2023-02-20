@@ -16,7 +16,7 @@ namespace Quix.Sdk.PerformanceTest
         public void Run(int paramCount, int bufferSize, CancellationToken ct, bool onlySent = false, bool showIntermediateResults = false)
         {
 
-            ParameterData data = null;
+            TimeseriesData data = null;
             var iteration = 0;
             long result = 0;
 
@@ -40,7 +40,7 @@ namespace Quix.Sdk.PerformanceTest
                 // New Parameter Data
                 if (!onlySent || iteration == 0)
                 {
-                    data = new ParameterData(100);
+                    data = new TimeseriesData(100);
                     for (var i = 0; i < 100; i++)
                     {
                         var timestamp = data.AddTimestampNanoseconds(time + i);

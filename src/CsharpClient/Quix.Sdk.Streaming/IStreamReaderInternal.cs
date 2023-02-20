@@ -26,9 +26,9 @@ namespace Quix.Sdk.Streaming
         event Action<IStreamReaderInternal, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
 
         /// <summary>
-        /// Event raised when a new package of <see cref="ParameterDataRaw"/> values have been received.
+        /// Event raised when a new package of <see cref="TimeseriesDataRaw"/> values have been received.
         /// </summary>
-        event Action<IStreamReaderInternal, Process.Models.ParameterDataRaw> OnParameterData;
+        event Action<IStreamReaderInternal, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <summary>
         /// Event raised when a new package of <see cref="EventDataRaw"/> values have been received.

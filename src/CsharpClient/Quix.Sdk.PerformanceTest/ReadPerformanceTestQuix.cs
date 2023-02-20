@@ -34,7 +34,7 @@ namespace Quix.Sdk.PerformanceTest
             {
                 Console.WriteLine($"New stream read: {streamReader.StreamId}");
 
-                var bufferConfiguration = new ParametersBufferConfiguration
+                var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
                     PacketSize = bufferSize,
                 };

@@ -11,14 +11,14 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
     {
 
         [Fact]
-        public void Receive_ParameterData_ShouldRaiseExpectedOnReadEvents()
+        public void Receive_TimeseriesData_ShouldRaiseExpectedOnReadEvents()
         {
             const int PacketSizeTest = 10;
             const int NumberTimestampsTest = 1000;
 
             // Arrange
             var streamReader = Substitute.For<IStreamReaderInternal>();
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
             var parametersReader = new Streaming.Models.StreamReader.StreamParametersReader(streamReader);
 
             var buffer = parametersReader.CreateBuffer();
@@ -31,13 +31,13 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             //Act
             for (var i = 1; i <= NumberTimestampsTest; i++)
             {
-                var parameterData = new Streaming.Models.ParameterData();
-                parameterData.AddTimestampNanoseconds(100 * i)
+                var timeseriesData = new Streaming.Models.TimeseriesData();
+                timeseriesData.AddTimestampNanoseconds(100 * i)
                     .AddValue($"test_numeric_param{i}", i)
                     .AddValue($"test_string_param{i}", $"{i}")
                     .AddTag($"tag{i}", $"{i}");
 
-                streamReader.OnParameterData += Raise.Event<Action<IStreamReaderInternal, ParameterDataRaw>>(streamReader, parameterData.ConvertToProcessData());
+                streamReader.OnTimeseriesData += Raise.Event<Action<IStreamReaderInternal, TimeseriesDataRaw>>(streamReader, timeseriesData.ConvertToProcessData());
             }
 
             // Assert

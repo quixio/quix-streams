@@ -79,7 +79,7 @@ namespace Quix.Sdk.Speedtest
             inputTopic.Dispose();
         }
 
-        protected ParameterDataRaw generateRawChunk(int size, int startTime)
+        protected TimeseriesDataRaw generateRawChunk(int size, int startTime)
         {
             long[] timestamps = new long[size];
             double?[] numerics1 = new double?[size];
@@ -93,7 +93,7 @@ namespace Quix.Sdk.Speedtest
             var numericValues = new Dictionary<string, double?[]>();
             numericValues.Add(parameterName, numerics1);
             
-            return new ParameterDataRaw(
+            return new TimeseriesDataRaw(
                 0, 
                 timestamps, 
                 numericValues,

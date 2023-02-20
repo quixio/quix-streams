@@ -24,7 +24,7 @@ using System.Threading.Tasks;
                 var offset = 0;
                 while (!ct.IsCancellationRequested)
                 {
-                    var tdata = GenerateParameterData(offset);
+                    var tdata = GenerateTimeseriesData(offset);
 
                     this.Output.Send(tdata);
 
@@ -38,9 +38,9 @@ using System.Threading.Tasks;
             }
         }
 
-        private static ParameterDataRaw GenerateParameterData(int offset)
+        private static TimeseriesDataRaw GenerateTimeseriesData(int offset)
         {
-            return new ParameterDataRaw
+            return new TimeseriesDataRaw
             {
                 Epoch = 1000000,
                 Timestamps = Enumerable.Range(offset, 10).Select(s => (long)s).ToArray(),

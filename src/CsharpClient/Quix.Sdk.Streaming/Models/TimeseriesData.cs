@@ -9,11 +9,11 @@ using Quix.Sdk.Streaming.Utils;
 namespace Quix.Sdk.Streaming.Models
 {
     /// <summary>
-    /// Represents a collection of <see cref="ParameterDataTimestamp"/>
+    /// Represents a collection of <see cref="TimeseriesDataTimestamp"/>
     /// </summary>
-    public class ParameterData
+    public class TimeseriesData
     {
-        internal Process.Models.ParameterDataRaw rawData;
+        internal Process.Models.TimeseriesDataRaw rawData;
         internal Dictionary<string, Parameter> parameterList;
         internal List<int> timestampsList;
 
@@ -27,7 +27,7 @@ namespace Quix.Sdk.Streaming.Models
         /// </summary>
         /// <param name="capacity">The number of timestamps that the new Parameter Data initially store. 
         /// Using this parameter when you know the number of Timestamps you need to store will increase the performance of the writing.</param>
-        public ParameterData(int capacity = 10)
+        public TimeseriesData(int capacity = 10)
         {
             this.rawData = this.EmptyRawData(capacity);
             this.epochsIncluded = new bool[capacity];
@@ -36,13 +36,13 @@ namespace Quix.Sdk.Streaming.Models
         }
 
         /// <summary>
-        /// Creates a new instance of <see cref="ParameterData"/> based on a <see cref="ParameterDataRaw"/> instance
+        /// Creates a new instance of <see cref="TimeseriesData"/> based on a <see cref="TimeseriesDataRaw"/> instance
         /// </summary>
         /// <param name="rawData">Parameter Data Raw instance from where lookup the data</param>
         /// <param name="parametersFilter">List of parameters to filter</param>
         /// <param name="merge">Merge duplicated timestamps</param>
         /// <param name="clean">Clean timestamps without values</param>
-        public ParameterData(Process.Models.ParameterDataRaw rawData, string[] parametersFilter = null, bool merge = true, bool clean = true)
+        public TimeseriesData(Process.Models.TimeseriesDataRaw rawData, string[] parametersFilter = null, bool merge = true, bool clean = true)
         {
             this.rawData = rawData;
             this.epochsIncluded = new bool[rawData.Timestamps.Count()];
@@ -69,14 +69,14 @@ namespace Quix.Sdk.Streaming.Models
         /// </summary>
         /// <param name="parametersFilter">List of parameters to filter when we clone the data.</param>
         /// <returns>Cloned data</returns>
-        public ParameterData Clone(params string[] parametersFilter)
+        public TimeseriesData Clone(params string[] parametersFilter)
         {
-            var data = new ParameterData();
+            var data = new TimeseriesData();
             data.CloneFrom(this, parametersFilter);
             return data;
         }
 
-        private void CloneFrom(Streaming.Models.ParameterData data, string[] parametersFilter = null)
+        private void CloneFrom(Streaming.Models.TimeseriesData data, string[] parametersFilter = null)
         {
             this.rawData = data.rawData.Clone();
             this.epochsIncluded = (bool[])data.epochsIncluded.Clone();
@@ -92,12 +92,12 @@ namespace Quix.Sdk.Streaming.Models
         }
 
         /// <summary>
-        /// Creates a new instance of <see cref="ParameterData"/> with the provided timestamps
+        /// Creates a new instance of <see cref="TimeseriesData"/> with the provided timestamps
         /// </summary>
         /// <param name="timestamps">The timestamps with parameter data</param>
         /// <param name="merge">Merge duplicated timestamps</param>
         /// <param name="clean">Clean timestamps without values</param>
-        public ParameterData(List<ParameterDataTimestamp> timestamps, bool merge = true, bool clean = true)
+        public TimeseriesData(List<TimeseriesDataTimestamp> timestamps, bool merge = true, bool clean = true)
         {
             this.rawData = this.EmptyRawData(timestamps.Count);
             this.epochsIncluded = new bool[timestamps.Count];
@@ -164,7 +164,7 @@ namespace Quix.Sdk.Streaming.Models
             }
         }
 
-        private void AddTimestamps(List<ParameterDataTimestamp> timestamps)
+        private void AddTimestamps(List<TimeseriesDataTimestamp> timestamps)
         {
             var sizeNeeded = this.timestampsList.Count() + timestamps.Count;
 
@@ -191,9 +191,9 @@ namespace Quix.Sdk.Streaming.Models
             }
         }
 
-        private ParameterDataRaw EmptyRawData(int size)
+        private TimeseriesDataRaw EmptyRawData(int size)
         {
-            return new ParameterDataRaw()
+            return new TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[size],
@@ -267,7 +267,7 @@ namespace Quix.Sdk.Streaming.Models
             }
         }
 
-        internal Process.Models.ParameterDataRaw ConvertToProcessData(bool merge = true, bool clean = true)
+        internal Process.Models.TimeseriesDataRaw ConvertToProcessData(bool merge = true, bool clean = true)
         {
             if (merge)
             {
@@ -287,11 +287,11 @@ namespace Quix.Sdk.Streaming.Models
             return this.rawData;
         }
 
-        private ParameterDataRaw GenerateCleanRawData()
+        private TimeseriesDataRaw GenerateCleanRawData()
         {
             var newSize = this.timestampsList.Count();
 
-            var newRawData = new ParameterDataRaw()
+            var newRawData = new TimeseriesDataRaw()
             {
                 Epoch = this.rawData.Epoch,
                 Timestamps = new long[newSize],
@@ -334,18 +334,18 @@ namespace Quix.Sdk.Streaming.Models
             var dupes = new Dictionary<long, List<int>>();
             for (var index = 0; index < this.Timestamps.Count; index++)
             {
-                var parameterDataTimestamp = this.Timestamps[index];
-                if (!encountered.Add(parameterDataTimestamp.TimestampNanoseconds))
+                var timeseriesDataTimestamp = this.Timestamps[index];
+                if (!encountered.Add(timeseriesDataTimestamp.TimestampNanoseconds))
                 {
-                    if (!dupes.TryGetValue(parameterDataTimestamp.TimestampNanoseconds, out var dupeList))
+                    if (!dupes.TryGetValue(timeseriesDataTimestamp.TimestampNanoseconds, out var dupeList))
                     {
                         dupeList = new List<int>();
-                        dupes[parameterDataTimestamp.TimestampNanoseconds] = dupeList;
+                        dupes[timeseriesDataTimestamp.TimestampNanoseconds] = dupeList;
                         // find previous dupe as we don't track it yet
                         for (var innerIndex = 0; innerIndex < index; innerIndex++)
                         {
                             var innerPdts = this.Timestamps[innerIndex];
-                            if (innerPdts.TimestampNanoseconds == parameterDataTimestamp.TimestampNanoseconds)
+                            if (innerPdts.TimestampNanoseconds == timeseriesDataTimestamp.TimestampNanoseconds)
                             {
                                 dupeList.Add(innerIndex);
                                 break; // found the previous dupe
@@ -364,9 +364,9 @@ namespace Quix.Sdk.Streaming.Models
             {
                 foreach (var index in timestamp.Value)
                 {
-                    var parameterDataTimestamp = this.Timestamps[index];
+                    var timeseriesDataTimestamp = this.Timestamps[index];
 
-                    var key = (timestamp.Key, TagsHash(parameterDataTimestamp.Tags));
+                    var key = (timestamp.Key, TagsHash(timeseriesDataTimestamp.Tags));
                     if (!uniqueTimestamps.TryGetValue(key, out var uniqueTimestampIndex))
                     {
                         uniqueTimestamps[key] = index; // new row with Timestamp
@@ -375,7 +375,7 @@ namespace Quix.Sdk.Streaming.Models
                     {
                         if (index != uniqueTimestampIndex) // If trying to merge to timestamps that are pointing to the same instance
                         {
-                            foreach (var parameter in parameterDataTimestamp.Parameters.Values)
+                            foreach (var parameter in timeseriesDataTimestamp.Parameters.Values)
                             {
                                 if (parameter.Value != null)
                                 {
@@ -395,7 +395,7 @@ namespace Quix.Sdk.Streaming.Models
             }
         }
 
-        private static long TagsHash(ParameterDataTimestampTags tags)
+        private static long TagsHash(TimeseriesDataTimestampTags tags)
         {
             if (tags.Count == 0) return 0;
             unchecked
@@ -417,9 +417,9 @@ namespace Quix.Sdk.Streaming.Models
 
             for (var index = 0; index < this.Timestamps.Count; index++)
             {
-                var parameterDataTimestamp = this.Timestamps[index];
+                var timeseriesDataTimestamp = this.Timestamps[index];
                 var empty = true;
-                foreach (var parameterValue in parameterDataTimestamp.Parameters.Values)
+                foreach (var parameterValue in timeseriesDataTimestamp.Parameters.Values)
                 {
                     if (parameterValue.Value != null)
                     {
@@ -441,37 +441,37 @@ namespace Quix.Sdk.Streaming.Models
         }
 
         /// <summary>
-        /// Gets the data as rows of <see cref="ParameterDataTimestamp"/>
+        /// Gets the data as rows of <see cref="TimeseriesDataTimestamp"/>
         /// </summary>
-        public ParameterDataTimestamps Timestamps => new ParameterDataTimestamps(this);
+        public TimeseriesDataTimestamps Timestamps => new TimeseriesDataTimestamps(this);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="dateTime">The datetime to use for adding new parameter values</param>
         /// <returns>Parameter data to add parameter values at the provided time</returns>
-        public ParameterDataTimestamp AddTimestamp(DateTime dateTime) => this.AddTimestampNanoseconds(dateTime.ToUnixNanoseconds(), true);
+        public TimeseriesDataTimestamp AddTimestamp(DateTime dateTime) => this.AddTimestampNanoseconds(dateTime.ToUnixNanoseconds(), true);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeSpan">The time since the <see name="epochOffset"/> to add the parameter values at</param>
         /// <returns>Parameter data to add parameter values at the provided time</returns>
-        public ParameterDataTimestamp AddTimestamp(TimeSpan timeSpan) => this.AddTimestampNanoseconds(timeSpan.ToNanoseconds(), false);
+        public TimeseriesDataTimestamp AddTimestamp(TimeSpan timeSpan) => this.AddTimestampNanoseconds(timeSpan.ToNanoseconds(), false);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeMilliseconds">The time in milliseconds since the <see name="epochOffset"/> to add the parameter values at</param>
         /// <returns>Parameter data to add parameter values at the provided time</returns>
-        public ParameterDataTimestamp AddTimestampMilliseconds(long timeMilliseconds) => this.AddTimestampNanoseconds(timeMilliseconds * (long)1e6, false);
+        public TimeseriesDataTimestamp AddTimestampMilliseconds(long timeMilliseconds) => this.AddTimestampNanoseconds(timeMilliseconds * (long)1e6, false);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeNanoseconds">The time in nanoseconds since the  <see name="epochOffset"/> to add the parameter values at</param>
         /// <returns>Parameter data to add parameter values at the provided time</returns>
-        public ParameterDataTimestamp AddTimestampNanoseconds(long timeNanoseconds) => this.AddTimestampNanoseconds(timeNanoseconds, false);
+        public TimeseriesDataTimestamp AddTimestampNanoseconds(long timeNanoseconds) => this.AddTimestampNanoseconds(timeNanoseconds, false);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
@@ -479,7 +479,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="timeNanoseconds">The time in nanoseconds since the  <see name="epoch"/> to add the parameter values at</param>
         /// <param name="epochIncluded">Epoch offset is included in the timestamp</param>
         /// <returns>Parameter data to add parameter values at the provided time</returns>
-        internal ParameterDataTimestamp AddTimestampNanoseconds(long timeNanoseconds, bool epochIncluded)
+        internal TimeseriesDataTimestamp AddTimestampNanoseconds(long timeNanoseconds, bool epochIncluded)
         {
             var sizeNeeded = this.timestampsList.Count() + 1;
             this.CheckRawDataSize(sizeNeeded);
@@ -489,7 +489,7 @@ namespace Quix.Sdk.Streaming.Models
             this.rawData.Timestamps[this.nextIndexRawData] = timeNanoseconds;
             this.epochsIncluded[this.nextIndexRawData] = epochIncluded;
 
-            var newTimestamp = new ParameterDataTimestamp(this, this.nextIndexRawData);
+            var newTimestamp = new TimeseriesDataTimestamp(this, this.nextIndexRawData);
             this.nextIndexRawData++;
 
             return newTimestamp;
@@ -504,7 +504,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <inheritdoc/>
         public override bool Equals(Object obj)
         {
-            void MergeEpoch(ParameterDataRaw rawData)
+            void MergeEpoch(TimeseriesDataRaw rawData)
             {
                 if (rawData.Epoch == 0) return;
 
@@ -517,7 +517,7 @@ namespace Quix.Sdk.Streaming.Models
             }
 
 
-            if (!(obj is ParameterData c))
+            if (!(obj is TimeseriesData c))
             {
                 return false;
             }

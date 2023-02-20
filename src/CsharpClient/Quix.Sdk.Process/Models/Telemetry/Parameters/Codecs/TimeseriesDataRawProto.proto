@@ -6,7 +6,7 @@ package tutorial;
 option csharp_namespace = "Quix.Sdk.Process.Models.Codecs";
 
 
-message ParameterDataRawProto {
+message TimeseriesDataRawProto {
     int64 epoch = 1;
     repeated int64 timestamps = 2;
 

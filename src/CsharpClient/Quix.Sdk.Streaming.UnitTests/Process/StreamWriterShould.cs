@@ -30,7 +30,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Process
             // Arrange
             CreateRequirements(out var streamId, out var kafkaWriter, out var streamWriter);
 
-            var pd = new ParameterDefinitions
+            var parameterDefinitions = new ParameterDefinitions
             {
                 ParameterGroups = new List<ParameterGroupDefinition>
                 {
@@ -154,12 +154,12 @@ namespace Quix.Sdk.Streaming.UnitTests.Process
             });
 
             // Act
-            streamWriter.Write(pd);
+            streamWriter.Write(parameterDefinitions);
             streamWriter.Write(ed);
 
             // Assert
             interceptedParameterDefinitions.Count.Should().Be(1);
-            interceptedParameterDefinitions[0].Should().Be(pd);
+            interceptedParameterDefinitions[0].Should().Be(parameterDefinitions);
             interceptedEventDefinitions.Count.Should().Be(1);
             interceptedEventDefinitions[0].Should().Be(ed);
         }

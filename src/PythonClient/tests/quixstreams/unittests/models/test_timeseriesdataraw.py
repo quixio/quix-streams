@@ -1,17 +1,17 @@
 import unittest
 
 import pandas
-from src.quixstreams import ParameterDataRaw
+from src.quixstreams import TimeseriesDataRaw
 
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 #InteropUtils.enable_debug()
 
 from pandas.util.testing import assert_frame_equal
 
-class ParameterDataRawTests(unittest.TestCase):
+class TimeseriesDataRawTests(unittest.TestCase):
 
     def test_constructor_all_properties_work(self):
-        pdr = ParameterDataRaw()
+        pdr = TimeseriesDataRaw()
 
         ts = pdr.timestamps
         tags = pdr.tag_values
@@ -25,8 +25,8 @@ class ParameterDataRawTests(unittest.TestCase):
 
     def test_set_values(self):
         # act
-        parameter_data = ParameterDataRaw()
-        parameter_data.set_values(
+        timeseries_data = TimeseriesDataRaw()
+        timeseries_data.set_values(
             epoch=0,
             timestamps=[1, 2, 3],
             numeric_values={"numeric": [3, 12.32, None]},
@@ -42,13 +42,13 @@ class ParameterDataRawTests(unittest.TestCase):
             {"time": 3, "string": "three"}
         ])
 
-        df_orig = parameter_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_panda_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
     def test_set_values_only_string(self):
         # act
-        parameter_data = ParameterDataRaw()
-        parameter_data.set_values(
+        timeseries_data = TimeseriesDataRaw()
+        timeseries_data.set_values(
             epoch=0,
             timestamps=[1, 2, 3],
             numeric_values={},
@@ -64,19 +64,19 @@ class ParameterDataRawTests(unittest.TestCase):
             {"time": 3, "string": "three"}
         ])
 
-        df_orig = parameter_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_panda_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
 
-    def test_convert_to_parameterdata(self):
+    def test_convert_to_timeseriesData(self):
         # arrange
         df = pandas.DataFrame([
             {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
         ])
 
         # act
-        raw = ParameterDataRaw.from_panda_dataframe(df)
-        data = raw.convert_to_parameterdata()
+        raw = TimeseriesDataRaw.from_panda_dataframe(df)
+        data = raw.convert_to_timeseriesData()
         result = data.to_panda_dataframe()
 
         # assert
@@ -89,9 +89,9 @@ class ParameterDataRawTests(unittest.TestCase):
         ])
 
         # act
-        raw = ParameterDataRaw.from_panda_dataframe(df)
+        raw = TimeseriesDataRaw.from_panda_dataframe(df)
         raw_ptr = raw.get_net_pointer()
-        reloaded_from_csharp = ParameterDataRaw(raw_ptr)  # this will force us to load data back from the assigned values in c# rather than checking against potentially cached vals
+        reloaded_from_csharp = TimeseriesDataRaw(raw_ptr)  # this will force us to load data back from the assigned values in c# rather than checking against potentially cached vals
 
         # assert
         self.assertEqual(reloaded_from_csharp.timestamps, [1000000])
@@ -111,10 +111,10 @@ class ParameterDataRawTests(unittest.TestCase):
                 df2 = df2.reset_index(drop=True)
                 assert_frame_equal(df1.sort_index(axis=1), df2.sort_index(axis=1), check_names=True, **kwds )
 
-            parameter_data_raw = ParameterDataRaw.from_panda_dataframe(pdf)
+            timeseries_data_raw = TimeseriesDataRaw.from_panda_dataframe(pdf)
             assertFrameEqual(
                         pdf,
-                        parameter_data_raw.to_panda_dataframe()
+                        timeseries_data_raw.to_panda_dataframe()
                     )
 
 
@@ -139,8 +139,8 @@ class ParameterDataRawTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            parameter_data_raw = ParameterDataRaw.from_panda_dataframe(pdf).to_panda_dataframe()
-            parsed_time=parameter_data_raw.loc[0, 'time']
+            timeseries_data_raw = TimeseriesDataRaw.from_panda_dataframe(pdf).to_panda_dataframe()
+            parsed_time=timeseries_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 
         _assert_time(pandas.DataFrame([{"value": 0.1,"time": 1000000}]), 1000000)

@@ -3,16 +3,16 @@ import math
 from datetime import datetime, timedelta
 from typing import Union
 
-from .parameterdatatimestamp import ParameterDataTimestamp
+from .timeseriesdatatimestamp import TimeseriesDataTimestamp
 from .parametervalue import ParameterValueType
 
 from typing import List
 import pandas as pd
 
 
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu, InteropUtils
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
-from ..native.Python.QuixSdkStreaming.Models.ParameterData import ParameterData as pdi
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
 from ..helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ..helpers.timeconverter import TimeConverter
 import ctypes
@@ -21,21 +21,21 @@ from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
-class ParameterData(object):
+class TimeseriesData(object):
     """
     Describes parameter data for multiple timestamps
     """
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
-            Initializes a new instance of ParameterData.
+            Initializes a new instance of TimeseriesData.
 
-            :param net_pointer: Pointer to an instance of a .net ParameterData.
+            :param net_pointer: Pointer to an instance of a .net TimeseriesData.
         """
 
         if net_pointer is None:
-            self._interop = pdi(pdi.Constructor())
+            self._interop = tsdi(tsdi.Constructor())
         else:
-            self._interop = pdi(net_pointer)
+            self._interop = tsdi(net_pointer)
 
         self._timestamps = None
         self._init_timestamps()  # else the first time addition could result in double counting it in local cache
@@ -47,9 +47,9 @@ class ParameterData(object):
 
             # TODO
     # @classmethod
-    # def from_timestamps(cls, timestamps: List[Quix.Sdk.Streaming.Models.ParameterDataTimestamp], merge: bool = True, clean: bool = True):
+    # def from_timestamps(cls, timestamps: List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
     #     """
-    #         Creates a new instance of ParameterData with the provided timestamps rows.
+    #         Creates a new instance of TimeseriesData with the provided timestamps rows.
     #
     #         :param timestamps: The timestamps with parameter data.
     #         :param merge: Merge duplicated timestamps.
@@ -57,14 +57,14 @@ class ParameterData(object):
     #
     #     """
     #
-    #     dotnet_list = System.Collections.Generic.List[Quix.Sdk.Streaming.Models.ParameterDataTimestamp]([])
+    #     dotnet_list = System.Collections.Generic.List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp]([])
     #     for item in timestamps:
     #         dotnet_item = item.convert_to_net()
     #         dotnet_list.Add(dotnet_item)
     #
     #     self = cls()
     #
-    #     self.__wrapped = Quix.Sdk.Streaming.Models.ParameterData(dotnet_list, merge, clean)
+    #     self.__wrapped = Quix.Sdk.Streaming.models.timeseriesdata(dotnet_list, merge, clean)
     #
     #     return self
 
@@ -101,48 +101,48 @@ class ParameterData(object):
 
             :param parameter_filter: The parameter filter. If one is provided, only parameters present in the list will be cloned
         """
-        new_net_instance = pdi.Constructor2(self.get_net_pointer(), parameter_filter)
-        return ParameterData(new_net_instance)
+        new_net_instance = tsdi.Constructor2(self.get_net_pointer(), parameter_filter)
+        return TimeseriesData(new_net_instance)
 
-    def add_timestamp(self, time: Union[datetime, timedelta]) -> ParameterDataTimestamp:
+    def add_timestamp(self, time: Union[datetime, timedelta]) -> TimeseriesDataTimestamp:
         """
         Start adding a new set parameters and their tags at the specified time
         :param time: The time to use for adding new event values.
                      | datetime: The datetime to use for adding new event values. Epoch will never be added to this
                      | timedelta: The time since the default epoch to add the event values at
 
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
         if time is None:
             raise ValueError("'time' must not be None")
         if isinstance(time, datetime):
             netdate_hptr = dtc.datetime_to_dotnet(time)
             try:
-                return self._add_to_timestamps(ParameterDataTimestamp(self._interop.AddTimestamp(netdate_hptr)))
+                return self._add_to_timestamps(TimeseriesDataTimestamp(self._interop.AddTimestamp(netdate_hptr)))
             finally:
                 InteropUtils.free_hptr(netdate_hptr)
         if isinstance(time, timedelta):
             nettimespan = dtc.timedelta_to_dotnet(time)
-            return self._add_to_timestamps(ParameterDataTimestamp(self._interop.AddTimestamp2(nettimespan)))
+            return self._add_to_timestamps(TimeseriesDataTimestamp(self._interop.AddTimestamp2(nettimespan)))
         raise ValueError("'time' must be either datetime or timedelta")
 
-    def add_timestamp_milliseconds(self, milliseconds: int) -> ParameterDataTimestamp:
+    def add_timestamp_milliseconds(self, milliseconds: int) -> TimeseriesDataTimestamp:
         """
         Start adding a new set parameters and their tags at the specified time
         :param milliseconds: The time in milliseconds since the default epoch to add the event values at
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
 
-        return self._add_to_timestamps(ParameterDataTimestamp(self._interop.AddTimestampMilliseconds(milliseconds)))
+        return self._add_to_timestamps(TimeseriesDataTimestamp(self._interop.AddTimestampMilliseconds(milliseconds)))
 
-    def add_timestamp_nanoseconds(self, nanoseconds: int) -> ParameterDataTimestamp:
+    def add_timestamp_nanoseconds(self, nanoseconds: int) -> TimeseriesDataTimestamp:
         """
         Start adding a new set parameters and their tags at the specified time
         :param nanoseconds: The time in nanoseconds since the default epoch to add the event values at
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
 
-        return self._add_to_timestamps(ParameterDataTimestamp(self._interop.AddTimestampNanoseconds(nanoseconds)))
+        return self._add_to_timestamps(TimeseriesDataTimestamp(self._interop.AddTimestampNanoseconds(nanoseconds)))
 
     def _add_to_timestamps(self, pdts):
         """
@@ -153,9 +153,9 @@ class ParameterData(object):
         return pdts
 
     @property
-    def timestamps(self) -> List[ParameterDataTimestamp]:
+    def timestamps(self) -> List[TimeseriesDataTimestamp]:
         """
-            Gets the data as rows of ParameterDataTimestamp
+            Gets the data as rows of TimeseriesDataTimestamp
         """
 
         return self._timestamps
@@ -165,23 +165,23 @@ class ParameterData(object):
         if self._timestamps is not None:
             return
 
-        def _converter_to_python(val: ctypes.c_void_p) -> ParameterDataTimestamp:
+        def _converter_to_python(val: ctypes.c_void_p) -> TimeseriesDataTimestamp:
             if val is None:
                 return None
-            return ParameterDataTimestamp(val)
+            return TimeseriesDataTimestamp(val)
 
         timestamps_hptr = self._interop.get_Timestamps()
         refs = InteropUtils.invoke_and_free(timestamps_hptr, ei.ReadReferences)
         self._timestamps = [_converter_to_python(refs[i]) for i in range(len(refs))]
 
     @timestamps.setter
-    def timestamps(self, timestamp_list: List[ParameterDataTimestamp]) -> None:
+    def timestamps(self, timestamp_list: List[TimeseriesDataTimestamp]) -> None:
         """
-            Sets the data as rows of ParameterDataTimestamp
+            Sets the data as rows of TimeseriesDataTimestamp
         """
 
         raise NotImplemented("TODO")
-        dotnet_list = System.Collections.Generic.List[Quix.Sdk.Streaming.Models.ParameterDataTimestamp]([])
+        dotnet_list = System.Collections.Generic.List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp]([])
         for item in timestamp_list:
             dotnet_item = item.convert_to_net()
             dotnet_list.Add(dotnet_item)
@@ -190,7 +190,7 @@ class ParameterData(object):
 
     def to_panda_dataframe(self) -> pd.DataFrame:
         """
-        Converts ParameterData to Panda DataFrame
+        Converts TimeseriesData to Panda DataFrame
 
         :return: Converted Panda DataFrame
         """
@@ -265,19 +265,19 @@ class ParameterData(object):
         return df
 
     @staticmethod
-    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'ParameterData':
+    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesData':
         """
-        Converts Panda DataFrame to ParameterData
+        Converts Panda DataFrame to TimeseriesData
 
-        :param data_frame: The Panda DataFrame to convert to ParameterData
-        :param epoch: The epoch to add to each time value when converting to ParameterData. Defaults to 0
-        :return: Converted ParameterData
+        :param data_frame: The Panda DataFrame to convert to TimeseriesData
+        :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
+        :return: Converted TimeseriesData
         """
 
         if data_frame is None:
             return None
 
-        parameter_data = ParameterData()
+        parameter_data = TimeseriesData()
 
         possible_time_labels = set(['time', 'timestamp', 'datetime'])
 

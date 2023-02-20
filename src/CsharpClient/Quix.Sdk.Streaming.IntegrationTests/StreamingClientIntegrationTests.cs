@@ -35,14 +35,14 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             output.WriteLine($"Created client with brokerlist '{kafkaDockerTestFixture.BrokerList}'");
         }
         
-        private static ParameterDataRaw GenerateParameterData(int offset)
+        private static TimeseriesDataRaw GenerateTimeseriesData(int offset)
         {
             var vals = Enumerable.Range(0, 2).ToDictionary(k => "p" + k,
                 s => Enumerable.Range(offset, 10).Select(s2 => new double?(s2 * 10.0)).ToArray());
             var stringVals = vals.ToDictionary(x => x.Key, x => x.Value.Select(y=> y.ToString()).ToArray());
             var binaryVals = stringVals.ToDictionary(x=> x.Key, x => x.Value.Select(y=> UTF8Encoding.UTF8.GetBytes(y)).ToArray());
             var epoch = 100000;
-            return new ParameterDataRaw
+            return new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = Enumerable.Range(offset, 10).Select(s => (long)s + epoch).ToArray(),
@@ -60,7 +60,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 var inputTopic = client.OpenInputTopic("integration-tests", "quix.tests-sdk-tests");
                 var outputTopic = client.OpenOutputTopic("integration-tests");
 
-                IList<ParameterDataRaw> data = new List<ParameterDataRaw>();
+                IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
                 var streamStarted = false;
                 var streamEnded = false;
@@ -77,7 +77,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
 
                     streamStarted = true;
-                    (e as IStreamReaderInternal).OnParameterData += (s2, e2) => data.Add(e2);
+                    (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
                     (e as IStreamReaderInternal).OnParameterDefinitionsChanged += (s2, e2) => parameterDefinitionsChanged = true;
                     (e as IStreamReaderInternal).OnEventDefinitionsChanged += (s2, e2) => eventDefinitionsChanged = true;
                     (e as IStreamReaderInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
@@ -163,9 +163,9 @@ namespace Quix.Sdk.Streaming.IntegrationTests
 
                     Assert.True(eventDefinitionsChanged, "Event definitions event not reached reader.");
 
-                    var expectedData = new List<ParameterDataRaw>();
-                    expectedData.Add(GenerateParameterData(0));
-                    expectedData.Add(GenerateParameterData(10));
+                    var expectedData = new List<TimeseriesDataRaw>();
+                    expectedData.Add(GenerateTimeseriesData(0));
+                    expectedData.Add(GenerateTimeseriesData(10));
 
                     (stream as IStreamWriterInternal).Write(expectedData);
 
@@ -229,7 +229,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 var inputTopic = client.OpenInputTopic("integration-tests", "quix.tests-sdk-tests");
                 var outputTopic = client.OpenOutputTopic("integration-tests");
 
-                IList<ParameterDataRaw> data = new List<ParameterDataRaw>();
+                IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
                 var streamStarted = false;
                 var streamEnded = false;
@@ -246,7 +246,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
 
                     streamStarted = true;
-                    (e as IStreamReaderInternal).OnParameterData += (s2, e2) => data.Add(e2);
+                    (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
                     (e as IStreamReaderInternal).OnParameterDefinitionsChanged += (s2, e2) => parameterDefinitions = e2.Parameters ?? parameterDefinitions;
                     (e as IStreamReaderInternal).OnEventDefinitionsChanged += (s2, e2) => eventDefinitions = e2.Events ?? eventDefinitions;
                     (e as IStreamReaderInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
@@ -335,9 +335,9 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     expectedParameterDefinitions.Parameters.Should().BeEquivalentTo(parameterDefinitions);
                     expectedEventDefinitions.Events.Should().BeEquivalentTo(eventDefinitions);
 
-                    var expectedData = new List<ParameterDataRaw>();
-                    expectedData.Add(GenerateParameterData(0));
-                    expectedData.Add(GenerateParameterData(10));
+                    var expectedData = new List<TimeseriesDataRaw>();
+                    expectedData.Add(GenerateTimeseriesData(0));
+                    expectedData.Add(GenerateTimeseriesData(10));
 
                     stream.Parameters.Buffer.Epoch = ((long) 100000).FromUnixNanoseconds();
                     stream.Parameters.Buffer.PacketSize = 10;
@@ -447,7 +447,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 var inputTopic = client.OpenInputTopic("integration-tests", "quix.tests-sdk-tests");
                 var outputTopic = client.OpenOutputTopic("integration-tests");
 
-                IList<ParameterDataRaw> data = new List<ParameterDataRaw>();
+                IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
                 var streamStarted = false;
                 var streamEnded = false;
@@ -461,7 +461,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
 
                     streamStarted = true;
-                    (e as IStreamReaderInternal).OnParameterData += (s2, e2) => data.Add(e2);
+                    (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
                     e.OnStreamClosed += (s2, e2) => streamEnded = true;
                 };
 

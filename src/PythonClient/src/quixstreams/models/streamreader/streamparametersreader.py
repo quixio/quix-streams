@@ -3,10 +3,10 @@ from typing import List, Callable
 import pandas
 
 from ..parameterdefinition import ParameterDefinition
-from ...models.parameterdataraw import ParameterDataRaw
-from ...models.parameterdata import ParameterData
-from ...models.parametersbufferconfiguration import ParametersBufferConfiguration
-from ...models.streamreader.parametersbufferreader import ParametersBufferReader
+from ...models.timeseriesdataraw import TimeseriesDataRaw
+from ...models.timeseriesdata import TimeseriesData
+from ...models.timeseriesbufferconfiguration import TimeseriesBufferConfiguration
+from ...models.streamreader.timeseriesbufferreader import TimeseriesBufferReader
 
 
 from ...native.Python.QuixSdkStreaming.Models.StreamReader.StreamParametersReader import StreamParametersReader as spri
@@ -59,16 +59,16 @@ class StreamParametersReader(object):
 
     # region on_read
     @property
-    def on_read(self) -> Callable[['StreamReader', ParameterData], None]:
+    def on_read(self) -> Callable[['StreamReader', TimeseriesData], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         return self._on_read
 
     @on_read.setter
-    def on_read(self, value: Callable[['StreamReader', ParameterData], None]) -> None:
+    def on_read(self, value: Callable[['StreamReader', TimeseriesData], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         self._on_read = value
         if self._on_read_ref is None:
@@ -76,7 +76,7 @@ class StreamParametersReader(object):
 
     def _on_read_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_read(self._stream_reader, ParameterData(data_hptr))
+        self._on_read(self._stream_reader, TimeseriesData(data_hptr))
         InteropUtils.free_hptr(stream_hptr)
 
     def _on_read_dispose(self):
@@ -87,16 +87,16 @@ class StreamParametersReader(object):
 
     # region on_read_raw
     @property
-    def on_read_raw(self) -> Callable[['StreamReader', ParameterDataRaw], None]:
+    def on_read_raw(self) -> Callable[['StreamReader', TimeseriesDataRaw], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         return self._on_read_raw
 
     @on_read_raw.setter
-    def on_read_raw(self, value: Callable[['StreamReader', ParameterDataRaw], None]) -> None:
+    def on_read_raw(self, value: Callable[['StreamReader', TimeseriesDataRaw], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         self._on_read_raw = value
         if self._on_read_raw_ref is None:
@@ -104,7 +104,7 @@ class StreamParametersReader(object):
 
     def _on_read_raw_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_read_raw(self._stream_reader, ParameterDataRaw(data_hptr))
+        self._on_read_raw(self._stream_reader, TimeseriesDataRaw(data_hptr))
         InteropUtils.free_hptr(stream_hptr)
 
     def _on_read_raw_dispose(self):
@@ -132,7 +132,7 @@ class StreamParametersReader(object):
 
     def _on_read_dataframe_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        pdr = ParameterDataRaw(data_hptr)
+        pdr = TimeseriesDataRaw(data_hptr)
         pdf = pdr.to_panda_dataframe()
         pdr.dispose()
         self._on_read_dataframe(self._stream_reader, pdf)
@@ -186,21 +186,21 @@ class StreamParametersReader(object):
         finally:
             InteropUtils.free_hptr(defs_hptr)
 
-    def create_buffer(self, *parameter_filter: str, buffer_configuration: ParametersBufferConfiguration = None) -> ParametersBufferReader:
+    def create_buffer(self, *parameter_filter: str, buffer_configuration: TimeseriesBufferConfiguration = None) -> TimeseriesBufferReader:
         """
         Creates a new buffer for reading data according to the provided parameter_filter and buffer_configuration
         :param parameter_filter: 0 or more parameter identifier to filter as a whitelist. If provided, only these
             parameters will be available through this buffer
         :param buffer_configuration: an optional ParameterBufferConfiguration.
 
-        :returns: a ParametersBufferReader which will raise new parameters read via .on_read event
+        :returns: a TimeseriesBufferReader which will raise new parameters read via .on_read event
         """
 
         actual_filters_uptr = None
         if parameter_filter is not None:
             filters = []
             for param_filter in parameter_filter:
-                if isinstance(param_filter, ParametersBufferConfiguration):
+                if isinstance(param_filter, TimeseriesBufferConfiguration):
                     buffer_configuration = param_filter
                     break
                 filters.append(param_filter)
@@ -210,9 +210,9 @@ class StreamParametersReader(object):
         buffer = None
         if buffer_configuration is not None:
             buffer_config_ptr = buffer_configuration.get_net_pointer()
-            buffer = ParametersBufferReader(self._stream_reader, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
+            buffer = TimeseriesBufferReader(self._stream_reader, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
         else:
-            buffer = ParametersBufferReader(self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
+            buffer = TimeseriesBufferReader(self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
 
         self._buffers.append(buffer)
         return buffer

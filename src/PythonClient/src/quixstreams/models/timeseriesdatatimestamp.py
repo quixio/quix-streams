@@ -7,29 +7,29 @@ from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
 from ..helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
-from ..native.Python.QuixSdkStreaming.Models.ParameterDataTimestamp import ParameterDataTimestamp as pdti
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesDataTimestamp import TimeseriesDataTimestamp as tsdti
 
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
-class ParameterDataTimestamp:
+class TimeseriesDataTimestamp:
     """
     Represents a single point in time with parameter values and tags attached to that time
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of ParameterDataTimestamp.
+            Initializes a new instance of TimeseriesDataTimestamp.
 
             Parameters:
 
-            net_pointer: Pointer to an instance of a .net ParameterDataTimestamp.
+            net_pointer: Pointer to an instance of a .net TimeseriesDataTimestamp.
         """
         if net_pointer is None:
-            raise Exception("ParameterDataTimestamp constructor should not be invoked without a .net pointer")
+            raise Exception("TimeseriesDataTimestamp constructor should not be invoked without a .net pointer")
 
-        self._interop = pdti(net_pointer)
+        self._interop = tsdti(net_pointer)
         self._parameters = None  # to cache whatever is read from .net
         self._tags = None  # to cache whatever is read from .net
 
@@ -129,13 +129,13 @@ class ParameterDataTimestamp:
         """Gets the timestamp in timespan format"""
         return dtc.timespan_to_python(self._interop.get_TimestampAsTimeSpan())
 
-    def add_value(self, parameter_id: str, value: Union[float, str, int, bytearray, bytes]) -> 'ParameterDataTimestamp':
+    def add_value(self, parameter_id: str, value: Union[float, str, int, bytearray, bytes]) -> 'TimeseriesDataTimestamp':
         """
             Adds a new value for the parameter
             :param parameter_id: The parameter to add the value for
             :param value: the value to add. Can be float or string
 
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
 
         if type(value) is int:
@@ -143,18 +143,18 @@ class ParameterDataTimestamp:
 
         val_type = type(value)
         if val_type is float:
-            new = pdti(self._interop.AddValue(parameter_id, value))
+            new = tsdti(self._interop.AddValue(parameter_id, value))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
         elif val_type is str:
-            new = pdti(self._interop.AddValue2(parameter_id, value))
+            new = tsdti(self._interop.AddValue2(parameter_id, value))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
         elif val_type is bytearray or val_type is bytes:
             uptr = ai.WriteBytes(value)
-            new = pdti(self._interop.AddValue3(parameter_id, uptr))
+            new = tsdti(self._interop.AddValue3(parameter_id, uptr))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
@@ -164,14 +164,14 @@ class ParameterDataTimestamp:
 
         return self
 
-    def remove_value(self, parameter_id: str) -> 'ParameterDataTimestamp':
+    def remove_value(self, parameter_id: str) -> 'TimeseriesDataTimestamp':
         """
             Removes the value for the parameter
             :param parameter_id: The parameter to remove the value for
 
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
-        new = pdti(self._interop.RemoveValue(parameter_id))
+        new = tsdti(self._interop.RemoveValue(parameter_id))
         if new != self._interop:
             self._interop.dispose_ptr__()
             self._interop = new
@@ -179,43 +179,43 @@ class ParameterDataTimestamp:
         self._clear_parameters()  # to cause re-read from underlying if necessary
         return self
 
-    def add_tag(self, tag_id: str, tag_value: str) -> 'ParameterDataTimestamp':
+    def add_tag(self, tag_id: str, tag_value: str) -> 'TimeseriesDataTimestamp':
         """
             Adds a tag to the values
             :param tag_id: The id of the tag to the set the value for
             :param tag_value: the value to set
 
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
         tags = self.tags  # force evaluation of the local cache
         tags[tag_id] = tag_value
-        new = pdti(self._interop.AddTag(tag_id, tag_value))
+        new = tsdti(self._interop.AddTag(tag_id, tag_value))
         if new != self._interop:
             self._interop.dispose_ptr__()
             self._interop = new
         return self
 
-    def remove_tag(self, tag_id: str) -> 'ParameterDataTimestamp':
+    def remove_tag(self, tag_id: str) -> 'TimeseriesDataTimestamp':
         """
             Removes a tag from the values
             :param tag_id: The id of the tag to remove
 
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
         tags = self.tags  # force evaluation of the local cache
         tags.pop(tag_id)
-        new = pdti(self._interop.RemoveTag(tag_id))
+        new = tsdti(self._interop.RemoveTag(tag_id))
         if new != self._interop:
             self._interop.dispose_ptr__()
             self._interop = new
         return self
 
-    def add_tags(self, tags: Dict[str, str]) -> 'ParameterDataTimestamp':
+    def add_tags(self, tags: Dict[str, str]) -> 'TimeseriesDataTimestamp':
         """
             Copies the tags from the specified dictionary. Conflicting tags will be overwritten
             :param tags: The tags to add
 
-        :return: ParameterDataTimestamp
+        :return: TimeseriesDataTimestamp
         """
 
         if tags is None:

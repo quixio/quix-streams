@@ -1,14 +1,14 @@
 from typing import Optional, Callable
 import ctypes
-from ..models.parameterdata import ParameterData
-from ..models.parameterdatatimestamp import ParameterDataTimestamp
-from ..native.Python.QuixSdkStreaming.Models.ParametersBufferConfiguration import ParametersBufferConfiguration as pbci
+from ..models.timeseriesdata import TimeseriesData
+from ..models.timeseriesdatatimestamp import TimeseriesDataTimestamp
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesBufferConfiguration import TimeseriesBufferConfiguration as tsbci
 
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
-class ParametersBufferConfiguration(object):
+class TimeseriesBufferConfiguration(object):
     """
     Describes the configuration for parameter buffers
     When none of the buffer conditions are configured, the buffer immediate invokes the on_read
@@ -16,14 +16,14 @@ class ParametersBufferConfiguration(object):
 
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
-            Initializes a new instance of ParametersBufferConfiguration.
+            Initializes a new instance of TimeseriesBufferConfiguration.
 
-            :param _net_object: Can be ignored, here for internal purposes .net object: The .net object representing a ParametersBufferConfiguration.
+            :param _net_object: Can be ignored, here for internal purposes .net object: The .net object representing a TimeseriesBufferConfiguration.
         """
         if net_pointer is None:
-            self._interop = pbci(pbci.Constructor())
+            self._interop = tsbci(tsbci.Constructor())
         else:
-            self._interop = pbci(net_pointer)
+            self._interop = tsbci(net_pointer)
 
         def dummy():
             pass
@@ -133,7 +133,7 @@ class ParametersBufferConfiguration(object):
         self._interop.set_BufferTimeout(value)
 
     @property
-    def custom_trigger_before_enqueue(self) -> Callable[[ParameterDataTimestamp], bool]:
+    def custom_trigger_before_enqueue(self) -> Callable[[TimeseriesDataTimestamp], bool]:
         """
             Gets the custom function which is invoked before adding the timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked before adding the timestamp to it.
             Defaults to none (disabled).
@@ -141,7 +141,7 @@ class ParametersBufferConfiguration(object):
         return self._custom_trigger_before_enqueue
 
     @custom_trigger_before_enqueue.setter
-    def custom_trigger_before_enqueue(self, value: Callable[[ParameterDataTimestamp], bool]):
+    def custom_trigger_before_enqueue(self, value: Callable[[TimeseriesDataTimestamp], bool]):
         """
             Sets the custom function which is invoked before adding the timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked before adding the timestamp to it.
             Defaults to none (disabled).
@@ -152,13 +152,13 @@ class ParametersBufferConfiguration(object):
             return
 
         def callback(ts: ctypes.c_void_p) -> bool:
-            converted_ts = ParameterDataTimestamp(ts)
+            converted_ts = TimeseriesDataTimestamp(ts)
             return value(converted_ts)
 
         self._interop.set_CustomTriggerBeforeEnqueue(callback)
 
     @property
-    def filter(self) -> Callable[[ParameterDataTimestamp], bool]:
+    def filter(self) -> Callable[[TimeseriesDataTimestamp], bool]:
         """
             Gets the custom function to filter the incoming data before adding it to the buffer. If returns true, data is added otherwise not.
             Defaults to none (disabled).
@@ -166,7 +166,7 @@ class ParametersBufferConfiguration(object):
         return self._filter
 
     @filter.setter
-    def filter(self, value: Callable[[ParameterDataTimestamp], bool]):
+    def filter(self, value: Callable[[TimeseriesDataTimestamp], bool]):
         """
             Sets the custom function to filter the incoming data before adding it to the buffer. If returns true, data is added otherwise not.
             Defaults to none (disabled).
@@ -177,13 +177,13 @@ class ParametersBufferConfiguration(object):
             return
 
         def callback(ts: ctypes.c_void_p) -> bool:
-            converted_ts = ParameterDataTimestamp(ts)
+            converted_ts = TimeseriesDataTimestamp(ts)
             return value(converted_ts)
 
         self._interop.set_Filter(callback)
 
     @property
-    def custom_trigger(self) -> Callable[[ParameterData], bool]:
+    def custom_trigger(self) -> Callable[[TimeseriesData], bool]:
         """
             Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked with the entire buffer content
             Defaults to none (disabled).
@@ -191,7 +191,7 @@ class ParametersBufferConfiguration(object):
         return self._custom_trigger
 
     @custom_trigger.setter
-    def custom_trigger(self, value: Callable[[ParameterData], bool]):
+    def custom_trigger(self, value: Callable[[TimeseriesData], bool]):
         """
             Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked with the entire buffer content
             Defaults to none (disabled).
@@ -202,7 +202,7 @@ class ParametersBufferConfiguration(object):
             return
 
         def callback(pd: ctypes.c_void_p) -> bool:
-            converted_pd = ParameterData(pd)
+            converted_pd = TimeseriesData(pd)
             return value(converted_pd)
 
         self._interop.set_CustomTrigger(callback)

@@ -63,7 +63,7 @@ namespace Quix.Sdk.Speedtest
             
             while (!ct.IsCancellationRequested)
             {
-                var data = new ParameterDataRaw();
+                var data = new TimeseriesDataRaw();
                 data.Epoch = 0;
 
                 var timestamps = new long[PACKET_SIZE];

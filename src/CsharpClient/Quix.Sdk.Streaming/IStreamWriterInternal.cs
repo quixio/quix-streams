@@ -30,12 +30,12 @@ namespace Quix.Sdk.Streaming
         /// <summary>
         /// Write a single Parameter data package to the stream
         /// </summary>
-        void Write(Process.Models.ParameterDataRaw rawData);
+        void Write(Process.Models.TimeseriesDataRaw rawData);
 
         /// <summary>
         /// Write a set of Parameter data packages to the stream
         /// </summary>
-        void Write(List<Process.Models.ParameterDataRaw> data);
+        void Write(List<Process.Models.TimeseriesDataRaw> data);
 
         /// <summary>
         /// Write the optional Parameter definition properties describing the hierarchical grouping of parameters

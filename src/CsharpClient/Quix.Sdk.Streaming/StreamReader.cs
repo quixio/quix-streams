@@ -59,7 +59,7 @@ namespace Quix.Sdk.Streaming
         public event Action<IStreamReaderInternal, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
 
         /// <inheritdoc />
-        public event Action<IStreamReaderInternal, Process.Models.ParameterDataRaw> OnParameterData;
+        public event Action<IStreamReaderInternal, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <inheritdoc />
         public event Action<IStreamReaderInternal, Process.Models.EventDataRaw> OnEventData;
@@ -73,7 +73,7 @@ namespace Quix.Sdk.Streaming
             // this.AddComponent(SimpleModifier)
 
             this.Subscribe<Process.Models.StreamProperties>(OnStreamPropertiesReceived);
-            this.Subscribe<Process.Models.ParameterDataRaw>(OnParameterDataReceived);
+            this.Subscribe<Process.Models.TimeseriesDataRaw>(OnTimeseriesDataReceived);
             this.Subscribe<Process.Models.ParameterDefinitions>(OnParameterDefinitionsReceived);
             this.Subscribe<Process.Models.EventDataRaw[]>(OnEventDataReceived);
             this.Subscribe<Process.Models.EventDefinitions>(OnEventDefinitionsReceived);
@@ -98,10 +98,10 @@ namespace Quix.Sdk.Streaming
             this.OnStreamPropertiesChanged?.Invoke(this, obj);
         }
 
-        private void OnParameterDataReceived(IStreamProcess streamProcess, Process.Models.ParameterDataRaw obj)
+        private void OnTimeseriesDataReceived(IStreamProcess streamProcess, Process.Models.TimeseriesDataRaw obj)
         {
-            this.logger.LogTrace("StreamReader: OnParameterDataReceived. Data packet of size = {0}", obj.Timestamps.Length);
-            this.OnParameterData?.Invoke(this, obj);
+            this.logger.LogTrace("StreamReader: OnTimeseriesDataReceived. Data packet of size = {0}", obj.Timestamps.Length);
+            this.OnTimeseriesData?.Invoke(this, obj);
         }
 
         private void OnParameterDefinitionsReceived(IStreamProcess streamProcess, Process.Models.ParameterDefinitions obj)

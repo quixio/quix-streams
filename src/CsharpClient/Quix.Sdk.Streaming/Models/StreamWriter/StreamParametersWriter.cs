@@ -9,7 +9,7 @@ using Quix.Sdk.Streaming.Exceptions;
 namespace Quix.Sdk.Streaming.Models.StreamWriter
 {
     /// <summary>
-    /// Helper class for writing <see cref="ParameterDefinition"/> and <see cref="ParameterData"/>
+    /// Helper class for writing <see cref="ParameterDefinition"/> and <see cref="TimeseriesData"/>
     /// </summary>
     public class StreamParametersWriter : IDisposable
     {
@@ -34,7 +34,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             this.streamWriter = streamWriter;
 
             // Parameters Buffer 
-            this.Buffer = new ParametersBufferWriter(this.streamWriter, new ParametersBufferConfiguration());
+            this.Buffer = new TimeseriesBufferWriter(this.streamWriter, new TimeseriesBufferConfiguration());
 
             // Timer for Flush Parameter definitions
             flushDefinitionsTimer = new Timer(OnFlushDefinitionsTimerEvent, null, Timeout.Infinite, Timeout.Infinite); // Create disabled flush timer
@@ -46,13 +46,13 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// <summary>
         /// Gets the buffer for writing parameter data
         /// </summary>
-        public ParametersBufferWriter Buffer { get;  }
+        public TimeseriesBufferWriter Buffer { get;  }
 
         /// <summary>
         /// Write data to stream without using Buffer
         /// </summary>
         /// <param name="data">Parameter data to write</param>
-        public void Write(ParameterData data)
+        public void Write(TimeseriesData data)
         {
             if (isDisposed)
             {
@@ -77,7 +77,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// Write data parameter data raw directly to stream
         /// </summary>
         /// <param name="data">Parameter data to write</param>
-        public void Write(Process.Models.ParameterDataRaw data)
+        public void Write(Process.Models.TimeseriesDataRaw data)
         {
             if (isDisposed)
             {
@@ -99,7 +99,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
                 updatedTimestamps[i] = data.Timestamps[i] + epochDiff;
             }
 
-            Process.Models.ParameterDataRaw new_data = new Process.Models.ParameterDataRaw(
+            Process.Models.TimeseriesDataRaw new_data = new Process.Models.TimeseriesDataRaw(
                 data.Epoch, 
                 updatedTimestamps, 
                 data.NumericValues, 

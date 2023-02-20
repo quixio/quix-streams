@@ -19,7 +19,7 @@ namespace Quix.Sdk.PerformanceTest
         public void Run(int paramCount, int bufferSize, CancellationToken ct, bool onlyReceive = false, bool showIntermediateResults = false)
         {
 
-            var buffer = new ParametersBuffer(null, null, true, false);
+            var buffer = new TimeseriesBuffer(null, null, true, false);
             buffer.PacketSize = bufferSize;
             buffer.OnRead += (sender, data) =>
             {
@@ -51,7 +51,7 @@ namespace Quix.Sdk.PerformanceTest
 
 
             // Prepare data 
-            var data = new ParameterData(100);
+            var data = new TimeseriesData(100);
             for(var i = 0; i < 100; i++)
             {
                 var timestamp = data.AddTimestampNanoseconds(i);
@@ -71,7 +71,7 @@ namespace Quix.Sdk.PerformanceTest
             {
                 buffer.WriteChunk(raw);
 
-                //var dataSimulated = new ParameterData(raw);
+                //var dataSimulated = new TimeseriesData(raw);
 
                 //dataSimulated.Timestamps.ForEach(t => 
                 //{

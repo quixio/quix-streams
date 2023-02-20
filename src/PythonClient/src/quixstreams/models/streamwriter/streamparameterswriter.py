@@ -1,8 +1,8 @@
 from typing import Union
 
-from .parametersbufferwriter import ParametersBufferWriter
+from .timeseriesbufferwriter import TimeseriesBufferWriter
 from ...builders import ParameterDefinitionBuilder
-from ...models import ParameterData, ParameterDataRaw
+from ...models import TimeseriesData, TimeseriesDataRaw
 import pandas as pd
 
 from ...native.Python.QuixSdkStreaming.Models.StreamWriter.StreamParametersWriter import StreamParametersWriter as spwi
@@ -79,18 +79,18 @@ class StreamParametersWriter(object):
         self._interop.set_DefaultLocation(value)
 
     @property
-    def buffer(self) -> ParametersBufferWriter:
+    def buffer(self) -> TimeseriesBufferWriter:
         """Get the buffer for writing parameter data"""
 
         if self._buffer is None:
-            self._buffer = ParametersBufferWriter(self._stream_writer, self._interop.get_Buffer())
+            self._buffer = TimeseriesBufferWriter(self._stream_writer, self._interop.get_Buffer())
         return self._buffer
 
-    def write(self, packet: Union[ParameterData, pd.DataFrame, ParameterDataRaw]) -> None:
+    def write(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]) -> None:
         """
             Writes the given packet to the stream without any buffering.
 
-            :param packet: The packet containing ParameterData or panda DataFrame
+            :param packet: The packet containing TimeseriesData or panda DataFrame
 
             packet type panda.DataFrame
                 Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
@@ -122,14 +122,14 @@ class StreamParametersWriter(object):
 
             for other type examples see the specific type
         """
-        if isinstance(packet, ParameterData):
+        if isinstance(packet, TimeseriesData):
             self._interop.Write(packet.get_net_pointer())
             return
-        if isinstance(packet, ParameterDataRaw):
+        if isinstance(packet, TimeseriesDataRaw):
             self._interop.Write2(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = ParameterDataRaw.from_panda_dataframe(packet)
+            data = TimeseriesDataRaw.from_panda_dataframe(packet)
             with data:
                 self._interop.Write2(data.get_net_pointer())
             return

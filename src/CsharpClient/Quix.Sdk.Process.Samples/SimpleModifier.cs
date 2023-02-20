@@ -18,12 +18,12 @@ namespace Quix.Sdk.Process.Samples
 
             // Modifiers is just about links input to output and intercept messages
             Input.LinkTo(Output)
-                .Intercept<ParameterDataRaw>(OnTDataIntercept) // use here any other generic model type
-                .Intercept<ParameterDataRaw>(OnTDataIntercept) // use here any other generic model type
-                .Intercept<ParameterDataRaw>(OnTDataIntercept);
+                .Intercept<TimeseriesDataRaw>(OnTDataIntercept) // use here any other generic model type
+                .Intercept<TimeseriesDataRaw>(OnTDataIntercept) // use here any other generic model type
+                .Intercept<TimeseriesDataRaw>(OnTDataIntercept);
         }
 
-        public Task OnTDataIntercept(ParameterDataRaw tdata)
+        public Task OnTDataIntercept(TimeseriesDataRaw tdata)
         {
             tdata.NumericValues.First().Value[0] = this.num;
 

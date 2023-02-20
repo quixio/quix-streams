@@ -10,9 +10,9 @@ using Xunit.Abstractions;
 
 namespace Quix.Sdk.Streaming.UnitTests.Models
 {
-    public class ParametersBufferShould
+    public class TimeseriesBufferShould
     {
-        public ParametersBufferShould(ITestOutputHelper helper)
+        public TimeseriesBufferShould(ITestOutputHelper helper)
         {
             Quix.Sdk.Logging.Factory = helper.CreateLoggerFactory();
         }
@@ -21,7 +21,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithDisabledConfiguration_ShouldRaiseOnReadEventsStraightForward()
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -31,8 +31,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTrigger = null,
                 CustomTriggerBeforeEnqueue = null
             };
-            var buffer = new ParametersBuffer(bufferConfiguration);
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -40,14 +40,14 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
 
             // Assert
             receivedData.Count.Should().Be(5);
             foreach (var rData in receivedData)
             {
-                receivedData[0].Should().BeEquivalentTo(new ParameterData(new List<ParameterDataTimestamp>() {data.Timestamps[0]}));   
+                receivedData[0].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[0]}));   
             }
         }
 
@@ -55,7 +55,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithData_FlushOnDispose()
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = 3,
                 TimeSpanInMilliseconds = null,
@@ -65,8 +65,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTrigger = null,
                 CustomTriggerBeforeEnqueue = null
             };
-            var buffer = new ParametersBuffer(bufferConfiguration);
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -74,7 +74,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
 
             // Assert
@@ -93,7 +93,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithPacketSizeConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -104,9 +104,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.PacketSize = 2;
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.PacketSize = 2;
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -114,13 +114,13 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
 
             // Assert
             receivedData.Count.Should().Be(2);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(0).Take(2).ToList()));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(2).Take(2).ToList()));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
         }
 
         [Theory]
@@ -129,7 +129,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithTimeSpanMsConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -139,9 +139,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.TimeSpanInMilliseconds = 200;
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.TimeSpanInMilliseconds = 200;
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -149,13 +149,13 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
 
             // Assert
             receivedData.Count.Should().Be(2);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(0).Take(2).ToList()));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(2).Take(2).ToList()));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
         }
 
         [Theory]
@@ -164,7 +164,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithTimeSpanNsConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -175,9 +175,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.TimeSpanInNanoseconds = 200 * (long) 1e6;
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.TimeSpanInNanoseconds = 200 * (long) 1e6;
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -185,20 +185,20 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
 
             // Assert
             receivedData.Count.Should().Be(2);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(0).Take(2).ToList()));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(2).Take(2).ToList()));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
         }
 
         [Fact]
         public void WriteData_WithTimeSpanAndBufferTimeoutConfiguration_ShouldRaiseProperOnReadEvents()
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() 
+            var bufferConfiguration = new TimeseriesBufferConfiguration() 
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = 200,
@@ -207,8 +207,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTrigger = null,
                 CustomTriggerBeforeEnqueue = null
             };
-            var buffer = new ParametersBuffer(bufferConfiguration);
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -216,15 +216,15 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
             Thread.Sleep(1000);
 
             // Assert
             receivedData.Count.Should().Be(3);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(0).Take(2).ToList()));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(2).Take(2).ToList()));
-            receivedData[2].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(4).Take(1).ToList()));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
+            receivedData[2].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(4).Take(1).ToList()));
         }
 
         [Theory]
@@ -233,7 +233,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithFilterConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -244,9 +244,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -254,15 +254,15 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
             Thread.Sleep(1000);
 
             // Assert
             receivedData.Count.Should().Be(3);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(new List<ParameterDataTimestamp>() {data.Timestamps[0]}));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(new List<ParameterDataTimestamp>() {data.Timestamps[2]}));
-            receivedData[2].Should().BeEquivalentTo(new ParameterData(new List<ParameterDataTimestamp>() {data.Timestamps[4]}));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[0]}));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[2]}));
+            receivedData[2].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[4]}));
         }
         
         [Theory]
@@ -271,7 +271,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithBufferTimeout_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -282,9 +282,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.BufferTimeout = 100;
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.BufferTimeout = 100;
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -292,7 +292,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
             Thread.Sleep(1000);
 
@@ -307,7 +307,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithCustomTriggerConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -318,9 +318,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.CustomTrigger = (data) => data.Timestamps.Count == 2;
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.CustomTrigger = (data) => data.Timestamps.Count == 2;
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -328,14 +328,14 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
             Thread.Sleep(1000);
 
             // Assert
             receivedData.Count.Should().Be(2);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(0).Take(2).ToList()));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(2).Take(2).ToList()));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
         }
 
         [Theory]
@@ -344,7 +344,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_WithCustomTriggerBeforeEnqueueConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new ParametersBufferConfiguration() // Set the buffer explicitly to null
+            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
                 PacketSize = null,
                 TimeSpanInMilliseconds = null,
@@ -355,9 +355,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 CustomTriggerBeforeEnqueue = null
             };
             if (initialConfig) bufferConfiguration.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
-            var buffer = new ParametersBuffer(bufferConfiguration);
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
-            var receivedData = new List<Streaming.Models.ParameterData>();
+            var receivedData = new List<Streaming.Models.TimeseriesData>();
 
             buffer.OnRead += (sender, data) =>
             {
@@ -365,19 +365,19 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             //Act
-            var data = this.GenerateParameterData();
+            var data = this.GenerateTimeseriesData();
             buffer.WriteChunk(data.ConvertToProcessData(false, false));
             Thread.Sleep(1000);
 
             // Assert
             receivedData.Count.Should().Be(2);
-            receivedData[0].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(0).Take(2).ToList()));
-            receivedData[1].Should().BeEquivalentTo(new ParameterData(data.Timestamps.Skip(2).Take(2).ToList()));
+            receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
+            receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
         }
 
-        private ParameterData GenerateParameterData()
+        private TimeseriesData GenerateTimeseriesData()
         {
-            var data = new ParameterData();
+            var data = new TimeseriesData();
             data.AddTimestampMilliseconds(100)
                 .AddValue("param1", 1)
                 .AddValue("param2", 2)

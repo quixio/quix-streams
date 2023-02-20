@@ -1,4 +1,4 @@
-from .. import ParameterDataRaw
+from .. import TimeseriesDataRaw
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.QuixSdkProcess.Models.StreamPackage import StreamPackage as spi
 from ..native.Python.SystemPrivateCoreLib.System.Type import Type as NetType
@@ -46,8 +46,8 @@ class StreamPackage(object):
             elif self.type == "Quix.Sdk.Process.Models.StreamEnd":
                 self.value = InteropUtils.hptr_to_uptr(val_hptr)
                 pass
-            elif self.type == "Quix.Sdk.Process.Models.ParameterDataRaw":
-                self.value = ParameterDataRaw(val_hptr)
+            elif self.type == "Quix.Sdk.Process.models.timeseriesdataRaw":
+                self.value = TimeseriesDataRaw(val_hptr)
             elif self.type == "Quix.Sdk.Process.Models.EventDataRaw[]":
                 pass
             elif self.type == "Quix.Sdk.Process.Models.EventDataRaw":

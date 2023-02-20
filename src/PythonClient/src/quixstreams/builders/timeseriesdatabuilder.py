@@ -2,36 +2,35 @@ from typing import Union, Dict
 import ctypes
 
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixSdkStreaming.Models.StreamWriter.ParameterDataBuilder import ParameterDataBuilder as pdbi
+from ..native.Python.QuixSdkStreaming.Models.StreamWriter.TimeseriesDataBuilder import TimeseriesDataBuilder as tsdbi
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
-class ParameterDataBuilder(object):
+class TimeseriesDataBuilder(object):
     """
         Builder for creating parameter data packages for StreamPropertiesWriter
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of ParameterDataBuilder.
+            Initializes a new instance of TimeseriesDataBuilder.
 
             Parameters:
 
-            net_pointer: Pointer to an instance of a .net ParameterDataBuilder.
+            net_pointer: Pointer to an instance of a .net TimeseriesDataBuilder.
         """
 
         if net_pointer is None:
-            raise Exception("ParameterDataBuilder is none")
+            raise Exception("TimeseriesDataBuilder is none")
 
-        self._interop = pdbi(net_pointer)
+        self._interop = tsdbi(net_pointer)
         self._entered = False
 
     def __enter__(self):
         self._entered = True
 
-    def add_value(self, parameter_id: str, value: Union[str, float, int, bytes, bytearray]) -> 'ParameterDataBuilder':
+    def add_value(self, parameter_id: str, value: Union[str, float, int, bytes, bytearray]) -> 'TimeseriesDataBuilder':
         """
         Adds new parameter value at the time the builder is created for
         :param parameter_id: The id of the parameter to set the value for
@@ -48,18 +47,18 @@ class ParameterDataBuilder(object):
             val_type = bytes
 
         if val_type is float:
-            new = pdbi(self._interop.AddValue(parameter_id, value))
+            new = tsdbi(self._interop.AddValue(parameter_id, value))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
         elif val_type is str:
-            new = pdbi(self._interop.AddValue2(parameter_id, value))
+            new = tsdbi(self._interop.AddValue2(parameter_id, value))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
         elif val_type is bytes:
             arr_ptr = Array.WriteBytes(value)
-            new = pdbi(self._interop.AddValue3(parameter_id, arr_ptr))
+            new = tsdbi(self._interop.AddValue3(parameter_id, arr_ptr))
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
@@ -67,14 +66,14 @@ class ParameterDataBuilder(object):
             raise Exception("Invalid type " + str(val_type) + " passed as parameter value.")
         return self
 
-    def add_tag(self, tag_id: str, value: str) -> 'ParameterDataBuilder':
+    def add_tag(self, tag_id: str, value: str) -> 'TimeseriesDataBuilder':
         """
         Adds tag value for the values. If
         :param tag_id: The id of the tag
         :param value: The value of the tag
         :return: The builder
         """
-        new = pdbi(self._interop.AddTag(tag_id, value))
+        new = tsdbi(self._interop.AddTag(tag_id, value))
         if new != self._interop:
             self._interop.dispose_ptr__()
             self._interop = new

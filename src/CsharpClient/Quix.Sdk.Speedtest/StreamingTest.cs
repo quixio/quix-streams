@@ -61,7 +61,7 @@ namespace Quix.Sdk.Speedtest
 
             while (!ct.IsCancellationRequested)
             {
-                var data = new Streaming.Models.ParameterData();
+                var data = new Streaming.Models.TimeseriesData();
                 data.AddTimestampNanoseconds(10).AddValue(parameterName, DateTime.UtcNow.ToBinary());
                 stream.Parameters.Buffer.Write(data);
             }

@@ -103,7 +103,7 @@ namespace Quix.Sdk.Streaming
         }
 
         /// <inheritdoc />
-        public void Write(Process.Models.ParameterDataRaw rawData)
+        public void Write(Process.Models.TimeseriesDataRaw rawData)
         {
             CheckIfClosed();
             var send = this.Send(rawData);
@@ -121,7 +121,7 @@ namespace Quix.Sdk.Streaming
         }
 
         /// <inheritdoc />
-        public void Write(List<Process.Models.ParameterDataRaw> data)
+        public void Write(List<Process.Models.TimeseriesDataRaw> data)
         {
             CheckIfClosed();
             foreach(var d in data)

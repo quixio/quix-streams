@@ -5,17 +5,17 @@ import pandas
 
 from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 
-from ..models.parameterdata import ParameterData
-from ..models.parameterdataraw import ParameterDataRaw
-from ..models.parameterdatatimestamp import ParameterDataTimestamp
+from ..models.timeseriesdata import TimeseriesData
+from ..models.timeseriesdataraw import TimeseriesDataRaw
+from ..models.timeseriesdatatimestamp import TimeseriesDataTimestamp
 
-from ..native.Python.QuixSdkStreaming.Models.ParametersBuffer import ParametersBuffer as pbi
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as pbi
 
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
-class ParametersBuffer(object):
+class TimeseriesBuffer(object):
     """
         Class used for buffering parameters
         When none of the buffer conditions are configured, the buffer does not buffer at all
@@ -23,15 +23,15 @@ class ParametersBuffer(object):
 
     def __init__(self, stream, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of ParametersBuffer.
+            Initializes a new instance of TimeseriesBuffer.
             NOTE: Do not initialize this class manually, use StreamingClient.create_output to create it
 
             Parameters:
 
-            net_object (.net object): The .net object representing a ParametersBuffer
+            net_object (.net object): The .net object representing a TimeseriesBuffer
         """
         if net_pointer is None:
-            raise Exception("ParametersBuffer is none")
+            raise Exception("TimeseriesBuffer is none")
 
         self._interop_pb = pbi(net_pointer)
         self._stream = stream
@@ -72,16 +72,16 @@ class ParametersBuffer(object):
 
     # region on_read
     @property
-    def on_read(self) -> Callable[[Union['StreamReader', 'StreamWriter'], ParameterData], None]:
+    def on_read(self) -> Callable[[Union['StreamReader', 'StreamWriter'], TimeseriesData], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         return self._on_read
 
     @on_read.setter
-    def on_read(self, value: Callable[[Union['StreamReader', 'StreamWriter'], ParameterData], None]) -> None:
+    def on_read(self, value: Callable[[Union['StreamReader', 'StreamWriter'], TimeseriesData], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterData format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         self._on_read = value
         if self._on_read_ref is None:
@@ -89,7 +89,7 @@ class ParametersBuffer(object):
 
     def _on_read_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        data = ParameterData(net_pointer=data_hptr)
+        data = TimeseriesData(net_pointer=data_hptr)
         self._on_read(self._stream, data)
         InteropUtils.free_hptr(stream_hptr)
 
@@ -101,16 +101,16 @@ class ParametersBuffer(object):
     
     # region on_read_raw
     @property
-    def on_read_raw(self) -> Callable[[Union['StreamReader', 'StreamWriter'], ParameterDataRaw], None]:
+    def on_read_raw(self) -> Callable[[Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         return self._on_read_raw
 
     @on_read_raw.setter
-    def on_read_raw(self, value: Callable[[Union['StreamReader', 'StreamWriter'], ParameterDataRaw], None]) -> None:
+    def on_read_raw(self, value: Callable[[Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in ParameterDataRaw format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         self._on_read_raw = value
         if self._on_read_raw_ref is None:
@@ -118,7 +118,7 @@ class ParametersBuffer(object):
 
     def _on_read_raw_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_read_raw(self._stream, ParameterDataRaw(data_hptr))
+        self._on_read_raw(self._stream, TimeseriesDataRaw(data_hptr))
         InteropUtils.free_hptr(stream_hptr)
 
     def _on_read_raw_dispose(self):
@@ -146,7 +146,7 @@ class ParametersBuffer(object):
 
     def _on_read_dataframe_wrapper(self, stream_hptr, data_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        pdr = ParameterDataRaw(data_hptr)
+        pdr = TimeseriesDataRaw(data_hptr)
         pdf = pdr.to_panda_dataframe()
         pdr.dispose()
         self._on_read_dataframe(self._stream, pdf)
@@ -160,7 +160,7 @@ class ParametersBuffer(object):
 
 
     @property
-    def filter(self) -> Callable[[ParameterDataTimestamp], bool]:
+    def filter(self) -> Callable[[TimeseriesDataTimestamp], bool]:
         """
             Gets the custom function to filter the incoming data before adding it to the buffer. If returns true, data is added otherwise not.
             Defaults to none (disabled).
@@ -168,7 +168,7 @@ class ParametersBuffer(object):
         return self._filter
 
     @filter.setter
-    def filter(self, value: Callable[[ParameterDataTimestamp], bool]):
+    def filter(self, value: Callable[[TimeseriesDataTimestamp], bool]):
         """
             Sets the custom function to filter the incoming data before adding it to the buffer. If returns true, data is added otherwise not.
             Defaults to none (disabled).
@@ -179,13 +179,13 @@ class ParametersBuffer(object):
             return
 
         def callback(ts: ctypes.c_void_p) -> bool:
-            converted_ts = ParameterDataTimestamp(ts)
+            converted_ts = TimeseriesDataTimestamp(ts)
             return value(converted_ts)
 
         self._interop_pb.set_Filter(callback)
 
     @property
-    def custom_trigger(self) -> Callable[[ParameterData], bool]:
+    def custom_trigger(self) -> Callable[[TimeseriesData], bool]:
         """
             Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked with the entire buffer content
             Defaults to none (disabled).
@@ -193,7 +193,7 @@ class ParametersBuffer(object):
         return self._custom_trigger
 
     @custom_trigger.setter
-    def custom_trigger(self, value: Callable[[ParameterData], bool]):
+    def custom_trigger(self, value: Callable[[TimeseriesData], bool]):
         """
             Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, ParameterBuffer.on_read is invoked with the entire buffer content
             Defaults to none (disabled).
@@ -204,7 +204,7 @@ class ParametersBuffer(object):
             return
 
         def callback(pd: ctypes.c_void_p) -> bool:
-            converted_pd = ParameterData(pd)
+            converted_pd = TimeseriesData(pd)
             return value(converted_pd)
 
         self._interop_pb.set_CustomTrigger(callback)

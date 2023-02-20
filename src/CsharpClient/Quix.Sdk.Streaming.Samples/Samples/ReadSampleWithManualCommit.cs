@@ -25,7 +25,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
 
             inputTopic.OnStreamReceived += (sender, streamReader) =>
             {
-                var bufferConfiguration = new ParametersBufferConfiguration
+                var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
                     PacketSize = 100,
                     TimeSpanInMilliseconds = null,

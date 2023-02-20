@@ -33,7 +33,7 @@ namespace Quix.Sdk.Process.Models
         {
             RegisterType<StreamProperties>(codec);
             RegisterType<StreamEnd>(codec);
-            RegisterType<ParameterDataRaw>(codec);
+            RegisterType<TimeseriesDataRaw>(codec);
             RegisterType<ParameterDefinitions>(codec);
             RegisterType<EventDataRaw[]>(codec);
             RegisterType<List<EventDataRaw>>(codec);
@@ -73,10 +73,10 @@ namespace Quix.Sdk.Process.Models
                 case CodecType.ImprovedJson:
                     foreach (var modelKey in modelKeys)
                     {
-                        if (typeof(ParameterDataRaw) == modelType)
+                        if (typeof(TimeseriesDataRaw) == modelType)
                         {
                             // Register the better performing specific codecs also for writing/reading
-                            Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new ParameterDataJsonCodec());
+                            Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataJsonCodec());
                         }
                     }
 
@@ -84,10 +84,10 @@ namespace Quix.Sdk.Process.Models
                 case CodecType.Protobuf:
                     foreach (var modelKey in modelKeys)
                     {
-                        if (typeof(ParameterDataRaw) == modelType)
+                        if (typeof(TimeseriesDataRaw) == modelType)
                         {
                             // Register the better performing specific codecs also for writing/reading
-                            Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new ParameterDataProtobufCodec());
+                            Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataProtobufCodec());
                         }
                     }
 

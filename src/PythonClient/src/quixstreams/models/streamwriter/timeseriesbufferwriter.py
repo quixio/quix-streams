@@ -4,37 +4,37 @@ import ctypes
 import pandas as pd
 from typing import Dict
 
-from ..parametersbuffer import ParametersBuffer
-from ... import ParameterData
-from ...builders import ParameterDataBuilder
+from ..timeseriesbuffer import TimeseriesBuffer
+from ... import TimeseriesData
+from ...builders import TimeseriesDataBuilder
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
 
-from ...native.Python.QuixSdkStreaming.Models.StreamWriter.ParametersBufferWriter import ParametersBufferWriter as pbwi
+from ...native.Python.QuixSdkStreaming.Models.StreamWriter.TimeseriesBufferWriter import TimeseriesBufferWriter as pbwi
 from ..netdict import NetDict
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
-class ParametersBufferWriter(ParametersBuffer):
+class TimeseriesBufferWriter(TimeseriesBuffer):
     """
         Class used to write to StreamWriter in a buffered manner
     """
 
     def __init__(self, stream_writer, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of ParametersBufferWriter.
+            Initializes a new instance of TimeseriesBufferWriter.
             NOTE: Do not initialize this class manually, use StreamParametersWriter.buffer to access an instance of it
 
             Parameters:
 
-            net_pointer: Pointer to an instance of a .net ParametersBufferWriter
+            net_pointer: Pointer to an instance of a .net TimeseriesBufferWriter
         """
         if net_pointer is None:
-            raise Exception("ParametersBufferWriter is none")
+            raise Exception("TimeseriesBufferWriter is none")
 
         self._interop = pbwi(net_pointer)
-        ParametersBuffer.__init__(self, stream_writer, net_pointer)
+        TimeseriesBuffer.__init__(self, stream_writer, net_pointer)
 
     @property
     def default_tags(self) -> Dict[str, str]:
@@ -53,45 +53,45 @@ class ParametersBufferWriter(ParametersBuffer):
         hptr = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(hptr)
 
-    def add_timestamp(self, time: Union[datetime, timedelta]) -> ParameterDataBuilder:
+    def add_timestamp(self, time: Union[datetime, timedelta]) -> TimeseriesDataBuilder:
         """
         Start adding a new set of parameter values at the given timestamp.
         :param time: The time to use for adding new parameter values.
                      | datetime: The datetime to use for adding new parameter values. NOTE, epoch is not used
                      | timedelta: The time since the default epoch to add the parameter values at
 
-        :return: ParameterDataBuilder
+        :return: TimeseriesDataBuilder
         """
         if time is None:
             raise ValueError("'time' must not be None")
         if isinstance(time, datetime):
             try:
                 netdate_hptr = dtc.datetime_to_dotnet(time)
-                return ParameterDataBuilder(self._interop.AddTimestamp(netdate_hptr))
+                return TimeseriesDataBuilder(self._interop.AddTimestamp(netdate_hptr))
             finally:
                 InteropUtils.free_hptr(netdate_hptr)  # dotnet will hold a reference to it, we no longer need it
         if isinstance(time, timedelta):
             nettimespan_uptr = dtc.timedelta_to_dotnet(time)
-            return ParameterDataBuilder(self._interop.AddTimestamp2(nettimespan_uptr))
+            return TimeseriesDataBuilder(self._interop.AddTimestamp2(nettimespan_uptr))
         raise ValueError("'time' must be either datetime or timedelta")
 
-    def add_timestamp_nanoseconds(self, nanoseconds: int) -> ParameterDataBuilder:
+    def add_timestamp_nanoseconds(self, nanoseconds: int) -> TimeseriesDataBuilder:
         """
         Start adding a new set of parameter values at the given timestamp.
         :param nanoseconds: The time in nanoseconds since the default epoch to add the parameter values at
-        :return: ParameterDataBuilder
+        :return: TimeseriesDataBuilder
         """
-        return ParameterDataBuilder(self._interop.AddTimestampNanoseconds(nanoseconds))
+        return TimeseriesDataBuilder(self._interop.AddTimestampNanoseconds(nanoseconds))
 
     def flush(self):
         """Immediately writes the data from the buffer without waiting for buffer condition to fulfill"""
         self._interop.Flush()
 
-    def write(self, packet: Union[ParameterData, pd.DataFrame]) -> None:
+    def write(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
         """
             Writes the given packet to the stream without any buffering.
 
-            :param packet: The packet containing ParameterData or panda DataFrame
+            :param packet: The packet containing TimeseriesData or panda DataFrame
 
             packet type panda.DataFrame
                 Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
@@ -123,11 +123,11 @@ class ParametersBufferWriter(ParametersBuffer):
 
             for other type examples see the specific type
         """
-        if isinstance(packet, ParameterData):
+        if isinstance(packet, TimeseriesData):
             self._interop.Write(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = ParameterData.from_panda_dataframe(packet)
+            data = TimeseriesData.from_panda_dataframe(packet)
             with data:
                 self._interop.Write(data.get_net_pointer())
             return

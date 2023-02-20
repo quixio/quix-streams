@@ -46,7 +46,7 @@ namespace Quix.Sdk.ManyStreamTest
             while (!ct.IsCancellationRequested)
             {
                 var stream = outputTopic.CreateStream();
-                var data = new Quix.Sdk.Streaming.Models.ParameterData();
+                var data = new Quix.Sdk.Streaming.Models.TimeseriesData();
                 data.AddTimestampNanoseconds(10).AddValue("test", DateTime.UtcNow.ToBinary());
                 stream.Parameters.Buffer.Write(data);
                 stream.Events.AddTimestampNanoseconds(10).AddValue("test1", "val1");

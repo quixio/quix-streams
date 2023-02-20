@@ -18,8 +18,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x=> sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x=> sentData.Add(x)));
 
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
@@ -44,7 +44,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -67,8 +67,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x=> sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x=> sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -100,7 +100,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -123,8 +123,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -132,21 +132,21 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(100)
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(100)
                 .AddValue("test_param", new byte[] {1,2,3});
-            parameterData.AddTimestampNanoseconds(200)
+            timeseriesData.AddTimestampNanoseconds(200)
                 .AddValue("test_param2", new byte[] {3,4,5});
-            parameterData.AddTimestampNanoseconds(300)
+            timeseriesData.AddTimestampNanoseconds(300)
                 .AddValue("test_param3", new byte[] {6,7,8});
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
 
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -167,8 +167,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -176,21 +176,21 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(100)
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(100)
                 .AddValue("test_param", 1);
-            parameterData.AddTimestampNanoseconds(200)
+            timeseriesData.AddTimestampNanoseconds(200)
                 .AddValue("test_param2", 2);
-            parameterData.AddTimestampNanoseconds(300)
+            timeseriesData.AddTimestampNanoseconds(300)
                 .AddValue("test_param3", 3);
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
 
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -210,8 +210,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -219,20 +219,20 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(100)
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(100)
                 .AddValue("test_param", "one");
-            parameterData.AddTimestampNanoseconds(200)
+            timeseriesData.AddTimestampNanoseconds(200)
                 .AddValue("test_param2", "two");
-            parameterData.AddTimestampNanoseconds(300)
+            timeseriesData.AddTimestampNanoseconds(300)
                 .AddValue("test_param3", "three");
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -252,24 +252,24 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             var epoch = new DateTime(2000, 01, 01);
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestamp(new DateTime( 2020, 01, 01, 1, 2, 3))
+            var TimeseriesData = new Streaming.Models.TimeseriesData();
+            TimeseriesData.AddTimestamp(new DateTime( 2020, 01, 01, 1, 2, 3))
                 .AddValue("test_param", "one");
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(TimeseriesData);
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { new DateTime(2020, 01, 01, 1, 2, 3).ToUnixNanoseconds() },
@@ -287,24 +287,24 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             var epoch = new DateTime(2000, 01, 01);
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestamp(new TimeSpan(2, 3, 4, 5))
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestamp(new TimeSpan(2, 3, 4, 5))
                 .AddValue("test_param", "one");
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { new TimeSpan(2, 3, 4, 5).ToNanoseconds() + epoch.ToUnixNanoseconds() },
@@ -322,24 +322,24 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             var epoch = new DateTime(2000, 01, 01);
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(1231123)
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(1231123)
                 .AddValue("test_param", "one");
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 1231123 + epoch.ToUnixNanoseconds() },
@@ -357,8 +357,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -366,16 +366,16 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampMilliseconds(1231123)
+            var TimeseriesData = new Streaming.Models.TimeseriesData();
+            TimeseriesData.AddTimestampMilliseconds(1231123)
                 .AddValue("test_param", "one");
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(TimeseriesData);
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 1231123000000 + epoch.ToUnixNanoseconds() },
@@ -393,30 +393,26 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             writer.Buffer.Epoch = new DateTime(2000, 01, 01);
 
             // Act
-            var the2000dt = new DateTime(2000, 01, 01);
-            var the2001dt = new DateTime(2001, 01, 01);
-            var the2002dt = new DateTime(2002, 01, 01);
-
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(100)
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(100)
                 .AddValue("test_param1", 1);
-            parameterData.AddTimestampNanoseconds(200)
+            timeseriesData.AddTimestampNanoseconds(200)
                 .AddValue("test_param2", 2);
-            parameterData.AddTimestampNanoseconds(300)
+            timeseriesData.AddTimestampNanoseconds(300)
                 .AddValue("test_param3", 3);
-            parameterData.AddTimestampNanoseconds(400)
+            timeseriesData.AddTimestampNanoseconds(400)
                 .AddValue("test_param4", 4);
-            parameterData.AddTimestamp(new DateTime(1998, 01, 01, 01, 02, 03))
+            timeseriesData.AddTimestamp(new DateTime(1998, 01, 01, 01, 02, 03))
                 .AddValue("test_param5", 5);
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
 
             writer.Buffer.AddTimestampNanoseconds(600)
                 .AddValue("test_param6", 6)
@@ -430,7 +426,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] 
@@ -463,8 +459,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -472,19 +468,19 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(1231123)
+            var timeseriesData = new Streaming.Models.TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(1231123)
                 .AddValue("test_param", "one");
 
-            writer.Buffer.Write(parameterData);
-            writer.Buffer.Write(parameterData);
+            writer.Buffer.Write(timeseriesData);
+            writer.Buffer.Write(timeseriesData);
 
             writer.Flush();
 
             // Assert
             sentData.Count.Should().Be(1);
             var data = sentData[0];
-            data.Should().BeEquivalentTo(new ParameterDataRaw
+            data.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 1231123 + epoch.ToUnixNanoseconds() },
@@ -502,22 +498,22 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var parameters = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             var epoch = new DateTime(2000, 01, 01);
             streamWriter.Epoch = epoch;
 
             // Act
-            var parameterData = new Streaming.Models.ParameterData();
-            parameterData.AddTimestampNanoseconds(1231123)
+            var TimeseriesData = new Streaming.Models.TimeseriesData();
+            TimeseriesData.AddTimestampNanoseconds(1231123)
                 .AddValue("test_param", "one");
 
-            parameters.Write(parameterData);
+            parameters.Write(TimeseriesData);
 
             // Assert
             sentData.Count.Should().Be(1);
-            sentData[0].Should().BeEquivalentTo(new ParameterDataRaw
+            sentData[0].Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 1231123 + epoch.ToUnixNanoseconds() },
@@ -535,8 +531,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var sentData = new List<ParameterDataRaw>();
-            streamWriter.Write(Arg.Do<ParameterDataRaw>(x => sentData.Add(x)));
+            var sentData = new List<TimeseriesDataRaw>();
+            streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
             var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
@@ -544,7 +540,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             writer.Buffer.Epoch = epoch;
 
             // Act
-            var incomingData = new Streaming.Models.ParameterData();
+            var incomingData = new Streaming.Models.TimeseriesData();
             incomingData.AddTimestampNanoseconds(100)
                 .AddValue("test_param", 1)
                 .AddTag("tag1", "tag1val1");
@@ -563,7 +559,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             // Assert
             sentData.Count.Should().Be(1);
             var processData = sentData[0];
-            processData.Should().BeEquivalentTo(new ParameterDataRaw
+            processData.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -583,7 +579,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             });
 
             // Act
-            var data = new Streaming.Models.ParameterData(processData);
+            var data = new Streaming.Models.TimeseriesData(processData);
             data.Should().BeEquivalentTo(incomingData, options => options.Including(info => info.WhichGetterHas(FluentAssertions.Common.CSharpAccessModifier.Public)));
         }
 

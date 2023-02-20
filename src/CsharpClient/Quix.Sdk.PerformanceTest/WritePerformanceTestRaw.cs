@@ -15,7 +15,7 @@ namespace Quix.Sdk.PerformanceTest
         public void Run(int paramCount, int bufferSize, CancellationToken ct, bool onlySent = false, bool showIntermediateResults = false)
         {
 
-            var buffer = new ParametersBuffer(null, null, true, true);
+            var buffer = new TimeseriesBuffer(null, null, true, true);
             buffer.PacketSize = bufferSize;
             buffer.OnReadRaw += (sender, data) =>
             {
@@ -25,7 +25,7 @@ namespace Quix.Sdk.PerformanceTest
             DateTime lastUpdate = DateTime.UtcNow;
 
 
-            ParameterDataRaw raw = null;
+            TimeseriesDataRaw raw = null;
             var iteration = 0;
             long result = 0;
 
@@ -38,7 +38,7 @@ namespace Quix.Sdk.PerformanceTest
                 //Parameter Data Raw
                 if (!onlySent || iteration == 0)
                 {
-                    raw = new ParameterDataRaw();
+                    raw = new TimeseriesDataRaw();
                     raw.Timestamps = new long[100];
                     raw.NumericValues = new Dictionary<string, double?[]>();
                     raw.StringValues = new Dictionary<string, string[]>();

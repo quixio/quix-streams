@@ -8,17 +8,17 @@ using Newtonsoft.Json.Linq;
 namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
 {
     /// <summary>
-    /// ParameterData Json Codec implementation
+    /// TimeseriesData Json Codec implementation
     /// </summary>
-    public class ParameterDataJsonCodec : Codec<ParameterDataRaw>
+    public class TimeseriesDataJsonCodec : Codec<TimeseriesDataRaw>
     {
-        private static readonly DefaultJsonCodec<ParameterDataCodeDto> BaseCodec = new DefaultJsonCodec<ParameterDataCodeDto>();
+        private static readonly DefaultJsonCodec<TimeseriesDataCodeDto> BaseCodec = new DefaultJsonCodec<TimeseriesDataCodeDto>();
 
         /// <inheritdoc />
-        public override CodecId Id => BaseCodec.Id + "-PaDa-1";
+        public override CodecId Id => BaseCodec.Id + "-PaDa-1";  // Used to be called ParameterData. Keeping it for time being to be backward compatible
 
         /// <inheritdoc />
-        public override ParameterDataRaw Deserialize(byte[] contentBytes)
+        public override TimeseriesDataRaw Deserialize(byte[] contentBytes)
         {
             var doBytes = BaseCodec.Deserialize(contentBytes);
             var ret = ConvertToDo(doBytes);
@@ -26,14 +26,14 @@ namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
         }
         
         /// <inheritdoc />
-        public override byte[] Serialize(ParameterDataRaw obj)
+        public override byte[] Serialize(TimeseriesDataRaw obj)
         {
             var dto = ConvertToDto(obj);
             var bytes = BaseCodec.Serialize(dto);
             return bytes;
         }
         
-        private ParameterDataRaw ConvertToDo(ParameterDataCodeDto dto)
+        private TimeseriesDataRaw ConvertToDo(TimeseriesDataCodeDto dto)
         {
             var numerics = dto.Numerics ?? new Dictionary<string, List<object>>();
             var strings = dto.Strings ?? new Dictionary<string, StringValueDto>();
@@ -133,7 +133,7 @@ namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
                 return doValues;
             }
 
-            return new ParameterDataRaw
+            return new TimeseriesDataRaw
             {
                 Epoch = dto.Epoch,
                 Timestamps = timestamps,
@@ -144,7 +144,7 @@ namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
             };
         }
 
-        private ParameterDataCodeDto ConvertToDto(ParameterDataRaw rawData)
+        private TimeseriesDataCodeDto ConvertToDto(TimeseriesDataRaw rawData)
         {
             var numericValues = rawData.NumericValues ?? new Dictionary<string, double?[]>();
             var stringValues = rawData.StringValues ?? new Dictionary<string, string[]>();
@@ -270,7 +270,7 @@ namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
             }
             
 
-            var dataDto = new ParameterDataCodeDto
+            var dataDto = new TimeseriesDataCodeDto
             {
                 Epoch = rawData.Epoch,
                 Timestamps = timestamps,
@@ -284,7 +284,7 @@ namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
             return dataDto;
         }
         
-        private class ParameterDataCodeDto
+        private class TimeseriesDataCodeDto
         {
             public long Epoch;
             

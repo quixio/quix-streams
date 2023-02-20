@@ -18,7 +18,7 @@ namespace Quix.Sdk.Process.Samples
 
         private void InitializeStreaming()
         {
-            this.Input.Subscribe<ParameterDataRaw>(OnParameterDataReceived);
+            this.Input.Subscribe<TimeseriesDataRaw>(OnTimeseriesDataReceived);
             this.OnStreamProcessAssigned = OnStreamProcessAssignedHandler;
         }
 
@@ -27,7 +27,7 @@ namespace Quix.Sdk.Process.Samples
             logger.LogInformation("Stream started. StreamId = {0}", this.StreamProcess.StreamId);
         }
 
-        private void OnParameterDataReceived(ParameterDataRaw tdata)
+        private void OnTimeseriesDataReceived(TimeseriesDataRaw tdata)
         {
             logger.LogInformation("Stream data received. Value = {0}", tdata.NumericValues.First().Value[0]);
         }

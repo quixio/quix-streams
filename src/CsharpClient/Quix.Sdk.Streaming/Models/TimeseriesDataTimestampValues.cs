@@ -6,16 +6,16 @@ using System.Linq;
 namespace Quix.Sdk.Streaming
 {
     /// <summary>
-    /// Enumerable which returns the the Parameter Values of the current <see cref="ParameterDataTimestamp"/>
+    /// Enumerable which returns the the Parameter Values of the current <see cref="TimeseriesDataTimestamp"/>
     /// </summary>
-    public readonly struct ParameterDataTimestampValues : IReadOnlyDictionary<string, ParameterValue>
+    public readonly struct TimeseriesDataTimestampValues : IReadOnlyDictionary<string, ParameterValue>
     {
-        private readonly ParameterData parameterData;
+        private readonly TimeseriesData TimeseriesData;
         private readonly long timestampRawIndex;
 
-        internal ParameterDataTimestampValues(ParameterData parameterData, long timestampRawIndex)
+        internal TimeseriesDataTimestampValues(TimeseriesData TimeseriesData, long timestampRawIndex)
         {
-            this.parameterData = parameterData;
+            this.TimeseriesData = TimeseriesData;
             this.timestampRawIndex = timestampRawIndex;
         }
 
@@ -26,7 +26,7 @@ namespace Quix.Sdk.Streaming
 
         readonly IEnumerator<KeyValuePair<string, ParameterValue>> IEnumerable<KeyValuePair<string, ParameterValue>>.GetEnumerator()
         {
-            foreach (var parameter in this.parameterData.parameterList.Values)
+            foreach (var parameter in this.TimeseriesData.parameterList.Values)
             {
                 yield return new KeyValuePair<string, ParameterValue>(parameter.ParameterId, new ParameterValue(this.timestampRawIndex, parameter));
             }
@@ -37,7 +37,7 @@ namespace Quix.Sdk.Streaming
         {
             get
             {
-                foreach (var parameter in this.parameterData.parameterList.Values)
+                foreach (var parameter in this.TimeseriesData.parameterList.Values)
                 {
                     yield return new ParameterValue(this.timestampRawIndex, parameter);
                 }
@@ -47,13 +47,13 @@ namespace Quix.Sdk.Streaming
         /// <inheritdoc/>
         public readonly bool ContainsKey(string key)
         {
-            return this.parameterData.parameterList.ContainsKey(key);
+            return this.TimeseriesData.parameterList.ContainsKey(key);
         }
 
         /// <inheritdoc/>
         public readonly bool TryGetValue(string key, out ParameterValue value)
         {
-            if (!this.parameterData.parameterList.TryGetValue(key, out var valueOut))
+            if (!this.TimeseriesData.parameterList.TryGetValue(key, out var valueOut))
             {
                 value = default;
                 return false;
@@ -65,17 +65,17 @@ namespace Quix.Sdk.Streaming
 
 
         /// <inheritdoc/>
-        public readonly int Count => this.parameterData.parameterList.Count();
+        public readonly int Count => this.TimeseriesData.parameterList.Count();
 
         /// <inheritdoc/>
-        public readonly IEnumerable<string> Keys => this.parameterData.parameterList.Keys;
+        public readonly IEnumerable<string> Keys => this.TimeseriesData.parameterList.Keys;
 
         /// <inheritdoc/>
         public readonly ParameterValue this[string key]
         {
             get
             {
-                if (!this.parameterData.parameterList.TryGetValue(key, out var parameter))
+                if (!this.TimeseriesData.parameterList.TryGetValue(key, out var parameter))
                 {
                     parameter = new Parameter(key);
                 }

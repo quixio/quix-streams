@@ -7,7 +7,7 @@ using Quix.Sdk.Process.Models;
 namespace Quix.Sdk.Streaming.Models.StreamReader
 {
     /// <summary>
-    /// Helper class for reader <see cref="ParameterDefinitions"/> and <see cref="ParameterData"/>
+    /// Helper class for reader <see cref="ParameterDefinitions"/> and <see cref="TimeseriesData"/>
     /// </summary>
     public class StreamParametersReader : IDisposable
     {
@@ -23,8 +23,8 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
 
             this.streamReader.OnParameterDefinitionsChanged += OnStreamReaderOnOnParameterDefinitionsChanged;
 
-            this.streamReader.OnParameterData += OnParameterData;
-            this.streamReader.OnParameterData += OnParameterRawData;
+            this.streamReader.OnTimeseriesData += OnTimeseriesData;
+            this.streamReader.OnTimeseriesData += OnTimeseriesDataRaw;
         }
 
         private void OnStreamReaderOnOnParameterDefinitionsChanged(IStreamReaderInternal sender, ParameterDefinitions parameterDefinitions)
@@ -40,9 +40,9 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// <param name="bufferConfiguration">Configuration of the buffer</param>
         /// <param name="parametersFilter">List of parameters to filter</param>
         /// <returns>Parameters reading buffer</returns>
-        public ParametersBufferReader CreateBuffer(ParametersBufferConfiguration bufferConfiguration = null, params string[] parametersFilter)
+        public TimeseriesBufferReader CreateBuffer(TimeseriesBufferConfiguration bufferConfiguration = null, params string[] parametersFilter)
         {
-            var buffer = new ParametersBufferReader(this.streamReader, bufferConfiguration, parametersFilter);
+            var buffer = new TimeseriesBufferReader(this.streamReader, bufferConfiguration, parametersFilter);
             this.Buffers.Add(buffer);
 
             return buffer;
@@ -53,9 +53,9 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// </summary>
         /// <param name="parametersFilter">List of parameters to filter</param>
         /// <returns>Parameters reading buffer</returns>
-        public ParametersBufferReader CreateBuffer(params string[] parametersFilter)
+        public TimeseriesBufferReader CreateBuffer(params string[] parametersFilter)
         {
-            var buffer = new ParametersBufferReader(this.streamReader, null, parametersFilter);
+            var buffer = new TimeseriesBufferReader(this.streamReader, null, parametersFilter);
             this.Buffers.Add(buffer);
 
             return buffer;
@@ -71,13 +71,13 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// Event raised when data is available to read (without buffering)
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<ParameterData> OnRead;
+        public event EventHandler<TimeseriesData> OnRead;
 
         /// <summary>
         /// Event raised when data is available to read (without buffering) in raw transport format
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<ParameterDataRaw> OnReadRaw;
+        public event EventHandler<TimeseriesDataRaw> OnReadRaw;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -87,7 +87,7 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// <summary>
         /// List of buffers created for this stream
         /// </summary>
-        internal List<ParametersBufferReader> Buffers { get; private set; } = new List<ParametersBufferReader>();
+        internal List<TimeseriesBufferReader> Buffers { get; private set; } = new List<TimeseriesBufferReader>();
 
         private void LoadFromProcessDefinitions(Process.Models.ParameterDefinitions definitions)
         {
@@ -134,23 +134,23 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             return result;
         }
 
-        private void OnParameterData(IStreamReaderInternal streamReader, Process.Models.ParameterDataRaw parameterDataRaw)
+        private void OnTimeseriesData(IStreamReaderInternal streamReader, Process.Models.TimeseriesDataRaw TimeseriesDataRaw)
         {
-            var pData = new ParameterData(parameterDataRaw, null, false, false);
-            this.OnRead?.Invoke(streamReader, pData);
+            var tsdata = new TimeseriesData(TimeseriesDataRaw, null, false, false);
+            this.OnRead?.Invoke(streamReader, tsdata);
         }
 
-        private void OnParameterRawData(IStreamReaderInternal streamReader, Process.Models.ParameterDataRaw parameterDataRaw)
+        private void OnTimeseriesDataRaw(IStreamReaderInternal streamReader, Process.Models.TimeseriesDataRaw TimeseriesDataRaw)
         {
-            this.OnReadRaw?.Invoke(streamReader, parameterDataRaw);
+            this.OnReadRaw?.Invoke(streamReader, TimeseriesDataRaw);
         }
 
         /// <inheritdoc/>
         public void Dispose()
         {
             this.streamReader.OnParameterDefinitionsChanged -= OnStreamReaderOnOnParameterDefinitionsChanged;
-            this.streamReader.OnParameterData -= OnParameterData;
-            this.streamReader.OnParameterData -= OnParameterRawData;
+            this.streamReader.OnTimeseriesData -= OnTimeseriesData;
+            this.streamReader.OnTimeseriesData -= OnTimeseriesDataRaw;
         }
     }
 }

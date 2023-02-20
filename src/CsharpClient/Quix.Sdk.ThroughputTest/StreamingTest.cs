@@ -123,7 +123,7 @@ namespace Quix.Sdk.Speedtest
 
             while (!ct.IsCancellationRequested)
             {
-                var data = new Streaming.Models.ParameterData();
+                var data = new Streaming.Models.TimeseriesData();
                 for (var loopCount = 0; loopCount < 15; loopCount++)
                 {
                     var builder = data.AddTimestampMilliseconds(index);

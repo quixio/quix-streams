@@ -9,14 +9,14 @@ namespace Quix.Sdk.Process.Models
     /// <summary>
     /// Describes parameter data for multiple timestamps
     /// </summary>
-    [ModelKey("ParameterData")]
-    public class ParameterDataRaw
+    [ModelKey("TimeseriesData")]
+    public class TimeseriesDataRaw
     {
 
         /// <summary>
         /// Create a new empty Parameter Data Raw instance
         /// </summary>
-        public ParameterDataRaw()
+        public TimeseriesDataRaw()
         {
             this.NumericValues = new Dictionary<string, double?[]>();
             this.StringValues = new Dictionary<string, string[]>();
@@ -26,7 +26,7 @@ namespace Quix.Sdk.Process.Models
         /// <summary>
         /// Create a new Parameter Data Raw instance with predefined values
         /// </summary>
-        public ParameterDataRaw(
+        public TimeseriesDataRaw(
             long epoch, 
             long[] timestamps,
             Dictionary<string, double?[]> numericValues,
@@ -97,18 +97,18 @@ namespace Quix.Sdk.Process.Models
     }
 
     /// <summary>
-    /// Extensions methods for ParameterDataRaw
+    /// Extensions methods for TimeseriesDataRaw
     /// </summary>
-    public static class ParameterDataRawExtensions
+    public static class TimeseriesDataRawExtensions
     {
         /// <summary>
-        /// Clone ParameterDataRaw instance
+        /// Clone TimeseriesDataRaw instance
         /// </summary>
-        /// <param name="rawData">ParameterDataRaw to clone</param>
+        /// <param name="rawData">TimeseriesDataRaw to clone</param>
         /// <returns>Cloned instance</returns>
-        public static ParameterDataRaw Clone(this ParameterDataRaw rawData)
+        public static TimeseriesDataRaw Clone(this TimeseriesDataRaw rawData)
         {
-            var result = new ParameterDataRaw()
+            var result = new TimeseriesDataRaw()
             {
                 Epoch = rawData.Epoch,
                 Timestamps = (long[])rawData.Timestamps.Clone(),

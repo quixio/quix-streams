@@ -3,10 +3,10 @@ from typing import Dict, List, Optional
 import pandas as pd
 import ctypes
 
-from .parameterdata import ParameterData
+from .timeseriesdata import TimeseriesData
 
-from ..native.Python.QuixSdkStreaming.Models.ParameterData import ParameterData as pdi
-from ..native.Python.QuixSdkProcess.Models.ParameterDataRaw import ParameterDataRaw as pdri
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
+from ..native.Python.QuixSdkProcess.Models.TimeseriesDataRaw import TimeseriesDataRaw as tsdri
 
 from ..helpers.timeconverter import TimeConverter
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
@@ -17,21 +17,21 @@ from ..helpers.nativedecorator import nativedecorator
 import math
 
 @nativedecorator
-class ParameterDataRaw(object):
+class TimeseriesDataRaw(object):
     """
     Describes parameter data in a raw format for multiple timestamps. Class is intended for read only.
     """
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
-            Initializes a new instance of ParameterDataRaw.
+            Initializes a new instance of TimeseriesDataRaw.
 
-            :param net_pointer: Pointer to an instance of a .net ParameterDataRaw.
+            :param net_pointer: Pointer to an instance of a .net TimeseriesDataRaw.
         """
 
         if net_pointer is None:
-            self._interop = pdri(pdri.Constructor())
+            self._interop = tsdri(tsdri.Constructor())
         else:
-            self._interop = pdri(net_pointer)
+            self._interop = tsdri(net_pointer)
 
         self._timestamps = None
         self._numeric_values = None
@@ -82,7 +82,7 @@ class ParameterDataRaw(object):
 
     def to_panda_dataframe(self) -> pd.DataFrame:
         """
-        Converts ParameterDataRaw to Panda DataFrame
+        Converts TimeseriesDataRaw to Panda DataFrame
 
         :return: Converted Panda DataFrame
         """
@@ -132,19 +132,19 @@ class ParameterDataRaw(object):
         return pd.DataFrame(rows, columns=headers)
 
     @staticmethod
-    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'ParameterDataRaw':
+    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesDataRaw':
         """
-        Converts Panda DataFrame to ParameterData
+        Converts Panda DataFrame to TimeseriesData
 
-        :param data_frame: The Panda DataFrame to convert to ParameterData
-        :param epoch: The epoch to add to each time value when converting to ParameterData. Defaults to 0
-        :return: Converted ParameterData
+        :param data_frame: The Panda DataFrame to convert to TimeseriesData
+        :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
+        :return: Converted TimeseriesData
         """
 
         if data_frame is None:
             return None
 
-        parameter_data_raw = ParameterDataRaw()
+        parameter_data_raw = TimeseriesDataRaw()
 
         possible_time_labels = set(['time', 'timestamp', 'datetime'])
 
@@ -402,9 +402,9 @@ class ParameterDataRaw(object):
 
         return self._tag_values
 
-    def convert_to_parameterdata(self) -> ParameterData:
-        ptr = pdi.Constructor2(self.get_net_pointer())
-        return ParameterData(ptr)
+    def convert_to_timeseriesData(self) -> TimeseriesData:
+        ptr = tsdi.Constructor2(self.get_net_pointer())
+        return TimeseriesData(ptr)
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         return self._interop.get_interop_ptr__()

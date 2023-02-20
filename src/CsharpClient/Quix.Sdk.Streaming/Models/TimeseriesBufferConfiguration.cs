@@ -5,18 +5,18 @@ namespace Quix.Sdk.Streaming.Models
     /// <summary>
     /// Describes the configuration for parameter buffers
     /// </summary>
-    public class ParametersBufferConfiguration
+    public class TimeseriesBufferConfiguration
     {
         /// <summary>
         /// Gets or sets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-        /// of data the <see cref="ParametersBuffer.OnRead"/> event is invoked and the data is cleared from the buffer.
+        /// of data the <see cref="TimeseriesBuffer.OnRead"/> event is invoked and the data is cleared from the buffer.
         /// Defaults to null (disabled).
         /// </summary>
         public int? PacketSize { get; set; } = null;
 
         /// <summary>
         /// Gets or sets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-        /// earliest and latest buffered timestamp surpasses this number the <see cref="ParametersBuffer.OnRead"/> event
+        /// earliest and latest buffered timestamp surpasses this number the <see cref="TimeseriesBuffer.OnRead"/> event
         /// is invoked and the data is cleared from the buffer.
         /// Defaults to None (disabled).
         /// </summary>
@@ -24,7 +24,7 @@ namespace Quix.Sdk.Streaming.Models
 
         /// <summary>
         /// Gets or sets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-        /// earliest and latest buffered timestamp surpasses this number the <see cref="ParametersBuffer.OnRead"/> event
+        /// earliest and latest buffered timestamp surpasses this number the <see cref="TimeseriesBuffer.OnRead"/> event
         /// is invoked and the data is cleared from the buffer.
         /// Defaults to null (disabled).
         /// Note: This is a millisecond converter on top of <see cref="TimeSpanInNanoseconds"/>. They both work with same underlying value.
@@ -37,26 +37,26 @@ namespace Quix.Sdk.Streaming.Models
 
 
         /// <summary>
-        /// Gets or set the custom function which is invoked before adding the timestamp to the buffer. If returns true, <see cref="ParametersBuffer.OnRead"/> is invoked before adding the timestamp to it.
+        /// Gets or set the custom function which is invoked before adding the timestamp to the buffer. If returns true, <see cref="TimeseriesBuffer.OnRead"/> is invoked before adding the timestamp to it.
         /// Defaults to null (disabled).
         /// </summary>
-        public Func<ParameterDataTimestamp, bool> CustomTriggerBeforeEnqueue { get; set; } = null;
+        public Func<TimeseriesDataTimestamp, bool> CustomTriggerBeforeEnqueue { get; set; } = null;
 
         /// <summary>
-        /// Gets or sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, <see cref="ParametersBuffer.OnRead"/> is invoked with the entire buffer content
+        /// Gets or sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, <see cref="TimeseriesBuffer.OnRead"/> is invoked with the entire buffer content
         /// Defaults to null (disabled).
         /// </summary>
-        public Func<ParameterData, bool> CustomTrigger { get; set; } = null;
+        public Func<TimeseriesData, bool> CustomTrigger { get; set; } = null;
 
         /// <summary>
         /// Gets or sets the custom function to filter the incoming data before adding it to the buffer. If returns true, data is added otherwise not. 
         /// Defaults to null (disabled).
         /// </summary>
-        public Func<ParameterDataTimestamp, bool> Filter { get; set; } = null;
+        public Func<TimeseriesDataTimestamp, bool> Filter { get; set; } = null;
 
         /// <summary>
-        /// Gets or sets the maximum duration in milliseconds for which the buffer will be held before triggering <see cref="ParametersBuffer.OnRead"/> event. 
-        /// <see cref="ParametersBuffer.OnRead"/> event is triggered when the configured <see cref="BufferTimeout"/> has elapsed from the last data received by the buffer.
+        /// Gets or sets the maximum duration in milliseconds for which the buffer will be held before triggering <see cref="TimeseriesBuffer.OnRead"/> event. 
+        /// <see cref="TimeseriesBuffer.OnRead"/> event is triggered when the configured <see cref="BufferTimeout"/> has elapsed from the last data received by the buffer.
         /// Defaults to null (disabled). 
         /// </summary>
         public int? BufferTimeout { get; set; } = null;

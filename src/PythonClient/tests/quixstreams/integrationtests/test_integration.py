@@ -5,7 +5,7 @@ import pandas as pd
 
 from testcontainers.core.container import DockerContainer
 
-from tests.quixstreams.unittests.models.test_parameterdata import ParameterDataTests
+from tests.quixstreams.unittests.models.test_timeseriesData import TimeseriesDataTests
 from src import quixstreams as qx
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 InteropUtils.enable_debug()
@@ -865,11 +865,11 @@ class TestIntegration(unittest.TestCase):
 
             stream = None  # The outgoing stream
             event = threading.Event()  # used for assertion
-            read_data: qx.ParameterData = None
+            read_data: qx.TimeseriesData = None
 
             def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
                 if stream.stream_id == reader.stream_id:
-                    def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                    def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                         nonlocal read_data
                         read_data = data
                         event.set()
@@ -911,11 +911,11 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
+        read_data: qx.TimeseriesData = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -958,7 +958,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param", bytearray("binary_param4", "UTF-8")) \
             .write()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(123456790) \
             .add_value("string_param", "value1") \
             .add_value("num_param", 83.756) \
@@ -974,7 +974,7 @@ class TestIntegration(unittest.TestCase):
         input_topic.dispose()  # cleanup
         self.assertEqual(4, len(read_data.timestamps))
 
-    def test_parameters_write_direct_and_read_as_parameterdataraw(self):
+    def test_parameters_write_direct_and_read_as_timeseriesDataraw(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
@@ -985,11 +985,11 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterDataRaw = None
+        read_data: qx.TimeseriesDataRaw = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterDataRaw):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesDataRaw):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -1002,7 +1002,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("bufferless_1", 1) \
             .add_value("bufferless_2", "test") \
@@ -1026,9 +1026,9 @@ class TestIntegration(unittest.TestCase):
         print("========================")
         input_topic.dispose()  # cleanup
 
-        converted = read_data.convert_to_parameterdata()
-        ParameterDataTests.assert_data_are_equal(self, written_data, converted)  # evaluate neither contains more or less than should
-        ParameterDataTests.assert_data_are_equal(self, converted, written_data)  # and is done by checking both ways
+        converted = read_data.convert_to_timeseriesData()
+        TimeseriesDataTests.assert_data_are_equal(self, written_data, converted)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, converted, written_data)  # and is done by checking both ways
         self.assertEqual(len(converted.timestamps), 1)
         self.assertEqual(len(converted.timestamps[0].parameters), 5, "Missing parameter")
 
@@ -1043,11 +1043,11 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
+        read_data: qx.TimeseriesData = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -1061,7 +1061,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("bufferless_1", 1) \
             .add_value("bufferless_2", "test") \
@@ -1083,8 +1083,8 @@ class TestIntegration(unittest.TestCase):
         print(read_data)
         input_topic.dispose()  # cleanup
         self.assertEqual(len(read_data.timestamps[0].parameters), 4, "Missing parameter")
-        ParameterDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
-        ParameterDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
+        TimeseriesDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
 
     def test_parameters_write_direct_and_read_all_options(self):
         # Arrange
@@ -1105,12 +1105,12 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data.to_panda_dataframe()
                     event.set()
 
-                def on_parameter_data_raw_handler(stream: qx.StreamReader, data: qx.ParameterDataRaw):
+                def on_parameter_data_raw_handler(stream: qx.StreamReader, data: qx.TimeseriesDataRaw):
                     nonlocal read_data_raw
                     read_data_raw = data.to_panda_dataframe()
                     event_raw.set()
@@ -1131,7 +1131,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("bufferless_1", 1) \
             .add_value("bufferless_2", "test") \
@@ -1178,11 +1178,11 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
+        read_data: qx.TimeseriesData = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -1196,7 +1196,7 @@ class TestIntegration(unittest.TestCase):
 
         # Act
         stream = output_topic.create_stream()
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(123456790) \
             .add_value("string_param", "value1") \
             .add_value("num_param", 83.756) \
@@ -1227,13 +1227,13 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         event2 = threading.Event()  # used for assertion
         event3 = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
-        read_data_raw: qx.ParameterDataRaw = None
+        read_data: qx.TimeseriesData = None
+        read_data_raw: qx.TimeseriesDataRaw = None
         read_pandas_dataframe: pd.DataFrame = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data.to_panda_dataframe()
                     event.set()
@@ -1262,7 +1262,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
         stream.parameters.buffer.packet_size = 10  # to enforce disabling of output buffer
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
 
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("string_param", "value1") \
@@ -1325,7 +1325,7 @@ class TestIntegration(unittest.TestCase):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
 
-                def custom_trigger_callback(parameter_data: qx.ParameterData) -> bool:
+                def custom_trigger_callback(parameter_data: qx.TimeseriesData) -> bool:
                     nonlocal special_func_invokation_count
                     special_func_invokation_count += 1
                     print("==== Custom Trigger ====")
@@ -1342,7 +1342,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \
@@ -1376,9 +1376,9 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         special_func_invokation_count = 0
 
-        buffer_config = qx.ParametersBufferConfiguration()
+        buffer_config = qx.TimeseriesBufferConfiguration()
 
-        def custom_trigger_callback(parameter_data: qx.ParameterData) -> bool:
+        def custom_trigger_callback(parameter_data: qx.TimeseriesData) -> bool:
             nonlocal special_func_invokation_count
             special_func_invokation_count += 1
             print("==== Custom Trigger ====")
@@ -1399,7 +1399,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \
@@ -1430,11 +1430,11 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
+        read_data: qx.TimeseriesData = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -1448,7 +1448,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("bufferless_1", 1) \
             .add_value("bufferless_2", "test") \
@@ -1470,8 +1470,8 @@ class TestIntegration(unittest.TestCase):
         print("------ READ ------")
         print(read_data)
         input_topic.dispose()  # cleanup
-        ParameterDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
-        ParameterDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
+        TimeseriesDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
 
     def test_parameters_read_with_parameter_filter(self):
         # Arrange
@@ -1484,11 +1484,11 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
+        read_data: qx.TimeseriesData = None
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -1503,7 +1503,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \
@@ -1519,7 +1519,7 @@ class TestIntegration(unittest.TestCase):
         stream.parameters.write(written_data)
 
         # Assert
-        expected_data = qx.ParameterData()
+        expected_data = qx.TimeseriesData()
         expected_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_tag("tag1", "tag1val")
@@ -1535,8 +1535,8 @@ class TestIntegration(unittest.TestCase):
         print(read_data)
         print("------ Expected ------")
         print(expected_data)
-        ParameterDataTests.assert_data_are_equal(self, expected_data, read_data)  # evaluate neither contains more or less than should
-        ParameterDataTests.assert_data_are_equal(self, read_data, expected_data)  # and is done by checking both ways
+        TimeseriesDataTests.assert_data_are_equal(self, expected_data, read_data)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, read_data, expected_data)  # and is done by checking both ways
 
     def test_parameters_read_with_buffer_configuration(self):
         # Arrange
@@ -1549,14 +1549,14 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        read_data: qx.ParameterData = None
+        read_data: qx.TimeseriesData = None
 
-        buffer_config = qx.ParametersBufferConfiguration()
+        buffer_config = qx.TimeseriesBufferConfiguration()
         buffer_config.packet_size = 2
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+                def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
                     nonlocal read_data
                     read_data = data
                     event.set()
@@ -1571,7 +1571,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \
@@ -1587,7 +1587,7 @@ class TestIntegration(unittest.TestCase):
         stream.parameters.write(written_data)
 
         # Assert
-        expected_data = qx.ParameterData()
+        expected_data = qx.TimeseriesData()
         expected_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \
@@ -1603,8 +1603,8 @@ class TestIntegration(unittest.TestCase):
         print("------ Expected ------")
         print(expected_data)
         input_topic.dispose()  # cleanup
-        ParameterDataTests.assert_data_are_equal(self, expected_data, read_data)  # evaluate neither contains more or less than should
-        ParameterDataTests.assert_data_are_equal(self, read_data, expected_data)  # and is done by checking both ways
+        TimeseriesDataTests.assert_data_are_equal(self, expected_data, read_data)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, read_data, expected_data)  # and is done by checking both ways
 
     def test_parameters_read_with_filter(self):
         return  # TODO high importance
@@ -1624,7 +1624,7 @@ class TestIntegration(unittest.TestCase):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
 
-                def filter(parameter_data_timestamp: qx.ParameterDataTimestamp) -> bool:
+                def filter(parameter_data_timestamp: qx.TimeseriesDataTimestamp) -> bool:
                     nonlocal special_func_invokation_count
                     special_func_invokation_count += 1
                     print("==== Filter ====")
@@ -1641,7 +1641,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \
@@ -1675,9 +1675,9 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         special_func_invokation_count = 0
 
-        buffer_config = qx.ParametersBufferConfiguration()
+        buffer_config = qx.TimeseriesBufferConfiguration()
 
-        def filter_callback(parameter_data_timestamp: qx.ParameterDataTimestamp) -> bool:
+        def filter_callback(parameter_data_timestamp: qx.TimeseriesDataTimestamp) -> bool:
             nonlocal special_func_invokation_count
             special_func_invokation_count += 1
             print("==== Filter ====")
@@ -1698,7 +1698,7 @@ class TestIntegration(unittest.TestCase):
         # Act
         stream = output_topic.create_stream()
 
-        written_data = qx.ParameterData()
+        written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
             .add_value("param1", 1) \
             .add_value("param2", "test") \

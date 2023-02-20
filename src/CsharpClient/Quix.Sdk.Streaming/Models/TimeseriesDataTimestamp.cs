@@ -8,26 +8,26 @@ namespace Quix.Sdk.Streaming.Models
     /// <summary>
     /// Represents a single point in time with parameter values and tags attached to that time
     /// </summary>
-    public readonly struct ParameterDataTimestamp
+    public readonly struct TimeseriesDataTimestamp
     {
-        internal readonly ParameterData parameterData;
+        internal readonly TimeseriesData TimeseriesData;
         internal readonly long timestampRawIndex;
 
-        internal ParameterDataTimestamp(ParameterData parameterData, long rawIndex)
+        internal TimeseriesDataTimestamp(TimeseriesData TimeseriesData, long rawIndex)
         {
-            this.parameterData = parameterData;
+            this.TimeseriesData = TimeseriesData;
             this.timestampRawIndex = rawIndex;
         }
 
         /// <summary>
         /// Parameter values for the timestamp. When a key is not found, returns empty <see cref="ParameterValue"/>
         /// </summary>
-        public readonly ParameterDataTimestampValues Parameters => new ParameterDataTimestampValues(this.parameterData, this.timestampRawIndex);
+        public readonly TimeseriesDataTimestampValues Parameters => new TimeseriesDataTimestampValues(this.TimeseriesData, this.timestampRawIndex);
 
         /// <summary>
         /// Tags for the timestamp. When key is not found, returns null
         /// </summary>
-        public readonly ParameterDataTimestampTags Tags  => new ParameterDataTimestampTags(this.parameterData, this.timestampRawIndex);
+        public readonly TimeseriesDataTimestampTags Tags  => new TimeseriesDataTimestampTags(this.TimeseriesData, this.timestampRawIndex);
 
         /// <summary>
         /// Gets the timestamp in nanoseconds
@@ -36,13 +36,13 @@ namespace Quix.Sdk.Streaming.Models
         {
             get
             {
-                return !this.parameterData.epochsIncluded[this.timestampRawIndex] 
-                    ? this.parameterData.rawData.Timestamps[this.timestampRawIndex] + this.parameterData.rawData.Epoch
-                    : this.parameterData.rawData.Timestamps[this.timestampRawIndex];
+                return !this.TimeseriesData.epochsIncluded[this.timestampRawIndex] 
+                    ? this.TimeseriesData.rawData.Timestamps[this.timestampRawIndex] + this.TimeseriesData.rawData.Epoch
+                    : this.TimeseriesData.rawData.Timestamps[this.timestampRawIndex];
             }
             set
             {
-                this.parameterData.rawData.Timestamps[this.timestampRawIndex] = value;
+                this.TimeseriesData.rawData.Timestamps[this.timestampRawIndex] = value;
             }
         }
 
@@ -65,11 +65,11 @@ namespace Quix.Sdk.Streaming.Models
         {
             get
             {
-                return this.parameterData.epochsIncluded[this.timestampRawIndex];
+                return this.TimeseriesData.epochsIncluded[this.timestampRawIndex];
             }
             set
             {
-                this.parameterData.epochsIncluded[this.timestampRawIndex] = value;
+                this.TimeseriesData.epochsIncluded[this.timestampRawIndex] = value;
             }
         }
 
@@ -79,14 +79,14 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="parameterId">Parameter Id</param>
         /// <param name="value">Numeric value</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp AddValue(string parameterId, double value)
+        public TimeseriesDataTimestamp AddValue(string parameterId, double value)
         {
-            if (!this.parameterData.rawData.NumericValues.TryGetValue(parameterId, out var values))
+            if (!this.TimeseriesData.rawData.NumericValues.TryGetValue(parameterId, out var values))
             {
-                values = new double?[this.parameterData.rawData.Timestamps.Length];
-                this.parameterData.rawData.NumericValues.Add(parameterId, values);
+                values = new double?[this.TimeseriesData.rawData.Timestamps.Length];
+                this.TimeseriesData.rawData.NumericValues.Add(parameterId, values);
 
-                this.parameterData.parameterList[parameterId] = new Parameter(parameterId, values);
+                this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
             }
 
             values[this.timestampRawIndex] = value;
@@ -100,14 +100,14 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="parameterId">Parameter Id</param>
         /// <param name="value">String value</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp AddValue(string parameterId, string value)
+        public TimeseriesDataTimestamp AddValue(string parameterId, string value)
         {
-            if (!this.parameterData.rawData.StringValues.TryGetValue(parameterId, out var values))
+            if (!this.TimeseriesData.rawData.StringValues.TryGetValue(parameterId, out var values))
             {
-                values = new string[this.parameterData.rawData.Timestamps.Length];
-                this.parameterData.rawData.StringValues.Add(parameterId, values);
+                values = new string[this.TimeseriesData.rawData.Timestamps.Length];
+                this.TimeseriesData.rawData.StringValues.Add(parameterId, values);
 
-                this.parameterData.parameterList[parameterId] = new Parameter(parameterId, values);
+                this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
             }
 
             values[this.timestampRawIndex] = value;
@@ -121,14 +121,14 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="parameterId">Parameter Id</param>
         /// <param name="value">String value</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp AddValue(string parameterId, byte[] value)
+        public TimeseriesDataTimestamp AddValue(string parameterId, byte[] value)
         {
-            if (!this.parameterData.rawData.BinaryValues.TryGetValue(parameterId, out var values))
+            if (!this.TimeseriesData.rawData.BinaryValues.TryGetValue(parameterId, out var values))
             {
-                values = new byte[this.parameterData.rawData.Timestamps.Length][];
-                this.parameterData.rawData.BinaryValues.Add(parameterId, values);
+                values = new byte[this.TimeseriesData.rawData.Timestamps.Length][];
+                this.TimeseriesData.rawData.BinaryValues.Add(parameterId, values);
 
-                this.parameterData.parameterList[parameterId] = new Parameter(parameterId, values);
+                this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
             }
 
             values[this.timestampRawIndex] = value;
@@ -142,7 +142,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="parameterId">Parameter Id</param>
         /// <param name="value">The value</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp AddValue(string parameterId, ParameterValue value)
+        public TimeseriesDataTimestamp AddValue(string parameterId, ParameterValue value)
         {
             if (value.Value == null) return this;
 
@@ -160,7 +160,7 @@ namespace Quix.Sdk.Streaming.Models
         /// </summary>
         /// <param name="parameterId">Parameter Id</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp RemoveValue(string parameterId)
+        public TimeseriesDataTimestamp RemoveValue(string parameterId)
         {
             var parameter = this.Parameters[parameterId];
             var valueType = parameter.Type;
@@ -178,15 +178,15 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="tagId">Tag name</param>
         /// <param name="tagValue">Tag value</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp AddTag(string tagId, string tagValue)
+        public TimeseriesDataTimestamp AddTag(string tagId, string tagValue)
         {
             if (string.IsNullOrWhiteSpace(tagId)) throw new ArgumentNullException(nameof(tagId), "Tag id can't be null or empty");
             if (string.IsNullOrWhiteSpace(tagValue)) throw new ArgumentNullException(nameof(tagValue), $"Tag ({tagId}) value can't be null or empty");
 
-            if (!this.parameterData.rawData.TagValues.TryGetValue(tagId, out var values))
+            if (!this.TimeseriesData.rawData.TagValues.TryGetValue(tagId, out var values))
             {
-                values = new string[this.parameterData.rawData.Timestamps.Length];
-                this.parameterData.rawData.TagValues.Add(tagId, values);
+                values = new string[this.TimeseriesData.rawData.Timestamps.Length];
+                this.TimeseriesData.rawData.TagValues.Add(tagId, values);
             }
 
             values[this.timestampRawIndex] = tagValue;
@@ -200,7 +200,7 @@ namespace Quix.Sdk.Streaming.Models
         /// </summary>
         /// <param name="tags">The tags to copy</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp AddTags(IEnumerable<KeyValuePair<string, string>> tags)
+        public TimeseriesDataTimestamp AddTags(IEnumerable<KeyValuePair<string, string>> tags)
         {
             if (tags == null) return this;
 
@@ -216,9 +216,9 @@ namespace Quix.Sdk.Streaming.Models
         /// </summary>
         /// <param name="tagId">Tag name</param>
         /// <returns>This instance</returns>
-        public ParameterDataTimestamp RemoveTag(string tagId)
+        public TimeseriesDataTimestamp RemoveTag(string tagId)
         {
-            this.parameterData.rawData.TagValues.Remove(tagId);
+            this.TimeseriesData.rawData.TagValues.Remove(tagId);
 
             return this;
         }

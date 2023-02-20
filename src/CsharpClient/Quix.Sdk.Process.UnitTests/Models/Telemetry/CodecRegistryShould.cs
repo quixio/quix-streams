@@ -33,33 +33,33 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry
         }
         
         [Fact]
-        public void Register_ImprovedJsonParameterData_ShouldRegisterAsExpected()
+        public void Register_ImprovedJsonTimeseriesData_ShouldRegisterAsExpected()
         {
             // Act
             CodecRegistry.Register(CodecType.ImprovedJson);
             
             // Assert
-            var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("ParameterData"));
+            var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));
             codecs.Count().Should().Be(3);
-            codecs.Should().Contain(x => x is DefaultJsonCodec<ParameterDataRaw>); // for reading
-            codecs.Should().Contain(x => x is ParameterDataJsonCodec);
-            codecs.Should().Contain(x => x is ParameterDataProtobufCodec); // for reading
-            codecs.First().GetType().Should().Be(typeof(ParameterDataJsonCodec)); // for writing
+            codecs.Should().Contain(x => x is DefaultJsonCodec<TimeseriesDataRaw>); // for reading
+            codecs.Should().Contain(x => x is TimeseriesDataJsonCodec);
+            codecs.Should().Contain(x => x is TimeseriesDataProtobufCodec); // for reading
+            codecs.First().GetType().Should().Be(typeof(TimeseriesDataJsonCodec)); // for writing
         }
         
         [Fact]
-        public void Register_JsonParameterData_ShouldRegisterAsExpected()
+        public void Register_JsonTimeseriesData_ShouldRegisterAsExpected()
         {
             // Act
             CodecRegistry.Register(CodecType.Json);
             
             // Assert
-            var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("ParameterData"));
+            var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));
             codecs.Count().Should().Be(3);
-            codecs.Should().Contain(x => x is DefaultJsonCodec<ParameterDataRaw>); 
-            codecs.Should().Contain(x => x is ParameterDataJsonCodec); // for reading
-            codecs.Should().Contain(x => x is ParameterDataProtobufCodec); // for reading
-            codecs.First().GetType().Should().Be(typeof(DefaultJsonCodec<ParameterDataRaw>)); // for writing
+            codecs.Should().Contain(x => x is DefaultJsonCodec<TimeseriesDataRaw>); 
+            codecs.Should().Contain(x => x is TimeseriesDataJsonCodec); // for reading
+            codecs.Should().Contain(x => x is TimeseriesDataProtobufCodec); // for reading
+            codecs.First().GetType().Should().Be(typeof(DefaultJsonCodec<TimeseriesDataRaw>)); // for writing
         }
         
         [Fact]

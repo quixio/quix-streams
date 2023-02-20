@@ -1,14 +1,14 @@
 import time
 import unittest
 
-from src.quixstreams import ParameterData
+from src.quixstreams import TimeseriesData
 
 
-class ParameterDataTimestampTests(unittest.TestCase):
+class TimeseriesDataTimestampTests(unittest.TestCase):
 
     def test_add_double(self):
         # Arrange
-        pd = ParameterData()
+        pd = TimeseriesData()
 
         # Act
         pd.add_timestamp_nanoseconds(100) \
@@ -19,7 +19,7 @@ class ParameterDataTimestampTests(unittest.TestCase):
 
     def test_add_string(self):
         # Arrange
-        pd = ParameterData()
+        pd = TimeseriesData()
 
         # Act
         pd.add_timestamp_nanoseconds(100) \
@@ -32,7 +32,7 @@ class ParameterDataTimestampTests(unittest.TestCase):
 
     def test_add_bytes(self):
         # Arrange
-        pd = ParameterData()
+        pd = TimeseriesData()
         expected = bytes("some bytes", "utf-8")
 
         # Act
@@ -44,7 +44,7 @@ class ParameterDataTimestampTests(unittest.TestCase):
 
     def test_add_tag(self):
         # Arrange
-        pd = ParameterData()
+        pd = TimeseriesData()
         pd.add_timestamp_nanoseconds(100)
         pdts = pd.timestamps[0]
         pdts.add_tag("a", "b")
@@ -61,8 +61,8 @@ class ParameterDataTimestampTests(unittest.TestCase):
 
     def test_add_tags(self):
         # Act
-        parameter_data = ParameterData()
-        ts = parameter_data.add_timestamp_nanoseconds(100)
+        timeseries_data = TimeseriesData()
+        ts = timeseries_data.add_timestamp_nanoseconds(100)
         ts.add_value("param1", 1) \
           .add_tags({"tag1": "val1", "tag2": "val2"})
         # Assert

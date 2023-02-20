@@ -14,11 +14,11 @@ using Xunit.Abstractions;
 
 namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
 {
-    public class ParameterDataJsonCodecShould
+    public class TimeseriesDataJsonCodecShould
     {
         private readonly ITestOutputHelper output;
 
-        public ParameterDataJsonCodecShould(ITestOutputHelper output)
+        public TimeseriesDataJsonCodecShould(ITestOutputHelper output)
         {
             this.output = output;
         }
@@ -27,7 +27,7 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
         [Fact]
         public void Serialization_ThenDeserialization_ShouldResultInOriginalData()
         {
-            var parameterData = new ParameterDataRaw()
+            var timeseriesData = new TimeseriesDataRaw()
             {
                 Epoch = 150,
                 Timestamps = Enumerable.Range(0, 1000).Select(x=> (long)x*11).ToDictionary(x=> new Random().Next(0, int.MaxValue), x=> x).OrderBy(x=> x.Key).Select(x=> x.Value).ToArray(),
@@ -38,10 +38,10 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
             };
 
             // Set a few duplicate timestamps
-            parameterData.Timestamps[10] = parameterData.Timestamps[9];
-            parameterData.Timestamps[11] = parameterData.Timestamps[9];
-            parameterData.Timestamps[12] = parameterData.Timestamps[9];
-            parameterData.Timestamps[13] = parameterData.Timestamps[9];
+            timeseriesData.Timestamps[10] = timeseriesData.Timestamps[9];
+            timeseriesData.Timestamps[11] = timeseriesData.Timestamps[9];
+            timeseriesData.Timestamps[12] = timeseriesData.Timestamps[9];
+            timeseriesData.Timestamps[13] = timeseriesData.Timestamps[9];
 
             var random = new Random();
             
@@ -61,13 +61,13 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
                     random.NextBytes(bytes);
                     return Encoding.UTF8.GetString(bytes);
                 }).ToArray();
-                var tagValue = new string[parameterData.Timestamps.Length];
+                var tagValue = new string[timeseriesData.Timestamps.Length];
                 for (int i = 0; i < tagValue.Length; i++)
                 {
                     tagValue[i] = random.Next(0, 2) == 1 ? null : possibleTagValues[random.Next(0, possibleTagValues.Length)];
                 }
 
-                parameterData.TagValues[tagKey] = tagValue;
+                timeseriesData.TagValues[tagKey] = tagValue;
             }
 
 
@@ -75,13 +75,13 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
             foreach (var i in Enumerable.Range(0, 25))
             {
                 var name = $"Parameter_{i}";
-                var values = new double?[parameterData.Timestamps.Length];
+                var values = new double?[timeseriesData.Timestamps.Length];
                 for (int j = 0; j < values.Length; j++)
                 {
                     values[j] = random.Next(0, j % 10 + 1) != 1 ? (double?)null : Math.Round(random.NextDouble()*10000, 5);
                 }
 
-                parameterData.NumericValues[name] = values;
+                timeseriesData.NumericValues[name] = values;
             }
             
             // Generate some string values
@@ -94,13 +94,13 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
                     return Encoding.UTF8.GetString(bytes);
                 }).ToArray();
                 var name = $"Parameter_{i}";
-                var values = new string[parameterData.Timestamps.Length];
+                var values = new string[timeseriesData.Timestamps.Length];
                 for (int j = 0; j < values.Length; j++)
                 {
                     values[j] = random.Next(0, j % 20 + 1) == 1 ? null : availableValuesAsString[random.Next(0, availableValuesAsString.Length)];
                 }
 
-                parameterData.StringValues[name] = values;
+                timeseriesData.StringValues[name] = values;
             }
             
             // Generate some binary values
@@ -118,20 +118,20 @@ namespace Quix.Sdk.Process.UnitTests.Models.Telemetry.Parameters
                     // null out every 5th or so
                     availableValues[j] = random.Next(0, j % 5) == 1 ? null : availableValues[j];
                 }
-                parameterData.BinaryValues[name] = availableValues;
+                timeseriesData.BinaryValues[name] = availableValues;
             }
 
-            var codec = new ParameterDataJsonCodec();
+            var codec = new TimeseriesDataJsonCodec();
             var newCodecSw = Stopwatch.StartNew();
-            var newCodecSerialized = codec.Serialize(parameterData);
+            var newCodecSerialized = codec.Serialize(timeseriesData);
             newCodecSw.Stop();
             var defaultCodecSw = Stopwatch.StartNew();
-            var defaultCodec = new DefaultJsonCodec<ParameterDataRaw>();
-            var defaultCodecSerialized = defaultCodec.Serialize(parameterData);
+            var defaultCodec = new DefaultJsonCodec<TimeseriesDataRaw>();
+            var defaultCodecSerialized = defaultCodec.Serialize(timeseriesData);
             defaultCodecSw.Stop();
             
             var deserialised = codec.Deserialize(newCodecSerialized);
-            deserialised.Should().BeEquivalentTo(parameterData, o => o.WithoutStrictOrdering().Using<double?>(ctx =>
+            deserialised.Should().BeEquivalentTo(timeseriesData, o => o.WithoutStrictOrdering().Using<double?>(ctx =>
                 {
                     if (ctx.Subject == null) ctx.Subject.Should().Be(ctx.Expectation);
                     else ctx.Subject.Should().BeApproximately(ctx.Expectation, 0.00001);;

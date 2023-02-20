@@ -37,7 +37,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     var i = 0;
                     while (!cancellationToken.IsCancellationRequested)
                     {
-                        stream.Parameters.Buffer.Write(GenerateParameterData(10 * i));
+                        stream.Parameters.Buffer.Write(GenerateTimeseriesData(10 * i));
                         Thread.Sleep(10);
                         i++;
                     }
@@ -47,9 +47,9 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             });
         }
         
-        private static ParameterData GenerateParameterData(int offset)
+        private static TimeseriesData GenerateTimeseriesData(int offset)
         {
-            var data = new ParameterData();
+            var data = new TimeseriesData();
 
             data.AddTimestampMilliseconds(offset)
                 .AddValue("param1", offset)

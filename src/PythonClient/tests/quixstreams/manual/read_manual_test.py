@@ -100,7 +100,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
 
     #new_stream.parameters.on_read_dataframe = on_parameters_dataframe_handler
 
-    def on_parameter_data_handler(stream: qx.StreamReader, data: qx.ParameterData):
+    def on_parameter_data_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
         with data:
             try:
                 print("Committing")
@@ -110,7 +110,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 # can convert to panda if wanted
                 pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
-                pfdata = qx.ParameterData.from_panda_dataframe(pf)
+                pfdata = qx.TimeseriesData.from_panda_dataframe(pf)
                 with pfdata:
                     print("  Length:", len(data.timestamps))
                     for index, val in enumerate(data.timestamps):
@@ -134,7 +134,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
     #param_buffer = new_stream.parameters.create_buffer()
     #param_buffer.on_read = on_parameter_data_handler
 
-    def on_parameter_data_filtered_handler(stream: qx.StreamReader, data: qx.ParameterData):
+    def on_parameter_data_filtered_handler(stream: qx.StreamReader, data: qx.TimeseriesData):
         with data:
             try:
                 def print(*args, **kwargs):
@@ -144,7 +144,7 @@ def read_stream(input_topic: qx.inputtopic, new_stream: qx.StreamReader):
                 # can convert to panda if wanted
                 pf = data.to_panda_dataframe()
                 # but for the following code, using original data, this is how you convert back:
-                pfdata = qx.ParameterData.from_panda_dataframe(pf)
+                pfdata = qx.TimeseriesData.from_panda_dataframe(pf)
                 with pfdata:
                     print("  Length:", len(pfdata.timestamps))
                     for index, val in enumerate(pfdata.timestamps):

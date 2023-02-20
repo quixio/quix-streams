@@ -4,46 +4,46 @@ from datetime import datetime, timezone, timedelta
 
 import pandas
 from src.quixstreams.helpers.timeconverter import TimeConverter
-from src.quixstreams import ParameterData
+from src.quixstreams import TimeseriesData
 
 from src.quixstreams.models.parametervalue import ParameterValueType
 
 
-class ParameterDataTests(unittest.TestCase):
+class TimeseriesDataTests(unittest.TestCase):
 
-    def test_populate_parameter_data_has_expected_length(self):
+    def test_populate_timeseries_data_has_expected_length(self):
         # Arrange
-        parameter_data = ParameterData()
-        parameter_data.add_timestamp_nanoseconds(100) \
+        timeseries_data = TimeseriesData()
+        timeseries_data.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
-        parameter_data.add_timestamp_milliseconds(1) \
+        timeseries_data.add_timestamp_milliseconds(1) \
             .add_value("param1", 2)
-        parameter_data.add_timestamp(timedelta(milliseconds=2)) \
+        timeseries_data.add_timestamp(timedelta(milliseconds=2)) \
             .add_value("param1", 3)
-        parameter_data.add_timestamp(datetime.now()) \
+        timeseries_data.add_timestamp(datetime.now()) \
             .add_value("param1", 3)
 
-        print(parameter_data)
+        print(timeseries_data)
 
         # Act
-        self.assertEqual(4, len(parameter_data.timestamps))
+        self.assertEqual(4, len(timeseries_data.timestamps))
 
-    def test_convert_from_parameter_data_to_panda_data_frame(self):
+    def test_convert_from_timeseries_data_to_panda_data_frame(self):
         # Arrange
-        parameter_data = ParameterData()
-        parameter_data.add_timestamp_nanoseconds(100)\
+        timeseries_data = TimeseriesData()
+        timeseries_data.add_timestamp_nanoseconds(100)\
                       .add_value("param1", 1) \
                       .add_value("param2", "string two")\
                       .add_tag("tag1", "tag val1")
-        parameter_data.add_timestamp_nanoseconds(100)\
+        timeseries_data.add_timestamp_nanoseconds(100)\
                       .add_value("param1", 2) \
                       .add_value("param2", "string two_b")\
                       .add_tag("tag1", "tag val2")
-        parameter_data.add_timestamp_nanoseconds(200)\
+        timeseries_data.add_timestamp_nanoseconds(200)\
                       .add_value("param1", 3)
 
         # Act
-        pdf = parameter_data.to_panda_dataframe()
+        pdf = timeseries_data.to_panda_dataframe()
         # Assert
         self.assertEqual(100, pdf["time"][0])
         self.assertEqual(1, pdf["param1"][0])
@@ -60,7 +60,7 @@ class ParameterDataTests(unittest.TestCase):
         self.assertTrue(pdf["param2"][2] is None)
         self.assertTrue(pdf["TAG__tag1"][2] is None)
 
-    def test_convert_from_panda_data_frame_with_numeric_header_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_numeric_header_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "time"] = 100
@@ -73,13 +73,13 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, 1] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
-        parameter_data_ptr = parameter_data.get_net_pointer()
-        reloaded_from_csharp = ParameterData(parameter_data_ptr)  # this will force us to load data back from the assigned values in c#
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
+        timeseries_data_ptr = timeseries_data.get_net_pointer()
+        reloaded_from_csharp = TimeseriesData(timeseries_data_ptr)  # this will force us to load data back from the assigned values in c#
 
 
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100)\
                       .add_value("1", 1)
         expected.add_timestamp_nanoseconds(100)\
@@ -90,7 +90,7 @@ class ParameterDataTests(unittest.TestCase):
         self.assert_data_are_equal(expected, reloaded_from_csharp)
         self.assert_data_are_equal(reloaded_from_csharp, expected)
 
-    def test_convert_from_panda_data_frame_with_time_as_string_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_time_as_string_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "time"] = str(datetime(1970, 1, 1, 0, 0, 1, 0, timezone.utc))
@@ -110,9 +110,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[4, "param1"] = 5
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(1000000000) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(1767107784123456000) \
@@ -125,10 +125,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(expected_fromstr) \
             .add_value("param1", 5)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_time_as_datetime_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_time_as_datetime_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "time"] = datetime(1970, 1, 1, 0, 0, 1, 0, timezone.utc)
@@ -138,18 +138,18 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[1, "param1"] = 2
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(1000000000) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(1767107784123456000) \
             .add_value("param1", 2)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_time_as_datetime_to_parameter_data_using_non_utc_timezone(self):
+    def test_convert_from_panda_data_frame_with_time_as_datetime_to_timeseries_data_using_non_utc_timezone(self):
         # Arrange
         pdf = pandas.DataFrame()
         tz = timezone(timedelta(seconds=14400))
@@ -161,18 +161,18 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[1, "param1"] = 2
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(1000000000) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(1767107784123456000) \
             .add_value("param1", 2)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_time_as_datetime_to_parameter_data_using_none_timezone(self):
+    def test_convert_from_panda_data_frame_with_time_as_datetime_to_timeseries_data_using_none_timezone(self):
         # Arrange
         pdf = pandas.DataFrame()
         time1 = datetime(1970, 1, 1, 0, 0, 1, 0)
@@ -184,21 +184,21 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[1, "param1"] = 2
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
         tz2 = datetime.now().astimezone().tzinfo
         expected1 = TimeConverter.to_unix_nanoseconds(time1.replace(tzinfo=tz2))
         expected2 = TimeConverter.to_unix_nanoseconds(time2.replace(tzinfo=tz2))
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(expected1) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(expected2) \
             .add_value("param1", 2)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_time_timecol_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_time_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "time"] = 100
@@ -211,9 +211,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(100) \
@@ -221,10 +221,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(200) \
             .add_value("param1", 3)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_Time_timecol_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_Time_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "Time"] = 100
@@ -237,9 +237,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(100) \
@@ -247,10 +247,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(200) \
             .add_value("param1", 3)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_datetime_timecol_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_datetime_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "datetime"] = 100
@@ -263,9 +263,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(100) \
@@ -273,10 +273,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(200) \
             .add_value("param1", 3)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_DateTime_timecol_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_DateTime_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "DateTime"] = 100
@@ -289,9 +289,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(100) \
@@ -299,10 +299,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(200) \
             .add_value("param1", 3)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_timestamp_timecol_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_timestamp_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "timestamp"] = 100
@@ -315,9 +315,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(100) \
@@ -325,10 +325,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(200) \
             .add_value("param1", 3)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_with_Timestamp_timecol_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_with_Timestamp_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "Timestamp"] = 100
@@ -341,9 +341,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100) \
             .add_value("param1", 1)
         expected.add_timestamp_nanoseconds(100) \
@@ -351,10 +351,10 @@ class ParameterDataTests(unittest.TestCase):
         expected.add_timestamp_nanoseconds(200) \
             .add_value("param1", 3)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_to_parameter_data(self):
+    def test_convert_from_panda_data_frame_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "time"] = 100
@@ -372,9 +372,9 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[2, "param1"] = 3
 
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(100)\
                       .add_value("param1", 1.32) \
                       .add_value("param2", "two")\
@@ -389,14 +389,14 @@ class ParameterDataTests(unittest.TestCase):
 
 
         print("-- Written --")
-        print(parameter_data)
+        print(timeseries_data)
         print("-- Expected --")
         print(expected)
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
-    def test_convert_from_panda_data_frame_to_parameter_data_with_epoch(self):
+    def test_convert_from_panda_data_frame_to_timeseries_data_with_epoch(self):
         # Arrange
         pdf = pandas.DataFrame()
         pdf.at[0, "time"] = 100
@@ -404,21 +404,21 @@ class ParameterDataTests(unittest.TestCase):
         pdf.at[0, "param2"] = "two"
         pdf.at[0, "TAG__tag1"] = "val1"
         # Act
-        parameter_data = ParameterData.from_panda_dataframe(pdf, 2000)
+        timeseries_data = TimeseriesData.from_panda_dataframe(pdf, 2000)
         # Assert
-        expected = ParameterData()
+        expected = TimeseriesData()
         expected.add_timestamp_nanoseconds(2100)\
                       .add_value("param1", 1) \
                       .add_value("param2", "two")\
                       .add_tag("tag1", "val1")
 
-        self.assert_data_are_equal(expected, parameter_data)
-        self.assert_data_are_equal(parameter_data, expected)
+        self.assert_data_are_equal(expected, timeseries_data)
+        self.assert_data_are_equal(timeseries_data, expected)
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            parameter_data_raw = ParameterData.from_panda_dataframe(pdf).to_panda_dataframe()
-            parsed_time=parameter_data_raw.loc[0, 'time']
+            timeseries_data_raw = TimeseriesData.from_panda_dataframe(pdf).to_panda_dataframe()
+            parsed_time=timeseries_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 
         _assert_time(pandas.DataFrame([{"value": 0.1,"time": 1000000}]), 1000000)
@@ -427,7 +427,7 @@ class ParameterDataTests(unittest.TestCase):
         _assert_time(pandas.DataFrame([{"TiMeSTAMP": 5000000, "value": 0.1}]), 5000000)
         _assert_time(pandas.DataFrame([{"value": 0.1, "TiMeSTAMP": 5000000}]), 5000000)
 
-    def assert_data_are_equal(self, data_a: ParameterData, data_b: ParameterData):
+    def assert_data_are_equal(self, data_a: TimeseriesData, data_b: TimeseriesData):
         self.assertEqual(len(data_a.timestamps), len(data_b.timestamps), "Timestamp count")
         for index_a, ts_a in enumerate(data_a.timestamps):
             ts_b = data_b.timestamps[index_a]

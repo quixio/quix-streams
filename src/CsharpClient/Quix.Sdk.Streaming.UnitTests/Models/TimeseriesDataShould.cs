@@ -9,13 +9,13 @@ using System.Text;
 
 namespace Quix.Sdk.Streaming.UnitTests.Models
 {
-    public class ParametersDataShould
+    public class TimeseriesDataShould
     {
         [Fact]
-        public void Clone_ParameterData_ShouldCreateInstanceAsExpected()
+        public void Clone_TimeseriesData_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var data = new ParameterData();
+            var data = new TimeseriesData();
             data.AddTimestampMilliseconds(100)
                 .AddValue("param1", 1)
                 .AddValue("param2", 2)
@@ -34,7 +34,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void Clone_WithParameterFilter_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var data = new ParameterData();
+            var data = new TimeseriesData();
             data.AddTimestampMilliseconds(100)
                 .AddValue("param1", 1)
                 .AddValue("param2", 2)
@@ -65,7 +65,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void Copy_WithParameterFilter_OnProcessData_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var data = new ParameterData();
+            var data = new TimeseriesData();
             data.AddTimestamp(DateTime.UtcNow)
                 .AddValue("param1", 1)
                 .AddValue("param2", 2)
@@ -80,7 +80,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
 
             // Act
             var processData = data.ConvertToProcessData();
-            var filtered = new ParameterData(processData, new[] { "param1", "param3" });
+            var filtered = new TimeseriesData(processData, new[] { "param1", "param3" });
 
             // Assert
             filtered.Timestamps.Count.Should().Be(1);
@@ -96,7 +96,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void ConvertToProcessData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataDuplicatedTimestamps = new ParameterData();
+            var dataDuplicatedTimestamps = new TimeseriesData();
             dataDuplicatedTimestamps.AddTimestampMilliseconds(100)
                 .AddValue("param1", 1)
                 .AddValue("param2", 2)
@@ -131,7 +131,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 .AddTag("tag1", "value2");
 
 
-            var dataWithoutDuplicatedTimestamps = new ParameterData();
+            var dataWithoutDuplicatedTimestamps = new TimeseriesData();
             dataWithoutDuplicatedTimestamps.AddTimestampMilliseconds(100)
                 .AddValue("param1", 3)
                 .AddValue("param2", 4)
@@ -168,7 +168,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void LoadFromProcessData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataDuplicatedTimestamps = new Sdk.Process.Models.ParameterDataRaw()
+            var dataDuplicatedTimestamps = new Sdk.Process.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100, 100, 100, 200, 200 },
@@ -188,7 +188,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 }
             };
 
-            var dataWithoutDuplicatedTimestamps = new Sdk.Process.Models.ParameterDataRaw()
+            var dataWithoutDuplicatedTimestamps = new Sdk.Process.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 , 200, 200 },
@@ -210,8 +210,8 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
 
 
             // Act
-            var data1 = new ParameterData(dataDuplicatedTimestamps);
-            var data2 = new ParameterData(dataWithoutDuplicatedTimestamps);
+            var data1 = new TimeseriesData(dataDuplicatedTimestamps);
+            var data2 = new TimeseriesData(dataWithoutDuplicatedTimestamps);
 
             // Assert
             data1.Should().BeEquivalentTo(data2, options => options.Including(info => info.WhichGetterHas(FluentAssertions.Common.CSharpAccessModifier.Public)));
@@ -221,7 +221,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void LoadFromProcessData_WithNullValues_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataWithNulls = new Sdk.Process.Models.ParameterDataRaw()
+            var dataWithNulls = new Sdk.Process.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100, 200, 300, 400, 500 },
@@ -241,7 +241,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 }
             };
 
-            var expectedData = new ParameterData();
+            var expectedData = new TimeseriesData();
             expectedData.AddTimestampNanoseconds(100)
                 .AddValue("param1", 1)
                 .AddValue("param3", "1")
@@ -266,7 +266,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 .AddTag("tag1", "value5");
 
             // Act
-            var data1 = new ParameterData(dataWithNulls);
+            var data1 = new TimeseriesData(dataWithNulls);
 
             // Assert
             data1.ConvertToProcessData().Should().BeEquivalentTo(dataWithNulls);
@@ -278,14 +278,14 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void ConvertToProcessData_WithDuplicatedTimestampsAndDifferentTags_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataDuplicatedTimestamps = new ParameterData();
+            var dataDuplicatedTimestamps = new TimeseriesData();
 
             dataDuplicatedTimestamps.AddTimestampMilliseconds(100).AddValue("a", "1").AddTag("c", "val1");
             dataDuplicatedTimestamps.AddTimestampMilliseconds(100).AddValue("b", "1").AddTag("c", "val1");
             dataDuplicatedTimestamps.AddTimestampMilliseconds(100).AddValue("b", "3").AddTag("c", "val2");
             dataDuplicatedTimestamps.AddTimestampMilliseconds(100).AddValue("b", "2").AddTag("c", "val1");
 
-            var expected = new ParameterData();
+            var expected = new TimeseriesData();
             expected.AddTimestampMilliseconds(100).AddValue("a", "1").AddValue("b", "2").AddTag("c", "val1");
             expected.AddTimestampMilliseconds(100).AddValue("b", "3").AddTag("c", "val2");
 
@@ -298,10 +298,10 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void ParameterData20_EqualityComparison_ShouldReturnTrue()
+        public void TimeseriesData20_EqualityComparison_ShouldReturnTrue()
         {
             // Arrange
-            var data = GenerateParameterData(0, 20);
+            var data = GenerateTimeseriesData(0, 20);
 
             // Act
             var dataCloned = data.Clone();
@@ -311,11 +311,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void ParameterDataRaw20_ParameterDataRaw100_EqualityComparison_ShouldReturnTrue()
+        public void TimeseriesDataRaw20_TimeseriesDataRaw100_EqualityComparison_ShouldReturnTrue()
         {
             // Arrange
-            var data100 = GenerateParameterData(0, 20);
-            var data20 = GenerateParameterData(0, 20, 20);
+            var data100 = GenerateTimeseriesData(0, 20);
+            var data20 = GenerateTimeseriesData(0, 20, 20);
 
             // Act
 
@@ -324,11 +324,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void ParameterDataWithEpoch_ParameterDataWithoutEpoch_EqualityComparison_ShouldReturnTrue()
+        public void TimeseriesDataWithEpoch_TimeseriesDataWithoutEpoch_EqualityComparison_ShouldReturnTrue()
         {
             // Arrange
-            var dataEpoch = GenerateParameterData(0, 20, 0, 1000, true);
-            var dataNoEpoch = GenerateParameterData(0, 20, 0, 1000, false);
+            var dataEpoch = GenerateTimeseriesData(0, 20, 0, 1000, true);
+            var dataNoEpoch = GenerateTimeseriesData(0, 20, 0, 1000, false);
 
             // Act
 
@@ -336,17 +336,17 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             dataEpoch.Should().BeEquivalentTo(dataNoEpoch);
         }
 
-        private static Sdk.Streaming.Models.ParameterData GenerateParameterData(int offset, int amount, int capacity = 0, long epoch = 0, bool includeEpoch = false)
+        private static Sdk.Streaming.Models.TimeseriesData GenerateTimeseriesData(int offset, int amount, int capacity = 0, long epoch = 0, bool includeEpoch = false)
         {
-            var pData = new ParameterData();
+            var tsdata = new TimeseriesData();
             if (capacity > 0)
             {
-                pData = new ParameterData(capacity);
+                tsdata = new TimeseriesData(capacity);
             }
 
             if (epoch > 0 && !includeEpoch)
             {
-                pData.rawData.Epoch = epoch;
+                tsdata.rawData.Epoch = epoch;
             }
 
             var tags = Enumerable.Range(0, 2).Select(k => "tag" + k);
@@ -360,7 +360,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                     time += epoch;
                 }
 
-                var ts = pData.AddTimestampNanoseconds(time);
+                var ts = tsdata.AddTimestampNanoseconds(time);
                 foreach (var parameter in Enumerable.Range(0, 2).Select(k => "p" + k))
                 {
                     ts.AddValue(parameter, (offset + i) * 10.0);
@@ -379,7 +379,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 }
             }
 
-            return pData;
+            return tsdata;
         }
 
     }

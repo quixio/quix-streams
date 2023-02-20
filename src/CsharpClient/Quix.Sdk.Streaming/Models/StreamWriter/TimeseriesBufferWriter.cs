@@ -8,20 +8,20 @@ using System.Text;
 namespace Quix.Sdk.Streaming.Models.StreamWriter
 {
     /// <summary>
-    /// Class used to write to <see cref="IStreamWriter"/> in a buffered manner
+    /// Class used to write time-series to <see cref="IStreamWriter"/> in a buffered manner
     /// </summary>
-    public class ParametersBufferWriter: ParametersBuffer, IDisposable
+    public class TimeseriesBufferWriter: TimeseriesBuffer, IDisposable
     {
         private readonly IStreamWriterInternal streamWriter;
         private long epoch = 0;
         private bool isDisposed;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="ParametersBufferWriter"/>
+        /// Initializes a new instance of <see cref="TimeseriesBufferWriter"/>
         /// </summary>
         /// <param name="streamWriter">Stream writer owner</param>
         /// <param name="bufferConfiguration">Configuration of the buffer</param>
-        internal ParametersBufferWriter(IStreamWriterInternal streamWriter, ParametersBufferConfiguration bufferConfiguration)
+        internal TimeseriesBufferWriter(IStreamWriterInternal streamWriter, TimeseriesBufferConfiguration bufferConfiguration)
             : base(bufferConfiguration, null, true, true)
         {
             this.streamWriter = streamWriter;
@@ -29,9 +29,9 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             this.OnReadRaw += OnReadDataRaw;
         }
 
-        private void OnReadDataRaw(object sender, ParameterDataRaw parameterDataRaw)
+        private void OnReadDataRaw(object sender, TimeseriesDataRaw TimeseriesDataRaw)
         {
-            this.streamWriter.Write(parameterDataRaw);
+            this.streamWriter.Write(TimeseriesDataRaw);
         }
 
         /// <summary>
@@ -55,38 +55,38 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// </summary>
         /// <param name="dateTime">The datetime to use for adding new parameter values</param>
         /// <returns>Parameter data builder to add parameter values at the provided time</returns>
-        public ParameterDataBuilder AddTimestamp(DateTime dateTime) => this.AddTimestampNanoseconds(dateTime.ToUnixNanoseconds(), 0);
+        public TimeseriesDataBuilder AddTimestamp(DateTime dateTime) => this.AddTimestampNanoseconds(dateTime.ToUnixNanoseconds(), 0);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeSpan">The time since the default <see cref="Epoch"/> to add the parameter values at</param>
         /// <returns>Parameter data builder to add parameter values at the provided time</returns>
-        public ParameterDataBuilder AddTimestamp(TimeSpan timeSpan) => this.AddTimestampNanoseconds(timeSpan.ToNanoseconds());
+        public TimeseriesDataBuilder AddTimestamp(TimeSpan timeSpan) => this.AddTimestampNanoseconds(timeSpan.ToNanoseconds());
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeMilliseconds">The time in milliseconds since the default <see cref="Epoch"/> to add the parameter values at</param>
         /// <returns>Parameter data builder to add parameter values at the provided time</returns>
-        public ParameterDataBuilder AddTimestampMilliseconds(long timeMilliseconds) => this.AddTimestampNanoseconds(timeMilliseconds * (long)1e6);
+        public TimeseriesDataBuilder AddTimestampMilliseconds(long timeMilliseconds) => this.AddTimestampNanoseconds(timeMilliseconds * (long)1e6);
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
         /// </summary>
         /// <param name="timeNanoseconds">The time in nanoseconds since the default <see cref="Epoch"/> to add the parameter values at</param>
         /// <returns>Parameter data builder to add parameter values at the provided time</returns>
-        public ParameterDataBuilder AddTimestampNanoseconds(long timeNanoseconds)
+        public TimeseriesDataBuilder AddTimestampNanoseconds(long timeNanoseconds)
         {
             return AddTimestampNanoseconds(timeNanoseconds, this.epoch);
         }
 
-        private ParameterDataBuilder AddTimestampNanoseconds(long timestampNanoseconds, long epoch)
+        private TimeseriesDataBuilder AddTimestampNanoseconds(long timestampNanoseconds, long epoch)
         {
-            var data = new ParameterData();
+            var data = new TimeseriesData();
             var timestamp = data.AddTimestampNanoseconds(timestampNanoseconds + epoch, true);
 
-            return new ParameterDataBuilder(this, data, timestamp);
+            return new TimeseriesDataBuilder(this, data, timestamp);
         }
 
 
@@ -94,7 +94,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// Write parameter data to the buffer
         /// </summary>
         /// <param name="data">Data to write</param>
-        public void Write(ParameterData data)
+        public void Write(TimeseriesData data)
         {
             for(var index = 0; index < data.Timestamps.Count; index++)
             {

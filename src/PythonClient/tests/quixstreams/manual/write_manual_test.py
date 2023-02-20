@@ -143,7 +143,7 @@ for stream_number in range(number_of_stream):
 
         # use writer directly rather than via buffer
         if variant == 1:
-            pdata = qx.ParameterData()
+            pdata = qx.TimeseriesData()
             with pdata:
                 for points_index in range(number_of_data_points_per_loop):
                     # send parameters

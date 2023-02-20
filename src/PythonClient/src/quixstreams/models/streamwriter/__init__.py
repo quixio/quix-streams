@@ -1,4 +1,4 @@
-from .parametersbufferwriter import ParametersBufferWriter
+from .timeseriesbufferwriter import TimeseriesBufferWriter
 from .streampropertieswriter import StreamPropertiesWriter
 from .streamparameterswriter import StreamParametersWriter
 from .streameventswriter import StreamEventsWriter

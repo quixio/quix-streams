@@ -8,14 +8,14 @@ namespace Quix.Sdk.Streaming.Utils
     /// <summary>
     /// ReadOnlyDictionary which returns the Tags of the current Timestamp
     /// </summary>
-    public readonly struct ParameterDataTimestampTags : IReadOnlyDictionary<string, string>
+    public readonly struct TimeseriesDataTimestampTags : IReadOnlyDictionary<string, string>
     {
-        private readonly ParameterData parameterData;
+        private readonly TimeseriesData TimeseriesData;
         private readonly long timestampRawIndex;
 
-        internal ParameterDataTimestampTags(ParameterData parameterData, long timestampRawIndex)
+        internal TimeseriesDataTimestampTags(TimeseriesData TimeseriesData, long timestampRawIndex)
         {
-            this.parameterData = parameterData;
+            this.TimeseriesData = TimeseriesData;
             this.timestampRawIndex = timestampRawIndex;
         }
 
@@ -23,7 +23,7 @@ namespace Quix.Sdk.Streaming.Utils
         public IEnumerator<KeyValuePair<string, string>> GetEnumerator()
         {
             var localTimestamp = this.timestampRawIndex;
-            return this.parameterData.rawData.TagValues
+            return this.TimeseriesData.rawData.TagValues
                 .ToDictionary(kv => kv.Key, kv => kv.Value[localTimestamp])
                 .Where(kv => kv.Value != null)
                 .GetEnumerator();
@@ -43,7 +43,7 @@ namespace Quix.Sdk.Streaming.Utils
         {
             get
             {
-                if (!this.parameterData.rawData.TagValues.TryGetValue(key, out var tagValues))
+                if (!this.TimeseriesData.rawData.TagValues.TryGetValue(key, out var tagValues))
                 {
                     return null;
                 }
@@ -64,13 +64,13 @@ namespace Quix.Sdk.Streaming.Utils
         /// <inheritdoc/>
         public bool ContainsKey(string key)
         {
-            return this.parameterData.rawData.TagValues.ContainsKey(key);
+            return this.TimeseriesData.rawData.TagValues.ContainsKey(key);
         }
 
         /// <inheritdoc/>
         public bool TryGetValue(string key, out string value)
         {
-            if (!this.parameterData.rawData.TagValues.TryGetValue(key, out var tagValues))
+            if (!this.TimeseriesData.rawData.TagValues.TryGetValue(key, out var tagValues))
             {
                 value = null;
                 return false;

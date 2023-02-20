@@ -18,14 +18,14 @@ namespace Quix.Sdk.Streaming.UnitTests
             Quix.Sdk.Logging.Factory = helper.CreateLoggerFactory();
         }
         
-        private static ParameterDataRaw GenerateParameterData(int offset)
+        private static TimeseriesDataRaw GenerateTimeseriesData(int offset)
         {
             var vals = Enumerable.Range(0, 2).ToDictionary(k => "p" + k,
                 s => Enumerable.Range(offset, 10).Select(s2 => new double?(s2 * 10.0)).ToArray());
             var stringVals = vals.ToDictionary(x => x.Key, x => x.Value.Select(y=> y.ToString()).ToArray());
             var binaryVals = stringVals.ToDictionary(x=> x.Key, x => x.Value.Select(y=> UTF8Encoding.UTF8.GetBytes(y)).ToArray());
             var epoch = 100000;
-            return new ParameterDataRaw
+            return new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = Enumerable.Range(offset, 10).Select(s => (long)s + epoch).ToArray(),
@@ -47,7 +47,7 @@ namespace Quix.Sdk.Streaming.UnitTests
             var inputTopic = client.OpenInputTopic("notused");
             var outputTopic = client.OpenOutputTopic("notused");
 
-            IList<ParameterDataRaw> data = new List<ParameterDataRaw>();
+            IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
             var streamStarted = 0;
             var streamEnded = 0;
             StreamProperties streamProperties = null;
@@ -62,7 +62,7 @@ namespace Quix.Sdk.Streaming.UnitTests
                 }
 
                 streamStarted++;
-                (e as IStreamReaderInternal).OnParameterData += (s2, e2) => data.Add(e2);
+                (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
                 (e as IStreamReaderInternal).OnParameterDefinitionsChanged += (s2, e2) => parametersPropertiesChanged = true;
                 (e as IStreamReaderInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
 
@@ -119,9 +119,9 @@ namespace Quix.Sdk.Streaming.UnitTests
 
                 Assert.True(parametersPropertiesChanged, "Parameter properties event not reached reader.");
 
-                var expectedData = new List<ParameterDataRaw>();
-                expectedData.Add(GenerateParameterData(0));
-                expectedData.Add(GenerateParameterData(10));
+                var expectedData = new List<TimeseriesDataRaw>();
+                expectedData.Add(GenerateTimeseriesData(0));
+                expectedData.Add(GenerateTimeseriesData(10));
 
                 (stream as IStreamWriterInternal).Write(expectedData);
 

@@ -10,14 +10,14 @@ using Quix.Sdk.Transport.Codec;
 namespace Quix.Sdk.Process.Models.Codecs
 {
     /// <summary>
-    /// ParameterData Protobuf Codec implementation
+    /// TimeseriesData Protobuf Codec implementation
     /// </summary>
-    public class ParameterDataProtobufCodec : Codec<ParameterDataRaw>
+    public class TimeseriesDataProtobufCodec : Codec<TimeseriesDataRaw>
     {
         /// <inheritdoc />
-        public override CodecId Id => CodecId.WellKnownCodecIds.ProtobufCodec+"-Pd";
+        public override CodecId Id => CodecId.WellKnownCodecIds.ProtobufCodec+"-Pd"; // Used to be called ParameterData. Keeping it for time being to be backward compatible
 
-        private Dictionary<string, string[]> DeserializeStrings(RepeatedField<ParameterDataRawProto.Types.StringValues> inp)
+        private Dictionary<string, string[]> DeserializeStrings(RepeatedField<TimeseriesDataRawProto.Types.StringValues> inp)
         {
             var ret = new Dictionary<string, string[]>(inp.Count);
             for (var i = 0; i < inp.Count; i++)
@@ -44,7 +44,7 @@ namespace Quix.Sdk.Process.Models.Codecs
             return ret;
         }
 
-        private Dictionary<string, double?[]> DeserializeNumerics(RepeatedField<ParameterDataRawProto.Types.NumericValues> inp)
+        private Dictionary<string, double?[]> DeserializeNumerics(RepeatedField<TimeseriesDataRawProto.Types.NumericValues> inp)
         {
             var ret = new Dictionary<string, double?[]>(inp.Count);
             for (var i = 0; i < inp.Count; i++)
@@ -70,7 +70,7 @@ namespace Quix.Sdk.Process.Models.Codecs
             return ret;
         }
 
-        private Dictionary<string, byte[][]> DeserializeBinaries(RepeatedField<ParameterDataRawProto.Types.BinaryValues> inp)
+        private Dictionary<string, byte[][]> DeserializeBinaries(RepeatedField<TimeseriesDataRawProto.Types.BinaryValues> inp)
         {
             var ret = new Dictionary<string, byte[][]>(inp.Count);
             for (var i = 0; i < inp.Count; i++)
@@ -104,13 +104,13 @@ namespace Quix.Sdk.Process.Models.Codecs
             return ret;
         }
         
-        private void SerializeStrings(Dictionary<string, string[]> inp, RepeatedField<ParameterDataRawProto.Types.StringValues> ret)
+        private void SerializeStrings(Dictionary<string, string[]> inp, RepeatedField<TimeseriesDataRawProto.Types.StringValues> ret)
         {
             if (inp == null)
                 return;
             foreach (var keyValuePair in inp)
             {
-                var row = new ParameterDataRawProto.Types.StringValues()
+                var row = new TimeseriesDataRawProto.Types.StringValues()
                 {
                     Header = keyValuePair.Key
                 };
@@ -137,13 +137,13 @@ namespace Quix.Sdk.Process.Models.Codecs
 
         }
 
-        private void SerializeNumerics(Dictionary<string, double?[]> inp, RepeatedField<ParameterDataRawProto.Types.NumericValues> ret)
+        private void SerializeNumerics(Dictionary<string, double?[]> inp, RepeatedField<TimeseriesDataRawProto.Types.NumericValues> ret)
         {
             if (inp == null)
                 return;
             foreach (var keyValuePair in inp)
             {
-                var row = new ParameterDataRawProto.Types.NumericValues()
+                var row = new TimeseriesDataRawProto.Types.NumericValues()
                 {
                     Header = keyValuePair.Key
                 };
@@ -166,13 +166,13 @@ namespace Quix.Sdk.Process.Models.Codecs
             }
         }
         
-        private void SerializeBinaries(Dictionary<string, byte[][]> inp, RepeatedField<ParameterDataRawProto.Types.BinaryValues> ret)
+        private void SerializeBinaries(Dictionary<string, byte[][]> inp, RepeatedField<TimeseriesDataRawProto.Types.BinaryValues> ret)
         {
             if (inp == null)
                 return;
             foreach (var keyValuePair in inp)
             {
-                var row = new ParameterDataRawProto.Types.BinaryValues()
+                var row = new TimeseriesDataRawProto.Types.BinaryValues()
                 {
                     Header = keyValuePair.Key
                 };
@@ -196,33 +196,33 @@ namespace Quix.Sdk.Process.Models.Codecs
         }
 
         /// <inheritdoc />
-        public override ParameterDataRaw Deserialize(byte[] contentBytes)
+        public override TimeseriesDataRaw Deserialize(byte[] contentBytes)
         {
-            var raw = ParameterDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes));
+            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes));
 
-            var NumericValues = DeserializeNumerics(raw.NumericValues);
-            var StringValues = DeserializeStrings(raw.StringValues);
-            var BinaryValues = DeserializeBinaries(raw.BinaryValues);
-            var TagValues = DeserializeStrings(raw.TagValues);
-            var ret = new ParameterDataRaw
+            var numericValues = DeserializeNumerics(raw.NumericValues);
+            var stringValues = DeserializeStrings(raw.StringValues);
+            var binaryValues = DeserializeBinaries(raw.BinaryValues);
+            var tagValues = DeserializeStrings(raw.TagValues);
+            var ret = new TimeseriesDataRaw
             {
                 Epoch = raw.Epoch,
                 Timestamps = raw.Timestamps.ToArray(),
-                NumericValues = NumericValues,
-                StringValues = StringValues,
-                BinaryValues = BinaryValues,
-                TagValues = TagValues,
+                NumericValues = numericValues,
+                StringValues = stringValues,
+                BinaryValues = binaryValues,
+                TagValues = tagValues,
             };
             return ret;
         }
         
         /// <inheritdoc />
-        public override byte[] Serialize(ParameterDataRaw obj)
+        public override byte[] Serialize(TimeseriesDataRaw obj)
         {
             using (MemoryStream memStream = new MemoryStream())
             {
                 byte[] ret;
-                var cl = new ParameterDataRawProto
+                var cl = new TimeseriesDataRawProto
                 {
                     Epoch = obj.Epoch,
                 };
