@@ -50,7 +50,7 @@ class KafkaStreamingClient(object):
 
         self._interop = sci(sci.Constructor(broker_address, secu_opts_hptr, properties=net_properties_hptr, debug=debug))
 
-    def create_topic_consumer(self, topic: str, consumer_group: str = "Default", commit_settings: Union[CommitOptions, CommitMode] = None, auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Earliest) -> TopicConsumer:
+    def create_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None, auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
             Opens an input topic capable of reading incoming streams
 
@@ -62,7 +62,7 @@ class KafkaStreamingClient(object):
 
             commit_settings (CommitOptions, CommitMode): the settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
 
-            auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to earliest
+            auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to latest
         """
 
         net_offset_reset = AutoOffsetResetInterop.Earliest

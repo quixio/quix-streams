@@ -53,7 +53,7 @@ public class InteropUtils
         if (obj == null) return IntPtr.Zero;
         var handle = GCHandle.Alloc(obj);
         var ptr = GCHandle.ToIntPtr(handle);
-        LogDebug("Allocated Ptr: {0}, type: {1}, {2}", ptr,typeof(T).FullName , obj == null ? "is null" : "is not null");
+        LogDebug("Allocated Ptr: {0}, type: {1}, {2}", ptr,typeof(T).FullName, obj == null ? "is null" : "is not null");
         return ptr;
     }
     

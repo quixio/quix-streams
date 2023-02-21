@@ -17,7 +17,7 @@ namespace Quix.Sdk.Process.Kafka
         /// <param name="brokerList">Broker list of the Kafka cluster</param>
         /// <param name="consumerGroupId">Consumer group id of the reading process. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="properties">Extra Kafka configuration properties</param>
-        public TelemetryKafkaConsumerConfiguration(string brokerList, string consumerGroupId = "Default", IDictionary<string, string> properties = null)
+        public TelemetryKafkaConsumerConfiguration(string brokerList, string consumerGroupId = null, IDictionary<string, string> properties = null)
         {
             if (string.IsNullOrWhiteSpace(brokerList))
             {

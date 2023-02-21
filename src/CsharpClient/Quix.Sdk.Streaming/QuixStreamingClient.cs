@@ -120,7 +120,7 @@ namespace Quix.Sdk.Streaming
         /// <param name="options">The settings to use for committing</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public ITopicConsumer CreateTopicConsumer(string topicIdOrName, string consumerGroup = "Default", CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Earliest)
+        public ITopicConsumer CreateTopicConsumer(string topicIdOrName, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
             
@@ -713,7 +713,7 @@ namespace Quix.Sdk.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public static ITopicConsumer CreateTopicConsumer(this QuixStreamingClient client, string topicId, string consumerGroup = "Default", CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Earliest)
+        public static ITopicConsumer CreateTopicConsumer(this QuixStreamingClient client, string topicId, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
         {
             switch (commitMode)
             {

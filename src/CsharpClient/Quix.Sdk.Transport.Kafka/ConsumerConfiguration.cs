@@ -64,7 +64,7 @@ namespace Quix.Sdk.Transport.Kafka
         /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.     
         /// 
         /// If no consumer group is configured, the consumption will start according to value set.
-        /// If no auto offset reset is set, in case of no consumer group it defaults to end, otherwise to earliest.
+        /// If no auto offset reset is set,  defaults to latest.
         /// </summary>
         public AutoOffsetReset? AutoOffsetReset { get; set; } = null;
 
@@ -105,7 +105,7 @@ namespace Quix.Sdk.Transport.Kafka
             {
                 GroupId = this.GroupId,
                 BootstrapServers = this.BrokerList,
-                AutoOffsetReset = this.AutoOffsetReset ?? (this.ConsumerGroupSet ? Confluent.Kafka.AutoOffsetReset.Earliest : Confluent.Kafka.AutoOffsetReset.Latest),
+                AutoOffsetReset = this.AutoOffsetReset ?? Confluent.Kafka.AutoOffsetReset.Latest,
                 EnableAutoCommit = false
             };
             return config;
