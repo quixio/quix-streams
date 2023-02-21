@@ -12,8 +12,8 @@ namespace Quix.Sdk.Streaming.UnitTests
     public class TestStreamingClient
     {
         private readonly TestBroker testBroker;
-        private KafkaReader kafkaReader;
-        private Func<string, KafkaWriter> createKafkaWriter;
+        private TelemetryKafkaConsumer telemetryKafkaConsumer;
+        private Func<string, TelemetryKafkaProducer> createKafkaWriter;
 
         public TestStreamingClient(CodecType codec = CodecType.Protobuf)
         {
@@ -29,9 +29,9 @@ namespace Quix.Sdk.Streaming.UnitTests
 
         public IInputTopic OpenInputTopic()
         {
-            this.kafkaReader = new TestKafkaReader(this.testBroker);
+            this.telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(this.testBroker);
 
-            var inputTopic = new InputTopic(this.kafkaReader);
+            var inputTopic = new InputTopic(this.telemetryKafkaConsumer);
 
             return inputTopic;
         }
@@ -43,7 +43,7 @@ namespace Quix.Sdk.Streaming.UnitTests
 
         public IOutputTopic OpenOutputTopic()
         {
-            this.createKafkaWriter = streamId => new TestKafkaWriter(this.testBroker, streamId);
+            this.createKafkaWriter = streamId => new TestTelemetryKafkaProducer(this.testBroker, streamId);
 
             var outputTopic = new OutputTopic(this.createKafkaWriter);
 

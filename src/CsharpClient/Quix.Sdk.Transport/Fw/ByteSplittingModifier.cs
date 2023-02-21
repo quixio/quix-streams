@@ -33,7 +33,7 @@ namespace Quix.Sdk.Transport.Fw
         public Func<Package, Task> OnNewPackage { get; set; }
 
         /// <summary>
-        /// Send a package, which the modifier splits if necessary. Split results are raised via <see cref="OnNewPackage"/>
+        /// Publish a package, which the modifier splits if necessary. Split results are raised via <see cref="OnNewPackage"/>
         /// </summary>
         /// <param name="package">The package to split</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>
@@ -44,7 +44,7 @@ namespace Quix.Sdk.Transport.Fw
             if (this.OnNewPackage == null || !package.TryConvertTo<byte[]>(out var bytePackage)) return Task.CompletedTask;
 
             var tasks = new List<Task>();
-            // this funky logic is done so I know when I'm sending the last one without enumerating the entire thing into a list first
+            // this funky logic is done so I know when I'm publishing the last one without enumerating the entire thing into a list first
             // So basically I always send the last one I enumerated, not the current one
             byte[] lastSegment = null;
             Package<byte[]> segmentPackage;
@@ -72,11 +72,11 @@ namespace Quix.Sdk.Transport.Fw
                 {
                     // not thread safe, but better than having too many warnings or some performance implication 
                     MovingWarnAboveSize = Math.Max(value.Length, MovingWarnAboveSize) * 2;
-                    Logger.LogWarning("One or more of your messages exceed the optimal size. Consider sending smaller for better consumer experience. Your message was over {0}KB", Math.Round((double)value.Length/1000, 1));
+                    Logger.LogWarning("One or more of your messages exceed the optimal size. Consider publishing smaller for better consumer experience. Your message was over {0}KB", Math.Round((double)value.Length/1000, 1));
                 }
                 else
                 {
-                    Logger.LogTrace("One or more of your messages exceed the optimal size. Consider sending smaller for better consumer experience. Your message was over {0}KB", Math.Round((double)value.Length/1000, 1));
+                    Logger.LogTrace("One or more of your messages exceed the optimal size. Consider publishing smaller for better consumer experience. Your message was over {0}KB", Math.Round((double)value.Length/1000, 1));
                 }
             }
 

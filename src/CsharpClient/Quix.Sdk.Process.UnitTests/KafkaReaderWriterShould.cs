@@ -37,7 +37,7 @@ namespace Quix.Sdk.Process.UnitTests
             bool streamStarted = false;
 
             // Create Kafka Reader
-            var kafkaReader = new TestKafkaReader(testBroker);
+            var kafkaReader = new TestTelemetryKafkaConsumer(testBroker);
             kafkaReader.ForEach(streamId =>
             {
                 streamStarted = true;
@@ -62,11 +62,11 @@ namespace Quix.Sdk.Process.UnitTests
 
             // Create streams
             var stream1 = new StreamProcess()
-                .AddComponent(new TestKafkaWriter(testBroker, "StreamId_1"));
+                .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_1"));
             var stream2 = new StreamProcess()
-                .AddComponent(new TestKafkaWriter(testBroker, "StreamId_2"));
+                .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_2"));
             var stream3 = new StreamProcess()
-                .AddComponent(new TestKafkaWriter(testBroker, "StreamId_3"));
+                .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_3"));
 
             // ACT
             stream1.Send(testModel1);
@@ -118,19 +118,19 @@ namespace Quix.Sdk.Process.UnitTests
             bool raised = false;
 
             // Create Kafka Reader
-            KafkaReader kafkaReader = new TestKafkaReader(testBroker);
-            kafkaReader.ForEach(streamId =>
+            TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
+            telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var s = new StreamProcess(streamId);
                 return s;
             });
 
             // Create Kafka Writer
-            KafkaWriter kafkaWriter = new TestKafkaWriter(testBroker, "StreamId_1");
+            TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
             var stream1 = new StreamProcess()
-                .AddComponent(kafkaWriter);
+                .AddComponent(telemetryKafkaProducer);
 
-            kafkaWriter.OnWriteException += (sender, e) => raised = true;
+            telemetryKafkaProducer.OnWriteException += (sender, e) => raised = true;
 
             // ACT
             stream1.Send(testModel1);
@@ -150,19 +150,19 @@ namespace Quix.Sdk.Process.UnitTests
             bool raised = false;
 
             // Create Kafka Reader
-            KafkaReader kafkaReader = new TestKafkaReader(testBroker);
-            kafkaReader.ForEach(streamId =>
+            TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
+            telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var s = new StreamProcess(streamId);
                 return s;
             });
 
             // Create Kafka Writer
-            KafkaWriter kafkaWriter = new TestKafkaWriter(testBroker, "StreamId_1");
+            TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
             var stream1 = new StreamProcess()
-                .AddComponent(kafkaWriter);
+                .AddComponent(telemetryKafkaProducer);
 
-            kafkaWriter.OnWriteException += (sender, e) => raised = true;
+            telemetryKafkaProducer.OnWriteException += (sender, e) => raised = true;
 
             // ACT
             stream1.Send(testModel1);

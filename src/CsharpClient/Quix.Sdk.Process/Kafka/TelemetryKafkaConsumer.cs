@@ -14,16 +14,16 @@ namespace Quix.Sdk.Process.Kafka
     /// KafkaReader initializes transport layer classes and sets up a <see cref="StreamProcessFactory"/> to detect new streams in Kafka topic 
     /// and start new <see cref="StreamProcess"/> instances where all the messages of the stream are going to be sent.
     /// </summary>
-    public class KafkaReader: IDisposable
+    public class TelemetryKafkaConsumer: IDisposable
     {
-        private readonly ILogger logger = Quix.Sdk.Logging.CreateLogger<KafkaReader>();
+        private readonly ILogger logger = Quix.Sdk.Logging.CreateLogger<TelemetryKafkaConsumer>();
         private Transport.TransportConsumer transportConsumer;
         private bool isDisposed = false;
 
         private StreamProcessFactory streamProcessFactory;
         private Func<string, IStreamProcess> streamProcessFactoryHandler;
         private IKafkaConsumer kafkaConsumer;
-        private Action<CommitOptions> configureCommitOptions;
+        private readonly Action<CommitOptions> configureCommitOptions;
 
         /// <summary>
         /// Event raised when an exception occurs during the Reading processes
@@ -56,15 +56,15 @@ namespace Quix.Sdk.Process.Kafka
         protected IStreamContextCache ContextCache;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaReader"/>
+        /// Initializes a new instance of <see cref="TelemetryKafkaConsumer"/>
         /// </summary>
-        /// <param name="kafkaReaderConfiguration">Kafka broker configuration for <see cref="KafkaReader"/></param>
+        /// <param name="telemetryKafkaConsumerConfiguration">Kafka broker configuration for <see cref="TelemetryKafkaConsumer"/></param>
         /// <param name="topic">Topic name to read from</param>
-        public KafkaReader(KafkaReaderConfiguration kafkaReaderConfiguration, string topic)
+        public TelemetryKafkaConsumer(TelemetryKafkaConsumerConfiguration telemetryKafkaConsumerConfiguration, string topic)
         {
             // Kafka Transport layer -> Transport layer
-            var subConfig = kafkaReaderConfiguration.ToSubscriberConfiguration();
-            var commitOptions = kafkaReaderConfiguration.CommitOptions ?? new CommitOptions();
+            var subConfig = telemetryKafkaConsumerConfiguration.ToSubscriberConfiguration();
+            var commitOptions = telemetryKafkaConsumerConfiguration.CommitOptions ?? new CommitOptions();
             if (commitOptions.AutoCommitEnabled && !subConfig.ConsumerGroupSet)
             {
                 logger.LogDebug("Disabled automatic kafka commit as no consumer group is set");
@@ -86,7 +86,7 @@ namespace Quix.Sdk.Process.Kafka
         /// Protected CTOR for testing purposes. We can simulate a Kafka broker instead of using a real broker.
         /// </summary>
         /// <param name="consumer">Simulated message broker ingoing endpoint of transport layer</param>
-        protected KafkaReader(IKafkaConsumer consumer)
+        protected TelemetryKafkaConsumer(IKafkaConsumer consumer)
         {
             this.kafkaConsumer = consumer;
         }
@@ -130,7 +130,7 @@ namespace Quix.Sdk.Process.Kafka
         /// </summary>
         public void Start()
         {
-            if (isDisposed) throw new ObjectDisposedException(nameof(KafkaReader));
+            if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
             if (!this.InitializeTransport()) return;
 
             // Transport layer -> Streaming layer
@@ -171,7 +171,7 @@ namespace Quix.Sdk.Process.Kafka
         /// The handler function receives a StreamId and has to return a <see cref="StreamProcess"/>.</param>
         public void ForEach(Func<string, IStreamProcess> streamProcessFactoryHandler)
         {
-            if (isDisposed) throw new ObjectDisposedException(nameof(KafkaReader));
+            if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
             this.streamProcessFactoryHandler = streamProcessFactoryHandler;
         }
 
@@ -180,7 +180,7 @@ namespace Quix.Sdk.Process.Kafka
         /// </summary>
         public void Stop()
         {
-            if (isDisposed) throw new ObjectDisposedException(nameof(KafkaReader));
+            if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
             StopHelper();
         }
 
@@ -221,7 +221,7 @@ namespace Quix.Sdk.Process.Kafka
         /// </summary>
         public void Commit()
         {
-            if (isDisposed) throw new ObjectDisposedException(nameof(KafkaReader));
+            if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
             if (transportConsumer == null) throw new InvalidOperationException("Not able to commit to inactive reader");
             Debug.Assert(ContextCache != null);
             lock (this.ContextCache.Sync)

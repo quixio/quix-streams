@@ -8,16 +8,16 @@ namespace Quix.Sdk.Process.Kafka
     public static class ConversionExtensions
     {
         /// <summary>
-        /// Converts <see cref="KafkaReaderConfiguration"/> to <see cref="SubscriberConfiguration"/>
+        /// Converts <see cref="TelemetryKafkaConsumerConfiguration"/> to <see cref="ConsumerConfiguration"/>
         /// </summary>
-        /// <param name="readerConfiguration">The <see cref="KafkaReaderConfiguration"/> to convert</param>
-        /// <returns>The converted <see cref="SubscriberConfiguration"/></returns>
-        public static SubscriberConfiguration ToSubscriberConfiguration(this KafkaReaderConfiguration readerConfiguration)
+        /// <param name="consumerConfiguration">The <see cref="TelemetryKafkaConsumerConfiguration"/> to convert</param>
+        /// <returns>The converted <see cref="ConsumerConfiguration"/></returns>
+        public static ConsumerConfiguration ToSubscriberConfiguration(this TelemetryKafkaConsumerConfiguration consumerConfiguration)
         {
-            if (readerConfiguration == null) return null;
-            var subConfig = new SubscriberConfiguration(readerConfiguration.BrokerList, readerConfiguration.ConsumerGroupId, readerConfiguration.Properties);
-            subConfig.AutoOffsetReset = readerConfiguration.AutoOffsetReset;
-            return subConfig;
+            if (consumerConfiguration == null) return null;
+            var consConf = new ConsumerConfiguration(consumerConfiguration.BrokerList, consumerConfiguration.ConsumerGroupId, consumerConfiguration.Properties);
+            consConf.AutoOffsetReset = consumerConfiguration.AutoOffsetReset;
+            return consConf;
         }
     }
 }

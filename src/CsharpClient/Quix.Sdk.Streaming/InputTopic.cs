@@ -13,7 +13,7 @@ namespace Quix.Sdk.Streaming
     public class InputTopic : IInputTopic
     {
         private ILogger logger = Logging.CreateLogger<StreamReader>();
-        private readonly KafkaReader kafkaReader;
+        private readonly TelemetryKafkaConsumer telemetryKafkaConsumer;
         private bool isDisposed = false;
 
         /// <inheritdoc />
@@ -38,16 +38,16 @@ namespace Quix.Sdk.Streaming
         public void Commit()
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(InputTopic));
-            this.kafkaReader.Commit();
+            this.telemetryKafkaConsumer.Commit();
         }
 
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
-        /// <param name="kafkaReader">Kafka reader from Process layer</param>
-        public InputTopic(KafkaReader kafkaReader)
+        /// <param name="telemetryKafkaConsumer">Kafka reader from Process layer</param>
+        public InputTopic(TelemetryKafkaConsumer telemetryKafkaConsumer)
         {
-            kafkaReader.ForEach(streamId =>
+            telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var stream = new StreamReader(this, streamId);
                 try
@@ -62,12 +62,12 @@ namespace Quix.Sdk.Streaming
                 return stream;
             });
 
-            kafkaReader.OnStreamsRevoked += this.StreamsRevokedEventHandler;
-            kafkaReader.OnRevoking += this.StreamsRevokingEventHandler;
-            kafkaReader.OnCommitted += this.CommittedEventHandler;
-            kafkaReader.OnCommitting += this.CommittingEventHandler;
+            telemetryKafkaConsumer.OnStreamsRevoked += this.StreamsRevokedEventHandler;
+            telemetryKafkaConsumer.OnRevoking += this.StreamsRevokingEventHandler;
+            telemetryKafkaConsumer.OnCommitted += this.CommittedEventHandler;
+            telemetryKafkaConsumer.OnCommitting += this.CommittingEventHandler;
 
-            this.kafkaReader = kafkaReader;
+            this.telemetryKafkaConsumer = telemetryKafkaConsumer;
         }
 
         private void CommittedEventHandler(object sender, EventArgs e)
@@ -101,7 +101,7 @@ namespace Quix.Sdk.Streaming
         public void StartReading()
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(InputTopic));
-            kafkaReader.Start();
+            telemetryKafkaConsumer.Start();
         }
 
         /// <inheritdoc />
@@ -109,11 +109,11 @@ namespace Quix.Sdk.Streaming
         {
             if (isDisposed) return;
             isDisposed = true;
-            kafkaReader.OnStreamsRevoked -= this.StreamsRevokedEventHandler;
-            kafkaReader.OnRevoking -= this.StreamsRevokingEventHandler;
-            kafkaReader.OnCommitted -= this.CommittedEventHandler;
-            kafkaReader.OnCommitting -= this.CommittingEventHandler;
-            this.kafkaReader.Dispose(); // TODO code smell, disposing external resource
+            telemetryKafkaConsumer.OnStreamsRevoked -= this.StreamsRevokedEventHandler;
+            telemetryKafkaConsumer.OnRevoking -= this.StreamsRevokingEventHandler;
+            telemetryKafkaConsumer.OnCommitted -= this.CommittedEventHandler;
+            telemetryKafkaConsumer.OnCommitting -= this.CommittingEventHandler;
+            this.telemetryKafkaConsumer.Dispose(); // TODO code smell, disposing external resource
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }
     }

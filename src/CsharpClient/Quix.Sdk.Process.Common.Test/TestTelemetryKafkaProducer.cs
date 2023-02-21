@@ -1,20 +1,19 @@
-﻿using Quix.Sdk.Process;
-using Quix.Sdk.Process.Kafka;
+﻿using Quix.Sdk.Process.Kafka;
 
 namespace Quix.Sdk.Process.Common.Test
 {
     /// <summary>
     /// Kafka Writer that uses a mocked Message broker for test purposes
     /// </summary>
-    public class TestKafkaWriter : KafkaWriter
+    public class TestTelemetryKafkaProducer : TelemetryKafkaProducer
     {
         /// <summary>
-        /// Initializes a new instance of <see cref="TestKafkaWriter"/>
+        /// Initializes a new instance of <see cref="TestTelemetryKafkaProducer"/>
         /// </summary>
         /// <param name="testBroker">Mocked test broker instance of <see cref="TestBroker"/></param>
         /// <param name="streamId">Writing stream Id</param>
-        public TestKafkaWriter(TestBroker testBroker, string streamId = null)
-            :base(testBroker.Producer, streamId)
+        public TestTelemetryKafkaProducer(TestBroker testBroker, string streamId = null)
+            :base(testBroker.Producer, null, streamId)
         {
         }
     }

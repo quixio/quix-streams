@@ -15,12 +15,12 @@ namespace Quix.Sdk.Streaming.UnitTests.Process
 {
     public class StreamWriterShould
     {
-        private void CreateRequirements(out string streamId, out TestKafkaWriter testKafkaWriter, out StreamWriter streamWriter)
+        private void CreateRequirements(out string streamId, out TestTelemetryKafkaProducer testTelemetryKafkaProducer, out StreamWriter streamWriter)
         {
             streamId = "TestStream";
-            var ftestKafkaWriter = new TestKafkaWriter(new TestBroker(), streamId);
-            testKafkaWriter = ftestKafkaWriter;
-            Func<string, KafkaWriter> func = (string streamId) => ftestKafkaWriter;
+            var ftestKafkaWriter = new TestTelemetryKafkaProducer(new TestBroker(), streamId);
+            testTelemetryKafkaProducer = ftestKafkaWriter;
+            Func<string, TelemetryKafkaProducer> func = (string streamId) => ftestKafkaWriter;
             streamWriter = new StreamWriter(Substitute.For<IOutputTopicInternal>(), func, streamId);
         }
         

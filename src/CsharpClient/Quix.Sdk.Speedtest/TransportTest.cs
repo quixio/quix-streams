@@ -54,9 +54,9 @@ namespace Quix.Sdk.Speedtest
             var start = DateTime.UtcNow;
             var lastpackageRead = DateTime.UtcNow;
 
-            var subConfig = new SubscriberConfiguration(Configuration.Config.BrokerList, "Debug", config);
+            var consConfig = new ConsumerConfiguration(Configuration.Config.BrokerList, "Debug", config);
             var topicConfig = new ConsumerTopicConfiguration(Configuration.Config.Topic);
-            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            var kafkaOutput = new KafkaConsumer(consConfig, topicConfig);
             kafkaOutput.OnErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
             kafkaOutput.Open();
             var consumer = new TransportConsumer(kafkaOutput);

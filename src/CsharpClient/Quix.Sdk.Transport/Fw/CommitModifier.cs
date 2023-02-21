@@ -16,7 +16,7 @@ namespace Quix.Sdk.Transport.Fw
     public sealed class CommitModifier : IProducer, IConsumer, ICanCommit, ICanCommitSubscriber, IRevocationSubscriber
     {
         private readonly ILogger logger = Logging.CreateLogger<CommitModifier>();
-        private readonly Func<Package, CancellationToken, Task> onSend = null;
+        private readonly Func<Package, CancellationToken, Task> onPublish = null;
         private Action onClose = null;
         private bool closed = false;
         private readonly EventHandler<OnRevokingEventArgs> onRevoking = null;
@@ -40,14 +40,14 @@ namespace Quix.Sdk.Transport.Fw
             if (!autoCommit)
             {
                 // In case there is no auto committing then all we have to do is pass the message up in the chain
-                onSend = (package, cancellationToken) => this.OnNewPackage?.Invoke(package) ?? Task.CompletedTask;
+                onPublish = (package, cancellationToken) => this.OnNewPackage?.Invoke(package) ?? Task.CompletedTask;
                 return;
             }
 
             if (commitEvery == 1)
             {
                 // if we're committing every single message, then any kind of timer based commit is irrelevant
-                onSend = async (package, cancellationToken) =>
+                onPublish = async (package, cancellationToken) =>
                 {
                     await (this.OnNewPackage?.Invoke(package) ?? Task.CompletedTask);
                     if (package == null) return;
@@ -181,7 +181,7 @@ namespace Quix.Sdk.Transport.Fw
             {
                 // This is a condition where I do not actually want to commit after every N number of messages.
                 // The task here is to simply keep track of every message going through this modifier
-                onSend = async (package, cancellationToken) =>
+                onPublish = async (package, cancellationToken) =>
                 {
                     await (this.OnNewPackage?.Invoke(package) ?? Task.CompletedTask);
                     if (package == null) return;
@@ -192,7 +192,7 @@ namespace Quix.Sdk.Transport.Fw
             else
             {
                 // This is a condition where I want to commit after every N number of messages.
-                onSend = async (package, cancellationToken) =>
+                onPublish = async (package, cancellationToken) =>
                 {
                     await (this.OnNewPackage?.Invoke(package) ?? Task.CompletedTask);
                     if (package == null) return;
@@ -240,7 +240,7 @@ namespace Quix.Sdk.Transport.Fw
         /// <inheritdoc/>
         public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
-            return onSend(package, cancellationToken);
+            return onPublish(package, cancellationToken);
         }
 
         /// <inheritdoc/>

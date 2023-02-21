@@ -5,7 +5,7 @@ using System.Text;
 namespace Quix.Sdk.Process.Kafka
 {
     /// <summary>
-    /// Kafka broker configuration for <see cref="KafkaWriter"/>
+    /// Kafka broker configuration for <see cref="TelemetryKafkaProducer"/>
     /// </summary>
     public class KafkaWriterConfiguration
     {

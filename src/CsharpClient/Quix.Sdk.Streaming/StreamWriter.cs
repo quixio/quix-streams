@@ -40,7 +40,7 @@ namespace Quix.Sdk.Streaming
         /// <param name="outputTopic">Output topic owner</param>
         /// <param name="createKafkaWriter">Function factory to create a Kafka Writer from Process layer.</param>
         /// <param name="streamId">Optional. Stream Id of the stream created</param>
-        internal StreamWriter(IOutputTopicInternal outputTopic, Func<string, KafkaWriter> createKafkaWriter, string streamId = null)
+        internal StreamWriter(IOutputTopicInternal outputTopic, Func<string, TelemetryKafkaProducer> createKafkaWriter, string streamId = null)
             :base(streamId)
         {
             // Modifiers

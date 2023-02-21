@@ -65,9 +65,9 @@ namespace Quix.Sdk.Transport.Samples.Samples
         private IConsumer CreateKafkaOutput(Partition partition, Offset offset)
         {
             Console.WriteLine($"Reading from {TopicName}, partition 2");
-            var subConfig = new SubscriberConfiguration(Const.BrokerList, ConsumerGroup);
+            var consConfig = new ConsumerConfiguration(Const.BrokerList, ConsumerGroup);
             var topicConfig = new ConsumerTopicConfiguration(TopicName, partition, offset);
-            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            var kafkaOutput = new KafkaConsumer(consConfig, topicConfig);
             kafkaOutput.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");

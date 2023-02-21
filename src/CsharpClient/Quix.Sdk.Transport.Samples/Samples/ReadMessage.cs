@@ -27,11 +27,11 @@ namespace Quix.Sdk.Transport.Samples.Samples
         /// <returns>Disposable subscriber</returns>
         public IConsumer Start(bool useConsumerGroup = true, Offset? offset = null)
         {
-            var subConfig = new SubscriberConfiguration(Const.BrokerList, useConsumerGroup ? ConsumerGroup : null);
+            var consConfig = new ConsumerConfiguration(Const.BrokerList, useConsumerGroup ? ConsumerGroup : null);
             var topicConfig = offset.HasValue ? 
                 new ConsumerTopicConfiguration(TopicName, offset.Value) :
                 new ConsumerTopicConfiguration(TopicName);
-            var kafkaConsumer = new KafkaConsumer(subConfig, topicConfig);
+            var kafkaConsumer = new KafkaConsumer(consConfig, topicConfig);
             kafkaConsumer.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");

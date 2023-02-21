@@ -58,21 +58,21 @@ namespace Quix.Sdk.Streaming.Raw
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         public RawInputTopic(string brokerAddress, string topicName, string consumerGroup, Dictionary<string, string> brokerProperties = null, AutoOffsetReset? autoOffset = null)
         {
-            brokerProperties = brokerProperties ?? new Dictionary<string, string>();
+            brokerProperties ??= new Dictionary<string, string>();
             if (!brokerProperties.ContainsKey("fetch.message.max.bytes")) brokerProperties["fetch.message.max.bytes"] = "20480";
 
-            var subscriberConfiguration = new SubscriberConfiguration(brokerAddress, consumerGroup, brokerProperties);
+            var consConfig = new ConsumerConfiguration(brokerAddress, consumerGroup, brokerProperties);
 
             if (autoOffset != null)
             {
-                subscriberConfiguration.AutoOffsetReset = autoOffset?.ConvertToKafka();
+                consConfig.AutoOffsetReset = autoOffset?.ConvertToKafka();
             }
 
             //disable quix-custom keep alive messages because they can interfere with the received data since we dont have any protocol running this over
-            subscriberConfiguration.CheckForKeepAlivePackets = false;
+            consConfig.CheckForKeepAlivePackets = false;
 
             var topicConfiguration = new ConsumerTopicConfiguration(topicName);
-            this.kafkaConsumer = new KafkaConsumer(subscriberConfiguration, topicConfiguration);
+            this.kafkaConsumer = new KafkaConsumer(consConfig, topicConfiguration);
         }
 
         /// <inheritdoc />

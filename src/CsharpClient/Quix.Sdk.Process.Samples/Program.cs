@@ -28,9 +28,9 @@ using System.Collections.Generic;
             //var testBroker = new TestBroker();
 
             // Reading from Kafka
-            KafkaReader kafkaReader = new KafkaReader(new KafkaReaderConfiguration(Configuration.Config.BrokerList, Configuration.Config.ConsumerId, Configuration.Config.Properties), Configuration.Config.Topic);
+            TelemetryKafkaConsumer telemetryKafkaConsumer = new TelemetryKafkaConsumer(new TelemetryKafkaConsumerConfiguration(Configuration.Config.BrokerList, Configuration.Config.ConsumerId, Configuration.Config.Properties), Configuration.Config.Topic);
             //KafkaReader kafkaReader = new TestKafkaReader(testBroker);
-            kafkaReader.ForEach(streamId =>
+            telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var s = new StreamProcess(streamId)
                     .AddComponent(new SimplyModifier(69))
@@ -39,14 +39,14 @@ using System.Collections.Generic;
                 return s;
             });
 
-            kafkaReader.Start();
+            telemetryKafkaConsumer.Start();
 
             // Writing to Kafka (Random data)
             var randomDataReader = new RandomDataReader();
             var stream = new StreamProcess()
                 .AddComponent(randomDataReader)
                 //.AddComponent(new SimplyModifier(69))
-                .AddComponent(new KafkaWriter(KafkaHelper.OpenKafkaInput(new KafkaWriterConfiguration(Configuration.Config.BrokerList, Configuration.Config.Properties), Configuration.Config.Topic)));
+                .AddComponent(new TelemetryKafkaProducer(KafkaHelper.OpenKafkaInput(new KafkaWriterConfiguration(Configuration.Config.BrokerList, Configuration.Config.Properties), Configuration.Config.Topic), null));
             //.AddComponent(new ConsoleStreamWriter()); // This is here to show if msg got correctly sent
                 //.AddComponent(new TestKafkaWriter(testBroker));
 

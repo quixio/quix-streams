@@ -45,7 +45,7 @@ namespace Quix.Sdk.Transport.Fw
         public Func<Package, Task> OnNewPackage { get; set; }
 
         /// <summary>
-        /// Send a package, which the modifier attempts to merge. Merge results are raised via <see cref="OnNewPackage"/>
+        /// Publish a package, which the modifier attempts to merge. Merge results are raised via <see cref="OnNewPackage"/>
         /// </summary>
         /// <param name="package">The package to merge</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>

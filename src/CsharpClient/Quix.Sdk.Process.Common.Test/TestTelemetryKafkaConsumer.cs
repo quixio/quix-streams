@@ -11,13 +11,13 @@ namespace Quix.Sdk.Process.Common.Test
     /// <summary>
     /// Kafka Reader that uses a mocked Message broker for test purposes
     /// </summary>
-    public class TestKafkaReader : KafkaReader
+    public class TestTelemetryKafkaConsumer : TelemetryKafkaConsumer
     {
         /// <summary>
-        /// Initializes a new instance of <see cref="TestKafkaReader"/>
+        /// Initializes a new instance of <see cref="TestTelemetryKafkaConsumer"/>
         /// </summary>
         /// <param name="testBroker">Mocked test broker instance of <see cref="TestBroker"/></param>
-        public TestKafkaReader(TestBroker testBroker)
+        public TestTelemetryKafkaConsumer(TestBroker testBroker)
             :base(new TestKafkaBrokerConsumer(testBroker.Consumer))
         {
         }

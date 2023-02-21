@@ -11,7 +11,7 @@ namespace Quix.Sdk.Streaming
     /// </summary>
     public class OutputTopic : IOutputTopic, IOutputTopicInternal
     {
-        private readonly Func<string, KafkaWriter> createKafkaWriter;
+        private readonly Func<string, TelemetryKafkaProducer> createKafkaWriter;
         private readonly ConcurrentDictionary<string, Lazy<IStreamWriter>> streams = new ConcurrentDictionary<string, Lazy<IStreamWriter>>();
         private readonly IKafkaProducer kafkaProducer;
         
@@ -22,7 +22,7 @@ namespace Quix.Sdk.Streaming
         /// Initializes a new instance of <see cref="OutputTopic"/>
         /// </summary>
         /// <param name="createKafkaWriter">Function factory to create a Kafka Writer from Process layer.</param>
-        public OutputTopic(Func<string, KafkaWriter> createKafkaWriter)
+        public OutputTopic(Func<string, TelemetryKafkaProducer> createKafkaWriter)
         {
             this.createKafkaWriter = createKafkaWriter;
         }
@@ -34,7 +34,7 @@ namespace Quix.Sdk.Streaming
         {
             this.kafkaProducer = KafkaHelper.OpenKafkaInput(config, topic, out var byteSplitter);
 
-            createKafkaWriter = (string streamId) => new KafkaWriter(this.kafkaProducer, byteSplitter, streamId);
+            createKafkaWriter = (string streamId) => new TelemetryKafkaProducer(this.kafkaProducer, byteSplitter, streamId);
         }
 
         /// <inheritdoc />

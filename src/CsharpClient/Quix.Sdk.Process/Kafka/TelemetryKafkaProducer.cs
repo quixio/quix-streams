@@ -11,9 +11,9 @@ namespace Quix.Sdk.Process.Kafka
     /// Kafka writer component implementation.
     /// It writes all the incoming messages to Kafka with a new StreamId.
     /// </summary>
-    public class KafkaWriter : StreamComponent, IDisposable
+    public class TelemetryKafkaProducer : StreamComponent, IDisposable
     {
-        private readonly ILogger logger = Logging.CreateLogger<KafkaWriter>();
+        private readonly ILogger logger = Logging.CreateLogger<TelemetryKafkaProducer>();
 
         private Transport.IO.IProducer transportProducer;
 
@@ -28,25 +28,12 @@ namespace Quix.Sdk.Process.Kafka
         public event EventHandler<Exception> OnWriteException;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaWriter"/>
-        /// </summary>
-        /// <param name="producer">The input to write the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
-        /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
-        [Obsolete("Use constructor with bytesplitter")] // kept for DLL backward compatibility
-        public KafkaWriter(Transport.IO.IProducer producer, string streamId = null)
-        {
-            this.transportProducer = new Transport.TransportProducer(producer);
-
-            this.InitializeStreaming(streamId);
-        }
-
-        /// <summary>
-        /// Initializes a new instance of <see cref="KafkaWriter"/>
+        /// Initializes a new instance of <see cref="TelemetryKafkaProducer"/>
         /// </summary>
         /// <param name="producer">The input to write the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
         /// <param name="byteSplitter">The byte splitter to use. </param>
         /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
-        public KafkaWriter(Transport.IO.IProducer producer, IByteSplitter byteSplitter, string streamId = null)
+        public TelemetryKafkaProducer(Transport.IO.IProducer producer, IByteSplitter byteSplitter, string streamId = null)
         {
             this.transportProducer = new Transport.TransportProducer(producer, byteSplitter);
 

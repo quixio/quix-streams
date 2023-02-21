@@ -86,14 +86,14 @@ namespace Quix.Sdk.Transport.Kafka
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaConsumer"/>
         /// </summary>
-        /// <param name="subscriberConfiguration">The subscriber configuration to use</param>
+        /// <param name="consumerConfiguration">The subscriber configuration to use</param>
         /// <param name="consumerTopicConfiguration">The topic configuration to use</param>
-        public KafkaConsumer(SubscriberConfiguration subscriberConfiguration, ConsumerTopicConfiguration consumerTopicConfiguration)
+        public KafkaConsumer(ConsumerConfiguration consumerConfiguration, ConsumerTopicConfiguration consumerTopicConfiguration)
         {
             this.consumerTopicConfiguration = consumerTopicConfiguration;
-            this.config = subscriberConfiguration.ToConsumerConfig();
-            this.consumerGroupSet = subscriberConfiguration.ConsumerGroupSet;
-            this.checkForKeepAlivePackets = subscriberConfiguration.CheckForKeepAlivePackets;
+            this.config = consumerConfiguration.ToConsumerConfig();
+            this.consumerGroupSet = consumerConfiguration.ConsumerGroupSet;
+            this.checkForKeepAlivePackets = consumerConfiguration.CheckForKeepAlivePackets;
             SetConfigId();
         }
 

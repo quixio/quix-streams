@@ -22,7 +22,7 @@ namespace Quix.Sdk.Transport.Fw
     }
 
     /// <summary>
-    /// Splits messages for sending onto transport layer according to limitations. Can be merged by <see cref="ByteMerger" />
+    /// Splits messages for publishing onto transport layer according to limitations. Can be merged by <see cref="ByteMerger" />
     /// </summary>
     public class ByteSplitter : IByteSplitter
     {

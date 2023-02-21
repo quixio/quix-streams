@@ -54,9 +54,9 @@ namespace Quix.Sdk.Transport.Samples.Samples
 
         private IConsumer CreateConsumer()
         {
-            var subConfig = new SubscriberConfiguration(Const.BrokerList, ConsumerGroup);
+            var consConfig = new ConsumerConfiguration(Const.BrokerList, ConsumerGroup);
             var topicConfig = new ConsumerTopicConfiguration(TopicName);
-            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            var kafkaOutput = new KafkaConsumer(consConfig, topicConfig);
             kafkaOutput.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");

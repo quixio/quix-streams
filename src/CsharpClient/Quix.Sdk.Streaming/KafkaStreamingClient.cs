@@ -96,13 +96,13 @@ namespace Quix.Sdk.Streaming
             var wsIdPrefix = GetWorkspaceIdPrefixFromTopic(topic);
             consumerGroup = UpdateConsumerGroup(consumerGroup, wsIdPrefix);
 
-            var kafkaReaderConfiguration = new KafkaReaderConfiguration(brokerAddress, consumerGroup, brokerProperties)
+            var kafkaReaderConfiguration = new TelemetryKafkaConsumerConfiguration(brokerAddress, consumerGroup, brokerProperties)
             {
                 CommitOptions = options,
                 AutoOffsetReset = autoOffset.ConvertToKafka()
             };
 
-            var kafkaReader = new KafkaReader(kafkaReaderConfiguration, topic);
+            var kafkaReader = new TelemetryKafkaConsumer(kafkaReaderConfiguration, topic);
 
             var inputTopic = new InputTopic(kafkaReader);
 
