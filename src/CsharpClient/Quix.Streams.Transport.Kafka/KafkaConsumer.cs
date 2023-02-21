@@ -289,6 +289,11 @@ namespace Quix.Streams.Transport.Kafka
                                 {
                                     throw new Exception($"[{this.configId}] Failed to retrieve metadata for topic '{partition.Topic}' with partition {partition.Partition}. Try again or specify partitions explicitly."); // Maybe a more specific exception ?
                                 }
+                                
+                                if (topicMetaData.Partitions.Count == 0)
+                                {
+                                    throw new OperationCanceledException($"[{this.configId}] Found no partition information for topic '{partition.Topic}'. Verify the topic exists and try again or use consumer group."); // Maybe a more specific exception ?
+                                }
 
                                 newPartitions.AddRange(topicMetaData.Partitions.Select(x=> new TopicPartitionOffset(new TopicPartition(partition.Topic, x.PartitionId), partition.Offset)));
                             }

@@ -122,8 +122,6 @@ namespace Quix.Streams.Streaming
             
             var (client, topicId, ws) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, options) = GetValidConsumerGroup(topicIdOrName, consumerGroup, options).ConfigureAwait(false).GetAwaiter().GetResult();
-
-            consumerGroup = UpdateConsumerGroup(consumerGroup, ws);
             
             return client.CreateTopicConsumer(topicId, consumerGroup, options, autoOffset);
         }
@@ -179,6 +177,8 @@ namespace Quix.Streams.Streaming
             originalConsumerGroup = originalConsumerGroup?.Trim();
             var newCommitOptions = commitOptions;
             var consumerGroup = originalConsumerGroup;
+            
+            var ws = await GetWorkspaceFromConfiguration(topicIdOrName);
             if (originalConsumerGroup == null)
             {
                 if (commitOptions?.AutoCommitEnabled == true)
@@ -190,10 +190,12 @@ namespace Quix.Streams.Streaming
                 {
                     AutoCommitEnabled = false
                 };
-                consumerGroup = Guid.NewGuid().ToString("N").Substring(0, 10);
+                
+                // Hacky workaround to an issue that Kafka client can't be left with no GroupId, but it still uses it for ACL checks.
+                Quix.Streams.Transport.Kafka.ConsumerConfiguration.ConsumerGroupIdWhenNotSet = ws.WorkspaceId + "-" + Guid.NewGuid().ToString("N").Substring(0, 10);
+                return (null, newCommitOptions);
             }
             
-            var ws = await GetWorkspaceFromConfiguration(topicIdOrName);
             if (!consumerGroup.StartsWith(ws.WorkspaceId))
             {
                 this.logger.LogDebug("Updating consumer group to have workspace id prefix to avoid being invalid.");
@@ -694,25 +696,6 @@ namespace Quix.Streams.Streaming
             /// Whether to warn if the provided token is not PAT token. Defaults to <c>true</c>.
             /// </summary>
             public bool WarnAboutNonPatToken = true;
-        }
-
-        private string UpdateConsumerGroup(string consumerGroup, Workspace ws)
-        {
-            if (consumerGroup == null) return null;
-            if (consumerGroup.Contains("[MACHINENAME]"))
-            {
-                consumerGroup = consumerGroup.Replace("[MACHINENAME]", Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? System.Environment.MachineName);
-            }
-
-            if (ws != null)
-            {
-                // check if consumerGroup already starts with it
-                if (consumerGroup.StartsWith(ws.WorkspaceId+'-')) return consumerGroup;
-                return $"{ws.WorkspaceId}-{consumerGroup}";
-            }
-            
-            this.logger.LogWarning("Warning: Your consumer group '{0}' could not be updated with workspace id prefix and might not work.", consumerGroup);
-            return consumerGroup;
         }
     }
 

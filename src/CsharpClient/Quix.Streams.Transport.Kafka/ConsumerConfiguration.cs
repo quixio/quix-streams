@@ -8,6 +8,7 @@ namespace Quix.Streams.Transport.Kafka
     public class ConsumerConfiguration
     {
         private readonly IDictionary<string, string> consumerProperties = new Dictionary<string, string>();
+        public static string ConsumerGroupIdWhenNotSet = "UNSET-" +Guid.NewGuid().ToString("D"); // technically any random static would do, but in case something does commit under that consumer id, it would possibly break things
 
         /// <summary>
         /// Initializes a new instance of <see cref="ConsumerConfiguration" />
@@ -26,7 +27,7 @@ namespace Quix.Streams.Transport.Kafka
             {
                 // means we're not using consumer group. In this case disallow use of commit
                 ConsumerGroupSet = false;
-                groupId = "UNSET-" +Guid.NewGuid().ToString("D"); // technically any random static would do, but in case something does commit under that consumer id, it would possibly break things
+                groupId = ConsumerGroupIdWhenNotSet;
             }
             else
             {

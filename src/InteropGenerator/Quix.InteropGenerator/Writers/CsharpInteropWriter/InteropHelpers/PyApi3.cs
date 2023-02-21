@@ -348,7 +348,7 @@ public class PyApi3 : IDisposable
     public unsafe string GetVersion()
     {
         var versionPtr = Py_GetVersion();
-        return InteropUtils.PtrToStringUTF8(versionPtr);
+        return InteropUtils.PtrToStringUTF8(versionPtr, false);
     }
 
     public unsafe void Initialize()

@@ -2,7 +2,7 @@ import time
 import unittest
 import threading
 import pandas as pd
-from quixstreams import Logging, LogLevel
+from quixstreams import Logging, LogLevel, AutoOffsetReset
 
 from testcontainers.core.container import DockerContainer
 
@@ -76,10 +76,11 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         incoming_stream: qx.StreamConsumer = None  # the object we will be testing here
 
-        with (client := qx.KafkaStreamingClient(TestIntegration.broker_list, None)), (topic_consumer := client.create_topic_consumer(topic_name, auto_offset_reset=qx.AutoOffsetReset.Earliest)):
+        with (client := qx.KafkaStreamingClient(TestIntegration.broker_list, None)), (topic_consumer := client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=qx.AutoOffsetReset.Earliest)):
             output_stream = None  # output stream
 
             def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
@@ -139,11 +140,12 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         incoming_stream: qx.StreamConsumer = None  # the object we will be testing here
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        topic_consumer = client.create_topic_consumer(topic_name, auto_offset_reset=qx.AutoOffsetReset.Earliest)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=qx.AutoOffsetReset.Earliest)
         output_stream = None  # output stream
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
@@ -221,11 +223,12 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         incoming_stream: qx.StreamConsumer = None  # the object we will be testing here
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        topic_consumer = client.create_topic_consumer(topic_name, auto_offset_reset=qx.AutoOffsetReset.Earliest)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=qx.AutoOffsetReset.Earliest)
         output_stream = None  # output stream
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
@@ -299,14 +302,14 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         read_data: qx.EventData = None  # the object we will be testing here
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         output_stream = None  # The outgoing stream
 
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         cts = qx.CancellationTokenSource()  # used for interrupting the App
 
@@ -363,12 +366,12 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         read_data: qx.EventData = None  # the object we will be testing here
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
         output_stream = None  # The outgoing stream
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
@@ -415,12 +418,12 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         read_data: qx.EventData = None  # the object we will be testing here
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
         output_stream = None  # The outgoing stream
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
@@ -464,14 +467,14 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
         read_data: qx.EventData = None  # the object we will be testing here
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         output_stream = None  # The outgoing stream
 
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
@@ -583,13 +586,13 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         output_stream = None  # The outgoing stream
 
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
@@ -618,7 +621,7 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
@@ -666,7 +669,7 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
@@ -702,7 +705,7 @@ class TestIntegration(unittest.TestCase):
         self.waitforresult(event)
         event.clear()
         topic_consumer.dispose()
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)  # should continue after first stream, as same consumer group
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)  # should continue after first stream, as same consumer group
         topic_consumer.on_stream_received = on_stream_received
         topic_consumer.subscribe()
 
@@ -726,7 +729,7 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         event = threading.Event()  # used to trigger evaluation
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
@@ -852,10 +855,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
         with topic_producer, topic_producer:
 
             stream = None  # The outgoing stream
@@ -899,10 +902,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -973,10 +976,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1031,10 +1034,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1085,10 +1088,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1166,10 +1169,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1213,10 +1216,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1307,10 +1310,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1362,10 +1365,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1418,10 +1421,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1472,10 +1475,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1537,10 +1540,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1606,10 +1609,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
@@ -1661,10 +1664,10 @@ class TestIntegration(unittest.TestCase):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
-        consumer_group = "irrelevant"
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
         topic_producer = client.create_topic_producer(topic_name)
-        topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
+        topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
