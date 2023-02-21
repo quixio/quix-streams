@@ -2,14 +2,17 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using Quix.Sdk.Streaming.Models;
+using Quix.Sdk.Streaming.Models.StreamReader;
 
 namespace Quix.Sdk.Streaming.Samples.Samples
 {
     public class ReadSampleWithManualCommit
     {
+        private long counter = 0;
+        
         public void Start(CancellationToken cancellationToken)
         {
-            long counter = 0;
+            counter = 0;
             var sw = Stopwatch.StartNew();
             var timer = new System.Timers.Timer();
             timer.Interval = 1000;
@@ -23,7 +26,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
             var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
 
-            inputTopic.OnStreamReceived += (sender, streamReader) =>
+            inputTopic.OnStreamReceived += (s, streamReader) =>
             {
                 var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
@@ -34,45 +37,13 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                 };
 
                 var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
+                buffer.OnRead += OnBufferOnOnRead;
 
-                buffer.OnRead += (sender, data) =>
-                {
-                    // inputTopic.Commit(data); this doesn't work just yet
-                    Interlocked.Add(ref counter, data.Timestamps.Count);
-                };
-
-                streamReader.Parameters.OnRead += (sender, data) =>
-                {
-                    inputTopic.Commit();
-                    Interlocked.Add(ref counter, data.Timestamps.Count);
-                };
-
-                streamReader.Events.OnRead += (sender, data) =>
-                {
-                    inputTopic.Commit();
-                    Console.WriteLine($"Event data -> StreamId: '{streamReader.StreamId}' - Event '{data.Id}' with value '{data.Value}'");
-                };
-
-                streamReader.Parameters.OnDefinitionsChanged += (sender, args) =>
-                {
-                    foreach (var definition in streamReader.Parameters.Definitions)
-                    {
-                        Console.WriteLine($"Parameter definition -> StreamId: {streamReader.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
-                    }
-                };
-
-                streamReader.Events.OnDefinitionsChanged += (sender, args) =>
-                {
-                    foreach (var definition in streamReader.Events.Definitions)
-                    {
-                        Console.WriteLine($"Event definition -> StreamId: {streamReader.StreamId} - Event definition '{definition.Id}' with name '{definition.Name}'");
-                    }
-                };
-
-                streamReader.Properties.OnChanged += (stream, args) =>
-                {
-                    Console.WriteLine($"Stream properties -> StreamId '{streamReader.StreamId}' with name '{streamReader.Properties.Name}' located in '{streamReader.Properties.Location}'");
-                };
+                streamReader.Parameters.OnRead += OnParametersOnOnRead;
+                streamReader.Events.OnRead += OnEventsOnOnRead;
+                streamReader.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
+                streamReader.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
+                streamReader.Properties.OnChanged += OnPropertiesOnOnChanged;
             };
 
             inputTopic.StartReading();
@@ -81,6 +52,47 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             {
                 inputTopic.Dispose();
             });
+        }
+        
+        void OnPropertiesOnOnChanged(object s, StreamPropertiesChangedEventArgs args)
+        {
+            Console.WriteLine($"Stream properties -> StreamId '{args.Stream.StreamId}' with name '{args.Stream.Properties.Name}' located in '{args.Stream.Properties.Location}'");
+        }
+        
+        void OnEventsOnOnDefinitionsChanged(object s, EventDefinitionsChangedEventArgs args)
+        {
+            foreach (var definition in args.Stream.Events.Definitions)
+            {
+                Console.WriteLine($"Event definition -> StreamId: {args.Stream.StreamId} - Event definition '{definition.Id}' with name '{definition.Name}'");
+            }
+        }
+
+        void OnParametersOnOnDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
+        {
+            foreach (var definition in args.Stream.Parameters.Definitions)
+            {
+                Console.WriteLine($"Parameter definition -> StreamId: {args.Stream.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
+            }
+        }
+        
+        void OnEventsOnOnRead(object s, EventDataReadEventArgs args)
+        {
+            args.Topic.Commit();
+            Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
+        }
+        
+        
+        void OnParametersOnOnRead(object s, TimeseriesDataReadEventArgs args)
+        {
+            ((IInputTopic)args.Topic).Commit();
+            Interlocked.Add(ref counter, args.Data.Timestamps.Count);
+        }
+        
+        
+        void OnBufferOnOnRead(object s, TimeseriesDataReadEventArgs args)
+        {
+            // args.Topic.Commit(data); this doesn't work just yet
+            Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
     }
 }

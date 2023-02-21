@@ -136,10 +136,10 @@ For instance, in the following example we read and print the first timestamp and
     ``` cs
     inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
-        streamReader.Parameters.OnRead += (stream, timeseriesData) =>
+        streamReader.Parameters.OnRead += (stream, args) =>
         {
-            var timestamp = timeseriesData.Timestamps[0].Timestamp;
-            var numValue = timeseriesData.Timestamps[0].Parameters["ParameterA"].NumericValue;
+            var timestamp = args.Data.Timestamps[0].Timestamp;
+            var numValue = args.Data.Timestamps[0].Parameters["ParameterA"].NumericValue;
             Console.WriteLine($"ParameterA - {timestamp}: {numValue}");
         };
     };
@@ -447,9 +447,9 @@ Reading events from a stream is as easy as reading timeseries data. In this case
 === "C\#"
     
     ``` cs
-    newStream.Events.OnRead += (stream, data) =>
+    newStream.Events.OnRead += (stream, args) =>
     {
-        Console.WriteLine($"Event read for stream. Event Id: {data.Id}");
+        Console.WriteLine($"Event read for stream. Event Id: {args.Data.Id}");
     };
     ```
 
@@ -664,9 +664,9 @@ You can detect stream closure with the stream closed event which has the sender 
     ``` cs
     inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
-            streamReader.OnStreamClosed += (reader, type) =>
+            streamReader.OnStreamClosed += (reader, args) =>
             {
-                    Console.WriteLine("Stream closed with {0}", type);
+                    Console.WriteLine("Stream closed with {0}", args.EndType);
             };
     };
     ```
@@ -750,10 +750,10 @@ This is a minimal code example you can use to read data from a topic using the Q
     
                     var buffer = streamReader.Parameters.CreateBuffer();
     
-                    buffer.OnRead += (stream, timeseriesData) =>
+                    buffer.OnRead += (stream, data) =>
                     {
                         Console.WriteLine(
-                            $"ParameterA - {timeseriesData.Timestamps[0].Timestamp}: {timeseriesData.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
+                            $"ParameterA - {data.Timestamps[0].Timestamp}: {data.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
                     };
                 };
     

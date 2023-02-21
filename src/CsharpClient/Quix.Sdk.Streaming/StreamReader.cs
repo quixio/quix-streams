@@ -13,6 +13,7 @@ namespace Quix.Sdk.Streaming
     /// </summary>
     internal class StreamReader : StreamProcess, IStreamReader, IStreamReaderInternal
     {
+        private readonly IInputTopic topic;
         private readonly ILogger logger = Logging.CreateLogger<StreamReader>();
         private readonly StreamPropertiesReader streamPropertiesReader;
         private readonly StreamParametersReader streamParametersReader;
@@ -23,17 +24,27 @@ namespace Quix.Sdk.Streaming
         /// Initializes a new instance of <see cref="StreamReader"/>
         /// This constructor is called internally by the Stream Process factory.
         /// </summary>
+        /// <param name="topic">The topic the reader belongs to</param>
         /// <param name="streamId">Stream Id of the source that has generated this Stream Process. 
         /// Commonly the Stream Id will be coming from the protocol. 
         /// If no stream Id is passed, like when a new stream is created for producing data, a Guid is generated automatically.</param>
-        public StreamReader(string streamId): base(streamId)
+        internal StreamReader(IInputTopic topic, string streamId): base(streamId)
         {
+            this.topic = topic;
             // Managed readers
-            this.streamPropertiesReader = new StreamPropertiesReader(this);
-            this.streamParametersReader = new StreamParametersReader(this);
-            this.streamEventsReader = new StreamEventsReader(this);
+            this.streamPropertiesReader = new StreamPropertiesReader(this.topic, this);
+            this.streamParametersReader = new StreamParametersReader(this.topic, this);
+            this.streamEventsReader = new StreamEventsReader(this.topic, this);
 
             InitializeStreaming();
+        }
+
+        /// <summary>
+        /// Exists for mocking purposes
+        /// </summary>
+        protected StreamReader()
+        {
+            
         }
 
         /// <inheritdoc />
@@ -46,26 +57,26 @@ namespace Quix.Sdk.Streaming
         public StreamEventsReader Events => streamEventsReader;
 
         /// <inheritdoc />
-        public event EventHandler<StreamPackage> OnPackageReceived;
+        public event EventHandler<PackageReceivedEventArgs> OnPackageReceived;
 
         /// <inheritdoc />
-        public event EventHandler<StreamEndType> OnStreamClosed;
+        public event EventHandler<StreamClosedEventArgs> OnStreamClosed;
 
 
         /// <inheritdoc />
-        public event Action<IStreamReaderInternal, Process.Models.StreamProperties> OnStreamPropertiesChanged;
+        public virtual event Action<IStreamReader, Process.Models.StreamProperties> OnStreamPropertiesChanged;
 
         /// <inheritdoc />
-        public event Action<IStreamReaderInternal, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
+        public virtual event Action<IStreamReader, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
 
         /// <inheritdoc />
-        public event Action<IStreamReaderInternal, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
+        public virtual event Action<IStreamReader, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <inheritdoc />
-        public event Action<IStreamReaderInternal, Process.Models.EventDataRaw> OnEventData;
+        public virtual  event Action<IStreamReader, Process.Models.EventDataRaw> OnEventData;
 
         /// <inheritdoc />
-        public event Action<IStreamReaderInternal, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
+        public virtual  event Action<IStreamReader, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
 
         private void InitializeStreaming()
         {
@@ -89,7 +100,7 @@ namespace Quix.Sdk.Streaming
         private void OnStreamPackageReceived(IStreamProcess streamProcess, Sdk.Process.Models.StreamPackage package)
         {
             this.logger.LogTrace("StreamReader: OnPackageReceived");
-            this.OnPackageReceived?.Invoke(this, package);
+            this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topic, this, package));
         }
 
         private void OnStreamPropertiesReceived(IStreamProcess streamProcess, Process.Models.StreamProperties obj)
@@ -139,7 +150,7 @@ namespace Quix.Sdk.Streaming
 
             this.Parameters.Buffers.ForEach(buffer => buffer.Dispose());
             
-            this.OnStreamClosed?.Invoke(this, endType);
+            this.OnStreamClosed?.Invoke(this, new StreamClosedEventArgs(this.topic, this, endType));
         }
 
         public override void Dispose()

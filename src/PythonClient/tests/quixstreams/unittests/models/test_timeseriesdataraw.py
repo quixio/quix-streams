@@ -68,7 +68,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
 
-    def test_convert_to_timeseriesData(self):
+    def test_convert_to_timeseriesdata(self):
         # arrange
         df = pandas.DataFrame([
             {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
@@ -76,7 +76,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
 
         # act
         raw = TimeseriesDataRaw.from_panda_dataframe(df)
-        data = raw.convert_to_timeseriesData()
+        data = raw.convert_to_timeseriesdata()
         result = data.to_panda_dataframe()
 
         # assert

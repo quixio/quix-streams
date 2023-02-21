@@ -41,13 +41,13 @@ namespace Quix.Sdk.Speedtest
 //                buffer.PacketSize = 111;
                 buffer.TimeSpanInMilliseconds = buffer.BufferTimeout = 1000;
 
-                buffer.OnReadRaw += (sender, data) =>
+                buffer.OnReadRaw += (sender, args) =>
                 {
 //                    var binaryTime = (long) data.Timestamps[0].Parameters[parameterName].NumericValue;
                     
 //                    var sentAt = DateTime.FromBinary(binaryTime);
 //                    var elapsed = (DateTime.UtcNow - sentAt).TotalMilliseconds;
-                    Console.WriteLine("Released "+data.Timestamps.Count());
+                    Console.WriteLine("Released "+args.Data.Timestamps.Count());
 //                    Console.WriteLine("Released "+data.Timestamps.Count());
 
 /*                    lock (timesLock)

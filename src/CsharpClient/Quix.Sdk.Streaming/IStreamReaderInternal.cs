@@ -8,32 +8,32 @@ namespace Quix.Sdk.Streaming
     /// Stream reader interface. Stands for a new stream read from the platform.
     /// Allows to read the stream data received from a topic.
     /// </summary>
-    internal interface IStreamReaderInternal
+    internal interface IStreamReaderInternal: IStreamReader
     {
         /// <summary>
         /// Event raised when the Stream Properties have changed.
         /// </summary>
-        event Action<IStreamReaderInternal, Process.Models.StreamProperties> OnStreamPropertiesChanged;
+        event Action<IStreamReader, Process.Models.StreamProperties> OnStreamPropertiesChanged;
 
         /// <summary>
         /// Event raised when the <see cref="Process.Models.ParameterDefinitions"/> have been changed.
         /// </summary>
-        event Action<IStreamReaderInternal, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
+        event Action<IStreamReader, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
 
         /// <summary>
         /// Event raised when the <see cref="Process.Models.EventDefinitions"/> have been changed.
         /// </summary>
-        event Action<IStreamReaderInternal, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
+        event Action<IStreamReader, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
 
         /// <summary>
         /// Event raised when a new package of <see cref="TimeseriesDataRaw"/> values have been received.
         /// </summary>
-        event Action<IStreamReaderInternal, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
+        event Action<IStreamReader, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <summary>
         /// Event raised when a new package of <see cref="EventDataRaw"/> values have been received.
         /// </summary>
-        event Action<IStreamReaderInternal, Process.Models.EventDataRaw> OnEventData;
+        event Action<IStreamReader, Process.Models.EventDataRaw> OnEventData;
 
     }
 }

@@ -4,14 +4,16 @@ using System.Collections.Generic;
 using Quix.Sdk.Process.Models;
 using System.Linq;
 using System.Text;
+using Quix.Sdk.Streaming.Models.StreamReader;
 
 namespace Quix.Sdk.Streaming.Models.StreamWriter
 {
     /// <summary>
     /// Class used to write time-series to <see cref="IStreamWriter"/> in a buffered manner
     /// </summary>
-    public class TimeseriesBufferWriter: TimeseriesBuffer, IDisposable
+    public class TimeseriesBufferWriter: TimeseriesBuffer
     {
+        private readonly IOutputTopic outputTopic;
         private readonly IStreamWriterInternal streamWriter;
         private long epoch = 0;
         private bool isDisposed;
@@ -19,19 +21,21 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// <summary>
         /// Initializes a new instance of <see cref="TimeseriesBufferWriter"/>
         /// </summary>
+        /// <param name="outputTopic">The output topic the writer writes to</param>
         /// <param name="streamWriter">Stream writer owner</param>
         /// <param name="bufferConfiguration">Configuration of the buffer</param>
-        internal TimeseriesBufferWriter(IStreamWriterInternal streamWriter, TimeseriesBufferConfiguration bufferConfiguration)
+        internal TimeseriesBufferWriter(IOutputTopic outputTopic, IStreamWriterInternal streamWriter, TimeseriesBufferConfiguration bufferConfiguration)
             : base(bufferConfiguration, null, true, true)
         {
+            this.outputTopic = outputTopic;
             this.streamWriter = streamWriter;
 
-            this.OnReadRaw += OnReadDataRaw;
+            this.OnReadRaw += OnReadDataRawHandler;
         }
 
-        private void OnReadDataRaw(object sender, TimeseriesDataRaw TimeseriesDataRaw)
+        private void OnReadDataRawHandler(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            this.streamWriter.Write(TimeseriesDataRaw);
+            this.streamWriter.Write(args.Data);
         }
 
         /// <summary>
@@ -131,6 +135,16 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         {
             this.FlushData(false);
         }
+        
+        protected override void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)
+        {
+            base.InvokeOnRead(this, new TimeseriesDataReadEventArgs(this.outputTopic, this.streamWriter, args.Data));
+        }
+
+        protected override void InvokeOnReadRaw(object sender, TimeseriesDataRawReadEventArgs args)
+        {
+            base.InvokeOnReadRaw(this, new TimeseriesDataRawReadEventArgs(this.outputTopic, this.streamWriter, args.Data));
+        }
 
         /// <summary>
         /// Flushes internal buffers and disposes
@@ -139,7 +153,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         {
             if (this.isDisposed) return;
             this.isDisposed = true;
-            this.OnReadRaw -= OnReadDataRaw;
+            this.OnReadRaw -= OnReadDataRawHandler;
             base.Dispose();
         }
 

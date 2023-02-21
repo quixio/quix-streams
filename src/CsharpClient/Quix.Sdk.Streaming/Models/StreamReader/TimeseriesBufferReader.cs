@@ -12,44 +12,47 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
     /// </summary>
     public class TimeseriesBufferReader: TimeseriesBuffer, IDisposable
     {
+        private readonly IInputTopic inputTopic;
         private readonly IStreamReaderInternal streamReader;
         private readonly string[] parametersFilter;
 
         /// <summary>
         /// Initializes a new instance of <see cref="TimeseriesBufferReader"/>
         /// </summary>
+        /// <param name="inputTopic">The topic it belongs to</param>
         /// <param name="streamReader">Stream reader owner</param>
         /// <param name="bufferConfiguration">Configuration of the buffer</param>
         /// <param name="parametersFilter">List of parameters to filter</param>
-        internal TimeseriesBufferReader(IStreamReaderInternal streamReader, TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter)
+        internal TimeseriesBufferReader(IInputTopic inputTopic, IStreamReaderInternal streamReader, TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter)
             : base(bufferConfiguration, parametersFilter, true, false)
         {
+            this.inputTopic = inputTopic;
             this.streamReader = streamReader;
             this.parametersFilter = parametersFilter;
 
-            this.streamReader.OnTimeseriesData += OnTimeseriesData;
+            this.streamReader.OnTimeseriesData += OnTimeseriesDataEventHandler;
         }
 
         /// <inheritdoc/>
         public override void Dispose()
         {
-            this.streamReader.OnTimeseriesData -= OnTimeseriesData;
+            this.streamReader.OnTimeseriesData -= OnTimeseriesDataEventHandler;
             base.Dispose();
         }
 
-        private void OnTimeseriesData(IStreamReaderInternal streamReader, Process.Models.TimeseriesDataRaw TimeseriesDataRaw)
+        private void OnTimeseriesDataEventHandler(IStreamReader streamReader, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
-            this.WriteChunk(TimeseriesDataRaw);
+            this.WriteChunk(timeseriesDataRaw);
         }
 
-        protected override void InvokeOnRead(object sender, TimeseriesData TimeseriesData)
+        protected override void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)
         {
-            base.InvokeOnRead(this.streamReader, TimeseriesData);
+            base.InvokeOnRead(this, new TimeseriesDataReadEventArgs(this.inputTopic, this.streamReader, args.Data));
         }
 
-        protected override void InvokeOnReadRaw(object sender, TimeseriesDataRaw TimeseriesDataRaw)
+        protected override void InvokeOnReadRaw(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            base.InvokeOnReadRaw(this.streamReader, TimeseriesDataRaw);
+            base.InvokeOnReadRaw(this, new TimeseriesDataRawReadEventArgs(this.inputTopic, this.streamReader, args.Data));
         }
     }
 }

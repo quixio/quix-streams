@@ -19,12 +19,12 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             // Arrange
             var streamReader = Substitute.For<IStreamReaderInternal>();
             var receivedData = new List<Streaming.Models.TimeseriesData>();
-            var parametersReader = new Streaming.Models.StreamReader.StreamParametersReader(streamReader);
+            var parametersReader = new Streaming.Models.StreamReader.StreamParametersReader(new TestStreamingClient().CreateInputTopic(), streamReader);
 
             var buffer = parametersReader.CreateBuffer();
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
             buffer.PacketSize = PacketSizeTest;
 
@@ -37,7 +37,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                     .AddValue($"test_string_param{i}", $"{i}")
                     .AddTag($"tag{i}", $"{i}");
 
-                streamReader.OnTimeseriesData += Raise.Event<Action<IStreamReaderInternal, TimeseriesDataRaw>>(streamReader, timeseriesData.ConvertToProcessData());
+                streamReader.OnTimeseriesData += Raise.Event<Action<IStreamReader, TimeseriesDataRaw>>(streamReader, timeseriesData.ConvertToProcessData());
             }
 
             // Assert
@@ -60,7 +60,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamReader = Substitute.For<IStreamReaderInternal>();
-            var parametersReader = new Streaming.Models.StreamReader.StreamParametersReader(streamReader);
+            var parametersReader = new Streaming.Models.StreamReader.StreamParametersReader(new TestStreamingClient().CreateInputTopic(), streamReader);
 
             var parameterDefinitions = new ParameterDefinitions
             {
@@ -197,7 +197,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             // Act
-            streamReader.OnParameterDefinitionsChanged += Raise.Event<Action<IStreamReaderInternal, ParameterDefinitions>>(streamReader, parameterDefinitions);
+            streamReader.OnParameterDefinitionsChanged += Raise.Event<Action<IStreamReader, ParameterDefinitions>>(streamReader, parameterDefinitions);
 
             // Assert
             parametersReader.Definitions.Count.Should().Be(7);

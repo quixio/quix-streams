@@ -49,7 +49,7 @@ namespace Quix.Sdk.Streaming
         {
             kafkaReader.ForEach(streamId =>
             {
-                var stream = new StreamReader(streamId);
+                var stream = new StreamReader(this, streamId);
                 try
                 {
                     this.OnStreamReceived?.Invoke(this, stream);

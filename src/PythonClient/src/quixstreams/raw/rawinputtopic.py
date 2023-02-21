@@ -1,3 +1,4 @@
+import traceback
 from typing import Callable
 
 from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -55,8 +56,11 @@ class RawInputTopic(object):
 
     def _on_message_read_wrapper(self, topic_hptr, message_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        self._on_message_read(self, RawMessage(message_hptr))
-        InteropUtils.free_hptr(topic_hptr)
+        try:
+            self._on_message_read(self, RawMessage(message_hptr))
+            InteropUtils.free_hptr(topic_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_message_read_dispose(self):
         if self._on_message_read_ref is not None:
@@ -85,10 +89,13 @@ class RawInputTopic(object):
 
     def _on_error_occurred_wrapper(self, topic_hptr, error_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        # TODO fix arg to be handled as exception
-        #self._on_error_occurred(self, BaseException(arg.Message, type(arg)))
-        InteropUtils.free_hptr(topic_hptr)
-        InteropUtils.free_hptr(error_hptr)
+        try:
+            # TODO fix arg to be handled as exception
+            #self._on_error_occurred(self, BaseException(arg.Message, type(arg)))
+            InteropUtils.free_hptr(topic_hptr)
+            InteropUtils.free_hptr(error_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_error_occurred_dispose(self):
         if self._on_error_occurred_ref is not None:

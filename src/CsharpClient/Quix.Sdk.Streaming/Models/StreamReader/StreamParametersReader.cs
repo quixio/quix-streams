@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Streaming.Models.StreamReader
@@ -11,27 +10,30 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
     /// </summary>
     public class StreamParametersReader : IDisposable
     {
+        private readonly IInputTopic topic;
         private readonly IStreamReaderInternal streamReader;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamParametersReader"/>
         /// </summary>
+        /// <param name="topic">The topic the stream to what this reader belongs to</param>
         /// <param name="streamReader">Stream reader owner</param>
-        internal StreamParametersReader(IStreamReaderInternal streamReader)
+        internal StreamParametersReader(IInputTopic topic, IStreamReaderInternal streamReader)
         {
+            this.topic = topic;
             this.streamReader = streamReader;
 
-            this.streamReader.OnParameterDefinitionsChanged += OnStreamReaderOnOnParameterDefinitionsChanged;
+            this.streamReader.OnParameterDefinitionsChanged += OnParameterDefinitionsChangedEventHandler;
 
-            this.streamReader.OnTimeseriesData += OnTimeseriesData;
-            this.streamReader.OnTimeseriesData += OnTimeseriesDataRaw;
+            this.streamReader.OnTimeseriesData += OnTimeseriesDataEventHandler;
+            this.streamReader.OnTimeseriesData += OnTimeseriesDataRawEventHandler;
         }
 
-        private void OnStreamReaderOnOnParameterDefinitionsChanged(IStreamReaderInternal sender, ParameterDefinitions parameterDefinitions)
+        private void OnParameterDefinitionsChangedEventHandler(IStreamReader sender, ParameterDefinitions parameterDefinitions)
         {
             this.LoadFromProcessDefinitions(parameterDefinitions);
 
-            this.OnDefinitionsChanged?.Invoke(this.streamReader, EventArgs.Empty);
+            this.OnDefinitionsChanged?.Invoke(this.streamReader, new ParameterDefinitionsChangedEventArgs(this.topic, this.streamReader));
         }
 
         /// <summary>
@@ -42,7 +44,7 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// <returns>Parameters reading buffer</returns>
         public TimeseriesBufferReader CreateBuffer(TimeseriesBufferConfiguration bufferConfiguration = null, params string[] parametersFilter)
         {
-            var buffer = new TimeseriesBufferReader(this.streamReader, bufferConfiguration, parametersFilter);
+            var buffer = new TimeseriesBufferReader(this.topic, this.streamReader, bufferConfiguration, parametersFilter);
             this.Buffers.Add(buffer);
 
             return buffer;
@@ -55,7 +57,7 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// <returns>Parameters reading buffer</returns>
         public TimeseriesBufferReader CreateBuffer(params string[] parametersFilter)
         {
-            var buffer = new TimeseriesBufferReader(this.streamReader, null, parametersFilter);
+            var buffer = new TimeseriesBufferReader(this.topic, this.streamReader, null, parametersFilter);
             this.Buffers.Add(buffer);
 
             return buffer;
@@ -65,19 +67,19 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// Raised when the parameter definitions have changed for the stream.
         /// See <see cref="Definitions"/> for the latest set of parameter definitions
         /// </summary>
-        public event EventHandler OnDefinitionsChanged;
+        public event EventHandler<ParameterDefinitionsChangedEventArgs> OnDefinitionsChanged;
 
         /// <summary>
         /// Event raised when data is available to read (without buffering)
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesData> OnRead;
+        public event EventHandler<TimeseriesDataReadEventArgs> OnRead;
 
         /// <summary>
         /// Event raised when data is available to read (without buffering) in raw transport format
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesDataRaw> OnReadRaw;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnReadRaw;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -134,23 +136,79 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             return result;
         }
 
-        private void OnTimeseriesData(IStreamReaderInternal streamReader, Process.Models.TimeseriesDataRaw TimeseriesDataRaw)
+        private void OnTimeseriesDataEventHandler(IStreamReader streamReader, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
-            var tsdata = new TimeseriesData(TimeseriesDataRaw, null, false, false);
-            this.OnRead?.Invoke(streamReader, tsdata);
+            var tsdata = new TimeseriesData(timeseriesDataRaw, null, false, false);
+            this.OnRead?.Invoke(streamReader, new TimeseriesDataReadEventArgs(this.topic, streamReader, tsdata));
         }
 
-        private void OnTimeseriesDataRaw(IStreamReaderInternal streamReader, Process.Models.TimeseriesDataRaw TimeseriesDataRaw)
+        private void OnTimeseriesDataRawEventHandler(IStreamReader streamReader, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
-            this.OnReadRaw?.Invoke(streamReader, TimeseriesDataRaw);
+            this.OnReadRaw?.Invoke(streamReader, new TimeseriesDataRawReadEventArgs(this.topic, streamReader, timeseriesDataRaw));
         }
 
         /// <inheritdoc/>
         public void Dispose()
         {
-            this.streamReader.OnParameterDefinitionsChanged -= OnStreamReaderOnOnParameterDefinitionsChanged;
-            this.streamReader.OnTimeseriesData -= OnTimeseriesData;
-            this.streamReader.OnTimeseriesData -= OnTimeseriesDataRaw;
+            this.streamReader.OnParameterDefinitionsChanged -= OnParameterDefinitionsChangedEventHandler;
+            this.streamReader.OnTimeseriesData -= OnTimeseriesDataEventHandler;
+            this.streamReader.OnTimeseriesData -= OnTimeseriesDataRawEventHandler;
         }
+    }
+
+    public class ParameterDefinitionsChangedEventArgs
+    {
+        public ParameterDefinitionsChangedEventArgs(IInputTopic topic, IStreamReader reader)
+        {
+            this.Topic = topic;
+            this.Stream = reader;
+        }
+
+        public IInputTopic Topic { get; }
+        public IStreamReader Stream { get; }
+    }
+
+    public class TimeseriesDataReadEventArgs
+    {
+        public TimeseriesDataReadEventArgs(object topic, object stream, TimeseriesData data)
+        {
+            this.Topic = topic;
+            this.Stream = stream;
+            this.Data = data;
+        }
+        
+        /// <summary>
+        /// Topic of type <see cref="IInputTopic"/> or <see cref="IOutputTopic"/>
+        /// </summary>
+        public object Topic { get; }
+        
+        /// <summary>
+        /// Stream of type <see cref="IStreamReader"/> or <see cref="IStreamWriter"/>
+        /// </summary>
+        public object Stream { get; }
+        
+        public TimeseriesData Data { get; }
+    }
+    
+    public class TimeseriesDataRawReadEventArgs
+    {
+        public TimeseriesDataRawReadEventArgs(object topic, object stream, TimeseriesDataRaw data)
+        {
+            this.Topic = topic;
+            this.Stream = stream;
+            this.Data = data;
+        }
+
+        /// <summary>
+        /// Topic of type <see cref="IInputTopic"/> or <see cref="IOutputTopic"/>
+        /// </summary>
+        public object Topic { get; }
+        
+        /// <summary>
+        /// Stream of type <see cref="IStreamReader"/> or <see cref="IStreamWriter"/>
+        /// </summary>
+        public object Stream { get; }
+        
+        public TimeseriesDataRaw Data { get; }
     }
 }

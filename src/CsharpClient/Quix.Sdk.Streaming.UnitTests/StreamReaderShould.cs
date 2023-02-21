@@ -10,11 +10,11 @@ namespace Quix.Sdk.Streaming.UnitTests
         public void Close_ShouldRaiseTerminatedCloseType()
         {
             // Arrange
-            var streamReader = new StreamReader("asdf");
+            var streamReader = new StreamReader(new TestStreamingClient().CreateInputTopic(), "asdf");
             StreamEndType? endType = null;
-            streamReader.OnStreamClosed += (sender, closeType) =>
+            streamReader.OnStreamClosed += (sender, args) =>
             {
-                endType = closeType;
+                endType = args.EndType;
             };
 
             // Act
@@ -28,11 +28,11 @@ namespace Quix.Sdk.Streaming.UnitTests
         public void Dispose_ShouldRaiseTerminatedCloseType()
         {
             // Arrange
-            var streamReader = new StreamReader("asdf");
+            var streamReader = new StreamReader(new TestStreamingClient().CreateInputTopic(), "asdf");
             StreamEndType? endType = null;
-            streamReader.OnStreamClosed += (sender, closeType) =>
+            streamReader.OnStreamClosed += (sender, args) =>
             {
-                endType = closeType;
+                endType = args.EndType;
             };
 
             // Act
@@ -46,11 +46,11 @@ namespace Quix.Sdk.Streaming.UnitTests
         public void SendStreamEnd_ShouldRaiseExpectedCloseType()
         {
             // Arrange
-            var streamReader = new StreamReader("asdf");
+            var streamReader = new StreamReader(new TestStreamingClient().CreateInputTopic(), "asdf");
             StreamEndType? endType = null;
-            streamReader.OnStreamClosed += (sender, closeType) =>
+            streamReader.OnStreamClosed += (sender, args) =>
             {
-                endType = closeType;
+                endType = args.EndType;
             };
 
             // Act
@@ -64,13 +64,13 @@ namespace Quix.Sdk.Streaming.UnitTests
         public void SendStreamEndAndClose_ShouldRaiseOnlyStreamEndCloseType()
         {
             // Arrange
-            var streamReader = new StreamReader("asdf");
+            var streamReader = new StreamReader(new TestStreamingClient().CreateInputTopic(), "asdf");
             StreamEndType? endType = null;
             var closeCount = 0;
-            streamReader.OnStreamClosed += (sender, closeType) =>
+            streamReader.OnStreamClosed += (sender, args) =>
             {
                 closeCount++;
-                endType = closeType;
+                endType = args.EndType;
             };
 
             // Act

@@ -21,27 +21,27 @@ namespace Quix.Sdk.PerformanceTest
 
             var buffer = new TimeseriesBuffer(null, null, true, false);
             buffer.PacketSize = bufferSize;
-            buffer.OnReadRaw += (sender, data) =>
+            buffer.OnReadRaw += (sender, args) =>
             {
                 if (onlyReceive)
                 {
-                    receivedCount += data.Timestamps.Length * paramCount;
+                    receivedCount += args.Data.Timestamps.Length * paramCount;
                     return;
                 }
 
-                for (var t=0; t<data.Timestamps.Length; t++)
+                for (var t=0; t<args.Data.Timestamps.Length; t++)
                 {
-                    foreach (var kv in data.NumericValues)
+                    foreach (var kv in args.Data.NumericValues)
                     {
                         var h = kv.Value[t];
                         receivedCount++;
                     }
-                    foreach (var kv in data.StringValues)
+                    foreach (var kv in args.Data.StringValues)
                     {
                         var h = kv.Value[t];
                         receivedCount++;
                     }
-                    foreach (var kv in data.BinaryValues)
+                    foreach (var kv in args.Data.BinaryValues)
                     {
                         var h = kv.Value[t];
                         receivedCount++;

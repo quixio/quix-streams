@@ -9,7 +9,7 @@ namespace Quix.Sdk.Process.Models
     /// <summary>
     /// Describes timeseries data for multiple timestamps
     /// </summary>
-    [ModelKey("TimeseriesData")]
+    [ModelKey("TimeseriesData", "ParameterData")] // used to be named ParameterData
     public class TimeseriesDataRaw
     {
 

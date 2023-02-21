@@ -23,8 +23,8 @@ namespace Quix.Sdk.PerformanceTest
         {
             var client = new TestStreamingClient(CodecType.ImprovedJson);
 
-            //var inputTopic = client.OpenInputTopic("notused");
-            var outputTopic = client.OpenOutputTopic("notused");
+            //var inputTopic = client.OpenInputTopic();
+            var outputTopic = client.OpenOutputTopic();
 
             //inputTopic.OnStreamReceived += (s, stream) =>
             //{

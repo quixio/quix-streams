@@ -1,3 +1,4 @@
+import traceback
 from typing import Callable
 
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -25,14 +26,14 @@ class OutputTopic(object):
         """
 
         self._interop = oti(net_pointer)
-        
+
         # define events and their ref holder
         self._on_disposed = None
         self._on_disposed_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
         self._on_disposed_dispose()
-    
+
     # region on_disposed
     @property
     def on_disposed(self) -> Callable[['OutputTopic'], None]:
@@ -52,9 +53,12 @@ class OutputTopic(object):
 
     def _on_disposed_wrapper(self, stream_hptr, arg_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_disposed(self)
-        InteropUtils.free_hptr(stream_hptr)
-        InteropUtils.arg_hptr(arg_hptr)
+        try:
+            self._on_disposed(self)
+            InteropUtils.free_hptr(stream_hptr)
+            InteropUtils.arg_hptr(arg_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_disposed_dispose(self):
         if self._on_disposed_ref is not None:
@@ -72,8 +76,8 @@ class OutputTopic(object):
            to always stream a certain source into the same stream
        """
         if stream_id is None:
-            return StreamWriter(self._interop.CreateStream())
-        return StreamWriter(self._interop.CreateStream2(stream_id))
+            return StreamWriter(self, self._interop.CreateStream())
+        return StreamWriter(self, self._interop.CreateStream2(stream_id))
 
     def get_stream(self, stream_id: str) -> StreamWriter:
         """
@@ -89,7 +93,7 @@ class OutputTopic(object):
         if result_hptr is None:
             return None
         # TODO retrieving same stream constantly might result in weird behavior here
-        return StreamWriter(result_hptr)
+        return StreamWriter(self, result_hptr)
 
     def get_or_create_stream(self, stream_id: str, on_stream_created: Callable[[StreamWriter], None] = None) -> StreamWriter:
         """
@@ -109,9 +113,9 @@ class OutputTopic(object):
             def on_create_callback(streamwriter_hptr: ctypes.c_void_p):
                 if type(streamwriter_hptr) is not ctypes.c_void_p:
                     streamwriter_hptr = ctypes.c_void_p(streamwriter_hptr)
-                wrapped = StreamWriter(streamwriter_hptr)
+                wrapped = StreamWriter(self, streamwriter_hptr)
                 on_stream_created(wrapped)
             callback = on_create_callback
 
-        return StreamWriter(self._interop.GetOrCreateStream(stream_id, callback)[0])
+        return StreamWriter(self, self._interop.GetOrCreateStream(stream_id, callback)[0])
 

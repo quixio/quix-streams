@@ -1,4 +1,5 @@
 ﻿using System;
+using Quix.Sdk.Process.Models;
 using Quix.Sdk.Streaming.Models.StreamReader;
 
 namespace Quix.Sdk.Streaming
@@ -32,13 +33,39 @@ namespace Quix.Sdk.Streaming
         /// <summary>
         /// Event raised when a stream package has been received.
         /// </summary>
-        event EventHandler<Process.Models.StreamPackage> OnPackageReceived;
+        event EventHandler<PackageReceivedEventArgs> OnPackageReceived;
 
         /// <summary>
         /// Event raised when the stream has closed.
         /// </summary>
-        event EventHandler<Process.Models.StreamEndType> OnStreamClosed;
+        event EventHandler<StreamClosedEventArgs> OnStreamClosed;
+    }
+    
+    public class PackageReceivedEventArgs
+    {
+        public PackageReceivedEventArgs(IInputTopic topic, IStreamReader reader, Process.Models.StreamPackage package)
+        {
+            this.Topic = topic;
+            this.Stream = reader;
+            this.Package = package;
+        }
+        
+        public IInputTopic Topic { get; }
+        public IStreamReader Stream { get; }
+        public Process.Models.StreamPackage Package { get; }
+    }
 
-
+    public class StreamClosedEventArgs
+    {
+        public StreamClosedEventArgs(IInputTopic topic, IStreamReader reader, StreamEndType endType)
+        {
+            this.Topic = topic;
+            this.Stream = reader;
+            this.EndType = endType;
+        }
+        
+        public IInputTopic Topic { get; }
+        public IStreamReader Stream { get; }
+        public StreamEndType EndType { get; }
     }
 }

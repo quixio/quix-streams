@@ -1,3 +1,4 @@
+import traceback
 from typing import Callable, List
 
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -73,10 +74,13 @@ class InputTopic(object):
 
     def _on_stream_received_wrapper(self, topic_hptr, stream_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        stream = StreamReader(stream_hptr, lambda s, e: self._active_streams.remove(s))
-        self._active_streams.append(stream)
-        self._on_stream_received(self, stream)
-        InteropUtils.free_hptr(topic_hptr)
+        try:
+            stream = StreamReader(stream_hptr, self, lambda s, e: self._active_streams.remove(s))
+            self._active_streams.append(stream)
+            self._on_stream_received(self, stream)
+            InteropUtils.free_hptr(topic_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_stream_received_dispose(self):
         if self._on_stream_received_ref is not None:
@@ -107,8 +111,11 @@ class InputTopic(object):
         # revoked_arg = list(map(lambda x: StreamReader(Quix.Sdk.Streaming.IStreamReader(x)), arg))
         # self.on_streams_revoked.fire(revoked_arg)
         streams = []
-        self._on_streams_revoked(self, streams)
-        InteropUtils.free_hptr(topic_hptr)
+        try:
+            self._on_streams_revoked(self, streams)
+            InteropUtils.free_hptr(topic_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_streams_revoked_dispose(self):
         if self._on_streams_revoked_ref is not None:
@@ -135,9 +142,12 @@ class InputTopic(object):
 
     def _on_revoking_wrapper(self, topic_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        self._on_revoking(self)
-        InteropUtils.free_hptr(topic_hptr)
-        InteropUtils.free_hptr(args_hptr)
+        try:
+            self._on_revoking(self)
+            InteropUtils.free_hptr(topic_hptr)
+            InteropUtils.free_hptr(args_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_revoking_dispose(self):
         if self._on_revoking_ref is not None:
@@ -164,9 +174,12 @@ class InputTopic(object):
 
     def _on_committed_wrapper(self, topic_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        self._on_committed(self)
-        InteropUtils.free_hptr(topic_hptr)
-        InteropUtils.free_hptr(args_hptr)
+        try:
+            self._on_committed(self)
+            InteropUtils.free_hptr(topic_hptr)
+            InteropUtils.free_hptr(args_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_committed_dispose(self):
         if self._on_committed_ref is not None:
@@ -193,9 +206,12 @@ class InputTopic(object):
 
     def _on_committing_wrapper(self, topic_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        self._on_committing(self)
-        InteropUtils.free_hptr(topic_hptr)
-        InteropUtils.free_hptr(args_hptr)
+        try:
+            self._on_committing(self)
+            InteropUtils.free_hptr(topic_hptr)
+            InteropUtils.free_hptr(args_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_committing_dispose(self):
         if self._on_committing_ref is not None:

@@ -21,20 +21,22 @@ class TimeseriesBufferWriter(TimeseriesBuffer):
         Class used to write to StreamWriter in a buffered manner
     """
 
-    def __init__(self, stream_writer, net_pointer: ctypes.c_void_p):
+    def __init__(self, output_topic, stream_writer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of TimeseriesBufferWriter.
             NOTE: Do not initialize this class manually, use StreamParametersWriter.buffer to access an instance of it
 
             Parameters:
 
+            output_topic: The output topic the stream belongs to
+            stream_writer: The stream the buffer is created for
             net_pointer: Pointer to an instance of a .net TimeseriesBufferWriter
         """
         if net_pointer is None:
             raise Exception("TimeseriesBufferWriter is none")
 
         self._interop = pbwi(net_pointer)
-        TimeseriesBuffer.__init__(self, stream_writer, net_pointer)
+        TimeseriesBuffer.__init__(self, output_topic, stream_writer, net_pointer)
 
     @property
     def default_tags(self) -> Dict[str, str]:

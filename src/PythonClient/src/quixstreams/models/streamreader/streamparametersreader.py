@@ -1,3 +1,4 @@
+import traceback
 from typing import List, Callable
 
 import pandas
@@ -10,6 +11,9 @@ from ...models.streamreader.timeseriesbufferreader import TimeseriesBufferReader
 
 
 from ...native.Python.QuixSdkStreaming.Models.StreamReader.StreamParametersReader import StreamParametersReader as spri
+from ...native.Python.QuixSdkStreaming.Models.StreamReader.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
+from ...native.Python.QuixSdkStreaming.Models.StreamReader.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
+from ...native.Python.QuixSdkStreaming.Models.StreamReader.ParameterDefinitionsChangedEventArgs import ParameterDefinitionsChangedEventArgs
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ...native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
@@ -20,13 +24,15 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamParametersReader(object):
 
-    def __init__(self, stream_reader, net_pointer: ctypes.c_void_p):
+    def __init__(self, input_topic, stream_reader, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamParametersReader.
             NOTE: Do not initialize this class manually, use StreamReader.parameters to access an instance of it
 
             Parameters:
 
+            input_topic: The input topic the stream belongs to
+            stream_reader: The stream the buffer is created for
             net_pointer (.net object): Pointer to an instance of a .net StreamParametersReader
         """
         if net_pointer is None:
@@ -35,6 +41,7 @@ class StreamParametersReader(object):
         self._interop = spri(net_pointer)
         self._buffers = []
 
+        self._input_topic = input_topic
         self._stream_reader = stream_reader
 
         # define events and their ref holder
@@ -59,25 +66,29 @@ class StreamParametersReader(object):
 
     # region on_read
     @property
-    def on_read(self) -> Callable[['StreamReader', TimeseriesData], None]:
+    def on_read(self) -> Callable[['InputTopic', 'StreamReader', TimeseriesData], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
+        Gets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesData format.
         """
         return self._on_read
 
     @on_read.setter
-    def on_read(self, value: Callable[['StreamReader', TimeseriesData], None]) -> None:
+    def on_read(self, value: Callable[['InputTopic', 'StreamReader', TimeseriesData], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
+        Sets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesData format.
         """
         self._on_read = value
         if self._on_read_ref is None:
             self._on_read_ref = self._interop.add_OnRead(self._on_read_wrapper)
 
-    def _on_read_wrapper(self, stream_hptr, data_hptr):
+    def _on_read_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_read(self._stream_reader, TimeseriesData(data_hptr))
-        InteropUtils.free_hptr(stream_hptr)
+        try:
+            with (args := TimeseriesDataReadEventArgs(args_hptr)):
+                self._on_read(self._input_topic, self._stream_reader, TimeseriesData(args.get_Data()))
+            InteropUtils.free_hptr(stream_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_read_dispose(self):
         if self._on_read_ref is not None:
@@ -87,25 +98,29 @@ class StreamParametersReader(object):
 
     # region on_read_raw
     @property
-    def on_read_raw(self) -> Callable[['StreamReader', TimeseriesDataRaw], None]:
+    def on_read_raw(self) -> Callable[['InputTopic', 'StreamReader', TimeseriesDataRaw], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
+        Gets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
         return self._on_read_raw
 
     @on_read_raw.setter
-    def on_read_raw(self, value: Callable[['StreamReader', TimeseriesDataRaw], None]) -> None:
+    def on_read_raw(self, value: Callable[['InputTopic', 'StreamReader', TimeseriesDataRaw], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
+        Sets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
         self._on_read_raw = value
         if self._on_read_raw_ref is None:
             self._on_read_raw_ref = self._interop.add_OnReadRaw(self._on_read_raw_wrapper)
 
-    def _on_read_raw_wrapper(self, stream_hptr, data_hptr):
+    def _on_read_raw_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_read_raw(self._stream_reader, TimeseriesDataRaw(data_hptr))
-        InteropUtils.free_hptr(stream_hptr)
+        try:
+            with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
+                self._on_read_raw(self._input_topic, self._stream_reader, TimeseriesDataRaw(args.get_Data()))
+            InteropUtils.free_hptr(stream_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_read_raw_dispose(self):
         if self._on_read_raw_ref is not None:
@@ -115,28 +130,32 @@ class StreamParametersReader(object):
 
     # region on_read_dataframe
     @property
-    def on_read_dataframe(self) -> Callable[['StreamReader', pandas.DataFrame], None]:
+    def on_read_dataframe(self) -> Callable[['InputTopic', 'StreamReader', pandas.DataFrame], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        Gets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
         """
         return self._on_read_dataframe
 
     @on_read_dataframe.setter
-    def on_read_dataframe(self, value: Callable[['StreamReader', pandas.DataFrame], None]) -> None:
+    def on_read_dataframe(self, value: Callable[['InputTopic', 'StreamReader', pandas.DataFrame], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        Sets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
         """
         self._on_read_dataframe = value
         if self._on_read_dataframe_ref is None:
             self._on_read_dataframe_ref = self._interop.add_OnReadRaw(self._on_read_dataframe_wrapper)
 
-    def _on_read_dataframe_wrapper(self, stream_hptr, data_hptr):
+    def _on_read_dataframe_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        pdr = TimeseriesDataRaw(data_hptr)
-        pdf = pdr.to_panda_dataframe()
-        pdr.dispose()
-        self._on_read_dataframe(self._stream_reader, pdf)
-        InteropUtils.free_hptr(stream_hptr)
+        try:
+            with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
+                pdr = TimeseriesDataRaw(args.get_Data())
+                pdf = pdr.to_panda_dataframe()
+                pdr.dispose()
+                self._on_read_dataframe(self._input_topic, self._stream_reader, pdf)
+            InteropUtils.free_hptr(stream_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_read_dataframe_dispose(self):
         if self._on_read_dataframe_ref is not None:
@@ -146,26 +165,29 @@ class StreamParametersReader(object):
 
     # region on_definitions_changed
     @property
-    def on_definitions_changed(self) -> Callable[['StreamReader'], None]:
+    def on_definitions_changed(self) -> Callable[['InputTopic', 'StreamReader'], None]:
         """
-        Gets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
+        Gets the handler for when the stream definitions change. First parameter is the topic, second is the stream the parameter definitions changed for.
         """
         return self._on_definitions_changed
 
     @on_definitions_changed.setter
-    def on_definitions_changed(self, value: Callable[['StreamReader'], None]) -> None:
+    def on_definitions_changed(self, value: Callable[['InputTopic', 'StreamReader'], None]) -> None:
         """
-        Sets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
+        Sets the handler for when the stream definitions change. First parameter is the topic, second is the stream the parameter definitions changed for.
         """
         self._on_definitions_changed = value
         if self._on_definitions_changed_ref is None:
             self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(self._on_definitions_changed_wrapper)
 
-    def _on_definitions_changed_wrapper(self, stream_hptr, args_ptr):
+    def _on_definitions_changed_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
-        self._on_definitions_changed(self._stream_reader)
-        InteropUtils.free_hptr(stream_hptr)
-        InteropUtils.free_hptr(args_ptr)
+        try:
+            with (args := ParameterDefinitionsChangedEventArgs(args_hptr)):
+                self._on_definitions_changed(self._input_topic, self._stream_reader)
+                InteropUtils.free_hptr(stream_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_definitions_changed_dispose(self):
         if self._on_definitions_changed_ref is not None:
@@ -210,9 +232,9 @@ class StreamParametersReader(object):
         buffer = None
         if buffer_configuration is not None:
             buffer_config_ptr = buffer_configuration.get_net_pointer()
-            buffer = TimeseriesBufferReader(self._stream_reader, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
+            buffer = TimeseriesBufferReader(self._input_topic, self._stream_reader, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
         else:
-            buffer = TimeseriesBufferReader(self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
+            buffer = TimeseriesBufferReader(self._input_topic, self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
 
         self._buffers.append(buffer)
         return buffer

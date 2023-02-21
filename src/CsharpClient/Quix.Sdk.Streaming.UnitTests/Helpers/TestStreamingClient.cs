@@ -22,12 +22,12 @@ namespace Quix.Sdk.Streaming.UnitTests
             CodecRegistry.Register(codec);
         }
 
-        public IInputTopic CreateInputTopic(string _, string __ = null)
+        public IInputTopic CreateInputTopic()
         {
-            return OpenInputTopic(_, __);
+            return OpenInputTopic();
         }
 
-        public IInputTopic OpenInputTopic(string topic, string consumerGroup = "Default", CommitOptions commitOptions = null)
+        public IInputTopic OpenInputTopic()
         {
             this.kafkaReader = new TestKafkaReader(this.testBroker);
 
@@ -36,12 +36,12 @@ namespace Quix.Sdk.Streaming.UnitTests
             return inputTopic;
         }
 
-        public IOutputTopic CreateOutputTopic(string _)
+        public IOutputTopic CreateOutputTopic()
         {
-            return OpenOutputTopic(_);
+            return OpenOutputTopic();
         }
 
-        public IOutputTopic OpenOutputTopic(string topic)
+        public IOutputTopic OpenOutputTopic()
         {
             this.createKafkaWriter = streamId => new TestKafkaWriter(this.testBroker, streamId);
 

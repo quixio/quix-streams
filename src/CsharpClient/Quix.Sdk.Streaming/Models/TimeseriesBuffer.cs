@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process.Models;
+using Quix.Sdk.Streaming.Models.StreamReader;
 
 namespace Quix.Sdk.Streaming.Models
 {
@@ -34,12 +35,12 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Event invoked when TimeseriesData is read from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesData> OnRead;
+        public event EventHandler<TimeseriesDataReadEventArgs> OnRead;
 
         /// <summary>
         /// Event invoked when TimeseriesDataRaw is read from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesDataRaw> OnReadRaw;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnReadRaw;
 
         // List representing internal data structure of the buffer
         private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
@@ -49,7 +50,7 @@ namespace Quix.Sdk.Streaming.Models
         private long minTimeSpan = Int64.MaxValue;
         private long maxTimeSpan = Int64.MinValue;
 
-        internal readonly Timer flushBufferTimeoutTimer; // Timer for Timeout buffer configuration
+        private readonly Timer flushBufferTimeoutTimer; // Timer for Timeout buffer configuration
         
         private bool timerEnabled; // Additional timer control, because stopping timer is not behaving as expected in environments (linux/mono) we tested with
 
@@ -62,7 +63,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <param name="cleanOnFlush">Clean timestamps with only null values when releasing data from the buffer</param>
         internal TimeseriesBuffer(TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter = null, bool mergeOnFlush = true, bool cleanOnFlush = true)
         {
-            this.parametersFilter = parametersFilter == null ? new string[0] : parametersFilter;
+            this.parametersFilter = parametersFilter ?? Array.Empty<string>();
             this.parametersFilterSet = new HashSet<string>(this.parametersFilter);
             this.mergeOnFlush = mergeOnFlush;
             this.cleanOnFlush = cleanOnFlush;
@@ -240,45 +241,45 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Writes a chunck of data into the buffer
         /// </summary>
-        /// <param name="TimeseriesDataRaw">Data in <see cref="TimeseriesBuffer.OnRead"/> format</param>
-        protected internal void WriteChunk(Process.Models.TimeseriesDataRaw TimeseriesDataRaw)
+        /// <param name="timeseriesDataRaw">Data in <see cref="TimeseriesBuffer.OnRead"/> format</param>
+        protected internal void WriteChunk(Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             if (isDisposed)
             {
                 throw new ObjectDisposedException(nameof(TimeseriesBuffer));
             }
-            this.logger.LogTrace("Writing data into the buffer. The data size is {size}", TimeseriesDataRaw.Timestamps.Length);
+            this.logger.LogTrace("Writing data into the buffer. The data size is {size}", timeseriesDataRaw.Timestamps.Length);
 
             // Filter
             if (this.filter != null)
             {
-                TimeseriesDataRaw = FilterDataFrameByFilterFunction(TimeseriesDataRaw, this.filter);
+                timeseriesDataRaw = FilterDataFrameByFilterFunction(timeseriesDataRaw, this.filter);
             }
 
             lock (this._lock)
             {
 
-                var epoch = TimeseriesDataRaw.Epoch;
+                var epoch = timeseriesDataRaw.Epoch;
                 int startIndex = 0;
-                TimeseriesData TimeseriesData = null;
+                TimeseriesData timeseriesData = null;
 
-                for (var i = 0; i < TimeseriesDataRaw.Timestamps.Length; i++)
+                for (var i = 0; i < timeseriesDataRaw.Timestamps.Length; i++)
                 {
-                    var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(TimeseriesDataRaw, i);
+                    var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(timeseriesDataRaw, i);
                     if (!flushCondition && this.customTriggerBeforeEnqueue != null)
                     {
-                        if (TimeseriesData == null)
+                        if (timeseriesData == null)
                         {
-                            TimeseriesData = new TimeseriesData(TimeseriesDataRaw, null, false, false);
+                            timeseriesData = new TimeseriesData(timeseriesDataRaw, null, false, false);
                         }
 
-                        flushCondition = this.customTriggerBeforeEnqueue(TimeseriesData.Timestamps[i]);
+                        flushCondition = this.customTriggerBeforeEnqueue(timeseriesData.Timestamps[i]);
                     }
 
                     if (flushCondition)
                     {
                         // add pending rows before flushing
-                        var splitData = SelectPdrRows(TimeseriesDataRaw, startIndex, i - startIndex);
+                        var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex);
                         bufferedFrames.Add(splitData);
 
                         FlushData(false);
@@ -289,9 +290,9 @@ namespace Quix.Sdk.Streaming.Models
                     // Enqueue
                     this.totalRowsCount++;
 
-                    if (EvaluateFlushDataConditionsAfterEnqueue(TimeseriesDataRaw, startIndex, i))
+                    if (EvaluateFlushDataConditionsAfterEnqueue(timeseriesDataRaw, startIndex, i))
                     {
-                        var splitData = SelectPdrRows(TimeseriesDataRaw, startIndex, i - startIndex + 1);
+                        var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex + 1);
                         bufferedFrames.Add(splitData);
 
                         FlushData(false);
@@ -301,9 +302,9 @@ namespace Quix.Sdk.Streaming.Models
 
                 }
 
-                if (startIndex < TimeseriesDataRaw.Timestamps.Length)
+                if (startIndex < timeseriesDataRaw.Timestamps.Length)
                 {
-                    this.bufferedFrames.Add(SelectPdrRows(TimeseriesDataRaw, startIndex));
+                    this.bufferedFrames.Add(SelectPdrRows(timeseriesDataRaw, startIndex));
                 }
             }
 
@@ -322,11 +323,11 @@ namespace Quix.Sdk.Streaming.Models
 
         }
 
-        private bool EvaluateFlushDataConditionsBeforeEnqueue(TimeseriesDataRaw TimeseriesDataRaw, int timestampRawIndex)
+        private bool EvaluateFlushDataConditionsBeforeEnqueue(TimeseriesDataRaw timeseriesDataRaw, int timestampRawIndex)
         {
             if (this.timeSpanInNanoseconds != null)
             {
-                var nano = TimeseriesDataRaw.Timestamps[timestampRawIndex];
+                var nano = timeseriesDataRaw.Timestamps[timestampRawIndex];
 
                 this.minTimeSpan = Math.Min(this.minTimeSpan, nano);
                 this.maxTimeSpan = Math.Max(this.maxTimeSpan, nano);
@@ -344,7 +345,7 @@ namespace Quix.Sdk.Streaming.Models
             return false;
         }
 
-        private bool EvaluateFlushDataConditionsAfterEnqueue(TimeseriesDataRaw TimeseriesDataRawInProgress, int startIndex, int endIndex)
+        private bool EvaluateFlushDataConditionsAfterEnqueue(TimeseriesDataRaw timeseriesDataRawInProgress, int startIndex, int endIndex)
         {
             if (this.bufferingDisabled)
             {
@@ -355,13 +356,13 @@ namespace Quix.Sdk.Streaming.Models
 
             if (this.customTrigger != null)
             {
-                if (this.CustomTrigger(GenerateTimeseriesDataFromBuffer(TimeseriesDataRawInProgress, startIndex, endIndex))) return true;
+                if (this.CustomTrigger(GenerateTimeseriesDataFromBuffer(timeseriesDataRawInProgress, startIndex, endIndex))) return true;
             }
 
             return false;
         }
 
-        private TimeseriesData GenerateTimeseriesDataFromBuffer(TimeseriesDataRaw TimeseriesDataRawInProgress, int startIndex, int endIndex)
+        private TimeseriesData GenerateTimeseriesDataFromBuffer(TimeseriesDataRaw timeseriesDataRawInProgress, int startIndex, int endIndex)
         {
             List<TimeseriesDataTimestamp> timestamps = new List<TimeseriesDataTimestamp>();
             TimeseriesData timeseriesData = null;
@@ -377,7 +378,7 @@ namespace Quix.Sdk.Streaming.Models
             }
 
             // Row on current processing TimeseriesDataRaw
-            timeseriesData = new TimeseriesData(TimeseriesDataRawInProgress, null, false, false);
+            timeseriesData = new TimeseriesData(timeseriesDataRawInProgress, null, false, false);
             for(var i = startIndex; i <= endIndex; i++) 
             {
                 timestamps.Add(timeseriesData.Timestamps[i]);
@@ -425,11 +426,11 @@ namespace Quix.Sdk.Streaming.Models
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
 
                     if (newPdrw.Timestamps.Length <= 0) return;
-                    this.InvokeOnReadRaw(this, newPdrw);
+                    this.InvokeOnReadRaw(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
 
                     if (this.OnRead == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
-                    this.InvokeOnRead(this, data);
+                    this.InvokeOnRead(this, new TimeseriesDataReadEventArgs(null, null, data));
                 }
 
                 RaiseData();
@@ -442,14 +443,14 @@ namespace Quix.Sdk.Streaming.Models
             }
         }
 
-        protected virtual void InvokeOnReadRaw(object sender, TimeseriesDataRaw TimeseriesDataRaw)
+        protected virtual void InvokeOnReadRaw(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            this.OnReadRaw?.Invoke(this, TimeseriesDataRaw);
+            this.OnReadRaw?.Invoke(this, args);
         } 
         
-        protected virtual void InvokeOnRead(object sender, TimeseriesData TimeseriesData)
+        protected virtual void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)
         {
-            this.OnRead?.Invoke(this, TimeseriesData);
+            this.OnRead?.Invoke(this, args);
         } 
 
         private void UpdateIfAllConditionsAreNull()
@@ -489,32 +490,32 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Get row subset of the TimeseriesDataRaw starting from startIndex and end at startIndex + Count
         /// </summary>
-        protected TimeseriesDataRaw SelectPdrRows(TimeseriesDataRaw TimeseriesDataRaw, int startIndex, int count)
+        protected TimeseriesDataRaw SelectPdrRows(TimeseriesDataRaw timeseriesDataRaw, int startIndex, int count)
         {
-            if (startIndex == 0 && count >= TimeseriesDataRaw.Timestamps.Length)
+            if (startIndex == 0 && count >= timeseriesDataRaw.Timestamps.Length)
             {
-                return TimeseriesDataRaw;
+                return timeseriesDataRaw;
             }
-            return this.SelectPdrRowsByMask(TimeseriesDataRaw, Enumerable.Range(startIndex, count).ToList());
+            return this.SelectPdrRowsByMask(timeseriesDataRaw, Enumerable.Range(startIndex, count).ToList());
         }
 
         /// <summary>
         /// Get row subset of the TimeseriesDataRaw starting from startIndex until the last timestamp available
         /// </summary>
-        protected TimeseriesDataRaw SelectPdrRows(TimeseriesDataRaw TimeseriesDataRaw, int startIndex)
+        protected TimeseriesDataRaw SelectPdrRows(TimeseriesDataRaw timeseriesDataRaw, int startIndex)
         {
-            return SelectPdrRows(TimeseriesDataRaw, startIndex, TimeseriesDataRaw.Timestamps.Length - startIndex);
+            return SelectPdrRows(timeseriesDataRaw, startIndex, timeseriesDataRaw.Timestamps.Length - startIndex);
         }
 
         /// <summary>
         /// Get row subset of the TimeseriesDataRaw from a list of selected indexes
         /// </summary>
-        /// <param name="TimeseriesDataRaw">Original data</param>
+        /// <param name="timeseriesDataRaw">Original data</param>
         /// <param name="filteredRows">IEnumerable containing indexes of rows to select (e.g. [0,3,5,6])</param>
-        protected TimeseriesDataRaw SelectPdrRowsByMask(TimeseriesDataRaw TimeseriesDataRaw, List<int> filteredRows){
+        protected TimeseriesDataRaw SelectPdrRowsByMask(TimeseriesDataRaw timeseriesDataRaw, List<int> filteredRows){
             if(filteredRows.Count() <= 0)
                 return new TimeseriesDataRaw(
-                    TimeseriesDataRaw.Epoch,
+                    timeseriesDataRaw.Epoch,
                     new long[0],
                     new Dictionary<string, double?[]>(),
                     new Dictionary<string, string[]>(),
@@ -523,14 +524,14 @@ namespace Quix.Sdk.Streaming.Models
                 );
 
             // Filter all values by the filteredRows masks
-            var newNumericValues = GenerateDictionaryMaskFilterMethod(TimeseriesDataRaw.NumericValues, filteredRows);
-            var newStringValues = GenerateDictionaryMaskFilterMethod(TimeseriesDataRaw.StringValues, filteredRows);
-            var newBinaryValues = GenerateDictionaryMaskFilterMethod(TimeseriesDataRaw.BinaryValues, filteredRows);
-            var newTagsValues = GenerateDictionaryMaskFilterMethod(TimeseriesDataRaw.TagValues, filteredRows);
+            var newNumericValues = GenerateDictionaryMaskFilterMethod(timeseriesDataRaw.NumericValues, filteredRows);
+            var newStringValues = GenerateDictionaryMaskFilterMethod(timeseriesDataRaw.StringValues, filteredRows);
+            var newBinaryValues = GenerateDictionaryMaskFilterMethod(timeseriesDataRaw.BinaryValues, filteredRows);
+            var newTagsValues = GenerateDictionaryMaskFilterMethod(timeseriesDataRaw.TagValues, filteredRows);
 
             return new TimeseriesDataRaw(
-                TimeseriesDataRaw.Epoch,
-                GenerateArrayMaskFilterMethod(TimeseriesDataRaw.Timestamps, filteredRows),
+                timeseriesDataRaw.Epoch,
+                GenerateArrayMaskFilterMethod(timeseriesDataRaw.Timestamps, filteredRows),
                 newNumericValues,
                 newStringValues,
                 newBinaryValues,
@@ -575,15 +576,15 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Copy one timestamp to another index of the buffer
         /// </summary>
-        /// <param name="TimeseriesDataRaw">Buffer data</param>
+        /// <param name="timeseriesDataRaw">Buffer data</param>
         /// <param name="sourceIndex">Index of the timestamp to copy</param>
         /// <param name="targetIndex">Target index where to copy timestamp</param>
-        protected void CopyTimeseriesDataRawIndex(TimeseriesDataRaw TimeseriesDataRaw, int sourceIndex, int targetIndex)
+        protected void CopyTimeseriesDataRawIndex(TimeseriesDataRaw timeseriesDataRaw, int sourceIndex, int targetIndex)
         {
-            CopyIndexWithinDataframe(TimeseriesDataRaw.NumericValues, sourceIndex, targetIndex);
-            CopyIndexWithinDataframe(TimeseriesDataRaw.BinaryValues, sourceIndex, targetIndex);
-            CopyIndexWithinDataframe(TimeseriesDataRaw.StringValues, sourceIndex, targetIndex);
-            CopyIndexWithinDataframe(TimeseriesDataRaw.TagValues, sourceIndex, targetIndex);
+            CopyIndexWithinDataframe(timeseriesDataRaw.NumericValues, sourceIndex, targetIndex);
+            CopyIndexWithinDataframe(timeseriesDataRaw.BinaryValues, sourceIndex, targetIndex);
+            CopyIndexWithinDataframe(timeseriesDataRaw.StringValues, sourceIndex, targetIndex);
+            CopyIndexWithinDataframe(timeseriesDataRaw.TagValues, sourceIndex, targetIndex);
         }
 
         private static bool CopyIndexWithinDataframe<T>(Dictionary<string, T[]> dict, int sourceIndex, int targetIndex)
@@ -604,15 +605,15 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Merge existing timestamps with the same timestamp and tags
         /// </summary>
-        /// <param name="TimeseriesDataRaw">Data to merge</param>
+        /// <param name="timeseriesDataRaw">Data to merge</param>
         /// <returns>New object with the proper length containing merged values</returns>
-        protected TimeseriesDataRaw MergeTimestamps(TimeseriesDataRaw TimeseriesDataRaw)
+        protected TimeseriesDataRaw MergeTimestamps(TimeseriesDataRaw timeseriesDataRaw)
         {
             Dictionary<(long, long), int> timestampsDict = new Dictionary<(long, long), int>();
-            int rows = TimeseriesDataRaw.Timestamps.Length;
+            int rows = timeseriesDataRaw.Timestamps.Length;
             
             long[] tagsHash = Enumerable.Repeat<long>(397, rows).ToArray();
-            foreach (var keyValuePair in TimeseriesDataRaw.TagValues)
+            foreach (var keyValuePair in timeseriesDataRaw.TagValues)
             {
                 var tag = keyValuePair.Key;
                 string[] tags = keyValuePair.Value;
@@ -629,12 +630,12 @@ namespace Quix.Sdk.Streaming.Models
             
             for (var i = 0; i < rows; i++)
             {
-                long timestamp = TimeseriesDataRaw.Timestamps[i];
+                long timestamp = timeseriesDataRaw.Timestamps[i];
                 var key = (timestamp, tagsHash[i]);
                 // I have already seen this timestamp/tags in the past >> copy current row to the previous row
                 if (timestampsDict.TryGetValue(key, out var value))
                 {
-                    this.CopyTimeseriesDataRawIndex(TimeseriesDataRaw, i, value);
+                    this.CopyTimeseriesDataRawIndex(timeseriesDataRaw, i, value);
                 }
                 else
                 {
@@ -642,14 +643,14 @@ namespace Quix.Sdk.Streaming.Models
                 }
             }
 
-            if (timestampsDict.Count() == TimeseriesDataRaw.Timestamps.Length)
+            if (timestampsDict.Count() == timeseriesDataRaw.Timestamps.Length)
             {
                 // No filtered rows >> no need for allocating new Array
                 // Since no change and no modifications were done to the original PDR
-                return TimeseriesDataRaw;
+                return timeseriesDataRaw;
             }
 
-            return this.SelectPdrRowsByMask(TimeseriesDataRaw, timestampsDict.Values.ToList());
+            return this.SelectPdrRowsByMask(timeseriesDataRaw, timestampsDict.Values.ToList());
         }
 
         /// <summary>
@@ -803,12 +804,12 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Remove rows that only contain null values
         /// </summary>
-        /// <param name="TimeseriesDataRaw">Data to be cleaned</param>
+        /// <param name="timeseriesDataRaw">Data to be cleaned</param>
         /// <returns>Cleaned data without the rows containing only null values</returns>
-        protected TimeseriesDataRaw FilterOutNullRows(TimeseriesDataRaw TimeseriesDataRaw)
+        protected TimeseriesDataRaw FilterOutNullRows(TimeseriesDataRaw timeseriesDataRaw)
         {
             // Contains only 0 and 1 values, but the datatype is in the form of byte so we can perform the xor operation under this array
-            byte[] filter = Enumerable.Repeat<byte>(0, TimeseriesDataRaw.Timestamps.Length).ToArray();
+            byte[] filter = Enumerable.Repeat<byte>(0, timeseriesDataRaw.Timestamps.Length).ToArray();
 
             // Count of the non-null rows
             int count = 0;
@@ -829,14 +830,14 @@ namespace Quix.Sdk.Streaming.Models
                 }
             }
 
-            applyFilterRows(TimeseriesDataRaw.NumericValues);
-            applyFilterRows(TimeseriesDataRaw.BinaryValues);
-            applyFilterRows(TimeseriesDataRaw.StringValues);
+            applyFilterRows(timeseriesDataRaw.NumericValues);
+            applyFilterRows(timeseriesDataRaw.BinaryValues);
+            applyFilterRows(timeseriesDataRaw.StringValues);
 
-            if (count >= TimeseriesDataRaw.Timestamps.Length)
+            if (count >= timeseriesDataRaw.Timestamps.Length)
             {
                 // No rows to filter
-                return TimeseriesDataRaw;
+                return timeseriesDataRaw;
             }
             
             T[] AllocForFilter<T>(T[] inpArr)
@@ -866,12 +867,12 @@ namespace Quix.Sdk.Streaming.Models
 
 
             return new TimeseriesDataRaw(
-                TimeseriesDataRaw.Epoch,
-                AllocForFilter(TimeseriesDataRaw.Timestamps),
-                GenerateFilteredDictionary(TimeseriesDataRaw.NumericValues),
-                GenerateFilteredDictionary(TimeseriesDataRaw.StringValues),
-                GenerateFilteredDictionary(TimeseriesDataRaw.BinaryValues),
-                GenerateFilteredDictionary(TimeseriesDataRaw.TagValues)
+                timeseriesDataRaw.Epoch,
+                AllocForFilter(timeseriesDataRaw.Timestamps),
+                GenerateFilteredDictionary(timeseriesDataRaw.NumericValues),
+                GenerateFilteredDictionary(timeseriesDataRaw.StringValues),
+                GenerateFilteredDictionary(timeseriesDataRaw.BinaryValues),
+                GenerateFilteredDictionary(timeseriesDataRaw.TagValues)
             );
         }
 

@@ -1,4 +1,5 @@
 import sys
+import traceback
 from typing import Callable
 
 from .models import *
@@ -21,7 +22,7 @@ class StreamWriter(object):
         Handles writing stream to a topic
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, output_topic, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamWriter.
             NOTE: Do not initialize this class manually, use StreamingClient.create_stream to write streams
@@ -35,6 +36,7 @@ class StreamWriter(object):
             raise Exception("StreamWriter is none")
 
         self._interop = swi(net_pointer)
+        self._output_topic = output_topic
         self._streamParametersWriter = None  # Holding reference to avoid GC
         self._streamEventsWriter = None  # Holding reference to avoid GC
         self._streamPropertiesWriter = None  # Holding reference to avoid GC
@@ -75,10 +77,13 @@ class StreamWriter(object):
 
     def _on_write_exception_wrapper(self, stream_hptr, exception_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
-        # TODO fix arg to be handled as exception
-        #self.on_write_exception.fire(self, BaseException(arg.Message, type(arg)))
-        InteropUtils.free_hptr(stream_hptr)
-        InteropUtils.free_hptr(exception_hptr)
+        try:
+            # TODO fix arg to be handled as exception
+            #self.on_write_exception.fire(self, BaseException(arg.Message, type(arg)))
+            InteropUtils.free_hptr(stream_hptr)
+            InteropUtils.free_hptr(exception_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_write_exception_dispose(self):
         if self._on_write_exception_ref is not None:
@@ -118,7 +123,7 @@ class StreamWriter(object):
         groups or values """
 
         if self._streamParametersWriter is None:
-            self._streamParametersWriter = StreamParametersWriter(self, self._interop.get_Parameters())
+            self._streamParametersWriter = StreamParametersWriter(self._output_topic, self, self._interop.get_Parameters())
         return self._streamParametersWriter
 
     @property

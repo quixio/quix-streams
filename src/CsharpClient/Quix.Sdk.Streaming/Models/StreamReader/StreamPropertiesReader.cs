@@ -10,24 +10,27 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
     /// </summary>
     public class StreamPropertiesReader : IDisposable
     {
-        private readonly Streaming.StreamReader streamReader;
+        private readonly IInputTopic topic;
+        private readonly IStreamReaderInternal streamReader;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamPropertiesReader"/>
         /// </summary>
+        /// <param name="topic">The topic the stream to what this reader belongs to</param>
         /// <param name="streamReader">Stream reader owner</param>
-        internal StreamPropertiesReader(Streaming.StreamReader streamReader)
+        internal StreamPropertiesReader(IInputTopic topic, IStreamReaderInternal streamReader)
         {
+            this.topic = topic;
             this.streamReader = streamReader;
 
             this.Metadata = new Dictionary<string, string>();
             this.Parents = new List<string>();
 
-            this.streamReader.OnStreamPropertiesChanged += OnStreamReaderOnOnStreamPropertiesChanged;
+            this.streamReader.OnStreamPropertiesChanged += OnStreamPropertiesChangedEventHandler;
 
         }
 
-        private void OnStreamReaderOnOnStreamPropertiesChanged(IStreamReaderInternal sender, StreamProperties streamProperties)
+        private void OnStreamPropertiesChangedEventHandler(IStreamReader sender, StreamProperties streamProperties)
         {
             this.Name = streamProperties.Name;
             this.Location = streamProperties.Location;
@@ -35,14 +38,14 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             this.Metadata = streamProperties.Metadata;
             this.Parents = streamProperties.Parents;
 
-            this.OnChanged?.Invoke(this.streamReader, EventArgs.Empty);
+            this.OnChanged?.Invoke(this.streamReader, new StreamPropertiesChangedEventArgs(this.topic, sender));
         }
 
         /// <summary>
         /// Raised when the stream properties have changed
         /// Sender is the stream the properties changed for
         /// </summary>
-        public event EventHandler OnChanged;
+        public event EventHandler<StreamPropertiesChangedEventArgs> OnChanged;
 
         /// <summary>
         /// Gets the name of the stream
@@ -72,7 +75,19 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// <inheritdoc/>
         public void Dispose()
         {
-            this.streamReader.OnStreamPropertiesChanged -= OnStreamReaderOnOnStreamPropertiesChanged;
+            this.streamReader.OnStreamPropertiesChanged -= OnStreamPropertiesChangedEventHandler;
         }
+    }
+
+    public class StreamPropertiesChangedEventArgs
+    {
+        public StreamPropertiesChangedEventArgs(IInputTopic topic, IStreamReader reader)
+        {
+            this.Topic = topic;
+            this.Stream = reader;
+        }
+
+        public IInputTopic Topic { get; }
+        public IStreamReader Stream { get; }
     }
 }

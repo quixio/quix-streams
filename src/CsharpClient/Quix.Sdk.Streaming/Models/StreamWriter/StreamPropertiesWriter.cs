@@ -20,15 +20,15 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         private DateTime? timeOfRecording;
 
         private readonly Timer flushTimer;
-        private bool timerEnabled = false; // Here because every now and then reseting its due time to never doesn't work
-        private const int propertyChangedFlushInterval = 20;
+        private bool timerEnabled = false; // Here because every now and then resetting its due time to never doesn't work
+        private const int PropertyChangedFlushInterval = 20;
         private int lastHash = 0;
         private readonly object flushLock = new object();
         private bool isDisposed = false;
 
         private long lastHeartbeatRebroadcastTime = 0;  // in milliseconds
         private int heartbeatRebroadcastFlushInterval = 30*1000;
-        private ILogger<StreamParametersWriter> logger = Logging.CreateLogger<StreamParametersWriter>();
+        private readonly ILogger<StreamParametersWriter> logger = Logging.CreateLogger<StreamParametersWriter>();
 
         /// <summary>
         /// Automatic flush interval of the properties metadata into the channel [ in milliseconds ]
@@ -287,7 +287,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         private void PushWrite()
         {
             timerEnabled = true;
-            this.flushTimer.Change(propertyChangedFlushInterval, Timeout.Infinite);
+            this.flushTimer.Change(PropertyChangedFlushInterval, Timeout.Infinite);
         }
 
         /// <summary>

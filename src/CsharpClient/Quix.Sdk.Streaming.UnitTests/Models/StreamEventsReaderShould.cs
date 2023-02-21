@@ -20,11 +20,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             // Arrange
             var streamReader = Substitute.For<IStreamReaderInternal>();
             var receivedData = new List<Streaming.Models.EventData>();
-            var eventsReader = new Streaming.Models.StreamReader.StreamEventsReader(streamReader);
+            var eventsReader = new Streaming.Models.StreamReader.StreamEventsReader(new TestStreamingClient().CreateInputTopic(), streamReader);
 
-            eventsReader.OnRead += (sender, data) =>
+            eventsReader.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -33,7 +33,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 var eventData = new Streaming.Models.EventData($"event{i}", 100 * i, $"test_event_value{i}")
                     .AddTag($"tag{i}", $"{i}");
 
-                streamReader.OnEventData += Raise.Event<Action<IStreamReaderInternal, EventDataRaw>>(streamReader, eventData.ConvertToProcessData());
+                streamReader.OnEventData += Raise.Event<Action<IStreamReader, EventDataRaw>>(streamReader, eventData.ConvertToProcessData());
             }
 
             // Assert
@@ -55,7 +55,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         {
             // Arrange
             var streamReader = Substitute.For<IStreamReaderInternal>();
-            var eventsReader = new Streaming.Models.StreamReader.StreamEventsReader(streamReader);
+            var eventsReader = new Streaming.Models.StreamReader.StreamEventsReader(new TestStreamingClient().CreateInputTopic(), streamReader);
 
             var eventDefinitions = new EventDefinitions
             {
@@ -186,7 +186,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             };
 
             // Act
-            streamReader.OnEventDefinitionsChanged += Raise.Event<Action<IStreamReaderInternal, EventDefinitions>>(streamReader, eventDefinitions);
+            streamReader.OnEventDefinitionsChanged += Raise.Event<Action<IStreamReader, EventDefinitions>>(streamReader, eventDefinitions);
 
             // Assert
             eventsReader.Definitions.Count.Should().Be(7);

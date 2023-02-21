@@ -21,15 +21,15 @@ namespace Quix.Sdk.PerformanceTest
 
             var buffer = new TimeseriesBuffer(null, null, true, false);
             buffer.PacketSize = bufferSize;
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
                 if (onlyReceive)
                 {
-                    receivedCount += data.Timestamps.Count * paramCount;
+                    receivedCount += args.Data.Timestamps.Count * paramCount;
                     return;
                 }
 
-                foreach (var t in data.Timestamps)
+                foreach (var t in args.Data.Timestamps)
                 {
                     //for (var i = 0; i < t.Parameters.Count; i++)
                     //{

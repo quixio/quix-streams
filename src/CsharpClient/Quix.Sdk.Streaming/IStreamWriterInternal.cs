@@ -10,7 +10,7 @@ namespace Quix.Sdk.Streaming
     /// Stands for a new stream that we want to send to the platform.
     /// It provides you helper properties to stream data the platform like parameter values, events, definitions and all the information you can persist to the platform.
     /// </summary>
-    internal interface IStreamWriterInternal
+    internal interface IStreamWriterInternal: IStreamWriter
     {
         /// <summary>
         /// Default Epoch used for Parameters and Events

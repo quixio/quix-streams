@@ -3,14 +3,16 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Quix.Sdk.Streaming.Models;
+using Quix.Sdk.Streaming.Models.StreamReader;
 
 namespace Quix.Sdk.Streaming.Samples.Samples
 {
     public class ReadSampleV2
     {
+        private long counter;
         public void Start(string streamIdToRead)
         {
-            long counter = 0;
+            counter = 0;
             var sw = Stopwatch.StartNew();
             var timer = new System.Timers.Timer();
             timer.Interval = 1000;
@@ -40,47 +42,53 @@ namespace Quix.Sdk.Streaming.Samples.Samples
 
                 var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += (sender, data) =>
-                {
-                    Interlocked.Add(ref counter, data.Timestamps.Count);
-                };
 
-                streamReader.Events.OnRead += (sender, data) =>
-                {
-                    Console.WriteLine($"Event data -> StreamId: '{streamReader.StreamId}' - Event '{data.Id}' with value '{data.Value}'");
-                };
-
-                streamReader.Parameters.OnDefinitionsChanged += (sender, args) =>
-                {
-                    foreach (var definition in streamReader.Parameters.Definitions)
-                    {
-                        Console.WriteLine($"Parameter definition -> StreamId: {streamReader.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
-                    }
-                };
-
-                streamReader.Events.OnDefinitionsChanged += (sender, args) =>
-                {
-                    foreach (var definition in streamReader.Events.Definitions)
-                    {
-                        Console.WriteLine($"Event definition -> StreamId: {streamReader.StreamId} - Event definition '{definition.Id}' with name '{definition.Name}'");
-                    }
-                };
-
-                streamReader.Properties.OnChanged += (stream, args) =>
-                {
-                    Console.WriteLine($"Stream properties -> StreamId '{streamReader.StreamId}' with name '{streamReader.Properties.Name}' located in '{streamReader.Properties.Location}'");
-                };
-                
-                streamReader.OnStreamClosed += (sr, set) =>
-                {
-                    Console.WriteLine($"Stream Close -> StreamId '{streamReader.StreamId}' with type {set}");
-                };
+                buffer.OnRead += OnBufferOnOnRead;
+                streamReader.Events.OnRead += OnEventsOnOnRead;
+                streamReader.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
+                streamReader.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
+                streamReader.Properties.OnChanged += OnPropertiesOnOnChanged;
+                streamReader.OnStreamClosed += OnStreamReaderOnOnStreamClosed;
             };
             
             inputTopic.OnDisposed += (s, e) =>
             {
                 Console.WriteLine($"input topic disposed");
             };
+        }
+        
+        void OnBufferOnOnRead(object s, TimeseriesDataReadEventArgs args)
+        {
+            Interlocked.Add(ref counter, args.Data.Timestamps.Count);
+        }
+        
+        void OnEventsOnOnRead(object s, EventDataReadEventArgs args)
+        {
+            Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
+        }
+        
+        void OnParametersOnOnDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
+        {
+            foreach (var definition in args.Stream.Parameters.Definitions)
+            {
+                Console.WriteLine($"Parameter definition -> StreamId: {args.Stream.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
+            }
+        }
+        
+        void OnEventsOnOnDefinitionsChanged(object s, EventDefinitionsChangedEventArgs args)
+        {
+            foreach (var definition in args.Stream.Events.Definitions)
+            {
+                Console.WriteLine($"Event definition -> StreamId: {args.Stream.StreamId} - Event definition '{definition.Id}' with name '{definition.Name}'");
+            }
+        }
+        void OnPropertiesOnOnChanged(object s, StreamPropertiesChangedEventArgs args)
+        {
+            Console.WriteLine($"Stream properties -> StreamId '{args.Stream.StreamId}' with name '{args.Stream.Properties.Name}' located in '{args.Stream.Properties.Location}'");
+        }
+        void OnStreamReaderOnOnStreamClosed(object s, StreamClosedEventArgs args)
+        {
+            Console.WriteLine($"Stream Close -> StreamId '{args.Stream.StreamId}' with type {args.EndType}");
         }
     }
 }

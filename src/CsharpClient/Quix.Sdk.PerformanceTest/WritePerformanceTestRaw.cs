@@ -17,9 +17,9 @@ namespace Quix.Sdk.PerformanceTest
 
             var buffer = new TimeseriesBuffer(null, null, true, true);
             buffer.PacketSize = bufferSize;
-            buffer.OnReadRaw += (sender, data) =>
+            buffer.OnReadRaw += (sender, args) =>
             {
-                receivedCount += data.Timestamps.Length * paramCount;
+                receivedCount += args.Data.Timestamps.Length * paramCount;
             };
 
             DateTime lastUpdate = DateTime.UtcNow;

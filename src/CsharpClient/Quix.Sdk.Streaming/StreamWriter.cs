@@ -60,7 +60,7 @@ namespace Quix.Sdk.Streaming
 
             // Managed writers
             this.streamPropertiesWriter = new StreamPropertiesWriter(this);
-            this.streamParametersWriter = new StreamParametersWriter(this);
+            this.streamParametersWriter = new StreamParametersWriter(outputTopic, this);
             this.streamEventsWriter = new StreamEventsWriter(this);
 
             this.outputTopic = outputTopic;

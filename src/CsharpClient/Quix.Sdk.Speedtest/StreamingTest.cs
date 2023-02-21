@@ -38,9 +38,9 @@ namespace Quix.Sdk.Speedtest
                 var buffer = reader.Parameters.CreateBuffer();
                 buffer.PacketSize = 1;
 
-                buffer.OnRead += (sender, data) =>
+                buffer.OnRead += (sender, args) =>
                 {
-                    var binaryTime = (long) data.Timestamps[0].Parameters[parameterName].NumericValue;
+                    var binaryTime = (long) args.Data.Timestamps[0].Parameters[parameterName].NumericValue;
                     var sentAt = DateTime.FromBinary(binaryTime);
                     var elapsed = (DateTime.UtcNow - sentAt).TotalMilliseconds;
                     lock (timesLock)

@@ -17,11 +17,12 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_NumericAndString_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x=> sentData.Add(x)));
 
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -66,10 +67,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithVariableTags_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x=> sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -122,10 +124,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithVariableBinaryParams_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -166,10 +169,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithVariableNumericParams_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -209,10 +213,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithVariableStringParams_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -251,10 +256,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithDateTime_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             var epoch = new DateTime(2000, 01, 01);
             writer.Buffer.Epoch = epoch;
@@ -286,10 +292,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithTimeSpan_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             var epoch = new DateTime(2000, 01, 01);
             writer.Buffer.Epoch = epoch;
@@ -321,10 +328,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithNanoseconds_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             var epoch = new DateTime(2000, 01, 01);
             writer.Buffer.Epoch = epoch;
@@ -356,10 +364,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithMilliseconds_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -392,10 +401,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithMultipleEpoch_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             writer.Buffer.Epoch = new DateTime(2000, 01, 01);
@@ -458,10 +468,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_ToBufferTwice_ShouldUpdateTimestampsWithEpochOnFirstWrite()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -497,10 +508,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void WriteData_DirectlyToWriterWithEpoch_ShouldWriteExpected()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var parameters = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var parameters = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             var epoch = new DateTime(2000, 01, 01);
             streamWriter.Epoch = epoch;
 
@@ -530,10 +542,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddValue_WithTags_AndConvertTo3rdLayerAgain_ShouldResultWithoutNullTags()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentData = new List<TimeseriesDataRaw>();
             streamWriter.Write(Arg.Do<TimeseriesDataRaw>(x => sentData.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = null;
             writer.Buffer.PacketSize = 100;
             var epoch = new DateTime(2000, 01, 01);
@@ -588,10 +601,11 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddDefinition_WithLocation_ShouldProduceExpectedDefinitions()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
             var sentDefinitions = new List<ParameterDefinitions>();
             streamWriter.Write(Arg.Do<ParameterDefinitions>(x => sentDefinitions.Add(x)));
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
             writer.Buffer.BufferTimeout = 500000; // maybe implement disable?
 
             // Act
@@ -704,8 +718,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void AddDefinition_WithIncorrectRanges_ShouldRaiseExceptions()
         {
             // Arrange
+            var outputTopic = Substitute.For<IOutputTopic>();
             var streamWriter = Substitute.For<IStreamWriterInternal>();
-            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(streamWriter);
+            var writer = new Streaming.Models.StreamWriter.StreamParametersWriter(outputTopic, streamWriter);
 
             // Act
             Action action1 = () => writer.AddDefinition("Param1").SetRange(10, -10);

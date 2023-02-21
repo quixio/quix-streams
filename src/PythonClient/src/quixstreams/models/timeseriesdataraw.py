@@ -402,7 +402,7 @@ class TimeseriesDataRaw(object):
 
         return self._tag_values
 
-    def convert_to_timeseriesData(self) -> TimeseriesData:
+    def convert_to_timeseriesdata(self) -> TimeseriesData:
         ptr = tsdi.Constructor2(self.get_net_pointer())
         return TimeseriesData(ptr)
 

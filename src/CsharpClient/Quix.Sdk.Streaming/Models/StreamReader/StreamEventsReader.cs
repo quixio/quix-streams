@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Streaming.Models.StreamReader
@@ -12,14 +10,17 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
     /// </summary>
     public class StreamEventsReader : IDisposable
     {
+        private readonly IInputTopic topic;
         private readonly IStreamReaderInternal streamReader;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamParametersReader"/>
         /// </summary>
+        /// <param name="topic">The topic the stream to what this reader belongs to</param>
         /// <param name="streamReader">Stream reader owner</param>
-        internal StreamEventsReader(IStreamReaderInternal streamReader)
+        internal StreamEventsReader(IInputTopic topic, IStreamReaderInternal streamReader)
         {
+            this.topic = topic;
             this.streamReader = streamReader;
 
             this.streamReader.OnEventDefinitionsChanged += OnEventDefinitionsChangedHandler;
@@ -28,30 +29,30 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
 
         }
 
-        private void OnEventDataHandler(IStreamReaderInternal sender, Process.Models.EventDataRaw eventDataRaw)
+        private void OnEventDataHandler(IStreamReader sender, Process.Models.EventDataRaw eventDataRaw)
         {
             var data = new EventData(eventDataRaw);
 
-            this.OnRead?.Invoke(this.streamReader, data);
+            this.OnRead?.Invoke(this, new EventDataReadEventArgs(this.topic, this.streamReader, data));
         }
 
-        private void OnEventDefinitionsChangedHandler(IStreamReaderInternal sender, EventDefinitions eventDefinitions)
+        private void OnEventDefinitionsChangedHandler(IStreamReader sender, EventDefinitions eventDefinitions)
         {
             this.LoadFromProcessDefinitions(eventDefinitions);
 
-            this.OnDefinitionsChanged?.Invoke(this.streamReader, EventArgs.Empty);
+            this.OnDefinitionsChanged?.Invoke(this, new EventDefinitionsChangedEventArgs(this.topic, this.streamReader));
         }
 
         /// <summary>
         /// Raised when an events data package is read for the stream
         /// </summary>
-        public event EventHandler<EventData> OnRead;
+        public event EventHandler<EventDataReadEventArgs> OnRead;
 
         /// <summary>
         /// Raised when the even definitions have changed for the stream.
         /// See <see cref="Definitions"/> for the latest set of event definitions
         /// </summary>
-        public event EventHandler OnDefinitionsChanged;
+        public event EventHandler<EventDefinitionsChangedEventArgs> OnDefinitionsChanged;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -109,5 +110,32 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
 
             this.streamReader.OnEventData -= OnEventDataHandler;
         }
+    }
+
+    public class EventDefinitionsChangedEventArgs
+    {
+        public EventDefinitionsChangedEventArgs(IInputTopic topic, IStreamReader reader)
+        {
+            this.Topic = topic;
+            this.Stream = reader;
+        }
+        
+                
+        public IInputTopic Topic { get; }
+        public IStreamReader Stream { get; }
+    }
+    
+    public class EventDataReadEventArgs
+    {
+        public EventDataReadEventArgs(IInputTopic topic, IStreamReader reader, EventData data)
+        {
+            this.Topic = topic;
+            this.Stream = reader;
+            this.Data = data;
+        }
+        
+        public IInputTopic Topic { get; }
+        public IStreamReader Stream { get; }
+        public EventData Data { get; }
     }
 }

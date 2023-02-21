@@ -41,11 +41,11 @@ namespace Quix.Sdk.PerformanceTest
 
                 var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += (sender, data) =>
+                buffer.OnRead += (sender, args) =>
                 {
                     //var paramCount = data.NumericValues.Count + data.StringValues.Count + data.BinaryValues.Count;
 
-                    receivedCount += data.Timestamps.Count() * paramCount;
+                    receivedCount += args.Data.Timestamps.Count() * paramCount;
 
                     if ((DateTime.UtcNow - lastUpdate).TotalSeconds >= 1)
                     {

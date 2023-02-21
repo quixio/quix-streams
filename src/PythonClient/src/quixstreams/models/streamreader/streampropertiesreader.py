@@ -1,8 +1,10 @@
+import traceback
 from typing import Dict, List, Callable
 
 from datetime import datetime
 
 from ...native.Python.QuixSdkStreaming.Models.StreamReader.StreamPropertiesReader import StreamPropertiesReader as spri
+from ...native.Python.QuixSdkStreaming.Models.StreamReader.StreamPropertiesChangedEventArgs import StreamPropertiesChangedEventArgs
 import ctypes
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ..netdict import NetDict
@@ -14,19 +16,22 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamPropertiesReader(object):
 
-    def __init__(self, stream_reader: 'StreamReader', net_pointer: ctypes.c_void_p):
+    def __init__(self, input_topic, stream_reader: 'StreamReader', net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamPropertiesReader.
             NOTE: Do not initialize this class manually, use StreamReader.properties to access an instance of it
 
             Parameters:
 
+            input_topic: The input topic the stream belongs to
+            stream_reader: The stream the buffer is created for
             net_pointer: Pointer to an instance of a .net StreamPropertiesReader
         """
         if net_pointer is None:
             raise Exception("StreamPropertiesReader is none")
 
         self._interop = spri(net_pointer)
+        self._input_topic = input_topic
         self._stream_reader = stream_reader
 
         # define events and their ref holder
@@ -45,26 +50,29 @@ class StreamPropertiesReader(object):
 
     # region on_changed
     @property
-    def on_changed(self) -> Callable[['StreamReader'], None]:
+    def on_changed(self) -> Callable[['InputTopic', 'StreamReader'], None]:
         """
-        Gets the handler for when the stream properties changed. First parameter is the stream it is invoked for, second is the properties.
+        Gets the handler for when the stream properties changed. First parameter is the topic, second is the stream it is invoked for.
         """
         return self._on_changed
 
     @on_changed.setter
-    def on_changed(self, value: Callable[['StreamReader'], None]) -> None:
+    def on_changed(self, value: Callable[['InputTopic', 'StreamReader'], None]) -> None:
         """
-        Sets the handler for when the stream properties changed. First parameter is the stream it is invoked for, second is the properties.
+        Sets the handler for when the stream properties changed. First parameter is the topic, second is the stream it is invoked for.
         """
         self._on_changed = value
         if self._on_changed_ref is None:
             self._on_changed_ref = self._interop.add_OnChanged(self._on_changed_wrapper)
 
-    def _on_changed_wrapper(self, sender_hptr, args_ptr):
+    def _on_changed_wrapper(self, sender_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
-        self._on_changed(self._stream_reader)
-        InteropUtils.free_hptr(sender_hptr)
-        InteropUtils.free_hptr(args_ptr)
+        try:
+            with (args := StreamPropertiesChangedEventArgs(args_hptr)):
+                self._on_changed(self._input_topic, self._stream_reader)
+            InteropUtils.free_hptr(sender_hptr)
+        except:
+            traceback.print_exc()
 
     def _on_changed_dispose(self):
         if self._on_changed_ref is not None:

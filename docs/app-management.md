@@ -30,12 +30,12 @@ def read_stream(new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_pandas_frame_handler(df: pd.DataFrame):
+    def on_dataframe_handler(stream: StreamReader, df: pd.DataFrame):
         print(df.to_string())
 
-    buffer.on_read_pandas += on_pandas_frame_handler
+    buffer.on_read_dataframe = on_dataframe_handler
 
-input_topic.on_stream_received += read_stream
+input_topic.on_stream_received = read_stream
 input_topic.start_reading()
 
 while(True)
@@ -51,12 +51,12 @@ def read_stream(new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_pandas_frame_handler(df: pd.DataFrame):
+    def on_dataframe_handler(stream: StreamReader, df: pd.DataFrame):
         print(df.to_string())
 
-    buffer.on_read_pandas += on_pandas_frame_handler
+    buffer.on_read_dataframe = on_dataframe_handler
 
-input_topic.on_stream_received += read_stream
+input_topic.on_stream_received = read_stream
 
 App.run()
 ```

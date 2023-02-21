@@ -23,7 +23,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         private string location;
         private readonly EventDefinitionsManager eventDefinitionsManager = new EventDefinitionsManager();
         private readonly Timer flushDefinitionsTimer;
-        private bool timerEnabled = false; // Here because every now and then reseting its due time to never doesn't work
+        private bool timerEnabled = false; // Here because every now and then resetting its due time to never doesn't work
         private const int TimerInterval = 200;
         private readonly object flushLock = new object();
         private bool isDisposed;

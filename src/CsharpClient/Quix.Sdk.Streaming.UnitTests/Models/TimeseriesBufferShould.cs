@@ -34,9 +34,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -68,9 +68,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -108,9 +108,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.PacketSize = 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -143,9 +143,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.TimeSpanInMilliseconds = 200;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -179,9 +179,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.TimeSpanInNanoseconds = 200 * (long) 1e6;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -210,9 +210,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -248,9 +248,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -286,9 +286,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.BufferTimeout = 100;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -322,9 +322,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.CustomTrigger = (data) => data.Timestamps.Count == 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act
@@ -359,9 +359,9 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             if (!initialConfig) buffer.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, data) =>
+            buffer.OnRead += (sender, args) =>
             {
-                receivedData.Add(data);
+                receivedData.Add(args.Data);
             };
 
             //Act

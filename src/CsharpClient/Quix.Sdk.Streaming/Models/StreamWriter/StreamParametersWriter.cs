@@ -20,7 +20,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         private string location;
         private readonly ParameterDefinitionsManager parameterDefinitionsManager = new ParameterDefinitionsManager();
         private readonly Timer flushDefinitionsTimer;
-        private bool timerEnabled = false; // Here because every now and then reseting its due time to never doesn't work
+        private bool timerEnabled = false; // Here because every now and then resetting its due time to never doesn't work
         private bool isDisposed;
         private const int TimerInterval = 20;
         private readonly object flushLock = new object();
@@ -28,13 +28,14 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         /// <summary>
         /// Initializes a new instance of <see cref="StreamParametersWriter"/>
         /// </summary>
+        /// <param name="outputTopic">The output topic the writer will write to</param>
         /// <param name="streamWriter">Stream writer owner</param>
-        internal StreamParametersWriter(IStreamWriterInternal streamWriter)
+        internal StreamParametersWriter(IOutputTopic outputTopic, IStreamWriterInternal streamWriter)
         {
             this.streamWriter = streamWriter;
 
             // Parameters Buffer 
-            this.Buffer = new TimeseriesBufferWriter(this.streamWriter, new TimeseriesBufferConfiguration());
+            this.Buffer = new TimeseriesBufferWriter(outputTopic, this.streamWriter, new TimeseriesBufferConfiguration());
 
             // Timer for Flush Parameter definitions
             flushDefinitionsTimer = new Timer(OnFlushDefinitionsTimerEvent, null, Timeout.Infinite, Timeout.Infinite); // Create disabled flush timer

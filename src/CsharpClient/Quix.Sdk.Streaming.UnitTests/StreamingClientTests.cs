@@ -44,8 +44,8 @@ namespace Quix.Sdk.Streaming.UnitTests
             
             var client = new TestStreamingClient(writerCodec);
             
-            var inputTopic = client.OpenInputTopic("notused");
-            var outputTopic = client.OpenOutputTopic("notused");
+            var inputTopic = client.OpenInputTopic();
+            var outputTopic = client.OpenOutputTopic();
 
             IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
             var streamStarted = 0;
