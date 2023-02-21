@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
-using System.Threading.Tasks;
 using FluentAssertions;
-using Quix.Sdk.Process;
+using NSubstitute;
 using Quix.Sdk.Process.Common.Test;
 using Quix.Sdk.Process.Kafka;
 using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming;
-using NSubstitute;
 using Xunit;
 
 namespace Quix.Sdk.Streaming.UnitTests.Process

@@ -1,6 +1,7 @@
 import ctypes
-from ..native.Python.QuixSdkStreaming.Models.StreamProducer.ParameterDefinitionBuilder import ParameterDefinitionBuilder as pdbi
+
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.ParameterDefinitionBuilder import ParameterDefinitionBuilder as pdbi
 
 
 @nativedecorator

@@ -1,9 +1,7 @@
-﻿using FluentAssertions;
+﻿using System;
+using FluentAssertions;
 using Quix.Sdk.Transport.Fw;
 using Quix.Sdk.Transport.Registry;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.Registry

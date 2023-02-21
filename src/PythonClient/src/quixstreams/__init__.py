@@ -1,12 +1,11 @@
 # The version will get automatically updated as part of setup
 __version__ = "local"
 
+import ctypes
 import os
 import platform
-import ctypes
 
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-
 
 plat = platform.uname()
 platname = f"{plat.system}-{plat.machine}".lower()
@@ -36,7 +35,6 @@ else:
 
 lib = ctypes.cdll.LoadLibrary(lib_dir + lib_dll)
 InteropUtils.set_lib(lib)
-
 
 from .models import *
 from .quixstreamingclient import QuixStreamingClient

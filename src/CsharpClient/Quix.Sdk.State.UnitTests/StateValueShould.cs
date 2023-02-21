@@ -1,7 +1,4 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Quix.Sdk.State.Storage;
-using System.Threading.Tasks;
-using Xunit;
 
 namespace Quix.Sdk.State.UnitTests
 {

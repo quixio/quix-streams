@@ -1,7 +1,5 @@
-﻿using Quix.Sdk.Process.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System;
+using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Streaming.Models.StreamProducer
 {

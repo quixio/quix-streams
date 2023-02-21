@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 using Quix.Sdk.Streaming.Models;
 using Quix.Sdk.Streaming.Models.StreamConsumer;
 

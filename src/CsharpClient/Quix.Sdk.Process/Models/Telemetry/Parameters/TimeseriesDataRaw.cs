@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using Quix.Sdk.Transport.IO;
 using Newtonsoft.Json;
 
 namespace Quix.Sdk.Process.Models

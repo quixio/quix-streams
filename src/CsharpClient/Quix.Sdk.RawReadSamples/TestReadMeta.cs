@@ -1,7 +1,6 @@
 ﻿using System;
-using Quix.Sdk.Streaming;
-using System.Collections.Generic;
 using System.Text;
+using Quix.Sdk.Streaming;
 
 namespace Quix.Sdk.RawReadSamples
 {

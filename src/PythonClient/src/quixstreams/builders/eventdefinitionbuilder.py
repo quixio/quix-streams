@@ -1,11 +1,10 @@
 import ctypes
-from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDefinitionBuilder import EventDefinitionBuilder as edbi
 
 from ..helpers.enumconverter import EnumConverter as ec
-from ..models.eventlevel import EventLevel
-
-from ..native.Python.QuixSdkProcess.Models.EventLevel import EventLevel as InteropEventLevel
 from ..helpers.nativedecorator import nativedecorator
+from ..models.eventlevel import EventLevel
+from ..native.Python.QuixSdkProcess.Models.EventLevel import EventLevel as InteropEventLevel
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDefinitionBuilder import EventDefinitionBuilder as edbi
 
 
 @nativedecorator

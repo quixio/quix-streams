@@ -1,5 +1,4 @@
-﻿using Quix.Sdk.Process;
-using System;
+﻿using System;
 using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Streaming

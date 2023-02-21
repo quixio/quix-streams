@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
 using Quix.InteropGenerator.Writers.Shared;
 
 namespace Quix.InteropGenerator.Writers.CsharpInteropWriter;

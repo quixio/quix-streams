@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Quix.Sdk.Streaming.Models.StreamConsumer
+﻿namespace Quix.Sdk.Streaming.Models.StreamConsumer
 {
     /// <summary>
     /// Class used to read from the stream in a buffered manner

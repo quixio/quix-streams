@@ -1,7 +1,7 @@
 from .saslmechanism import SaslMechanism
-from ..native.Python.QuixSdkStreaming.Configuration.SecurityOptions import SecurityOptions as soi
 from ..helpers.enumconverter import EnumConverter as ec
 from ..native.Python.QuixSdkStreaming.Configuration.SaslMechanism import SaslMechanism as SaslMechanismInterop
+from ..native.Python.QuixSdkStreaming.Configuration.SecurityOptions import SecurityOptions as soi
 
 
 class SecurityOptions(object):
@@ -32,4 +32,3 @@ class SecurityOptions(object):
 
     def get_net_pointer(self):
         return self._interop.get_interop_ptr__()
-

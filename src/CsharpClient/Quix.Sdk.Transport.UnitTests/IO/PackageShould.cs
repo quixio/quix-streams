@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Xunit;
-using Quix.Sdk.Transport.IO;
-using FluentAssertions;
 using System.Threading;
+using FluentAssertions;
+using Quix.Sdk.Transport.IO;
+using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.IO
 {

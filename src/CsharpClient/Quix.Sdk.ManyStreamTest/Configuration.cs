@@ -1,5 +1,4 @@
-﻿using System.IO;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Quix.Sdk.Streaming.Configuration;
 
 namespace Quix.Sdk.ManyStreamTest

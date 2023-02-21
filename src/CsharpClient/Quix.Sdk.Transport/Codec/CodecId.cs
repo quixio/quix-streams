@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
-using Quix.Sdk.Transport.Fw.JsonConverters;
 using Newtonsoft.Json;
+using Quix.Sdk.Transport.Fw.JsonConverters;
 
 namespace Quix.Sdk.Transport.Codec
 {

@@ -2,7 +2,6 @@
 using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Quix.Sdk.Transport.Codec;
 using Quix.Sdk.Transport.Fw.Exceptions;
 using Quix.Sdk.Transport.Fw.Helpers;

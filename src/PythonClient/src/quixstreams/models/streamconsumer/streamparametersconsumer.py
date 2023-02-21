@@ -1,24 +1,22 @@
+import ctypes
 import traceback
 from typing import List, Callable
 
 import pandas
 
 from ..parameterdefinition import ParameterDefinition
-from ...models.timeseriesdataraw import TimeseriesDataRaw
-from ...models.timeseriesdata import TimeseriesData
-from ...models.timeseriesbufferconfiguration import TimeseriesBufferConfiguration
-from ...models.streamconsumer.timeseriesbufferconsumer import TimeseriesBufferConsumer
-
-
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamParametersConsumer import StreamParametersConsumer as spci
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.ParameterDefinitionsChangedEventArgs import ParameterDefinitionsChangedEventArgs
-from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
-from ...native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
-import ctypes
 from ...helpers.nativedecorator import nativedecorator
+from ...models.streamconsumer.timeseriesbufferconsumer import TimeseriesBufferConsumer
+from ...models.timeseriesbufferconfiguration import TimeseriesBufferConfiguration
+from ...models.timeseriesdata import TimeseriesData
+from ...models.timeseriesdataraw import TimeseriesDataRaw
+from ...native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
+from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.ParameterDefinitionsChangedEventArgs import ParameterDefinitionsChangedEventArgs
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamParametersConsumer import StreamParametersConsumer as spci
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
 
 
 @nativedecorator
@@ -94,6 +92,7 @@ class StreamParametersConsumer(object):
         if self._on_read_ref is not None:
             self._interop.remove_OnRead(self._on_read_ref)
             self._on_read_ref = None
+
     # endregion on_read
 
     # region on_raw_read
@@ -126,6 +125,7 @@ class StreamParametersConsumer(object):
         if self._on_raw_read_ref is not None:
             self._interop.remove_OnRawRead(self._on_raw_read_ref)
             self._on_raw_read_ref = None
+
     # endregion on_raw_read
 
     # region on_read_dataframe
@@ -161,6 +161,7 @@ class StreamParametersConsumer(object):
         if self._on_read_dataframe_ref is not None:
             self._interop.remove_OnRawRead(self._on_read_dataframe_ref)
             self._on_read_dataframe_ref = None
+
     # endregion on_read_dataframe
 
     # region on_definitions_changed
@@ -193,6 +194,7 @@ class StreamParametersConsumer(object):
         if self._on_definitions_changed_ref is not None:
             self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_ref)
             self._on_definitions_changed_ref = None
+
     # endregion on_definitions_changed
 
     @property

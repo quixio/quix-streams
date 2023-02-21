@@ -1,9 +1,7 @@
-﻿using Quix.Sdk.Streaming;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
+﻿using System;
 using System.Text;
 using System.Threading;
+using Quix.Sdk.Streaming;
 
 namespace Quix.Sdk.RawReadSamples
 {

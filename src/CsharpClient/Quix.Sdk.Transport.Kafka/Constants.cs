@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Quix.Sdk.Transport.Fw;
-using Quix.Sdk.Transport.Fw.Codecs;
 using Quix.Sdk.Transport.IO;
 
 namespace Quix.Sdk.Transport.Kafka

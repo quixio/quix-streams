@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Quix.Sdk.Transport.IO;
 
 namespace Quix.Sdk.Process.Models
 {

@@ -1,6 +1,5 @@
 ﻿using System;
 
-
 namespace Quix.Sdk.State
 {
     /// <summary>

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
-using Quix.Sdk.Transport.Codec;
 using Newtonsoft.Json;
+using Quix.Sdk.Transport.Codec;
 
 namespace Quix.Sdk.Transport.Fw.Codecs
 {

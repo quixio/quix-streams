@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using Quix.Sdk.Transport.Fw;
-using Quix.Sdk.Transport.Kafka;
 
 namespace Quix.Sdk.Process.Kafka
 {

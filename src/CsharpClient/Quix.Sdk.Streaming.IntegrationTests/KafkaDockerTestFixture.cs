@@ -3,10 +3,8 @@ using System.Diagnostics;
 using Ductus.FluentDocker.Builders;
 using Ductus.FluentDocker.Extensions;
 using Ductus.FluentDocker.Services;
-using Ductus.FluentDocker.Services.Extensions;
 using Quix.Sdk.Streaming.Configuration;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace Quix.Sdk.Streaming.IntegrationTests
 {

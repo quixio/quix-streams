@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Quix.Sdk.Streaming.Models
+﻿namespace Quix.Sdk.Streaming.Models
 {
 
     /// <summary>

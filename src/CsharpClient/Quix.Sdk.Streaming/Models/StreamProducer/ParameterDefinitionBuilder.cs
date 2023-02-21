@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Quix.Sdk.Streaming.Models.StreamProducer
 {

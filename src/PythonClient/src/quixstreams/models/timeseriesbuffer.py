@@ -1,20 +1,17 @@
+import ctypes
 import traceback
 from typing import Optional, Callable, Union
-import ctypes
 
 import pandas
 
 from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-
+from ..helpers.nativedecorator import nativedecorator
 from ..models.timeseriesdata import TimeseriesData
 from ..models.timeseriesdataraw import TimeseriesDataRaw
 from ..models.timeseriesdatatimestamp import TimeseriesDataTimestamp
-
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as tsbi
-from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
 from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
-
-from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as tsbi
 
 
 @nativedecorator
@@ -75,7 +72,6 @@ class TimeseriesBuffer(object):
         self._on_raw_read_dispose()
         self._on_read_dataframe_dispose()
 
-
     # region on_read
     @property
     def on_read(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]:
@@ -107,8 +103,9 @@ class TimeseriesBuffer(object):
         if self._on_read_ref is not None:
             self._interop_pb.remove_OnRead(self._on_read_ref)
             self._on_read_ref = None
+
     # endregion on_read
-    
+
     # region on_raw_read
     @property
     def on_raw_read(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]:
@@ -139,8 +136,9 @@ class TimeseriesBuffer(object):
         if self._on_raw_read_ref is not None:
             self._interop_pb.remove_OnRawRead(self._on_raw_read_ref)
             self._on_raw_read_ref = None
+
     # endregion on_raw_read
-    
+
     # region on_read_dataframe
     @property
     def on_read_dataframe(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]:
@@ -174,8 +172,8 @@ class TimeseriesBuffer(object):
         if self._on_read_dataframe_ref is not None:
             self._interop_pb.remove_OnRawRead(self._on_read_dataframe_ref)
             self._on_read_dataframe_ref = None
-    # endregion on_read_dataframe
 
+    # endregion on_read_dataframe
 
     @property
     def filter(self) -> Callable[[TimeseriesDataTimestamp], bool]:

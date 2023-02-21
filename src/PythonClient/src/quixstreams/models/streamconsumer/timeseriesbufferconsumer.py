@@ -1,12 +1,13 @@
 import ctypes
 
 from ...models.timeseriesbuffer import TimeseriesBuffer
-
 from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesBufferConsumer import TimeseriesBufferConsumer as tsbci
-#from ...helpers.nativedecorator import nativedecorator
 
 
-#@nativedecorator #  TODO currently not decorating due to inheritance, but pending verification
+# from ...helpers.nativedecorator import nativedecorator
+
+
+# @nativedecorator #  TODO currently not decorating due to inheritance, but pending verification
 class TimeseriesBufferConsumer(TimeseriesBuffer):
     """
         Class used to write to StreamProducer in a buffered manner

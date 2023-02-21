@@ -1,4 +1,5 @@
 from enum import Enum
+
 from .helpers.enumconverter import EnumConverter as ec
 from .native.Python.MicrosoftExtensionsLoggingAbstractions.Microsoft.Extensions.Logging.LogLevel import LogLevel as LogLevelInterop
 from .native.Python.QuixSdkLogging.Logging import Logging as LoggingInterop

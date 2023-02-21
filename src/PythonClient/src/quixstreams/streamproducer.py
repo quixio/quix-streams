@@ -1,19 +1,17 @@
+import ctypes
 import sys
 import traceback
+from datetime import datetime
 from typing import Callable
 
-from .models import *
-from datetime import datetime
-from .models.streamproducer import *
-
-import ctypes
-
-from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .native.Python.QuixSdkStreaming.IStreamProducer import IStreamProducer as spi
-from .native.Python.QuixSdkProcess.Models.StreamEndType import StreamEndType as StreamEndTypeInterop
-from .helpers.enumconverter import EnumConverter as ec
 from .helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
+from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
+from .models import *
+from .models.streamproducer import *
+from .native.Python.InteropHelpers.InteropUtils import InteropUtils
+from .native.Python.QuixSdkProcess.Models.StreamEndType import StreamEndType as StreamEndTypeInterop
+from .native.Python.QuixSdkStreaming.IStreamProducer import IStreamProducer as spi
 
 
 @nativedecorator
@@ -40,7 +38,7 @@ class StreamProducer(object):
         self._streamParametersWriter = None  # Holding reference to avoid GC
         self._streamEventsWriter = None  # Holding reference to avoid GC
         self._streamPropertiesWriter = None  # Holding reference to avoid GC
-        
+
         # define events and their ref holder
         self._on_write_exception = None
         self._on_write_exception_ref = None  # keeping reference to avoid GC
@@ -79,7 +77,7 @@ class StreamProducer(object):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
         try:
             # TODO fix arg to be handled as exception
-            #self.on_write_exception.fire(self, BaseException(arg.Message, type(arg)))
+            # self.on_write_exception.fire(self, BaseException(arg.Message, type(arg)))
             InteropUtils.free_hptr(stream_hptr)
             InteropUtils.free_hptr(exception_hptr)
         except:
@@ -89,6 +87,7 @@ class StreamProducer(object):
         if self._on_write_exception_ref is not None:
             self._interop.remove_OnWriteException(self._on_write_exception_ref)
             self._on_write_exception_ref = None
+
     # endregion on_write_exception
 
     @property
@@ -146,4 +145,3 @@ class StreamProducer(object):
         refcount = sys.getrefcount(self)
         if refcount == -1:  # TODO figure out correct number
             self.dispose()
-

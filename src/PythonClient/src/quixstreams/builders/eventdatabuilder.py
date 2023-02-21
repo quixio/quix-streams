@@ -1,7 +1,8 @@
-from typing import Dict
 import ctypes
-from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDataBuilder import EventDataBuilder as edbi
+from typing import Dict
+
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDataBuilder import EventDataBuilder as edbi
 
 
 @nativedecorator

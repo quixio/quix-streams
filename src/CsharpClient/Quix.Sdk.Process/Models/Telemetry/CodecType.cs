@@ -1,6 +1,4 @@
-﻿using Quix.Sdk.Process.Models.Utility;
-using System;
-using Quix.Sdk.Transport.Fw.Codecs;
+﻿using Quix.Sdk.Transport.Fw.Codecs;
 
 namespace Quix.Sdk.Process.Models
 {

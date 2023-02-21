@@ -1,12 +1,12 @@
-from ..native.Python.QuixSdkStreaming.Models.ParameterDefinition import ParameterDefinition as pdi
 import ctypes
+
+from ..native.Python.QuixSdkStreaming.Models.ParameterDefinition import ParameterDefinition as pdi
 
 
 class ParameterDefinition(object):
     """
     Describes additional context for the parameter
     """
-
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """

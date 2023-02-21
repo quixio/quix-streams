@@ -1,19 +1,17 @@
 from typing import Dict, Union
 
-from .topicconsumer import TopicConsumer
-from .models.netdict import NetDict
-from .topicproducer import TopicProducer
 from .configuration import SecurityOptions
-from .raw import RawTopicConsumer, RawTopicProducer
-
-from .models import CommitOptions, CommitMode, AutoOffsetReset
-
-from .native.Python.QuixSdkStreaming.KafkaStreamingClient import KafkaStreamingClient as sci
-from .native.Python.QuixSdkStreaming.KafkaStreamingClientExtensions import KafkaStreamingClientExtensions as kscei
-from .native.Python.QuixSdkProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
-from .native.Python.QuixSdkStreaming.Models.CommitMode import CommitMode as CommitModeInterop
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
+from .models import CommitOptions, CommitMode, AutoOffsetReset
+from .models.netdict import NetDict
+from .native.Python.QuixSdkProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
+from .native.Python.QuixSdkStreaming.KafkaStreamingClient import KafkaStreamingClient as sci
+from .native.Python.QuixSdkStreaming.KafkaStreamingClientExtensions import KafkaStreamingClientExtensions as kscei
+from .native.Python.QuixSdkStreaming.Models.CommitMode import CommitMode as CommitModeInterop
+from .raw import RawTopicConsumer, RawTopicProducer
+from .topicconsumer import TopicConsumer
+from .topicproducer import TopicProducer
 
 
 @nativedecorator
@@ -50,7 +48,8 @@ class KafkaStreamingClient(object):
 
         self._interop = sci(sci.Constructor(broker_address, secu_opts_hptr, properties=net_properties_hptr, debug=debug))
 
-    def create_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None, auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
+    def create_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
+                              auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
             Opens an input topic capable of reading incoming streams
 
@@ -82,16 +81,16 @@ class KafkaStreamingClient(object):
         return TopicConsumer(hptr)
 
     def create_topic_producer(self, topic: str) -> TopicProducer:
-       """
-           Opens an output topic capable of sending outgoing streams
+        """
+            Opens an output topic capable of sending outgoing streams
 
-           Parameters:
+            Parameters:
 
-           topic (string): Name of the topic
-       """
-       hptr = self._interop.CreateTopicProducer(topic)
-       return TopicProducer(hptr)
-    
+            topic (string): Name of the topic
+        """
+        hptr = self._interop.CreateTopicProducer(topic)
+        return TopicProducer(hptr)
+
     def create_raw_topic_consumer(self, topic: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
             Opens an input topic for reading raw data from the stream

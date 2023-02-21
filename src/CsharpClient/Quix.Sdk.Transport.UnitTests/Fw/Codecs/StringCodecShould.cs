@@ -1,6 +1,5 @@
 ﻿using FluentAssertions;
 using Quix.Sdk.Transport.Fw.Codecs;
-using Quix.Sdk.Transport.UnitTests.Helpers;
 using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.Fw.Codecs

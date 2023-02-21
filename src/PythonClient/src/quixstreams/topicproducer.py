@@ -1,12 +1,11 @@
+import ctypes
 import traceback
 from typing import Callable
 
-from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .streamproducer import StreamProducer
-import ctypes
-
-from .native.Python.QuixSdkStreaming.ITopicProducer import ITopicProducer as tpi
 from .helpers.nativedecorator import nativedecorator
+from .native.Python.InteropHelpers.InteropUtils import InteropUtils
+from .native.Python.QuixSdkStreaming.ITopicProducer import ITopicProducer as tpi
+from .streamproducer import StreamProducer
 
 
 @nativedecorator
@@ -64,6 +63,7 @@ class TopicProducer(object):
         if self._on_disposed_ref is not None:
             self._interop.remove_OnDisposed(self._on_disposed_ref)
             self._on_disposed_ref = None
+
     # endregion on_disposed
 
     def create_stream(self, stream_id: str = None) -> StreamProducer:
@@ -115,7 +115,7 @@ class TopicProducer(object):
                     streamproducer_hptr = ctypes.c_void_p(streamproducer_hptr)
                 wrapped = StreamProducer(self, streamproducer_hptr)
                 on_stream_created(wrapped)
+
             callback = on_create_callback
 
         return StreamProducer(self, self._interop.GetOrCreateStream(stream_id, callback)[0])
-

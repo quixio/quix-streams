@@ -1,18 +1,18 @@
-from datetime import datetime, timedelta
-from typing import Union
 import ctypes
-import pandas as pd
+from datetime import datetime, timedelta
 from typing import Dict
+from typing import Union
 
+import pandas as pd
+
+from ..netdict import NetDict
 from ..timeseriesbuffer import TimeseriesBuffer
 from ... import TimeseriesData
 from ...builders import TimeseriesDataBuilder
-from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-
-from ...native.Python.QuixSdkStreaming.Models.StreamProducer.TimeseriesBufferProducer import TimeseriesBufferProducer as tsbpi
-from ..netdict import NetDict
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
+from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ...native.Python.QuixSdkStreaming.Models.StreamProducer.TimeseriesBufferProducer import TimeseriesBufferProducer as tsbpi
 
 
 @nativedecorator

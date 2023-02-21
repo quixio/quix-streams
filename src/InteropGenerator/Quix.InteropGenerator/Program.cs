@@ -31,7 +31,6 @@ using Quix.InteropGenerator.Writers.CsharpInteropWriter;
 using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using Quix.InteropGenerator.Writers.Shared;
 
-
 namespace Quix.InteropGenerator;
 
 public class Program

@@ -1,11 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming;
-using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamProducer;
 using Quix.Sdk.Streaming.UnitTests;
 
 namespace Quix.Sdk.PerformanceTest

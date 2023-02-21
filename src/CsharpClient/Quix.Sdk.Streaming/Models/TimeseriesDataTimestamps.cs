@@ -1,7 +1,6 @@
-﻿using Quix.Sdk.Streaming.Models;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
+using Quix.Sdk.Streaming.Models;
 
 namespace Quix.Sdk.Streaming.Utils
 {

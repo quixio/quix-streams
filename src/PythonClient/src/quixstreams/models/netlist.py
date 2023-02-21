@@ -1,6 +1,7 @@
+import weakref
+
 from ..native.Python.InteropHelpers.ExternalTypes.System.List import List as li
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-import weakref
 
 
 class NetReadOnlyList(object):
@@ -71,6 +72,7 @@ class NetReadOnlyList(object):
     def get_net_pointer(self):
         return self._pointer
 
+
 class NetList(NetReadOnlyList):
     """
         Experimental. Acts as a proxy between a .net collection and a python list. Useful if .net collection is observable and reacts to changes
@@ -111,4 +113,3 @@ class NetList(NetReadOnlyList):
 
     def clear(self):
         li.Clear(self._pointer)
-

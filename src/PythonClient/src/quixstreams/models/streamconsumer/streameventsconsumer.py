@@ -1,17 +1,15 @@
+import ctypes
 import traceback
 from typing import List, Callable
 
-
-from ...models.eventdefinition import EventDefinition
+from ...helpers.nativedecorator import nativedecorator
 from ...models.eventdata import EventData
-
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamEventsConsumer import StreamEventsConsumer as seci
+from ...models.eventdefinition import EventDefinition
+from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
+from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.EventDataReadEventArgs import EventDataReadEventArgs
 from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.EventDefinitionsChangedEventArgs import EventDefinitionsChangedEventArgs
-from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
-import ctypes
-from ...helpers.nativedecorator import nativedecorator
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamEventsConsumer import StreamEventsConsumer as seci
 
 
 @nativedecorator
@@ -77,8 +75,9 @@ class StreamEventsConsumer(object):
         if self._on_read_ref is not None:
             self._interop.remove_OnRead(self._on_read_ref)
             self._on_read_ref = None
+
     # endregion on_read
-    
+
     # region on_definitions_changed
     @property
     def on_definitions_changed(self) -> Callable[['TopicConsumer', 'StreamConsumer'], None]:
@@ -109,6 +108,7 @@ class StreamEventsConsumer(object):
         if self._on_definitions_changed_ref is not None:
             self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_ref)
             self._on_definitions_changed_ref = None
+
     # endregion on_definitions_changed
 
     @property

@@ -1,8 +1,8 @@
-﻿using Quix.Sdk.Process.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Process
 {

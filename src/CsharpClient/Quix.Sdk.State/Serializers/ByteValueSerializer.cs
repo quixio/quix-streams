@@ -1,9 +1,7 @@
-﻿using Quix.Sdk.State.Storage.FileStorage;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.IO;
 using System.Linq;
-using System.Text;
+using Quix.Sdk.State.Storage.FileStorage;
 
 namespace Quix.Sdk.State.Serializers
 {

@@ -1,10 +1,8 @@
 using System;
 using System.Threading;
-using Quix.Sdk.Streaming.Utils;
-using Quix.Sdk.Streaming.Configuration;
-using Quix.Sdk.Streaming.Models;
 using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming;
+using Quix.Sdk.Streaming.Models;
 
 namespace Quix.Sdk.PerformanceTest
 {

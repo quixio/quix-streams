@@ -1,8 +1,6 @@
-﻿using Quix.Sdk.State.Serializers;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System;
 using System.Threading.Tasks;
+using Quix.Sdk.State.Serializers;
 
 namespace Quix.Sdk.State.Storage
 {

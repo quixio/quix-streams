@@ -1,15 +1,14 @@
-from typing import Union, Dict
-from datetime import datetime, timedelta
-from ..models.parametervalue import ParameterValue, ParameterValueType
 import ctypes
+from datetime import datetime, timedelta
+from typing import Union, Dict
 
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu
+from ..helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
+from ..helpers.nativedecorator import nativedecorator
+from ..models.parametervalue import ParameterValue, ParameterValueType
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
-from ..helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu
 from ..native.Python.QuixSdkStreaming.Models.TimeseriesDataTimestamp import TimeseriesDataTimestamp as tsdti
-
-from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
@@ -75,7 +74,6 @@ class TimeseriesDataTimestamp:
                 if net_hptr is None:
                     return None
                 return ParameterValue(net_hptr)
-
 
             parameters_hptr = self._interop.get_Parameters()
             try:

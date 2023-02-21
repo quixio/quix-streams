@@ -1,9 +1,9 @@
-from typing import Union, Dict
 import ctypes
+from typing import Union, Dict
 
+from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array
 from ..native.Python.QuixSdkStreaming.Models.StreamProducer.TimeseriesDataBuilder import TimeseriesDataBuilder as tsdbi
-from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator

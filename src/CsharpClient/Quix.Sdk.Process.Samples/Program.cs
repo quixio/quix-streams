@@ -1,12 +1,7 @@
-﻿﻿using Quix.Sdk.Process.Common.Test;
-using Quix.Sdk.Process.Kafka;
-using Quix.Sdk.Process.Models;
-using System;
-using System.Collections.Generic;
- using System.IO;
+﻿﻿using System;
  using System.Threading;
- using Confluent.Kafka;
- using Quix.Sdk.Process.Configuration;
+ using Quix.Sdk.Process.Kafka;
+ using Quix.Sdk.Process.Models;
 
  namespace Quix.Sdk.Process.Samples
 {

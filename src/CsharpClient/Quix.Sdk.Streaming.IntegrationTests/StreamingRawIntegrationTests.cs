@@ -1,23 +1,10 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using Confluent.Kafka;
-using FluentAssertions;
-using Quix.Sdk.Process.Configuration;
-using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming.Configuration;
-using Quix.Sdk.Streaming;
-using Quix.Sdk.Process.Models.Utility;
-using Xunit;
 using System;
-using System.Text;
-using System.Text.Unicode;
-using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Threading;
 using Quix.Sdk.Process.Kafka;
 using Quix.TestBase.Extensions;
+using Xunit;
 using Xunit.Abstractions;
-using AutoOffsetReset = Quix.Sdk.Process.Kafka.AutoOffsetReset;
-using System.Collections.ObjectModel;
 
 namespace Quix.Sdk.Streaming.IntegrationTests
 {

@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using NSubstitute;
 using Quix.Sdk.Transport.Fw;
 using Quix.Sdk.Transport.IO;
-using NSubstitute;
 using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.Fw

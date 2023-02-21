@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
+using NSubstitute;
 using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.Models.Utility;
-using NSubstitute;
 using Xunit;
 
 namespace Quix.Sdk.Streaming.UnitTests.Models

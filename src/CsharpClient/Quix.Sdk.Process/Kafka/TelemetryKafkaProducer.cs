@@ -1,9 +1,9 @@
-﻿using Quix.Sdk.Process.Models;
-using Quix.Sdk.Transport.Kafka;
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Quix.Sdk.Process.Models;
 using Quix.Sdk.Transport.Fw;
+using Quix.Sdk.Transport.Kafka;
 
 namespace Quix.Sdk.Process.Kafka
 {

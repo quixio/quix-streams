@@ -1,13 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Runtime.CompilerServices;
-using System.Runtime.Serialization;
-using System.Text;
+﻿using System.Runtime.Serialization;
 using Quix.Sdk.Transport.Codec;
-using Quix.Sdk.Transport.Fw.Codecs;
-using Quix.Sdk.Transport.IO;
-using Newtonsoft.Json;
 
 namespace Quix.Sdk.Transport.Fw.Helpers
 {

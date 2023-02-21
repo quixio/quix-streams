@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using Quix.Sdk.Process.Managers;
 using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.Models.Utility;
-using Quix.Sdk.Process.Managers;
-using System.Linq;
 using Quix.Sdk.Streaming.Exceptions;
 
 namespace Quix.Sdk.Streaming.Models.StreamProducer

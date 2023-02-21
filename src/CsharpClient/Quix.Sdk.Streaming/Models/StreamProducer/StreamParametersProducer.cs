@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-using Quix.Sdk.Process.Managers;
 using Microsoft.Extensions.Logging;
+using Quix.Sdk.Process.Managers;
 using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming.Exceptions;
 

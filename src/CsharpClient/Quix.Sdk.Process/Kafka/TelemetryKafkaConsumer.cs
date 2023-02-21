@@ -1,12 +1,10 @@
-﻿using Quix.Sdk.Transport.IO;
-using Quix.Sdk.Transport.Kafka;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Transport.Fw;
+using Quix.Sdk.Transport.Kafka;
 
 namespace Quix.Sdk.Process.Kafka
 {

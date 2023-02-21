@@ -9,7 +9,6 @@ using Quix.Sdk.Process.Kafka;
 using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming.Exceptions;
-using Quix.Sdk.Streaming.Models;
 using Quix.Sdk.Streaming.Models.StreamProducer;
 
 namespace Quix.Sdk.Streaming

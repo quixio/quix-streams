@@ -1,25 +1,24 @@
+import ctypes
 from datetime import timedelta
 from typing import Dict, Union
-import ctypes
 
-from .models.autooffsetreset import AutoOffsetReset
-from .models.commitoptions import CommitOptions
-from .models.commitmode import CommitMode
-from .topicconsumer import TopicConsumer
-from .models.netdict import NetDict
-from .raw.rawtopicconsumer import RawTopicConsumer
-from .topicproducer import TopicProducer
-from .raw.rawtopicproducer import RawTopicProducer
-
-from .native.Python.QuixSdkStreaming.QuixStreamingClient import QuixStreamingClient as qsci
-from .native.Python.QuixSdkStreaming.QuixStreamingClientExtensions import QuixStreamingClientExtensions as qscei
-from .native.Python.QuixSdkStreaming.QuixStreamingClient_TokenValidationConfiguration import TokenValidationConfiguration as tvci
-from .native.Python.QuixSdkProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
-from .native.Python.QuixSdkStreaming.Models.CommitMode import CommitMode as CommitModeInterop
-from .native.Python.SystemPrivateUri.System.Uri import Uri as ui
 from .helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
+from .models.autooffsetreset import AutoOffsetReset
+from .models.commitmode import CommitMode
+from .models.commitoptions import CommitOptions
+from .models.netdict import NetDict
+from .native.Python.QuixSdkProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
+from .native.Python.QuixSdkStreaming.Models.CommitMode import CommitMode as CommitModeInterop
+from .native.Python.QuixSdkStreaming.QuixStreamingClient import QuixStreamingClient as qsci
+from .native.Python.QuixSdkStreaming.QuixStreamingClientExtensions import QuixStreamingClientExtensions as qscei
+from .native.Python.QuixSdkStreaming.QuixStreamingClient_TokenValidationConfiguration import TokenValidationConfiguration as tvci
+from .native.Python.SystemPrivateUri.System.Uri import Uri as ui
+from .raw.rawtopicconsumer import RawTopicConsumer
+from .raw.rawtopicproducer import RawTopicProducer
+from .topicconsumer import TopicConsumer
+from .topicproducer import TopicProducer
 
 
 @nativedecorator
@@ -120,7 +119,8 @@ class QuixStreamingClient(object):
 
         self._interop = qsci(qsci.Constructor(token, auto_create_topics, properties=net_properties_hptr, debug=debug))
 
-    def create_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None, auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
+    def create_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
+                              auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
             Opens an input topic capable of reading incoming streams
 
@@ -137,7 +137,6 @@ class QuixStreamingClient(object):
         py_offset_reset = AutoOffsetReset.Earliest
         if auto_offset_reset is not None:
             py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
-
 
         if isinstance(commit_settings, CommitMode):
             net_commit_settings = ec.enum_to_another(commit_settings, CommitModeInterop)
@@ -162,7 +161,7 @@ class QuixStreamingClient(object):
 
         dotnet_pointer = self._interop.CreateTopicProducer(topic_id_or_name)
         return TopicProducer(dotnet_pointer)
-    
+
     def create_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
             Opens an input topic for reading raw data from the stream

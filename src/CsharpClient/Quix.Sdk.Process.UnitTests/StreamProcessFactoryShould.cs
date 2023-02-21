@@ -1,11 +1,11 @@
-﻿using FluentAssertions;
-using NSubstitute;
-using Quix.Sdk.Process.Models;
-using Quix.Sdk.Transport.IO;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using FluentAssertions;
+using NSubstitute;
+using Quix.Sdk.Process.Models;
+using Quix.Sdk.Transport.IO;
 using Quix.TestBase.Extensions;
 using Xunit;
 using Xunit.Abstractions;

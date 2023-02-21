@@ -1,6 +1,6 @@
-﻿using FluentAssertions;
+﻿using System.Collections.Generic;
+using FluentAssertions;
 using Quix.Sdk.Transport.IO;
-using System.Collections.Generic;
 using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.IO

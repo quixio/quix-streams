@@ -1,20 +1,18 @@
+import ctypes
 import sys
 import traceback
 from typing import Callable
 
-from .models.streampackage import StreamPackage
-from .models.streamconsumer.streampropertiesconsumer import StreamPropertiesConsumer
-from .models.streamconsumer.streamparametersconsumer import StreamParametersConsumer
+from .helpers.enumconverter import EnumConverter as ec
+from .helpers.nativedecorator import nativedecorator
 from .models.streamconsumer.streameventsconsumer import StreamEventsConsumer
-
+from .models.streamconsumer.streamparametersconsumer import StreamParametersConsumer
+from .models.streamconsumer.streampropertiesconsumer import StreamPropertiesConsumer
 from .models.streamendtype import StreamEndType
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixSdkStreaming.IStreamConsumer import IStreamConsumer as sci
-from .native.Python.QuixSdkStreaming.StreamClosedEventArgs import StreamClosedEventArgs
 from .native.Python.QuixSdkStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
-from .helpers.enumconverter import EnumConverter as ec
-import ctypes
-from .helpers.nativedecorator import nativedecorator
+from .native.Python.QuixSdkStreaming.StreamClosedEventArgs import StreamClosedEventArgs
 
 
 @nativedecorator
@@ -38,7 +36,7 @@ class StreamConsumer(object):
         # define events and their ref holder
         self._on_stream_closed = None
         self._on_stream_closed_ref = None  # keeping reference to avoid GC
-        
+
         self._on_package_received = None
         self._on_package_received_ref = None  # keeping reference to avoid GC
 
@@ -101,8 +99,9 @@ class StreamConsumer(object):
         if self._on_stream_closed_ref is not None:
             self._interop.remove_OnStreamClosed(self._on_stream_closed_ref)
             self._on_stream_closed_ref = None
+
     # endregion on_stream_closed
-    
+
     # region on_package_received
     @property
     def on_package_received(self) -> Callable[['TopicConsumer', 'StreamConsumer', any], None]:
@@ -135,6 +134,7 @@ class StreamConsumer(object):
         if self._on_package_received_ref is not None:
             self._interop.remove_OnPackageReceived(self._on_package_received_ref)
             self._on_package_received_ref = None
+
     # endregion on_package_received
 
     @property

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Quix.Sdk.Process.UnitTests.Helpers
+﻿namespace Quix.Sdk.Process.UnitTests.Helpers
 {
     public class TestModel1
     {

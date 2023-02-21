@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using FluentAssertions;
-using Xunit;
-using Quix.Sdk.Streaming.Models;
-using FluentAssertions.Equivalency;
 using System.Linq;
 using System.Text;
+using FluentAssertions;
+using FluentAssertions.Equivalency;
+using Quix.Sdk.Streaming.Models;
+using Xunit;
 
 namespace Quix.Sdk.Streaming.UnitTests.Models
 {

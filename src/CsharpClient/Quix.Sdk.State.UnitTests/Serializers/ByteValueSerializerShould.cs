@@ -1,8 +1,6 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quix.Sdk.State.Serializers;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Quix.Sdk.State.UnitTests.Serializers
 {

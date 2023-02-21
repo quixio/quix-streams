@@ -1,7 +1,4 @@
-﻿using Quix.Sdk.Streaming.QuixApi.Portal;
-using System;
-
-namespace Quix.Sdk.Streaming.Configuration
+﻿namespace Quix.Sdk.Streaming.Configuration
 {
     /// <summary>
     /// Kafka security option for configuring SSL encryption with SASL authentication

@@ -1,12 +1,11 @@
+import ctypes
 import traceback
 from typing import Callable, List
 
-from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .streamconsumer import StreamConsumer
-
-import ctypes
-from .native.Python.QuixSdkStreaming.TopicConsumer import TopicConsumer as tci
 from .helpers.nativedecorator import nativedecorator
+from .native.Python.InteropHelpers.InteropUtils import InteropUtils
+from .native.Python.QuixSdkStreaming.TopicConsumer import TopicConsumer as tci
+from .streamconsumer import StreamConsumer
 
 
 @nativedecorator
@@ -26,7 +25,7 @@ class TopicConsumer(object):
         """
         if net_pointer is None:
             raise Exception("TopicConsumer is None")
-        
+
         self._interop = tci(net_pointer)
 
         self._active_streams = []  # To clean up when closing topic else could end up with references
@@ -86,6 +85,7 @@ class TopicConsumer(object):
         if self._on_stream_received_ref is not None:
             self._interop.remove_OnStreamReceived(self._on_stream_received_ref)
             self._on_stream_received_ref = None
+
     # endregion on_stream_received
 
     # region on_streams_revoked
@@ -121,8 +121,9 @@ class TopicConsumer(object):
         if self._on_streams_revoked_ref is not None:
             self._interop.remove_OnStreamsRevoked(self._on_streams_revoked_ref)
             self._on_streams_revoked_ref = None
+
     # endregion on_streams_revoked
-    
+
     # region on_revoking
     @property
     def on_revoking(self) -> Callable[['TopicConsumer'], None]:
@@ -153,8 +154,9 @@ class TopicConsumer(object):
         if self._on_revoking_ref is not None:
             self._interop.remove_OnRevoking(self._on_revoking_ref)
             self._on_revoking_ref = None
+
     # endregion on_revoking
-    
+
     # region on_committed
     @property
     def on_committed(self) -> Callable[['TopicConsumer'], None]:
@@ -185,8 +187,9 @@ class TopicConsumer(object):
         if self._on_committed_ref is not None:
             self._interop.remove_OnCommitted(self._on_committed_ref)
             self._on_committed_ref = None
+
     # endregion on_committed
-    
+
     # region on_committing
     @property
     def on_committing(self) -> Callable[['TopicConsumer'], None]:
@@ -217,6 +220,7 @@ class TopicConsumer(object):
         if self._on_committing_ref is not None:
             self._interop.remove_OnCommitting(self._on_committing_ref)
             self._on_committing_ref = None
+
     # endregion on_committing
 
     def subscribe(self):

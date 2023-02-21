@@ -1,6 +1,6 @@
-﻿using Quix.Sdk.Process.Models.Utility;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming.Models.StreamConsumer;
 
 namespace Quix.Sdk.Streaming.Models.StreamProducer

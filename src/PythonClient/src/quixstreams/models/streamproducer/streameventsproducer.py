@@ -1,16 +1,16 @@
+import ctypes
 from datetime import datetime, timedelta
 from typing import Union, Dict
-from ...builders import *
-from ... import EventData
+
 import pandas as pd
 
-import ctypes
-
-from ...native.Python.QuixSdkStreaming.Models.StreamProducer.StreamEventsProducer import StreamEventsProducer as sepi
-from ...native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
-from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ... import EventData
+from ...builders import *
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
+from ...native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
+from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ...native.Python.QuixSdkStreaming.Models.StreamProducer.StreamEventsProducer import StreamEventsProducer as sepi
 
 
 @nativedecorator

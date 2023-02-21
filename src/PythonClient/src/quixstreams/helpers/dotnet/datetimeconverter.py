@@ -4,6 +4,7 @@ import datetime
 from ...native.Python.SystemPrivateCoreLib.System.DateTime import DateTime as dti
 from ...native.Python.SystemPrivateCoreLib.System.TimeSpan import TimeSpan as tsi
 
+
 class DateTimeConverter:
 
     @staticmethod
@@ -33,7 +34,7 @@ class DateTimeConverter:
             micro_ticks = int(ticks % 10000000)
             ticks_nomicro = ticks - micro_ticks
             parsed_nomicro = datetime.datetime(1, 1, 1) + datetime.timedelta(microseconds=ticks_nomicro / 10)
-            parsed_withmicro = parsed_nomicro + datetime.timedelta(microseconds=micro_ticks/10)
+            parsed_withmicro = parsed_nomicro + datetime.timedelta(microseconds=micro_ticks / 10)
             return parsed_withmicro
 
     @staticmethod
@@ -86,7 +87,7 @@ class DateTimeConverter:
             micro_ticks = int(ticks % 10000000)
             ticks_nomicro = ticks - micro_ticks
             parsed_nomicro = datetime.timedelta(microseconds=ticks_nomicro / 10)
-            parsed_withmicro = parsed_nomicro + datetime.timedelta(microseconds=micro_ticks/10)
+            parsed_withmicro = parsed_nomicro + datetime.timedelta(microseconds=micro_ticks / 10)
             return parsed_withmicro
 
     @staticmethod

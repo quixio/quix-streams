@@ -1,26 +1,26 @@
+import ctypes
+import math
 from datetime import datetime
 from typing import Dict, List, Optional
+
 import pandas as pd
-import ctypes
 
 from .timeseriesdata import TimeseriesData
-
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
-from ..native.Python.QuixSdkProcess.Models.TimeseriesDataRaw import TimeseriesDataRaw as tsdri
-
+from ..helpers.nativedecorator import nativedecorator
 from ..helpers.timeconverter import TimeConverter
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di, Dictionary
-
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..helpers.nativedecorator import nativedecorator
-import math
+from ..native.Python.QuixSdkProcess.Models.TimeseriesDataRaw import TimeseriesDataRaw as tsdri
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
+
 
 @nativedecorator
 class TimeseriesDataRaw(object):
     """
     Describes timeseries data in a raw format for multiple timestamps. Class is intended for read only.
     """
+
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
             Initializes a new instance of TimeseriesDataRaw.
@@ -98,7 +98,6 @@ class TimeseriesDataRaw(object):
             *map(lambda x: f"TAG__{x[0]}", self.tag_values.items())
         ]
 
-
         rows = [None] * len(self.timestamps)
         for rowindex, timestamp in enumerate(self.timestamps):
             row = [None] * len(headers)
@@ -107,25 +106,25 @@ class TimeseriesDataRaw(object):
 
             i = 1
 
-            #Add numerics
+            # Add numerics
             for _, param_vals in self.numeric_values.items():
                 row[i] = param_vals[rowindex]
-                i = i+1
+                i = i + 1
 
-            #Add strings_array
+            # Add strings_array
             for _, param_vals in self.string_values.items():
                 row[i] = param_vals[rowindex]
-                i = i+1
+                i = i + 1
 
-            #Add binaries
+            # Add binaries
             for _, param_vals in self.binary_values.items():
                 row[i] = param_vals[rowindex]
-                i = i+1
+                i = i + 1
 
-            #add tags
+            # add tags
             for _, tag_vals in self.tag_values.items():
                 row[i] = tag_vals[rowindex]
-                i = i+1
+                i = i + 1
 
             rows[rowindex] = row
 
@@ -148,13 +147,14 @@ class TimeseriesDataRaw(object):
 
         possible_time_labels = set(['time', 'timestamp', 'datetime'])
 
-        #first or default in columns
+        # first or default in columns
         time_label = next((x for x in data_frame.columns if x.lower() in possible_time_labels), None)
 
         if time_label is None:
             possible_time_vals = data_frame.select_dtypes(include=['int', 'int64'])
             if possible_time_vals.count()[0] == 0:
-                raise Exception("Panda data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
+                raise Exception(
+                    "Panda data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
             time_label = possible_time_vals.columns[0]
 
         def get_value_as_type(val_type, val, type_conv=None) -> []:
@@ -191,13 +191,12 @@ class TimeseriesDataRaw(object):
                 return None
             return float(val_to_convert)
 
-        rows_no = len(data_frame.index) #dataframe rows count
+        rows_no = len(data_frame.index)  # dataframe rows count
         timestamps = [None] * rows_no
         string_values = {}
         binary_values = {}
         numeric_values = {}
         tag_values = {}
-
 
         def _add_tag(tag_colname: str, index: int, value: str):
             if tag_colname not in tag_values:
@@ -269,14 +268,14 @@ class TimeseriesDataRaw(object):
         return parameter_data_raw
 
     def set_values(
-            self, 
-            epoch: int, 
+            self,
+            epoch: int,
             timestamps: [int],
             numeric_values: Dict[str, List[float]],
             string_values: Dict[str, List[str]],
             binary_values: Dict[str, List[bytes]],
             tag_values: Dict[str, List[str]]
-        ):
+    ):
         """
             Sets the values of the timeseries data from the provided dictionaries
 
@@ -290,31 +289,30 @@ class TimeseriesDataRaw(object):
             :param tag_values: the tag values where the dictionary key is the parameter name and the value is the array of values
         """
 
-        #set epoch
+        # set epoch
         self._interop.set_Epoch(epoch)
 
-        #set timestamps
+        # set timestamps
         self._timestamps = timestamps
         ts_uptr = Array.WriteLongs(timestamps)
         self._interop.set_Timestamps(ts_uptr)
 
-        #set numeric values
+        # set numeric values
         self._numeric_values = numeric_values
         nv_uptr = Dictionary.WriteStringNullableDoublesArray(numeric_values)
         self._interop.set_NumericValues(nv_uptr)
 
-
-        #set string values
+        # set string values
         self._string_values = string_values
         sv_uptr = Dictionary.WriteStringStringsArray(string_values)
         self._interop.set_StringValues(sv_uptr)
 
-        #set byte values
+        # set byte values
         self._binary_values = binary_values
         bv_uptr = Dictionary.WriteStringBytesArray(binary_values)
         self._interop.set_BinaryValues(bv_uptr)
 
-        #set tags values
+        # set tags values
         self._tag_values = tag_values
         tv_uptr = Dictionary.WriteStringStringsArray(tag_values)
         self._interop.set_TagValues(tv_uptr)

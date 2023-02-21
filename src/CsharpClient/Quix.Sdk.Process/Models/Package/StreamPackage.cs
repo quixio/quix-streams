@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using Newtonsoft.Json;
 using Quix.Sdk.Transport.IO;
 

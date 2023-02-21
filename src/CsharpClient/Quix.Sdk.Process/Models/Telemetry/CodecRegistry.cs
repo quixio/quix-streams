@@ -1,9 +1,9 @@
-﻿using Quix.Sdk.Transport.Fw.Codecs;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Quix.Sdk.Process.Models.Codecs;
 using Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs;
+using Quix.Sdk.Transport.Fw.Codecs;
 
 namespace Quix.Sdk.Process.Models
 {

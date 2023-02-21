@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading;
-using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming.Models;
 

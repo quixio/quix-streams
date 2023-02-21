@@ -1,11 +1,7 @@
-﻿using Quix.Sdk.Process;
-using Quix.Sdk.Process.Kafka;
+﻿using System;
 using Quix.Sdk.Process.Common.Test;
-using System;
-using Quix.Sdk.Streaming;
+using Quix.Sdk.Process.Kafka;
 using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Transport.Fw;
 
 namespace Quix.Sdk.Streaming.UnitTests
 {

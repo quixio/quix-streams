@@ -1,8 +1,6 @@
+using System.Threading.Tasks;
 using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.UnitTests.Helpers;
-using NSubstitute;
-using System;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace Quix.Sdk.Process.UnitTests

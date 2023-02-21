@@ -1,14 +1,11 @@
+import ctypes
 import traceback
 from typing import Callable
 
 from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-
 from .rawmessage import RawMessage
-
-from ..native.Python.QuixSdkStreaming.Raw.RawTopicConsumer import RawTopicConsumer as rtpi
-
-import ctypes
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixSdkStreaming.Raw.RawTopicConsumer import RawTopicConsumer as rtpi
 
 
 @nativedecorator
@@ -26,7 +23,7 @@ class RawTopicConsumer(object):
             raise Exception("RawTopicConsumer is none")
 
         self._interop = rtpi(net_pointer)
-        
+
         # define events and their ref holder
         self._on_message_read = None
         self._on_message_read_ref = None  # keeping reference to avoid GC
@@ -66,6 +63,7 @@ class RawTopicConsumer(object):
         if self._on_message_read_ref is not None:
             self._interop.remove_OnMessageRead(self._on_message_read_ref)
             self._on_message_read_ref = None
+
     # endregion on_message_read
 
     # region on_error_occurred
@@ -91,7 +89,7 @@ class RawTopicConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
         try:
             # TODO fix arg to be handled as exception
-            #self._on_error_occurred(self, BaseException(arg.Message, type(arg)))
+            # self._on_error_occurred(self, BaseException(arg.Message, type(arg)))
             InteropUtils.free_hptr(topic_hptr)
             InteropUtils.free_hptr(error_hptr)
         except:
@@ -101,6 +99,7 @@ class RawTopicConsumer(object):
         if self._on_error_occurred_ref is not None:
             self._interop.remove_OnErrorOccurred(self._on_error_occurred_ref)
             self._on_error_occurred_ref = None
+
     # endregion on_error_occurred
 
     def subscribe(self):

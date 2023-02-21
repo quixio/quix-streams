@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Quix.Sdk.Process
+﻿namespace Quix.Sdk.Process
 {
     /// <summary>
     /// Extensions methods to link stream processes together

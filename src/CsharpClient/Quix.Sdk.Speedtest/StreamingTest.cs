@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Quix.Sdk.Process.Models;
 using Quix.Sdk.Streaming;
 
 namespace Quix.Sdk.Speedtest

@@ -1,11 +1,11 @@
-from .. import TimeseriesDataRaw
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixSdkProcess.Models.StreamPackage import StreamPackage as spi
-from ..native.Python.SystemPrivateCoreLib.System.Type import Type as NetType
 import ctypes
 from typing import Dict
 
+from .. import TimeseriesDataRaw
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ..native.Python.QuixSdkProcess.Models.StreamPackage import StreamPackage as spi
+from ..native.Python.SystemPrivateCoreLib.System.Type import Type as NetType
 
 
 @nativedecorator
@@ -67,5 +67,3 @@ class StreamPackage(object):
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         return self._interop.get_interop_ptr__()
-
-

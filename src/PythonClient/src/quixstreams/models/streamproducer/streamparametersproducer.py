@@ -1,13 +1,13 @@
+import ctypes
 from typing import Union
+
+import pandas as pd
 
 from .timeseriesbufferproducer import TimeseriesBufferProducer
 from ...builders import ParameterDefinitionBuilder
-from ...models import TimeseriesData, TimeseriesDataRaw
-import pandas as pd
-
-from ...native.Python.QuixSdkStreaming.Models.StreamProducer.StreamParametersProducer import StreamParametersProducer as sppi
-import ctypes
 from ...helpers.nativedecorator import nativedecorator
+from ...models import TimeseriesData, TimeseriesDataRaw
+from ...native.Python.QuixSdkStreaming.Models.StreamProducer.StreamParametersProducer import StreamParametersProducer as sppi
 
 
 @nativedecorator
@@ -137,4 +137,3 @@ class StreamParametersProducer(object):
                 self._interop.Write2(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")
-

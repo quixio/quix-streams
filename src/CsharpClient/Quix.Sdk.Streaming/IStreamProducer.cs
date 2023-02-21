@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Quix.Sdk.Streaming.Models;
 using Quix.Sdk.Streaming.Models.StreamProducer;
 
 namespace Quix.Sdk.Streaming

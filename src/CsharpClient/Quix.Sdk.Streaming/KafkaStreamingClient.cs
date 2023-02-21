@@ -1,19 +1,13 @@
 using System;
-using Quix.Sdk.Process.Kafka;
 using System.Collections.Generic;
-using Quix.Sdk.Process.Configuration;
-using Quix.Sdk.Streaming.Configuration;
-using Quix.Sdk.Process.Models;
-using System.Text.RegularExpressions;
-using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
+using Quix.Sdk.Process.Configuration;
+using Quix.Sdk.Process.Kafka;
+using Quix.Sdk.Process.Models;
+using Quix.Sdk.Streaming.Configuration;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Transport.Fw;
-using AutoOffsetReset = Quix.Sdk.Process.Kafka.AutoOffsetReset;
 using Quix.Sdk.Streaming.Raw;
-using Quix.Sdk.Streaming.Utils;
-using SaslMechanism = Confluent.Kafka.SaslMechanism;
-using Quix.Sdk.Streaming.QuixApi.Portal;
+using Quix.Sdk.Transport.Fw;
 
 namespace Quix.Sdk.Streaming
 {

@@ -1,8 +1,8 @@
-from .eventlevel import EventLevel
-
-from ..native.Python.QuixSdkStreaming.Models.EventDefinition import EventDefinition as edi
-from ..helpers.enumconverter import EnumConverter as ec
 import ctypes
+
+from .eventlevel import EventLevel
+from ..helpers.enumconverter import EnumConverter as ec
+from ..native.Python.QuixSdkStreaming.Models.EventDefinition import EventDefinition as edi
 
 
 class EventDefinition(object):
@@ -21,25 +21,24 @@ class EventDefinition(object):
         if net_pointer is None:
             raise Exception("StreamPropertiesConsumer is none")
         with (interop := edi(net_pointer)):
-
             self.id: str = interop.get_Id()
             """Gets the globally unique identifier of the event"""
 
-            self.name: str = interop.get_Name() 
+            self.name: str = interop.get_Name()
             """Gets the human friendly display name of the event"""
-    
+
             self.level: EventLevel = ec.enum_to_another(interop.get_Level(), EventLevel)
             """Gets the human friendly display name of the event"""
-    
+
             self.custom_properties: str = interop.get_CustomProperties()
             """
             Gets the optional field for any custom properties that do not exist on the event.
             For example this could be a json string, describing the optimal value range of this event
             """
-    
+
             self.description: str = interop.get_Description()
             """Gets the description of the event"""
-    
+
             self.location: str = interop.get_Location()
             """Gets the location of the event within the Event hierarchy. Example: "/", "car/chassis/suspension"""
 

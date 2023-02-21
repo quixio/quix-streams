@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
-using Quix.Sdk.Transport.Codec;
-using Quix.Sdk.Transport.Fw.Codecs;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Quix.Sdk.Transport.Codec;
+using Quix.Sdk.Transport.Fw.Codecs;
 
 namespace Quix.Sdk.Process.Models.Telemetry.Parameters.Codecs
 {

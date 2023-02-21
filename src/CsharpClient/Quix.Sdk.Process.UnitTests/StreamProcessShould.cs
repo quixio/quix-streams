@@ -1,9 +1,7 @@
+using System;
+using FluentAssertions;
 using Quix.Sdk.Process.Models;
 using Quix.Sdk.Process.UnitTests.Helpers;
-using NSubstitute;
-using System;
-using System.Threading.Tasks;
-using FluentAssertions;
 using Xunit;
 
 namespace Quix.Sdk.Process.UnitTests

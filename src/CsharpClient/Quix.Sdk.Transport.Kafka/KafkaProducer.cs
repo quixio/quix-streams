@@ -2,13 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Transport.IO;
-using Serilog.Core;
 
 namespace Quix.Sdk.Transport.Kafka
 {

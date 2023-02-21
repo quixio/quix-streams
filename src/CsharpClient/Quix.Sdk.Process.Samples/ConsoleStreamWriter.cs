@@ -1,6 +1,6 @@
-﻿using Quix.Sdk.Process.Models;
-using System.Linq;
+﻿using System.Linq;
 using Microsoft.Extensions.Logging;
+using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Process.Samples
 {

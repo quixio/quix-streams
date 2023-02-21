@@ -9,26 +9,22 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Runtime.Caching;
 using System.Security.Authentication;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
+using Quix.Sdk.Process.Kafka;
 using Quix.Sdk.Streaming.Configuration;
 using Quix.Sdk.Streaming.Exceptions;
 using Quix.Sdk.Streaming.Models;
 using Quix.Sdk.Streaming.QuixApi;
 using Quix.Sdk.Streaming.QuixApi.Portal;
 using Quix.Sdk.Streaming.QuixApi.Portal.Requests;
-using Quix.Sdk.Transport.Fw;
-using AutoOffsetReset = Quix.Sdk.Process.Kafka.AutoOffsetReset;
 using Quix.Sdk.Streaming.Raw;
 using Quix.Sdk.Streaming.Utils;
-using Exception = System.Exception;
-using Quix.Sdk.Process.Configuration;
+using Quix.Sdk.Transport.Fw;
 
 namespace Quix.Sdk.Streaming
 {

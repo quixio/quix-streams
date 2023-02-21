@@ -1,23 +1,19 @@
+import ctypes
 import math
-
 from datetime import datetime, timedelta
+from typing import List
 from typing import Union
 
-from .timeseriesdatatimestamp import TimeseriesDataTimestamp
-from .parametervalue import ParameterValueType
-
-from typing import List
 import pandas as pd
 
-
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
+from .parametervalue import ParameterValueType
+from .timeseriesdatatimestamp import TimeseriesDataTimestamp
 from ..helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
-from ..helpers.timeconverter import TimeConverter
-import ctypes
-
 from ..helpers.nativedecorator import nativedecorator
+from ..helpers.timeconverter import TimeConverter
+from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
 
 
 @nativedecorator
@@ -25,6 +21,7 @@ class TimeseriesData(object):
     """
     Describes timeseries data for multiple timestamps
     """
+
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
             Initializes a new instance of TimeseriesData.
@@ -46,6 +43,7 @@ class TimeseriesData(object):
             self._timestamps = None
 
             # TODO
+
     # @classmethod
     # def from_timestamps(cls, timestamps: List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
     #     """
@@ -196,7 +194,7 @@ class TimeseriesData(object):
         """
 
         def _build_headers(pdts):
-            #object containing the index to the result array
+            # object containing the index to the result array
             headers = {
                 'time': 0
             }
@@ -211,7 +209,7 @@ class TimeseriesData(object):
                     if key not in headers:
                         headers[key] = max_index
                         headers[key] = max_index
-                        max_index = max_index+1
+                        max_index = max_index + 1
                         if val.type == ParameterValueType.Numeric:
                             default_row.append(None)
                         elif val.type == ParameterValueType.String:
@@ -223,11 +221,11 @@ class TimeseriesData(object):
                         else:
                             raise Exception("Unreachable")
 
-                for key,_ in pdts.tags.items():
-                    k = "TAG__"+key
+                for key, _ in pdts.tags.items():
+                    k = "TAG__" + key
                     if k not in headers:
                         headers[k] = max_index
-                        max_index = max_index+1
+                        max_index = max_index + 1
                         default_row.append(None)
             return (headers, default_row)
 
@@ -235,8 +233,8 @@ class TimeseriesData(object):
 
         def _build_row(pdts):
             obj = default_row.copy()
-            
-            #time
+
+            # time
             index = headers["time"]
             obj[index] = pdts.timestamp_nanoseconds
 
@@ -252,15 +250,15 @@ class TimeseriesData(object):
                     obj[index] = bytes(val.binary_value)
 
             for key, val in pdts.tags.items():
-                index = headers["TAG__"+key]
+                index = headers["TAG__" + key]
                 obj[index] = val
 
             return obj
 
         df = pd.DataFrame(
-                map(_build_row, self.timestamps),
-                columns=headers
-            )
+            map(_build_row, self.timestamps),
+            columns=headers
+        )
 
         return df
 
@@ -281,14 +279,15 @@ class TimeseriesData(object):
 
         possible_time_labels = set(['time', 'timestamp', 'datetime'])
 
-        #first or default in columns
+        # first or default in columns
         time_label = next((x for x in data_frame.columns if x.lower() in possible_time_labels), None)
 
         if time_label is None:
-                possible_time_vals = data_frame.select_dtypes(include=['int', 'int64'])
-                if possible_time_vals.count()[0] == 0:
-                    raise Exception("panda data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
-                time_label = possible_time_vals.columns[0]
+            possible_time_vals = data_frame.select_dtypes(include=['int', 'int64'])
+            if possible_time_vals.count()[0] == 0:
+                raise Exception(
+                    "panda data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
+            time_label = possible_time_vals.columns[0]
 
         def get_value_as_type(val_type, val, type_conv=None) -> []:
             if not isinstance(val, val_type) and type_conv is not None:

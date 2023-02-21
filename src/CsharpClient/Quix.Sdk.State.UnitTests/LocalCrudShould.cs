@@ -2,8 +2,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quix.Sdk.State.Storage;
 using Quix.Sdk.State.Storage.FileStorage;
 using Quix.Sdk.State.Storage.FileStorage.LocalFileStorage;
-using System.Threading.Tasks;
-using Xunit;
 
 namespace Quix.Sdk.State.UnitTests
 {

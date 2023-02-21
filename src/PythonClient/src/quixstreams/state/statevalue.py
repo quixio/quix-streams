@@ -1,15 +1,17 @@
 import ctypes
 import pickle
 
-from ..helpers.enumconverter import EnumConverter as ec
 from .statetype import StateType
+from ..helpers.enumconverter import EnumConverter as ec
+from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.QuixSdkState.StateValue import StateValue as svi
 from ..native.Python.QuixSdkState.StateValue_StateType import StateType as StateTypeInterop
-from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 
 """
 Boxed value wrapping the supported types
 """
+
+
 class StateValue(object):
 
     def __init__(self, value: any):

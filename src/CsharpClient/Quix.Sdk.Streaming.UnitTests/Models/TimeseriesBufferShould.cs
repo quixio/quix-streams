@@ -1,11 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using FluentAssertions;
-using Xunit;
-using Quix.Sdk.Streaming.Models;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using FluentAssertions;
+using Quix.Sdk.Streaming.Models;
 using Quix.TestBase.Extensions;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace Quix.Sdk.Streaming.UnitTests.Models

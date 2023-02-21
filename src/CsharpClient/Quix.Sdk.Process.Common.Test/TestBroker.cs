@@ -1,8 +1,7 @@
-﻿using Quix.Sdk.Transport.Fw;
-using Quix.Sdk.Transport.IO;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Quix.Sdk.Transport.IO;
 
 namespace Quix.Sdk.Process.Common.Test
 {

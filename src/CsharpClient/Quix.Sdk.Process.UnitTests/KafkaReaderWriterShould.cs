@@ -1,14 +1,11 @@
-using Quix.Sdk.Process.Kafka;
-using Quix.Sdk.Process.Common.Test;
-using Quix.Sdk.Process.UnitTests.Helpers;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Xunit;
+using Quix.Sdk.Process.Common.Test;
+using Quix.Sdk.Process.Kafka;
 using Quix.Sdk.Process.Models;
+using Quix.Sdk.Process.UnitTests.Helpers;
 using Quix.TestBase.Extensions;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace Quix.Sdk.Process.UnitTests

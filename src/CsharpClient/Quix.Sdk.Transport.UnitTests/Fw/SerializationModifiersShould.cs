@@ -1,10 +1,10 @@
-﻿using FluentAssertions;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using FluentAssertions;
 using Quix.Sdk.Transport.Fw;
 using Quix.Sdk.Transport.IO;
 using Quix.Sdk.Transport.UnitTests.Helpers;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.Fw

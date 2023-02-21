@@ -1,11 +1,9 @@
-﻿using FluentAssertions;
+﻿using System;
+using FluentAssertions;
+using NSubstitute;
 using Quix.Sdk.Transport.Codec;
 using Quix.Sdk.Transport.Fw;
 using Quix.Sdk.Transport.Registry;
-using NSubstitute;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests.Registry

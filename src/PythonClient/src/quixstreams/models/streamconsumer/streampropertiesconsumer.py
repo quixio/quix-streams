@@ -1,16 +1,15 @@
+import ctypes
 import traceback
+from datetime import datetime
 from typing import Dict, List, Callable
 
-from datetime import datetime
-
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamPropertiesConsumer import StreamPropertiesConsumer as spci
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamPropertiesChangedEventArgs import StreamPropertiesChangedEventArgs
-import ctypes
-from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ..netdict import NetDict
 from ..netlist import NetList
-from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
+from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamPropertiesChangedEventArgs import StreamPropertiesChangedEventArgs
+from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamPropertiesConsumer import StreamPropertiesConsumer as spci
 
 
 @nativedecorator
@@ -78,6 +77,7 @@ class StreamPropertiesConsumer(object):
         if self._on_changed_ref is not None:
             self._interop.remove_OnChanged(self._on_changed_ref)
             self._on_changed_ref = None
+
     # endregion on_changed
 
     @property

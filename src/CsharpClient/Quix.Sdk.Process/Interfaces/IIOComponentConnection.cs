@@ -1,6 +1,6 @@
-﻿using Quix.Sdk.Process.Models;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Process
 {

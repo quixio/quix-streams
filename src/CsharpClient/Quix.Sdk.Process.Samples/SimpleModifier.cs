@@ -1,7 +1,6 @@
-﻿using Quix.Sdk.Process;
-using Quix.Sdk.Process.Models;
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
+using Quix.Sdk.Process.Models;
 
 namespace Quix.Sdk.Process.Samples
 {
