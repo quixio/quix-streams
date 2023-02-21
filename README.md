@@ -14,7 +14,7 @@
 
 <b>Quix Streams</b> is a stream processing library, focused on <b>time-series data</b> and ease of use. It's designed to be used for telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and save resources without introducing delay.
 
-Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means that with Quix Streams you can use any data processing library for your chosen language.
+Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means that with Quix Streams you can use any external library for your chosen language. For example in Python, you can leverage Pandas, NumPy, PyTorch, TensorFlow, Transformers, OpenCV. 
 
 Quix Streams currently supports the following languages:
 
@@ -245,9 +245,7 @@ For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/
 
 ### Coming soon
 
-This library is actively in developing process. We have some features planned in the [road map](roadmap.md) of the library coming soon:
-
-(WIP)
+This library is actively in developing process. We have some features planned in the [Roadmap](roadmap.md) of the library coming soon.
 
 ## Library architecture notes
 
