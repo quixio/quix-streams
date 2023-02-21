@@ -245,7 +245,7 @@ For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/
 
 ### Coming soon
 
-This library is actively in developing process. We have some features planned in the [road map](roadmap) of the library coming soon:
+This library is actively in developing process. We have some features planned in the [road map](roadmap.md) of the library coming soon:
 
 (WIP)
 
