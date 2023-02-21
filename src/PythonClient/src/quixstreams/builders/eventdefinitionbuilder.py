@@ -3,8 +3,8 @@ import ctypes
 from ..helpers.enumconverter import EnumConverter as ec
 from ..helpers.nativedecorator import nativedecorator
 from ..models.eventlevel import EventLevel
-from ..native.Python.QuixSdkProcess.Models.EventLevel import EventLevel as InteropEventLevel
-from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDefinitionBuilder import EventDefinitionBuilder as edbi
+from ..native.Python.QuixStreamsProcess.Models.EventLevel import EventLevel as InteropEventLevel
+from ..native.Python.QuixStreamsStreaming.Models.StreamProducer.EventDefinitionBuilder import EventDefinitionBuilder as edbi
 
 
 @nativedecorator

@@ -5,7 +5,7 @@ from typing import Union
 from ..helpers.enumconverter import EnumConverter as ec
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
-from ..native.Python.QuixSdkStreaming.Models.ParameterValue import ParameterValue as pvi
+from ..native.Python.QuixStreamsStreaming.Models.ParameterValue import ParameterValue as pvi
 
 
 class ParameterValueType(Enum):

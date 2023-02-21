@@ -2,13 +2,15 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
-using Quix.Sdk.Transport.IO;
+using Quix.Streams.Transport.IO;
+using Serilog.Core;
 
-namespace Quix.Sdk.Transport.Kafka
+namespace Quix.Streams.Transport.Kafka
 {
     /// <summary>
     /// Kafka producer implemented using Queueing mechanism
@@ -242,7 +244,7 @@ namespace Quix.Sdk.Transport.Kafka
         }
 
 
-        private Task SendInternal(Package package, ProduceDelegate handler,  CancellationToken cancellationToken = default, object state = null)
+        private Task SendInternal(Package package, ProduceDelegate handler, CancellationToken cancellationToken = default, object state = null)
         {
             if (cancellationToken.IsCancellationRequested) return Task.FromCanceled(cancellationToken);
             if (this.producer == null)

@@ -4,7 +4,7 @@ from typing import Callable
 
 from .helpers.nativedecorator import nativedecorator
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .native.Python.QuixSdkStreaming.ITopicProducer import ITopicProducer as tpi
+from .native.Python.QuixStreamsStreaming.ITopicProducer import ITopicProducer as tpi
 from .streamproducer import StreamProducer
 
 

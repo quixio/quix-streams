@@ -2,7 +2,7 @@ import ctypes
 
 from .eventlevel import EventLevel
 from ..helpers.enumconverter import EnumConverter as ec
-from ..native.Python.QuixSdkStreaming.Models.EventDefinition import EventDefinition as edi
+from ..native.Python.QuixStreamsStreaming.Models.EventDefinition import EventDefinition as edi
 
 
 class EventDefinition(object):

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Confluent.Kafka;
 
-namespace Quix.Sdk.Transport.Kafka
+namespace Quix.Streams.Transport.Kafka
 {
     public class ConsumerConfiguration
     {
@@ -64,7 +64,7 @@ namespace Quix.Sdk.Transport.Kafka
         /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.     
         /// 
         /// If no consumer group is configured, the consumption will start according to value set.
-        /// If no auto offset reset is set,  defaults to latest.
+        /// If no auto offset reset is set, defaults to latest.
         /// </summary>
         public AutoOffsetReset? AutoOffsetReset { get; set; } = null;
 

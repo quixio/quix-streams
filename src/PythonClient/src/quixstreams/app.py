@@ -2,7 +2,7 @@ import ctypes
 import traceback
 from typing import Callable
 
-from .native.Python.QuixSdkStreaming.App import App as ai
+from .native.Python.QuixStreamsStreaming.App import App as ai
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationToken import CancellationToken as cti
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationTokenSource import CancellationTokenSource as ctsi
 

@@ -8,7 +8,7 @@ from ..models.parametervalue import ParameterValue, ParameterValueType
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesDataTimestamp import TimeseriesDataTimestamp as tsdti
+from ..native.Python.QuixStreamsStreaming.Models.TimeseriesDataTimestamp import TimeseriesDataTimestamp as tsdti
 
 
 @nativedecorator

@@ -3,7 +3,7 @@ from typing import Union, Dict
 
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array
-from ..native.Python.QuixSdkStreaming.Models.StreamProducer.TimeseriesDataBuilder import TimeseriesDataBuilder as tsdbi
+from ..native.Python.QuixStreamsStreaming.Models.StreamProducer.TimeseriesDataBuilder import TimeseriesDataBuilder as tsdbi
 
 
 @nativedecorator

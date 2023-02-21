@@ -3,7 +3,7 @@ from typing import Union
 
 from .rawmessage import RawMessage
 from ..helpers.nativedecorator import nativedecorator
-from ..native.Python.QuixSdkStreaming.Raw.RawTopicProducer import RawTopicProducer as rtpi
+from ..native.Python.QuixStreamsStreaming.Raw.RawTopicProducer import RawTopicProducer as rtpi
 
 
 @nativedecorator

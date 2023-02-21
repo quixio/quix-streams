@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
-using Quix.Sdk.Transport.IO;
+using Quix.Streams.Transport.IO;
 
-namespace Quix.Sdk.Transport.Kafka
+namespace Quix.Streams.Transport.Kafka
 {
     public static class KafkaConsumerExtensions
     {
@@ -182,7 +183,7 @@ namespace Quix.Sdk.Transport.Kafka
         /// <returns>The key if found, else null</returns>
         public static string GetKey(this Package package)
         {
-            return  package.TransportContext.GetKey();
+            return package.TransportContext.GetKey();
         }
 
         /// <summary>

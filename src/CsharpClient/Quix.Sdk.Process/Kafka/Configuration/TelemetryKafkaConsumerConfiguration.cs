@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using Quix.Sdk.Transport.Fw;
+using System.Text;
+using Quix.Streams.Transport.Fw;
+using Quix.Streams.Transport.Kafka;
 
-namespace Quix.Sdk.Process.Kafka
+namespace Quix.Streams.Process.Kafka
 {
     /// <summary>
     /// Kafka broker configuration for <see cref="TelemetryKafkaConsumer"/>
@@ -45,7 +47,7 @@ namespace Quix.Sdk.Process.Kafka
         /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.
         /// 
         /// If no consumer group is configured, the consumption will start according to value set.
-        /// If no auto offset reset is set, in case of no consumer group it defaults to end, otherwise to earliest.
+        /// If no auto offset reset is set, defaults to latest.
         /// </summary>
         public Confluent.Kafka.AutoOffsetReset? AutoOffsetReset { get; set; } = null;
 

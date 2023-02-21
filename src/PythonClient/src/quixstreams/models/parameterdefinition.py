@@ -1,6 +1,6 @@
 import ctypes
 
-from ..native.Python.QuixSdkStreaming.Models.ParameterDefinition import ParameterDefinition as pdi
+from ..native.Python.QuixStreamsStreaming.Models.ParameterDefinition import ParameterDefinition as pdi
 
 
 class ParameterDefinition(object):

@@ -4,7 +4,7 @@ from typing import Optional, Callable
 from ..helpers.nativedecorator import nativedecorator
 from ..models.timeseriesdata import TimeseriesData
 from ..models.timeseriesdatatimestamp import TimeseriesDataTimestamp
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesBufferConfiguration import TimeseriesBufferConfiguration as tsbci
+from ..native.Python.QuixStreamsStreaming.Models.TimeseriesBufferConfiguration import TimeseriesBufferConfiguration as tsbci
 
 
 @nativedecorator

@@ -9,11 +9,11 @@ from .models.autooffsetreset import AutoOffsetReset
 from .models.commitmode import CommitMode
 from .models.commitoptions import CommitOptions
 from .models.netdict import NetDict
-from .native.Python.QuixSdkProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
-from .native.Python.QuixSdkStreaming.Models.CommitMode import CommitMode as CommitModeInterop
-from .native.Python.QuixSdkStreaming.QuixStreamingClient import QuixStreamingClient as qsci
-from .native.Python.QuixSdkStreaming.QuixStreamingClientExtensions import QuixStreamingClientExtensions as qscei
-from .native.Python.QuixSdkStreaming.QuixStreamingClient_TokenValidationConfiguration import TokenValidationConfiguration as tvci
+from .native.Python.QuixStreamsProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
+from .native.Python.QuixStreamsStreaming.Models.CommitMode import CommitMode as CommitModeInterop
+from .native.Python.QuixStreamsStreaming.QuixStreamingClient import QuixStreamingClient as qsci
+from .native.Python.QuixStreamsStreaming.QuixStreamingClientExtensions import QuixStreamingClientExtensions as qscei
+from .native.Python.QuixStreamsStreaming.QuixStreamingClient_TokenValidationConfiguration import TokenValidationConfiguration as tvci
 from .native.Python.SystemPrivateUri.System.Uri import Uri as ui
 from .raw.rawtopicconsumer import RawTopicConsumer
 from .raw.rawtopicproducer import RawTopicProducer

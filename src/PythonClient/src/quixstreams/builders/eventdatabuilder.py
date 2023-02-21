@@ -2,7 +2,7 @@ import ctypes
 from typing import Dict
 
 from ..helpers.nativedecorator import nativedecorator
-from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDataBuilder import EventDataBuilder as edbi
+from ..native.Python.QuixStreamsStreaming.Models.StreamProducer.EventDataBuilder import EventDataBuilder as edbi
 
 
 @nativedecorator

@@ -1,7 +1,7 @@
 import ctypes
 
 from ...models.timeseriesbuffer import TimeseriesBuffer
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesBufferConsumer import TimeseriesBufferConsumer as tsbci
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesBufferConsumer import TimeseriesBufferConsumer as tsbci
 
 
 # from ...helpers.nativedecorator import nativedecorator

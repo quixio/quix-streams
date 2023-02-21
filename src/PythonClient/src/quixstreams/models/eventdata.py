@@ -9,7 +9,7 @@ from ..helpers.nativedecorator import nativedecorator
 from ..helpers.timeconverter import TimeConverter
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu
-from ..native.Python.QuixSdkStreaming.Models.EventData import EventData as edi
+from ..native.Python.QuixStreamsStreaming.Models.EventData import EventData as edi
 
 
 @nativedecorator

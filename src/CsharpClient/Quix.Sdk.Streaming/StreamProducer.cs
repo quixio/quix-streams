@@ -4,14 +4,15 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Quix.Sdk.Process;
-using Quix.Sdk.Process.Kafka;
-using Quix.Sdk.Process.Models;
-using Quix.Sdk.Process.Models.Utility;
-using Quix.Sdk.Streaming.Exceptions;
-using Quix.Sdk.Streaming.Models.StreamProducer;
+using Quix.Streams.Process;
+using Quix.Streams.Process.Kafka;
+using Quix.Streams.Process.Models;
+using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Streaming.Exceptions;
+using Quix.Streams.Streaming.Models;
+using Quix.Streams.Streaming.Models.StreamProducer;
 
-namespace Quix.Sdk.Streaming
+namespace Quix.Streams.Streaming
 {
     /// <summary>
     /// Stream writer interface. Stands for a new stream that we want to send to the platform.
@@ -255,7 +256,7 @@ namespace Quix.Sdk.Streaming
                 {
                     if (lastSendTask != null && !lastSendTask.IsCanceled && !lastSendTask.IsCompleted && !lastSendTask.IsFaulted)
                     {
-                        this.logger.LogTrace("Waiting for last message send for stream {1}.",  this.StreamId);
+                        this.logger.LogTrace("Waiting for last message send for stream {1}.", this.StreamId);
                         var sw = Stopwatch.StartNew();
                         Task.WaitAny(new[] {lastSendTask}, TimeSpan.FromSeconds(10));
                         sw.Stop();

@@ -13,7 +13,7 @@ from ..helpers.nativedecorator import nativedecorator
 from ..helpers.timeconverter import TimeConverter
 from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
+from ..native.Python.QuixStreamsStreaming.Models.TimeseriesData import TimeseriesData as tsdi
 
 
 @nativedecorator
@@ -45,7 +45,7 @@ class TimeseriesData(object):
             # TODO
 
     # @classmethod
-    # def from_timestamps(cls, timestamps: List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
+    # def from_timestamps(cls, timestamps: List[Quix.Streams.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
     #     """
     #         Creates a new instance of TimeseriesData with the provided timestamps rows.
     #
@@ -55,14 +55,14 @@ class TimeseriesData(object):
     #
     #     """
     #
-    #     dotnet_list = System.Collections.Generic.List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp]([])
+    #     dotnet_list = System.Collections.Generic.List[Quix.Streams.Streaming.models.timeseriesdataTimestamp]([])
     #     for item in timestamps:
     #         dotnet_item = item.convert_to_net()
     #         dotnet_list.Add(dotnet_item)
     #
     #     self = cls()
     #
-    #     self.__wrapped = Quix.Sdk.Streaming.models.timeseriesdata(dotnet_list, merge, clean)
+    #     self.__wrapped = Quix.Streams.Streaming.models.timeseriesdata(dotnet_list, merge, clean)
     #
     #     return self
 
@@ -179,7 +179,7 @@ class TimeseriesData(object):
         """
 
         raise NotImplemented("TODO")
-        dotnet_list = System.Collections.Generic.List[Quix.Sdk.Streaming.models.timeseriesdataTimestamp]([])
+        dotnet_list = System.Collections.Generic.List[Quix.Streams.Streaming.models.timeseriesdataTimestamp]([])
         for item in timestamp_list:
             dotnet_item = item.convert_to_net()
             dotnet_list.Add(dotnet_item)

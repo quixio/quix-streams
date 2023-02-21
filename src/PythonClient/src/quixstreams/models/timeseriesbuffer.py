@@ -9,9 +9,9 @@ from ..helpers.nativedecorator import nativedecorator
 from ..models.timeseriesdata import TimeseriesData
 from ..models.timeseriesdataraw import TimeseriesDataRaw
 from ..models.timeseriesdatatimestamp import TimeseriesDataTimestamp
-from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
-from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as tsbi
+from ..native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
+from ..native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
+from ..native.Python.QuixStreamsStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as tsbi
 
 
 @nativedecorator

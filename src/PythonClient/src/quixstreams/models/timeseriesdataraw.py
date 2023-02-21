@@ -11,8 +11,8 @@ from ..helpers.timeconverter import TimeConverter
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di, Dictionary
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixSdkProcess.Models.TimeseriesDataRaw import TimeseriesDataRaw as tsdri
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesData import TimeseriesData as tsdi
+from ..native.Python.QuixStreamsProcess.Models.TimeseriesDataRaw import TimeseriesDataRaw as tsdri
+from ..native.Python.QuixStreamsStreaming.Models.TimeseriesData import TimeseriesData as tsdi
 
 
 @nativedecorator

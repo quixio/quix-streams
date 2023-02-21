@@ -8,8 +8,8 @@ from ..netlist import NetList
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamPropertiesChangedEventArgs import StreamPropertiesChangedEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamPropertiesConsumer import StreamPropertiesConsumer as spci
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamPropertiesChangedEventArgs import StreamPropertiesChangedEventArgs
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamPropertiesConsumer import StreamPropertiesConsumer as spci
 
 
 @nativedecorator

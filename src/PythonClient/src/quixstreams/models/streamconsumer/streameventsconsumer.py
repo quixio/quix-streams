@@ -7,9 +7,9 @@ from ...models.eventdata import EventData
 from ...models.eventdefinition import EventDefinition
 from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.EventDataReadEventArgs import EventDataReadEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.EventDefinitionsChangedEventArgs import EventDefinitionsChangedEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamEventsConsumer import StreamEventsConsumer as seci
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.EventDataReadEventArgs import EventDataReadEventArgs
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.EventDefinitionsChangedEventArgs import EventDefinitionsChangedEventArgs
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamEventsConsumer import StreamEventsConsumer as seci
 
 
 @nativedecorator

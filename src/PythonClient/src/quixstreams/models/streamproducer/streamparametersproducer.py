@@ -7,7 +7,7 @@ from .timeseriesbufferproducer import TimeseriesBufferProducer
 from ...builders import ParameterDefinitionBuilder
 from ...helpers.nativedecorator import nativedecorator
 from ...models import TimeseriesData, TimeseriesDataRaw
-from ...native.Python.QuixSdkStreaming.Models.StreamProducer.StreamParametersProducer import StreamParametersProducer as sppi
+from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.StreamParametersProducer import StreamParametersProducer as sppi
 
 
 @nativedecorator

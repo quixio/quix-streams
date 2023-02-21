@@ -1,6 +1,6 @@
 # Horizontal scaling
 
-The Quix SDK provides horizontal scaling with the [streaming context](/sdk/features/streaming-context). This means a data scientist or data engineer does not have to implement parallel processing themselves.
+Quix Streams provides horizontal scaling with the [streaming context](/sdk/features/streaming-context). This means a data scientist or data engineer does not have to implement parallel processing themselves.
 
 Imagine the following example:
 
@@ -12,7 +12,7 @@ Now, one of the replicas crashes (the purple one), and the "stream 4" is assigne
 
 ![Purple replica crashes](../images/QuixHorizontalScaling2.png)
 
-This situation will trigger an event on the SDK in the blue replica indicating that "stream 4" has been received:
+This situation will trigger an event on Quix Streams in the blue replica indicating that "stream 4" has been received:
 
 === "Python"
     
@@ -87,13 +87,13 @@ Output on the purple replica:
 New stream received: stream 4
 ```
 
-The same behavior will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on the Quix SDK.
+The same behavior will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on Quix Streams.
 
 ## Rebalancing mechanism and partitions
 
 Kafka uses partitions and the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html) to decide which consumers receive which messages. 
 
-Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind the Quix SDK. You don’t need to worry about them because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context) feature of the SDK. The events described above will remain the same, even if the SDK uses another Message Broker technology or another rebalancing mechanism in the future.
+Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind Quix Streams. You don’t need to worry about them because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context) feature of the SDK. The events described above will remain the same, even if Quix Streams uses another Message Broker technology or another rebalancing mechanism in the future.
 
 !!! warning
 

@@ -13,10 +13,10 @@ from ...models.timeseriesdataraw import TimeseriesDataRaw
 from ...native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.ParameterDefinitionsChangedEventArgs import ParameterDefinitionsChangedEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.StreamParametersConsumer import StreamParametersConsumer as spci
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
-from ...native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.ParameterDefinitionsChangedEventArgs import ParameterDefinitionsChangedEventArgs
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamParametersConsumer import StreamParametersConsumer as spci
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
 
 
 @nativedecorator

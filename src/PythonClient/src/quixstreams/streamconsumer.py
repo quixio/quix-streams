@@ -10,9 +10,9 @@ from .models.streamconsumer.streamparametersconsumer import StreamParametersCons
 from .models.streamconsumer.streampropertiesconsumer import StreamPropertiesConsumer
 from .models.streamendtype import StreamEndType
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .native.Python.QuixSdkStreaming.IStreamConsumer import IStreamConsumer as sci
-from .native.Python.QuixSdkStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
-from .native.Python.QuixSdkStreaming.StreamClosedEventArgs import StreamClosedEventArgs
+from .native.Python.QuixStreamsStreaming.IStreamConsumer import IStreamConsumer as sci
+from .native.Python.QuixStreamsStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
+from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClosedEventArgs
 
 
 @nativedecorator

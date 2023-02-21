@@ -4,7 +4,7 @@ from typing import Dict
 from .. import TimeseriesDataRaw
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixSdkProcess.Models.StreamPackage import StreamPackage as spi
+from ..native.Python.QuixStreamsProcess.Models.StreamPackage import StreamPackage as spi
 from ..native.Python.SystemPrivateCoreLib.System.Type import Type as NetType
 
 
@@ -34,23 +34,23 @@ class StreamPackage(object):
 
             val_hptr = self._interop.get_Value()
 
-            if self.type == "Quix.Sdk.Process.Models.StreamProperties":
+            if self.type == "Quix.Streams.Process.Models.StreamProperties":
                 # todo
                 pass
-            elif self.type == "Quix.Sdk.Process.Models.ParameterDefinitions":
+            elif self.type == "Quix.Streams.Process.Models.ParameterDefinitions":
                 # todo
                 pass
-            elif self.type == "Quix.Sdk.Process.Models.EventDefinitions":
+            elif self.type == "Quix.Streams.Process.Models.EventDefinitions":
                 # todo
                 pass
-            elif self.type == "Quix.Sdk.Process.Models.StreamEnd":
+            elif self.type == "Quix.Streams.Process.Models.StreamEnd":
                 self.value = InteropUtils.hptr_to_uptr(val_hptr)
                 pass
-            elif self.type == "Quix.Sdk.Process.models.timeseriesdataRaw":
+            elif self.type == "Quix.Streams.Process.models.timeseriesdataRaw":
                 self.value = TimeseriesDataRaw(val_hptr)
-            elif self.type == "Quix.Sdk.Process.Models.EventDataRaw[]":
+            elif self.type == "Quix.Streams.Process.Models.EventDataRaw[]":
                 pass
-            elif self.type == "Quix.Sdk.Process.Models.EventDataRaw":
+            elif self.type == "Quix.Streams.Process.Models.EventDataRaw":
                 pass
 
     @property

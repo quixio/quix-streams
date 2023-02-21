@@ -1,10 +1,10 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
-using Quix.Sdk.Process;
-using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming.Models.StreamConsumer;
+using Quix.Streams.Process;
+using Quix.Streams.Process.Models;
+using Quix.Streams.Streaming.Models.StreamConsumer;
 
-namespace Quix.Sdk.Streaming
+namespace Quix.Streams.Streaming
 {
     /// <summary>
     /// Handles reading data for the assigned stream from the protocol.
@@ -71,10 +71,10 @@ namespace Quix.Sdk.Streaming
         public virtual event Action<IStreamConsumer, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <inheritdoc />
-        public virtual  event Action<IStreamConsumer, Process.Models.EventDataRaw> OnEventData;
+        public virtual event Action<IStreamConsumer, Process.Models.EventDataRaw> OnEventData;
 
         /// <inheritdoc />
-        public virtual  event Action<IStreamConsumer, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
+        public virtual event Action<IStreamConsumer, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
 
         private void InitializeStreaming()
         {
@@ -95,7 +95,7 @@ namespace Quix.Sdk.Streaming
             };
         }
 
-        private void OnStreamPackageReceived(IStreamProcess streamProcess, Sdk.Process.Models.StreamPackage package)
+        private void OnStreamPackageReceived(IStreamProcess streamProcess, Streams.Process.Models.StreamPackage package)
         {
             this.logger.LogTrace("StreamConsumer: OnPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));

@@ -4,7 +4,7 @@ from typing import Union, Dict
 from ..helpers.nativedecorator import nativedecorator
 from ..models.netdict import NetDict
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
-from ..native.Python.QuixSdkStreaming.Raw.RawMessage import RawMessage as rmi
+from ..native.Python.QuixStreamsStreaming.Raw.RawMessage import RawMessage as rmi
 
 
 @nativedecorator

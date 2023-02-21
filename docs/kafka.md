@@ -1,10 +1,10 @@
-# Kafka and Quix SDK
+# Kafka and Quix Streams
 
-The Quix SDK helps you to leverage Kafka’s powerful features with ease.
+Quix Streams helps you to leverage Kafka’s powerful features with ease.
 
 ## Why this is important
 
-Kafka is a powerful but complex technology to master. Using the Quix SDK, you can leverage the power of Kafka without worrying about mastering it. There are just a couple of important concepts to grasp, the rest is handled in the background by the SDK.
+Kafka is a powerful but complex technology to master. Using Quix Streams, you can leverage the power of Kafka without worrying about mastering it. There are just a couple of important concepts to grasp, the rest is handled in the background by Quix Streams.
 
 ## Concepts
 
@@ -22,7 +22,7 @@ Each topic has temporary storage. Every message sent to the topic will live in K
 
 ### Topic partitions
 
-Each Kafka topic is created with a number of partitions. You can add more partitions later, but you can’t remove them. Each partition is an independent queue that preserves the order of messages. **The Quix SDK restricts all messages inside one stream to the same single partition.** That means that inside one stream, a consumer can rely on the order of messages. Partitions are spread across your Kafka cluster, over different Kafka nodes, for improved performance.
+Each Kafka topic is created with a number of partitions. You can add more partitions later, but you can’t remove them. Each partition is an independent queue that preserves the order of messages. **Quix Streams restricts all messages inside one stream to the same single partition.** That means that inside one stream, a consumer can rely on the order of messages. Partitions are spread across your Kafka cluster, over different Kafka nodes, for improved performance.
 
 #### Redistribution of load
 
@@ -48,7 +48,7 @@ If you deploy this model with a replica set to 3, your model will be deployed in
 
 ### Checkpointing
 
-We can think of Kafka temporary storage as a processing queue for each partition. Consumer groups read from this queue and regularly commit offsets to track which messages were already processed. By default, this is done by the Quix SDK automatically, but you can override that by manually committing an offset when you are done processing a set of rows.
+We can think of Kafka temporary storage as a processing queue for each partition. Consumer groups read from this queue and regularly commit offsets to track which messages were already processed. By default, this is done by Quix Streams automatically, but you can override that by manually committing an offset when you are done processing a set of rows.
 
 ``` python
 topic_consumer = client.create_topic_consumer('Telemetry', commit_settings=CommitMode.Manual)

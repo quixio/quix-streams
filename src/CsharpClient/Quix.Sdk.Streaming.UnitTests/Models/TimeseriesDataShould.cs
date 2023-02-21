@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using FluentAssertions;
+using Xunit;
+using Quix.Streams.Streaming.Models;
+using FluentAssertions.Equivalency;
 using System.Linq;
 using System.Text;
-using FluentAssertions;
-using FluentAssertions.Equivalency;
-using Quix.Sdk.Streaming.Models;
-using Xunit;
 
-namespace Quix.Sdk.Streaming.UnitTests.Models
+namespace Quix.Streams.Streaming.UnitTests.Models
 {
     public class TimeseriesDataShould
     {
@@ -168,7 +168,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void LoadFromProcessData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataDuplicatedTimestamps = new Sdk.Process.Models.TimeseriesDataRaw()
+            var dataDuplicatedTimestamps = new Streams.Process.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100, 100, 100, 200, 200 },
@@ -188,10 +188,10 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
                 }
             };
 
-            var dataWithoutDuplicatedTimestamps = new Sdk.Process.Models.TimeseriesDataRaw()
+            var dataWithoutDuplicatedTimestamps = new Streams.Process.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
-                Timestamps = new long[] { 100 , 200, 200 },
+                Timestamps = new long[] { 100, 200, 200 },
                 NumericValues = new Dictionary<string, double?[]>()
                 {
                     { "param1", new double?[] { 3, 1, 2 } },
@@ -221,7 +221,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
         public void LoadFromProcessData_WithNullValues_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataWithNulls = new Sdk.Process.Models.TimeseriesDataRaw()
+            var dataWithNulls = new Streams.Process.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100, 200, 300, 400, 500 },
@@ -336,7 +336,7 @@ namespace Quix.Sdk.Streaming.UnitTests.Models
             dataEpoch.Should().BeEquivalentTo(dataNoEpoch);
         }
 
-        private static Sdk.Streaming.Models.TimeseriesData GenerateTimeseriesData(int offset, int amount, int capacity = 0, long epoch = 0, bool includeEpoch = false)
+        private static Streams.Streaming.Models.TimeseriesData GenerateTimeseriesData(int offset, int amount, int capacity = 0, long epoch = 0, bool includeEpoch = false)
         {
             var tsdata = new TimeseriesData();
             if (capacity > 0)

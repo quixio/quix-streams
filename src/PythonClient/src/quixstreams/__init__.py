@@ -9,10 +9,10 @@ from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 
 plat = platform.uname()
 platname = f"{plat.system}-{plat.machine}".lower()
-lib_dir = os.path.join(os.path.dirname(__file__), "./native/" + platname + "/Quix.Sdk.Streaming.Interop/")
+lib_dir = os.path.join(os.path.dirname(__file__), "./native/" + platname + "/Quix.Streams.Streaming.Interop/")
 if plat.system.upper() == "WINDOWS":
     allowed_extensions = [".dll"]
-    lib_dll = "Quix.Sdk.Streaming.Interop.dll"
+    lib_dll = "Quix.Streams.Streaming.Interop.dll"
     for file in os.listdir(lib_dir):
         if file == lib_dll:
             continue
@@ -26,10 +26,10 @@ if plat.system.upper() == "WINDOWS":
         ctypes.cdll.LoadLibrary(lib_dir + file)
 elif plat.system.upper() == "DARWIN":
     allowed_extensions = [".dylib"]
-    lib_dll = "Quix.Sdk.Streaming.Interop.dylib"
+    lib_dll = "Quix.Streams.Streaming.Interop.dylib"
 elif plat.system.upper() == "LINUX":
     allowed_extensions = [".so"]
-    lib_dll = "Quix.Sdk.Streaming.Interop.so"
+    lib_dll = "Quix.Streams.Streaming.Interop.so"
 else:
     raise Exception("Platform {} is not supported".format(plat))
 

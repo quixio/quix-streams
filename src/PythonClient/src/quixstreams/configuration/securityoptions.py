@@ -1,7 +1,7 @@
 from .saslmechanism import SaslMechanism
 from ..helpers.enumconverter import EnumConverter as ec
-from ..native.Python.QuixSdkStreaming.Configuration.SaslMechanism import SaslMechanism as SaslMechanismInterop
-from ..native.Python.QuixSdkStreaming.Configuration.SecurityOptions import SecurityOptions as soi
+from ..native.Python.QuixStreamsStreaming.Configuration.SaslMechanism import SaslMechanism as SaslMechanismInterop
+from ..native.Python.QuixStreamsStreaming.Configuration.SecurityOptions import SecurityOptions as soi
 
 
 class SecurityOptions(object):

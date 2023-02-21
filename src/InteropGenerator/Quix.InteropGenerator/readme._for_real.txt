@@ -3,7 +3,7 @@ Notes:
 
 - You must build it in debug mode, because release mode comes up with the following error:
 ```
-EXEC : error : VTable of type 'Confluent.Kafka.ProduceException`2<Byte[], Byte[]>' not computed by the IL scanner. You can work around by running the compilation with scanner disabled. [C:\Work\Source\Quix.Sdk\CsharpClient\Quix.Sdk.Interop\Quix.Sdk.Interop.csproj]
+EXEC : error : VTable of type 'Confluent.Kafka.ProduceException`2<Byte[], Byte[]>' not computed by the IL scanner. You can work around by running the compilation with scanner disabled. [C:\Work\Source\Quix.Streams\CsharpClient\Quix.Streams.Interop\Quix.Streams.Interop.csproj]
 ```
 
 - From a clean code, execute the following to get win built:
@@ -32,9 +32,9 @@ libssl-dev libnuma-dev libkrb5-dev zlib1g-dev ninja-build libtinfo5
 Interop best practices: https://docs.microsoft.com/en-us/dotnet/standard/native-interop/best-practices
 
 When running the application in IDE, use the following program arguments:
--a "../../../../../CsharpClient/Quix.Sdk.Streaming/bin/Debug/netstandard2.0/publish/Quix.Sdk.Streaming.dll" -o "../../../../InteropOutput"  -c "../../../../InteropConfig"
+-a "../../../../../CsharpClient/Quix.Streams.Streaming/bin/Debug/netstandard2.0/publish/Quix.Streams.Streaming.dll" -o "../../../../InteropOutput"  -c "../../../../InteropConfig"
 
-note: You'll need to publish Quix.Sdk.Streaming first to have all dependency available. If you're publishing other than Debug config, update line above accordingly
+note: You'll need to publish Quix.Streams.Streaming first to have all dependency available. If you're publishing other than Debug config, update line above accordingly
 
 
 Additional sources:

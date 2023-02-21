@@ -1,6 +1,6 @@
 # Connect to Quix
 
-The Quix SDK comes with a streaming client that enables you to connect to Quix easily, to read data from Quix, and to write data to Quix. The streaming client manages the connections between your application and Quix and makes sure that the data is delivered reliably to and from your application.
+Quix Streams comes with a streaming client that enables you to connect to Quix easily, to read data from Quix, and to write data to Quix. The streaming client manages the connections between your application and Quix and makes sure that the data is delivered reliably to and from your application.
 
 ## Using QuixStreamingClient
 
@@ -18,7 +18,7 @@ Starting with 0.4.0, we’re offering QuixStreamingClient, which handles the cum
 === "C\#"
     
     ``` cs
-    var client = new Quix.Sdk.Streaming.QuixStreamingClient();
+    var client = new Quix.Streams.Streaming.QuixStreamingClient();
     ```
 
 If you wish to run the same code locally, you’ll have to provide an OAuth2.0 bearer token. We have created a purpose made token for this, called [SDK token](/platform/how-to/use-sdk-token). Once you have the token you will have to provide it as an argument to QuixStreamingClient or set `Quix__Sdk__Token` environment variable.
@@ -34,7 +34,7 @@ If you wish to run the same code locally, you’ll have to provide an OAuth2.0 b
 === "C\#"
     
     ``` cs
-    var client = new Quix.Sdk.Streaming.QuixStreamingClient("your_token");
+    var client = new Quix.Streams.Streaming.QuixStreamingClient("your_token");
     ```
 
 Using the streaming client is another way to communicate with a broker. It is a Kafka specific client implementation that requires some explicit configuration but allows you to connect to any Kafka cluster even outside Quix platform. It involves the following steps:
@@ -59,7 +59,7 @@ The following code shows you how to set up the `SecurityOptions` for your connec
 	
 	``` cs
 	var security = new SecurityOptions(CERTIFICATES_FOLDER, QUIX_USER, QUIX_PASSWORD);
-	var client = new Quix.Sdk.Streaming.KafkaStreamingClient("kafka-k1.quix.ai:9093,kafka-k2.quix.ai:9093,kafka-k3.quix.ai:9093", security);
+	var client = new Quix.Streams.Streaming.KafkaStreamingClient("kafka-k1.quix.ai:9093,kafka-k2.quix.ai:9093,kafka-k3.quix.ai:9093", security);
 	```
 
 === "JavaScript"

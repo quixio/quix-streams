@@ -12,7 +12,7 @@ from ...builders import TimeseriesDataBuilder
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ...native.Python.QuixSdkStreaming.Models.StreamProducer.TimeseriesBufferProducer import TimeseriesBufferProducer as tsbpi
+from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.TimeseriesBufferProducer import TimeseriesBufferProducer as tsbpi
 
 
 @nativedecorator
