@@ -17,7 +17,7 @@ namespace Quix.Sdk.PerformanceTest
 
             var buffer = new TimeseriesBuffer(null, null, true, true);
             buffer.PacketSize = bufferSize;
-            buffer.OnReadRaw += (sender, args) =>
+            buffer.OnRawRead += (sender, args) =>
             {
                 receivedCount += args.Data.Timestamps.Length * paramCount;
             };

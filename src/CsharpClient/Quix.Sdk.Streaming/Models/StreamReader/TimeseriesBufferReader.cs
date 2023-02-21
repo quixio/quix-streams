@@ -50,9 +50,9 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             base.InvokeOnRead(this, new TimeseriesDataReadEventArgs(this.inputTopic, this.streamReader, args.Data));
         }
 
-        protected override void InvokeOnReadRaw(object sender, TimeseriesDataRawReadEventArgs args)
+        protected override void InvokeOnRawRead(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            base.InvokeOnReadRaw(this, new TimeseriesDataRawReadEventArgs(this.inputTopic, this.streamReader, args.Data));
+            base.InvokeOnRawRead(this, new TimeseriesDataRawReadEventArgs(this.inputTopic, this.streamReader, args.Data));
         }
     }
 }

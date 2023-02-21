@@ -982,7 +982,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(input_topic: qx.InputTopic, reader: qx.StreamReader):
             if stream.stream_id == reader.stream_id:
-                reader.parameters.on_read_raw = on_parameter_data_handler
+                reader.parameters.on_raw_read = on_parameter_data_handler
 
         def on_parameter_data_handler(input_topic: qx.InputTopic, stream: qx.StreamReader, data: qx.TimeseriesDataRaw):
             nonlocal read_data
@@ -1100,7 +1100,7 @@ class TestIntegration(unittest.TestCase):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.on_read = on_parameter_data_handler
-                param_buffer.on_read_raw = on_parameter_data_raw_handler
+                param_buffer.on_raw_read = on_parameter_data_raw_handler
                 param_buffer.on_read_dataframe = on_parameter_dataframe_handler
 
         def on_parameter_data_handler(input_topic: qx.InputTopic, stream: qx.StreamReader, data: qx.TimeseriesData):
@@ -1231,7 +1231,7 @@ class TestIntegration(unittest.TestCase):
                 param_buffer.on_read = on_parameter_data_handler
 
                 params = reader.parameters
-                params.on_read_raw = on_parameter_raw_handler
+                params.on_raw_read = on_parameter_raw_handler
                 params.on_read_dataframe = on_parameter_dataframe_handler
 
         def on_parameter_data_handler(input_topic: qx.InputTopic, stream: qx.StreamReader, data: qx.TimeseriesData):

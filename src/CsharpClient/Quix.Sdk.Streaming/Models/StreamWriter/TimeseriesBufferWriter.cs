@@ -30,10 +30,10 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             this.outputTopic = outputTopic;
             this.streamWriter = streamWriter;
 
-            this.OnReadRaw += OnReadDataRawHandler;
+            this.OnRawRead += RawReadDataHandler;
         }
 
-        private void OnReadDataRawHandler(object sender, TimeseriesDataRawReadEventArgs args)
+        private void RawReadDataHandler(object sender, TimeseriesDataRawReadEventArgs args)
         {
             this.streamWriter.Write(args.Data);
         }
@@ -141,9 +141,9 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
             base.InvokeOnRead(this, new TimeseriesDataReadEventArgs(this.outputTopic, this.streamWriter, args.Data));
         }
 
-        protected override void InvokeOnReadRaw(object sender, TimeseriesDataRawReadEventArgs args)
+        protected override void InvokeOnRawRead(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            base.InvokeOnReadRaw(this, new TimeseriesDataRawReadEventArgs(this.outputTopic, this.streamWriter, args.Data));
+            base.InvokeOnRawRead(this, new TimeseriesDataRawReadEventArgs(this.outputTopic, this.streamWriter, args.Data));
         }
 
         /// <summary>
@@ -153,7 +153,7 @@ namespace Quix.Sdk.Streaming.Models.StreamWriter
         {
             if (this.isDisposed) return;
             this.isDisposed = true;
-            this.OnReadRaw -= OnReadDataRawHandler;
+            this.OnRawRead -= RawReadDataHandler;
             base.Dispose();
         }
 

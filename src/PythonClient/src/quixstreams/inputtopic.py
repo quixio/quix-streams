@@ -75,7 +75,7 @@ class InputTopic(object):
     def _on_stream_received_wrapper(self, topic_hptr, stream_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
         try:
-            stream = StreamReader(stream_hptr, self, lambda s, e: self._active_streams.remove(s))
+            stream = StreamReader(stream_hptr, self, lambda s: self._active_streams.remove(s))
             self._active_streams.append(stream)
             self._on_stream_received(self, stream)
             InteropUtils.free_hptr(topic_hptr)

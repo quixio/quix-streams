@@ -79,7 +79,7 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
         /// Event raised when data is available to read (without buffering) in raw transport format
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesDataRawReadEventArgs> OnReadRaw;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawRead;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -144,7 +144,7 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
 
         private void OnTimeseriesDataRawEventHandler(IStreamReader streamReader, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
-            this.OnReadRaw?.Invoke(streamReader, new TimeseriesDataRawReadEventArgs(this.topic, streamReader, timeseriesDataRaw));
+            this.OnRawRead?.Invoke(streamReader, new TimeseriesDataRawReadEventArgs(this.topic, streamReader, timeseriesDataRaw));
         }
 
         /// <inheritdoc/>

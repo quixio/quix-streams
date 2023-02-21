@@ -1,5 +1,6 @@
 ﻿using System;
 using Quix.Sdk.Process.Models;
+using Quix.Sdk.Streaming.Models.StreamReader;
 using Quix.Sdk.Transport.IO;
 
 namespace Quix.Sdk.Streaming

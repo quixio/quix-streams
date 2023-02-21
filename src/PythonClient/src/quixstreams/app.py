@@ -1,3 +1,4 @@
+import traceback
 from typing import Callable
 
 from .native.Python.QuixSdkStreaming.App import App as ai
@@ -5,6 +6,7 @@ import ctypes
 
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationTokenSource import CancellationTokenSource as ctsi
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationToken import CancellationToken as cti
+
 
 class CancellationTokenSource:
     """
@@ -64,7 +66,10 @@ class App():
 
         def wrapper():
             if before_shutdown is not None:
-                before_shutdown()
+                try:
+                    before_shutdown()
+                except:
+                    traceback.print_exc()
 
         try:
             if cancellation_token is not None:

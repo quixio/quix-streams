@@ -64,15 +64,15 @@ class TimeseriesBuffer(object):
         self._on_read = None
         self._on_read_ref = None  # keeping reference to avoid GC
 
-        self._on_read_raw = None
-        self._on_read_raw_ref = None  # keeping reference to avoid GC
+        self._on_raw_read = None
+        self._on_raw_read_ref = None  # keeping reference to avoid GC
 
         self._on_read_dataframe = None
         self._on_read_dataframe_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
         self._on_read_dispose()
-        self._on_read_raw_dispose()
+        self._on_raw_read_dispose()
         self._on_read_dataframe_dispose()
 
 
@@ -109,37 +109,37 @@ class TimeseriesBuffer(object):
             self._on_read_ref = None
     # endregion on_read
     
-    # region on_read_raw
+    # region on_raw_read
     @property
-    def on_read_raw(self) -> Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]:
+    def on_raw_read(self) -> Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
-        return self._on_read_raw
+        return self._on_raw_read
 
-    @on_read_raw.setter
-    def on_read_raw(self, value: Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]) -> None:
+    @on_raw_read.setter
+    def on_raw_read(self, value: Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
-        self._on_read_raw = value
-        if self._on_read_raw_ref is None:
-            self._on_read_raw_ref = self._interop_pb.add_OnReadRaw(self._on_read_raw_wrapper)
+        self._on_raw_read = value
+        if self._on_raw_read_ref is None:
+            self._on_raw_read_ref = self._interop_pb.add_OnRawRead(self._on_raw_read_wrapper)
 
-    def _on_read_raw_wrapper(self, stream_hptr, args_hptr):
+    def _on_raw_read_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
-                self._on_read_raw(self._topic, self._stream, TimeseriesDataRaw(args.get_Data()))
+                self._on_raw_read(self._topic, self._stream, TimeseriesDataRaw(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_read_raw_dispose(self):
-        if self._on_read_raw_ref is not None:
-            self._interop_pb.remove_OnReadRaw(self._on_read_raw_ref)
-            self._on_read_raw_ref = None
-    # endregion on_read_raw
+    def _on_raw_read_dispose(self):
+        if self._on_raw_read_ref is not None:
+            self._interop_pb.remove_OnRawRead(self._on_raw_read_ref)
+            self._on_raw_read_ref = None
+    # endregion on_raw_read
     
     # region on_read_dataframe
     @property
@@ -156,7 +156,7 @@ class TimeseriesBuffer(object):
         """
         self._on_read_dataframe = value
         if self._on_read_dataframe_ref is None:
-            self._on_read_dataframe_ref = self._interop_pb.add_OnReadRaw(self._on_read_dataframe_wrapper)
+            self._on_read_dataframe_ref = self._interop_pb.add_OnRawRead(self._on_read_dataframe_wrapper)
 
     def _on_read_dataframe_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -172,7 +172,7 @@ class TimeseriesBuffer(object):
 
     def _on_read_dataframe_dispose(self):
         if self._on_read_dataframe_ref is not None:
-            self._interop_pb.remove_OnReadRaw(self._on_read_dataframe_ref)
+            self._interop_pb.remove_OnRawRead(self._on_read_dataframe_ref)
             self._on_read_dataframe_ref = None
     # endregion on_read_dataframe
 

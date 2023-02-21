@@ -1,9 +1,7 @@
 ﻿using System;
-using System.IO;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process;
 using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming.Models;
 using Quix.Sdk.Streaming.Models.StreamReader;
 
 namespace Quix.Sdk.Streaming
@@ -11,7 +9,7 @@ namespace Quix.Sdk.Streaming
     /// <summary>
     /// Handles reading data for the assigned stream from the protocol.
     /// </summary>
-    internal class StreamReader : StreamProcess, IStreamReader, IStreamReaderInternal
+    internal class StreamReader : StreamProcess, IStreamReaderInternal
     {
         private readonly IInputTopic topic;
         private readonly ILogger logger = Logging.CreateLogger<StreamReader>();

@@ -40,7 +40,7 @@ namespace Quix.Sdk.Streaming.Models
         /// <summary>
         /// Event invoked when TimeseriesDataRaw is read from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesDataRawReadEventArgs> OnReadRaw;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawRead;
 
         // List representing internal data structure of the buffer
         private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
@@ -415,7 +415,7 @@ namespace Quix.Sdk.Streaming.Models
                         this.bufferedFrames = new List<TimeseriesDataRaw>();
                     }
 
-                    if (this.OnRead == null && this.OnReadRaw == null) return;
+                    if (this.OnRead == null && this.OnRawRead == null) return;
                     
                     var newPdrw = this.ConcatDataFrames(loadedData);
                     if (this.mergeOnFlush)
@@ -426,7 +426,7 @@ namespace Quix.Sdk.Streaming.Models
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
 
                     if (newPdrw.Timestamps.Length <= 0) return;
-                    this.InvokeOnReadRaw(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
+                    this.InvokeOnRawRead(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
 
                     if (this.OnRead == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
@@ -443,9 +443,9 @@ namespace Quix.Sdk.Streaming.Models
             }
         }
 
-        protected virtual void InvokeOnReadRaw(object sender, TimeseriesDataRawReadEventArgs args)
+        protected virtual void InvokeOnRawRead(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            this.OnReadRaw?.Invoke(this, args);
+            this.OnRawRead?.Invoke(this, args);
         } 
         
         protected virtual void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)

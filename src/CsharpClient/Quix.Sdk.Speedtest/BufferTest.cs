@@ -41,7 +41,7 @@ namespace Quix.Sdk.Speedtest
 //                buffer.PacketSize = 111;
                 buffer.TimeSpanInMilliseconds = buffer.BufferTimeout = 1000;
 
-                buffer.OnReadRaw += (sender, args) =>
+                buffer.OnRawRead += (sender, args) =>
                 {
 //                    var binaryTime = (long) data.Timestamps[0].Parameters[parameterName].NumericValue;
                     

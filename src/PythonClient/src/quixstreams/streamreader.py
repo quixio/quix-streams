@@ -49,8 +49,7 @@ class StreamReader(object):
                 try:
                     # To avoid unnecessary overhead and complication, we're using the instances we already have
                     with (args := StreamClosedEventArgs(args_hptr)):
-                        converted = ec.enum_to_another(args.get_EndType(), StreamEndType)
-                        on_close_cb_always(self, converted)
+                        on_close_cb_always(self)
 
                     refcount = sys.getrefcount(self)
                     if refcount == -1:  # TODO figure out correct number
