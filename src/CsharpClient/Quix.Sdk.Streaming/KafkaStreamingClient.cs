@@ -93,9 +93,6 @@ namespace Quix.Sdk.Streaming
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
         public ITopicConsumer CreateTopicConsumer(string topic, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest)
         {
-            var wsIdPrefix = GetWorkspaceIdPrefixFromTopic(topic);
-            consumerGroup = UpdateConsumerGroup(consumerGroup, wsIdPrefix);
-
             var kafkaReaderConfiguration = new TelemetryKafkaConsumerConfiguration(brokerAddress, consumerGroup, brokerProperties)
             {
                 CommitOptions = options,
@@ -152,37 +149,6 @@ namespace Quix.Sdk.Streaming
             Quix.Sdk.Streaming.App.Register(topicProducer);
 
             return topicProducer;
-        }
-
-        private string GetWorkspaceIdPrefixFromTopic(string topic)
-        {
-            if (QuixUtils.TryGetWorkspaceIdPrefix(topic, out var wsId))
-            {
-                this.logger.LogTrace("Determined your workspace Id to be {0}", wsId.TrimEnd('-'));
-                return wsId;
-            }
-
-            this.logger.LogWarning("Warning: Your workspace id could not be determined from your topic and it might not work unless using your own kafka.", topic);
-            return null;
-        }
-
-        private string UpdateConsumerGroup(string consumerGroup, string workspaceIdPrefix)
-        {
-            if (consumerGroup == null) return null;
-            if (consumerGroup.Contains("[MACHINENAME]"))
-            {
-                consumerGroup = consumerGroup.Replace("[MACHINENAME]", Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? System.Environment.MachineName);
-            }
-
-            if (workspaceIdPrefix != null)
-            {
-                // check if consumerGroup already starts with it
-                if (consumerGroup.StartsWith(workspaceIdPrefix)) return consumerGroup;
-                return workspaceIdPrefix + consumerGroup;
-            }
-            
-            this.logger.LogWarning("Warning: Your consumer group '{0}' could not be updated with workspace id prefix and might not work.", consumerGroup);
-            return consumerGroup;
         }
     }
 

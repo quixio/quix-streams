@@ -124,9 +124,11 @@ namespace Quix.Sdk.Streaming
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
             
-            var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
+            var (client, topicId, ws) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, options) = GetValidConsumerGroup(topicIdOrName, consumerGroup, options).ConfigureAwait(false).GetAwaiter().GetResult();
 
+            consumerGroup = UpdateConsumerGroup(consumerGroup, ws);
+            
             return client.CreateTopicConsumer(topicId, consumerGroup, options, autoOffset);
         }
 
@@ -141,7 +143,7 @@ namespace Quix.Sdk.Streaming
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
-            var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
+            var (client, topicId, _) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, _) = GetValidConsumerGroup(topicIdOrName, consumerGroup, null).ConfigureAwait(false).GetAwaiter().GetResult();
 
             return client.CreateRawTopicConsumer(topicId, consumerGroup, autoOffset);
@@ -156,7 +158,7 @@ namespace Quix.Sdk.Streaming
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
-            var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
+            var (client, topicId, _) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
 
             return client.CreateRawTopicProducer(topicId);
         }
@@ -170,7 +172,7 @@ namespace Quix.Sdk.Streaming
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
-            var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
+            var (client, topicId, _) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
 
             return client.CreateTopicProducer(topicId);
         }
@@ -205,7 +207,7 @@ namespace Quix.Sdk.Streaming
             return (consumerGroup, newCommitOptions);
         }
 
-        private async Task<(KafkaStreamingClient client, string topicId)> ValidateTopicAndCreateClient(string topicIdOrName)
+        private async Task<(KafkaStreamingClient client, string topicId, Workspace ws)> ValidateTopicAndCreateClient(string topicIdOrName)
         {
             CheckToken(token);
             topicIdOrName = topicIdOrName.Trim();
@@ -219,7 +221,7 @@ namespace Quix.Sdk.Streaming
             var topicId = await this.ValidateTopicExistence(ws, topicIdOrName);
             sw.Stop();
             this.logger.LogTrace("Validated topic {0} in {1}.", topicIdOrName, sw.Elapsed);
-            return (client, topicId);
+            return (client, topicId, ws);
         }
 
         /// <summary>
@@ -696,6 +698,25 @@ namespace Quix.Sdk.Streaming
             /// Whether to warn if the provided token is not PAT token. Defaults to <c>true</c>.
             /// </summary>
             public bool WarnAboutNonPatToken = true;
+        }
+
+        private string UpdateConsumerGroup(string consumerGroup, Workspace ws)
+        {
+            if (consumerGroup == null) return null;
+            if (consumerGroup.Contains("[MACHINENAME]"))
+            {
+                consumerGroup = consumerGroup.Replace("[MACHINENAME]", Environment.GetEnvironmentVariable("POD_NAMESPACE") ?? System.Environment.MachineName);
+            }
+
+            if (ws != null)
+            {
+                // check if consumerGroup already starts with it
+                if (consumerGroup.StartsWith(ws.WorkspaceId+'-')) return consumerGroup;
+                return $"{ws.WorkspaceId}-{consumerGroup}";
+            }
+            
+            this.logger.LogWarning("Warning: Your consumer group '{0}' could not be updated with workspace id prefix and might not work.", consumerGroup);
+            return consumerGroup;
         }
     }
 
