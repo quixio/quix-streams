@@ -12,9 +12,9 @@
 
 # What is Quix Streams?
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and resource savings.
+<b>Quix Streams</b> is a stream processing library, focused on <b>time-series data</b> and ease of use. It's designed to be used for telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and save resources without introducing delay.
 
-Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language ,together with Quix Streams.
+Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means that with Quix Streams you can use any data processing library for your chosen language.
 
 Quix Streams currently supports the following languages:
 
@@ -27,12 +27,12 @@ Using Quix Streams, you can:
 
 - Produce time-series and event data to a Kafka Topic.
 - Consume time-series and event data from a Kafka Topic.
-- Process data by consuming it from one Kafka Topic, process it, and then producing the results back to another Kafka Topic.
-- Group data by Streams attaching metadata to them.
+- Process data by creating pipelines using <b>publish–subscribe</b> pattern.
+- Group data by streams to send different type of data (Timeseries data, events, metadata or binary) into one ordered stream of data.
 
 ## What is time-series data?
 
-Time-series data is a series of data points indexed in time order. Typically, time-series data is collected at regular intervals, such as days, hours, minutes, seconds, or milliseconds. In a data frame representation, each row of the data frame corresponds to a single time point, and each column contains a different variable or observation measured at that time point.
+Time-series data is a series of data points indexed in time order. Typically, time-series data is collected at regular intervals, such as minutes, seconds, or milliseconds. In a data frame representation, each row of the data frame corresponds to a single time point, and each column contains a different variable or observation measured at that time point.
 
 ```
 timestamp            value1   value2   value3   value4   value5   value6   value7
@@ -219,11 +219,11 @@ For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/r
 
 This library provides several features and solves common problems you face when developing real-time streaming applications. 
 
-- <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. It let's you produce <b>multiple streams</b> through the same topic and enables the message broker to <b>parallelize loads</b> reliably across multiple consumers. 
+- <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. It let's you produce <b>multiple streams</b> through the same topic and enables the message broker to <b>parallelize loads</b> reliably across multiple consumers. It also allows stateful processing to be resiliently parallelised.     
 
-- <b>Stream metadata</b>: Quix Streams allows you to attached metadata to a Stream context and to the definition of Parameters and Events. The library manages the <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary to improve efficiency.
+- <b>Stream metadata</b>: Quix Streams allows you to attached metadata to a Stream context and to the definition of Parameters and Events. The library manages the <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary to improve efficiency. 
 
-- <b>Time-series data serialization and de-serialization</b>: Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughtput and reduce latency.
+- <b>Time-series data serialization and de-serialization</b>: Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughput and reduce latency.
 
 - <b>No schema registry needed</b>: Quix Streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b>.
 
@@ -245,7 +245,7 @@ For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/
 
 ### Coming soon
 
-This library is actively in developing process. We have some features planned in the [road map](https://github.com/orgs/quixai/projects/1) of the library coming soon:
+This library is actively in developing process. We have some features planned in the [road map](roadmap) of the library coming soon:
 
 (WIP)
 
