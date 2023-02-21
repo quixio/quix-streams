@@ -196,12 +196,11 @@ input_topic = client.open_input_topic("your-kafka-topic", consumer_group=None, a
 
 # consume streams
 def on_stream(input_topic: InputTopic, new_stream: StreamReader):
-
-    # consume data (as Pandas DataFrame)
-    def on_dataframe(stream: StreamReader, df: pd.DataFrame):
-        print(df.to_string())
-
     input_stream.parameters.on_read_dataframe = on_dataframe
+
+# consume data (as Pandas DataFrame)
+def on_dataframe(input_topic: InputTopic, stream: StreamReader, df: pd.DataFrame):
+    print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
 input_topic.on_stream_received = on_stream

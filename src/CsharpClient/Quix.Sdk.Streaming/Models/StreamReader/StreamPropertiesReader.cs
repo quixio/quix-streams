@@ -38,12 +38,11 @@ namespace Quix.Sdk.Streaming.Models.StreamReader
             this.Metadata = streamProperties.Metadata;
             this.Parents = streamProperties.Parents;
 
-            this.OnChanged?.Invoke(this.streamReader, new StreamPropertiesChangedEventArgs(this.topic, sender));
+            this.OnChanged?.Invoke(this, new StreamPropertiesChangedEventArgs(this.topic, sender));
         }
 
         /// <summary>
         /// Raised when the stream properties have changed
-        /// Sender is the stream the properties changed for
         /// </summary>
         public event EventHandler<StreamPropertiesChangedEventArgs> OnChanged;
 

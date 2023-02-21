@@ -8,7 +8,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw.Codecs
     public class StringCodecShould
     {
         [Fact]
-        public void Serialize_Deserialize_ShouldReturnInputStrung()
+        public void Serialize_Deserialize_ShouldReturnInputString()
         {
             // Arrange
             var str = "How much wood would a wood chuck chuck if a wood chuck could chuck wood?";
