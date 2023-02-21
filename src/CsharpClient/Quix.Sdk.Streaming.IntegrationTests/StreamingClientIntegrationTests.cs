@@ -57,8 +57,8 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var inputTopic = client.OpenInputTopic("integration-tests", "quix.tests-sdk-tests");
-                var outputTopic = client.OpenOutputTopic("integration-tests");
+                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.CreateTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -69,7 +69,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 var eventDefinitionsChanged = false;
                 string streamId = null;
 
-                inputTopic.OnStreamReceived += (s, e) =>
+                topicConsumer.OnStreamReceived += (s, e) =>
                 {
                     if (e.StreamId != streamId)
                     {
@@ -77,18 +77,18 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
 
                     streamStarted = true;
-                    (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
-                    (e as IStreamReaderInternal).OnParameterDefinitionsChanged += (s2, e2) => parameterDefinitionsChanged = true;
-                    (e as IStreamReaderInternal).OnEventDefinitionsChanged += (s2, e2) => eventDefinitionsChanged = true;
-                    (e as IStreamReaderInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
-                    (e as IStreamReaderInternal).OnEventData += (s2, e2) => events.Add(e2);
+                    (e as IStreamConsumerInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
+                    (e as IStreamConsumerInternal).OnParameterDefinitionsChanged += (s2, e2) => parameterDefinitionsChanged = true;
+                    (e as IStreamConsumerInternal).OnEventDefinitionsChanged += (s2, e2) => eventDefinitionsChanged = true;
+                    (e as IStreamConsumerInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
+                    (e as IStreamConsumerInternal).OnEventData += (s2, e2) => events.Add(e2);
 
                     e.OnStreamClosed += (s2, e2) => streamEnded = true;
                 };
 
-                inputTopic.StartReading();
+                topicConsumer.Subscribe();
 
-                using (var stream = outputTopic.CreateStream())
+                using (var stream = topicProducer.CreateStream())
                 {
                     streamId = stream.StreamId;
 
@@ -151,13 +151,13 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     };
 
 
-                    (stream as IStreamWriterInternal).Write(expectedParameterDefinitions);
+                    (stream as IStreamProducerInternal).Publish(expectedParameterDefinitions);
 
                     SpinWait.SpinUntil(() => parameterDefinitionsChanged, 2000);
 
                     Assert.True(parameterDefinitionsChanged, "Parameter definitions event not reached reader.");
 
-                    (stream as IStreamWriterInternal).Write(expectedEventDefinitions);
+                    (stream as IStreamProducerInternal).Publish(expectedEventDefinitions);
 
                     SpinWait.SpinUntil(() => eventDefinitionsChanged, 2000);
 
@@ -167,7 +167,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     expectedData.Add(GenerateTimeseriesData(0));
                     expectedData.Add(GenerateTimeseriesData(10));
 
-                    (stream as IStreamWriterInternal).Write(expectedData);
+                    (stream as IStreamProducerInternal).Publish(expectedData);
 
                     SpinWait.SpinUntil(() => data.Count == 2, 5000);
 
@@ -200,13 +200,13 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                         }
                     };
                     // test single event
-                    (stream as IStreamWriterInternal).Write(inputEvents[0]);
+                    (stream as IStreamProducerInternal).Publish(inputEvents[0]);
                     SpinWait.SpinUntil(() => events.Count == 1, 2000);
                     events[0].Should().BeEquivalentTo(inputEvents[0]);
                     events.Clear();
 
                     //test multiple event
-                    (stream as IStreamWriterInternal).Write(inputEvents);
+                    (stream as IStreamProducerInternal).Publish(inputEvents);
                     SpinWait.SpinUntil(() => events.Count == 2, 2000);
                     events.Should().BeEquivalentTo(inputEvents);
 
@@ -217,7 +217,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     Assert.True(streamEnded, "Stream end event not reached reader.");
                 }
 
-                inputTopic.Dispose();
+                topicConsumer.Dispose();
             });
         }
 
@@ -226,8 +226,8 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var inputTopic = client.OpenInputTopic("integration-tests", "quix.tests-sdk-tests");
-                var outputTopic = client.OpenOutputTopic("integration-tests");
+                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.CreateTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -238,7 +238,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 List<EventDefinition> eventDefinitions = null;
                 string streamId = null;
 
-                inputTopic.OnStreamReceived += (s, e) =>
+                topicConsumer.OnStreamReceived += (s, e) =>
                 {
                     if (e.StreamId != streamId)
                     {
@@ -246,18 +246,18 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
 
                     streamStarted = true;
-                    (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
-                    (e as IStreamReaderInternal).OnParameterDefinitionsChanged += (s2, e2) => parameterDefinitions = e2.Parameters ?? parameterDefinitions;
-                    (e as IStreamReaderInternal).OnEventDefinitionsChanged += (s2, e2) => eventDefinitions = e2.Events ?? eventDefinitions;
-                    (e as IStreamReaderInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
-                    (e as IStreamReaderInternal).OnEventData += (s2, e2) => events.Add(e2);
+                    (e as IStreamConsumerInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
+                    (e as IStreamConsumerInternal).OnParameterDefinitionsChanged += (s2, e2) => parameterDefinitions = e2.Parameters ?? parameterDefinitions;
+                    (e as IStreamConsumerInternal).OnEventDefinitionsChanged += (s2, e2) => eventDefinitions = e2.Events ?? eventDefinitions;
+                    (e as IStreamConsumerInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
+                    (e as IStreamConsumerInternal).OnEventData += (s2, e2) => events.Add(e2);
 
                     e.OnStreamClosed += (s2, e2) => streamEnded = true;
                 };
 
-                inputTopic.StartReading();
+                topicConsumer.Subscribe();
 
-                using (var stream = outputTopic.CreateStream())
+                using (var stream = topicProducer.CreateStream())
                 {
                     streamId = stream.StreamId;
                     output.WriteLine($"New stream created: {streamId}");
@@ -434,7 +434,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
 
                     Assert.True(streamEnded, "Stream end event not reached reader.");
 
-                    inputTopic.Dispose();
+                    topicConsumer.Dispose();
                 }
             });
         }
@@ -444,8 +444,8 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var inputTopic = client.OpenInputTopic("integration-tests", "quix.tests-sdk-tests");
-                var outputTopic = client.OpenOutputTopic("integration-tests");
+                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.CreateTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -453,7 +453,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 var streamEnded = false;
                 string streamId = null;
 
-                inputTopic.OnStreamReceived += (s, e) =>
+                topicConsumer.OnStreamReceived += (s, e) =>
                 {
                     if (e.StreamId != streamId)
                     {
@@ -461,13 +461,13 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
 
                     streamStarted = true;
-                    (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
+                    (e as IStreamConsumerInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
                     e.OnStreamClosed += (s2, e2) => streamEnded = true;
                 };
 
-                inputTopic.StartReading();
+                topicConsumer.Subscribe();
 
-                using (var stream = outputTopic.CreateStream())
+                using (var stream = topicProducer.CreateStream())
                 {
                     streamId = stream.StreamId;
 
@@ -495,7 +495,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     streamStarted = false;
 
                     // Second stream
-                    using (var stream2 = outputTopic.CreateStream(streamId))
+                    using (var stream2 = topicProducer.CreateStream(streamId))
                     {
                         stream2.Parameters.Buffer.AddTimestampNanoseconds(100)
                             .AddValue("p0", 1)
@@ -509,7 +509,7 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     Assert.True(streamStarted, "Stream is not started on reader.");
                 }
 
-                inputTopic.Dispose();
+                topicConsumer.Dispose();
             });
         }
         
@@ -518,15 +518,15 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var outputTopic = client.OpenOutputTopic("integration-tests");
+                var topicProducer = client.CreateTopicProducer("integration-tests");
                 var result = Parallel.For(0, 1000, parallelOptions: new ParallelOptions()
                 {
                     MaxDegreeOfParallelism = 20
-                }, (loop) => { outputTopic.GetOrCreateStream("testme"); });
+                }, (loop) => { topicProducer.GetOrCreateStream("testme"); });
 
                 result.IsCompleted.Should().BeTrue();
-                var stream = outputTopic.GetOrCreateStream("testme");
-                var stream2 = outputTopic.GetOrCreateStream("testme");
+                var stream = topicProducer.GetOrCreateStream("testme");
+                var stream2 = topicProducer.GetOrCreateStream("testme");
                 stream.Should().BeSameAs(stream2);
             });
         }
@@ -536,20 +536,20 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var outputTopic = client.OpenOutputTopic("integration-tests");
+                var topicProducer = client.CreateTopicProducer("integration-tests");
 
                 var testGroup = "quix.tests-" + Guid.NewGuid().GetHashCode().ToString("X");
-                var inputTopic1 = client.OpenInputTopic("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                var topicConsumer1 = client.CreateTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
 
                 var expectedStreamCount = 1;
                 long streamsRevoked = 0;
                 long streamsReceived = 0;
                 var cts = new CancellationTokenSource();
 
-                var streams = new List<IStreamWriter>();
+                var streams = new List<IStreamProducer>();
                 for (var i = 0; i <= expectedStreamCount; i++)
                 {
-                    streams.Add(outputTopic.CreateStream());
+                    streams.Add(topicProducer.CreateStream());
                 }
 
                 var writerTask = Task.Run(async () =>
@@ -570,18 +570,18 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                     }
                 });
 
-                inputTopic1.OnStreamReceived += (sender, sr) =>
+                topicConsumer1.OnStreamReceived += (sender, sr) =>
                 {
                     Interlocked.Increment(ref streamsReceived);
                 };
-                inputTopic1.OnStreamsRevoked += (sender, streams) =>
+                topicConsumer1.OnStreamsRevoked += (sender, streams) =>
                 {
-                    foreach (var streamReader in streams)
+                    foreach (var streamConsumer in streams)
                     {
                         Interlocked.Increment(ref streamsRevoked);
                     }
                 };
-                inputTopic1.StartReading();
+                topicConsumer1.Subscribe();
                 SpinWait.SpinUntil(() => streamsReceived > 0, TimeSpan.FromSeconds(20));
                 streamsReceived.Should().BeGreaterThan(0);
 
@@ -591,9 +591,9 @@ namespace Quix.Sdk.Streaming.IntegrationTests
                 for (var index = 0; index <= 5; index++)
                 {
                     if (streamsReceived2 > 0) break;
-                    var inputTopic2 = client.OpenInputTopic("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
-                    inputTopic2.OnStreamReceived += (sender, sr) => { Interlocked.Increment(ref streamsReceived2); };
-                    inputTopic2.StartReading();
+                    var topicConsumer2 = client.CreateTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                    topicConsumer2.OnStreamReceived += (sender, sr) => { Interlocked.Increment(ref streamsReceived2); };
+                    topicConsumer2.Subscribe();
                 }
 
                 SpinWait.SpinUntil(() => streamsReceived2 > 0, TimeSpan.FromSeconds(20));

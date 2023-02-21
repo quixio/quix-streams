@@ -22,13 +22,13 @@ namespace Quix.Sdk.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
 
-            var stream = outputTopic.CreateStream();
+            var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);
             
-            inputTopic.OnStreamReceived += (sender, reader) =>
+            topicConsumer.OnStreamReceived += (sender, reader) =>
             {
                 if (reader.StreamId != stream.StreamId)
                 {
@@ -63,7 +63,7 @@ namespace Quix.Sdk.Speedtest
                     */
                 };
             };
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
             const int size = 500;
             int totalcnt = 0;
@@ -76,7 +76,7 @@ namespace Quix.Sdk.Speedtest
             }
             
             stream.Close();
-            inputTopic.Dispose();
+            topicConsumer.Dispose();
         }
 
         protected TimeseriesDataRaw generateRawChunk(int size, int startTime)

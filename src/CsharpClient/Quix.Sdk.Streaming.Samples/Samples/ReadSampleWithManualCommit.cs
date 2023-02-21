@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamReader;
+using Quix.Sdk.Streaming.Models.StreamConsumer;
 
 namespace Quix.Sdk.Streaming.Samples.Samples
 {
@@ -24,9 +24,9 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
 
-            inputTopic.OnStreamReceived += (s, streamReader) =>
+            topicConsumer.OnStreamReceived += (s, streamConsumer) =>
             {
                 var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
@@ -36,21 +36,21 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     BufferTimeout = null,
                 };
 
-                var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
                 buffer.OnRead += OnBufferOnOnRead;
 
-                streamReader.Parameters.OnRead += OnParametersOnOnRead;
-                streamReader.Events.OnRead += OnEventsOnOnRead;
-                streamReader.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
-                streamReader.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
-                streamReader.Properties.OnChanged += OnPropertiesOnOnChanged;
+                streamConsumer.Parameters.OnRead += OnParametersOnOnRead;
+                streamConsumer.Events.OnRead += OnEventsOnOnRead;
+                streamConsumer.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
+                streamConsumer.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
+                streamConsumer.Properties.OnChanged += OnPropertiesOnOnChanged;
             };
 
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
             cancellationToken.Register(() =>
             {
-                inputTopic.Dispose();
+                topicConsumer.Dispose();
             });
         }
         
@@ -77,14 +77,14 @@ namespace Quix.Sdk.Streaming.Samples.Samples
         
         void OnEventsOnOnRead(object s, EventDataReadEventArgs args)
         {
-            args.Topic.Commit();
+            args.TopicConsumer.Commit();
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }
         
         
         void OnParametersOnOnRead(object s, TimeseriesDataReadEventArgs args)
         {
-            ((IInputTopic)args.Topic).Commit();
+            ((ITopicConsumer)args.Topic).Commit();
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         

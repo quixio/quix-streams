@@ -1,13 +1,13 @@
 from typing import Dict
 import ctypes
-from ..native.Python.QuixSdkStreaming.Models.StreamWriter.EventDataBuilder import EventDataBuilder as edbi
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDataBuilder import EventDataBuilder as edbi
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
 class EventDataBuilder(object):
     """
-        Builder for creating event data packages for StreamPropertiesWriter
+        Builder for creating event data packages for StreamPropertiesProducer
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
@@ -77,7 +77,7 @@ class EventDataBuilder(object):
 
     def write(self):
         """
-        Writes the values to the StreamEventsWriter buffer. See StreamEventsWriter buffer settings for more information when the values are sent to the broker
+        Writes the values to the StreamEventsProducer buffer. See StreamEventsProducer buffer settings for more information when the values are sent to the broker
         """
 
         self._interop.Write()

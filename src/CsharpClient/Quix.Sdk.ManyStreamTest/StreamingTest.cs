@@ -20,12 +20,12 @@ namespace Quix.Sdk.ManyStreamTest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
 
             int streamCounter = 0;
             
-            inputTopic.OnStreamReceived += (sender, reader) =>
+            topicConsumer.OnStreamReceived += (sender, reader) =>
             {
                 reader.OnStreamClosed += (sr, end) =>
                 {
@@ -41,11 +41,11 @@ namespace Quix.Sdk.ManyStreamTest
                     Console.WriteLine($"Stream count: {streamCounter}");
                 };*/
             };
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
             while (!ct.IsCancellationRequested)
             {
-                var stream = outputTopic.CreateStream();
+                var stream = topicProducer.CreateStream();
                 var data = new Quix.Sdk.Streaming.Models.TimeseriesData();
                 data.AddTimestampNanoseconds(10).AddValue("test", DateTime.UtcNow.ToBinary());
                 stream.Parameters.Buffer.Write(data);
@@ -55,7 +55,7 @@ namespace Quix.Sdk.ManyStreamTest
                 stream.Events.AddDefinition("test1");
                 stream.Close();
             }
-            inputTopic.Dispose();
+            topicConsumer.Dispose();
         }
     }
 }

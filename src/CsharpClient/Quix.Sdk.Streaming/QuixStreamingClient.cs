@@ -70,7 +70,7 @@ namespace Quix.Sdk.Streaming
         public TokenValidationConfiguration TokenValidationConfig { get; set; } = new TokenValidationConfiguration();
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaStreamingClient"/> that is capable of creating input and output topics for reading and writing
+        /// Initializes a new instance of <see cref="KafkaStreamingClient"/> that is capable of creating topic consumer and producers
         /// </summary>
         /// <param name="token">The token to use when talking to Quix. When not provided, Quix__Sdk__Token environment variable will be used</param>
         /// <param name="autoCreateTopics">Whether topics should be auto created if they don't exist yet</param>
@@ -113,66 +113,66 @@ namespace Quix.Sdk.Streaming
         }
 
         /// <summary>
-        /// Open an input topic capable of reading incoming streams
+        /// Open an topic consumer capable of subscribing to receive incoming streams
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="options">The settings to use for committing</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IInputTopic OpenInputTopic(string topicIdOrName, string consumerGroup = "Default", CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Earliest)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public ITopicConsumer CreateTopicConsumer(string topicIdOrName, string consumerGroup = "Default", CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Earliest)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
             
             var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, options) = GetValidConsumerGroup(topicIdOrName, consumerGroup, options).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.OpenInputTopic(topicId, consumerGroup, options, autoOffset);
+            return client.CreateTopicConsumer(topicId, consumerGroup, options, autoOffset);
         }
 
         /// <summary>
-        /// Open an input topic capable of reading non-sdk incoming messages 
+        /// Open an topic consumer capable of subscribing to receive non-sdk incoming messages 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IRawInputTopic OpenRawInputTopic(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public IRawTopicConsumer CreateRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
             var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, _) = GetValidConsumerGroup(topicIdOrName, consumerGroup, null).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.OpenRawInputTopic(topicId, consumerGroup, autoOffset);
+            return client.CreateRawTopicConsumer(topicId, consumerGroup, autoOffset);
         }
 
         /// <summary>
-        /// Open an output topic capable of writing non-sdk messages 
+        /// Open an topic consumer capable of subscribing to receive non-sdk incoming messages 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IRawOutputTopic OpenRawOutputTopic(string topicIdOrName)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public IRawTopicProducer CreateRawTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
             var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.OpenRawOutputTopic(topicId);
+            return client.CreateRawTopicProducer(topicId);
         }
         
         /// <summary>
-        /// Open an output topic capable of writing sdk messages 
+        /// Open an topic producer capable of publishing sdk messages 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IOutputTopic OpenOutputTopic(string topicIdOrName)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public ITopicProducer CreateTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
             var (client, topicId) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.OpenOutputTopic(topicId);
+            return client.CreateTopicProducer(topicId);
         }
 
         private async Task<(string, CommitOptions)> GetValidConsumerGroup(string topicIdOrName, string originalConsumerGroup, CommitOptions commitOptions)
@@ -705,26 +705,26 @@ namespace Quix.Sdk.Streaming
     public static class QuixStreamingClientExtensions
     {
         /// <summary>
-        /// Open an input topic capable of reading incoming streams
+        /// Open an topic consumer capable of subscribing to receive incoming streams
         /// </summary>
         /// <param name="client">Quix Streaming client instance</param>
         /// <param name="topicId">Id of the topic. Should look like: myvery-myworkspace-mytopic</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public static IInputTopic OpenInputTopic(this QuixStreamingClient client, string topicId, string consumerGroup = "Default", CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Earliest)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public static ITopicConsumer CreateTopicConsumer(this QuixStreamingClient client, string topicId, string consumerGroup = "Default", CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Earliest)
         {
             switch (commitMode)
             {
                 case CommitMode.Automatic:
-                    return client.OpenInputTopic(topicId, consumerGroup, null, autoOffset);
+                    return client.CreateTopicConsumer(topicId, consumerGroup, null, autoOffset);
                 case CommitMode.Manual:
                     var commitOptions = new CommitOptions()
                     {
                         AutoCommitEnabled = false
                     };
-                    return client.OpenInputTopic(topicId, consumerGroup, commitOptions, autoOffset);
+                    return client.CreateTopicConsumer(topicId, consumerGroup, commitOptions, autoOffset);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(commitMode), commitMode, null);
             }

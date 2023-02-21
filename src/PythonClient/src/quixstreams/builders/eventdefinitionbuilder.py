@@ -1,5 +1,5 @@
 import ctypes
-from ..native.Python.QuixSdkStreaming.Models.StreamWriter.EventDefinitionBuilder import EventDefinitionBuilder as edbi
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.EventDefinitionBuilder import EventDefinitionBuilder as edbi
 
 from ..helpers.enumconverter import EnumConverter as ec
 from ..models.eventlevel import EventLevel
@@ -11,7 +11,7 @@ from ..helpers.nativedecorator import nativedecorator
 @nativedecorator
 class EventDefinitionBuilder(object):
     """
-        Builder for creating event and group definitions for StreamPropertiesWriter
+        Builder for creating event and group definitions for StreamPropertiesProducer
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
@@ -57,7 +57,7 @@ class EventDefinitionBuilder(object):
 
     def add_definition(self, event_id: str, name: str = None, description: str = None) -> 'EventDefinitionBuilder':
         """
-        Add new event definition to the StreamPropertiesWriter. Configure it with the builder methods.
+        Add new event definition to the StreamPropertiesProducer. Configure it with the builder methods.
         :param event_id: The id of the event. Must match the event id used to send data.
         :param name: The human friendly display name of the event
         :param description: The description of the event

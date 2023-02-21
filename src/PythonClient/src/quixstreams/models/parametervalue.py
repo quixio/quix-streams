@@ -1,7 +1,6 @@
 from typing import Union
 from enum import Enum
 
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.QuixSdkStreaming.Models.ParameterValue import ParameterValue as pvi
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 import ctypes

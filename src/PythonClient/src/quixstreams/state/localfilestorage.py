@@ -1,5 +1,3 @@
-from ctypes import Union
-
 from .statevalue import StateValue
 
 from ..native.Python.QuixSdkState.Storage.StorageExtensions import StorageExtensions as se

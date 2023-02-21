@@ -10,14 +10,14 @@ namespace Quix.Sdk.RawReadSamples
         public static void Run()
         {
             var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var rawReader = streamingClient.OpenRawInputTopic("RawSampleKey");
+            var rawTopicConsumer = streamingClient.CreateRawTopicConsumer("RawSampleKey");
 
 
-            rawReader.OnErrorOccurred += (s, e) =>
+            rawTopicConsumer.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Expception occurred: {e}");
             };
-            rawReader.OnMessageRead += (sender, message) =>
+            rawTopicConsumer.OnMessageRead += (sender, message) =>
             {
                 var text = Encoding.UTF8.GetString((byte[])message.Value);
                 var key = message.Key != null ? message.Key : "???`";
@@ -25,7 +25,7 @@ namespace Quix.Sdk.RawReadSamples
             };
 
 
-            rawReader.StartReading();
+            rawTopicConsumer.Subscribe();
             Console.WriteLine("Litening to Kafka!");
 
             Console.WriteLine("\npress any key to exit the process...");

@@ -24,12 +24,12 @@ namespace Quix.Sdk.PerformanceTest
             DateTime lastUpdate = DateTime.UtcNow;
             var datetime = DateTime.UtcNow.ToUnixNanoseconds();
 
-            // Create a client which holds generic details for creating input and output topics
+            // Create a client which holds generic details for creating topic consumer and producers
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            using var outputTopic = client.OpenOutputTopic("test");
+            using var topicProducer = client.CreateTopicProducer("test");
 
-            var stream = outputTopic.CreateStream();
+            var stream = topicProducer.CreateStream();
             stream.Parameters.Buffer.PacketSize = bufferSize;
             Console.WriteLine("Stream Created.");
 

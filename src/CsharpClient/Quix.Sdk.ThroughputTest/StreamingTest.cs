@@ -30,10 +30,10 @@ namespace Quix.Sdk.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
 
-            var stream = outputTopic.CreateStream();
+            var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);
 
             var timer = new System.Timers.Timer()
@@ -78,7 +78,7 @@ namespace Quix.Sdk.Speedtest
                 }
             };
             var mre = new ManualResetEvent(false);
-            inputTopic.OnStreamReceived += (sender, reader) =>
+            topicConsumer.OnStreamReceived += (sender, reader) =>
             {
                 if (reader.StreamId != stream.StreamId)
                 {
@@ -102,7 +102,7 @@ namespace Quix.Sdk.Speedtest
                 };
                 
             };
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
             
             stream.Parameters.Buffer.PacketSize = 1000;
@@ -143,7 +143,7 @@ namespace Quix.Sdk.Speedtest
             }
             
             stream.Close();
-            inputTopic.Dispose();
+            topicConsumer.Dispose();
         }
 
         private class Entry

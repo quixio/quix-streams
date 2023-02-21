@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
 using Quix.Sdk.Process.Models;
-using Quix.Sdk.Streaming.Models.StreamReader;
+using Quix.Sdk.Streaming.Models.StreamConsumer;
 
 namespace Quix.Sdk.Streaming.Models
 {

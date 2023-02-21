@@ -12,9 +12,9 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             Task.Run(() =>
             {
                 var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-                var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);
+                var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
 
-                using var stream = outputTopic.CreateStream(streamId);
+                using var stream = topicProducer.CreateStream(streamId);
                 stream.Properties.Name = "Volvo car telemetry";
                 stream.Properties.Location = "Car telemetry/Vehicles/Volvo";
                 stream.Properties.AddParent("1234");

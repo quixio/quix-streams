@@ -16,10 +16,10 @@ namespace Quix.Sdk.Streaming
     /// </summary>
     public static class App
     {
-        private static readonly ConcurrentDictionary<IInputTopic, bool> inputTopics = new ConcurrentDictionary<IInputTopic, bool>();
-        private static readonly ConcurrentDictionary<IRawInputTopic, bool> rawInputTopics = new ConcurrentDictionary<IRawInputTopic, bool>();
-        private static readonly ConcurrentDictionary<IOutputTopic, bool> outputTopics = new ConcurrentDictionary<IOutputTopic, bool>();
-        private static readonly ConcurrentDictionary<IRawOutputTopic, bool> rawOutputTopics = new ConcurrentDictionary<IRawOutputTopic, bool>();
+        private static readonly ConcurrentDictionary<ITopicConsumer, bool> topicConsumers = new ConcurrentDictionary<ITopicConsumer, bool>();
+        private static readonly ConcurrentDictionary<IRawTopicConsumer, bool> rawTopicConsumers = new ConcurrentDictionary<IRawTopicConsumer, bool>();
+        private static readonly ConcurrentDictionary<ITopicProducer, bool> topicProducers = new ConcurrentDictionary<ITopicProducer, bool>();
+        private static readonly ConcurrentDictionary<IRawTopicProducer, bool> rawTopicProducers = new ConcurrentDictionary<IRawTopicProducer, bool>();
         
         
         [DllImport("Kernel32")]
@@ -37,7 +37,7 @@ namespace Quix.Sdk.Streaming
 
         /// <summary>
         /// Helper method to handle default streaming behaviors and handle automatic resource cleanup on shutdown
-        /// It also ensures input topics defined at the time of invocation are opened for read.
+        /// It also ensures topic consumers defined at the time of invocation are subscribed to receive messages.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token to abort. Use when you wish to manually stop streaming for other reason that shutdown.</param>
         /// <param name="beforeShutdown">The callback to invoke before shutting down</param>
@@ -134,15 +134,15 @@ namespace Quix.Sdk.Streaming
             var opened = 0;
             
             // Init
-            foreach (var inputTopic in inputTopics)
+            foreach (var topicConsumer in topicConsumers)
             {
-                inputTopic.Key.StartReading();
+                topicConsumer.Key.Subscribe();
                 opened++;
             }
             
-            foreach (var inputTopic in rawInputTopics)
+            foreach (var topicConsumer in rawTopicConsumers)
             {
-                inputTopic.Key.StartReading();
+                topicConsumer.Key.Subscribe();
                 opened++;
             }
             if (opened > 0) logger.LogDebug("Opened {0} topics for reading", opened);
@@ -154,7 +154,7 @@ namespace Quix.Sdk.Streaming
             logger.LogDebug($"Waiting for graceful shutdown");
             var sw = Stopwatch.StartNew();
             actualBeforeShutdown();
-            foreach (var disposable in inputTopics)
+            foreach (var disposable in topicConsumers)
             {
                 try
                 {
@@ -166,7 +166,7 @@ namespace Quix.Sdk.Streaming
                 }
             }
             
-            foreach (var disposable in rawInputTopics)
+            foreach (var disposable in rawTopicConsumers)
             {
                 try
                 {
@@ -178,7 +178,7 @@ namespace Quix.Sdk.Streaming
                 }
             }
             
-            foreach (var disposable in outputTopics)
+            foreach (var disposable in topicProducers)
             {
                 try
                 {
@@ -190,7 +190,7 @@ namespace Quix.Sdk.Streaming
                 }
             }
 
-            foreach (var disposable in rawOutputTopics)
+            foreach (var disposable in rawTopicProducers)
             {
                 try
                 {
@@ -202,10 +202,10 @@ namespace Quix.Sdk.Streaming
                 }
             }
             
-            rawInputTopics.Clear();
-            inputTopics.Clear();
-            outputTopics.Clear();
-            rawOutputTopics.Clear();
+            rawTopicConsumers.Clear();
+            topicConsumers.Clear();
+            topicProducers.Clear();
+            rawTopicProducers.Clear();
 
             logger.LogDebug("Graceful shutdown completed in {0}", sw.Elapsed);
 
@@ -213,25 +213,25 @@ namespace Quix.Sdk.Streaming
             waitForMainExit.Set();
         }
 
-        internal static void Register(InputTopic inputTopic)
+        internal static void Register(TopicConsumer topicConsumer)
         {
-            if (inputTopics.TryAdd(inputTopic, false)) inputTopic.OnDisposed += (s, e) => inputTopics.TryRemove(inputTopic, out _);
+            if (topicConsumers.TryAdd(topicConsumer, false)) topicConsumer.OnDisposed += (s, e) => topicConsumers.TryRemove(topicConsumer, out _);
         }
         
 
-        internal static void Register(RawInputTopic rawInputTopic)
+        internal static void Register(RawTopicConsumer rawTopicConsumer)
         {
-            if (rawInputTopics.TryAdd(rawInputTopic, false)) rawInputTopic.OnDisposed += (s, e) => rawInputTopics.TryRemove(rawInputTopic, out _);
+            if (rawTopicConsumers.TryAdd(rawTopicConsumer, false)) rawTopicConsumer.OnDisposed += (s, e) => rawTopicConsumers.TryRemove(rawTopicConsumer, out _);
         }
 
-        internal static void Register(OutputTopic rawOutputTopic)
+        internal static void Register(TopicProducer rawTopicProducer)
         {
-            if (outputTopics.TryAdd(rawOutputTopic, false)) rawOutputTopic.OnDisposed += (s, e) => outputTopics.TryRemove(rawOutputTopic, out _);
+            if (topicProducers.TryAdd(rawTopicProducer, false)) rawTopicProducer.OnDisposed += (s, e) => topicProducers.TryRemove(rawTopicProducer, out _);
         }
 
-        internal static void Register(RawOutputTopic rawOutputTopic)
+        internal static void Register(RawTopicProducer rawTopicProducer)
         {
-            if (rawOutputTopics.TryAdd(rawOutputTopic, false)) rawOutputTopic.OnDisposed += (s, e) => rawOutputTopics.TryRemove(rawOutputTopic, out _);
+            if (rawTopicProducers.TryAdd(rawTopicProducer, false)) rawTopicProducer.OnDisposed += (s, e) => rawTopicProducers.TryRemove(rawTopicProducer, out _);
         }
     }
 }

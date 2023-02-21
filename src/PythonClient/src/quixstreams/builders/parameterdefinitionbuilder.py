@@ -1,12 +1,12 @@
 import ctypes
-from ..native.Python.QuixSdkStreaming.Models.StreamWriter.ParameterDefinitionBuilder import ParameterDefinitionBuilder as pdbi
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.ParameterDefinitionBuilder import ParameterDefinitionBuilder as pdbi
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
 class ParameterDefinitionBuilder(object):
     """
-        Builder for creating parameter and group definitions for StreamPropertiesWriter
+        Builder for creating parameter and group definitions for StreamPropertiesProducer
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
@@ -75,7 +75,7 @@ class ParameterDefinitionBuilder(object):
 
     def add_definition(self, parameter_id: str, name: str = None, description: str = None) -> 'ParameterDefinitionBuilder':
         """
-        Add new parameter definition to the StreamPropertiesWriter. Configure it with the builder methods.
+        Add new parameter definition to the StreamPropertiesProducer. Configure it with the builder methods.
         :param parameter_id: The id of the parameter. Must match the parameter id used to send data.
         :param name: The human friendly display name of the parameter
         :param description: The description of the parameter

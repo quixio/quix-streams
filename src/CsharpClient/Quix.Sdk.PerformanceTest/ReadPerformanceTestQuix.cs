@@ -6,8 +6,8 @@ using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming;
 using Quix.Sdk.Streaming.Configuration;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamReader;
-using Quix.Sdk.Streaming.Models.StreamWriter;
+using Quix.Sdk.Streaming.Models.StreamConsumer;
+using Quix.Sdk.Streaming.Models.StreamProducer;
 using Quix.Sdk.Streaming.UnitTests;
 
 namespace Quix.Sdk.PerformanceTest
@@ -24,22 +24,22 @@ namespace Quix.Sdk.PerformanceTest
 
             DateTime lastUpdate = DateTime.UtcNow;
 
-            // Create a client which holds generic details for creating input and output topics
+            // Create a client which holds generic details for creating topic consumer and producers
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            using var inputTopic = client.OpenInputTopic("test");
+            using var topicConsumer = client.CreateTopicConsumer("test");
 
             // Hook up events before initiating read to avoid losing out on any data
-            inputTopic.OnStreamReceived += (topic, streamReader) =>
+            topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
             {
-                Console.WriteLine($"New stream read: {streamReader.StreamId}");
+                Console.WriteLine($"New stream read: {streamConsumer.StreamId}");
 
                 var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
                     PacketSize = bufferSize,
                 };
 
-                var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
 
                 buffer.OnRead += (sender, args) =>
                 {
@@ -66,7 +66,7 @@ namespace Quix.Sdk.PerformanceTest
                 };
             };
 
-            inputTopic.StartReading(); // initiate read
+            topicConsumer.Subscribe(); // initiate read
             Console.WriteLine("Listening for streams");
 
             // Hook up to termination signal (for docker image) and CTRL-C

@@ -21,13 +21,13 @@ namespace Quix.Sdk.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var outputTopic = client.OpenOutputTopic(Configuration.Config.Topic);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
 
-            var stream = outputTopic.CreateStream();
+            var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);
             
-            inputTopic.OnStreamReceived += (sender, reader) =>
+            topicConsumer.OnStreamReceived += (sender, reader) =>
             {
                 if (reader.StreamId != stream.StreamId)
                 {
@@ -55,7 +55,7 @@ namespace Quix.Sdk.Speedtest
                     }
                 };
             };
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
             stream.Parameters.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
@@ -82,7 +82,7 @@ namespace Quix.Sdk.Speedtest
             }
             
             stream.Close();
-            inputTopic.Dispose();
+            topicConsumer.Dispose();
         }
     }
 }

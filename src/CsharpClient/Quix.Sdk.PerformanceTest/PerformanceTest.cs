@@ -5,7 +5,7 @@ using System.Threading;
 using Quix.Sdk.Process.Models;
 using Quix.Sdk.Streaming;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamWriter;
+using Quix.Sdk.Streaming.Models.StreamProducer;
 using Quix.Sdk.Streaming.UnitTests;
 
 namespace Quix.Sdk.PerformanceTest
@@ -23,10 +23,10 @@ namespace Quix.Sdk.PerformanceTest
         {
             var client = new TestStreamingClient(CodecType.ImprovedJson);
 
-            //var inputTopic = client.OpenInputTopic();
-            var outputTopic = client.OpenOutputTopic();
+            //var topicConsumer = client.CreateTopicConsumer();
+            var topicProducer = client.CreateTopicProducer();
 
-            //inputTopic.OnStreamReceived += (s, stream) =>
+            //topicConsumer.OnStreamReceived += (s, stream) =>
             //{
             //    var buffer = stream.Parameters.CreateBuffer();
             //    buffer.PacketSize = readBufferSize;
@@ -39,9 +39,9 @@ namespace Quix.Sdk.PerformanceTest
             //    };
             //};
 
-            //inputTopic.StartReading();
+            //topicConsumer.StartReading();
 
-            var stream = outputTopic.CreateStream();
+            var stream = topicProducer.CreateStream();
             stream.Parameters.Buffer.PacketSize = writeBufferSize;
 
             DateTime lastUpdate = DateTime.UtcNow;
@@ -69,7 +69,7 @@ namespace Quix.Sdk.PerformanceTest
             }
 
             stream.Close();
-            //inputTopic.Dispose();
+            //topicConsumer.Dispose();
         }
 
     }

@@ -44,8 +44,8 @@ namespace Quix.Sdk.Streaming.UnitTests
             
             var client = new TestStreamingClient(writerCodec);
             
-            var inputTopic = client.OpenInputTopic();
-            var outputTopic = client.OpenOutputTopic();
+            var topicConsumer = client.CreateTopiConsumer();
+            var topicProducer = client.CreateTopicProducer();
 
             IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
             var streamStarted = 0;
@@ -54,7 +54,7 @@ namespace Quix.Sdk.Streaming.UnitTests
             var parametersPropertiesChanged = false;
             string streamId = null;
 
-            inputTopic.OnStreamReceived += (s, e) =>
+            topicConsumer.OnStreamReceived += (s, e) =>
             {
                 if (e.StreamId != streamId)
                 {
@@ -62,17 +62,17 @@ namespace Quix.Sdk.Streaming.UnitTests
                 }
 
                 streamStarted++;
-                (e as IStreamReaderInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
-                (e as IStreamReaderInternal).OnParameterDefinitionsChanged += (s2, e2) => parametersPropertiesChanged = true;
-                (e as IStreamReaderInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
+                (e as IStreamConsumerInternal).OnTimeseriesData += (s2, e2) => data.Add(e2);
+                (e as IStreamConsumerInternal).OnParameterDefinitionsChanged += (s2, e2) => parametersPropertiesChanged = true;
+                (e as IStreamConsumerInternal).OnStreamPropertiesChanged += (s2, e2) => streamProperties = e2;
 
                 e.OnStreamClosed += (s2, e2) => streamEnded++;
             };
 
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
 
-            using (var stream = outputTopic.CreateStream())
+            using (var stream = topicProducer.CreateStream())
             {
                 streamId = stream.StreamId;
 
@@ -115,7 +115,7 @@ namespace Quix.Sdk.Streaming.UnitTests
                     }
                 };
 
-                (stream as IStreamWriterInternal).Write(expectedParametersProperties);
+                (stream as IStreamProducerInternal).Publish(expectedParametersProperties);
 
                 Assert.True(parametersPropertiesChanged, "Parameter properties event not reached reader.");
 
@@ -123,7 +123,7 @@ namespace Quix.Sdk.Streaming.UnitTests
                 expectedData.Add(GenerateTimeseriesData(0));
                 expectedData.Add(GenerateTimeseriesData(10));
 
-                (stream as IStreamWriterInternal).Write(expectedData);
+                (stream as IStreamProducerInternal).Publish(expectedData);
 
                 SpinWait.SpinUntil(() => data.Count == 2, TimeSpan.FromSeconds(5));
 

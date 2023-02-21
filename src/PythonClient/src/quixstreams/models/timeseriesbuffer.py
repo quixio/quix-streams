@@ -10,9 +10,9 @@ from ..models.timeseriesdata import TimeseriesData
 from ..models.timeseriesdataraw import TimeseriesDataRaw
 from ..models.timeseriesdatatimestamp import TimeseriesDataTimestamp
 
-from ..native.Python.QuixSdkStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as pbi
-from ..native.Python.QuixSdkStreaming.Models.StreamReader.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
-from ..native.Python.QuixSdkStreaming.Models.StreamReader.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
+from ..native.Python.QuixSdkStreaming.Models.TimeseriesBuffer import TimeseriesBuffer as tsbi
+from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
+from ..native.Python.QuixSdkStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
 
 from ..helpers.nativedecorator import nativedecorator
 
@@ -38,7 +38,7 @@ class TimeseriesBuffer(object):
         if net_pointer is None:
             raise Exception("TimeseriesBuffer is none")
 
-        self._interop_pb = pbi(net_pointer)
+        self._interop_pb = tsbi(net_pointer)
         self._stream = stream
         self._topic = topic
 
@@ -78,14 +78,14 @@ class TimeseriesBuffer(object):
 
     # region on_read
     @property
-    def on_read(self) -> Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesData], None]:
+    def on_read(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesData format.
         """
         return self._on_read
 
     @on_read.setter
-    def on_read(self, value: Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesData], None]) -> None:
+    def on_read(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesData format.
         """
@@ -111,14 +111,14 @@ class TimeseriesBuffer(object):
     
     # region on_raw_read
     @property
-    def on_raw_read(self) -> Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]:
+    def on_raw_read(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
         return self._on_raw_read
 
     @on_raw_read.setter
-    def on_raw_read(self, value: Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], TimeseriesDataRaw], None]) -> None:
+    def on_raw_read(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
@@ -143,14 +143,14 @@ class TimeseriesBuffer(object):
     
     # region on_read_dataframe
     @property
-    def on_read_dataframe(self) -> Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], pandas.DataFrame], None]:
+    def on_read_dataframe(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
         """
         return self._on_read_dataframe
 
     @on_read_dataframe.setter
-    def on_read_dataframe(self, value: Callable[[Union['InputTopic', 'OutputTopic'], Union['StreamReader', 'StreamWriter'], pandas.DataFrame], None]) -> None:
+    def on_read_dataframe(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
         """

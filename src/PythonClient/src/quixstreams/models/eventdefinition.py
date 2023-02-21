@@ -14,12 +14,12 @@ class EventDefinition(object):
         """
         Initializes a new instance of EventDefinition
 
-        NOTE: Do not initialize this class manually. Instances of it are available on StreamEventsReader.definitions
+        NOTE: Do not initialize this class manually. Instances of it are available on StreamEventsConsumer.definitions
         :param net_pointer: Pointer to an instance of a .net EventDefinition
         """
 
         if net_pointer is None:
-            raise Exception("StreamPropertiesReader is none")
+            raise Exception("StreamPropertiesConsumer is none")
         with (interop := edi(net_pointer)):
 
             self.id: str = interop.get_Id()

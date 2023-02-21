@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamReader;
+using Quix.Sdk.Streaming.Models.StreamConsumer;
 
 namespace Quix.Sdk.Streaming.Samples.Samples
 {
@@ -26,12 +26,12 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
 
             var closeReadTask = new TaskCompletionSource<object>();
-            inputTopic.OnStreamReceived += (sender, streamReader) =>
+            topicConsumer.OnStreamReceived += (sender, streamConsumer) =>
             {
-                if (streamReader.StreamId != streamIdToRead) return;
+                if (streamConsumer.StreamId != streamIdToRead) return;
                 var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
                     PacketSize = 100,
@@ -43,30 +43,30 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     //CustomFilter = (timestamp) => timestamp.TimestampMilliseconds % 1000 == 0
                 };
 
-                var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
 
 
 
                 buffer.OnRead += OnBufferOnOnRead;
-                streamReader.Events.OnRead += OnEventsOnOnRead;
-                streamReader.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
-                streamReader.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
-                streamReader.Properties.OnChanged += OnPropertiesOnOnChanged;
-                streamReader.OnStreamClosed += (s, args) =>
+                streamConsumer.Events.OnRead += OnEventsOnOnRead;
+                streamConsumer.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
+                streamConsumer.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
+                streamConsumer.Properties.OnChanged += OnPropertiesOnOnChanged;
+                streamConsumer.OnStreamClosed += (s, args) =>
                 {
                     Console.WriteLine($"Stream Close -> StreamId '{args.Stream.StreamId}' with type {args.EndType}");
                     closeReadTask.SetResult(new object());
                 };
             };
 
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
             
             this.onStop = () =>
             {
                 Console.WriteLine("Waiting for incoming stream end");
                 closeReadTask.Task.GetAwaiter().GetResult(); // wait for close to be read
                 Console.WriteLine("Waited for incoming stream end");
-                inputTopic.Dispose();
+                topicConsumer.Dispose();
             };
         }
         
@@ -83,9 +83,9 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             // var outData = data.Clone();
 
             // Send using writer buffer
-            //streamWriter.Parameters.Buffer.Write(data);
+            //streamProducer.Parameters.Buffer.Write(data);
             // Send without using writer buffer
-            //streamWriter.Parameters.Write(data);
+            //streamProducer.Parameters.Write(data);
 
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }

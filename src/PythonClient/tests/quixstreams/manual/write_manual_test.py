@@ -14,7 +14,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-output_topic = client.open_output_topic('generated-data')
+output_topic = client.create_topic_producer('generated-data')
 
 number_of_stream = 10
 
@@ -34,7 +34,7 @@ number_of_streamproperties_metadata = 5
 number_of_data_loop = 100
 number_of_data_points_per_loop = 10
 
-def on_write_exception_handler(stream: qx.StreamWriter, ex: BaseException):
+def on_write_exception_handler(stream: qx.StreamProducer, ex: BaseException):
     print(ex.args[0])
 
 for stream_number in range(number_of_stream):

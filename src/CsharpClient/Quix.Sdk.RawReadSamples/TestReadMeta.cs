@@ -10,7 +10,7 @@ namespace Quix.Sdk.RawReadSamples
         public static void Run()
         {
             var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var rawReader = streamingClient.OpenRawInputTopic("RawSampleMeta");
+            var rawReader = streamingClient.CreateRawTopicConsumer("RawSampleMeta");
 
 
             rawReader.OnErrorOccurred += (s, e) =>
@@ -29,7 +29,7 @@ namespace Quix.Sdk.RawReadSamples
             };
 
 
-            rawReader.StartReading();
+            rawReader.Subscribe();
             Console.WriteLine("Litening to Kafka!");
 
             Console.WriteLine("\npress any key to exit the process...");

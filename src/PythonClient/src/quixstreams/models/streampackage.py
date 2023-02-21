@@ -18,7 +18,7 @@ class StreamPackage(object):
         """
             Initializes a new instance of StreamPackage.
 
-            NOTE: Do not initialize this class manually. Will be initialized by StreamReader.on_package_received
+            NOTE: Do not initialize this class manually. Will be initialized by StreamConsumer.on_package_received
             Parameters:
 
             net_pointer: Pointer to an instance of a .net StreamPackage.

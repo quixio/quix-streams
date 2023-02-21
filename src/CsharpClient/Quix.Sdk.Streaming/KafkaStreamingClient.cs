@@ -27,7 +27,7 @@ namespace Quix.Sdk.Streaming
         private readonly Dictionary<string, string> brokerProperties;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaStreamingClient"/> that is capable of creating input and output topics for reading and writing
+        /// Initializes a new instance of <see cref="KafkaStreamingClient"/> that is capable of creating topic consumer and producers
         /// </summary>
         /// <param name="brokerAddress">Address of Kafka cluster.</param>
         /// <param name="securityOptions">Optional security options.</param>
@@ -84,14 +84,14 @@ namespace Quix.Sdk.Streaming
         }
         
         /// <summary>
-        /// Open an input topic capable of reading incoming streams
+        /// Open an topic consumer capable of subscribing to receive incoming streams
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="options">The settings to use for committing</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IInputTopic OpenInputTopic(string topic, string consumerGroup = "Default", CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Earliest)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public ITopicConsumer CreateTopicConsumer(string topic, string consumerGroup = "Default", CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Earliest)
         {
             var wsIdPrefix = GetWorkspaceIdPrefixFromTopic(topic);
             consumerGroup = UpdateConsumerGroup(consumerGroup, wsIdPrefix);
@@ -104,54 +104,54 @@ namespace Quix.Sdk.Streaming
 
             var kafkaReader = new TelemetryKafkaConsumer(kafkaReaderConfiguration, topic);
 
-            var inputTopic = new InputTopic(kafkaReader);
+            var topicConsumer = new TopicConsumer(kafkaReader);
 
-            Quix.Sdk.Streaming.App.Register(inputTopic);
+            Quix.Sdk.Streaming.App.Register(topicConsumer);
 
-            return inputTopic;
+            return topicConsumer;
         }
 
         /// <summary>
-        /// Open an input topic capable of reading non-sdk incoming messages 
+        /// Open an topic consumer capable of subscribing to receive non-sdk incoming messages 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IRawInputTopic OpenRawInputTopic(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public IRawTopicConsumer CreateRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
-            var rawInputTopic = new RawInputTopic(brokerAddress, topic, consumerGroup ?? "Default", brokerProperties, autoOffset ?? AutoOffsetReset.Earliest);
+            var rawTopicConsumer = new RawTopicConsumer(brokerAddress, topic, consumerGroup ?? "Default", brokerProperties, autoOffset ?? AutoOffsetReset.Earliest);
 
-            Quix.Sdk.Streaming.App.Register(rawInputTopic);
+            Quix.Sdk.Streaming.App.Register(rawTopicConsumer);
             
-            return rawInputTopic;
+            return rawTopicConsumer;
         }
 
         /// <summary>
-        /// Open an input topic capable of writing non-sdk incoming messages 
+        /// Open an topic consumer capable of subscribing to receive non-sdk incoming messages  
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IRawOutputTopic OpenRawOutputTopic(string topic)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public IRawTopicProducer CreateRawTopicProducer(string topic)
         {
-            var rawOutputTopic = new RawOutputTopic(brokerAddress, topic, brokerProperties);
+            var rawTopicProducer = new RawTopicProducer(brokerAddress, topic, brokerProperties);
 
-            Quix.Sdk.Streaming.App.Register(rawOutputTopic);
-            return rawOutputTopic;
+            Quix.Sdk.Streaming.App.Register(rawTopicProducer);
+            return rawTopicProducer;
         }
         
         /// <summary>
-        /// Open an output topic capable of writing non-sdk messages 
+        /// Open an topic producer capable of publishing non-sdk messages 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public IOutputTopic OpenOutputTopic(string topic)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public ITopicProducer CreateTopicProducer(string topic)
         {
-            var outputTopic = new OutputTopic(new KafkaWriterConfiguration(brokerAddress, brokerProperties), topic);
+            var topicProducer = new TopicProducer(new KafkaWriterConfiguration(brokerAddress, brokerProperties), topic);
             
-            Quix.Sdk.Streaming.App.Register(outputTopic);
+            Quix.Sdk.Streaming.App.Register(topicProducer);
 
-            return outputTopic;
+            return topicProducer;
         }
 
         private string GetWorkspaceIdPrefixFromTopic(string topic)
@@ -192,26 +192,26 @@ namespace Quix.Sdk.Streaming
     public static class KafkaStreamingClientExtensions
     {
         /// <summary>
-        /// Open an input topic capable of reading incoming streams
+        /// Open an topic consumer capable of subscribing to receive incoming streams
         /// </summary>
         /// <param name="client">Streaming Client instance</param>
         /// <param name="topic">Name of the topic.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
-        /// <returns>Instance of <see cref="IInputTopic"/></returns>
-        public static IInputTopic OpenInputTopic(this KafkaStreamingClient client, string topic, string consumerGroup = "Default", CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Earliest)
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        public static ITopicConsumer CreateTopicConsumer(this KafkaStreamingClient client, string topic, string consumerGroup = "Default", CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Earliest)
         {
             switch (commitMode)
             {
                 case CommitMode.Automatic:
-                    return client.OpenInputTopic(topic, consumerGroup, autoOffset: autoOffset);
+                    return client.CreateTopicConsumer(topic, consumerGroup, autoOffset: autoOffset);
                 case CommitMode.Manual:
                     var commitOptions = new CommitOptions()
                     {
                         AutoCommitEnabled = false
                     };
-                    return client.OpenInputTopic(topic, consumerGroup, commitOptions, autoOffset);
+                    return client.CreateTopicConsumer(topic, consumerGroup, commitOptions, autoOffset);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(commitMode), commitMode, null);
             }

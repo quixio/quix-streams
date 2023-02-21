@@ -1,4 +1,4 @@
-from .rawinputtopic import RawInputTopic
-from .rawoutputtopic import RawOutputTopic
+from .rawtopicconsumer import RawTopicConsumer
+from .rawtopicproducer import RawTopicProducer
 from .rawmessage import RawMessage
 

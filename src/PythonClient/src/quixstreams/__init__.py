@@ -3,7 +3,6 @@ __version__ = "local"
 
 import os
 import platform
-import sysconfig
 import ctypes
 
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -41,16 +40,16 @@ InteropUtils.set_lib(lib)
 
 from .models import *
 from .quixstreamingclient import QuixStreamingClient
-from .streamreader import StreamReader
+from .streamconsumer import StreamConsumer
 from .app import App, CancellationTokenSource, CancellationToken
 from .kafkastreamingclient import KafkaStreamingClient
 from .raw import RawMessage
 
-from .outputtopic import OutputTopic
+from .topicproducer import TopicProducer
 
 from .configuration import *
-from .inputtopic import InputTopic
-from .streamwriter import StreamWriter
+from .topicconsumer import TopicConsumer
+from .streamproducer import StreamProducer
 
 from .logging import Logging, LogLevel
 from .state import LocalFileStorage

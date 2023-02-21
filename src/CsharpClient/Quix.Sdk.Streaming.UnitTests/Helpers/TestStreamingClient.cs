@@ -22,32 +22,27 @@ namespace Quix.Sdk.Streaming.UnitTests
             CodecRegistry.Register(codec);
         }
 
-        public IInputTopic CreateInputTopic()
+        public ITopicConsumer CreateTopicConsumer()
         {
-            return OpenInputTopic();
+            return CreateTopiConsumer();
         }
 
-        public IInputTopic OpenInputTopic()
+        public ITopicConsumer CreateTopiConsumer()
         {
             this.telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(this.testBroker);
 
-            var inputTopic = new InputTopic(this.telemetryKafkaConsumer);
+            var topicConsumer = new TopicConsumer(this.telemetryKafkaConsumer);
 
-            return inputTopic;
+            return topicConsumer;
         }
 
-        public IOutputTopic CreateOutputTopic()
-        {
-            return OpenOutputTopic();
-        }
-
-        public IOutputTopic OpenOutputTopic()
+        public ITopicProducer CreateTopicProducer()
         {
             this.createKafkaWriter = streamId => new TestTelemetryKafkaProducer(this.testBroker, streamId);
 
-            var outputTopic = new OutputTopic(this.createKafkaWriter);
+            var topicProducer = new TopicProducer(this.createKafkaWriter);
 
-            return outputTopic;
+            return topicProducer;
         }
     }
 }

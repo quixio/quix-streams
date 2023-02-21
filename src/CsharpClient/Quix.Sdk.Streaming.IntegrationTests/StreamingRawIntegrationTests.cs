@@ -42,26 +42,26 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             var topicName = "streaming-raw-integration-test";
             
                         
-            var justCreateMeMyTopic = client.OpenRawOutputTopic(topicName);
+            var justCreateMeMyTopic = client.CreateRawTopicProducer(topicName);
             justCreateMeMyTopic.Dispose(); // should cause a flush
             Thread.Sleep(5000); // This is only necessary because the container we use for kafka and how a topic creation is handled for the unit test
 
 
-            var inputTopic = client.OpenRawInputTopic(topicName, "Default", AutoOffsetReset.Latest);
+            var topicConsumer = client.CreateRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
 
             var toSend = new byte[] { 1, 2, 0, 4, 6, 123, 54, 2 };
             var received = new List<byte[]>();
 
 
-            inputTopic.OnMessageRead += (sender, message) =>
+            topicConsumer.OnMessageRead += (sender, message) =>
             {
                 received.Add(message.Value);
             };
 
-            inputTopic.StartReading();
+            topicConsumer.Subscribe();
 
-            var outputTopic = client.OpenRawOutputTopic(topicName);
-            outputTopic.Write(new Raw.RawMessage(toSend));
+            var topicProducer = client.CreateRawTopicProducer(topicName);
+            topicProducer.Publish(new Raw.RawMessage(toSend));
 
             SpinWait.SpinUntil(() => received.Count > 0, 5000);
 
@@ -70,8 +70,8 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             Assert.Equal(toSend, received[0]);
 
 
-            inputTopic.Dispose();
-            outputTopic.Dispose();
+            topicConsumer.Dispose();
+            topicProducer.Dispose();
         }
 
 
@@ -80,24 +80,24 @@ namespace Quix.Sdk.Streaming.IntegrationTests
         {
             var topicName = "streaming-raw-integration-test2";
             
-            var justCreateMeMyTopic = client.OpenRawOutputTopic(topicName);
+            var justCreateMeMyTopic = client.CreateRawTopicProducer(topicName);
             justCreateMeMyTopic.Dispose(); // should cause a flush
             Thread.Sleep(5000); // This is only necessary because the container we use for kafka and how a topic creation is handled for the unit test
 
-            var inputTopic = client.OpenRawInputTopic(topicName, "Default", AutoOffsetReset.Latest);
+            var topicConsumer = client.CreateRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
 
             var toSend = new byte[] { 1, 2, 0, 4, 6, 123, 54, 2 };
             var received = new List<byte[]>();
 
 
-            inputTopic.OnMessageRead += (sender, message) =>
+            topicConsumer.OnMessageRead += (sender, message) =>
             {
                 received.Add(message.Value);
             };
 
-            inputTopic.StartReading();
-            var outputTopic = client.OpenRawOutputTopic(topicName);
-            outputTopic.Write(new Raw.RawMessage(toSend));
+            topicConsumer.Subscribe();
+            var topicProducer = client.CreateRawTopicProducer(topicName);
+            topicProducer.Publish(new Raw.RawMessage(toSend));
 
             SpinWait.SpinUntil(() => received.Count > 0, 5000);
 
@@ -105,8 +105,8 @@ namespace Quix.Sdk.Streaming.IntegrationTests
             Assert.Equal(toSend, received[0]);
 
 
-            inputTopic.Dispose();
-            outputTopic.Dispose();
+            topicConsumer.Dispose();
+            topicProducer.Dispose();
         }
     }
 }

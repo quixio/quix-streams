@@ -2,14 +2,14 @@ from typing import Union, Dict
 import ctypes
 
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array
-from ..native.Python.QuixSdkStreaming.Models.StreamWriter.TimeseriesDataBuilder import TimeseriesDataBuilder as tsdbi
+from ..native.Python.QuixSdkStreaming.Models.StreamProducer.TimeseriesDataBuilder import TimeseriesDataBuilder as tsdbi
 from ..helpers.nativedecorator import nativedecorator
 
 
 @nativedecorator
 class TimeseriesDataBuilder(object):
     """
-        Builder for creating timeseries data packages for StreamPropertiesWriter
+        Builder for creating timeseries data packages for StreamPropertiesProducer
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
@@ -98,7 +98,7 @@ class TimeseriesDataBuilder(object):
 
     def write(self):
         """
-        Writes the values to the StreamParametersWriter buffer. See StreamParametersWriter buffer settings for more information when the values are sent to the broker
+        Writes the values to the StreamParametersProducer buffer. See StreamParametersProducer buffer settings for more information when the values are sent to the broker
         """
 
         self._interop.Write()

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamReader;
+using Quix.Sdk.Streaming.Models.StreamConsumer;
 
 namespace Quix.Sdk.Streaming.Samples.Samples
 {
@@ -24,11 +24,11 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var inputTopic = client.OpenInputTopic(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
 
-            inputTopic.OnStreamReceived += (sender, streamReader) =>
+            topicConsumer.OnStreamReceived += (sender, streamConsumer) =>
             {
-                if (streamReader.StreamId != streamIdToRead) return;
+                if (streamConsumer.StreamId != streamIdToRead) return;
                 var bufferConfiguration = new TimeseriesBufferConfiguration
                 {
                     PacketSize = 100,
@@ -40,20 +40,20 @@ namespace Quix.Sdk.Streaming.Samples.Samples
                     //CustomFilter = (timestamp) => timestamp.TimestampMilliseconds % 1000 == 0
                 };
 
-                var buffer = streamReader.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
 
 
                 buffer.OnRead += OnBufferOnOnRead;
-                streamReader.Events.OnRead += OnEventsOnOnRead;
-                streamReader.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
-                streamReader.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
-                streamReader.Properties.OnChanged += OnPropertiesOnOnChanged;
-                streamReader.OnStreamClosed += OnStreamReaderOnOnStreamClosed;
+                streamConsumer.Events.OnRead += OnEventsOnOnRead;
+                streamConsumer.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
+                streamConsumer.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
+                streamConsumer.Properties.OnChanged += OnPropertiesOnOnChanged;
+                streamConsumer.OnStreamClosed += OnStreamReaderOnOnStreamClosed;
             };
             
-            inputTopic.OnDisposed += (s, e) =>
+            topicConsumer.OnDisposed += (s, e) =>
             {
-                Console.WriteLine($"input topic disposed");
+                Console.WriteLine($"Topic consumer disposed");
             };
         }
         

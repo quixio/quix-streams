@@ -5,8 +5,8 @@ using System.Threading;
 using Quix.Sdk.Process.Models.Utility;
 using Quix.Sdk.Streaming;
 using Quix.Sdk.Streaming.Models;
-using Quix.Sdk.Streaming.Models.StreamReader;
-using Quix.Sdk.Streaming.Models.StreamWriter;
+using Quix.Sdk.Streaming.Models.StreamConsumer;
+using Quix.Sdk.Streaming.Models.StreamProducer;
 using Quix.Sdk.Streaming.UnitTests;
 
 namespace Quix.Sdk.PerformanceTest

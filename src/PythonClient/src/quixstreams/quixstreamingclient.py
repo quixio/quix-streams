@@ -5,11 +5,11 @@ import ctypes
 from .models.autooffsetreset import AutoOffsetReset
 from .models.commitoptions import CommitOptions
 from .models.commitmode import CommitMode
-from .inputtopic import InputTopic
+from .topicconsumer import TopicConsumer
 from .models.netdict import NetDict
-from .raw.rawinputtopic import RawInputTopic
-from .outputtopic import OutputTopic
-from .raw.rawoutputtopic import RawOutputTopic
+from .raw.rawtopicconsumer import RawTopicConsumer
+from .topicproducer import TopicProducer
+from .raw.rawtopicproducer import RawTopicProducer
 
 from .native.Python.QuixSdkStreaming.QuixStreamingClient import QuixStreamingClient as qsci
 from .native.Python.QuixSdkStreaming.QuixStreamingClientExtensions import QuixStreamingClientExtensions as qscei
@@ -120,7 +120,7 @@ class QuixStreamingClient(object):
 
         self._interop = qsci(qsci.Constructor(token, auto_create_topics, properties=net_properties_hptr, debug=debug))
 
-    def open_input_topic(self, topic_id_or_name: str, consumer_group: str = "Default", commit_settings: Union[CommitOptions, CommitMode] = None, auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Earliest) -> InputTopic:
+    def create_topic_consumer(self, topic_id_or_name: str, consumer_group: str = "Default", commit_settings: Union[CommitOptions, CommitMode] = None, auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Earliest) -> TopicConsumer:
         """
             Opens an input topic capable of reading incoming streams
 
@@ -142,16 +142,16 @@ class QuixStreamingClient(object):
         if isinstance(commit_settings, CommitMode):
             net_commit_settings = ec.enum_to_another(commit_settings, CommitModeInterop)
 
-            hptr = qscei.OpenInputTopic(self._interop.get_interop_ptr__(), topic_id_or_name, consumer_group, net_commit_settings, py_offset_reset)
+            hptr = qscei.CreateTopicConsumer(self._interop.get_interop_ptr__(), topic_id_or_name, consumer_group, net_commit_settings, py_offset_reset)
         else:
             if isinstance(commit_settings, CommitOptions):
-                hptr = self._interop.OpenInputTopic(topic_id_or_name, consumer_group, commit_settings.get_net_pointer(), py_offset_reset)
+                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, commit_settings.get_net_pointer(), py_offset_reset)
             else:
-                hptr = self._interop.OpenInputTopic(topic_id_or_name, consumer_group, None, py_offset_reset)
+                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, None, py_offset_reset)
 
-        return InputTopic(hptr)
+        return TopicConsumer(hptr)
 
-    def open_output_topic(self, topic_id_or_name: str) -> OutputTopic:
+    def open_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
         """
             Opens an output topic capable of sending outgoing streams
 
@@ -160,10 +160,10 @@ class QuixStreamingClient(object):
             topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
         """
 
-        dotnet_pointer = self._interop.OpenOutputTopic(topic_id_or_name)
-        return OutputTopic(dotnet_pointer)
+        dotnet_pointer = self._interop.CreateTopicProducer(topic_id_or_name)
+        return TopicProducer(dotnet_pointer)
     
-    def open_raw_input_topic(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawInputTopic:
+    def open_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
             Opens an input topic for reading raw data from the stream
 
@@ -177,10 +177,10 @@ class QuixStreamingClient(object):
         if auto_offset_reset is not None:
             py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
-        dotnet_pointer = self._interop.OpenRawInputTopic(topic_id_or_name, consumer_group, py_offset_reset)
-        return RawInputTopic(dotnet_pointer)
+        dotnet_pointer = self._interop.CreateRawTopicConsumer(topic_id_or_name, consumer_group, py_offset_reset)
+        return RawTopicConsumer(dotnet_pointer)
 
-    def open_raw_output_topic(self, topic_id_or_name: str) -> RawOutputTopic:
+    def open_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
         """
             Opens an input topic for writing raw data to the stream
 
@@ -188,8 +188,8 @@ class QuixStreamingClient(object):
 
             topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
         """
-        dotnet_pointer = self._interop.OpenRawOutputTopic(topic_id_or_name)
-        return RawOutputTopic(dotnet_pointer)
+        dotnet_pointer = self._interop.CreateRawTopicProducer(topic_id_or_name)
+        return RawTopicProducer(dotnet_pointer)
 
     @property
     def token_validation_config(self) -> TokenValidationConfiguration:
