@@ -15,7 +15,7 @@ namespace Quix.Sdk.RawReadSamples
 
             rawTopicConsumer.OnErrorOccurred += (s, e) =>
             {
-                Console.WriteLine($"Expception occurred: {e}");
+                Console.WriteLine($"Exception occurred: {e}");
             };
             rawTopicConsumer.OnMessageRead += (sender, message) =>
             {
@@ -26,7 +26,7 @@ namespace Quix.Sdk.RawReadSamples
 
 
             rawTopicConsumer.Subscribe();
-            Console.WriteLine("Litening to Kafka!");
+            Console.WriteLine("Listening to Kafka!");
 
             Console.WriteLine("\npress any key to exit the process...");
             // basic use of "Console.ReadKey()" method

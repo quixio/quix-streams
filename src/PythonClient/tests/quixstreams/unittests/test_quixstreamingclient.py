@@ -75,7 +75,7 @@ class StreamingClientTests(unittest.TestCase):
         # Assert
         self.assertEqual("https://test.quix.ai/", sc.api_url)
 
-    def test_open_topic(self):
+    def test_create_topic(self):
         os.environ["Quix__Sdk__Token"] = "something"
         sc = QuixStreamingClient()
         sc.api_url = "https://test.quix.ai"

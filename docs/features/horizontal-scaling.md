@@ -17,16 +17,16 @@ This situation will trigger an event on the SDK in the blue replica indicating t
 === "Python"
     
     ``` python
-    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+    def read_stream(topic_consumer: InputTopic, new_stream: StreamConsumer):
         print("New stream received:" + new_stream.stream_id)
     
-    input_topic.on_stream_received = read_stream
+    topic_consumer.on_stream_received = read_stream
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, newStream) =>
+    topicConsumer.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream received: {newStream.StreamId}");
     };
@@ -47,26 +47,26 @@ This will trigger two events, one in the blue replica indicating that "stream 4"
 === "Python"
     
     ``` python
-    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+    def read_stream(topic_consumer: InputTopic, new_stream: StreamConsumer):
         print("New stream received:" + new_stream.stream_id)
     
-    def streams_revoked(input_topic: InputTopic, streams_revoked: [StreamReader]):
+    def streams_revoked(topic_consumer: InputTopic, streams_revoked: [StreamConsumer]):
         for stream in streams_revoked:
             print("Stream revoked:" + stream.stream_id)
     
-    input_topic.on_stream_received = read_stream
-    input_topic.on_streams_revoked = streams_revoked
+    topic_consumer.on_stream_received = read_stream
+    topic_consumer.on_streams_revoked = streams_revoked
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, newStream) =>
+    topicConsumer.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream received: {newStream.StreamId}");
     };
     
-    inputTopic.OnStreamsRevoked += (topic, streamsRevoked) =>
+    topicConsumer.OnStreamsRevoked += (topic, streamsRevoked) =>
     {
         foreach (var stream in streamsRevoked)
         {

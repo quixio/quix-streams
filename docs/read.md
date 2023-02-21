@@ -32,18 +32,18 @@ You can find more advanced information on how to connect to Quix in the [Connect
 
 Topics are the default environment for input/output operations on Quix.
 
-In order to access that topic for reading you need an instance of `InputTopic`. This instance allow you to read all the incoming streams on the specified Topic. You can create an instance of `InputTopic` using the client’s `open_input_topic` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
+In order to access that topic for reading you need an instance of `TopicConsumer`. This instance allow you to read all the incoming streams on the specified Topic. You can create an instance of `TopicConsumer` using the client’s `create_topic_consumer` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
 
 === "Python"
     
     ``` python
-    input_topic = client.open_input_topic(TOPIC_ID)
+    topic_consumer = client.create_topic_consumer(TOPIC_ID)
     ```
 
 === "C\#"
     
     ``` cs
-    var inputTopic = client.OpenInputTopic(TOPIC_ID);
+    var topicConsumer = client.CreateTopicConsumer(TOPIC_ID);
     ```
 
 ### Consumer group
@@ -53,13 +53,13 @@ The **Consumer group** is a concept used when you want to [scale horizontally](/
 === "Python"
     
     ``` python
-    input_topic = client.open_input_topic("{topic}","{your-consumer-group-id}")
+    topic_consumer = client.create_topic_consumer("{topic}","{your-consumer-group-id}")
     ```
 
 === "C\#"
     
     ``` cs
-    var inputTopic = client.OpenInputTopic("{topic}","{your-consumer-group-id}");
+    var topicConsumer = client.CreateTopicConsumer("{topic}","{your-consumer-group-id}");
     ```
 
 When you want to enable [horizontal scalability](/sdk/features/horizontal-scaling), all the replicas of your process should use the same `ConsumerId`. This is how the message broker knows that all the replicas of your process want to share the load of the incoming streams between replicas. Each replica will receive only a subset of the streams incoming to the Input Topic.
@@ -71,71 +71,71 @@ When you want to enable [horizontal scalability](/sdk/features/horizontal-scalin
 ## Reading streams
 
 === "Python"  
-    Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the callback `on_stream_received`. This callback will be invoked every time you receive a new Stream. For example, the following code prints the StreamId for each `newStream` received on that Topic:
+    Once you have the `TopicConsumer` instance you can start reading streams. For each stream received to the specified topic, `TopicConsumer` will execute the callback `on_stream_received`. This callback will be invoked every time you receive a new Stream. For example, the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` python
-    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+    def read_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
         print("New stream read:" + new_stream.stream_id)
     
-    input_topic.on_stream_received = read_stream
-    input_topic.start_reading()
+    topic_consumer.on_stream_received = read_stream
+    topic_consumer.subscribe()
     ```
 
     !!! note
-        `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+        `subscribe()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
 
         Find out more about [App.run()](app-management.md)
 
 
 === "C\#"
-    Once you have the `InputTopic` instance you can start reading streams. For each stream received to the specified topic, `InputTopic` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
+    Once you have the `TopicConsumer` instance you can start reading streams. For each stream received to the specified topic, `TopicConsumer` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new Stream. For example the following code prints the StreamId for each `newStream` received on that Topic:
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, newStream) =>
+    topicConsumer.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream read: {newStream.StreamId}");
     };
     
-    inputTopic.StartReading();
+    topicConsumer.Subscribe();
     ```
 
 !!! tip
 
-	The `StartReading` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
+	The `Subscribe` method indicates to the SDK the moment to start reading streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
 
 ## Reading time-series data
 
-You can read real-time data from Streams using the `on_read` event of the `StreamReader` instance received in the previous callback when you receive a new stream in your Topic.
+You can read real-time data from Streams using the `on_read` event of the `StreamConsumer` instance received in the previous callback when you receive a new stream in your Topic.
 
 For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
 
 === "Python"
     
     ``` python
-    def on_stream_received_handler(input_topic: InputTopic, new_stream: StreamReader):
+    def on_stream_received_handler(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
         new_stream.on_read = on_parameter_data_handler
     
-    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+    def on_parameter_data_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
             print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
-    input_topic.on_stream_received = on_stream_received_handler
-    input_topic.start_reading()
+    topic_consumer.on_stream_received = on_stream_received_handler
+    topic_consumer.subscribe()
     ```
 
     !!! note
-        `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+        `subscribe()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
 
         Find out more about [App.run()](app-management.md)
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, streamReader) =>
+    topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
     {
-        streamReader.Parameters.OnRead += (sender, args) =>
+        streamConsumer.Parameters.OnRead += (sender, args) =>
         {
             var timestamp = args.Data.Timestamps[0].Timestamp;
             var numValue = args.Data.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -143,7 +143,7 @@ For instance, in the following example we read and print the first timestamp and
         };
     };
     
-    inputTopic.StartReading();
+    topicConsumer.Subscribe();
     ```
 
 We use [TimeseriesData](#timeseriesdata-format) packages to read data from the stream. This class handles reading and writing of time series data. The Quix SDK provides multiple helpers for reading and writing data using [TimeseriesData](#timeseriesdata-format).
@@ -257,7 +257,7 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
 === "Python"
     
     ``` python
-    def on_parameter_data_handler(topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+    def on_parameter_data_handler(topic: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
@@ -373,35 +373,34 @@ Is represented as the following Pandas DataFrame:
 One simple way to read data from Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} is using the event `on_read_dataframe` instead of the common callback `on_read` when reading from a `stream`, or when reading data from a buffer:
 
 ``` python
-def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+def read_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
 
     buffer = new_stream.parameters.create_buffer()
-
-    def on_dataframe_handler(stream: StreamReader, df: pd.DataFrame):
-        print(df.to_string())
-
     buffer.on_read_dataframe = on_dataframe_handler
 
-input_topic.on_stream_received = read_stream
-input_topic.start_reading()
+def on_dataframe_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
+
+topic_consumer.on_stream_received = read_stream
+topic_consumer.subscribe()
 ```
     
 Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format) to a Pandas DataFrame using the method `to_panda_dataframe`:
 
 ``` python
-def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+def read_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
 
     buffer = new_stream.parameters.create_buffer()
     buffer.on_read = on_parameter_data_handler
 
-def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+def on_parameter_data_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
     with data:
         # read from input stream
         df = data.to_panda_dataframe()
         print(df.to_string())
 
-input_topic.on_stream_received = read_stream
-input_topic.start_reading()
+topic_consumer.on_stream_received = read_stream
+topic_consumer.subscribe()
 ```
 
 !!! tip
@@ -409,7 +408,7 @@ input_topic.start_reading()
 	The conversions from [TimeseriesData](#timeseriesdata-format) to Pandas DataFrames have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use the `on_read_dataframe` callback provided by the SDK, which is optimized for doing as few conversions as possible.
 
 !!! note
-    `start_reading()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+    `subscribe()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
 
     Find out more about [App.run()](app-management.md)
     
@@ -435,7 +434,7 @@ Reading events from a stream is as easy as reading timeseries data. In this case
 === "Python"
     
     ``` python
-    def on_event_data_handler(input_topic: InputTopic, stream: StreamReader, data: EventData):
+    def on_event_data_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: EventData):
         with data:
             print("Event read for stream. Event Id: " + data.Id)
     
@@ -487,13 +486,13 @@ If you wish to use different automatic commit intervals, use the following code:
     commit_settings.commit_every = 100 # note, you can set this to none
     commit_settings.commit_interval = 500 # note, you can set this to none
     commit_settings.auto_commit_enabled = True
-    input_topic = client.open_input_topic('yourtopic', commit_settings=commit_settings)
+    topic_consumer = client.create_topic_consumer('yourtopic', commit_settings=commit_settings)
     ```
 
 === "C\#"
     
     ``` cs
-    var inputTopic = client.OpenInputTopic(topic, consumerGroup, new CommitOptions()
+    var topicConsumer = client.CreateTopicConsumer(topic, consumerGroup, new CommitOptions()
     {
             CommitEvery = 100,
             CommitInterval = 500,
@@ -512,13 +511,13 @@ Some use cases need manual committing to mark completion of work, for example wh
     ``` python
     from quixstreams import CommitMode
     
-    input_topic = client.open_input_topic('yourtopic', commit_settings=CommitMode.Manual)
+    topic_consumer = client.create_topic_consumer('yourtopic', commit_settings=CommitMode.Manual)
     ```
 
 === "C\#"
     
     ``` cs
-    client.OpenInputTopic(topic, consumerGroup, CommitMode.Manual);
+    client.CreateTopicConsumer(topic, consumerGroup, CommitMode.Manual);
     ```
 
 Then, whenever your commit condition fulfils, call:
@@ -526,13 +525,13 @@ Then, whenever your commit condition fulfils, call:
 === "Python"
     
     ``` python
-    input_topic.commit()
+    topic_consumer.commit()
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.Commit();
+    topicConsumer.Commit();
     ```
 
 The piece of code above will commit anything – like parameter, event or metadata - read and served to you from the input topic up to this point.
@@ -543,17 +542,17 @@ The piece of code above will commit anything – like parameter, event or metada
 Whenever a commit occurs, a callback is raised to let you know. This callback is invoked for both manual and automatic commits. You can set the callback using the following code:
     
     ``` python
-    def on_committed_handler(input_topic: InputTopic):
+    def on_committed_handler(topic_consumer: TopicConsumer):
         # your code doing something when committed to broker
     
-    input_topic.on_committed = on_committed_handler
+    topic_consumer.on_committed = on_committed_handler
     ```
 
 === "C\#"
 Whenever a commit occurs, an event is raised to let you know. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
     
     ``` cs
-    inputTopic.OnCommitted += (sender, args) =>
+    topicConsumer.OnCommitted += (sender, args) =>
     {
         //... your code …
     };
@@ -574,17 +573,17 @@ When setting the `AutoOffsetReset` you can specify one of three options:
 === "Python"
     
     ``` python
-    input_topic = client.open_input_topic(test_topic, auto_offset_reset=AutoOffsetReset.Latest)
+    topic_consumer = client.create_topic_consumer(test_topic, auto_offset_reset=AutoOffsetReset.Latest)
     or
-    input_topic = client.open_input_topic(test_topic, auto_offset_reset=AutoOffsetReset.Earliest)
+    topic_consumer = client.create_topic_consumer(test_topic, auto_offset_reset=AutoOffsetReset.Earliest)
     ```
 
 === "C\#"
     
     ``` cs
-    var inputTopic = client.OpenInputTopic("MyTopic", autoOffset: AutoOffsetReset.Latest);
+    var topicConsumer = client.CreateTopicConsumer("MyTopic", autoOffset: AutoOffsetReset.Latest);
     or
-    var inputTopic = client.OpenInputTopic("MyTopic", autoOffset: AutoOffsetReset.Earliest);
+    var topicConsumer = client.CreateTopicConsumer("MyTopic", autoOffset: AutoOffsetReset.Earliest);
     ```
 
 ## Revocation
@@ -604,16 +603,16 @@ One or more streams are about to be revoked from your client, but you have a lim
 === "Python"
     
     ``` python
-    def on_revoking_handler(input_topic: InputTopic):
+    def on_revoking_handler(topic_consumer: TopicConsumer):
         # your code
     
-    input_topic.on_revoking = on_revoking_handler
+    topic_consumer.on_revoking = on_revoking_handler
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnRevoking += (sender, args) =>
+    topicConsumer.OnRevoking += (sender, args) =>
         {
             // ... your code ...
         };
@@ -626,19 +625,19 @@ One or more streams are revoked from your client. You can no longer commit to th
 === "Python"
     
     ``` python
-    from quixstreams import StreamReader
+    from quixstreams import StreamConsumer
     
-    def on_streams_revoked_handler(input_topic: InputTopic, readers: [StreamReader]):
-        for reader in readers:
-            print("Stream " + reader.stream_id + " got revoked")
+    def on_streams_revoked_handler(topic_consumer: TopicConsumer, streams: [StreamConsumer]):
+        for stream in streams:
+            print("Stream " + stream.stream_id + " got revoked")
     
-    input_topic.on_streams_revoked = on_streams_revoked_handler
+    topic_consumer.on_streams_revoked = on_streams_revoked_handler
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamsRevoked += (sender, revokedStreams) =>
+    topicConsumer.OnStreamsRevoked += (sender, revokedStreams) =>
         {
             // revoked streams are provided to the handler
         };
@@ -650,7 +649,7 @@ One or more streams are revoked from your client. You can no longer commit to th
 You can detect stream closure with the `on_stream_closed` callback which has the stream and the StreamEndType to help determine the closure reason if required.
     
     ``` python
-    def on_stream_closed_handler(stream: StreamReader, end_type: StreamEndType):
+    def on_stream_closed_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, end_type: StreamEndType):
             print("Stream closed with {}".format(end_type))
     
     new_stream.on_stream_closed = on_stream_closed_handler
@@ -660,9 +659,9 @@ You can detect stream closure with the `on_stream_closed` callback which has the
 You can detect stream closure with the stream closed event which has the sender and the StreamEndType to help determine the closure reason if required.
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, streamReader) =>
+    topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
     {
-            streamReader.OnStreamClosed += (reader, args) =>
+            streamConsumer.OnStreamClosed += (reader, args) =>
             {
                     Console.WriteLine("Stream closed with {0}", args.EndType);
             };
@@ -690,21 +689,21 @@ This is a minimal code example you can use to read data from a topic using the Q
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()
     
-    input_topic = client.open_input_topic(TOPIC_ID)
+    topic_consumer = client.create_topic_consumer(TOPIC_ID)
     
     # read streams
-    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+    def read_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
     
         buffer = new_stream.parameters.create_buffer()
         buffer.on_read = on_parameter_data_handler
     
-    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+    def on_parameter_data_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
         with data:
             df = data.to_panda_dataframe()
             print(df.to_string())    
     
     # Hook up events before initiating read to avoid losing out on any data
-    input_topic.on_stream_received = read_stream
+    topic_consumer.on_stream_received = read_stream
     
     # Hook up to termination signal (for docker image) and CTRL-C
     print("Listening to streams. Press CTRL-C to exit.")
@@ -738,19 +737,18 @@ This is a minimal code example you can use to read data from a topic using the Q
                 // Create a client which holds generic details for creating input and output topics
                 var client = new Quix.Sdk.Streaming.QuixStreamingClient();
     
-                using var inputTopic = client.OpenInputTopic(TOPIC_ID);
+                using var topicConsumer = client.CreateTopicConsumer(TOPIC_ID);
     
                 // Hook up events before initiating read to avoid losing out on any data
-                inputTopic.OnStreamReceived += (topic, streamReader) =>
+                topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
                 {
-                    Console.WriteLine($"New stream read: {streamReader.StreamId}");
+                    Console.WriteLine($"New stream read: {streamConsumer.StreamId}");
     
-                    var buffer = streamReader.Parameters.CreateBuffer();
+                    var buffer = streamConsumer.Parameters.CreateBuffer();
     
                     buffer.OnRead += (sender, args) =>
                     {
-                        Console.WriteLine(
-                            $"ParameterA - {ags.Data.Timestamps[0].Timestamp}: {ags.Data.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
+                        Console.WriteLine($"ParameterA - {ags.Data.Timestamps[0].Timestamp}: {ags.Data.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
                     };
                 };
     
@@ -776,9 +774,9 @@ To cater for these cases we added the ability to read the raw, unformatted, mess
 === "Python"
     
     ``` python
-    inp = client.open_raw_input_topic(TOPIC_ID)
+    inp = client.create_raw_topic_consumer(TOPIC_ID)
     
-    def on_raw_message(topic: RawInputTopic, msg: RawMessage):
+    def on_raw_message(topic: RawTopicConsumer, msg: RawMessage):
         #bytearray containing bytes received from kafka
         data = msg.value
     
@@ -786,18 +784,18 @@ To cater for these cases we added the ability to read the raw, unformatted, mess
         meta = msg.metadata
     
     inp.on_message_read = on_raw_message
-    inp.start_reading()
+    inp.subscribe()
     ```
 
 === "C\#"
     
     ``` cs
-    var inp = client.OpenRawInputTopic(TOPIC_ID)
+    var inp = client.CreateRawTopicConsumer(TOPIC_ID)
     
     inp.OnMessageRead += (sender, message) =>
     {
         var data = (byte[])message.Value;
     };
     
-    inp.StartReading()
+    inp.Subscribe()
     ```

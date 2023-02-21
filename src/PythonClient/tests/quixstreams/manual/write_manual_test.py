@@ -14,7 +14,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-output_topic = client.create_topic_producer('generated-data')
+topic_producer = client.create_topic_producer('generated-data')
 
 number_of_stream = 10
 
@@ -39,7 +39,7 @@ def on_write_exception_handler(stream: qx.StreamProducer, ex: BaseException):
 
 for stream_number in range(number_of_stream):
     print(f"--- Sending Stream {stream_number} ---")
-    stream = output_topic.create_stream()
+    stream = topic_producer.create_stream()
     stream.on_write_exception = on_write_exception_handler
 
     print(f"--- Setting stream properties for stream {stream_number} ---")
@@ -217,4 +217,4 @@ for stream_number in range(number_of_stream):
     endtype = qx.StreamEndType(stream_number % 2 + 1)
     stream.close(qx.StreamEndType.Aborted)
 
-output_topic.dispose()
+topic_producer.dispose()

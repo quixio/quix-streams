@@ -47,11 +47,11 @@ namespace Quix.Sdk.Streaming.Samples.Samples
 
 
 
-                buffer.OnRead += OnBufferOnOnRead;
-                streamConsumer.Events.OnRead += OnEventsOnOnRead;
-                streamConsumer.Parameters.OnDefinitionsChanged += OnParametersOnOnDefinitionsChanged;
-                streamConsumer.Events.OnDefinitionsChanged += OnEventsOnOnDefinitionsChanged;
-                streamConsumer.Properties.OnChanged += OnPropertiesOnOnChanged;
+                buffer.OnRead += OnBufferRead;
+                streamConsumer.Events.OnRead += OnEventsRead;
+                streamConsumer.Parameters.OnDefinitionsChanged += OnParameterDefinitionsChanged;
+                streamConsumer.Events.OnDefinitionsChanged += OnDefinitionsChanged;
+                streamConsumer.Properties.OnChanged += OnPropertiesChanged;
                 streamConsumer.OnStreamClosed += (s, args) =>
                 {
                     Console.WriteLine($"Stream Close -> StreamId '{args.Stream.StreamId}' with type {args.EndType}");
@@ -70,7 +70,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             };
         }
         
-        void OnBufferOnOnRead(object s, TimeseriesDataReadEventArgs args)
+        void OnBufferRead(object s, TimeseriesDataReadEventArgs args)
         {
             // Inline manipulation
             //data.Timestamps.ForEach(timestamp =>
@@ -90,12 +90,12 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         
-        void OnEventsOnOnRead(object s, EventDataReadEventArgs args)
+        void OnEventsRead(object s, EventDataReadEventArgs args)
         {
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }
         
-        void OnEventsOnOnDefinitionsChanged(object s, EventDefinitionsChangedEventArgs args)
+        void OnDefinitionsChanged(object s, EventDefinitionsChangedEventArgs args)
         {
             foreach (var definition in args.Stream.Events.Definitions)
             {
@@ -103,7 +103,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             }
         }
         
-        void OnParametersOnOnDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
+        void OnParameterDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
         {
             foreach (var definition in args.Stream.Parameters.Definitions)
             {
@@ -111,7 +111,7 @@ namespace Quix.Sdk.Streaming.Samples.Samples
             }
         }
         
-        void OnPropertiesOnOnChanged(object s, StreamPropertiesChangedEventArgs args)
+        void OnPropertiesChanged(object s, StreamPropertiesChangedEventArgs args)
         {
             Console.WriteLine($"Stream properties -> StreamId '{args.Stream.StreamId}' with name '{args.Stream.Properties.Name}' located in '{args.Stream.Properties.Location}'");
         }

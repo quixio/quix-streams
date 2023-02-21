@@ -97,31 +97,31 @@ namespace Quix.Sdk.Streaming
 
         private void OnStreamPackageReceived(IStreamProcess streamProcess, Sdk.Process.Models.StreamPackage package)
         {
-            this.logger.LogTrace("StreamReader: OnPackageReceived");
+            this.logger.LogTrace("StreamConsumer: OnPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));
         }
 
         private void OnStreamPropertiesReceived(IStreamProcess streamProcess, Process.Models.StreamProperties obj)
         {
-            this.logger.LogTrace("StreamReader: OnStreamPropertiesReceived");
+            this.logger.LogTrace("StreamConsumer: OnStreamPropertiesReceived");
             this.OnStreamPropertiesChanged?.Invoke(this, obj);
         }
 
         private void OnTimeseriesDataReceived(IStreamProcess streamProcess, Process.Models.TimeseriesDataRaw obj)
         {
-            this.logger.LogTrace("StreamReader: OnTimeseriesDataReceived. Data packet of size = {0}", obj.Timestamps.Length);
+            this.logger.LogTrace("StreamConsumer: OnTimeseriesDataReceived. Data packet of size = {0}", obj.Timestamps.Length);
             this.OnTimeseriesData?.Invoke(this, obj);
         }
 
         private void OnParameterDefinitionsReceived(IStreamProcess streamProcess, Process.Models.ParameterDefinitions obj)
         {
-            this.logger.LogTrace("StreamReader: OnParameterDefinitionsReceived");
+            this.logger.LogTrace("StreamConsumer: OnParameterDefinitionsReceived");
             this.OnParameterDefinitionsChanged?.Invoke(this, obj);
         }
 
         private void OnEventDataReceived(IStreamProcess streamProcess, Process.Models.EventDataRaw[] events)
         {
-            this.logger.LogTrace("StreamReader: OnEventDataReceived");
+            this.logger.LogTrace("StreamConsumer: OnEventDataReceived");
             for (var index = 0; index < events.Length; index++)
             {
                 var ev = events[index];
@@ -131,7 +131,7 @@ namespace Quix.Sdk.Streaming
 
         private void OnEventDefinitionsReceived(IStreamProcess streamProcess, Process.Models.EventDefinitions obj)
         {
-            this.logger.LogTrace("StreamReader: OnEventDefinitionsReceived");
+            this.logger.LogTrace("StreamConsumer: OnEventDefinitionsReceived");
             this.OnEventDefinitionsChanged?.Invoke(this, obj);
         }
 
@@ -144,7 +144,7 @@ namespace Quix.Sdk.Streaming
         {
             if (isClosed) return;
             isClosed = true;
-            this.logger.LogTrace("StreamReader: OnStreamEndReceived");
+            this.logger.LogTrace("StreamConsumer: OnStreamEndReceived");
 
             this.Parameters.Buffers.ForEach(buffer => buffer.Dispose());
             

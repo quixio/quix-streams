@@ -24,7 +24,7 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamParametersConsumer(object):
 
-    def __init__(self, topic_consumer, stream_reader, net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_consumer, stream_consumer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamParametersConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.parameters to access an instance of it
@@ -32,7 +32,7 @@ class StreamParametersConsumer(object):
             Parameters:
 
             topic_consumer: The input topic the stream belongs to
-            stream_reader: The stream the buffer is created for
+            stream_consumer: The stream the buffer is created for
             net_pointer (.net object): Pointer to an instance of a .net StreamParametersConsumer
         """
         if net_pointer is None:
@@ -42,7 +42,7 @@ class StreamParametersConsumer(object):
         self._buffers = []
 
         self._topic_consumer = topic_consumer
-        self._stream_reader = stream_reader
+        self._stream_consumer = stream_consumer
 
         # define events and their ref holder
         self._on_read = None
@@ -85,7 +85,7 @@ class StreamParametersConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataReadEventArgs(args_hptr)):
-                self._on_read(self._topic_consumer, self._stream_reader, TimeseriesData(args.get_Data()))
+                self._on_read(self._topic_consumer, self._stream_consumer, TimeseriesData(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -117,7 +117,7 @@ class StreamParametersConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
-                self._on_raw_read(self._topic_consumer, self._stream_reader, TimeseriesDataRaw(args.get_Data()))
+                self._on_raw_read(self._topic_consumer, self._stream_consumer, TimeseriesDataRaw(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -152,7 +152,7 @@ class StreamParametersConsumer(object):
                 pdr = TimeseriesDataRaw(args.get_Data())
                 pdf = pdr.to_panda_dataframe()
                 pdr.dispose()
-                self._on_read_dataframe(self._topic_consumer, self._stream_reader, pdf)
+                self._on_read_dataframe(self._topic_consumer, self._stream_consumer, pdf)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -184,7 +184,7 @@ class StreamParametersConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := ParameterDefinitionsChangedEventArgs(args_hptr)):
-                self._on_definitions_changed(self._topic_consumer, self._stream_reader)
+                self._on_definitions_changed(self._topic_consumer, self._stream_consumer)
                 InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -232,9 +232,9 @@ class StreamParametersConsumer(object):
         buffer = None
         if buffer_configuration is not None:
             buffer_config_ptr = buffer_configuration.get_net_pointer()
-            buffer = TimeseriesBufferConsumer(self._topic_consumer, self._stream_reader, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
+            buffer = TimeseriesBufferConsumer(self._topic_consumer, self._stream_consumer, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
         else:
-            buffer = TimeseriesBufferConsumer(self._topic_consumer, self._stream_reader, self._interop.CreateBuffer2(actual_filters_uptr))
+            buffer = TimeseriesBufferConsumer(self._topic_consumer, self._stream_consumer, self._interop.CreateBuffer2(actual_filters_uptr))
 
         self._buffers.append(buffer)
         return buffer

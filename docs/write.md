@@ -32,36 +32,36 @@ You can find more advanced information on how to connect to Quix in the [Connect
 
 Topics are the default environment for input/output real-time operations on Quix.
 
-In order to access that topic for writing you need an instance of `OutputTopic`. You can create an instance of `OutputTopic` using the client’s `open_output_topic` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
+In order to access that topic for writing you need an instance of `TopicProducer`. You can create an instance of `TopicProducer` using the client’s `create_topic_producer` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
 
 === "Python"
     
     ``` python
-    output_topic = client.open_output_topic(TOPIC_ID)
+    topic_producer = client.create_topic_producer(TOPIC_ID)
     ```
 
 === "C\#"
     
     ``` cs
-    var outputTopic = client.OpenOutputTopic(TOPIC_ID);
+    var topicProducer = client.CreateTopicProducer(TOPIC_ID);
     ```
 
 ## Create / attach to a stream
 
 [Streams](/sdk/features/streaming-context) are the central context of data in Quix. Streams make it easy to manage, discover, and work with your data. They are key to good data governance in your organization. Also, Streams are vital for [parallelizing](/sdk/features/horizontal-scaling) huge data loads with an infinite number of data sources.
 
-You can create as many streams as you want using the `create_stream` method of your `OutputTopic` instance:
+You can create as many streams as you want using the `create_stream` method of your `TopicProducer` instance:
 
 === "Python"
     
     ``` python
-    stream = output_topic.create_stream()
+    stream = topic_producer.create_stream()
     ```
 
 === "C\#"
     
     ``` cs
-    var stream = outputTopic.CreateStream();
+    var stream = topicProducer.CreateStream();
     ```
 
 A stream ID is auto-generated, but you can also pass a `StreamId` to the method to append or update data of an existing stream:
@@ -69,13 +69,13 @@ A stream ID is auto-generated, but you can also pass a `StreamId` to the method 
 === "Python"
     
     ``` python
-    stream = output_topic.create_stream("existing-stream-id")
+    stream = topic_producer.create_stream("existing-stream-id")
     ```
 
 === "C\#"
     
     ``` cs
-    var stream = outputTopic.CreateStream("existing-stream-id");
+    var stream = topicProducer.CreateStream("existing-stream-id");
     ```
 
 ### Stream properties
@@ -944,9 +944,9 @@ This is a minimal code example you can use to write data to a topic using the Qu
     # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
     client = QuixStreamingClient()
     
-    output_topic = client.open_output_topic(TOPIC_ID)
+    topic_producer = client.create_topic_producer(TOPIC_ID)
     
-    stream = output_topic.create_stream()
+    stream = topic_producer.create_stream()
     
     stream.properties.name = "Hello World python stream"
     
@@ -980,9 +980,9 @@ This is a minimal code example you can use to write data to a topic using the Qu
                 // Create a client which holds generic details for creating input and output topics
                 var client = new Quix.Sdk.Streaming.QuixStreamingClient();
     
-                using var outputTopic = client.OpenOutputTopic(TOPIC_ID);
+                using var topicProducer = client.CreateTopicProducer(TOPIC_ID);
     
-                var stream = outputTopic.CreateStream();
+                var stream = topicProducer.CreateStream();
     
                 stream.Properties.Name = "Hello World stream";
     
@@ -1018,7 +1018,7 @@ You can write messages with or without a key. The following example demonstrates
 === "Python"
     
     ``` python
-    inp = client.open_raw_output_topic(TOPIC_ID)
+    inp = client.create_raw_topic_producer(TOPIC_ID)
     
     data = bytearray(bytes("TEXT CONVERTED TO BYTES",'utf-8'))
     
@@ -1034,9 +1034,9 @@ You can write messages with or without a key. The following example demonstrates
 === "C\#"
     
     ``` cs
-    var out = client.OpenRawOutputTopic(TOPIC_ID);
+    var out = client.CreateRawTopicProducer(TOPIC_ID);
     
-    inp = client.OpenRawInputTopic(TOPIC_NAME)
+    inp = client.CreateRawTopicConsumer(TOPIC_NAME)
     
     var data = new byte[]{1,3,5,7,1,43};
     
@@ -1051,5 +1051,5 @@ You can write messages with or without a key. The following example demonstrates
         data
     ));
     
-    inp.StartReading()
+    inp.Subscribe()
     ```

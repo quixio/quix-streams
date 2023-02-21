@@ -49,7 +49,7 @@ namespace Quix.Sdk.Streaming
             {
                 if (this.OnWriteException == null)
                 {
-                    this.logger.LogError(e, "StreamWriter: Exception sending package to Kafka");
+                    this.logger.LogError(e, "StreamProducer: Exception sending package to Kafka");
                 }
                 else
                 {
@@ -111,12 +111,12 @@ namespace Quix.Sdk.Streaming
             {
                 send.ContinueWith(t =>
                 {
-                    this.logger.LogTrace("StreamWriter: Sent data packet of size = {0}", rawData.Timestamps.Length);
+                    this.logger.LogTrace("StreamProducer: Sent data packet of size = {0}", rawData.Timestamps.Length);
                 }, TaskContinuationOptions.OnlyOnRanToCompletion);
             }
             send.ContinueWith(t =>
             {
-                this.logger.LogError(t.Exception, "StreamWriter: Exception while sending timeseries data");
+                this.logger.LogError(t.Exception, "StreamProducer: Exception while sending timeseries data");
             }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
@@ -144,12 +144,12 @@ namespace Quix.Sdk.Streaming
             {
                 send.ContinueWith(t =>
                 {
-                    this.logger.LogTrace("StreamWriter: Sent parameter definitions");
+                    this.logger.LogTrace("StreamProducer: Sent parameter definitions");
                 }, TaskContinuationOptions.OnlyOnRanToCompletion);
             }
             send.ContinueWith(t =>
             {
-                this.logger.LogError(t.Exception, "StreamWriter: Exception while sending parameter definitions");
+                this.logger.LogError(t.Exception, "StreamProducer: Exception while sending parameter definitions");
             }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
@@ -173,12 +173,12 @@ namespace Quix.Sdk.Streaming
             {
                 send.ContinueWith(t =>
                 {
-                    this.logger.LogTrace("StreamWriter: Sent {0} events", events.Count);
+                    this.logger.LogTrace("StreamProducer: Sent {0} events", events.Count);
                 }, TaskContinuationOptions.OnlyOnRanToCompletion);
             }
             send.ContinueWith(t =>
             {
-                this.logger.LogError(t.Exception, "StreamWriter: Exception while sending event data");
+                this.logger.LogError(t.Exception, "StreamProducer: Exception while sending event data");
             }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
@@ -196,12 +196,12 @@ namespace Quix.Sdk.Streaming
             {
                 send.ContinueWith(t =>
                 {
-                    this.logger.LogTrace("StreamWriter: Sent event definitions");
+                    this.logger.LogTrace("StreamProducer: Sent event definitions");
                 }, TaskContinuationOptions.OnlyOnRanToCompletion);
             }
             send.ContinueWith(t =>
             {
-                this.logger.LogError(t.Exception, "StreamWriter: Exception while sending event definitions");
+                this.logger.LogError(t.Exception, "StreamProducer: Exception while sending event definitions");
             }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
@@ -245,7 +245,7 @@ namespace Quix.Sdk.Streaming
                 {
                     send.ContinueWith(t =>
                     {
-                        this.logger.LogTrace("StreamWriter: Sent close");
+                        this.logger.LogTrace("StreamProducer: Sent close");
                     }, TaskContinuationOptions.OnlyOnRanToCompletion);
                 }
 

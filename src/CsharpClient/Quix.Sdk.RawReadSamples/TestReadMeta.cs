@@ -15,7 +15,7 @@ namespace Quix.Sdk.RawReadSamples
 
             rawReader.OnErrorOccurred += (s, e) =>
             {
-                Console.WriteLine($"Expception occurred: {e}");
+                Console.WriteLine($"Exception occurred: {e}");
             };
             rawReader.OnMessageRead += (sender, message) =>
             {
@@ -30,7 +30,7 @@ namespace Quix.Sdk.RawReadSamples
 
 
             rawReader.Subscribe();
-            Console.WriteLine("Litening to Kafka!");
+            Console.WriteLine("Listening to Kafka!");
 
             Console.WriteLine("\npress any key to exit the process...");
             // basic use of "Console.ReadKey()" method

@@ -62,7 +62,7 @@ class TestIntegration(unittest.TestCase):
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
 
         print("---- Start Writing ----")
-        with (output_topic := client.create_topic_producer(topic_name)), (output_stream := output_topic.create_stream()):
+        with (topic_producer := client.create_topic_producer(topic_name)), (output_stream := topic_producer.create_stream()):
             print("---- Setting stream properties ----")
             output_stream.properties.flush_interval = 7000
             print("Closed")
@@ -97,8 +97,8 @@ class TestIntegration(unittest.TestCase):
             topic_consumer.subscribe()
 
             print("---- Start Writing ----")
-            with (output_topic := client.create_topic_producer(topic_name)), (
-            output_stream := output_topic.create_stream()):
+            with (topic_producer := client.create_topic_producer(topic_name)), (
+            output_stream := topic_producer.create_stream()):
 
                 print("---- Setting stream properties ----")
                 output_stream.properties.name = "ABCDE"
@@ -162,8 +162,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
 
         print("---- Setting stream parameter definitions ----")
         output_stream.parameters.default_location = "/the/location"
@@ -178,7 +178,7 @@ class TestIntegration(unittest.TestCase):
         output_stream.parameters.flush()
         output_stream.close()
         print("Closed")
-        output_topic.dispose()
+        topic_producer.dispose()
 
         # Assert
         self.waitforresult(event)
@@ -245,8 +245,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
 
 
         print("---- Setting stream event definitions ----")
@@ -260,7 +260,7 @@ class TestIntegration(unittest.TestCase):
         output_stream.events.flush()
         output_stream.close()
         print("Closed")
-        output_topic.dispose()
+        topic_producer.dispose()
 
         # Assert
         self.waitforresult(event)
@@ -322,8 +322,8 @@ class TestIntegration(unittest.TestCase):
 
         # Act
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
 
         print("---- Writing event data ----")
         output_stream.events.add_timestamp_nanoseconds(100)\
@@ -386,8 +386,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
 
         print("---- Writing event data ----")
         output_stream.events.add_timestamp_nanoseconds(100)\
@@ -438,8 +438,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
 
         print("---- Writing event data ----")
         expected = qx.EventData("event1", 100, "value1").add_tag("tag1", "tag1val")
@@ -489,8 +489,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
 
         print("---- Writing event data ----")
         data = [("event1", 100, "value1")]
@@ -520,18 +520,18 @@ class TestIntegration(unittest.TestCase):
             self.assertEqual(tag_value_a, tag_value_b, "tag")
 # endregion
 
-# region outputtopic tests
+# region TopicProducer tests
     def test_created_stream_can_be_retrieved(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
 
         # Act
-        stream = output_topic.create_stream()
-        retrieved = output_topic.get_stream(stream.stream_id)
+        stream = topic_producer.create_stream()
+        retrieved = topic_producer.get_stream(stream.stream_id)
 
         # Assert
         self.assertIsNotNone(retrieved)
@@ -543,12 +543,12 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
-        stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        stream = topic_producer.create_stream()
         stream.close()
 
         # Act
-        retrieved = output_topic.get_stream(stream.stream_id)
+        retrieved = topic_producer.get_stream(stream.stream_id)
 
         # Assert
         self.assertIsNone(retrieved)
@@ -559,7 +559,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
 
         callback_topic_disposed = None
 
@@ -567,13 +567,13 @@ class TestIntegration(unittest.TestCase):
             nonlocal callback_topic_disposed
             callback_topic_disposed = topic
 
-        output_topic.on_disposed = callback
+        topic_producer.on_disposed = callback
 
         # Act
-        output_topic.dispose()
+        topic_producer.dispose()
 
         # Assert
-        self.assertEqual(output_topic, callback_topic_disposed)
+        self.assertEqual(topic_producer, callback_topic_disposed)
 # endregion
 
 # region client.create_topic_consumer integration tests
@@ -601,15 +601,15 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Start Writing ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
         output_stream.close()
 
         # Assert
         self.waitforresult(event)  # enough assertion as if event times out, expected scenario did not happen
 
         # cleanup
-        output_topic.dispose()
+        topic_producer.dispose()
         topic_consumer.dispose()
 
     def test_stream_open_with_latest_offset(self):
@@ -635,8 +635,8 @@ class TestIntegration(unittest.TestCase):
 
         # Act
         print("---- Write first stream ----")
-        output_topic = client.create_topic_producer(topic_name)
-        first_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        first_stream = topic_producer.create_stream()
         first_stream.close()
 
         print("---- Start reading ----")
@@ -648,7 +648,7 @@ class TestIntegration(unittest.TestCase):
         time.sleep(5)
 
         print("---- Write second stream ----")
-        second_stream = output_topic.create_stream()
+        second_stream = topic_producer.create_stream()
         second_stream.close()
 
         # Assert
@@ -657,7 +657,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(first_stream_read.stream_id, second_stream.stream_id)
 
         # cleanup
-        output_topic.dispose()
+        topic_producer.dispose()
         topic_consumer.dispose()
 
     def test_stream_open_with_manual_commit(self):
@@ -692,8 +692,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Write first stream ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
         output_stream.close()
         print(f"---- Write first stream {output_stream.stream_id} ----")
 
@@ -705,7 +705,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Write second stream ----")
-        output_stream = output_topic.create_stream()  # output_stream points to second stream from now
+        output_stream = topic_producer.create_stream()  # output_stream points to second stream from now
         output_stream.close()
         print(f"---- Write second stream {output_stream.stream_id} ----")
 
@@ -715,7 +715,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(last_stream_read.stream_id, output_stream.stream_id)
 
         # cleanup
-        output_topic.dispose()
+        topic_producer.dispose()
         topic_consumer.dispose()
 # endregion
 
@@ -753,8 +753,8 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         print("---- Write first stream ----")
-        output_topic = client.create_topic_producer(topic_name)
-        output_stream = output_topic.create_stream()
+        topic_producer = client.create_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
         output_stream.close(qx.StreamEndType.Aborted)
 
         # Assert
@@ -763,7 +763,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(end_type_received, qx.StreamEndType.Aborted)
 
         # cleanup
-        output_topic.dispose()
+        topic_producer.dispose()
         topic_consumer.dispose()
 # endregion
 
@@ -775,20 +775,20 @@ class TestIntegration(unittest.TestCase):
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
 
         # Act
-        output_topic = client.create_topic_producer(topic_name)
-        callback_invoked_streamwriter : qx.StreamProducer = None
+        topic_producer = client.create_topic_producer(topic_name)
+        callback_invoked_streamproducer : qx.StreamProducer = None
 
         def on_create_callback(sw):
-            nonlocal callback_invoked_streamwriter
-            callback_invoked_streamwriter = sw
+            nonlocal callback_invoked_streamproducer
+            callback_invoked_streamproducer = sw
 
-        retrieved = output_topic.get_or_create_stream("test_stream_id", on_create_callback)
+        retrieved = topic_producer.get_or_create_stream("test_stream_id", on_create_callback)
 
         # Assert
         self.assertIsNotNone(retrieved)
-        self.assertIsNotNone(callback_invoked_streamwriter)
+        self.assertIsNotNone(callback_invoked_streamproducer)
         retrievedId = retrieved.stream_id
-        self.assertEqual(callback_invoked_streamwriter.stream_id, retrieved.stream_id)
+        self.assertEqual(callback_invoked_streamproducer.stream_id, retrieved.stream_id)
         self.assertEqual(retrieved.stream_id, "test_stream_id")
 
     def test_get_or_create_stream_no_prev_stream_without_callback(self):
@@ -798,8 +798,8 @@ class TestIntegration(unittest.TestCase):
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
 
         # Act
-        output_topic = client.create_topic_producer(topic_name)
-        retrieved = output_topic.get_or_create_stream("test_stream_id")
+        topic_producer = client.create_topic_producer(topic_name)
+        retrieved = topic_producer.get_or_create_stream("test_stream_id")
 
         # Assert
         self.assertIsNotNone(retrieved)
@@ -812,20 +812,20 @@ class TestIntegration(unittest.TestCase):
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
 
         # Act
-        output_topic = client.create_topic_producer(topic_name)
-        first_stream = output_topic.create_stream("test_stream_id")  # will cause the stream to exist
+        topic_producer = client.create_topic_producer(topic_name)
+        first_stream = topic_producer.create_stream("test_stream_id")  # will cause the stream to exist
 
-        callback_invoked_streamwriter : qx.StreamProducer = None
+        callback_invoked_streamproducer : qx.StreamProducer = None
 
         def on_create_callback(sw):
-            nonlocal callback_invoked_streamwriter
-            callback_invoked_streamwriter = sw
+            nonlocal callback_invoked_streamproducer
+            callback_invoked_streamproducer = sw
 
-        retrieved = output_topic.get_or_create_stream("test_stream_id", on_create_callback)
+        retrieved = topic_producer.get_or_create_stream("test_stream_id", on_create_callback)
 
         # Assert
         self.assertIsNotNone(retrieved)
-        self.assertIsNone(callback_invoked_streamwriter)
+        self.assertIsNone(callback_invoked_streamproducer)
         self.assertEqual(retrieved.stream_id, "test_stream_id")
 
     def test_get_or_create_stream_with_prev_stream_without_callback(self):
@@ -835,10 +835,10 @@ class TestIntegration(unittest.TestCase):
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
 
         # Act
-        output_topic = client.create_topic_producer(topic_name)
-        first_stream = output_topic.create_stream("test_stream_id")  # will cause the stream to exist
+        topic_producer = client.create_topic_producer(topic_name)
+        first_stream = topic_producer.create_stream("test_stream_id")  # will cause the stream to exist
 
-        retrieved = output_topic.get_or_create_stream("test_stream_id")
+        retrieved = topic_producer.get_or_create_stream("test_stream_id")
 
         # Assert
         self.assertIsNotNone(retrieved)
@@ -852,9 +852,9 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
-        with output_topic, output_topic:
+        with topic_producer, topic_producer:
 
             stream = None  # The outgoing stream
             event = threading.Event()  # used for assertion
@@ -875,7 +875,7 @@ class TestIntegration(unittest.TestCase):
             topic_consumer.subscribe()
 
             # Act
-            stream = output_topic.create_stream()
+            stream = topic_producer.create_stream()
             stream.parameters.buffer.packet_size = 10  # this is to enforce buffering until we want
             # Send parameter Data for datetime
             utc_now = datetime.utcnow()  # for assertion purposes save it
@@ -899,7 +899,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -921,7 +921,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
         stream.parameters.buffer.packet_size = 10  # this is to enforce buffering until we want
         # Send parameter Data for datetime
         utc_now = datetime.utcnow()  # for assertion purposes save it
@@ -973,7 +973,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -993,7 +993,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1031,7 +1031,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1052,7 +1052,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1085,7 +1085,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1122,7 +1122,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1166,7 +1166,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1188,7 +1188,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(123456790) \
             .add_value("string_param", "value1") \
@@ -1213,7 +1213,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1253,7 +1253,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
         stream.parameters.buffer.packet_size = 10  # to enforce disabling of output buffer
         written_data = qx.TimeseriesData()
 
@@ -1307,7 +1307,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1333,7 +1333,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1362,7 +1362,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1390,7 +1390,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1418,7 +1418,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1439,7 +1439,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1472,7 +1472,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1494,7 +1494,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1537,7 +1537,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1562,7 +1562,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1606,7 +1606,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1632,7 +1632,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \
@@ -1661,7 +1661,7 @@ class TestIntegration(unittest.TestCase):
         topic_name = sys._getframe().f_code.co_name  # current method name
         consumer_group = "irrelevant"
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
-        output_topic = client.create_topic_producer(topic_name)
+        topic_producer = client.create_topic_producer(topic_name)
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group)
 
         stream = None  # The outgoing stream
@@ -1689,7 +1689,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.subscribe()
 
         # Act
-        stream = output_topic.create_stream()
+        stream = topic_producer.create_stream()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(10) \

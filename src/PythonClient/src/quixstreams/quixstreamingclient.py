@@ -151,7 +151,7 @@ class QuixStreamingClient(object):
 
         return TopicConsumer(hptr)
 
-    def open_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
+    def create_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
         """
             Opens an output topic capable of sending outgoing streams
 
@@ -163,7 +163,7 @@ class QuixStreamingClient(object):
         dotnet_pointer = self._interop.CreateTopicProducer(topic_id_or_name)
         return TopicProducer(dotnet_pointer)
     
-    def open_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
+    def create_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
             Opens an input topic for reading raw data from the stream
 
@@ -180,7 +180,7 @@ class QuixStreamingClient(object):
         dotnet_pointer = self._interop.CreateRawTopicConsumer(topic_id_or_name, consumer_group, py_offset_reset)
         return RawTopicConsumer(dotnet_pointer)
 
-    def open_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
+    def create_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
         """
             Opens an input topic for writing raw data to the stream
 

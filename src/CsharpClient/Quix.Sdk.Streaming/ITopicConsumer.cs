@@ -16,7 +16,7 @@ namespace Quix.Sdk.Streaming
         /// <summary>
         /// Event raised when a new stream has been received for reading.
         /// Use the Stream Reader interface received to read data from the stream.
-        /// You must execute 'StartReading' method before starting to receive streams from this event
+        /// You must execute 'Subscribe' method before starting to receive streams from this event
         /// </summary>
         event EventHandler<IStreamConsumer> OnStreamReceived;
         

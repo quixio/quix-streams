@@ -89,7 +89,7 @@ namespace Quix.Sdk.Streaming
             if (this.OnStreamsRevoked == null) return;
             if (obj == null || obj.Length == 0) return;
             
-            // This is relying on the assumption that the StreamReader that we've created in the StreamProcessFactoryHandler (see kafkareader.foreach)
+            // This is relying on the assumption that the StreamConsumer that we've created in the StreamProcessFactoryHandler (see kafkareader.foreach)
             // is being returned here.
             var readers = obj.Select(y => y as IStreamConsumer).Where(y => y != null).ToArray();
             if (readers.Length == 0) return;

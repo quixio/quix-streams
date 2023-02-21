@@ -18,7 +18,7 @@ Let’s see some examples of how to read and write data in a Data processor usin
     
     ``` python
     # Callback triggered for each new data frame
-    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+    def on_parameter_data_handler(topic_consumer: InputTopic, stream: StreamConsumer, data: TimeseriesData):
         with data:
     
             df = data.to_panda_dataframe()  # Input data frame
@@ -36,7 +36,7 @@ Let’s see some examples of how to read and write data in a Data processor usin
     
     ``` python
     # Callback triggered for each new data frame
-    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+    def on_parameter_data_handler(topic_consumer: InputTopic, stream: StreamConsumer, data: TimeseriesData):
         with data:
             for row in data.timestamps:
                 # If braking force applied is more than 50%, we mark HardBraking with True

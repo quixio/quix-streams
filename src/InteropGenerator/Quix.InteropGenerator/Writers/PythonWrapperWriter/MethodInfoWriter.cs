@@ -124,11 +124,6 @@ public class MethodInfoWriter : BaseWriter
 
         sb.Append(")");
 
-        if (this.declaringTypePythonName == "IStreamReader")
-        {
-            
-        }
-
         await contentWriter.Write(sb.ToString());
         if (!string.IsNullOrWhiteSpace(resultName))
         {

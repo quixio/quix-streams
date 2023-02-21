@@ -81,7 +81,7 @@ namespace Quix.Sdk.Streaming.Raw
             if(connectionStarted)
             {
                 //throw exception for double starting
-                throw new InvalidOperationException("Cannot call StartReading twice");
+                throw new InvalidOperationException("Cannot call Subscribe twice");
             }
 
             kafkaConsumer.OnNewPackage = async package =>

@@ -39,7 +39,7 @@ namespace Quix.Sdk.PerformanceTest
             //    };
             //};
 
-            //topicConsumer.StartReading();
+            //topicConsumer.Subscribe();
 
             var stream = topicProducer.CreateStream();
             stream.Parameters.Buffer.PacketSize = writeBufferSize;

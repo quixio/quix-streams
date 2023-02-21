@@ -37,7 +37,7 @@ Streams are redistributed over available partitions. With an increasing number o
 The **Consumer group** is a concept of how to horizontally scale topic processing. Each consumer group has an ID, which you set when opening a connection to the topic:
 
 ``` python
-output_topic = client.open_input_topic("{topic}","{your-consumer-group-id}")
+topic_producer = client.create_topic_consumer("{topic}","{your-consumer-group-id}")
 ```
 
 If you deploy this model with a replica set to 3, your model will be deployed in three instances as members of one consumer group. This group will share partitions between each other and therefore share the load.
@@ -51,8 +51,8 @@ If you deploy this model with a replica set to 3, your model will be deployed in
 We can think of Kafka temporary storage as a processing queue for each partition. Consumer groups read from this queue and regularly commit offsets to track which messages were already processed. By default, this is done by the Quix SDK automatically, but you can override that by manually committing an offset when you are done processing a set of rows.
 
 ``` python
-input_topic = client.open_input_topic('Telemetry', commit_settings=CommitMode.Manual)
-input_topic.commit()
+topic_consumer = client.create_topic_consumer('Telemetry', commit_settings=CommitMode.Manual)
+topic_consumer.commit()
 ```
 
 The consumer group is playing an important role here as offset commits are associated with the consumer group ID. That means that if you connect to the same topic with a different consumer group ID, the model will start reading from the start of the Kafka queue.

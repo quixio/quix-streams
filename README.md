@@ -153,10 +153,10 @@ from quixstreams import KafkaStreamingClient
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the output topic where to produce data to.
-output_topic = client.open_output_topic("your-kafka-topic")
+# Open the topic producer to publish to the output topic
+topic_producer = client.create_topic_producer("your-kafka-topic")
 
-stream = output_topic.create_stream()
+stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.properties.metadata["my-metadata"] = "my-metadata-value"
 stream.parameters.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
@@ -192,18 +192,18 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the input topic where to consume data from.
 # For testing purposes we remove consumer group and always read from latest data.
-input_topic = client.open_input_topic("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.create_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(input_topic: InputTopic, new_stream: StreamReader):
+def on_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
     input_stream.parameters.on_read_dataframe = on_dataframe
 
 # consume data (as Pandas DataFrame)
-def on_dataframe(input_topic: InputTopic, stream: StreamReader, df: pd.DataFrame):
+def on_dataframe(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
-input_topic.on_stream_received = on_stream
+topic_consumer.on_stream_received = on_stream
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit

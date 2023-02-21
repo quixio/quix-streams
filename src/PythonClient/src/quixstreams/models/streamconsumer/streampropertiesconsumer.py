@@ -16,7 +16,7 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamPropertiesConsumer(object):
 
-    def __init__(self, topic_consumer, stream_reader: 'StreamConsumer', net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_consumer, stream_consumer: 'StreamConsumer', net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamPropertiesConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.properties to access an instance of it
@@ -24,7 +24,7 @@ class StreamPropertiesConsumer(object):
             Parameters:
 
             topic_consumer: The input topic the stream belongs to
-            stream_reader: The stream the buffer is created for
+            stream_consumer: The stream the buffer is created for
             net_pointer: Pointer to an instance of a .net StreamPropertiesConsumer
         """
         if net_pointer is None:
@@ -32,7 +32,7 @@ class StreamPropertiesConsumer(object):
 
         self._interop = spci(net_pointer)
         self._topic_consumer = topic_consumer
-        self._stream_reader = stream_reader
+        self._stream_consumer = stream_consumer
 
         # define events and their ref holder
         self._on_changed = None
@@ -69,7 +69,7 @@ class StreamPropertiesConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
         try:
             with (args := StreamPropertiesChangedEventArgs(args_hptr)):
-                self._on_changed(self._topic_consumer, self._stream_reader)
+                self._on_changed(self._topic_consumer, self._stream_consumer)
             InteropUtils.free_hptr(sender_hptr)
         except:
             traceback.print_exc()

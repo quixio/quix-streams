@@ -16,14 +16,14 @@ class StreamParametersProducer(object):
         Group all the Parameters properties, builders and helpers that allow to stream parameter values and parameter definitions to the platform.
     """
 
-    def __init__(self, topic_producer, stream_writer, net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_producer, stream_producer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamParametersProducer.
 
             Parameters:
 
             topic_producer: The output topic the stream belongs to
-            stream_writer: The stream the writer is created for
+            stream_producer: The stream the writer is created for
             net_pointer: Pointer to an instance of a .net StreamParametersProducer.
         """
 
@@ -32,7 +32,7 @@ class StreamParametersProducer(object):
 
         self._interop = sppi(net_pointer)
         self._buffer = None
-        self._stream_writer = stream_writer
+        self._stream_producer = stream_producer
         self._topic = topic_producer
 
     def _finalizerfunc(self):
@@ -86,7 +86,7 @@ class StreamParametersProducer(object):
         """Get the buffer for writing timeseries data"""
 
         if self._buffer is None:
-            self._buffer = TimeseriesBufferProducer(self._topic, self._stream_writer, self._interop.get_Buffer())
+            self._buffer = TimeseriesBufferProducer(self._topic, self._stream_producer, self._interop.get_Buffer())
         return self._buffer
 
     def write(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]) -> None:

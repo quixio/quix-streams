@@ -110,10 +110,10 @@ class TopicProducer(object):
 
         callback = None
         if on_stream_created is not None:
-            def on_create_callback(streamwriter_hptr: ctypes.c_void_p):
-                if type(streamwriter_hptr) is not ctypes.c_void_p:
-                    streamwriter_hptr = ctypes.c_void_p(streamwriter_hptr)
-                wrapped = StreamProducer(self, streamwriter_hptr)
+            def on_create_callback(streamproducer_hptr: ctypes.c_void_p):
+                if type(streamproducer_hptr) is not ctypes.c_void_p:
+                    streamproducer_hptr = ctypes.c_void_p(streamproducer_hptr)
+                wrapped = StreamProducer(self, streamproducer_hptr)
                 on_stream_created(wrapped)
             callback = on_create_callback
 

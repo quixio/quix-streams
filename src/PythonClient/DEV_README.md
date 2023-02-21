@@ -121,7 +121,7 @@ The absolute minimum to test the installed package use the following `.py` file 
 ```
 echo "import quixstreams as qx" >> main.py
 echo "client = qx.KafkaStreamingClient('127.0.0.1:9092', None)" >> main.py
-echo "client.open_output_topic('testinstall')" >> main.py
+echo "client.create_topic_producer('testinstall')" >> main.py
 python3 main.py
 ```
 Note: unless you have a local kafka running, this is expected to fail by logging Kafka producer exceptions.

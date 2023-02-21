@@ -17,7 +17,7 @@ from ...helpers.nativedecorator import nativedecorator
 @nativedecorator
 class StreamEventsConsumer(object):
 
-    def __init__(self, topic_consumer, stream_reader, net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_consumer, stream_consumer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamEventsConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.events to access an instance of it
@@ -25,7 +25,7 @@ class StreamEventsConsumer(object):
             Parameters:
 
             topic_consumer: The input topic the stream belongs to
-            stream_reader: The stream the buffer is created for
+            stream_consumer: The stream the buffer is created for
             net_pointer (.net object): Pointer to an instance of a .net StreamEventsConsumer
         """
         if net_pointer is None:
@@ -33,7 +33,7 @@ class StreamEventsConsumer(object):
 
         self._interop = seci(net_pointer)
         self._topic_consumer = topic_consumer
-        self._stream_reader = stream_reader
+        self._stream_consumer = stream_consumer
 
         # define events and their ref holder
         self._on_read = None
@@ -68,7 +68,7 @@ class StreamEventsConsumer(object):
         try:
             with (args := EventDataReadEventArgs(args_hptr)):
                 data = EventData(net_pointer=args.get_Data())
-                self._on_read(self._topic_consumer, self._stream_reader, data)
+                self._on_read(self._topic_consumer, self._stream_consumer, data)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -100,7 +100,7 @@ class StreamEventsConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := EventDefinitionsChangedEventArgs(args_hptr)):
-                self._on_definitions_changed(self._topic_consumer, self._stream_reader)
+                self._on_definitions_changed(self._topic_consumer, self._stream_consumer)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
