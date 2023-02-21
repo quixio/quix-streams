@@ -113,14 +113,13 @@ For instance, in the following example we read and print the first timestamp and
     
     ``` python
     def on_stream_received_handler(input_topic: InputTopic, new_stream: StreamReader):
-    
-        def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
-            with data:
-                timestamp = data.timestamps[0].timestamp
-                num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
-                print("ParameterA - " + str(timestamp) + ": " + str(num_value))
-    
         new_stream.on_read = on_parameter_data_handler
+    
+    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+        with data:
+            timestamp = data.timestamps[0].timestamp
+            num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
+            print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
     input_topic.on_stream_received = on_stream_received_handler
     input_topic.start_reading()
@@ -136,7 +135,7 @@ For instance, in the following example we read and print the first timestamp and
     ``` cs
     inputTopic.OnStreamReceived += (topic, streamReader) =>
     {
-        streamReader.Parameters.OnRead += (stream, args) =>
+        streamReader.Parameters.OnRead += (sender, args) =>
         {
             var timestamp = args.Data.Timestamps[0].Timestamp;
             var numValue = args.Data.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -258,7 +257,7 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
 === "Python"
     
     ``` python
-    def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
+    def on_parameter_data_handler(topic: InputTopic, stream: StreamReader, data: TimeseriesData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
@@ -270,10 +269,10 @@ Reading data from that buffer is as simple as using its `OnRead` event. For each
 === "C\#"
     
     ``` cs
-    buffer.OnRead += (stream, data) =>
+    buffer.OnRead += (sender, args) =>
     {
-        var timestamp = data.Timestamps[0].Timestamp;
-        var numValue = data.Timestamps[0].Parameters["ParameterA"].NumericValue;
+        var timestamp = ags.Data.Timestamps[0].Timestamp;
+        var numValue = ags.Data.Timestamps[0].Parameters["ParameterA"].NumericValue;
         Console.WriteLine($"ParameterA - {timestamp}: {numValue}");
     };
     ```
@@ -393,14 +392,13 @@ Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format)
 def read_stream(input_topic: InputTopic, new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
-
-    def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
-        with data:
-            # read from input stream
-            df = data.to_panda_dataframe()
-            print(df.to_string())
-
     buffer.on_read = on_parameter_data_handler
+
+def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+    with data:
+        # read from input stream
+        df = data.to_panda_dataframe()
+        print(df.to_string())
 
 input_topic.on_stream_received = read_stream
 input_topic.start_reading()
@@ -437,7 +435,7 @@ Reading events from a stream is as easy as reading timeseries data. In this case
 === "Python"
     
     ``` python
-    def on_event_data_handler(stream: StreamReader, data: EventData):
+    def on_event_data_handler(input_topic: InputTopic, stream: StreamReader, data: EventData):
         with data:
             print("Event read for stream. Event Id: " + data.Id)
     
@@ -698,13 +696,12 @@ This is a minimal code example you can use to read data from a topic using the Q
     def read_stream(input_topic: InputTopic, new_stream: StreamReader):
     
         buffer = new_stream.parameters.create_buffer()
-    
-        def on_parameter_data_handler(stream: StreamReader, data: TimeseriesData):
-            with data:
-                df = data.to_panda_dataframe()
-                print(df.to_string())
-    
         buffer.on_read = on_parameter_data_handler
+    
+    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
+        with data:
+            df = data.to_panda_dataframe()
+            print(df.to_string())    
     
     # Hook up events before initiating read to avoid losing out on any data
     input_topic.on_stream_received = read_stream
@@ -750,10 +747,10 @@ This is a minimal code example you can use to read data from a topic using the Q
     
                     var buffer = streamReader.Parameters.CreateBuffer();
     
-                    buffer.OnRead += (stream, data) =>
+                    buffer.OnRead += (sender, args) =>
                     {
                         Console.WriteLine(
-                            $"ParameterA - {data.Timestamps[0].Timestamp}: {data.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
+                            $"ParameterA - {ags.Data.Timestamps[0].Timestamp}: {ags.Data.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
                     };
                 };
     

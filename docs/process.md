@@ -18,7 +18,7 @@ Let’s see some examples of how to read and write data in a Data processor usin
     
     ``` python
     # Callback triggered for each new data frame
-    def on_parameter_data_handler(data: TimeseriesData):
+    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
         with data:
     
             df = data.to_panda_dataframe()  # Input data frame
@@ -36,7 +36,7 @@ Let’s see some examples of how to read and write data in a Data processor usin
     
     ``` python
     # Callback triggered for each new data frame
-    def on_parameter_data_handler(data: TimeseriesData):
+    def on_parameter_data_handler(input_topic: InputTopic, stream: StreamReader, data: TimeseriesData):
         with data:
             for row in data.timestamps:
                 # If braking force applied is more than 50%, we mark HardBraking with True
@@ -52,14 +52,14 @@ Let’s see some examples of how to read and write data in a Data processor usin
 === "C\#"
     
     ``` cs
-    buffer.OnRead += (stream, data) =>
+    buffer.OnRead += (stream, args) =>
     {
         var outputData = new TimeseriesData();
     
         // We calculate mean value for each second of data to effectively down-sample source topic to 1Hz.
-        outputData.AddTimestamp(data.Timestamps.First().Timestamp)
-            .AddValue("ParameterA 10Hz", data.Timestamps.Average(s => s.Parameters["ParameterA"].NumericValue.GetValueOrDefault()))
-            .AddValue("ParameterA source frequency", data.Timestamps.Count);
+        outputData.AddTimestamp(args.Data.Timestamps.First().Timestamp)
+            .AddValue("ParameterA 10Hz", args.Data.Timestamps.Average(s => s.Parameters["ParameterA"].NumericValue.GetValueOrDefault()))
+            .AddValue("ParameterA source frequency", args.Data.Timestamps.Count);
     
         // Send data back to the stream
         streamOutput.Parameters.Write(outputData);

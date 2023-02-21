@@ -50,11 +50,10 @@ So your code would look like this instead:
 def read_stream(new_stream: StreamReader):
 
     buffer = new_stream.parameters.create_buffer()
-
-    def on_dataframe_handler(stream: StreamReader, df: pd.DataFrame):
-        print(df.to_string())
-
     buffer.on_read_dataframe = on_dataframe_handler
+
+def on_dataframe_handler(input_topic: InputTopic, stream: StreamReader, df: pd.DataFrame):
+    print(df.to_string())
 
 input_topic.on_stream_received = read_stream
 
