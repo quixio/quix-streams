@@ -2,6 +2,7 @@ import time
 import unittest
 import threading
 import pandas as pd
+from quixstreams import Logging, LogLevel
 
 from testcontainers.core.container import DockerContainer
 
@@ -9,6 +10,7 @@ from tests.quixstreams.unittests.models.test_timeseriesdata import TimeseriesDat
 from src import quixstreams as qx
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 InteropUtils.enable_debug()
+Logging.update_factory(LogLevel.Debug)
 
 from datetime import datetime, timedelta
 import sys

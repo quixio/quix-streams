@@ -64,7 +64,7 @@ class KafkaStreamingClient(object):
             auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to latest
         """
 
-        net_offset_reset = AutoOffsetResetInterop.Earliest
+        net_offset_reset = AutoOffsetResetInterop.Latest
         if auto_offset_reset is not None:
             net_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 

@@ -132,9 +132,9 @@ class QuixStreamingClient(object):
 
             commit_settings (CommitOptions, CommitMode): the settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
 
-            auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to earliest
+            auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to latest
         """
-        py_offset_reset = AutoOffsetReset.Earliest
+        py_offset_reset = AutoOffsetReset.Latest
         if auto_offset_reset is not None:
             py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
@@ -172,7 +172,7 @@ class QuixStreamingClient(object):
             consumer_group (string): Consumer group ( optional )
         """
 
-        py_offset_reset = AutoOffsetReset.Earliest
+        py_offset_reset = AutoOffsetReset.Latest
         if auto_offset_reset is not None:
             py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
