@@ -9,12 +9,12 @@ using Quix.Sdk.Transport.Fw.Codecs;
 namespace Quix.Sdk.Transport.Registry
 {
     /// <summary>
-    ///     Codec registry. If multiple codecs are registered for the same ModelKey, the last one registered will be used
+    /// Codec registry. If multiple codecs are registered for the same ModelKey, the last one registered will be used
     /// </summary>
     public static class CodecRegistry
     {
         /// <summary>
-        ///     A concurrent codec dictionary in case people use codec registration via multiple threads
+        /// A concurrent codec dictionary in case people use codec registration via multiple threads
         /// </summary>
         private static readonly ConcurrentDictionary<ModelKey, IReadOnlyCollection<ICodec>> Codecs =
             new ConcurrentDictionary<ModelKey, IReadOnlyCollection<ICodec>>();

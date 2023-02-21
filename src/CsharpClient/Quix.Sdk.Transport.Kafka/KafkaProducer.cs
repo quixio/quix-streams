@@ -13,9 +13,9 @@ using Serilog.Core;
 namespace Quix.Sdk.Transport.Kafka
 {
     /// <summary>
-    /// Kafka input implemented using Queueing mechanism
+    /// Kafka producer implemented using Queueing mechanism
     /// </summary>
-    public class KafkaInput : IInput, IKafkaInput
+    public class KafkaProducer : IKafkaProducer
     {
         private readonly ProducerConfig config;
 
@@ -23,23 +23,23 @@ namespace Quix.Sdk.Transport.Kafka
         private readonly object sendLock = new object();
 
         private readonly object openLock = new object();
-        private readonly ILogger logger = Logging.CreateLogger<KafkaInput>();
+        private readonly ILogger logger = Logging.CreateLogger<KafkaProducer>();
 
         private readonly ProduceDelegate produce;
 
         private long lastFlush = -1;
         private IProducer<string, byte[]> producer;
-        private ThreadingTimer timer;
+        private readonly ThreadingTimer timer;
         private List<TopicPartition> partitionsToKeepAliveWith = new List<TopicPartition>();
-        private Action setupKeepAlive;
+        private readonly Action setupKeepAlive;
         private string configId;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaInput"/>
+        /// Initializes a new instance of <see cref="KafkaProducer"/>
         /// </summary>
         /// <param name="publisherConfiguration">The publisher configuration</param>
         /// <param name="topicConfiguration">The topic configuration</param>
-        public KafkaInput(PublisherConfiguration publisherConfiguration, InputTopicConfiguration topicConfiguration)
+        public KafkaProducer(PublisherConfiguration publisherConfiguration, ProducerTopicConfiguration topicConfiguration)
         {
             Action hbAction = null;
             this.config = publisherConfiguration.ToProducerConfig();
@@ -111,7 +111,7 @@ namespace Quix.Sdk.Transport.Kafka
             }
         }
         
-        private void SetConfigId(InputTopicConfiguration topicConfiguration)
+        private void SetConfigId(ProducerTopicConfiguration topicConfiguration)
         {
             this.configId = Guid.NewGuid().GetHashCode().ToString("X8");
             var logBuilder = new StringBuilder();
@@ -238,7 +238,7 @@ namespace Quix.Sdk.Transport.Kafka
         /// <param name="package">The package to send</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting send</param>
         /// <returns>An awaitable <see cref="Task"/></returns>
-        public Task Send(Package package, CancellationToken cancellationToken = default)
+        public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             return this.SendInternal(package, this.produce, cancellationToken);
         }
@@ -314,7 +314,7 @@ namespace Quix.Sdk.Transport.Kafka
         /// <inheritdoc />
         public void Flush(CancellationToken cancellationToken)
         {
-            if (this.producer == null) throw new InvalidOperationException($"[{this.configId}] Unable to flush a closed " + nameof(KafkaInput));
+            if (this.producer == null) throw new InvalidOperationException($"[{this.configId}] Unable to flush a closed " + nameof(KafkaProducer));
             var flushTime = DateTime.UtcNow.ToBinary();
             if (flushTime < this.lastFlush) return;
 

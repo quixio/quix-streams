@@ -7,9 +7,9 @@ using Quix.Sdk.Transport.IO;
 namespace Quix.Sdk.Transport
 {
     /// <summary>
-    /// A prebuilt pipeline, which deserializes and merges the package's output by the specified <see cref="IOutput"/>
+    /// A prebuilt pipeline, which deserializes and merges the packages and passes to the specified <see cref="IConsumer"/>
     /// </summary>
-    public class TransportOutput : IOutput, ICanCommit, IRevocationPublisher
+    public class TransportConsumer : IConsumer, ICanCommit, IRevocationPublisher
     {
         private readonly Action onClose = () => { };
         private readonly Action<TransportContext[]> onCommit = (context) => { };
@@ -18,58 +18,58 @@ namespace Quix.Sdk.Transport
         private readonly Func<object, IEnumerable<TransportContext>, IEnumerable<TransportContext>> contextFilterByState = (state, context) => context;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="TransportOutput"/>, which listens to the specified <see cref="IOutput"/>
+        /// Initializes a new instance of <see cref="TransportConsumer"/>, which listens to the specified <see cref="IConsumer"/>
         /// </summary>
-        /// <param name="output">The output to listen to</param>
-        public TransportOutput(IOutput output) : this(output, null)
+        /// <param name="consumer">The consumer to listen to</param>
+        public TransportConsumer(IConsumer consumer) : this(consumer, null)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of <see cref="TransportOutput"/>, which listens to the specified <see cref="IOutput"/>
+        /// Initializes a new instance of <see cref="TransportConsumer"/>, which listens to the specified <see cref="IConsumer"/>
         /// </summary>
-        /// <param name="output">The output to listen to</param>
+        /// <param name="consumer">The consumer to listen to</param>
         /// <param name="configureOptions"></param>
-        public TransportOutput(IOutput output, Action<TransportOutputOptions> configureOptions)
+        public TransportConsumer(IConsumer consumer, Action<TransportConsumerOptions> configureOptions)
         {
-            if (output == null) throw new ArgumentNullException(nameof(output));
-            var options = new TransportOutputOptions();
+            if (consumer == null) throw new ArgumentNullException(nameof(consumer));
+            var options = new TransportConsumerOptions();
             configureOptions?.Invoke(options);
 
-            // output -> merger -> deserializer -> commitModifier -> raise
-            var outputsAndInputs = new List<object>();
-            outputsAndInputs.Add(output);
+            // consumer -> merger -> deserializer -> commitModifier -> raise
+            var pipeline = new List<object>();
+            pipeline.Add(consumer);
 
             var byteMerger = new ByteMerger(new MergeBuffer());
             var merger = new ByteMergingModifier(byteMerger);
-            outputsAndInputs.Add(merger);
+            pipeline.Add(merger);
 
             var deserializer = new DeserializingModifier();
-            outputsAndInputs.Add(deserializer);
+            pipeline.Add(deserializer);
             if (options.CommitOptions?.AutoCommitEnabled ?? false)
             {
                 var commitModifier = new CommitModifier(options.CommitOptions);
-                outputsAndInputs.Add(commitModifier);
+                pipeline.Add(commitModifier);
                 onClose = () => commitModifier.Close();
             }
             
             // Now that we have the modifier, lets connect them up
-            var previous = outputsAndInputs[0];
-            for (var index = 1; index < outputsAndInputs.Count; index++)
+            var previous = pipeline[0];
+            for (var index = 1; index < pipeline.Count; index++)
             {
-                var modifier = outputsAndInputs[index];
-                ((IOutput) previous).OnNewPackage = p => ((IInput) modifier).Send(p) ?? Task.CompletedTask;
+                var modifier = pipeline[index];
+                ((IConsumer) previous).OnNewPackage = p => ((IProducer) modifier).Publish(p) ?? Task.CompletedTask;
                 previous = modifier;
             }
 
-            // Connect last output to TransportOutput (this class)
-            ((IOutput) previous).OnNewPackage =  p=> this.OnNewPackage?.Invoke(p) ?? Task.CompletedTask;
+            // Connect last consumer to TransportConsumer (this class)
+            ((IConsumer) previous).OnNewPackage =  p=> this.OnNewPackage?.Invoke(p) ?? Task.CompletedTask;
             
-            // Hook up committing modifiers from front (output) to back (this)
+            // Hook up committing modifiers from front (consumer) to back (this)
             ICanCommit previousCanCommitModifier = null;
-            for (var index = 0; index < outputsAndInputs.Count; index++)
+            for (var index = 0; index < pipeline.Count; index++)
             {
-                var modifier = outputsAndInputs[index];
+                var modifier = pipeline[index];
                 if (previousCanCommitModifier != null)
                 {
                     if (modifier is ICanCommitSubscriber subscriber)
@@ -81,7 +81,7 @@ namespace Quix.Sdk.Transport
                 if (modifier is ICanCommit committingModifier) previousCanCommitModifier = committingModifier;
             }
             
-            // Connect last committing modifiers to TransportOutput (this class)
+            // Connect last committing modifiers to TransportConsumer (this class)
             if (previousCanCommitModifier != null)
             {
                 this.onCommit = (context) => { previousCanCommitModifier.Commit(context); };
@@ -90,11 +90,11 @@ namespace Quix.Sdk.Transport
                 previousCanCommitModifier.OnCommitting += (sender, args) => this.OnCommitting?.Invoke(sender, args);
             }
             
-            // Hook up modifiers implementing IRevocation.... from front (output) to back (this)
+            // Hook up modifiers implementing IRevocation.... from front (consumer) to back (this)
             IRevocationPublisher previousRevocationPublisher = null;
-            for (var index = 0; index < outputsAndInputs.Count; index++)
+            for (var index = 0; index < pipeline.Count; index++)
             {
-                var modifier = outputsAndInputs[index];
+                var modifier = pipeline[index];
                 if (previousRevocationPublisher != null)
                 {
                     // If we have previous notification modifier then try to hook up callbacks to it. Without previous notification modifier
@@ -109,7 +109,7 @@ namespace Quix.Sdk.Transport
                 if (modifier is IRevocationPublisher revocationPublisher) previousRevocationPublisher = revocationPublisher;
             }
             
-            // Connect last IRevocation... to TransportOutput (this class)
+            // Connect last IRevocation... to TransportConsumer (this class)
             if (previousRevocationPublisher != null)
             {
                 this.contextFilterByState = previousRevocationPublisher.FilterRevokedContexts;
@@ -143,7 +143,7 @@ namespace Quix.Sdk.Transport
         public Func<Package, Task> OnNewPackage { get; set; }
 
         /// <summary>
-        /// Close transport output
+        /// Close transport consumer
         /// </summary>
         public void Close()
         {
@@ -164,9 +164,9 @@ namespace Quix.Sdk.Transport
     }
 
     /// <summary>
-    /// Transport output options
+    /// Transport consumer options
     /// </summary>
-    public class TransportOutputOptions
+    public class TransportConsumerOptions
     {
         /// <summary>
         /// Auto commit options

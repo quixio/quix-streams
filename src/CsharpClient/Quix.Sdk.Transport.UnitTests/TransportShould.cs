@@ -12,18 +12,18 @@ namespace Quix.Sdk.Transport.UnitTests
     public class TransportShould
     {
         [Fact]
-        public void TransportOutput_ShouldCorrespondToTransportInput()
+        public void TransportConsumer_ShouldCorrespondToTransportProducer()
         {
             // This test checks that Transport Input and Output are reverse of each other
 
             // Arrange
             var passthrough = new Passthrough();
             var byteSplitter = new ByteSplitter(15); // this tiny to force some splitting
-            var transportInput = new TransportInput(passthrough, byteSplitter);
-            var transportOutput = new TransportOutput(passthrough);
+            var transportProducer = new TransportProducer(passthrough, byteSplitter);
+            var transportConsumer = new TransportConsumer(passthrough);
 
             Package packageReceived = null;
-            transportOutput.OnNewPackage = (p) =>
+            transportConsumer.OnNewPackage = (p) =>
             {
                 packageReceived = p;
                 return Task.CompletedTask;
@@ -34,7 +34,7 @@ namespace Quix.Sdk.Transport.UnitTests
             var sentPackage = new Package<TestModel>(new Lazy<TestModel>(sentValue), sentMetaData);
 
             // Act
-            transportInput.Send(sentPackage).Wait(2000); // should be completed the moment packageReceived is set. Timeout is in case test fails;
+            transportProducer.Publish(sentPackage).Wait(2000); // should be completed the moment packageReceived is set. Timeout is in case test fails;
 
 
             // Assert

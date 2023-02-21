@@ -46,7 +46,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             // Act
             for (int i = 0; i < ackEvery * 3; i++)
             {
-                await modifier.Send(new Package(typeof(object), new Lazy<object>(new object())));
+                await modifier.Publish(new Package(typeof(object), new Lazy<object>(new object())));
             }
             
             // Assert
@@ -79,7 +79,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             // Act
             var start = DateTime.UtcNow;
-            await modifier.Send(new Package(typeof(object), new Lazy<object>(new object())));
+            await modifier.Publish(new Package(typeof(object), new Lazy<object>(new object())));
             mre.WaitOne(3000);
 
             // Assert
@@ -111,7 +111,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             // Act
             for (int i = 0; i < 12; i++)
             {
-                await modifier.Send(new Package(typeof(object), new Lazy<object>(new object())));
+                await modifier.Publish(new Package(typeof(object), new Lazy<object>(new object())));
             }
 
             // Assert
@@ -183,9 +183,9 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             var package2 = PackageFactory.CreatePackage(new object(), new TransportContext() {{"PackageId", 2}});
             var package3 = PackageFactory.CreatePackage(new object(), new TransportContext() {{"PackageId", 3}});
             // Act
-            modifier.Send(package1);
-            modifier.Send(package2);
-            modifier.Send(package3);
+            modifier.Publish(package1);
+            modifier.Publish(package2);
+            modifier.Publish(package3);
             modifier.Close();
 
 
@@ -228,11 +228,11 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             await Task.Run(() =>
             {
                 this.helper.WriteLine(DateTime.UtcNow.ToString("G") + "- Wait 1");
-                modifier.Send(package1);
-                modifier.Send(package2);
+                modifier.Publish(package1);
+                modifier.Publish(package2);
                 mre.Wait();
                 mre.Reset();
-                modifier.Send(package3);
+                modifier.Publish(package3);
                 this.helper.WriteLine(DateTime.UtcNow.ToString("G") + "- Wait 2");
                 mre.Wait();
                 this.helper.WriteLine(DateTime.UtcNow.ToString("G") + "- After wait 2");

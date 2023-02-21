@@ -14,18 +14,18 @@ namespace Quix.Sdk.Process.Kafka
         /// <param name="config">Kafka Writer configuration</param>
         /// <param name="topic">Topic Id</param>
         /// <returns>New instance of Kafka Input Transport layer</returns>
-        public static IKafkaInput OpenKafkaInput(KafkaWriterConfiguration config, string topic)
+        public static IKafkaProducer OpenKafkaInput(KafkaWriterConfiguration config, string topic)
         {
             // Create kafka input
             var pubConfig = new Transport.Kafka.PublisherConfiguration(config.BrokerList, config.Properties)
             {
                 MaxMessageSize = config.MaxMessageSize
             };
-            var topicConfig = new Transport.Kafka.InputTopicConfiguration(topic);
+            var topicConfig = new Transport.Kafka.ProducerTopicConfiguration(topic);
 
-            var input = new Transport.Kafka.KafkaInput(pubConfig, topicConfig);
-            input.Open();
-            return input;
+            var kafkaProducer = new Transport.Kafka.KafkaProducer(pubConfig, topicConfig);
+            kafkaProducer.Open();
+            return kafkaProducer;
         }
 
         /// <summary>
@@ -35,7 +35,7 @@ namespace Quix.Sdk.Process.Kafka
         /// <param name="topic">Topic Id</param>
         /// <param name="byteSplitter">Byte splitter (output)</param> // TODO: Remove this dependency from Process layer
         /// <returns>New instance of Kafka Input Transport layer</returns>
-        public static IKafkaInput OpenKafkaInput(KafkaWriterConfiguration config, string topic, out IByteSplitter byteSplitter)
+        public static IKafkaProducer OpenKafkaInput(KafkaWriterConfiguration config, string topic, out IByteSplitter byteSplitter)
         {
             // Create kafka input
             var pubConfig = new Transport.Kafka.PublisherConfiguration(config.BrokerList, config.Properties)
@@ -43,11 +43,11 @@ namespace Quix.Sdk.Process.Kafka
                 MaxMessageSize = config.MaxMessageSize
             };
             byteSplitter = new Transport.Fw.ByteSplitter(pubConfig.MaxMessageSize - config.MaxKeySize);
-            var topicConfig = new Transport.Kafka.InputTopicConfiguration(topic);
+            var topicConfig = new Transport.Kafka.ProducerTopicConfiguration(topic);
 
-            var input = new Transport.Kafka.KafkaInput(pubConfig, topicConfig);
-            input.Open();
-            return input;
+            var kafkaProducer = new Transport.Kafka.KafkaProducer(pubConfig, topicConfig);
+            kafkaProducer.Open();
+            return kafkaProducer;
         }
     }
 }

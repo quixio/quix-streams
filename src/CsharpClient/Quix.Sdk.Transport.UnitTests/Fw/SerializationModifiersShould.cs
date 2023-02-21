@@ -25,7 +25,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             serializingModifier.OnNewPackage += (package) =>
             {
-                return deserializingModifier.Send(package);
+                return deserializingModifier.Publish(package);
             };
 
             Package deserializedPackage = null;
@@ -65,7 +65,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             serializingModifier.OnNewPackage += (package) =>
             {
-                return deserializingModifier.Send(package);
+                return deserializingModifier.Publish(package);
             };
 
             Package deserializedPackage = null;
@@ -102,7 +102,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             serializingModifier.OnNewPackage += (package) =>
             {
-                return deserializingModifier.Send(package);
+                return deserializingModifier.Publish(package);
             };
 
             Package deserializedPackage = null;
@@ -136,7 +136,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             serializingModifier.OnNewPackage += (package) =>
             {
-                return deserializingModifier.Send(package);
+                return deserializingModifier.Publish(package);
             };
 
             Package deserializedPackage = null;

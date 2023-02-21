@@ -13,16 +13,16 @@ using Quix.Sdk.Transport.IO;
 namespace Quix.Sdk.Transport.Kafka
 {
     /// <summary>
-    /// Kafka output implemented using polling mechanism from Kafka
+    /// Kafka consumer implemented using polling mechanism from Kafka
     /// </summary>
-    public class KafkaOutput : IOutput, IKafkaOutput, ICanCommit, IRevocationPublisher
+    public class KafkaConsumer : IKafkaConsumer, ICanCommit, IRevocationPublisher
     {
-        private readonly ILogger logger = Logging.CreateLogger<KafkaOutput>();
+        private readonly ILogger logger = Logging.CreateLogger<KafkaConsumer>();
         private readonly ConsumerConfig config;
 
         private readonly object consumerLock = new object();
 
-        private readonly OutputTopicConfiguration topicConfiguration;
+        private readonly ConsumerTopicConfiguration consumerTopicConfiguration;
         private readonly object workerThreadLock = new object();
 
         private IConsumer<string, byte[]> consumer;
@@ -36,17 +36,17 @@ namespace Quix.Sdk.Transport.Kafka
         private Task workerTask;
         private TaskCompletionSource<object> workerTaskPollFinished; // Resolved when WorkerTask's polling loop is completed. Used for stopping more efficiently
         private CancellationTokenSource workerTaskCts;
-        private Stopwatch currentPackageProcessTime = new Stopwatch();
-        private bool consumerGroupSet;
+        private readonly Stopwatch currentPackageProcessTime = new Stopwatch();
+        private readonly bool consumerGroupSet;
         private List<TopicPartitionOffset> lastRevokingState;
         private Action lastRevokeCompleteAction = null;
         private Action lastRevokeCancelAction = null;
         private ShouldSkipConsumeResult seekFunc = (cr) => false; // return true if consume result should be dropped
-        private const int revokeTimeoutPeriodInMs = 5000; // higher number should only mean up to this seconds of delay if you are never going to get new assignments,
+        private const int RevokeTimeoutPeriodInMs = 5000; // higher number should only mean up to this seconds of delay if you are never going to get new assignments,
                                                           // but should not prove to cause any other issue
 
         
-        private bool CheckForKeepAlivePackets = true;   // Enables the check for keep alive messages from Quix
+        private readonly bool checkForKeepAlivePackets;   // Enables the check for keep alive messages from Quix
         private string configId; // Hash to use in logs, so it is easier to detect what is experiencing an issue
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace Quix.Sdk.Transport.Kafka
         public bool EnableReAssignedLogic { get; set; } = true;
 
         /// <inheritdoc />
-        public event EventHandler<Exception> ErrorOccurred;
+        public event EventHandler<Exception> OnErrorOccurred;
 
         /// <summary>
         /// The callback that is used when a new package is available from Kafka
@@ -72,28 +72,28 @@ namespace Quix.Sdk.Transport.Kafka
         public event EventHandler<OnCommittingEventArgs> OnCommitting;
         
         /// <summary>
-        /// Raised when output is losing access to output source depending on implementation
+        /// Raised when consumer is losing access to subscribed source depending on implementation
         /// Argument is the state which describes what is being revoked. State is of type <see cref="List{TopicPartitionOffset}"/>
         /// </summary>
         public event EventHandler<OnRevokingEventArgs> OnRevoking;
         
         /// <summary>
-        /// Raised when output lost access to output source depending on implementation
+        /// Raised when consumer lost access to subscribed source depending on implementation
         /// Argument is the state which describes what got revoked. State is of type <see cref="List{TopicPartitionOffset}"/>
         /// </summary>
         public event EventHandler<OnRevokedEventArgs> OnRevoked;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaOutput"/>
+        /// Initializes a new instance of <see cref="KafkaConsumer"/>
         /// </summary>
         /// <param name="subscriberConfiguration">The subscriber configuration to use</param>
-        /// <param name="topicConfiguration">The topic configuration to use</param>
-        public KafkaOutput(SubscriberConfiguration subscriberConfiguration, OutputTopicConfiguration topicConfiguration)
+        /// <param name="consumerTopicConfiguration">The topic configuration to use</param>
+        public KafkaConsumer(SubscriberConfiguration subscriberConfiguration, ConsumerTopicConfiguration consumerTopicConfiguration)
         {
-            this.topicConfiguration = topicConfiguration;
+            this.consumerTopicConfiguration = consumerTopicConfiguration;
             this.config = subscriberConfiguration.ToConsumerConfig();
             this.consumerGroupSet = subscriberConfiguration.ConsumerGroupSet;
-            this.CheckForKeepAlivePackets = subscriberConfiguration.CheckForKeepAlivePackets;
+            this.checkForKeepAlivePackets = subscriberConfiguration.CheckForKeepAlivePackets;
             SetConfigId();
         }
 
@@ -104,31 +104,31 @@ namespace Quix.Sdk.Transport.Kafka
             logBuilder.AppendLine();
             logBuilder.AppendLine("=================== Kafka Consumer Configuration =====================");
             logBuilder.AppendLine("= Configuration Id: " + this.configId);
-            if (topicConfiguration.Partitions != null && topicConfiguration.Partitions.Any())
+            if (consumerTopicConfiguration.Partitions != null && consumerTopicConfiguration.Partitions.Any())
             {
-                if (topicConfiguration.Partitions.Count == 1)
+                if (consumerTopicConfiguration.Partitions.Count == 1)
                 {
-                    logBuilder.AppendLine($"= Topic with partition: {topicConfiguration.Partitions.First()}");
+                    logBuilder.AppendLine($"= Topic with partition: {consumerTopicConfiguration.Partitions.First()}");
                 }
                 else
                 {
                     logBuilder.AppendLine("= Topics with partitions");
-                    foreach (var topicConfigurationPartition in topicConfiguration.Partitions)
+                    foreach (var topicConfigurationPartition in consumerTopicConfiguration.Partitions)
                     {
                         logBuilder.AppendLine($"=   |_{topicConfigurationPartition.Topic}[{topicConfigurationPartition.Partition.Value} | {topicConfigurationPartition.Offset}]");
                     }
                 }
             }
-            if (topicConfiguration.Topics != null && topicConfiguration.Topics.Any())
+            if (consumerTopicConfiguration.Topics != null && consumerTopicConfiguration.Topics.Any())
             {
-                if (topicConfiguration.Topics.Count == 1)
+                if (consumerTopicConfiguration.Topics.Count == 1)
                 {
-                    logBuilder.AppendLine($"= Topic: {topicConfiguration.Topics.First()}");
+                    logBuilder.AppendLine($"= Topic: {consumerTopicConfiguration.Topics.First()}");
                 }
                 else
                 {
                     logBuilder.AppendLine("= Topics");
-                    foreach (var topic in topicConfiguration.Topics)
+                    foreach (var topic in consumerTopicConfiguration.Topics)
                     {
                         logBuilder.AppendLine($"=   |_{topic}");
                     }
@@ -177,7 +177,7 @@ namespace Quix.Sdk.Transport.Kafka
             
             // Figure out the extent of the contexts
             var contextsToFilterEvaluated = contextsToFilter.ToArray();
-            var contextOffsets = KafkaOutputExtensions.GetPartitionOffsets(contextsToFilterEvaluated, true).ToArray();
+            var contextOffsets = KafkaConsumerExtensions.GetPartitionOffsets(contextsToFilterEvaluated, true).ToArray();
             for (var index = 0; index < contextOffsets.Length; index++)
             {
                 var contextOffset = contextOffsets[index];
@@ -232,7 +232,7 @@ namespace Quix.Sdk.Transport.Kafka
                 consumerBuilder.SetPartitionsLostHandler(this.PartitionsLostHandler);
                 //  consumerBuilder.SetLogHandler(this.ConsumerLogHandler); // TODO later, for now not setting due to confluent.kafka having a default logger to stderr
 
-                var partitions = this.topicConfiguration.Partitions?.ToList();
+                var partitions = this.consumerTopicConfiguration.Partitions?.ToList();
                 if (!this.consumerGroupSet)
                 {
                     if (partitions == null)
@@ -255,7 +255,7 @@ namespace Quix.Sdk.Transport.Kafka
                             default:
                                 throw new ArgumentOutOfRangeException();
                         }
-                        partitions = this.topicConfiguration.Topics.Select(x => new TopicPartitionOffset(x, Partition.Any, selectedOffset)).ToList(); // doing unset instead of end, so we get nice logs below
+                        partitions = this.consumerTopicConfiguration.Topics.Select(x => new TopicPartitionOffset(x, Partition.Any, selectedOffset)).ToList(); // doing unset instead of end, so we get nice logs below
                     }
 
                     // convert all "Partition Any" to explicit list of partition because Any doesn't work. // See https://github.com/confluentinc/confluent-kafka-dotnet/issues/917
@@ -336,7 +336,7 @@ namespace Quix.Sdk.Transport.Kafka
                 else
                 {
                     this.logger.LogTrace("[{0}] Assigning topics to consumer", this.configId);
-                    this.consumer.Subscribe(this.topicConfiguration.Topics);
+                    this.consumer.Subscribe(this.consumerTopicConfiguration.Topics);
                     this.logger.LogTrace("[{0}] Assigned topics to consumer", this.configId);
                 }
 
@@ -434,7 +434,7 @@ namespace Quix.Sdk.Transport.Kafka
                 }
                 else
                 {
-                    Task.Delay(revokeTimeoutPeriodInMs, cts.Token).ContinueWith(t => lastRevokeCompleteAction(),
+                    Task.Delay(RevokeTimeoutPeriodInMs, cts.Token).ContinueWith(t => lastRevokeCompleteAction(),
                         TaskContinuationOptions.OnlyOnRanToCompletion);
                 }
             }
@@ -546,10 +546,10 @@ namespace Quix.Sdk.Transport.Kafka
 
         private void ConsumerErrorHandler(IConsumer<string, byte[]> consumer, Error error)
         {
-            this.OnErrorOccurred(new KafkaException(error));
+            this.OnErrorOccurredHandler(new KafkaException(error));
         }
 
-        private void OnErrorOccurred(KafkaException exception)
+        private void OnErrorOccurredHandler(KafkaException exception)
         {
             if (exception.Message.ToLowerInvariant().Contains("disconnect"))
             {
@@ -609,7 +609,7 @@ namespace Quix.Sdk.Transport.Kafka
                 }
             }
             
-            if (this.ErrorOccurred == null)
+            if (this.OnErrorOccurred == null)
             {
                 this.logger.LogError(exception, "[{0}] Exception receiving from Kafka", this.configId);
             }
@@ -617,7 +617,7 @@ namespace Quix.Sdk.Transport.Kafka
             {
                 // wrap error to include configId
                 var wrappedError = new KafkaException(new Error(exception.Error.Code, $"[{this.configId}] {exception.Error.Reason}", exception.Error.IsFatal), exception.InnerException);
-                this.ErrorOccurred?.Invoke(this, wrappedError);
+                this.OnErrorOccurred?.Invoke(this, wrappedError);
             }
         }
 
@@ -707,7 +707,7 @@ namespace Quix.Sdk.Transport.Kafka
                         }
                         catch (ConsumeException e)
                         {
-                            this.OnErrorOccurred(e);
+                            this.OnErrorOccurredHandler(e);
                         }
                         catch (OperationCanceledException)
                         {
@@ -764,7 +764,7 @@ namespace Quix.Sdk.Transport.Kafka
                 logger.LogDebug("[{0}] Reconnecting to kafka", this.configId);
                 if (disposed)
                 {
-                    logger.LogDebug("[{0}] Unable to reconnect to Kafka as {1} is disposed", this.configId, nameof(KafkaOutput));
+                    logger.LogDebug("[{0}] Unable to reconnect to Kafka as {1} is disposed", this.configId, nameof(KafkaConsumer));
                     return;
                 }
 
@@ -776,7 +776,7 @@ namespace Quix.Sdk.Transport.Kafka
             {
                 // While log and throw is an anti-pattern, this is critical enough exception for it.
                 logger.LogCritical(ex, "[{0}] Unexpected exception in kafka message poll thread", this.configId);
-                this.ErrorOccurred?.Invoke(this, ex);
+                this.OnErrorOccurred?.Invoke(this, ex);
             }
         }
 
@@ -792,7 +792,7 @@ namespace Quix.Sdk.Transport.Kafka
             {
                 if (this.consumer == null)
                 {
-                    throw new InvalidOperationException($"[{this.configId}] Unable to commit offsets when output is not open.");
+                    throw new InvalidOperationException($"[{this.configId}] Unable to commit offsets when consumer is not open.");
                 }
 
                 try
@@ -829,7 +829,7 @@ namespace Quix.Sdk.Transport.Kafka
             {
                 if (this.consumer == null)
                 {
-                    throw new InvalidOperationException($"[{this.configId}] Unable to commit offsets when output is not open.");
+                    throw new InvalidOperationException($"[{this.configId}] Unable to commit offsets when consumer is not open.");
                 }
 
                 if (!this.consumerGroupSet)
@@ -840,13 +840,13 @@ namespace Quix.Sdk.Transport.Kafka
 
                 
                 List<string> invalidTopics;
-                if (this.topicConfiguration.Topics != null)
+                if (this.consumerTopicConfiguration.Topics != null)
                 {
-                    invalidTopics = offsets.Where(x => !this.topicConfiguration.Topics.Contains(x.Topic)).Select(x => x.Topic).Distinct().ToList();
+                    invalidTopics = offsets.Where(x => !this.consumerTopicConfiguration.Topics.Contains(x.Topic)).Select(x => x.Topic).Distinct().ToList();
                 }
                 else
                 {
-                    invalidTopics = offsets.Where(x => this.topicConfiguration.Partitions.All(y => y.TopicPartition != x.TopicPartition)).Select(x => x.Topic).Distinct().ToList();
+                    invalidTopics = offsets.Where(x => this.consumerTopicConfiguration.Partitions.All(y => y.TopicPartition != x.TopicPartition)).Select(x => x.Topic).Distinct().ToList();
                 }
                 if (invalidTopics.Count > 0)
                 {
@@ -892,27 +892,27 @@ namespace Quix.Sdk.Transport.Kafka
             var args = KafkaHelper.FromResult(result);
             try
             {
-                if (this.CheckForKeepAlivePackets && args.IsKeepAlivePackage())
+                if (this.checkForKeepAlivePackets && args.IsKeepAlivePackage())
                 {
-                    this.logger.LogTrace("[{0}] KafkaOutput: keep alive message read, ignoring.", this.configId);
+                    this.logger.LogTrace("[{0}] KafkaConsumer: keep alive message read, ignoring.", this.configId);
                     return;
                 }
 
-                this.logger.LogTrace("[{0}] KafkaOutput: raising OnNewPackage", this.configId);
+                this.logger.LogTrace("[{0}] KafkaConsumer: raising OnNewPackage", this.configId);
                 var task = this.OnNewPackage?.Invoke(args);
                 if (task == null) return;
                 await task;
-                this.logger.LogTrace("[{0}] KafkaOutput: raised OnNewPackage", this.configId);
+                this.logger.LogTrace("[{0}] KafkaConsumer: raised OnNewPackage", this.configId);
             }
             catch (Exception ex)
             {
-                if (this.ErrorOccurred == null)
+                if (this.OnErrorOccurred == null)
                 {
                     this.logger.LogError(ex, "[{0}] Exception processing message read from Kafka", this.configId);
                 }
                 else
                 {
-                    this.ErrorOccurred?.Invoke(this, ex);
+                    this.OnErrorOccurred?.Invoke(this, ex);
                 }
             }
         }

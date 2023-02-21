@@ -12,9 +12,9 @@ using Quix.Sdk.Transport.Registry;
 namespace Quix.Sdk.Transport.Fw
 {
     /// <summary>
-    ///     Modifier, which deserializes the package into the model described in the package.
+    /// Modifier, which deserializes the package into the model described in the package.
     /// </summary>
-    public class DeserializingModifier : IOutput, IInput
+    public class DeserializingModifier : IConsumer, IProducer
     {
         /// <summary>
         /// The callback that is used when deserialized package is available
@@ -28,7 +28,7 @@ namespace Quix.Sdk.Transport.Fw
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>
         /// <returns>An awaitable <see cref="Task"/></returns>
         /// <exception cref="SerializationException">When deserialization fails due to unknown codec or invalid data for codec</exception>
-        public Task Send(Package package, CancellationToken cancellationToken = default)
+        public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
             {

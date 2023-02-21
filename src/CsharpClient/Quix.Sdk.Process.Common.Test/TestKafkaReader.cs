@@ -18,7 +18,7 @@ namespace Quix.Sdk.Process.Common.Test
         /// </summary>
         /// <param name="testBroker">Mocked test broker instance of <see cref="TestBroker"/></param>
         public TestKafkaReader(TestBroker testBroker)
-            :base(new TestKafkaBrokerOutput(testBroker.Output))
+            :base(new TestKafkaBrokerConsumer(testBroker.Consumer))
         {
         }
 
@@ -27,28 +27,28 @@ namespace Quix.Sdk.Process.Common.Test
         /// <summary>
         /// Transport Output of the Test broker. Stands for the consumer output end point of the Message broker.
         /// </summary>
-        private class TestKafkaBrokerOutput : IKafkaOutput
+        private class TestKafkaBrokerConsumer : IKafkaConsumer
         {
-            private TestBrokerOutput output;
+            private TestBrokerConsumer consumer;
             
             public Func<Package, Task> OnNewPackage { get; set; }
 
-            public TestKafkaBrokerOutput(TestBrokerOutput output)
+            public TestKafkaBrokerConsumer(TestBrokerConsumer consumer)
             {
-                this.output = output;
-                output.OnNewPackage += (package) => this.OnNewPackage?.Invoke(package);
+                this.consumer = consumer;
+                consumer.OnNewPackage += (package) => this.OnNewPackage?.Invoke(package);
             }
 
             public async Task Send(Package newPackage)
             {
-                await this.output.Send(newPackage);
+                await this.consumer.Send(newPackage);
             }
 
             public void Dispose()
             {
             }
 
-            public event EventHandler<Exception> ErrorOccurred;
+            public event EventHandler<Exception> OnErrorOccurred;
 
             public void Close()
             {

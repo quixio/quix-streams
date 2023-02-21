@@ -11,11 +11,11 @@ namespace Quix.Sdk.Transport.UnitTests.Helpers
         public static Package CreatePackage(object value, TransportContext transportContext)
         {
             CodecRegistry.RegisterCodec(new ModelKey(typeof(object)), DefaultJsonCodec.Instance);
-            var input = new Passthrough();
+            var producer = new Passthrough();
             Package result = null;
-            input.OnNewPackage = async package => result = package;  
-            var tInput = new TransportInput(input);
-            tInput.Send(new Package<object>(new Lazy<object>(() => value), null, transportContext));
+            producer.OnNewPackage = async package => result = package;  
+            var tProducer = new TransportProducer(producer);
+            tProducer.Publish(new Package<object>(new Lazy<object>(() => value), null, transportContext));
             return result;
         }
     }

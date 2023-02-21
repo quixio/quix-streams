@@ -3,12 +3,12 @@
 namespace Quix.Sdk.Transport.IO
 {
     /// <summary>
-    ///     Context holder for package when transporting through the pipeline
+    /// Context holder for package when transporting through the pipeline
     /// </summary>
     public class TransportContext : Dictionary<string, object>
     {
         /// <summary>
-        ///     Initializes a new instance of <see cref="TransportContext" /> using the provided dictionary
+        /// Initializes a new instance of <see cref="TransportContext" /> using the provided dictionary
         /// </summary>
         /// <param name="dictionary">The dictionary to use as base</param>
         public TransportContext(IDictionary<string, object> dictionary) : base(dictionary ?? new Dictionary<string, object>())
@@ -16,7 +16,7 @@ namespace Quix.Sdk.Transport.IO
         }
 
         /// <summary>
-        ///     Initializes a new instance of <see cref="TransportContext" /> that is empty
+        /// Initializes a new instance of <see cref="TransportContext" /> that is empty
         /// </summary>
         public TransportContext() : base(new Dictionary<string, object>())
         {
@@ -54,8 +54,8 @@ namespace Quix.Sdk.Transport.IO
     public static class KnownTransportContextKeys
     {
         /// <summary>
-        ///     The unique identifier, which groups together messages.
-        ///     Type is <see cref="string" />
+        /// The unique identifier, which groups together messages.
+        /// Type is <see cref="string" />
         /// </summary>
         public const string MessageGroupKey = "MessageGroupKey";
     }

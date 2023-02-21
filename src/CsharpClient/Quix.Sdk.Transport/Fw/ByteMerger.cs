@@ -10,7 +10,7 @@ namespace Quix.Sdk.Transport.Fw
     public static class ByteMergerExtensions
     {
         /// <summary>
-        ///     Buffers and merges message segments created using <see cref="ByteSplitter.Split" />
+        /// Buffers and merges message segments created using <see cref="ByteSplitter.Split" />
         /// </summary>
         /// <param name="byteMerger">Byte Merger instance</param>
         /// <param name="bytePackage">Byte array package</param>
@@ -27,12 +27,12 @@ namespace Quix.Sdk.Transport.Fw
     }
 
     /// <summary>
-    ///     Merges messages split by <see cref="IByteSplitter" />
+    /// Merges messages split by <see cref="IByteSplitter" />
     /// </summary>
     public interface IByteMerger
     {
         /// <summary>
-        ///     Buffers and merges message segments created using <see cref="ByteSplitter.Split" />
+        /// Buffers and merges message segments created using <see cref="ByteSplitter.Split" />
         /// </summary>
         /// <param name="messageSegment">The segment created using <see cref="ByteSplitter.Split" /></param>
         /// <param name="msgGroupKey">An unique key, which further identifies, which group the message belongs to. Optional</param>
@@ -53,7 +53,7 @@ namespace Quix.Sdk.Transport.Fw
     }
 
     /// <summary>
-    ///     Merges messages split by <see cref="ByteSplitter" />
+    /// Merges messages split by <see cref="ByteSplitter" />
     /// </summary>
     public class ByteMerger : IByteMerger
     {
@@ -61,7 +61,7 @@ namespace Quix.Sdk.Transport.Fw
         private readonly ILogger logger = Logging.CreateLogger<ByteMerger>();
 
         /// <summary>
-        ///     Initializes a new instance of <see cref="ByteMerger" />
+        /// Initializes a new instance of <see cref="ByteMerger" />
         /// </summary>
         /// <param name="buffer">The buffer to use to store the message parts</param>
         public ByteMerger(MergeBuffer buffer)

@@ -13,7 +13,7 @@ namespace Quix.Sdk.Streaming
     {
         private readonly Func<string, KafkaWriter> createKafkaWriter;
         private readonly ConcurrentDictionary<string, Lazy<IStreamWriter>> streams = new ConcurrentDictionary<string, Lazy<IStreamWriter>>();
-        private readonly IKafkaInput kafkaInput;
+        private readonly IKafkaProducer kafkaProducer;
         
         /// <inheritdoc />
         public event EventHandler OnDisposed;
@@ -32,9 +32,9 @@ namespace Quix.Sdk.Streaming
         /// </summary>
         public OutputTopic(KafkaWriterConfiguration config, string topic)
         {
-            this.kafkaInput = KafkaHelper.OpenKafkaInput(config, topic, out var byteSplitter);
+            this.kafkaProducer = KafkaHelper.OpenKafkaInput(config, topic, out var byteSplitter);
 
-            createKafkaWriter = (string streamId) => new KafkaWriter(this.kafkaInput, byteSplitter, streamId);
+            createKafkaWriter = (string streamId) => new KafkaWriter(this.kafkaProducer, byteSplitter, streamId);
         }
 
         /// <inheritdoc />
@@ -96,8 +96,8 @@ namespace Quix.Sdk.Streaming
         /// <inheritdoc />
         public void Dispose()
         {
-            this.kafkaInput?.Flush(default);
-            this.kafkaInput?.Dispose();
+            this.kafkaProducer?.Flush(default);
+            this.kafkaProducer?.Dispose();
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }
     }

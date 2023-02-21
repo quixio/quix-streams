@@ -17,12 +17,12 @@ namespace Quix.Sdk.Process.Kafka
     public class KafkaReader: IDisposable
     {
         private readonly ILogger logger = Quix.Sdk.Logging.CreateLogger<KafkaReader>();
-        private Transport.TransportOutput transportOutput;
+        private Transport.TransportConsumer transportConsumer;
         private bool isDisposed = false;
 
         private StreamProcessFactory streamProcessFactory;
         private Func<string, IStreamProcess> streamProcessFactoryHandler;
-        private IKafkaOutput kafkaOutput;
+        private IKafkaConsumer kafkaConsumer;
         private Action<CommitOptions> configureCommitOptions;
 
         /// <summary>
@@ -78,28 +78,28 @@ namespace Quix.Sdk.Process.Kafka
                 o.AutoCommitEnabled = commitOptions.AutoCommitEnabled;
             };
             
-            var topicConfig = new OutputTopicConfiguration(topic);
-            this.kafkaOutput = new KafkaOutput(subConfig, topicConfig);
+            var topicConfig = new ConsumerTopicConfiguration(topic);
+            this.kafkaConsumer = new KafkaConsumer(subConfig, topicConfig);
         }
 
         /// <summary>
         /// Protected CTOR for testing purposes. We can simulate a Kafka broker instead of using a real broker.
         /// </summary>
-        /// <param name="output">Simulated message broker ingoing endpoint of transport layer</param>
-        protected KafkaReader(IKafkaOutput output)
+        /// <param name="consumer">Simulated message broker ingoing endpoint of transport layer</param>
+        protected KafkaReader(IKafkaConsumer consumer)
         {
-            this.kafkaOutput = output;
+            this.kafkaConsumer = consumer;
         }
 
         private bool InitializeTransport()
         {
-            if (transportOutput != null)
+            if (transportConsumer != null)
                 return false;
 
-            this.kafkaOutput.ErrorOccurred += ReadingExceptionHandler;
-            this.kafkaOutput.Open();
+            this.kafkaConsumer.OnErrorOccurred += ReadingExceptionHandler;
+            this.kafkaConsumer.Open();
 
-            this.transportOutput = new Transport.TransportOutput(kafkaOutput, (o) =>
+            this.transportConsumer = new Transport.TransportConsumer(kafkaConsumer, (o) =>
             { 
                 this.configureCommitOptions?.Invoke(o.CommitOptions);
             });
@@ -135,11 +135,11 @@ namespace Quix.Sdk.Process.Kafka
 
             // Transport layer -> Streaming layer
             ContextCache = new StreamContextCache();
-            this.streamProcessFactory = new KafkaStreamProcessFactory(this.transportOutput, streamProcessFactoryHandler, ContextCache);
+            this.streamProcessFactory = new KafkaStreamProcessFactory(this.transportConsumer, streamProcessFactoryHandler, ContextCache);
             this.streamProcessFactory.OnStreamsRevoked += StreamsRevokedHandler;
-            this.transportOutput.OnRevoking += RevokingHandler;
-            this.transportOutput.OnCommitted += CommittedHandler;
-            this.transportOutput.OnCommitting += CommitingHandler;
+            this.transportConsumer.OnRevoking += RevokingHandler;
+            this.transportConsumer.OnCommitted += CommittedHandler;
+            this.transportConsumer.OnCommitting += CommitingHandler;
             this.streamProcessFactory.Open();
         }
 
@@ -187,14 +187,14 @@ namespace Quix.Sdk.Process.Kafka
         private void StopHelper()
         {
             // Transport layer
-            if (transportOutput != null)
+            if (transportConsumer != null)
             {
-                this.transportOutput.OnRevoking -= RevokingHandler;
-                this.transportOutput.OnCommitted -= CommittedHandler;
-                this.transportOutput.Close();
+                this.transportConsumer.OnRevoking -= RevokingHandler;
+                this.transportConsumer.OnCommitted -= CommittedHandler;
+                this.transportConsumer.Close();
             }
 
-            this.kafkaOutput?.Close();
+            this.kafkaConsumer?.Close();
 
             // Stream process factory
             if (this.streamProcessFactory != null)
@@ -211,8 +211,8 @@ namespace Quix.Sdk.Process.Kafka
             isDisposed = true;
             this.StopHelper();
 
-            this.kafkaOutput = null;
-            this.transportOutput = null;
+            this.kafkaConsumer = null;
+            this.transportConsumer = null;
             this.streamProcessFactory = null;
         }
 
@@ -222,14 +222,14 @@ namespace Quix.Sdk.Process.Kafka
         public void Commit()
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(KafkaReader));
-            if (transportOutput == null) throw new InvalidOperationException("Not able to commit to inactive reader");
+            if (transportConsumer == null) throw new InvalidOperationException("Not able to commit to inactive reader");
             Debug.Assert(ContextCache != null);
             lock (this.ContextCache.Sync)
             {
                 var all = this.ContextCache.GetAll();
                 var contexts = all.Select(y => y.Value.LastUncommittedTransportContext).Where(y => y != null).ToArray();
                 if (contexts.Length == 0) return; // there is nothing to commit
-                this.transportOutput.Commit(contexts);
+                this.transportConsumer.Commit(contexts);
             }
         }
     }

@@ -42,25 +42,25 @@ namespace Quix.Sdk.Speedtest
                 config["group.id"] = Configuration.Config.ConsumerId;
             }
 
-            IKafkaInput CreateInput()
+            IKafkaProducer CreateProducer()
             {
                 var pubConfig = new PublisherConfiguration(Configuration.Config.BrokerList, config);
-                var topicConfig = new InputTopicConfiguration(Configuration.Config.Topic);
-                var kafkaInput = new KafkaInput(pubConfig, topicConfig);
-                kafkaInput.Open();
-                return kafkaInput;
+                var topicConfig = new ProducerTopicConfiguration(Configuration.Config.Topic);
+                var kafkaProducer = new KafkaProducer(pubConfig, topicConfig);
+                kafkaProducer.Open();
+                return kafkaProducer;
             }
 
             var start = DateTime.UtcNow;
             var lastpackageRead = DateTime.UtcNow;
 
             var subConfig = new SubscriberConfiguration(Configuration.Config.BrokerList, "Debug", config);
-            var topicConfig = new OutputTopicConfiguration(Configuration.Config.Topic);
-            var kafkaOutput = new KafkaOutput(subConfig, topicConfig);
-            kafkaOutput.ErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
+            var topicConfig = new ConsumerTopicConfiguration(Configuration.Config.Topic);
+            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            kafkaOutput.OnErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
             kafkaOutput.Open();
-            var output = new TransportOutput(kafkaOutput);
-            output.OnNewPackage = (package) =>
+            var consumer = new TransportConsumer(kafkaOutput);
+            consumer.OnNewPackage = (package) =>
             {
                 lastpackageRead = DateTime.UtcNow;
                 var now = DateTime.UtcNow;
@@ -93,9 +93,9 @@ namespace Quix.Sdk.Speedtest
                 // get to end...
                 Thread.Sleep(100);
             }
-            using (var input = CreateInput())
+            using (var kafkaProducer = CreateProducer())
             {
-                var transportInput = new TransportInput(input);
+                var transportProducer = new TransportProducer(kafkaProducer);
                 while (!ct.IsCancellationRequested)
                 {
                     try
@@ -106,7 +106,7 @@ namespace Quix.Sdk.Speedtest
                         Array.Copy(BitConverter.GetBytes(binary), 0, bytes, 1, 8);
                         var value = new Lazy<byte[]>(bytes);
                         var msg = new Package<byte[]>(value, null);
-                        transportInput.Send(msg, ct);
+                        transportProducer.Publish(msg, ct);
                         Thread.Sleep(100);
                     }
                     catch (Exception ex)

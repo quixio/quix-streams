@@ -7,7 +7,7 @@ using Quix.Sdk.Transport.IO;
 
 namespace Quix.Sdk.Transport.UnitTests.Helpers
 {
-    public class Passthrough : IOutput, IInput, ICanCommit
+    public class Passthrough : IConsumer, IProducer, ICanCommit
     {
         private readonly Func<Package, Task> callback;
 
@@ -35,7 +35,7 @@ namespace Quix.Sdk.Transport.UnitTests.Helpers
             return contextsToFilter;
         }
 
-        public Task Send(Package package, CancellationToken cancellationToken = default)
+        public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             return this.callback?.Invoke(package) ?? this.OnNewPackage?.Invoke(package);
         }

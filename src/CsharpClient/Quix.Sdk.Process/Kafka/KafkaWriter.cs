@@ -15,7 +15,7 @@ namespace Quix.Sdk.Process.Kafka
     {
         private readonly ILogger logger = Logging.CreateLogger<KafkaWriter>();
 
-        private Transport.IO.IInput transportInput;
+        private Transport.IO.IProducer transportProducer;
 
         /// <summary>
         /// The globally unique identifier of the stream.
@@ -30,12 +30,12 @@ namespace Quix.Sdk.Process.Kafka
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaWriter"/>
         /// </summary>
-        /// <param name="input">The input to write the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
+        /// <param name="producer">The input to write the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
         /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
         [Obsolete("Use constructor with bytesplitter")] // kept for DLL backward compatibility
-        public KafkaWriter(Transport.IO.IInput input, string streamId = null)
+        public KafkaWriter(Transport.IO.IProducer producer, string streamId = null)
         {
-            this.transportInput = new Transport.TransportInput(input);
+            this.transportProducer = new Transport.TransportProducer(producer);
 
             this.InitializeStreaming(streamId);
         }
@@ -43,12 +43,12 @@ namespace Quix.Sdk.Process.Kafka
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaWriter"/>
         /// </summary>
-        /// <param name="input">The input to write the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
+        /// <param name="producer">The input to write the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
         /// <param name="byteSplitter">The byte splitter to use. </param>
         /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
-        public KafkaWriter(Transport.IO.IInput input, IByteSplitter byteSplitter, string streamId = null)
+        public KafkaWriter(Transport.IO.IProducer producer, IByteSplitter byteSplitter, string streamId = null)
         {
-            this.transportInput = new Transport.TransportInput(input, byteSplitter);
+            this.transportProducer = new Transport.TransportProducer(producer, byteSplitter);
 
             this.InitializeStreaming(streamId);
         }
@@ -73,14 +73,14 @@ namespace Quix.Sdk.Process.Kafka
                     new Lazy<object>(() => package.Value)
                 );
 
-                if (transportInput == null)
+                if (transportProducer == null)
                 {
                     throw new InvalidOperationException("Writer is already closed.");
                 }
 
                 transportPackage.SetKey(StreamId);
 
-                await this.transportInput.Send(transportPackage, this.CancellationToken);
+                await this.transportProducer.Publish(transportPackage, this.CancellationToken);
                 await this.Output.Send(package);
             }
             catch (Exception e)
@@ -99,7 +99,7 @@ namespace Quix.Sdk.Process.Kafka
         private void Stop()
         {
             // Transport layer
-            this.transportInput = null;
+            this.transportProducer = null;
         }
 
         /// <inheritdoc />

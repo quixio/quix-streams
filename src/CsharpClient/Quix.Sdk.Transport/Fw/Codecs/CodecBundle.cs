@@ -4,13 +4,13 @@ using Quix.Sdk.Transport.Codec;
 namespace Quix.Sdk.Transport.Fw.Codecs
 {
     /// <summary>
-    ///     Codec bundle is a composite model with all details necessary for looking up a codec implementation
+    /// Codec bundle is a composite model with all details necessary for looking up a codec implementation
     /// </summary>
     [DebuggerDisplay("Codec: {CodecId}, Model: {ModelKey}")]
     public sealed class CodecBundle
     {
         /// <summary>
-        ///     Initializes a new instance of <see cref="CodecBundle" />
+        /// Initializes a new instance of <see cref="CodecBundle" />
         /// </summary>
         /// <param name="modelKey">The key to identify the model</param>
         /// <param name="codecId">The id of the codec used for model serialization</param>
@@ -21,12 +21,12 @@ namespace Quix.Sdk.Transport.Fw.Codecs
         }
 
         /// <summary>
-        ///     Gets the key to identify the Data
+        /// Gets the key to identify the Data
         /// </summary>
         public ModelKey ModelKey { get; }
 
         /// <summary>
-        ///     Gets the codec id to used to serialize the model
+        /// Gets the codec id to used to serialize the model
         /// </summary>
         public CodecId CodecId { get; }
 

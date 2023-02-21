@@ -11,7 +11,7 @@ namespace Quix.Sdk.Streaming.Raw
     /// </summary>
     public class RawInputTopic: IRawInputTopic, IDisposable
     {
-        private KafkaOutput kafkaOutput;
+        private KafkaConsumer kafkaConsumer;
         private bool connectionStarted = false;
 
         EventHandler<Exception> _errorHandler;
@@ -32,7 +32,7 @@ namespace Quix.Sdk.Streaming.Raw
                 {
                     //automatic attaching the handler when noone someone starts listening to the event
                     // internally causing to stop logging messages instead of start throwing them
-                    this.kafkaOutput.ErrorOccurred += InternalErrorHandler;
+                    this.kafkaConsumer.OnErrorOccurred += InternalErrorHandler;
                     errorHandlerRegistered = true;
                 }
             }
@@ -42,7 +42,7 @@ namespace Quix.Sdk.Streaming.Raw
                 {
                     //automatic detaching of the handler when noone is listening to the event
                     // internally causing to start logging messages instead of throwing them
-                    this.kafkaOutput.ErrorOccurred -= InternalErrorHandler;
+                    this.kafkaConsumer.OnErrorOccurred -= InternalErrorHandler;
                     errorHandlerRegistered = false;
                 }
             }
@@ -71,8 +71,8 @@ namespace Quix.Sdk.Streaming.Raw
             //disable quix-custom keep alive messages because they can interfere with the received data since we dont have any protocol running this over
             subscriberConfiguration.CheckForKeepAlivePackets = false;
 
-            var topicConfiguration = new OutputTopicConfiguration(topicName);
-            this.kafkaOutput = new KafkaOutput(subscriberConfiguration, topicConfiguration);
+            var topicConfiguration = new ConsumerTopicConfiguration(topicName);
+            this.kafkaConsumer = new KafkaConsumer(subscriberConfiguration, topicConfiguration);
         }
 
         /// <inheritdoc />
@@ -84,7 +84,7 @@ namespace Quix.Sdk.Streaming.Raw
                 throw new InvalidOperationException("Cannot call StartReading twice");
             }
 
-            kafkaOutput.OnNewPackage = async package =>
+            kafkaConsumer.OnNewPackage = async package =>
             {
                 byte[] message = (byte[])package.Value.Value;
 
@@ -105,7 +105,7 @@ namespace Quix.Sdk.Streaming.Raw
                 this.OnMessageRead?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
             };
 
-            kafkaOutput.Open();
+            kafkaConsumer.Open();
             connectionStarted = true;
         }
 
@@ -123,7 +123,7 @@ namespace Quix.Sdk.Streaming.Raw
         /// <inheritdoc />
         public void Dispose()
         {
-            this.kafkaOutput?.Dispose();
+            this.kafkaConsumer?.Dispose();
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }
 

@@ -12,9 +12,9 @@ using Quix.Sdk.Transport.Registry;
 namespace Quix.Sdk.Transport.Fw
 {
     /// <summary>
-    ///     Modifier, which serializes the package into bytes
+    /// Modifier, which serializes the package into bytes
     /// </summary>
-    public class SerializingModifier : IOutput
+    public class SerializingModifier : IConsumer
     {
         /// <summary>
         /// The callback that is used when serialized package is available

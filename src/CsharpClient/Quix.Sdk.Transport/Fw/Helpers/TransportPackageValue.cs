@@ -5,7 +5,7 @@ using Quix.Sdk.Transport.IO;
 namespace Quix.Sdk.Transport.Fw.Helpers
 {
     /// <summary>
-    ///     Describes how to de/serialize the <see cref="Package.Value"/>
+    /// Describes how to de/serialize the <see cref="Package.Value"/>
     /// </summary>
     internal sealed class TransportPackageValue
     {

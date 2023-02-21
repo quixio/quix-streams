@@ -10,7 +10,7 @@ namespace Quix.Sdk.Transport.Kafka
         private readonly IDictionary<string, string> consumerProperties = new Dictionary<string, string>();
 
         /// <summary>
-        ///     Initializes a new instance of <see cref="SubscriberConfiguration" />
+        /// Initializes a new instance of <see cref="SubscriberConfiguration" />
         /// </summary>
         /// <param name="brokerList">The list of brokers as a comma separated list of broker host or host:port.</param>
         /// <param name="groupId">Client group id string. All clients sharing the same GroupId belong to the same group.</param>
@@ -39,18 +39,18 @@ namespace Quix.Sdk.Transport.Kafka
         }
 
         /// <summary>
-        ///     The list of brokers as a comma separated list of broker host or host:port.
+        /// The list of brokers as a comma separated list of broker host or host:port.
         /// </summary>
         public string BrokerList { get; }
 
 
         /// <summary>
-        ///     Client group id string. All clients sharing the same GroupId belong to the same group.
+        /// Client group id string. All clients sharing the same GroupId belong to the same group.
         /// </summary>
         public string GroupId { get; }
 
         /// <summary>
-        ///     Whether the consumer group is set
+        /// Whether the consumer group is set
         /// </summary>
         public bool ConsumerGroupSet { get; }
 
@@ -60,12 +60,11 @@ namespace Quix.Sdk.Transport.Kafka
         public bool CheckForKeepAlivePackets { get; set; } = true;
 
         /// <summary>
-        ///     If consumer group is configured, The auto offset reset determines the start offset in the event
-        ///     there are not yet any committed offsets for the consumer group for the topic/partitions of interest.
-        ///     
+        /// If consumer group is configured, The auto offset reset determines the start offset in the event
+        /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.     
         /// 
-        ///     If no consumer group is configured, the consumption will start according to value set.
-        ///     If no auto offset reset is set, in case of no consumer group it defaults to end, otherwise to earliest.
+        /// If no consumer group is configured, the consumption will start according to value set.
+        /// If no auto offset reset is set, in case of no consumer group it defaults to end, otherwise to earliest.
         /// </summary>
         public AutoOffsetReset? AutoOffsetReset { get; set; } = null;
 

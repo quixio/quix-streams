@@ -36,7 +36,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             };
 
             // Act
-            var task = modifier.Send(package);
+            var task = modifier.Publish(package);
 
             // Assert
             task.Wait(2000);
@@ -78,7 +78,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             };
 
             // Act
-            var task = modifier.Send(package);
+            var task = modifier.Publish(package);
 
             // Assert
             task.Wait(2000);
@@ -139,7 +139,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             });
 
             // Act
-            var task = modifier.Send(package);
+            var task = modifier.Publish(package);
 
             // Assert
             task.IsCompleted.Should().BeFalse("Because manual reset events are still waiting to be set");

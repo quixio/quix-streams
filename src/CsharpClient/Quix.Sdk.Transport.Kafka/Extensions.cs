@@ -8,26 +8,26 @@ using Quix.Sdk.Transport.IO;
 
 namespace Quix.Sdk.Transport.Kafka
 {
-    public static class KafkaOutputExtensions
+    public static class KafkaConsumerExtensions
     {
-        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => Logging.CreateLogger(typeof(KafkaOutputExtensions)));
+        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => Logging.CreateLogger(typeof(KafkaConsumerExtensions)));
         
         /// <summary>
-        ///     Commit a transport contexts limited by the topics this output had previously subscribed to
+        /// Commit a transport contexts limited by the topics this consumer had previously subscribed to
         /// </summary>
-        /// <param name="kafkaOutput">The output to commit to</param>
+        /// <param name="kafkaConsumer">The consumer to commit to</param>
         /// <param name="transportContext">The transport contexts to commit</param>
-        public static void CommitOffset(this IKafkaOutput kafkaOutput, TransportContext transportContext)
+        public static void CommitOffset(this IKafkaConsumer kafkaConsumer, TransportContext transportContext)
         {
-            kafkaOutput.CommitOffsets(new [] {transportContext});
+            kafkaConsumer.CommitOffsets(new [] {transportContext});
         }
 
         /// <summary>
-        ///     Commit a list of transport contexts limited by the topics this output had previously subscribed to
+        /// Commit a list of transport contexts limited by the topics this consumer had previously subscribed to
         /// </summary>
-        /// <param name="kafkaOutput">The output to commit to</param>
+        /// <param name="kafkaConsumer">The consumer to commit to</param>
         /// <param name="transportContexts">The transport contexts to commit</param>
-        public static void CommitOffsets(this IKafkaOutput kafkaOutput, TransportContext[] transportContexts)
+        public static void CommitOffsets(this IKafkaConsumer kafkaConsumer, TransportContext[] transportContexts)
         {
             if (transportContexts.Length == 0)
             {
@@ -39,7 +39,7 @@ namespace Quix.Sdk.Transport.Kafka
             {
                 var transportContext = transportContexts[0];
                 if (!transportContext.TryGetKafkaCommitDetails(out var topic, out var partition, out var offset)) return;
-                kafkaOutput.CommitOffset(new TopicPartitionOffset(topic, partition, offset + offSetToNextPackage));
+                kafkaConsumer.CommitOffset(new TopicPartitionOffset(topic, partition, offset + offSetToNextPackage));
                 return;
             }
 
@@ -51,7 +51,7 @@ namespace Quix.Sdk.Transport.Kafka
 
             if (latestOffsets.Count == 0) return;
             
-            kafkaOutput.CommitOffsets(latestOffsets);
+            kafkaConsumer.CommitOffsets(latestOffsets);
         }
 
         /// <summary>
@@ -135,13 +135,13 @@ namespace Quix.Sdk.Transport.Kafka
         }
 
         /// <summary>
-        /// Commit an offset limited by the topics this output had previously subscribed to
+        /// Commit an offset limited by the topics this consumer had previously subscribed to
         /// </summary>
-        /// <param name="kafkaOutput">The kafka output</param>
+        /// <param name="kafkaConsumer">The kafka consumer</param>
         /// <param name="offset">The offset to commit</param>
-        public static void CommitOffset(this IKafkaOutput kafkaOutput, TopicPartitionOffset offset)
+        public static void CommitOffset(this IKafkaConsumer kafkaConsumer, TopicPartitionOffset offset)
         {
-            kafkaOutput.CommitOffsets(new[]{ offset });
+            kafkaConsumer.CommitOffsets(new[]{ offset });
         }
     }
     

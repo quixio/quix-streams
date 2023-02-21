@@ -43,12 +43,11 @@ namespace Quix.Sdk.Process.Kafka
         public string ConsumerGroupId { get; }
 
         /// <summary>
-        ///     If consumer group is configured, The auto offset reset determines the start offset in the event
-        ///     there are not yet any committed offsets for the consumer group for the topic/partitions of interest.
-        ///     
+        /// If consumer group is configured, The auto offset reset determines the start offset in the event
+        /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.
         /// 
-        ///     If no consumer group is configured, the consumption will start according to value set.
-        ///     If no auto offset reset is set, in case of no consumer group it defaults to end, otherwise to earliest.
+        /// If no consumer group is configured, the consumption will start according to value set.
+        /// If no auto offset reset is set, in case of no consumer group it defaults to end, otherwise to earliest.
         /// </summary>
         public Confluent.Kafka.AutoOffsetReset? AutoOffsetReset { get; set; } = null;
 

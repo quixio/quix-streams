@@ -7,16 +7,16 @@ using Confluent.Kafka;
 namespace Quix.Sdk.Transport.Kafka
 {
     /// <summary>
-    /// Topic configuration for Kafka Input
+    /// Topic configuration for Kafka producer
     /// </summary>
-    public sealed class InputTopicConfiguration
+    public sealed class ProducerTopicConfiguration
     {
         /// <summary>
-        /// Initializes a new instance of <see cref="InputTopicConfiguration"/>
+        /// Initializes a new instance of <see cref="ProducerTopicConfiguration"/>
         /// </summary>
         /// <param name="topic">The topic to write to</param>
         /// <param name="partition">The partition to write to</param>
-        public InputTopicConfiguration(string topic, Partition partition)
+        public ProducerTopicConfiguration(string topic, Partition partition)
         {
             if (string.IsNullOrWhiteSpace(topic))
             {
@@ -28,10 +28,10 @@ namespace Quix.Sdk.Transport.Kafka
         }
 
         /// <summary>
-        /// Initializes a new instance of <see cref="InputTopicConfiguration"/>
+        /// Initializes a new instance of <see cref="ProducerTopicConfiguration"/>
         /// </summary>
         /// <param name="topic">The topic to write to</param>
-        public InputTopicConfiguration(string topic) : this(topic, Partition.Any)
+        public ProducerTopicConfiguration(string topic) : this(topic, Partition.Any)
         {
         }
 
@@ -46,77 +46,77 @@ namespace Quix.Sdk.Transport.Kafka
         public Partition Partition { get; }
     }
 
-    public sealed class OutputTopicConfiguration
+    public sealed class ConsumerTopicConfiguration
     {
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> for a single topic where partitions will be automatically 
-        ///     selected and offset will be the last unread offset or first available offset if
-        ///     no previous offset for consumer group is found.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> for a single topic where partitions will be automatically 
+        /// selected and offset will be the last unread offset or first available offset if
+        /// no previous offset for consumer group is found.
         /// </summary>
         /// <param name="topic">The topic</param>
-        public OutputTopicConfiguration(string topic)
+        public ConsumerTopicConfiguration(string topic)
         {
             this.Topics = new ReadOnlyCollection<string>(new List<string>(1) {topic});
         }
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> for one or more topics where partitions will be automatically 
-        ///     selected and offset will be the last unread offset or first available
-        ///     offset if no previous offset for consumer group is found.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> for one or more topics where partitions will be automatically 
+        /// selected and offset will be the last unread offset or first available
+        /// offset if no previous offset for consumer group is found.
         /// </summary>
         /// <param name="topics">The topics</param>
-        public OutputTopicConfiguration(ICollection<string> topics)
+        public ConsumerTopicConfiguration(ICollection<string> topics)
         {
             this.Topics = new ReadOnlyCollection<string>(topics.ToList());
         }
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with a single topic and partition with default offset. 
-        ///     Default is the last unread offset or first available offset if
-        ///     no previous offset for consumer group is found.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with a single topic and partition with default offset. 
+        /// Default is the last unread offset or first available offset if
+        /// no previous offset for consumer group is found.
         /// </summary>
         /// <param name="topic">The topic to set the partitions for</param>
         /// <param name="partition">The partition to set the offset to default for</param>
-        public OutputTopicConfiguration(string topic, Partition partition) : this(topic, new List<Partition>(1) {partition}, Offset.Unset)
+        public ConsumerTopicConfiguration(string topic, Partition partition) : this(topic, new List<Partition>(1) {partition}, Offset.Unset)
         {
         }
         
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with a single topic and offset with default partition.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with a single topic and offset with default partition.
         /// </summary>
         /// <param name="topic">The topic to set the partitions for</param>
         /// <param name="offset">The offset to use</param>
-        public OutputTopicConfiguration(string topic, Offset offset) : this(topic, new List<Partition>(1) {Partition.Any}, offset)
+        public ConsumerTopicConfiguration(string topic, Offset offset) : this(topic, new List<Partition>(1) {Partition.Any}, offset)
         {
         }        
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with a single topic and partition with the specified offset.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with a single topic and partition with the specified offset.
         /// </summary>
         /// <param name="topic">The topic to set the partitions for</param>
         /// <param name="partition">The partition to set the offset for</param>
         /// <param name="offset">The offset</param>
-        public OutputTopicConfiguration(string topic, Partition partition, Offset offset) : this(topic, new List<Partition>(1) {partition}, offset)
+        public ConsumerTopicConfiguration(string topic, Partition partition, Offset offset) : this(topic, new List<Partition>(1) {partition}, offset)
         {
         }
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with a single topic for, which all specified partitions are set to default. 
-        ///     Default is the last unread offset or first available offset if
-        ///     no previous offset for consumer group is found.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with a single topic for, which all specified partitions are set to default. 
+        /// Default is the last unread offset or first available offset if
+        /// no previous offset for consumer group is found.
         /// </summary>
         /// <param name="topic">The topic to set the partitions for</param>
         /// <param name="partitions">The partitions to set the offset to default for</param>
-        public OutputTopicConfiguration(string topic, ICollection<Partition> partitions) : this(topic, partitions, Offset.Unset)
+        public ConsumerTopicConfiguration(string topic, ICollection<Partition> partitions) : this(topic, partitions, Offset.Unset)
         {
         }
 
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with multiple topics where each topic has one or more configured partition offset
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with multiple topics where each topic has one or more configured partition offset
         /// </summary>
         /// <param name="topicPartitionOffsets">The topics with partition offsets</param>
-        public OutputTopicConfiguration(ICollection<TopicPartitionOffset> topicPartitionOffsets)
+        public ConsumerTopicConfiguration(ICollection<TopicPartitionOffset> topicPartitionOffsets)
         {
             if (topicPartitionOffsets == null)
             {
@@ -151,21 +151,21 @@ namespace Quix.Sdk.Transport.Kafka
         }
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with a single topic for, which all partitions set to one type of offset.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with a single topic for, which all partitions set to one type of offset.
         /// </summary>
         /// <param name="topic">The topic to set the partitions for</param>
         /// <param name="partitions">The partitions to set the offset for</param>
         /// <param name="offset">The offset</param>
-        public OutputTopicConfiguration(string topic, ICollection<Partition> partitions, Offset offset) : this(topic, partitions.Select(p => new PartitionOffset(p.Value, offset)).ToList())
+        public ConsumerTopicConfiguration(string topic, ICollection<Partition> partitions, Offset offset) : this(topic, partitions.Select(p => new PartitionOffset(p.Value, offset)).ToList())
         {
         }
 
         /// <summary>
-        ///     Initializes a new <see cref="OutputTopicConfiguration" /> with a single topic with the specified partition offsets.
+        /// Initializes a new <see cref="ConsumerTopicConfiguration" /> with a single topic with the specified partition offsets.
         /// </summary>
         /// <param name="topic">The topic to set the partitions for</param>
         /// <param name="partitionOffsets">The partitions with offsets to listen to</param>
-        public OutputTopicConfiguration(string topic, ICollection<PartitionOffset> partitionOffsets) : this(partitionOffsets.Select(x=> new TopicPartitionOffset(topic, x.Partition, x.Offset)).ToList())
+        public ConsumerTopicConfiguration(string topic, ICollection<PartitionOffset> partitionOffsets) : this(partitionOffsets.Select(x=> new TopicPartitionOffset(topic, x.Partition, x.Offset)).ToList())
         {
         }
 
@@ -181,7 +181,7 @@ namespace Quix.Sdk.Transport.Kafka
     }
 
     /// <summary>
-    ///     The offset to use for a given partition
+    /// The offset to use for a given partition
     /// </summary>
     public class PartitionOffset
     {

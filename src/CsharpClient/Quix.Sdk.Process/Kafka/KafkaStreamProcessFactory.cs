@@ -10,7 +10,7 @@ namespace Quix.Sdk.Process.Kafka
     /// </summary>
     internal class KafkaStreamProcessFactory : StreamProcessFactory
     {
-        public KafkaStreamProcessFactory(IOutput transportOutput, Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache cache) : base(transportOutput, streamProcessFactoryHandler, cache)
+        public KafkaStreamProcessFactory(IConsumer transportConsumer, Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache cache) : base(transportConsumer, streamProcessFactoryHandler, cache)
         {
         }
 

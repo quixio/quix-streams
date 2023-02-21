@@ -11,8 +11,8 @@ using Timer = System.Timers.Timer;
 namespace Quix.Sdk.Transport.Samples.Samples
 {
     /// <summary>
-    ///     Example for simple raw message write (lowest level possible)
-    ///     Note: Works well with ReadMessages example
+    /// Example for simple raw message write (lowest level possible)
+    /// Note: Works well with ReadMessages example
     /// </summary>
     public class WriteMessage
     {
@@ -24,18 +24,18 @@ namespace Quix.Sdk.Transport.Samples.Samples
         private long publishedCounter; // this is purely here for statistics
 
         /// <summary>
-        ///     Run the test synchronously
+        /// Run the test synchronously
         /// </summary>
         /// <param name="ct"></param>
         public void Run(CancellationToken ct)
         {
-            using (var input = this.CreateInput(out var splitter))
+            using (var producer = this.CreateProducer(out var splitter))
             {
-                var transportInput = new TransportInput(input, splitter);
+                var transportProducer = new TransportProducer(producer, splitter);
                 this.HookUpStatistics();
                 try
                 {
-                    this.SendMessage(transportInput, ct);
+                    this.SendMessage(transportProducer, ct);
                 }
                 catch (Exception ex)
                 {
@@ -44,7 +44,7 @@ namespace Quix.Sdk.Transport.Samples.Samples
             }
         }
 
-        private void SendMessage(IInput input, CancellationToken ct)
+        private void SendMessage(IProducer producer, CancellationToken ct)
         {
             var counter = 0;
             var random = new Random();
@@ -57,7 +57,7 @@ namespace Quix.Sdk.Transport.Samples.Samples
                 var msg = new Package<byte[]>(value, null);
                 msg.SetKey($"CustomSize {currentCounter}");
 
-                var sendTask = input.Send(msg, ct);
+                var sendTask = producer.Publish(msg, ct);
                 sendTask.ContinueWith(t => Console.WriteLine($"Exception on send: {t.Exception}"), TaskContinuationOptions.OnlyOnFaulted);
                 sendTask.ContinueWith(t => Interlocked.Increment(ref this.publishedCounter), TaskContinuationOptions.OnlyOnRanToCompletion);
                 counter++;
@@ -75,17 +75,17 @@ namespace Quix.Sdk.Transport.Samples.Samples
             }
         }
 
-        private IKafkaInput CreateInput(out ByteSplitter byteSplitter)
+        private IKafkaProducer CreateProducer(out ByteSplitter byteSplitter)
         {
             var pubConfig = new PublisherConfiguration(Const.BrokerList)
             {
                 MaxMessageSize = this.MaxMessageSizeInKafka
             };
             byteSplitter = new ByteSplitter(pubConfig.MaxMessageSize - MaxKafkaKeySize);
-            var topicConfig = new InputTopicConfiguration(TopicName);
-            var kafkaInput = new KafkaInput(pubConfig, topicConfig);
-            kafkaInput.Open();
-            return kafkaInput;
+            var topicConfig = new ProducerTopicConfiguration(TopicName);
+            var kafkaProducer = new KafkaProducer(pubConfig, topicConfig);
+            kafkaProducer.Open();
+            return kafkaProducer;
         }
 
         private void HookUpStatistics()

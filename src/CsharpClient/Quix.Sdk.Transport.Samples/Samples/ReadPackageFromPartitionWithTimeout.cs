@@ -12,8 +12,8 @@ using Timer = System.Timers.Timer;
 namespace Quix.Sdk.Transport.Samples.Samples
 {
     /// <summary>
-    ///     Read telemetry data and monitor the output
-    ///     This is a scenario to test timout issue in kafka and how it is handled when partitions are in use
+    /// Read telemetry data and monitor the output
+    /// This is a scenario to test timout issue in kafka and how it is handled when partitions are in use
     /// </summary>
     public class ReadPackageFromPartitionWithTimeout
     {
@@ -24,15 +24,15 @@ namespace Quix.Sdk.Transport.Samples.Samples
         private DateTime nextError = DateTime.UtcNow.AddSeconds(10);
 
         /// <summary>
-        ///     Start the reading stream which is an asynchronous process.
+        /// Start the reading stream which is an asynchronous process.
         /// </summary>
         /// <returns>Disposable output</returns>
-        public IOutput Start(Partition partition, Offset offset)
+        public IConsumer Start(Partition partition, Offset offset)
         {
-            var output = this.CreateKafkaOutput(partition, offset);
+            var consumer = this.CreateKafkaOutput(partition, offset);
             this.HookUpStatistics();
-            output.OnNewPackage = this.NewPackageHandler;
-            return output;
+            consumer.OnNewPackage = this.NewPackageHandler;
+            return consumer;
         }
 
         private Task NewPackageHandler(Package obj)
@@ -73,22 +73,22 @@ namespace Quix.Sdk.Transport.Samples.Samples
             timer.Start();
         }
 
-        private IOutput CreateKafkaOutput(Partition partition, Offset offset)
+        private IConsumer CreateKafkaOutput(Partition partition, Offset offset)
         {
             Console.WriteLine($"Reading from {TopicName}, partition 2");
             var subConfig = new SubscriberConfiguration(Const.BrokerList, ConsumerGroup, new Dictionary<string, string>()
             {
                 {"max.poll.interval.ms", "10000"}
             });
-            var topicConfig = new OutputTopicConfiguration(TopicName, partition, offset);
-            var kafkaOutput = new KafkaOutput(subConfig, topicConfig);
-            kafkaOutput.ErrorOccurred += (s, e) =>
+            var topicConfig = new ConsumerTopicConfiguration(TopicName, partition, offset);
+            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            kafkaOutput.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");
             };
             kafkaOutput.Open();
-            var output = new TransportOutput(kafkaOutput, (a) => a.CommitOptions = new CommitOptions() {CommitInterval = 15000, AutoCommitEnabled = true});
-            return output;
+            var transportConsumer = new TransportConsumer(kafkaOutput, (a) => a.CommitOptions = new CommitOptions() {CommitInterval = 15000, AutoCommitEnabled = true});
+            return transportConsumer;
         }
     }
 }

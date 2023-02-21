@@ -6,21 +6,21 @@ namespace Quix.Sdk.Transport.Samples.Samples
 {
     public delegate bool PackageFilter(Package package);
 
-    public class PackageFilterOutput : IOutput
+    public class PackageFilterConsumer : IConsumer
     {
         private readonly PackageFilter filter;
 
         public Func<Package, Task> OnNewPackage { get; set; }
 
         /// <summary>
-        ///     Initializes new instance of <see cref="PackageFilterOutput" />
+        /// Initializes new instance of <see cref="PackageFilterConsumer" />
         /// </summary>
-        /// <param name="output"></param>
+        /// <param name="consumer"></param>
         /// <param name="filter">Filter to use. When filter returns true, package is kept</param>
-        public PackageFilterOutput(IOutput output, PackageFilter filter)
+        public PackageFilterConsumer(IConsumer consumer, PackageFilter filter)
         {
             this.filter = filter;
-            output.OnNewPackage = FilterNewPackage;
+            consumer.OnNewPackage = FilterNewPackage;
         }
 
         private Task FilterNewPackage(Package package)

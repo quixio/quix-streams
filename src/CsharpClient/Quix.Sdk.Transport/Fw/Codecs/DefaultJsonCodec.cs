@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 namespace Quix.Sdk.Transport.Fw.Codecs
 {
     /// <summary>
-    ///     Default JSON codec for any type.
+    /// Default JSON codec for any type.
     /// </summary>
     /// <typeparam name="TContent"></typeparam>
     public class DefaultJsonCodec<TContent> : Codec<TContent>

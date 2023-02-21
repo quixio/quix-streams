@@ -3,12 +3,12 @@
 namespace Quix.Sdk.Transport.Fw.Codecs
 {
     /// <summary>
-    ///     Codec for serializing and deserializing a <see cref="string"/>
+    /// Codec for serializing and deserializing a <see cref="string"/>
     /// </summary>
     public class StringCodec : Codec<string>
     {
         /// <summary>
-        ///     The <see cref="StringCodec"/> instance to always use to avoid unnecessary duplication
+        /// The <see cref="StringCodec"/> instance to always use to avoid unnecessary duplication
         /// </summary>
         public static readonly StringCodec Instance = new StringCodec();
 

@@ -14,9 +14,9 @@ namespace Quix.Sdk.Transport.Kafka
         private readonly Action callback;
         private readonly int timespanInMs;
         private bool isEnabled; // Here because every now and then resetting its due time to never doesn't work
-        private Timer timer;
+        private readonly Timer timer;
         private bool disposed;
-        private ILogger logger;
+        private readonly ILogger logger;
 
         public ThreadingTimer(Action callback, TimeSpan timeSpan, ILogger logger = null) : this(callback, (int)Math.Round(timeSpan.TotalMilliseconds), logger)
         {

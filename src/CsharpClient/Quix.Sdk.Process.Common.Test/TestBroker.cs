@@ -19,48 +19,48 @@ namespace Quix.Sdk.Process.Common.Test
         /// <param name="generateExceptions">The test broker generates exceptions when it receives data</param>
         public TestBroker(bool generateExceptions = false)
         {
-            this.Output = new TestBrokerOutput();
+            this.Consumer = new TestBrokerConsumer();
             // Connection between Transport Input and Output simulating a real broker
-            this.Input = new TestBrokerInput(Output, generateExceptions); 
+            this.Producer = new TestBrokerProducer(Consumer, generateExceptions); 
         }
 
         /// <summary>
         /// Transport Output of the Test broker. Stands for the consumer output end point of the Message broker.
         /// </summary>
-        public TestBrokerOutput Output { get; }
+        public TestBrokerConsumer Consumer { get; }
 
         /// <summary>
         /// Transport Input of the Test broker. Stands for the producer input end point of the Message broker.
         /// </summary>
-        public TestBrokerInput Input { get; }
+        public TestBrokerProducer Producer { get; }
 
     }
 
     /// <summary>
     /// Transport Input of the Test broker. Stands for the producer input end point of the Message broker.
     /// </summary>
-    public class TestBrokerInput : IInput
+    public class TestBrokerProducer : IProducer
     {
-        private readonly TestBrokerOutput testOutput;
+        private readonly TestBrokerConsumer testConsumer;
         private readonly bool generateExceptions;
 
-        public TestBrokerInput(TestBrokerOutput testOutput, bool generateExceptions = false)
+        public TestBrokerProducer(TestBrokerConsumer testConsumer, bool generateExceptions = false)
         {
-            this.testOutput = testOutput;
+            this.testConsumer = testConsumer;
             this.generateExceptions = generateExceptions;
         }
 
-        public async Task Send(Package package, CancellationToken cancellationToken = default)
+        public async Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             if (generateExceptions) throw new Exception("Test broker generated exception.");
-            await this.testOutput.Send(package); // Redirecting to Output all the messages arriving from the Input
+            await this.testConsumer.Send(package); // Redirecting to Output all the messages arriving from the Input
         }
     }
 
     /// <summary>
     /// Transport Output of the Test broker. Stands for the consumer output end point of the Message broker.
     /// </summary>
-    public class TestBrokerOutput : IOutput
+    public class TestBrokerConsumer : IConsumer
     {
         public Func<Package, Task> OnNewPackage { get; set; }
 

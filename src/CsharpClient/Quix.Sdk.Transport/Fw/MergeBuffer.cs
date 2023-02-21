@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace Quix.Sdk.Transport.Fw
 {
     /// <summary>
-    ///     Buffer capable of handling a single message Id.
+    /// Buffer capable of handling a single message Id.
     /// </summary>
     public class MergeBuffer
     {
@@ -38,7 +38,7 @@ namespace Quix.Sdk.Transport.Fw
         public event Action<MessagePurgedEventArgs> OnMessagePurged;
 
         /// <summary>
-        ///     Initializes a new instance of <see cref="MergeBuffer"/>
+        /// Initializes a new instance of <see cref="MergeBuffer"/>
         /// </summary>
         /// <param name="bufferPerMessageGroupKey">The number of different buffered message ids a group can have concurrently. Higher number might help with a producer that is interweaving multiple split message</param>
         public MergeBuffer(int bufferPerMessageGroupKey = 50) : this(TimeSpan.FromSeconds(60), bufferPerMessageGroupKey)
@@ -46,7 +46,7 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <summary>
-        ///     Initializes a new instance of <see cref="MergeBuffer"/> 
+        /// Initializes a new instance of <see cref="MergeBuffer"/> 
         /// </summary>
         /// <param name="timeToLive">Time to live for messages that do not properly merge for various reasons. This time is after last message appended to buffer for the message Group Key and message id</param>
         /// <param name="bufferPerMessageGroupKey">The number of different buffered message ids a group can have concurrently. Higher number might help with a producer that is interweaving multiple split message</param>
@@ -59,7 +59,7 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <summary>
-        ///     Adds the message segment to the buffer
+        /// Adds the message segment to the buffer
         /// </summary>
         /// <param name="msgGroupKey">An unique key, which further identifies, which group the message belongs to</param>
         /// <param name="messageId">The message id the segment belongs to</param>
@@ -90,7 +90,7 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <summary>
-        ///     Returns whether the specified message group key and id combination exists
+        /// Returns whether the specified message group key and id combination exists
         /// </summary>
         /// <param name="msgGroupKey">An unique key, which further identifies, which group the message belongs to</param>
         /// <param name="messageId">The message id the segment belongs to</param>
@@ -184,12 +184,12 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <summary>
-        ///     Removes the message segments from the buffer and returns them in the order according to their message index
+        /// Removes the message segments from the buffer and returns them in the order according to their message index
         /// </summary>
         /// <param name="msgGroupKey">A unique key, which further identifies to which group the message belongs</param>
         /// <param name="messageId"></param>
         /// <param name="segmentLengths">
-        ///     It is set to 0 if message is not in buffer, else to the data length of the segments for the message id
+        /// It is set to 0 if message is not in buffer, else to the data length of the segments for the message id
         /// </param>
         /// <param name="segmentCount">It is set to 0 if message is not in buffer, else to the segment count for the message id</param>
         /// <returns>The messages segments in order. Returns zero length if requested message segments are unavailable</returns>

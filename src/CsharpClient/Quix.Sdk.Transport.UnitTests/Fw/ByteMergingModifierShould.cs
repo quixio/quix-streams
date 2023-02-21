@@ -36,7 +36,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             };
 
             // Act
-            var task = modifier.Send(package);
+            var task = modifier.Publish(package);
 
             // Assert
             var sw = Stopwatch.StartNew();
@@ -92,8 +92,8 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             };
 
             // Act
-            await modifier.Send(p1s1);
-            await modifier.Send(p1s2);
+            await modifier.Publish(p1s1);
+            await modifier.Publish(p1s2);
 
             // Assert
             receivedPackage.Should().NotBeNull();
@@ -167,15 +167,15 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             };
 
             // Act
-            await modifier.Send(p1s1);
+            await modifier.Publish(p1s1);
             packagesReceived.Count().Should().Be(0); // only segments so far
-            await modifier.Send(p2s1);
+            await modifier.Publish(p2s1);
             packagesReceived.Count().Should().Be(0); // only segments so far
-            await modifier.Send(p3);
+            await modifier.Publish(p3);
             packagesReceived.Count().Should().Be(0); // have a normal package, but in-between segments
-            await modifier.Send(p1s2);
+            await modifier.Publish(p1s2);
             packagesReceived.Count().Should().Be(1); // first package segments arrived, but the normal package is still between segments
-            await modifier.Send(p2s2);
+            await modifier.Publish(p2s2);
             packagesReceived.Count().Should().Be(3); // the last segment arrived for the package wrapping the normal package, so both the normal and the merged release
 
             // Assert
@@ -224,9 +224,9 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             // Act
             var tasks = new List<Task>(); 
-            tasks.Add(modifier.Send(p1s1));
+            tasks.Add(modifier.Publish(p1s1));
             merger.OnMessageSegmentsPurged += Raise.Event<Action<string>>("p1"); // IMPORTANT! this is before p2
-            tasks.Add(modifier.Send(p2));
+            tasks.Add(modifier.Publish(p2));
             Task.WaitAll(tasks.ToArray(), 2000);
 
             // Assert
@@ -277,8 +277,8 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             // Act
             var tasks = new List<Task>(); 
-            tasks.Add(modifier.Send(p1s1));
-            tasks.Add(modifier.Send(p2));
+            tasks.Add(modifier.Publish(p1s1));
+            tasks.Add(modifier.Publish(p2));
             merger.OnMessageSegmentsPurged += Raise.Event<Action<string>>("p1"); // IMPORTANT! this is after p2
             Task.WaitAll(tasks.ToArray(), 2000);
 
@@ -312,7 +312,7 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
             };
 
             // Act
-            var task = modifier.Send(package);
+            var task = modifier.Publish(package);
 
             // Assert
             var sw = Stopwatch.StartNew();
@@ -396,10 +396,10 @@ namespace Quix.Sdk.Transport.UnitTests.Fw
 
             // Act
             var tasks = new List<Task>(); 
-            tasks.Add(modifier.Send(p1s1));
-            tasks.Add(modifier.Send(p2));
-            tasks.Add(modifier.Send(p1s2));
-            tasks.Add(modifier.Send(p3));
+            tasks.Add(modifier.Publish(p1s1));
+            tasks.Add(modifier.Publish(p2));
+            tasks.Add(modifier.Publish(p1s2));
+            tasks.Add(modifier.Publish(p3));
             revocationPublisher.OnRevoked += Raise.EventWith(new OnRevokedEventArgs());
 
             // Assert

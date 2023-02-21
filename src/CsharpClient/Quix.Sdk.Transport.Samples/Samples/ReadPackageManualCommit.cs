@@ -12,23 +12,23 @@ namespace Quix.Sdk.Transport.Samples.Samples
     public class ReadPackageManualCommit
     {
         private const string TopicName = Const.PackageTopic;
-        private const string InputGroup = "ManualCommit-Subscriber#1";
+        private const string ConsumerGroup = "ManualCommit-Subscriber#1";
 
         private long consumedCounter; // this is purely here for statistics
 
         /// <summary>
-        ///     Start the reading stream which is an asynchronous process.
+        /// Start the reading stream which is an asynchronous process.
         /// </summary>
         /// <returns>Disposable output</returns>
-        public IOutput Start()
+        public IConsumer Start()
         {
-            var output = this.CreateOutput();
+            var consumer = this.CreateConsumer();
             this.HookUpStatistics();
 
-            var previousRef = output.OnNewPackage;
+            var previousRef = consumer.OnNewPackage;
 
-            output.OnNewPackage = e => previousRef(e).ContinueWith(t => this.NewPackageHandler(e));
-            return output;
+            consumer.OnNewPackage = e => previousRef(e).ContinueWith(t => this.NewPackageHandler(e));
+            return consumer;
         }
 
         private Task NewPackageHandler(Package obj)
@@ -62,39 +62,39 @@ namespace Quix.Sdk.Transport.Samples.Samples
             timer.Start();
         }
 
-        private IOutput CreateOutput()
+        private IConsumer CreateConsumer()
         {
-            var subConfig = new SubscriberConfiguration(Const.BrokerList, InputGroup);
-            var topicConfig = new OutputTopicConfiguration(TopicName);
-            var kafkaOutput = new KafkaOutput(subConfig, topicConfig);
-            kafkaOutput.ErrorOccurred += (s, e) =>
+            var subConfig = new SubscriberConfiguration(Const.BrokerList, ConsumerGroup);
+            var topicConfig = new ConsumerTopicConfiguration(TopicName);
+            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            kafkaOutput.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");
             };
             kafkaOutput.Open();
-            var output = new TransportOutput(kafkaOutput, o=> o.CommitOptions.AutoCommitEnabled = false);
+            var transportConsumer = new TransportConsumer(kafkaOutput, o=> o.CommitOptions.AutoCommitEnabled = false);
             var newStreamCommiter = new NewStreamOffSetCommiter(kafkaOutput);
-            output.OnNewPackage = e => newStreamCommiter.Send(e);
-            return output;
+            transportConsumer.OnNewPackage = e => newStreamCommiter.Publish(e);
+            return transportConsumer;
         }
 
-        private class NewStreamOffSetCommiter : IInput
+        private class NewStreamOffSetCommiter : IProducer
         {
-            private readonly KafkaOutput kafkaOutput;
+            private readonly KafkaConsumer kafkaConsumer;
 
-            public NewStreamOffSetCommiter(KafkaOutput kafkaOutput)
+            public NewStreamOffSetCommiter(KafkaConsumer kafkaConsumer)
             {
-                this.kafkaOutput = kafkaOutput;
+                this.kafkaConsumer = kafkaConsumer;
             }
 
-            public Task Send(Package package, CancellationToken cancellationToken = default)
+            public Task Publish(Package package, CancellationToken cancellationToken = default)
             {
                 var packageOffSet = (long) package.TransportContext[KnownKafkaTransportContextKeys.Offset];
                 var partition = (int) package.TransportContext[KnownKafkaTransportContextKeys.Partition];
                 var topic = (string) package.TransportContext[KnownKafkaTransportContextKeys.Topic];
                 if (packageOffSet == 0) return Task.CompletedTask; // no need to commit anything
                 Console.WriteLine($"Package found on Topic '{topic}', partition {partition} and offset {packageOffSet}. Committing offset {packageOffSet}");
-                this.kafkaOutput.CommitOffset(new TopicPartitionOffset(topic, new Partition(partition), new Offset(packageOffSet)));
+                this.kafkaConsumer.CommitOffset(new TopicPartitionOffset(topic, new Partition(partition), new Offset(packageOffSet)));
                 return Task.CompletedTask;
             }
         }

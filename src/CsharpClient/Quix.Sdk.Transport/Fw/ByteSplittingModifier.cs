@@ -9,9 +9,9 @@ using Quix.Sdk.Transport.IO;
 namespace Quix.Sdk.Transport.Fw
 {
     /// <summary>
-    ///     Modifier, which encapsulates an <see cref="IByteSplitter"/> to split packages
+    /// Modifier, which encapsulates an <see cref="IByteSplitter"/> to split packages
     /// </summary>
-    public class ByteSplittingModifier : IInput, IOutput
+    public class ByteSplittingModifier : IProducer, IConsumer
     {
         private static int VerboseWarnAboveSegmentCount = 3;
         private static int MovingWarnAboveSize = 0;
@@ -38,7 +38,7 @@ namespace Quix.Sdk.Transport.Fw
         /// <param name="package">The package to split</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>
         /// <returns>An awaitable <see cref="Task"/>, which resolves when all tasks returned by <see cref="OnNewPackage"/> resolve</returns>
-        public Task Send(Package package, CancellationToken cancellationToken = default)
+        public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested) return Task.FromCanceled(cancellationToken);
             if (this.OnNewPackage == null || !package.TryConvertTo<byte[]>(out var bytePackage)) return Task.CompletedTask;

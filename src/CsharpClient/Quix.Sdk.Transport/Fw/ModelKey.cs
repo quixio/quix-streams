@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 namespace Quix.Sdk.Transport.Fw
 {
     /// <summary>
-    ///     The key used to uniquely identify a model
+    /// The key used to uniquely identify a model
     /// </summary>
     [DebuggerDisplay("{key}")]
     [JsonConverter(typeof(AsStringJsonConverter))]
@@ -24,8 +24,8 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <summary>
-        ///     Creates a new key using type.
-        ///     This is a short hand for type.FullName
+        /// Creates a new key using type.
+        /// This is a short hand for type.FullName
         /// </summary>
         /// <param name="type">The Type</param>
         public ModelKey(Type type) : this(type.FullName)
@@ -33,8 +33,8 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <summary>
-        ///     Creates a new key using type, which is also versioned.
-        ///     This is a short hand for {type.FullName}.V{version}
+        /// Creates a new key using type, which is also versioned.
+        /// This is a short hand for {type.FullName}.V{version}
         /// </summary>
         /// <param name="type"></param>
         /// <param name="version"></param>

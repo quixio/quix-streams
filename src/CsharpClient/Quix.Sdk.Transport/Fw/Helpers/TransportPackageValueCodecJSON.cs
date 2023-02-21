@@ -12,9 +12,9 @@ using Newtonsoft.Json;
 namespace Quix.Sdk.Transport.Fw.Helpers
 {
     /// <summary>
-    ///     Codec used to serialize TransportPackageValue
-    ///     Doesn't inherit from <see cref="ICodec{TransportPackageValue}"/> because isn't intended for external or generic use
-    ///     and the interface slightly compicates the implementation for no benefit
+    /// Codec used to serialize TransportPackageValue
+    /// Doesn't inherit from <see cref="ICodec{TransportPackageValue}"/> because isn't intended for external or generic use
+    /// and the interface slightly compicates the implementation for no benefit
     /// </summary>
     internal static class TransportPackageValueCodecJSON
     {

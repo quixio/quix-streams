@@ -5,19 +5,19 @@ using Quix.Sdk.Transport.Fw;
 namespace Quix.Sdk.Transport.Registry
 {
     /// <summary>
-    ///     Model registry
+    /// Model registry
     /// </summary>
     public static class ModelKeyRegistry
     {
         private static readonly object dicLock = new object();
 
         /// <summary>
-        ///     A concurrent model dictionary in case people use model registration via multiple threads
+        /// A concurrent model dictionary in case people use model registration via multiple threads
         /// </summary>
         private static readonly Dictionary<Type, ModelKey> TypesToModelKey = new Dictionary<Type, ModelKey>();
 
         /// <summary>
-        ///     A concurrent model dictionary in case people use model registration via multiple threads
+        /// A concurrent model dictionary in case people use model registration via multiple threads
         /// </summary>
         private static readonly Dictionary<ModelKey, Type> ModelKeysToTypes = new Dictionary<ModelKey, Type>();
 

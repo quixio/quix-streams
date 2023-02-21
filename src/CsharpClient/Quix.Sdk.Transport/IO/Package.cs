@@ -3,7 +3,7 @@
 namespace Quix.Sdk.Transport.IO
 {
     /// <summary>
-    ///     Package holds the content value and its metadata with extra context relevant for transporting it.
+    /// Package holds the content value and its metadata with extra context relevant for transporting it.
     /// </summary>
     /// <typeparam name="TContent">The type of the content</typeparam>
     public sealed class Package<TContent> : Package
@@ -21,13 +21,13 @@ namespace Quix.Sdk.Transport.IO
         }
 
         /// <summary>
-        ///     The content value of the package
+        /// The content value of the package
         /// </summary>
         public new Lazy<TContent> Value { get; }
     }
 
     /// <summary>
-    ///     Package holds a value and its metadata with extra context relevant for transporting it.
+    /// Package holds a value and its metadata with extra context relevant for transporting it.
     /// </summary>
     public class Package
     {
@@ -54,27 +54,27 @@ namespace Quix.Sdk.Transport.IO
         }
 
         /// <summary>
-        ///     The content value of the package
+        /// The content value of the package
         /// </summary>
         public Lazy<object> Value { get; protected set; }
 
         /// <summary>
-        ///     The transport context of the package
+        /// The transport context of the package
         /// </summary>
         public TransportContext TransportContext { get; }
 
         /// <summary>
-        ///     The content meta data
+        /// The content meta data
         /// </summary>
         public MetaData MetaData { get; protected set; }
 
         /// <summary>
-        ///     The type of the value
+        /// The type of the value
         /// </summary>
         public Type Type { get; protected set; }
 
         /// <summary>
-        ///     Converts the Package to type provided if possible
+        /// Converts the Package to type provided if possible
         /// </summary>
         /// <typeparam name="TContent">The type of the content</typeparam>
         /// <returns>Null if failed to convert else the typed Quix.Sdk.Transport.Fw.Package</returns>

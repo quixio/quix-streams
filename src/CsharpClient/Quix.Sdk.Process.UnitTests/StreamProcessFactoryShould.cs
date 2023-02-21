@@ -23,8 +23,8 @@ namespace Quix.Sdk.Process.UnitTests
         public void StreamPackageReceived_NoPreviousStream_ShouldBeTrackedAsActiveStream()
         {
             // Arrange
-            var output = Substitute.For<IOutput>();
-            var factory = new TestStreamProcessFactory(output, (s) => new StreamProcess());
+            var consumer = Substitute.For<IConsumer>();
+            var factory = new TestStreamProcessFactory(consumer, (s) => new StreamProcess());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
 
@@ -33,7 +33,7 @@ namespace Quix.Sdk.Process.UnitTests
             {
                 {TestStreamProcessFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
-            output.OnNewPackage(package);
+            consumer.OnNewPackage(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -44,10 +44,10 @@ namespace Quix.Sdk.Process.UnitTests
         public void StreamPackageReceived_NoPreviousStreamAndStreamCreateThrowsException_ShouldDoRetryLogic()
         {
             // Arrange
-            var output = Substitute.For<IOutput>();
+            var consumer = Substitute.For<IConsumer>();
             var elapsedTimes = new List<long>();
             var sw = new Stopwatch();
-            var factory = new TestStreamProcessFactory(output, (s) =>
+            var factory = new TestStreamProcessFactory(consumer, (s) =>
             {
                 elapsedTimes.Add(sw.ElapsedMilliseconds);
                 sw.Restart();
@@ -64,7 +64,7 @@ namespace Quix.Sdk.Process.UnitTests
             }));
             sw.Restart();
 
-            Action action = () => output.OnNewPackage(package).GetAwaiter().GetResult();
+            Action action = () => consumer.OnNewPackage(package).GetAwaiter().GetResult();
 
             // Act & Assert
 
@@ -89,15 +89,15 @@ namespace Quix.Sdk.Process.UnitTests
         public void StreamPackageReceived_PrevioslyActiveStream_ShouldNotAddAnotherTrackedAsActiveStream()
         {
             // Arrange
-            var output = Substitute.For<IOutput>();
-            var factory = new TestStreamProcessFactory(output, (s) => new StreamProcess());
+            var consumer = Substitute.For<IConsumer>();
+            var factory = new TestStreamProcessFactory(consumer, (s) => new StreamProcess());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamProcessFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
-            output.OnNewPackage(package);
+            consumer.OnNewPackage(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -106,7 +106,7 @@ namespace Quix.Sdk.Process.UnitTests
             {
                 {TestStreamProcessFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
-            output.OnNewPackage(package);
+            consumer.OnNewPackage(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -116,16 +116,16 @@ namespace Quix.Sdk.Process.UnitTests
         public void StreamProcessCloses_TrackedAsActiveStream_ShouldNoLongerBeTrackedAsActiveStream()
         {
             // Arrange
-            var output = Substitute.For<IOutput>();
+            var consumer = Substitute.For<IConsumer>();
             var process = new StreamProcess();
-            var factory = new TestStreamProcessFactory(output, (s) => process);
+            var factory = new TestStreamProcessFactory(consumer, (s) => process);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamProcessFactory.TransportContextStreamIdKey, process.StreamId}
             }));
-            output.OnNewPackage(package);
+            consumer.OnNewPackage(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -141,16 +141,16 @@ namespace Quix.Sdk.Process.UnitTests
         public void StreamEndReceived_TrackedAsActiveStream_ShouldNoLongerBeTrackedAsActiveStream()
         {
             // Arrange
-            var output = Substitute.For<IOutput>();
+            var consumer = Substitute.For<IConsumer>();
             var process = new StreamProcess();
-            var factory = new TestStreamProcessFactory(output, (s) => process);
+            var factory = new TestStreamProcessFactory(consumer, (s) => process);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamProcessFactory.TransportContextStreamIdKey, process.StreamId}
             }));
-            output.OnNewPackage(package);
+            consumer.OnNewPackage(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -167,13 +167,13 @@ namespace Quix.Sdk.Process.UnitTests
         {
             public const string TransportContextStreamIdKey = "StreamId";
             
-            public TestStreamProcessFactory(Transport.IO.IOutput transportOutput, Func<string, IStreamProcess> streamProcessFactoryHandler) : this(transportOutput, streamProcessFactoryHandler, new StreamContextCache())
+            public TestStreamProcessFactory(Transport.IO.IConsumer transportConsumer, Func<string, IStreamProcess> streamProcessFactoryHandler) : this(transportConsumer, streamProcessFactoryHandler, new StreamContextCache())
             {
             }
 
-            public TestStreamProcessFactory(Transport.IO.IOutput transportOutput,
+            public TestStreamProcessFactory(Transport.IO.IConsumer transportConsumer,
                 Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache cache) : base(
-                transportOutput, streamProcessFactoryHandler, cache)
+                transportConsumer, streamProcessFactoryHandler, cache)
             {
                 this.ContextCache = cache;
             }

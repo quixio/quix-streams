@@ -20,7 +20,7 @@ namespace Quix.Sdk.Process
         private readonly ILogger logger = Logging.CreateLogger<StreamProcessFactory>();
         private readonly object openCloseLock = new object();
         private bool isOpen;
-        private IOutput transportOutput;
+        private IConsumer transportConsumer;
         private Func<string, IStreamProcess> streamProcessFactoryHandler;
         private readonly IStreamContextCache contextCache;
         private Action onClose = () => { };
@@ -75,13 +75,13 @@ namespace Quix.Sdk.Process
         /// <summary>
         /// Initializes a new instance of <see cref="StreamProcessFactory"/>
         /// </summary>
-        /// <param name="transportOutput">Transport layer to read from</param>
+        /// <param name="transportConsumer">Transport layer to read from</param>
         /// <param name="streamProcessFactoryHandler">Handler factory to execute for each Stream detected in the incoming messages in order to create a new <see cref="StreamProcess"/> for each stream. 
         /// The handler function receives a StreamId and has to return a <see cref="StreamProcess"/>.</param>
         /// <param name="contextCache">The cache to store created stream contexts</param>
-        public StreamProcessFactory(Transport.IO.IOutput transportOutput, Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache contextCache)
+        public StreamProcessFactory(Transport.IO.IConsumer transportConsumer, Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache contextCache)
         {
-            this.transportOutput = transportOutput ?? throw new ArgumentNullException(nameof(transportOutput));
+            this.transportConsumer = transportConsumer ?? throw new ArgumentNullException(nameof(transportConsumer));
             this.streamProcessFactoryHandler = streamProcessFactoryHandler ?? throw new ArgumentNullException(nameof(streamProcessFactoryHandler));
             this.contextCache = contextCache ?? throw new ArgumentNullException(nameof(contextCache));
         }
@@ -96,22 +96,22 @@ namespace Quix.Sdk.Process
             {
                 if (this.isOpen) return;
                 this.cancellationTokenSource = new CancellationTokenSource();
-                var output = this.transportOutput;
-                if (output == null) return;
+                var consumer = this.transportConsumer;
+                if (consumer == null) return;
                 this.onClose = () =>
                 {
                     cancellationTokenSource.Cancel();
                 };
 
-                output.OnNewPackage += this.NewTransportPackageHandler;
-                this.onClose += () => { output.OnNewPackage -= this.NewTransportPackageHandler; };
+                consumer.OnNewPackage += this.NewTransportPackageHandler;
+                this.onClose += () => { consumer.OnNewPackage -= this.NewTransportPackageHandler; };
 
-                if (output is IRevocationPublisher revocationPublisher)
+                if (consumer is IRevocationPublisher revocationPublisher)
                 {
                     revocationPublisher.OnRevoked += this.OutputRevokedHandler;
                     this.onClose += () => { revocationPublisher.OnRevoked -= this.OutputRevokedHandler; };
                 }
-                if (output is ICanCommit canCommit)
+                if (consumer is ICanCommit canCommit)
                 {
                     canCommit.OnCommitted += this.OutputCommittedHandler;
                     this.onClose += () => { canCommit.OnCommitted -= this.OutputCommittedHandler; };
@@ -284,7 +284,7 @@ namespace Quix.Sdk.Process
                 if (!this.isOpen) return;
                 this.isOpen = false;
 
-                this.transportOutput = null;
+                this.transportConsumer = null;
 
                 lock (this.contextCache.Sync)
                 {

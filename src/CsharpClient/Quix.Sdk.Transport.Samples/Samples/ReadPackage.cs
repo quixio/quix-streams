@@ -11,26 +11,26 @@ using Timer = System.Timers.Timer;
 namespace Quix.Sdk.Transport.Samples.Samples
 {
     /// <summary>
-    ///     Example for simple package (Typed messages) reading
-    ///     Note: Works well with WritePackages example
+    /// Example for simple package (Typed messages) reading
+    /// Note: Works well with WritePackages example
     /// </summary>
     public class ReadPackages
     {
         private const string TopicName = Const.PackageTopic;
-        private const string InputGroup = "Test-Subscriber#2";
+        private const string ConsumerGroup = "Test-Subscriber#2";
         private long consumedCounter; // this is purely here for statistics
 
         /// <summary>
-        ///     Start the reading which is an asynchronous process. See <see cref="NewPackageHandler" />
+        /// Start the reading which is an asynchronous process. See <see cref="NewPackageHandler" />
         /// </summary>
         /// <returns>Disposable output</returns>
-        public IOutput Start()
+        public IConsumer Start()
         {
             this.RegisterCodecs();
-            var output = this.CreateOutput();
+            var consumer = this.CreateConsumer();
             this.HookUpStatistics();
-            output.OnNewPackage = this.NewPackageHandler;
-            return output;
+            consumer.OnNewPackage = this.NewPackageHandler;
+            return consumer;
         }
 
         private Task NewPackageHandler(Package package)
@@ -52,18 +52,18 @@ namespace Quix.Sdk.Transport.Samples.Samples
             CodecRegistry.RegisterCodec("EM", new DefaultJsonCodec<ExampleModel>());
         }
 
-        private IOutput CreateOutput()
+        private IConsumer CreateConsumer()
         {
-            var subConfig = new SubscriberConfiguration(Const.BrokerList, InputGroup);
-            var topicConfig = new OutputTopicConfiguration(TopicName);
-            var kafkaOutput = new KafkaOutput(subConfig, topicConfig);
-            kafkaOutput.ErrorOccurred += (s, e) =>
+            var subConfig = new SubscriberConfiguration(Const.BrokerList, ConsumerGroup);
+            var topicConfig = new ConsumerTopicConfiguration(TopicName);
+            var kafkaOutput = new KafkaConsumer(subConfig, topicConfig);
+            kafkaOutput.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");
             };
             kafkaOutput.Open();
-            var output = new TransportOutput(kafkaOutput);
-            return output;
+            var transportConsumer = new TransportConsumer(kafkaOutput);
+            return transportConsumer;
         }
 
         private void HookUpStatistics()

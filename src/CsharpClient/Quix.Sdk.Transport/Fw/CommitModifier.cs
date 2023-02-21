@@ -13,7 +13,7 @@ namespace Quix.Sdk.Transport.Fw
     /// <summary>
     /// Commit modifier which enables committing packages in an automatic fashion
     /// </summary>
-    public sealed class CommitModifier : IInput, IOutput, ICanCommit, ICanCommitSubscriber, IRevocationSubscriber
+    public sealed class CommitModifier : IProducer, IConsumer, ICanCommit, ICanCommitSubscriber, IRevocationSubscriber
     {
         private readonly ILogger logger = Logging.CreateLogger<CommitModifier>();
         private readonly Func<Package, CancellationToken, Task> onSend = null;
@@ -238,7 +238,7 @@ namespace Quix.Sdk.Transport.Fw
         }
 
         /// <inheritdoc/>
-        public Task Send(Package package, CancellationToken cancellationToken = default)
+        public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             return onSend(package, cancellationToken);
         }

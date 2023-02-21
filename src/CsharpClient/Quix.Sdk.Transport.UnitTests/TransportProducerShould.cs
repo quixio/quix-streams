@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests
 {
-    public class TransportInputShould
+    public class TransportProducerShould
     {
         [Fact]
         public void Send_ExceptionThrownByInput_ShouldThrowException()
@@ -16,12 +16,12 @@ namespace Quix.Sdk.Transport.UnitTests
             // Arrange
             var exception = new Exception("I'm an exception");
             var passthrough = new Passthrough((p) => throw exception);
-            var transportInput = new TransportInput(passthrough);
+            var transportProducer = new TransportProducer(passthrough);
 
             var sentValue = TestModel.Create();
             var sentPackage = new Package<TestModel>(new Lazy<TestModel>(sentValue));
 
-            Action action = () => transportInput.Send(sentPackage);
+            Action action = () => transportProducer.Publish(sentPackage);
 
             // Assert
             action.Should().Throw<Exception>().WithMessage(exception.Message);
@@ -38,13 +38,13 @@ namespace Quix.Sdk.Transport.UnitTests
                 ts.SetException(exception);
                 return ts.Task;
             });
-            var transportInput = new TransportInput(passthrough);
+            var transportProducer = new TransportProducer(passthrough);
 
             var sentValue = TestModel.Create();
             var sentPackage = new Package<TestModel>(new Lazy<TestModel>(sentValue));
 
             // Act
-            Action action = () => transportInput.Send(sentPackage).Wait(2000);
+            Action action = () => transportProducer.Publish(sentPackage).Wait(2000);
 
             // Assert
             action.Should().Throw<Exception>().WithMessage(exception.Message);

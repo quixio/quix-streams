@@ -8,16 +8,16 @@ using Xunit;
 
 namespace Quix.Sdk.Transport.UnitTests
 {
-    public class TransportOutputShould
+    public class TransportConsumerShould
     {
         [Fact]
-        public void Commit_WithTransport_ShouldAckOutput()
+        public void Commit_WithTransport_ShouldAckConsumer()
         {
             // Arrange
-            var output = Substitute.For<IOutput, ICanCommit>();
+            var consumer = Substitute.For<IConsumer, ICanCommit>();
             TransportContext[] committed = null;
-            ((ICanCommit)output).Commit(Arg.Do<TransportContext[]>(x => committed = x));
-            var transportOutput = new TransportOutput(output);
+            ((ICanCommit)consumer).Commit(Arg.Do<TransportContext[]>(x => committed = x));
+            var transportConsumer = new TransportConsumer(consumer);
             
             var transportContext = new TransportContext()
             {
@@ -29,20 +29,20 @@ namespace Quix.Sdk.Transport.UnitTests
             };
             
             // Act
-            transportOutput.Commit(new [] {transportContext, transportContext2});
+            transportConsumer.Commit(new [] {transportContext, transportContext2});
 
             // Assert
             committed.Should().BeEquivalentTo(transportContext, transportContext2);
         }
         
         [Fact]
-        public void Setup_OutputRaisesEnoughForAutoCommitToKickIn_ShouldCommitIntoOutput()
+        public void Setup_ConsumerRaisesEnoughForAutoCommitToKickIn_ShouldCommitIntoConsumer()
         {
             // Arrange
-            var output = new Passthrough();
+            var consumer = new Passthrough();
             OnCommittedEventArgs committed = null;
-            output.OnCommitted += (sender, args) => committed = args;
-            var transportOutput = new TransportOutput(output, o=> o.CommitOptions.CommitEvery = 1);
+            consumer.OnCommitted += (sender, args) => committed = args;
+            var transportConsumer = new TransportConsumer(consumer, o=> o.CommitOptions.CommitEvery = 1);
             
             var transportContext = new TransportContext()
             {
@@ -52,7 +52,7 @@ namespace Quix.Sdk.Transport.UnitTests
             var package = PackageFactory.CreatePackage(new {TestMessage = "YAY"}, transportContext);
             
             // Act
-            output.OnNewPackage.Invoke(package);
+            consumer.OnNewPackage.Invoke(package);
 
             // Assert
             committed.Should().NotBeNull();
@@ -60,13 +60,13 @@ namespace Quix.Sdk.Transport.UnitTests
         }
         
         [Fact]
-        public void Setup_OutputRaisesRevokingEvent_ShouldAlsoRaiseRevokingEvent()
+        public void Setup_ConsumerRaisesRevokingEvent_ShouldAlsoRaiseRevokingEvent()
         {
             // Arrange
-            var output = Substitute.For<IOutput, IRevocationPublisher>();
-            var transportOutput = new TransportOutput(output);
+            var consumer = Substitute.For<IConsumer, IRevocationPublisher>();
+            var transportConsumer = new TransportConsumer(consumer);
             var revokingInvokes = new List<object>();
-            transportOutput.OnRevoking += (sender, args) =>
+            transportConsumer.OnRevoking += (sender, args) =>
             {
                 revokingInvokes.Add(args);
             };
@@ -78,20 +78,20 @@ namespace Quix.Sdk.Transport.UnitTests
             
             // Act
             var expectedArgs = new OnRevokingEventArgs();
-            ((IRevocationPublisher)output).OnRevoking += Raise.EventWith(expectedArgs);
+            ((IRevocationPublisher)consumer).OnRevoking += Raise.EventWith(expectedArgs);
 
             // Assert
             revokingInvokes.Should().BeEquivalentTo(new[] {expectedArgs});
         }
         
         [Fact]
-        public void Setup_OutputRaisesRevokedEvent_ShouldAlsoRaiseRevokedEvent()
+        public void Setup_ConsumerRaisesRevokedEvent_ShouldAlsoRaiseRevokedEvent()
         {
             // Arrange
-            var output = Substitute.For<IOutput, IRevocationPublisher>();
-            var transportOutput = new TransportOutput(output);
+            var consumer = Substitute.For<IConsumer, IRevocationPublisher>();
+            var transportConsumer = new TransportConsumer(consumer);
             var revokedInvokes = new List<object>();
-            transportOutput.OnRevoked += (sender, args) =>
+            transportConsumer.OnRevoked += (sender, args) =>
             {
                 revokedInvokes.Add(args);
             };
@@ -103,42 +103,42 @@ namespace Quix.Sdk.Transport.UnitTests
             
             // Act
             var expectedArgs = new OnRevokedEventArgs();
-            ((IRevocationPublisher)output).OnRevoked += Raise.EventWith(expectedArgs);
+            ((IRevocationPublisher)consumer).OnRevoked += Raise.EventWith(expectedArgs);
 
             // Assert
             revokedInvokes.Should().BeEquivalentTo(new[] {expectedArgs});
         }
         
         [Fact]
-        public void Setup_OutputSupportsRevocationPublisher_FilterRevokedContextsShouldBeSameAsOutputs()
+        public void Setup_ConsumerSupportsRevocationPublisher_FilterRevokedContextsShouldBeSameAsConsumers()
         {
-            // As of writing this test, No other modifier within TransportOutput supports IRevocationFilter,
+            // As of writing this test, No other modifier within TransportConsumer supports IRevocationFilter,
             // meaning if in future this changes, this test will have to be updated to whatever the new logic is.
             // For now it is assumed that the provided output might implement IRevocationPublisher
             // Arrange
-            var output = Substitute.For<IOutput, IRevocationPublisher>();
-            var transportOutput = new TransportOutput(output);
+            var consumer = Substitute.For<IConsumer, IRevocationPublisher>();
+            var transportConsumer = new TransportConsumer(consumer);
             var expectedResult = new [] {new TransportContext()
             {
                 {"abcde", 1}
             }};
-            ((IRevocationPublisher) output).FilterRevokedContexts(Arg.Any<object>(), Arg.Any<IEnumerable<TransportContext>>()).ReturnsForAnyArgs(expectedResult);
+            ((IRevocationPublisher) consumer).FilterRevokedContexts(Arg.Any<object>(), Arg.Any<IEnumerable<TransportContext>>()).ReturnsForAnyArgs(expectedResult);
 
             // Act
-            var result = transportOutput.FilterRevokedContexts(null, null); // se mock above, nulls don't matter
+            var result = transportConsumer.FilterRevokedContexts(null, null); // se mock above, nulls don't matter
 
             // Assert
             result.Should().BeEquivalentTo(expectedResult);
         }
         
         [Fact]
-        public void Setup_OutputRaisesCommitted_ShouldAlsoRaiseCommitted()
+        public void Setup_ConsumerRaisesCommitted_ShouldAlsoRaiseCommitted()
         {
             // Arrange
-            var output = Substitute.For<IOutput, ICanCommit>();
+            var consumer = Substitute.For<IConsumer, ICanCommit>();
             var committed = new List<OnCommittedEventArgs>();
-            var transportOutput = new TransportOutput(output, o=> o.CommitOptions.CommitEvery = 1);
-            transportOutput.OnCommitted += (sender, args) => committed.Add(args);
+            var transportConsumer = new TransportConsumer(consumer, o=> o.CommitOptions.CommitEvery = 1);
+            transportConsumer.OnCommitted += (sender, args) => committed.Add(args);
             
             var transportContext = new TransportContext()
             {
@@ -147,7 +147,7 @@ namespace Quix.Sdk.Transport.UnitTests
             
             // Act
             var eArgs = new OnCommittedEventArgs(new object());
-            ((ICanCommit) output).OnCommitted += Raise.EventWith(eArgs);
+            ((ICanCommit) consumer).OnCommitted += Raise.EventWith(eArgs);
 
             // Assert
             var expected = new List<OnCommittedEventArgs> {eArgs};
@@ -156,13 +156,13 @@ namespace Quix.Sdk.Transport.UnitTests
         
                 
         [Fact]
-        public void Setup_OutputRaisesCommitting_ShouldAlsoRaiseCommitting()
+        public void Setup_ConsumerRaisesCommitting_ShouldAlsoRaiseCommitting()
         {
             // Arrange
-            var output = Substitute.For<IOutput, ICanCommit>();
+            var consumer = Substitute.For<IConsumer, ICanCommit>();
             var comittingArgs = new List<OnCommittingEventArgs>();
-            var transportOutput = new TransportOutput(output, o=> o.CommitOptions.CommitEvery = 1);
-            transportOutput.OnCommitting += (sender, args) => comittingArgs.Add(args);
+            var transportConsumer = new TransportConsumer(consumer, o=> o.CommitOptions.CommitEvery = 1);
+            transportConsumer.OnCommitting += (sender, args) => comittingArgs.Add(args);
             
             var transportContext = new TransportContext()
             {
@@ -171,7 +171,7 @@ namespace Quix.Sdk.Transport.UnitTests
             
             // Act
             var eArgs = new OnCommittingEventArgs(new object());
-            ((ICanCommit) output).OnCommitting += Raise.EventWith(eArgs);
+            ((ICanCommit) consumer).OnCommitting += Raise.EventWith(eArgs);
 
             // Assert
             var expected = new List<OnCommittingEventArgs> {eArgs};

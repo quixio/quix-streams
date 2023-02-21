@@ -5,15 +5,10 @@ using Quix.Sdk.Transport.IO;
 namespace Quix.Sdk.Transport.Kafka
 {
     /// <summary>
-    /// The interface required to implement an <see cref="IInput"/>, which sends <see cref="Package"/> to Kafka
+    /// The interface required to implement an <see cref="IProducer"/>, which sends <see cref="Package"/> to Kafka
     /// </summary>
-    public interface IKafkaInput : IInput, IDisposable
+    public interface IKafkaProducer : IProducer, IDisposable
     {
-        /// <summary>
-        /// Close connection to Kafka
-        /// </summary>
-        void Close();
-
         /// <summary>
         /// Flush the queue to Kafka
         /// </summary>
@@ -24,5 +19,10 @@ namespace Quix.Sdk.Transport.Kafka
         /// Open connection to Kafka
         /// </summary>
         void Open();
+        
+        /// <summary>
+        /// Close connection to Kafka
+        /// </summary>
+        void Close();
     }
 }

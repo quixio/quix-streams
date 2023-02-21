@@ -11,11 +11,11 @@ namespace Quix.Sdk.Streaming.Raw
     public class RawOutputTopic: IRawOutputTopic, IDisposable
     {
         private PublisherConfiguration publisherConfiguration;
-        private InputTopicConfiguration topicConfiguration;
+        private ProducerTopicConfiguration topicConfiguration;
 
         private string topicName;
 
-        private IKafkaInput kafkaInput = null;
+        private IKafkaProducer kafkaProducer = null;
         
         /// <inheritdoc />
         public event EventHandler OnDisposed;
@@ -38,10 +38,10 @@ namespace Quix.Sdk.Streaming.Raw
             };
             //keepalive packets would interfere with reading raw data since we dont have any protocol defined over the transport layer
             this.publisherConfiguration.KeepConnectionAlive = false;
-            this.topicConfiguration = new Transport.Kafka.InputTopicConfiguration(this.topicName);
+            this.topicConfiguration = new Transport.Kafka.ProducerTopicConfiguration(this.topicName);
 
-            this.kafkaInput = new Transport.Kafka.KafkaInput(this.publisherConfiguration, this.topicConfiguration);
-            this.kafkaInput.Open();
+            this.kafkaProducer = new Transport.Kafka.KafkaProducer(this.publisherConfiguration, this.topicConfiguration);
+            this.kafkaProducer.Open();
         }
 
         /// <inheritdoc />
@@ -51,13 +51,13 @@ namespace Quix.Sdk.Streaming.Raw
                               new Lazy<byte[]>(() => message.Value)
                         );
             data.SetKey(message.Key);
-            kafkaInput.Send(data);
+            kafkaProducer.Publish(data);
         }
 
         /// <inheritdoc />
         public void Dispose()
         {
-            this.kafkaInput?.Dispose();
+            this.kafkaProducer?.Dispose();
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }
 

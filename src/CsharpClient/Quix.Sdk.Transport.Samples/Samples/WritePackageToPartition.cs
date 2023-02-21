@@ -21,17 +21,17 @@ namespace Quix.Sdk.Transport.Samples.Samples
         public void Run(Partition partition, CancellationToken cancellationToken)
         {
             CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<ExampleModel>());
-            using (var input = this.CreateKafkaInput(partition, out var splitter))
+            using (var producer = this.CreateKafkaProducer(partition, out var splitter))
             {
-                var transportInput = new TransportInput(input, splitter);
-                this.SendDataUsingInput(transportInput, cancellationToken);
+                var transportProducer = new TransportProducer(producer, splitter);
+                this.SendDataUsingProducer(transportProducer, cancellationToken);
 
                 cancellationToken.WaitHandle.WaitOne();
             }
         }
 
 
-        private void SendDataUsingInput(IInput input, CancellationToken ct)
+        private void SendDataUsingProducer(IProducer producer, CancellationToken ct)
         {
             var counter = 0;
             var random = new Random();
@@ -52,7 +52,7 @@ namespace Quix.Sdk.Transport.Samples.Samples
                 var package = new Package<ExampleModel>(new Lazy<ExampleModel>(new ExampleModel()), metaData);
                 package.SetKey($"DataSet {counter}");
 
-                var sendTask = input.Send(package, ct);
+                var sendTask = producer.Publish(package, ct);
                 sendTask.ContinueWith(t => Console.WriteLine($"Exception on send: {t.Exception}"), TaskContinuationOptions.OnlyOnFaulted);
                 sendTask.ContinueWith(t => Interlocked.Increment(ref this.producedCounter), TaskContinuationOptions.OnlyOnRanToCompletion);
                 if (this.MillisecondsInterval > 0)
@@ -69,15 +69,15 @@ namespace Quix.Sdk.Transport.Samples.Samples
             }
         }
 
-        private IKafkaInput CreateKafkaInput(Partition partition, out ByteSplitter byteSplitter)
+        private IKafkaProducer CreateKafkaProducer(Partition partition, out ByteSplitter byteSplitter)
         {
             Console.WriteLine($"Write to {TopicName}, partition 2");
             var pubConfig = new PublisherConfiguration(Const.BrokerList);
             byteSplitter = new ByteSplitter(pubConfig.MaxMessageSize);
-            var topicConfig = new InputTopicConfiguration(TopicName, partition);
-            var input = new KafkaInput(pubConfig, topicConfig);
-            input.Open();
-            return input;
+            var topicConfig = new ProducerTopicConfiguration(TopicName, partition);
+            var kafkaProducer = new KafkaProducer(pubConfig, topicConfig);
+            kafkaProducer.Open();
+            return kafkaProducer;
         }
     }
 }

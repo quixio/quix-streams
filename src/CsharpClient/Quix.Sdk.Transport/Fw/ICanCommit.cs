@@ -26,7 +26,7 @@ namespace Quix.Sdk.Transport.Fw
     public interface ICanCommit
     {
         /// <summary>
-        /// Commits the transport context to the output.
+        /// Commits the transport context to the consumer.
         /// </summary>
         /// <param name="transportContexts">The transport context to commit</param>
         void Commit(TransportContext[] transportContexts);

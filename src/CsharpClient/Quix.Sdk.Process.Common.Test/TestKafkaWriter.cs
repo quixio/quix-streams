@@ -14,7 +14,7 @@ namespace Quix.Sdk.Process.Common.Test
         /// <param name="testBroker">Mocked test broker instance of <see cref="TestBroker"/></param>
         /// <param name="streamId">Writing stream Id</param>
         public TestKafkaWriter(TestBroker testBroker, string streamId = null)
-            :base(testBroker.Input, streamId)
+            :base(testBroker.Producer, streamId)
         {
         }
     }

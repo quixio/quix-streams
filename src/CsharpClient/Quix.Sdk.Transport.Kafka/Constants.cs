@@ -10,7 +10,7 @@ namespace Quix.Sdk.Transport.Kafka
 {
     internal class Constants
     {
-        public static Regex ExceptionMsRegex = new Regex(" (\\d+)ms", RegexOptions.Compiled);
+        public static readonly Regex ExceptionMsRegex = new Regex(" (\\d+)ms", RegexOptions.Compiled);
         public static Package KeepAlivePackage;
 
         static Constants()

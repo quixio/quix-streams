@@ -9,9 +9,9 @@ using Quix.Sdk.Transport.IO;
 namespace Quix.Sdk.Transport.Fw
 {
     /// <summary>
-    ///     Modifier, which encapsulates an <see cref="IByteMerger"/> to merge previously split packages
+    /// Modifier, which encapsulates an <see cref="IByteMerger"/> to merge previously split packages
     /// </summary>
-    public class ByteMergingModifier : IInput, IOutput, IRevocationSubscriber
+    public class ByteMergingModifier : IProducer, IConsumer, IRevocationSubscriber
     {
         private readonly IByteMerger merger;
         private readonly ILogger logger = Logging.CreateLogger<ByteMergingModifier>();
@@ -50,7 +50,7 @@ namespace Quix.Sdk.Transport.Fw
         /// <param name="package">The package to merge</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>
         /// <returns>An awaitable <see cref="Task"/></returns>
-        public async Task Send(Package package, CancellationToken cancellationToken = default)
+        public async Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
             {
