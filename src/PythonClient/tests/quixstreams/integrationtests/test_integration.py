@@ -311,6 +311,7 @@ class TestIntegration(unittest.TestCase):
 
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
+        from quixstreams import TopicConsumer, StreamConsumer
         cts = qx.CancellationTokenSource()  # used for interrupting the App
 
         def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):

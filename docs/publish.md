@@ -1,16 +1,16 @@
 # Writing time-series data
 
-You write data to Quix using streams in your topic. Quix Streams allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
+You publish data to Quix using streams in your topic. Quix Streams allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
 
-All the necessary code to write data to your Quix Workspace is auto-generated when you create a project using the existing templates. In this section, we explain more in-depth how to write data using Quix Streams.
+All the necessary code to publish data to your Quix Workspace is auto-generated when you create a project using the existing templates. In this section, we explain more in-depth how to publish data using Quix Streams.
 
 !!! tip
 
-	The [Quix Portal](https://portal.platform.quix.ai){target=_blank} offers you easy-to-use, auto-generated examples for reading, writing, and processing data. These examples work directly with your workspace Topics. You can deploy these examples in our serverless environment with just a few clicks. For a quick test of the capabilities of the library, we recommend starting with those auto-generated examples.
+	The [Quix Portal](https://portal.platform.quix.ai) offers you easy-to-use, auto-generated examples for reading, writing, and processing data. These examples work directly with your workspace Topics. You can deploy these examples in our serverless environment with just a few clicks. For a quick test of the capabilities of the library, we recommend starting with those auto-generated examples.
 
 ## Connect to Quix
 
-In order to start writing data to Quix you need an instance of the Quix client, `QuixStreamingClient`. . This is the entry point where you begin publishing to the topics.
+In order to start publishing data to Quix you need an instance of the Quix client, `QuixStreamingClient`. . This is the entry point where you begin publishing to the topics.
 
 You can create an instance of `QuixStreamingClient` as shown here:
 
@@ -26,13 +26,11 @@ You can create an instance of `QuixStreamingClient` as shown here:
     var client = new Quix.Streams.Streaming.QuixStreamingClient();
     ```
 
-You can find more advanced information on how to connect to Quix in the [Connect to Quix](/sdk/connect) section.
+You can find more advanced information on how to connect to Quix in the [Connect to Quix](connect.md) section.
 
 ## Open a topic
 
-Topics are the default environment for input/output real-time operations on Quix.
-
-In order to access that topic for writing you need an instance of `TopicProducer`. You can create an instance of `TopicProducer` using the client’s `create_topic_producer` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
+In order to access that topic for publishing you need an instance of `TopicProducer`. You can create an instance of `TopicProducer` using the client’s `create_topic_producer` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
 
 === "Python"
     
@@ -48,7 +46,7 @@ In order to access that topic for writing you need an instance of `TopicProducer
 
 ## Create / attach to a stream
 
-[Streams](/sdk/features/streaming-context) are the central context of data in Quix. Streams make it easy to manage, discover, and work with your data. They are key to good data governance in your organization. Also, Streams are vital for [parallelizing](/sdk/features/horizontal-scaling) huge data loads with an infinite number of data sources.
+[Streams](features/streaming-context) are the central context of data in Quix. Streams make it easy to manage, discover, and work with your data. They are key to good data governance in your organization. Also, Streams are vital for [parallelizing](features/horizontal-scaling) huge data loads with an infinite number of data sources.
 
 You can create as many streams as you want using the `create_stream` method of your `TopicProducer` instance:
 
@@ -152,7 +150,7 @@ Any streams sent without a location property will be located under the "Root" le
 
 Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you have all the data you need. They will also be closed automatically when your service stops.
 
-However, sometimes a stream can be closed for other reasons, such as if an error occurs in the writer code, or something unexpected happens.
+However, sometimes a stream can be closed for other reasons, such as if an error occurs in the publisher code, or something unexpected happens.
 
 These snippets show you how to close a stream and how to specify the `StreamEndType`:
 
@@ -233,7 +231,7 @@ The following code would generate the previous `TimeseriesData` and send it to t
         .add_value("Speed", 110) \
         .add_value("Gear", 2)
     
-    stream.parameters.write(data)
+    stream.parameters.publish(data)
     ```
 
 === "C\#"
@@ -254,7 +252,7 @@ The following code would generate the previous `TimeseriesData` and send it to t
         .AddValue("Speed", 110)
         .AddValue("Gear", 2);
     
-    stream.Parameters.Write(data);
+    stream.Parameters.Publish(data);
     ```
 
 Although Quix allows you to send `TimeseriesData` to a stream directly, without any buffering, Quix recommends you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `TimeseriesData` through a buffer:
@@ -262,13 +260,13 @@ Although Quix allows you to send `TimeseriesData` to a stream directly, without 
 === "Python"
     
     ``` python
-    stream.parameters.buffer.write(data)
+    stream.parameters.buffer.publish(data)
     ```
 
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer.Write(data);
+    stream.Parameters.Buffer.Publish(data);
     ```
 
 Visit the [Buffer](#buffer) section of this documentation to find out more about the built-in Buffer feature.
@@ -283,7 +281,7 @@ Quix Streams allows you to attach any type of data — Numbers, Strings, or raw 
     data.add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
-        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) # use bytearray to write binary data to a stream.
+        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) # use bytearray to publish binary data to a stream.
     ```
 
 === "C\#"
@@ -352,7 +350,7 @@ Adding data without using Epoch property:
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
-        .write()
+        .publish()
     ```
 
 === "C\#"
@@ -362,7 +360,7 @@ Adding data without using Epoch property:
         .AddTimestamp(DateTime.UtcNow)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")
-        .Write();
+        .Publish();
     ```
 
 Or we can add a timestamp 1000ms from the epoch *"Today"*:
@@ -376,7 +374,7 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
         .add_timestamp_milliseconds(1000) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
-        .write()
+        .publish()
     ```
 
 === "C\#"
@@ -409,23 +407,23 @@ For example, the following configuration means that Quix Streams will send a pac
     stream.Parameters.Buffer.PacketSize = 100;
     ```
 
-Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `Write` method of that built-in `Buffer`, passing the `TimeseriesData` to write:
+Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `Write` method of that built-in `Buffer`, passing the `TimeseriesData` to publish:
 
 === "Python"
     
     ``` python
-    stream.parameters.buffer.write(data)
+    stream.parameters.buffer.publish(data)
     ```
 
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer.Write(data);
+    stream.Parameters.Buffer.Publish(data);
     ```
 
-Quix Streams also allows you to write data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the buffer.
+Quix Streams also allows you to publish data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the buffer.
 
-The following code is an example of how to write data to the buffer without using an explicit `TimeseriesData` instance:
+The following code is an example of how to publish data to the buffer without using an explicit `TimeseriesData` instance:
 
 === "Python"
     
@@ -434,8 +432,8 @@ The following code is an example of how to write data to the buffer without usin
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
-        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) # use bytearray to write binary data to a stream.
-        .write()
+        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) # use bytearray to publish binary data to a stream.
+        .publish()
     ```
 
 === "C\#"
@@ -445,8 +443,8 @@ The following code is an example of how to write data to the buffer without usin
         .AddTimestamp(DateTime.UtcNow)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")
-        .AddValue("ParameterC", Encoding.ASCII.GetBytes("Hello Quix!")) // Write binary data as a byte array.
-        .Write();
+        .AddValue("ParameterC", Encoding.ASCII.GetBytes("Hello Quix!")) // Publish binary data as a byte array.
+        .Publish();
     ```
 
 You can configure multiple conditions to determine when the Buffer has to release data. If any of these conditions become true, the buffer will release a new packet of data and that data is cleared from the buffer:
@@ -629,7 +627,7 @@ Will result in this parameter hierarchy in the parameter selection dialog:
 
 ### Using Data Frames
 
-If you use the Python version of Quix Streams you can use [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} for reading and writing TimeseriesData to Quix. The Pandas DataFrames format is just a representation of [TimeseriesData](#timeseriesdata-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
+If you use the Python version of Quix Streams you can use [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) for reading and writing TimeseriesData to Quix. The pandas DataFrame format is just a representation of [TimeseriesData](#timeseriesdata-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
 
 For example, the following [TimeseriesData](#timeseriesdata-format):
 
@@ -640,7 +638,7 @@ For example, the following [TimeseriesData](#timeseriesdata-format):
 | 3         | car-1       | 125   | 3    |
 | 6         | car-2       | 110   | 2    |
 
-Is represented as the following Pandas DataFrame:
+Is represented as the following pandas DataFrame:
 
 | time | TAG\_\_CarId | Speed | Gear |
 | ---- | ------------ | ----- | ---- |
@@ -649,24 +647,24 @@ Is represented as the following Pandas DataFrame:
 | 3    | car-1        | 125   | 3    |
 | 6    | car-2        | 110   | 2    |
 
-Quix Streams allows you to write data to Quix using [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} directly. You just need to use the common `write` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
+Quix Streams allows you to publish data to Quix using [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) directly. You just need to use the common `publish` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
 
 ``` python
 df = data.to_panda_dataframe()
-stream.parameters.buffer.write(df)
+stream.parameters.buffer.publish(df)
 ```
 
-Alternatively, you can convert a Pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
+Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
 
 ``` python
 data = TimeseriesData.from_panda_dataframe(df)
 with data:
-    stream.parameters.buffer.write(data)
+    stream.parameters.buffer.publish(data)
 ```
 
 !!! tip
 
-	The conversions from Pandas DataFrames to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using Pandas DataFrames, you should use Pandas DataFrames methods provided by Quix Streams that are optimized for doing as few conversions as possible.
+	The conversions from pandas DataFrame to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use pandas DataFrame methods provided by Quix Streams that are optimized for doing as few conversions as possible.
 
 ## Writing events
 
@@ -705,7 +703,7 @@ The following code would generate the list of `EventData` shown in the previous 
     events.append(EventData("motor-off", 3, "Motor has stopped"))
     events.append(EventData("race-event3", 6, "Race has finished"))
     
-    stream.events.write(events)
+    stream.events.publish(events)
     ```
 
 === "C\#"
@@ -718,12 +716,12 @@ The following code would generate the list of `EventData` shown in the previous 
     events.Add(new EventData("motor-off", 3, "Motor has stopped"));
     events.Add(new EventData("race-event3", 6, "Race has finished"));
     
-    stream.Events.Write(events)
+    stream.Events.Publish(events)
     ```
 
-Quix Streams lets you write Events without creating `EventData` instances explicitly. To do so, you can use the same helpers present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `write` method to write that timestamp to the stream.
+Quix Streams lets you publish Events without creating `EventData` instances explicitly. To do so, you can use the same helpers present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the stream.
 
-This is an example of how to write Events to the stream without using explicit `EventData` instances:
+This is an example of how to publish Events to the stream without using explicit `EventData` instances:
 
 === "Python"
     
@@ -731,19 +729,19 @@ This is an example of how to write Events to the stream without using explicit `
     stream.events \
         .add_timestamp(1) \
         .add_value("failure23", "Gearbox has a failure") \
-        .write()
+        .publish()
     stream.events \
         .add_timestamp(2) \
         .add_value("box-event2", "Car has entered to the box") \
-        .write()
+        .publish()
     stream.events \
         .add_timestamp(3) \
         .add_value("motor-off", "Motor has stopped") \
-        .write()
+        .publish()
     stream.events \
         .add_timestamp(6) \
         .add_value("race-event3", "Race has finished") \
-        .write()
+        .publish()
     ```
 
 === "C\#"
@@ -752,19 +750,19 @@ This is an example of how to write Events to the stream without using explicit `
     stream.Events
         .AddTimestamp(1)
         .AddValue("failure23", "Gearbox has a failure")
-        .Write();
+        .Publish();
     stream.Events
         .AddTimestamp(2)
         .AddValue("box-event2", "Car has entered to the box")
-        .Write();
+        .Publish();
     stream.Events
         .AddTimestamp(3)
         .AddValue("motor-off", "Motor has stopped")
-        .Write();
+        .Publish();
     stream.Events
         .AddTimestamp(6)
         .AddValue("race-event3", "Race has finished")
-        .Write();
+        .Publish();
     ```
 
 ### Event definitions
@@ -891,7 +889,7 @@ The following example of good tagging practice enables you to query the maximum 
         .add_tag("driver-id", "Peter") \
         .add_value("Speed", 53) \
         .add_value("Gear", 4) \
-        .write()
+        .publish()
     ```
 
 === "C\#"
@@ -903,7 +901,7 @@ The following example of good tagging practice enables you to query the maximum 
         .AddTag("driver-id", "Peter")
         .AddValue("Speed", 53)
         .AddValue("Gear", 4)
-        .Write();
+        .Publish();
     ```
 
 The following example of bad tagging practice will lead to excessive cardinality as there will be a large number of different values for the specified tag, Speed:
@@ -915,7 +913,7 @@ The following example of bad tagging practice will lead to excessive cardinality
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_tag("Speed", 53) \
         .add_value("Gear", 4) \
-        .write()
+        .publish()
     ```
 
 === "C\#"
@@ -925,12 +923,12 @@ The following example of bad tagging practice will lead to excessive cardinality
         .AddTimestamp(DateTime.UtcNow)
         .AddTag("Speed", 53)
         .AddValue("Gear", 4)
-        .Write();
+        .Publish();
     ```
 
 ## Minimal example
 
-This is a minimal code example you can use to write data to a topic using Quix Streams:
+This is a minimal code example you can use to publish data to a topic using Quix Streams:
 
 === "Python"
     
@@ -955,7 +953,7 @@ This is a minimal code example you can use to write data to a topic using Quix S
             .buffer \
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("ParameterA", index) \
-            .write()
+            .publish()
         time.sleep(0.01)
     print("Closing stream")
     stream.close()
@@ -1007,49 +1005,46 @@ This is a minimal code example you can use to write data to a topic using Quix S
 
 ## Write raw Kafka messages
 
-Quix Streams uses the message brokers' internal protocol for data transmission. This protocol is both data and speed optimized so we do encourage you to use it. For that you need to use Quix Streams on both producer (writer) and consumer (reader) sides.
+Quix Streams uses the message brokers' internal protocol for data transmission. This protocol is both data and speed optimized so we do encourage you to use it. For that you need to use Quix Streams on both producer and consumer sides.
 
 However, in some cases, you simply do not have the ability to run Quix Streams on both sides.
 
-To cater for these cases we added the ability to write the raw, unformatted, messages as a byte array. This gives you the freedom to implement the protocol as needed, such as JSON, or comma-separated rows.
+To cater for these cases we added the ability to publish the raw, unformatted, messages as a byte array. This gives you the freedom to implement the protocol as needed, such as JSON, or comma-separated rows.
 
-You can write messages with or without a key. The following example demonstrates how to write two messages to Kafka, one message with a key, and one without:
+You can publish messages with or without a key. The following example demonstrates how to publish two messages to Kafka, one message with a key, and one without:
 
 === "Python"
     
     ``` python
-    inp = client.create_raw_topic_producer(TOPIC_ID)
+    producer = client.create_raw_topic_producer(TOPIC_ID)
     
     data = bytearray(bytes("TEXT CONVERTED TO BYTES",'utf-8'))
     
-    #write value with KEY to kafka
+    #publish value with KEY to kafka
     message = RawMessage(data)
     message.key = MESSAGE_KEY
-    out.write(message)
+    producer.publish(message)
     
-    #write value without key into kafka
-    out.write(data)
+    #publish value without key into kafka
+    producer.publish(data)
     ```
 
 === "C\#"
     
     ``` cs
-    var out = client.CreateRawTopicProducer(TOPIC_ID);
-    
-    inp = client.CreateRawTopicConsumer(TOPIC_NAME)
+    var producer = client.CreateRawTopicProducer(TOPIC_ID);
     
     var data = new byte[]{1,3,5,7,1,43};
     
-    //write value with KEY to kafka
-    rawWriter.Write(new Streaming.Raw.RawMessage(
+    //Publish value with KEY to kafka
+    producer.Publish(new Streaming.Raw.RawMessage(
         MESSAGE_KEY,
         data
     ));
     
-    //write value withhout key into kafka
-    rawWriter.Write(new Streaming.Raw.RawMessage(
+    //Publish value withhout key into kafka
+    producer.Publish(new Streaming.Raw.RawMessage(
         data
     ));
     
-    inp.Subscribe()
     ```

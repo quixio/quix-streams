@@ -1,8 +1,8 @@
 # Multiple data types
 
-Quix Streams lets you attach any type of data — Numbers, Strings, or raw Binary data — to your timestamps.
+Quix Streams lets you attach any type of data — Numbers, Strings or even Binary data — to your timestamps.
 
-For example, with Quix you can send telemetry data from your vehicle or IoT device and attach a picture or video frame to the same timestamp.
+For example, with the library you can send telemetry data from your vehicle or IoT device and attach a picture or video frame to the same timestamp.
 
 ![High level of splitting / merging flow](../images/QuixMultipleTypes.png)
 

@@ -1,82 +1,73 @@
 # Introduction
 
-Quix Streams makes it quick and easy to develop streaming applications. It’s designed to be used for high-performance telemetry services where you need to process high volumes of data in a nanosecond response time.
+Quix Streams makes it quick and easy to develop streaming applications. It’s designed to be used for high-performance telemetry services where you need to process high volumes of data with quick response time in a scalable way.
 
 Quix Streams is available for Python and C\#.
 
 Using Quix Streams, you can:
 
-  - [Write time-series data](/sdk/write) to a Kafka Topic
+  - [Publish time-series data](publish.md) to a Kafka topic
 
-  - [Read time-series data](/sdk/read) from a Kafka Topic
+  - [Subscribe to time-series data](subscribe.md) from a Kafka topic
 
-  - [Process data](/sdk/process) by [reading](/sdk/read) it from one
-    Topic and [writing](/sdk/write) the results to another one.
+  - [Process data](process.md) by [subscribing](subscribe.md) to it from one topic and [publishing](publish.md) the results to another one or elsewhere.
 
-To support these operations, Quix Streams provides several useful features, and solves all the common problems you may face when developing real-time streaming applications:
+To support these operations, Quix Streams provides several useful features and solves common problems you may face when developing real-time streaming applications:
 
 ## Streaming context
 
-Quix Streams handles [stream contexts](/sdk/features/streaming-context) for you, so all the data from one data source is bundled in the same scope. This allows you to attach metadata to streams.
+Quix Streams handles [stream contexts](features/streaming-context) for you, so all the data from one data source is bundled in the same scope. This allows you to attach metadata to streams.
 
-Quix Streams simplifies the processing of streams by providing callbacks on the reading side. When processing stream data, you can identify data from different streams more easily than with the key-value approach used by other technologies.
+Stream context simplifies processing streams by providing callbacks on the subscribing side. You can keep working with each context (stream) separately or together, depending on your needs.
 
-Refer to the [Streaming context](/sdk/features/streaming-context) section of this documentation for more information.
+Refer to the [Streaming context](features/streaming-context) section of this documentation for more information.
 
 ## Built-in buffers
 
-If you’re sending data at high frequency, processing each message can be costly. Quix Streams provides a built-in buffers features for reading and writing to give you absolute freedom in balancing between latency and cost.
+If you’re sending data at high frequency, processing each message can be costly. Quix Streams provides a built-in buffers features for reading and writing to give you freedom in balancing between latency and cost.
 
-Refer to the [Built-in buffers](/sdk/features/builtin-buffers) section of this documentation for more information.
+Refer to the [Built-in buffers](features/builtin-buffers) section of this documentation for more information.
 
 ## Support for data frames
 
-In many use cases, multiple parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. Quix Streams uses a rows system, and can work with [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank} natively. Each row has a timestamp and user-defined tags as indexes.
+In many use cases, multiple parameters are emitted at the same time, so they share one timestamp. Publishing these parameters independently is wasteful. Quix Streams uses a rows system and can work with [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) natively. Each row has a timestamp and user-defined tags as indexes.
 
-Refer to the [Support for Data Frames](/sdk/features/data-frames) section of this documentation for more information.
+Refer to the [Support for Data Frames](features/data-frames) section of this documentation for more information.
 
 ## Message splitting
 
-Quix Streams automatically handles large messages on the producer side, splitting them up if required. You no longer need to worry about Kafka message limits. On the consumer side, those messages are automatically merged back.
+Quix Streams automatically handles large messages on the producer side, splitting them up when required. On the consumer side, those messages are automatically merged back and processed as one.
 
-Refer to the [Message splitting](/sdk/features/message-splitting) section of this documentation for more information.
+Refer to the [Message splitting](features/message-splitting) section of this documentation for more information.
 
-## Data serialization and de-serialization
+## Data ser/des
 
-Quix Streams automatically serializes data from native types in your language. You can work with familiar data types, such as [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe){target=_blank}, without worrying about conversion. Serialization can be difficult, especially if it is done with performance in mind. We serialize native types using our codecs so you don’t have to implement that.
+Quix Streams automatically serializes data from native types in your language. You can work with familiar data types, such as [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe), without worrying about conversion. Serialization can be difficult, especially if it is done with performance in mind. We serialize native types using our codecs so you don’t have to implement that.
 
-Refer to the [Data serialization](/sdk/features/data-serialization) section of this documentation for more information.
+Refer to the [Data serialization](features/data-serialization) section of this documentation for more information.
 
 ## Multiple data types
 
-Quix Streams allows you to attach any type of data to your timestamps, like Numbers, Strings or even raw Binary data. This gives Quix Streams the ability to adapt to any streaming application use case.
+Quix Streams allows you to attach different types of data to your timestamps, such as numbers, string and binary data. This gives Quix Streams the ability to adapt to any streaming application use case.
 
-Refer to the [Multiple data types](/sdk/features/multiple-data-types) section of this documentation for more information.
-
-## Message Broker configuration including authentication and authorization
-
-Quix handles Kafka configuration efficiently and reliably. Our templates come with pre-configured certificates and connection settings. Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time\! We take care of this in Quix Streams so you don’t have to.
-
-Refer to the [Broker configuration](/sdk/features/broker-configuration) section of this documentation for more information.
+Refer to the [Multiple data types](features/multiple-data-types) section of this documentation for more information.
 
 ## Checkpointing
 
-Quix Streams allows you to do manual checkpointing when you read data from a Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point, usually called a **checkpoint**.
+Quix Streams allows you to do manual checkpointing when you subscribe to data from a topic. This provides the ability to inform the message broker that you have already processed messages up to one point, called a **checkpoint**.
 
 This is a very important concept when you are developing high-performance streaming applications.
 
-Refer to the [Checkpointing](/sdk/features/checkpointing) section of this documentation for more information.
+Refer to the [Checkpointing](features/checkpointing) section of this documentation for more information.
 
 ## Horizontal scaling
 
-Quix Streams provides horizontal scale using the [streaming context](/sdk/features/streaming-context) feature. This means a data scientist or data engineer does not have to implement parallel processing themselves. You can scale the processing models, from one replica to many and back to one, and use the [callback system inside the SDK](/sdk/read#_parallel_processing) to ensure that your data load is always shared between your model replicas.
+Quix Streams provides horizontal scaling using the [streaming context](features/streaming-context) feature. Data scientists or engineers do not have to implement horizontal scaling for stream processing themselves. You can scale the processing models, from one replica to many or back while relying on the [callback system](subscribe.md#_parallel_processing) to ensure that your data is distributed between your model replicas.
 
-Refer to the [Horizontal scaling](/sdk/features/horizontal-scaling) section of this documentation for more information.
+Refer to the [Horizontal scaling](features/horizontal-scaling) section of this documentation for more information.
 
 ## Raw messages
 
-Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it. For that you need to use Quix Streams on both producer (writer) and consumer (reader) sides.
+Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it, but you need to use Quix Streams on both producer and consumer sides as of today. We have plans to support most common formats in near future, but custom formats will always need to be handled manually.
 
-However, in some cases, you simply do not have the ability to run Quix Streams on both sides.
-
-To cater for these cases we added the ability to both [write](/sdk/write#write-raw-kafka-messages) and [read](/sdk/read#read-raw-kafka-messages) the raw, unformatted, messages as byte array. This gives you the ability to implement the protocol as needed, for example JSON or comma-separated rows.
+For this, we have created a way to [publish](publish.md#write-raw-kafka-messages) and [subscribe](subscribe.md#read-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.

@@ -1,10 +1,10 @@
 # App management
 
-In order to reduce the amount of boilerplate code Quix added to each of our samples, we developed the `App.run()` feature.
+In order to reduce the amount of boilerplate code added to each of our samples, we developed the `App.run()` feature.
 
 `App.run` takes care of several small but important tasks in managing your Python apps. These include:
 
-* Start reading from input topics
+* Start subscribing to topics
 * Handle termination
 * Close streams and dispose topics
 * Keep alive
@@ -16,29 +16,31 @@ Each of these is described in the following sections.
 To use `App.run()` in your code, you will need this import:
 
 ```py
-from quixstreams.app import App
+from quixstreams import App
+App.run()
 ```
 
-## Start reading
+## Start subscribing
 
-In order to start reading from an input topic you need to make a call to the `subscribe()` method. Your Python code won’t be able to read any data from the broker if you have missed this step. It makes sense to add this call near the end of the code, just before your 'keep busy' `while` loop.
+In order to start receiving from a topic you need to make a call to the `subscribe()` method. Your Python code won’t be able to receive any data from the broker if you have missed this step. It makes sense to add this call near the end of the code, just before your 'keep busy' `while` loop.
 
 Your code might look something like this:
 
 ```py
-def read_stream(new_stream: StreamConsumer):
+from quixstreams import TopicConsumer, StreamConsumer
 
+def on_stream_received_handler(topic: TopicConsumer, new_stream: StreamConsumer):
     buffer = new_stream.parameters.create_buffer()
+    buffer.on_read_dataframe = on_read_dataframe_handler
 
-    def on_dataframe_handler(stream: StreamConsumer, df: pd.DataFrame):
-        print(df.to_string())
+def on_read_dataframe_handler(topic: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
 
-    buffer.on_read_dataframe = on_dataframe_handler
-
-topic_consumer.on_stream_received = read_stream
+# ... some code setting up topic_consumer
+topic_consumer.on_stream_received = on_stream_received_handler
 topic_consumer.subscribe()
 
-while(True)
+while(True):  # or other blocking call
     print('running')
 ```
 
@@ -47,15 +49,18 @@ However, using `App.run()` you no longer need the call to `subscribe()`, because
 So your code would look like this instead:
 
 ```py
-def read_stream(new_stream: StreamConsumer):
+from quixstreams import App, TopicConsumer, StreamConsumer
+import pandas as pd
 
+def on_stream_received_handler(topic: TopicConsumer, new_stream: StreamConsumer):
     buffer = new_stream.parameters.create_buffer()
-    buffer.on_read_dataframe = on_dataframe_handler
+    buffer.on_read_dataframe = on_read_dataframe_handler
 
-def on_dataframe_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+def on_read_dataframe_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
-topic_consumer.on_stream_received = read_stream
+# ... some code setting up topic_consumer
+topic_consumer.on_stream_received = on_stream_received_handler
 
 App.run()
 ```
@@ -65,6 +70,10 @@ App.run()
 Termination signals such as `SIGINT`, `SIGTERM` and `SIGQUIT` could be used to break out of the `while` loop used to keep your code listening for data. In order to listen for these you’d need to add some code like this:
 
 ```py
+import threading
+import signal
+import time
+
 # Handle graceful exit
 event = threading.Event() 
 
@@ -89,6 +98,7 @@ In this case, when the code runs, it will subscribe to and handle `SIGINT` (an i
 Using `App.run` the above code becomes much simpler:
 
 ```py
+from quixstreams import App
 App.run()
 print('Exiting')
 ```
@@ -102,23 +112,31 @@ You can ensure the streams are closed by calling the following code just before 
 ```py
 # dispose the topic(s) and close the stream(s)
 print('Closing streams...')
-topic_consumer.dispose()
-topic_producer.dispose()
+topic_consumer.dispose()  # Note the order. Producer should be closed after consumer
+topic_producer.dispose()  # to avoid receiving data - possibly committing - but not being able to write.
+print('Closed streams...')
+
+# or using the with statement, if your code structure is suited for it
+with topic_producer, topic_consumer:  # disposed in reverse order
+    pass  # do great stuff
+# disposed when going out of scope
+print('Closed streams...')
 ```
 
-Here, you dispose of the topic consumer, which stops new data from being received, and then dispose of the topic producer. This code is easy and straightforward, however it's just more boilerplate that you have to remember.
+Here, you dispose of the topic consumer, which stops new data from being received, and then dispose of the topic producer. This code is easy and straightforward, however it is just more boilerplate that you have to remember.
 
 Once again, `App.run()` encapsulates this and handles this for you, so the code above becomes:
 
 ```py
+from quixstreams import App
 App.run()
 ```
 
 ## Keep alive
 
-Unless you add an infinite loop or similar code, a Python code file will usually run each code statement sequentially until the end of the file, and then exit.  
+Unless you add an infinite loop or similar code, a Python code file will run each code statement sequentially until the end of the file, and then exit.  
 
-In order to continuously handle data in your Python code, you need to prevent the code file from terminating. There are several ways this could be achieved. For example, you could use an infinite `while` loop to allow your code to run continuously. The following code will continuously print "running" until the `end_condition` has been satisfied:
+In order to continuously handle data in your Python code, you need to prevent the code from terminating. There are several ways this could be achieved. For example, you could use an infinite `while` loop to allow your code to run continuously. The following code will continuously print "running" until the `end_condition` has been satisfied:
 
 ```py
 run = True
@@ -129,11 +147,12 @@ while(run):
 print('ending')
 ```
 
-Quix used code very similar to this in our Quix Library items for quite a while. However, once we'd seen the same pattern being used repeatedly, we decided to build this functionality into Quix Streams.
+We used code similar to this in our [Quix Library](https://github.com/quixai/quix-library) items for a while. However, once we'd seen the same pattern being used repeatedly, we decided to build this functionality into Quix Streams.
 
 This is how you can use it in your code:
 
 ```py
+from quixstreams import App
 App.run()
 ```
 
@@ -144,6 +163,11 @@ You have seen how you could start subscribing to streams, handle termination sig
 To recap, here is an example of your code without using `App.run`, all in one snippet:
 
 ```py
+import threading
+import signal
+import time
+
+# ... some code setting up topic_consumer and topic_producer
 topic_consumer.subscribe()  # initiate read
 
 # Hook up to termination signal (for docker image) and CTRL-C
@@ -173,6 +197,7 @@ print('Exiting')
 If you use `App.run()`, this is greatly simplified into the following much smaller snippet:
 
 ```py
+from quixstreams import App
 # run a while loop
 # open the input topics
 # listen for termination
@@ -188,6 +213,7 @@ It's good practice to make sure that your code cleans up during the shutdown pha
 If you choose to implement the cleanup of other resources, or simply need to log something immediately before the code ends, you can configure `App.run()` to call a function before it does all of the other built-in actions. `App.run` provides the `before_shutdown` hook to enable this facility. The following code provides an example of this:
 
 ```py
+from quixstreams import App
 def before_shutdown():
     print('before shutdown')
 
@@ -195,3 +221,31 @@ App.run(before_shutdown=before_shutdown)
 ```
 
 In this snippet, `before_shutdown` is called before the app shuts down. That is before the `while` loop inside `App.run` comes to an end. This allows you to close connections, tidy up, and log your last messages before the app terminates.
+
+## Triggering shutdown from code
+
+In some cases you might want to trigger shutdown from code. You can do it using `CancellationTokenSource`.
+
+```py
+from quixstreams import App, CancellationTokenSource
+import threading
+import time
+
+cts = CancellationTokenSource()  # used for interrupting the App
+
+# setup shutdown after 5 seconds
+def timeout_callback():
+    time.sleep(5)
+    cts.cancel()
+
+timeout_thread = threading.Thread(target=timeout_callback)
+timeout_thread.start()
+
+# Setup some prints and pass the token to App.run
+def before_shutdown():
+    print('before shutdown')
+
+print('Waiting 5 seconds')
+App.run(cts.token, before_shutdown=before_shutdown)
+print('exiting')
+```
