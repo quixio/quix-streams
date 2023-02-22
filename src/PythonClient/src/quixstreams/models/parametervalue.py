@@ -1,13 +1,11 @@
-from typing import Union
-from enum import Enum
-
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixSdkStreaming.Models.ParameterValue import ParameterValue as pvi
-from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 import ctypes
+from enum import Enum
+from typing import Union
 
 from ..helpers.enumconverter import EnumConverter as ec
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ..native.Python.QuixStreamsStreaming.Models.ParameterValue import ParameterValue as pvi
 
 
 class ParameterValueType(Enum):
@@ -52,7 +50,6 @@ class ParameterValue(object):
         elif self._type == ParameterValueType.Numeric:
             self._numeric = self._interop.get_NumericValue()
             self._value = self._numeric
-
 
     @property
     def numeric_value(self) -> float:
@@ -125,4 +122,3 @@ class ParameterValue(object):
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         return self._interop.get_interop_ptr__()
-

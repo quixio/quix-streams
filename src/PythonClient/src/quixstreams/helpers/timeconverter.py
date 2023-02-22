@@ -1,7 +1,8 @@
+import logging
 import sys
 from datetime import datetime, timedelta, timezone
+
 from dateutil.parser import parse
-import logging
 
 
 class TimeConverter:

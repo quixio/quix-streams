@@ -1,10 +1,7 @@
-from ctypes import Union
-
 from .statevalue import StateValue
-
-from ..native.Python.QuixSdkState.Storage.StorageExtensions import StorageExtensions as se
-from ..native.Python.QuixSdkState.Storage.FileStorage.LocalFileStorage.LocalFileStorage import LocalFileStorage as lfsi
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ..native.Python.QuixStreamsState.Storage.FileStorage.LocalFileStorage.LocalFileStorage import LocalFileStorage as lfsi
+from ..native.Python.QuixStreamsState.Storage.StorageExtensions import StorageExtensions as se
 
 
 class LocalFileStorage(object):

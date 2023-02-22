@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /Quix.Sdk/builds/python/linux
+cd /Quix.Streams/builds/python/linux
 chmod +x ./build_native.sh
 ./build_native.sh
 if [[ $? != 0 ]]; then exit $?; fi

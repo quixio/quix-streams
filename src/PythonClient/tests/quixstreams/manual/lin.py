@@ -7,9 +7,9 @@ import math
 client = QuixStreamingClient("sdk-a02c9a23857f4311a6626de81be1fb3e")
 
 # Open the output topic where to write data out
-output_topic = client.open_output_topic("hello-world-source")
+topic_producer = client.create_topic_producer("hello-world-source")
 
-stream = output_topic.create_stream()
+stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.parameters.add_definition("ParameterA").set_range(-1.2, 1.2)
 stream.parameters.buffer.time_span_in_milliseconds = 100

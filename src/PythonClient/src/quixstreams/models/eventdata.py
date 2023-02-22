@@ -1,17 +1,15 @@
+import ctypes
 from datetime import datetime, timedelta
 from typing import Dict, Union
 
-
-from ..helpers.timeconverter import TimeConverter
-from ..helpers.dotnet.datetimeconverter import DateTimeConverter
-
 import pandas as pd
 
-from ..native.Python.QuixSdkStreaming.Models.EventData import EventData as edi
+from ..helpers.dotnet.datetimeconverter import DateTimeConverter
+from ..helpers.nativedecorator import nativedecorator
+from ..helpers.timeconverter import TimeConverter
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils as iu
-import ctypes
-from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixStreamsStreaming.Models.EventData import EventData as edi
 
 
 @nativedecorator
@@ -161,5 +159,6 @@ class EventData(object):
     """
     Get associated .net object pointer
     """
+
     def get_net_pointer(self):
         return self._interop.get_interop_ptr__()

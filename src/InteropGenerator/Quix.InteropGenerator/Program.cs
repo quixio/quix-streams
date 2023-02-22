@@ -31,7 +31,6 @@ using Quix.InteropGenerator.Writers.CsharpInteropWriter;
 using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using Quix.InteropGenerator.Writers.Shared;
 
-
 namespace Quix.InteropGenerator;
 
 public class Program
@@ -78,7 +77,7 @@ public class Program
         
         var whitelist = new List<string>()
         {
-            "^Quix\\.Sdk\\.*"
+            "^Quix\\.Streams\\.*"
         }.Select(y => new Regex(y, RegexOptions.Compiled)).ToList();
         
         if (Directory.Exists(options.OutputPathRoot)) Directory.Delete(options.OutputPathRoot, true);

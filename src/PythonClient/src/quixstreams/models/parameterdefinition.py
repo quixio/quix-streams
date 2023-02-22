@@ -1,5 +1,6 @@
-from ..native.Python.QuixSdkStreaming.Models.ParameterDefinition import ParameterDefinition as pdi
 import ctypes
+
+from ..native.Python.QuixStreamsStreaming.Models.ParameterDefinition import ParameterDefinition as pdi
 
 
 class ParameterDefinition(object):
@@ -7,12 +8,11 @@ class ParameterDefinition(object):
     Describes additional context for the parameter
     """
 
-
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
         Initializes a new instance of ParameterDefinition
 
-        NOTE: Do not initialize this class manually. Instances of it are available on StreamParametersReader.definitions
+        NOTE: Do not initialize this class manually. Instances of it are available on StreamParametersConsumer.definitions
         :param net_pointer: Pointer to an instance of a .net ParameterDefinition.
         """
 

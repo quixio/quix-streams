@@ -1,11 +1,10 @@
+import weakref
 from typing import List, Any
 
+from .netlist import NetReadOnlyList
+from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
-
-from .netlist import NetReadOnlyList
-import weakref
 
 
 class ReadOnlyNetDict(object):
@@ -33,8 +32,8 @@ class ReadOnlyNetDict(object):
         self._key_converter_to_python_list = key_converter_to_python_list
         if self._key_converter_to_python_list is None:
             self._key_converter_to_python_list = lambda key_arr_ptr: NetReadOnlyList(key_arr_ptr,
-                                                                                      converter_to_python=self._key_converter_to_python,
-                                                                                      converter_from_python=self._key_converter_from_python)
+                                                                                     converter_to_python=self._key_converter_to_python,
+                                                                                     converter_from_python=self._key_converter_from_python)
 
         self._val_converter_to_python = val_converter_to_python
         if self._val_converter_to_python is None:
@@ -47,8 +46,8 @@ class ReadOnlyNetDict(object):
         self._val_converter_to_python_list = val_converter_to_python_list
         if self._val_converter_to_python_list is None:
             self._val_converter_to_python_list = lambda val_arr_ptr: NetReadOnlyList(val_arr_ptr,
-                                                                                      converter_to_python=self._val_converter_to_python,
-                                                                                      converter_from_python=self._val_converter_from_python)
+                                                                                     converter_to_python=self._val_converter_to_python,
+                                                                                     converter_from_python=self._val_converter_from_python)
 
         self._finalizer = weakref.finalize(self, self._finalizerfunc)
 

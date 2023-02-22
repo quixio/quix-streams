@@ -1,7 +1,6 @@
 import datetime
 import math
 import unittest
-import os
 from datetime import timedelta
 
 from src.quixstreams.native.Python.SystemPrivateCoreLib.System.DateTime import DateTime

@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using InteropHelpers.Interop;
@@ -123,11 +121,6 @@ public class MethodInfoWriter : BaseWriter
         }
 
         sb.Append(")");
-
-        if (this.declaringTypePythonName == "IStreamReader")
-        {
-            
-        }
 
         await contentWriter.Write(sb.ToString());
         if (!string.IsNullOrWhiteSpace(resultName))
