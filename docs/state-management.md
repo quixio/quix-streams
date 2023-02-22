@@ -8,7 +8,7 @@ Quix Streams has state management built in to allow values to be used and persis
 
 ## Usage
 
-To use the SDK’s state management feature create an instance of *LocalFileStorage*. This is in *quixstreams.state.localfilestorage*. Then use the `set`, `get`, `containsKey` (`contains_key` for Python), and `clear` methods to manipulate the state as needed.
+To use the library’s state management feature create an instance of *LocalFileStorage*. This is in *quixstreams.state.localfilestorage*. Then use the `set`, `get`, `containsKey` (`contains_key` for Python), and `clear` methods to manipulate the state as needed.
 
 === "Python"
     

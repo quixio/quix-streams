@@ -134,19 +134,19 @@ class QuixStreamingClient(object):
 
             auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to latest
         """
-        py_offset_reset = AutoOffsetReset.Latest
+        net_offset_reset = AutoOffsetResetInterop.Latest
         if auto_offset_reset is not None:
-            py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
+            net_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
         if isinstance(commit_settings, CommitMode):
             net_commit_settings = ec.enum_to_another(commit_settings, CommitModeInterop)
 
-            hptr = qscei.CreateTopicConsumer(self._interop.get_interop_ptr__(), topic_id_or_name, consumer_group, net_commit_settings, py_offset_reset)
+            hptr = qscei.CreateTopicConsumer(self._interop.get_interop_ptr__(), topic_id_or_name, consumer_group, net_commit_settings, net_offset_reset)
         else:
             if isinstance(commit_settings, CommitOptions):
-                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, commit_settings.get_net_pointer(), py_offset_reset)
+                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, commit_settings.get_net_pointer(), net_offset_reset)
             else:
-                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, None, py_offset_reset)
+                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, None, net_offset_reset)
 
         return TopicConsumer(hptr)
 
@@ -172,11 +172,11 @@ class QuixStreamingClient(object):
             consumer_group (string): Consumer group ( optional )
         """
 
-        py_offset_reset = AutoOffsetReset.Latest
+        net_offset_reset = AutoOffsetResetInterop.Latest
         if auto_offset_reset is not None:
-            py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
+            net_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
-        dotnet_pointer = self._interop.CreateRawTopicConsumer(topic_id_or_name, consumer_group, py_offset_reset)
+        dotnet_pointer = self._interop.CreateRawTopicConsumer(topic_id_or_name, consumer_group, net_offset_reset)
         return RawTopicConsumer(dotnet_pointer)
 
     def create_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
