@@ -5,6 +5,7 @@ import datetime
 import sys
 
 import pandas as pd
+from quixstreams import AutoOffsetReset
 
 from src.quixstreams.logging import Logging, LogLevel
 
@@ -22,7 +23,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-topic_consumer = client.create_topic_consumer('generated-data', None, commit_settings=commit_settings, auto_offset_reset=qx.AutoOffsetReset.Earliest)
+topic_consumer = client.create_topic_consumer('generated-data', auto_offset_reset=AutoOffsetReset.Latest)
 
 
 def on_streams_revoked_handler(topic: qx.TopicConsumer, readers: [qx.StreamConsumer]):
@@ -71,8 +72,8 @@ def read_stream(topic_consumer: qx.topicconsumer, new_stream: qx.StreamConsumer)
 
     print("New Stream read!" + str(datetime.datetime.now()))
     new_stream.on_stream_closed = on_stream_closed_handler
-    # new_stream.properties.on_changed = on_stream_properties_changed_handler
-    # new_stream.parameters.on_read_dataframe = on_parameters_dataframe_handler
+    new_stream.properties.on_changed = on_stream_properties_changed_handler
+    new_stream.parameters.on_read_dataframe = on_parameters_dataframe_handler
     # param_buffer = new_stream.parameters.create_buffer()
     # param_buffer.on_read = on_parameter_data_handler
 

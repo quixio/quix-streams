@@ -9,7 +9,7 @@ namespace Quix.Streams.Streaming.UnitTests
     {
         private readonly TestBroker testBroker;
         private TelemetryKafkaConsumer telemetryKafkaConsumer;
-        private Func<string, TelemetryKafkaProducer> createKafkaWriter;
+        private Func<string, TelemetryKafkaProducer> createKafkaProducer;
 
         public TestStreamingClient(CodecType codec = CodecType.Protobuf)
         {
@@ -34,9 +34,9 @@ namespace Quix.Streams.Streaming.UnitTests
 
         public ITopicProducer CreateTopicProducer()
         {
-            this.createKafkaWriter = streamId => new TestTelemetryKafkaProducer(this.testBroker, streamId);
+            this.createKafkaProducer = streamId => new TestTelemetryKafkaProducer(this.testBroker, streamId);
 
-            var topicProducer = new TopicProducer(this.createKafkaWriter);
+            var topicProducer = new TopicProducer(this.createKafkaProducer);
 
             return topicProducer;
         }

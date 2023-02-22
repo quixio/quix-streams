@@ -89,9 +89,9 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         """Immediately writes the data from the buffer without waiting for buffer condition to fulfill"""
         self._interop.Flush()
 
-    def write(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
+    def publish(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
         """
-            Writes the given packet to the stream without any buffering.
+            Publishes the given packet to the stream without any buffering.
 
             :param packet: The packet containing TimeseriesData or panda DataFrame
 
@@ -126,11 +126,11 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             for other type examples see the specific type
         """
         if isinstance(packet, TimeseriesData):
-            self._interop.Write(packet.get_net_pointer())
+            self._interop.Publish(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
             data = TimeseriesData.from_panda_dataframe(packet)
             with data:
-                self._interop.Write(data.get_net_pointer())
+                self._interop.Publish(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")

@@ -43,7 +43,7 @@ namespace Quix.Streams.ManyStreamTest
                 var stream = topicProducer.CreateStream();
                 var data = new Quix.Streams.Streaming.Models.TimeseriesData();
                 data.AddTimestampNanoseconds(10).AddValue("test", DateTime.UtcNow.ToBinary());
-                stream.Parameters.Buffer.Write(data);
+                stream.Parameters.Buffer.Publish(data);
                 stream.Events.AddTimestampNanoseconds(10).AddValue("test1", "val1");
                 stream.Properties.Location = "/test";
                 stream.Parameters.AddDefinition("test");

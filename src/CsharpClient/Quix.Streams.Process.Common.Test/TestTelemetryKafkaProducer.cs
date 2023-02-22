@@ -3,7 +3,7 @@
 namespace Quix.Streams.Process.Common.Test
 {
     /// <summary>
-    /// Kafka Writer that uses a mocked Message broker for test purposes
+    /// Kafka producer that uses a mocked Message broker for test purposes
     /// </summary>
     public class TestTelemetryKafkaProducer : TelemetryKafkaProducer
     {

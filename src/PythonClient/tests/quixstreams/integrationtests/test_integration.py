@@ -334,7 +334,7 @@ class TestIntegration(unittest.TestCase):
         output_stream.events.add_timestamp_nanoseconds(100)\
             .add_value("event1", "value1")\
             .add_tag("tag1", "tag1val")\
-            .write()
+            .publish()
 
         def event_callback():
             try:
@@ -398,7 +398,7 @@ class TestIntegration(unittest.TestCase):
         output_stream.events.add_timestamp_nanoseconds(100)\
             .add_value("event1", "value1")\
             .add_tag("tag1", "tag1val")\
-            .write()
+            .publish()
 
         # Assert
         self.waitforresult(event)
@@ -448,7 +448,7 @@ class TestIntegration(unittest.TestCase):
 
         print("---- Writing event data ----")
         expected = qx.EventData("event1", 100, "value1").add_tag("tag1", "tag1val")
-        output_stream.events.write(expected)
+        output_stream.events.publish(expected)
 
         # Assert
         self.waitforresult(event)
@@ -500,7 +500,7 @@ class TestIntegration(unittest.TestCase):
         print("---- Writing event data ----")
         data = [("event1", 100, "value1")]
         df = pd.DataFrame(data, columns=['id', 'time', 'val'])
-        output_stream.events.write(data=df, timestamp='time', value='val')
+        output_stream.events.publish(data=df, timestamp='time', value='val')
 
         # Assert
         self.waitforresult(event)
@@ -887,7 +887,7 @@ class TestIntegration(unittest.TestCase):
             stream.parameters.buffer \
                 .add_timestamp(utc_now) \
                 .add_value("binary_param", bytearray("binary_param", "UTF-8")) \
-                .write()
+                .publish()
 
             stream.parameters.buffer.flush()
 
@@ -938,7 +938,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8"))) \
             .add_tag("Tag2", "tag two updated") \
             .add_tag("Tag3", "tag three") \
-            .write()
+            .publish()
 
         # Send timeseries data in nanoseconds relative to epoch
         stream.parameters.buffer \
@@ -946,7 +946,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("string_param", "value1") \
             .add_value("num_param", 83.756) \
             .add_value("binary_param", bytearray("binary_param3", "UTF-8")) \
-            .write()
+            .publish()
 
         # Send timeseries data in timedelta relative to a new epoch
         stream.parameters.buffer.epoch = datetime(2018, 1, 2)
@@ -954,7 +954,7 @@ class TestIntegration(unittest.TestCase):
             .add_timestamp(timedelta(seconds=1, milliseconds=555)) \
             .add_value("num_param", 123.32) \
             .add_value("binary_param", bytearray("binary_param4", "UTF-8")) \
-            .write()
+            .publish()
 
         written_data = qx.TimeseriesData()
         written_data.add_timestamp_nanoseconds(123456790) \
@@ -962,7 +962,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("num_param", 83.756) \
             .add_value("binary_param", bytearray("binary_param4", "UTF-8"))
 
-        stream.parameters.buffer.write(written_data)
+        stream.parameters.buffer.publish(written_data)
 
         stream.parameters.buffer.flush()
 
@@ -1012,7 +1012,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1071,7 +1071,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1141,7 +1141,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         print("------ Written ------")
@@ -1202,7 +1202,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8")))
         pf = written_data.to_panda_dataframe()
 
-        stream.parameters.buffer.add_timestamp(datetime.utcnow()).add_value("a", "b").write()
+        stream.parameters.buffer.add_timestamp(datetime.utcnow()).add_value("a", "b").publish()
 
         stream.parameters.buffer.flush()
 
@@ -1280,7 +1280,7 @@ class TestIntegration(unittest.TestCase):
 
         pf = written_data.to_panda_dataframe()
 
-        stream.parameters.buffer.write(pf)
+        stream.parameters.buffer.publish(pf)
 
         stream.parameters.buffer.flush()
 
@@ -1353,7 +1353,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1410,7 +1410,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1459,7 +1459,7 @@ class TestIntegration(unittest.TestCase):
             .remove_tag("tag2")
         pf = written_data.to_panda_dataframe()
 
-        stream.parameters.write(pf)
+        stream.parameters.publish(pf)
 
         # Assert
         print("------ Written ------")
@@ -1514,7 +1514,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         expected_data = qx.TimeseriesData()
@@ -1582,7 +1582,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         expected_data = qx.TimeseriesData()
@@ -1652,7 +1652,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1709,7 +1709,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.write(written_data)
+        stream.parameters.publish(written_data)
 
         # Assert
         self.waitforresult(event)

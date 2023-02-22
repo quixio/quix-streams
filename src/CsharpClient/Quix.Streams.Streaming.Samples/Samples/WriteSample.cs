@@ -29,14 +29,14 @@ namespace Quix.Streams.Streaming.Samples.Samples
                     .SetLevel(Process.Models.EventLevel.Critical);
 
                 stream.Events.AddTimestampMilliseconds(10).AddValue("e1", "value 1").AddTag("tag1", "tagValue")
-                    .Write();
+                    .Publish();
 
                 stream.Parameters.Buffer.PacketSize = 10;
 
                 var i = 0;
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    stream.Parameters.Buffer.Write(GenerateTimeseriesData(10 * i));
+                    stream.Parameters.Buffer.Publish(GenerateTimeseriesData(10 * i));
                     Thread.Sleep(10);
                     i++;
                 }

@@ -28,7 +28,7 @@
             telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var s = new StreamProcess(streamId)
-                    .AddComponent(new SimplyModifier(69))
+                    .AddComponent(new SimpleModifier(69))
                     .AddComponent(new ConsoleStreamWriter());
 
                 return s;
@@ -37,13 +37,13 @@
             telemetryKafkaConsumer.Start();
 
             // Writing to Kafka (Random data)
-            var randomDataReader = new RandomDataReader();
+            var randomDataReader = new RandomDataProducer();
             var stream = new StreamProcess()
                 .AddComponent(randomDataReader)
                 //.AddComponent(new SimplyModifier(69))
-                .AddComponent(new TelemetryKafkaProducer(KafkaHelper.OpenKafkaInput(new KafkaWriterConfiguration(Configuration.Config.BrokerList, Configuration.Config.Properties), Configuration.Config.Topic), null));
+                .AddComponent(new TelemetryKafkaProducer(KafkaHelper.OpenKafkaInput(new KafkaProducerConfiguration(Configuration.Config.BrokerList, Configuration.Config.Properties), Configuration.Config.Topic), null));
             //.AddComponent(new ConsoleStreamWriter()); // This is here to show if msg got correctly sent
-                //.AddComponent(new TestKafkaWriter(testBroker));
+                //.AddComponent(new TestKafkaProducer(testBroker));
 
             randomDataReader.Start(cts.Token);
 

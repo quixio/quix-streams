@@ -77,7 +77,7 @@ namespace Quix.Streams.Speedtest
                 }
                 data.Timestamps = timestamps;
                 data.NumericValues.Add(parameterName, values);
-                stream.Parameters.Write(data);
+                stream.Parameters.Publish(data);
                 Thread.Sleep(1);
             }
             

@@ -18,14 +18,13 @@ class RawTopicProducer(object):
         """
         self._interop = rtpi(net_pointer)
 
-    """
-    Write the packet to the output topic.
+    def publish(self, message: Union[RawMessage, bytes, bytearray]):
+        """
+        Publish the packet to the output topic.
 
-    params:
-    (message): either bytes, bytearray or instance of RawMessage
-    """
-
-    def write(self, message: Union[RawMessage, bytes, bytearray]):
+        params:
+        (message): either bytes, bytearray or instance of RawMessage
+        """
         if not isinstance(message, RawMessage):
             message = RawMessage(message)
-        self._interop.Write(message.get_net_pointer())
+        self._interop.Publish(message.get_net_pointer())

@@ -53,7 +53,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write data to stream without using Buffer
         /// </summary>
         /// <param name="data">Timeseries data to write</param>
-        public void Write(TimeseriesData data)
+        public void Publish(TimeseriesData data)
         {
             if (isDisposed)
             {
@@ -78,7 +78,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write data timeseries data raw directly to stream
         /// </summary>
         /// <param name="data">Timeseries data to write</param>
-        public void Write(Process.Models.TimeseriesDataRaw data)
+        public void Publish(Process.Models.TimeseriesDataRaw data)
         {
             if (isDisposed)
             {

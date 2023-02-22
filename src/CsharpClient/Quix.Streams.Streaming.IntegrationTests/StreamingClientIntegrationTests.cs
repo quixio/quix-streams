@@ -341,7 +341,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                             .AddValue("p0", i)
                             .AddValue("p1", i)
                             .AddValue("p2", i)
-                            .Write();
+                            .Publish();
                     }
 
                     SpinWait.SpinUntil(() => data.Count == 2, 2000);
@@ -396,7 +396,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                     stream.Events.AddTimestampNanoseconds(123456789)
                         .AddValue("abc", "Iamvalue")
                         .AddTag("one", "two")
-                        .Write();
+                        .Publish();
 
                     SpinWait.SpinUntil(() => events.Count == 1, 2000);
                     events[0].Should().BeEquivalentTo(inputEvents[0]);
@@ -406,18 +406,18 @@ namespace Quix.Streams.Streaming.IntegrationTests
                     stream.Events.AddTimestampNanoseconds(123456789)
                         .AddValue("abc", "Iamvalue")
                         .AddTag("one", "two")
-                        .Write();
+                        .Publish();
                     stream.Events.AddTimestampNanoseconds(123456790)
                         .AddValue("efg", "Iamvalue2")
                         .AddTag("three", "fwo")
-                        .Write();
+                        .Publish();
                     stream.Events.Epoch = now;
                     stream.Events.AddTimestamp(now)
                         .AddValue("datetimetest", "Iamvalue3")
-                        .Write();
+                        .Publish();
                     stream.Events.AddTimestamp(TimeSpan.FromSeconds(10))
                         .AddValue("timespan", "Iamvalue4")
-                        .Write();
+                        .Publish();
 
                     SpinWait.SpinUntil(() => events.Count == 4, 2000);
                     events.Should().BeEquivalentTo(inputEvents);
@@ -469,7 +469,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                         .AddValue("p0", 1)
                         .AddValue("p1", 2)
                         .AddValue("p2", 3)
-                        .Write();
+                        .Publish();
 
                     SpinWait.SpinUntil(() => streamStarted, 20000);
                     Assert.True(streamStarted, "Stream is not started on reader.");
@@ -495,7 +495,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                             .AddValue("p0", 1)
                             .AddValue("p1", 2)
                             .AddValue("p2", 3)
-                            .Write();
+                            .Publish();
                     }
 
                     SpinWait.SpinUntil(() => streamStarted, 2000);
@@ -556,7 +556,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                         {
                             stream.Parameters.Buffer.AddTimestamp(DateTime.UtcNow)
                                 .AddValue("p0", 1)
-                                .Write();
+                                .Publish();
                             stream.Parameters.Buffer.Flush();
                         }
 

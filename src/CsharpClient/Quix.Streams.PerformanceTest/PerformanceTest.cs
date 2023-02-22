@@ -49,7 +49,7 @@ namespace Quix.Streams.PerformanceTest
                     builder = builder.AddValue($"param{i}", i);
                 }
                 builder.AddTag("tagTest", "Test");
-                builder.Write();
+                builder.Publish();
 
                 sentCount += paramCount;
 

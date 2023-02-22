@@ -87,9 +87,9 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// <summary>
         /// Write the values
         /// </summary>
-        public void Write()
+        public void Publish()
         {
-            this.buffer.Write(data);
+            this.buffer.Publish(data);
         }
 
     }

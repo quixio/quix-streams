@@ -15,17 +15,17 @@ namespace Quix.Streams.Streaming.UnitTests.Process
         private void CreateRequirements(out string streamId, out TestTelemetryKafkaProducer testTelemetryKafkaProducer, out StreamProducer streamProducer)
         {
             streamId = "TestStream";
-            var ftestKafkaWriter = new TestTelemetryKafkaProducer(new TestBroker(), streamId);
-            testTelemetryKafkaProducer = ftestKafkaWriter;
-            Func<string, TelemetryKafkaProducer> func = (string streamId) => ftestKafkaWriter;
+            var ftestKafkaProducer = new TestTelemetryKafkaProducer(new TestBroker(), streamId);
+            testTelemetryKafkaProducer = ftestKafkaProducer;
+            Func<string, TelemetryKafkaProducer> func = (string streamId) => ftestKafkaProducer;
             streamProducer = new StreamProducer(Substitute.For<ITopicProducerInternal>(), func, streamId);
         }
         
         [Fact]
-        public void WriteEventDefinitions_WithValidValues_ShouldSendToKafkaWriter()
+        public void PublishEventDefinitions_WithValidValues_ShouldSendToKafkaProducer()
         {
             // Arrange
-            CreateRequirements(out var streamId, out var kafkaWriter, out var streamProducer);
+            CreateRequirements(out var streamId, out var kafkaProducer, out var streamProducer);
 
             var parameterDefinitions = new ParameterDefinitions
             {
@@ -139,13 +139,13 @@ namespace Quix.Streams.Streaming.UnitTests.Process
             };
 
             List<ParameterDefinitions> interceptedParameterDefinitions = new List<ParameterDefinitions>();
-            kafkaWriter.Input.Intercept((ParameterDefinitions definitions) =>
+            kafkaProducer.Input.Intercept((ParameterDefinitions definitions) =>
             {
                 interceptedParameterDefinitions.Add(definitions);
             });
 
             List<EventDefinitions> interceptedEventDefinitions = new List<EventDefinitions>();
-            kafkaWriter.Input.Intercept((EventDefinitions definitions) =>
+            kafkaProducer.Input.Intercept((EventDefinitions definitions) =>
             {
                 interceptedEventDefinitions.Add(definitions);
             });
@@ -162,10 +162,10 @@ namespace Quix.Streams.Streaming.UnitTests.Process
         }
 
         [Fact]
-        public void WriteParameterDefinitions_WithDuplicateGroupName_ShouldThrowException()
+        public void PublishParameterDefinitions_WithDuplicateGroupName_ShouldThrowException()
         {
             // Arrange
-            CreateRequirements(out var streamId, out var kafkaWriter, out var streamProducer);
+            CreateRequirements(out var streamId, out var kafkaProducer, out var streamProducer);
 
             var tdp = new ParameterDefinitions
             {
@@ -182,7 +182,7 @@ namespace Quix.Streams.Streaming.UnitTests.Process
                 }
             };
             List<ParameterDefinitions> interceptedTdps = new List<ParameterDefinitions>();
-            kafkaWriter.Input.Intercept((ParameterDefinitions interceptedTdp) =>
+            kafkaProducer.Input.Intercept((ParameterDefinitions interceptedTdp) =>
             {
                 interceptedTdps.Add(interceptedTdp);
             });
@@ -195,10 +195,10 @@ namespace Quix.Streams.Streaming.UnitTests.Process
         }
         
         [Fact]
-        public void WriteParameterDefinitions_WithDuplicateParameterId_ShouldThrowException()
+        public void PublishParameterDefinitions_WithDuplicateParameterId_ShouldThrowException()
         {
             // Arrange
-            CreateRequirements(out var streamId, out var kafkaWriter, out var streamProducer);
+            CreateRequirements(out var streamId, out var KafkaProducer, out var streamProducer);
 
             var tdp = new ParameterDefinitions
             {
@@ -225,7 +225,7 @@ namespace Quix.Streams.Streaming.UnitTests.Process
                 }
             };
             List<ParameterDefinitions> interceptedTdps = new List<ParameterDefinitions>();
-            kafkaWriter.Input.Intercept((ParameterDefinitions interceptedTdp) =>
+            KafkaProducer.Input.Intercept((ParameterDefinitions interceptedTdp) =>
             {
                 interceptedTdps.Add(interceptedTdp);
             });
@@ -238,10 +238,10 @@ namespace Quix.Streams.Streaming.UnitTests.Process
         }
         
         [Fact]
-        public void WriteEventDefinitions_WithDuplicateEventId_ShouldThrowException()
+        public void PublishEventDefinitions_WithDuplicateEventId_ShouldThrowException()
         {
             // Arrange
-            CreateRequirements(out var streamId, out var kafkaWriter, out var streamProducer);
+            CreateRequirements(out var streamId, out var KafkaProducer, out var streamProducer);
 
             var ed = new EventDefinitions
             {
@@ -268,7 +268,7 @@ namespace Quix.Streams.Streaming.UnitTests.Process
                 },
             };
             List<EventDefinitions> interceptedDefinitions = new List<EventDefinitions>();
-            kafkaWriter.Input.Intercept((EventDefinitions definitions) =>
+            KafkaProducer.Input.Intercept((EventDefinitions definitions) =>
             {
                 interceptedDefinitions.Add(definitions);
             });
@@ -281,10 +281,10 @@ namespace Quix.Streams.Streaming.UnitTests.Process
         }
         
         [Fact]
-        public void WriteEventData_Valid_ShouldSendEvent()
+        public void PublishEventData_Valid_ShouldSendEvent()
         {
             // Arrange
-            CreateRequirements(out var streamId, out var kafkaWriter, out var streamProducer);
+            CreateRequirements(out var streamId, out var KafkaProducer, out var streamProducer);
 
             var @event = new EventDataRaw
             {
@@ -298,7 +298,7 @@ namespace Quix.Streams.Streaming.UnitTests.Process
             };
             
             List<EventDataRaw[]> interceptedEvents = new List<EventDataRaw[]>();
-            kafkaWriter.Input.Intercept((EventDataRaw[] events) =>
+            KafkaProducer.Input.Intercept((EventDataRaw[] events) =>
             {
                 interceptedEvents.Add(events);
             });
@@ -313,10 +313,10 @@ namespace Quix.Streams.Streaming.UnitTests.Process
         }
         
         [Fact]
-        public void WriteEvents_Valid_ShouldSendEvents()
+        public void PublishEvents_Valid_ShouldSendEvents()
         {
             // Arrange
-            CreateRequirements(out var streamId, out var kafkaWriter, out var streamProducer);
+            CreateRequirements(out var streamId, out var KafkaProducer, out var streamProducer);
 
             var inputEvents = new EventDataRaw[]
             {
@@ -341,7 +341,7 @@ namespace Quix.Streams.Streaming.UnitTests.Process
             };
             
             List<EventDataRaw[]> interceptedEvents = new List<EventDataRaw[]>();
-            kafkaWriter.Input.Intercept((EventDataRaw[] events) =>
+            KafkaProducer.Input.Intercept((EventDataRaw[] events) =>
             {
                 interceptedEvents.Add(events);
             });

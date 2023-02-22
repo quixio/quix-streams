@@ -138,7 +138,7 @@ namespace Quix.Streams.Streaming
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
         public ITopicProducer CreateTopicProducer(string topic)
         {
-            var topicProducer = new TopicProducer(new KafkaWriterConfiguration(brokerAddress, brokerProperties), topic);
+            var topicProducer = new TopicProducer(new KafkaProducerConfiguration(brokerAddress, brokerProperties), topic);
             
             Quix.Streams.Streaming.App.Register(topicProducer);
 

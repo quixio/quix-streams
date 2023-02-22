@@ -124,7 +124,7 @@ for stream_number in range(number_of_stream):
                         break
                     param_tsbuilder.add_tag(tag, f"new parameter tag value {index}")
 
-                param_tsbuilder.write()
+                param_tsbuilder.publish()
                 # send events
                 event_tsbuilder = event_builder.add_timestamp(datetime.datetime.utcnow())
 
@@ -136,7 +136,7 @@ for stream_number in range(number_of_stream):
                         break
                     event_tsbuilder.add_tag(tag, f"new event tag value {index}")
 
-                event_tsbuilder.write()
+                event_tsbuilder.publish()
 
             param_builder.flush()
             event_builder.flush()
@@ -165,7 +165,7 @@ for stream_number in range(number_of_stream):
                             break
                         pdts.add_tag(tag, f"new parameter tag value {index}")
 
-                stream.parameters.write(tsdata)
+                stream.parameters.publish(tsdata)
 
         if variant == 2:
 
@@ -211,7 +211,7 @@ for stream_number in range(number_of_stream):
                 rows[rowindex] = row
 
             pdf = pd.DataFrame(rows, columns=headers)
-            stream.parameters.write(pdf)
+            stream.parameters.publish(pdf)
 
     print(f"--- Closing stream {stream_number} ---")
     endtype = qx.StreamEndType(stream_number % 2 + 1)

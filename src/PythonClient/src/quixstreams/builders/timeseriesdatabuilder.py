@@ -89,19 +89,17 @@ class TimeseriesDataBuilder(object):
 
         if tags is None:
             return self
-        # TODO
-        prep_tags_dict = System.Collections.Generic.List[System.Collections.Generic.KeyValuePair[str, str]]([])
+
         for key, val in tags.items():
-            prep_tags_dict.Add(System.Collections.Generic.KeyValuePair[str, str](key, val))
-        self.__wrapped.AddTags(prep_tags_dict)
+            self.add_tag(key, val)  # TODO use the bulk add self._interop.AddTags()
         return self
 
-    def write(self):
+    def publish(self):
         """
-        Writes the values to the StreamParametersProducer buffer. See StreamParametersProducer buffer settings for more information when the values are sent to the broker
+        Publishes the values to the StreamParametersProducer buffer. See StreamParametersProducer buffer settings for more information when the values are sent to the broker
         """
 
-        self._interop.Write()
+        self._interop.Publish()
 
         if not self._entered:
             self.dispose()

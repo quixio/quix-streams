@@ -139,7 +139,7 @@ namespace Quix.Streams.Speedtest
                     }
                     index++;
                 }
-                stream.Parameters.Buffer.Write(data);
+                stream.Parameters.Buffer.Publish(data);
             }
             
             stream.Close();

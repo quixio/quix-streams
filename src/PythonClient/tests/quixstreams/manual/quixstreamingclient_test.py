@@ -24,7 +24,7 @@ for index in range(0, 3000):
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", math.sin(index / 200.0) + math.sin(index) / 5.0) \
-        .write()
+        .publish()
     time.sleep(0.01)
 
 print("Closing stream")

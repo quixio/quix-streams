@@ -237,7 +237,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write event into the stream
         /// </summary>
         /// <param name="data">Event data to write</param>
-        public void Write(EventData data)
+        public void Publish(EventData data)
         {
             if (isDisposed)
             {
@@ -265,7 +265,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write events into the stream
         /// </summary>
         /// <param name="events">Events to write</param>
-        public void Write(ICollection<EventData> events)
+        public void Publish(ICollection<EventData> events)
         {
             if (isDisposed)
             {
@@ -288,7 +288,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             this.logger.Log(LogLevel.Trace, "{0} event(s) sent.", events.Count);
         }
 
-        internal void Write(ICollection<Process.Models.EventDataRaw> events)
+        internal void Publish(ICollection<Process.Models.EventDataRaw> events)
         {
             if (isDisposed)
             {

@@ -82,10 +82,10 @@ namespace Quix.Streams.Streaming.Samples.Samples
             // Cloning data
             // var outData = data.Clone();
 
-            // Send using writer buffer
-            //streamProducer.Parameters.Buffer.Write(data);
-            // Send without using writer buffer
-            //streamProducer.Parameters.Write(data);
+            // Send using buffer
+            //streamProducer.Parameters.Buffer.Publish(data);
+            // Send without using buffer
+            //streamProducer.Parameters.Publish(data);
 
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }

@@ -95,7 +95,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write timeseries data to the buffer
         /// </summary>
         /// <param name="data">Data to write</param>
-        public void Write(TimeseriesData data)
+        public void Publish(TimeseriesData data)
         {
             for(var index = 0; index < data.Timestamps.Count; index++)
             {

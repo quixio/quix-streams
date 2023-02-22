@@ -70,7 +70,7 @@ namespace Quix.Streams.Speedtest
             while (!ct.IsCancellationRequested)
             {
                 var dataraw = this.generateRawChunk(size, totalcnt+=size);
-                stream.Parameters.Write(dataraw);
+                stream.Parameters.Publish(dataraw);
                 stream.Parameters.Flush();
                 Thread.Sleep(5);
             }

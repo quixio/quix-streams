@@ -9,10 +9,10 @@
     /// <summary>
     /// Simply reader component that generates random tdata messages and writes them to the output.
     /// </summary>
-    public class RandomDataReader : StreamComponent
+    public class RandomDataProducer : StreamComponent
     {
 
-        public RandomDataReader()
+        public RandomDataProducer()
         {
         }
 

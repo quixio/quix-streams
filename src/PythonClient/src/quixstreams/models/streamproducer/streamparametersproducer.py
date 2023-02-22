@@ -89,9 +89,9 @@ class StreamParametersProducer(object):
             self._buffer = TimeseriesBufferProducer(self._topic, self._stream_producer, self._interop.get_Buffer())
         return self._buffer
 
-    def write(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]) -> None:
+    def publish(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]) -> None:
         """
-            Writes the given packet to the stream without any buffering.
+            Publishes the given packet to the stream without any buffering.
 
             :param packet: The packet containing TimeseriesData or panda DataFrame
 
@@ -126,14 +126,14 @@ class StreamParametersProducer(object):
             for other type examples see the specific type
         """
         if isinstance(packet, TimeseriesData):
-            self._interop.Write(packet.get_net_pointer())
+            self._interop.Publish(packet.get_net_pointer())
             return
         if isinstance(packet, TimeseriesDataRaw):
-            self._interop.Write2(packet.get_net_pointer())
+            self._interop.Publish2(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
             data = TimeseriesDataRaw.from_panda_dataframe(packet)
             with data:
-                self._interop.Write2(data.get_net_pointer())
+                self._interop.Publish2(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")

@@ -53,7 +53,7 @@ namespace Quix.Streams.PerformanceTest
                 }
 
 
-                stream.Parameters.Buffer.Write(data);
+                stream.Parameters.Buffer.Publish(data);
 
                 sentCount += paramCount * data.Timestamps.Count;
                 timeIteration++;
