@@ -20,13 +20,13 @@ class StreamProducer(object):
         Handles writing stream to a topic
     """
 
-    def __init__(self, topic_producer, net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_producer: 'TopicProducer', net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamProducer.
             NOTE: Do not initialize this class manually, use StreamingClient.create_stream to write streams
 
             Parameters:
-
+            topic_producer: The topic producer the stream producer publishes to
             net_object (.net object): The .net object representing a StreamProducer
         """
 
@@ -34,7 +34,7 @@ class StreamProducer(object):
             raise Exception("StreamProducer is none")
 
         self._interop = spi(net_pointer)
-        self._topic_producer = topic_producer
+        self._topic = topic_producer
         self._streamParametersWriter = None  # Holding reference to avoid GC
         self._streamEventsWriter = None  # Holding reference to avoid GC
         self._streamPropertiesWriter = None  # Holding reference to avoid GC
@@ -53,6 +53,13 @@ class StreamProducer(object):
         if self._streamPropertiesWriter is not None:
             self._streamPropertiesWriter.dispose()
         self._on_write_exception_dispose()
+
+    @property
+    def topic(self) -> 'TopicProducer':
+        """
+        Gets the topic the stream is writing to
+        """
+        return self._topic
 
     # region on_write_exception
     @property
@@ -122,7 +129,7 @@ class StreamProducer(object):
         groups or values """
 
         if self._streamParametersWriter is None:
-            self._streamParametersWriter = StreamParametersProducer(self._topic_producer, self, self._interop.get_Parameters())
+            self._streamParametersWriter = StreamParametersProducer(self, self._interop.get_Parameters())
         return self._streamParametersWriter
 
     @property

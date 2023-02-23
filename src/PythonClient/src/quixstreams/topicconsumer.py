@@ -76,7 +76,7 @@ class TopicConsumer(object):
         try:
             stream = StreamConsumer(stream_hptr, self, lambda s: self._active_streams.remove(s))
             self._active_streams.append(stream)
-            self._on_stream_received(self, stream)
+            self._on_stream_received(stream)
             InteropUtils.free_hptr(topic_hptr)
         except:
             traceback.print_exc()

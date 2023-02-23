@@ -21,7 +21,7 @@ class TimeseriesBuffer(object):
         When none of the buffer conditions are configured, the buffer does not buffer at all
     """
 
-    def __init__(self, topic, stream, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of TimeseriesBuffer.
             NOTE: Do not initialize this class manually, use StreamingClient.create_output to create it
@@ -37,7 +37,6 @@ class TimeseriesBuffer(object):
 
         self._interop_pb = tsbi(net_pointer)
         self._stream = stream
-        self._topic = topic
 
         def dummy():
             pass
@@ -94,7 +93,7 @@ class TimeseriesBuffer(object):
         try:
             with (args := TimeseriesDataReadEventArgs(args_hptr)):
                 data = TimeseriesData(net_pointer=args.get_Data())
-                self._on_receive(self._topic, self._stream, data)
+                self._on_receive(self._stream, data)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -127,7 +126,7 @@ class TimeseriesBuffer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
-                self._on_raw_receive(self._topic, self._stream, TimeseriesDataRaw(args.get_Data()))
+                self._on_raw_receive(self._stream, TimeseriesDataRaw(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -163,7 +162,7 @@ class TimeseriesBuffer(object):
                 pdr = TimeseriesDataRaw(args.get_Data())
                 pdf = pdr.to_panda_dataframe()
                 pdr.dispose()
-                self._on_dataframe_receive(self._topic, self._stream, pdf)
+                self._on_dataframe_receive(self._stream, pdf)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()

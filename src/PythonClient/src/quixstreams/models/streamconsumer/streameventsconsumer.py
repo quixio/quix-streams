@@ -15,14 +15,13 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamEventsCon
 @nativedecorator
 class StreamEventsConsumer(object):
 
-    def __init__(self, topic_consumer, stream_consumer, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamEventsConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.events to access an instance of it
 
             Parameters:
 
-            topic_consumer: The input topic the stream belongs to
             stream_consumer: The stream the buffer is created for
             net_pointer (.net object): Pointer to an instance of a .net StreamEventsConsumer
         """
@@ -30,7 +29,6 @@ class StreamEventsConsumer(object):
             raise Exception("StreamEventsConsumer is none")
 
         self._interop = seci(net_pointer)
-        self._topic_consumer = topic_consumer
         self._stream_consumer = stream_consumer
 
         # define events and their ref holder
@@ -46,16 +44,16 @@ class StreamEventsConsumer(object):
 
     # region on_receive
     @property
-    def on_receive(self) -> Callable[['TopicConsumer', 'StreamConsumer', EventData], None]:
+    def on_receive(self) -> Callable[['StreamConsumer', EventData], None]:
         """
-        Gets the handler for when the stream receives event. First parameter is the topic, second is the stream the event is received for, third is the event.
+        Gets the handler for when the stream receives event. First parameter is the stream the event is received for, second is the event.
         """
         return self._on_receive
 
     @on_receive.setter
-    def on_receive(self, value: Callable[['TopicConsumer', 'StreamConsumer', EventData], None]) -> None:
+    def on_receive(self, value: Callable[['StreamConsumer', EventData], None]) -> None:
         """
-        Sets the handler for when the stream receives event. First parameter is the topic, second is the stream the event is received for, third is the event.
+        Sets the handler for when the stream receives event. First parameter is the stream the event is received for, second is the event.
         """
         self._on_receive = value
         if self._on_receive_ref is None:
@@ -66,7 +64,7 @@ class StreamEventsConsumer(object):
         try:
             with (args := EventDataReadEventArgs(args_hptr)):
                 data = EventData(net_pointer=args.get_Data())
-                self._on_receive(self._topic_consumer, self._stream_consumer, data)
+                self._on_receive(self._stream_consumer, data)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -80,16 +78,16 @@ class StreamEventsConsumer(object):
 
     # region on_definitions_changed
     @property
-    def on_definitions_changed(self) -> Callable[['TopicConsumer', 'StreamConsumer'], None]:
+    def on_definitions_changed(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when the stream definitions change. First parameter is the topic, second is the stream the event definitions changed for.
+        Gets the handler for when the stream definitions change. First parameter is the stream the event definitions changed for.
         """
         return self._on_definitions_changed
 
     @on_definitions_changed.setter
-    def on_definitions_changed(self, value: Callable[['TopicConsumer', 'StreamConsumer'], None]) -> None:
+    def on_definitions_changed(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when the stream definitions change. First parameter is the topic, second is the stream the event definitions changed for.
+        Sets the handler for when the stream definitions change. First parameter is the stream the event definitions changed for.
         """
         self._on_definitions_changed = value
         if self._on_definitions_changed_ref is None:
@@ -99,7 +97,7 @@ class StreamEventsConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := EventDefinitionsChangedEventArgs(args_hptr)):
-                self._on_definitions_changed(self._topic_consumer, self._stream_consumer)
+                self._on_definitions_changed(self._stream_consumer)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()

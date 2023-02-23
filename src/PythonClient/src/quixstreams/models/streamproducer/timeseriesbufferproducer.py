@@ -21,14 +21,13 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         Class used to write to StreamProducer in a buffered manner
     """
 
-    def __init__(self, topic_producer, stream_producer, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_producer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of TimeseriesBufferProducer.
             NOTE: Do not initialize this class manually, use StreamParametersProducer.buffer to access an instance of it
 
             Parameters:
 
-            topic_producer: The output topic the stream belongs to
             stream_producer: The stream the buffer is created for
             net_pointer: Pointer to an instance of a .net TimeseriesBufferProducer
         """
@@ -36,7 +35,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             raise Exception("TimeseriesBufferProducer is none")
 
         self._interop = tsbpi(net_pointer)
-        TimeseriesBuffer.__init__(self, topic_producer, stream_producer, net_pointer)
+        TimeseriesBuffer.__init__(self, stream_producer, net_pointer)
 
     @property
     def default_tags(self) -> Dict[str, str]:

@@ -2,7 +2,7 @@ import time
 import unittest
 import threading
 import pandas as pd
-from quixstreams import Logging, LogLevel, AutoOffsetReset
+from src.quixstreams import Logging, LogLevel, AutoOffsetReset
 
 from testcontainers.core.container import DockerContainer
 
@@ -83,14 +83,14 @@ class TestIntegration(unittest.TestCase):
         with (client := qx.KafkaStreamingClient(TestIntegration.broker_list, None)), (topic_consumer := client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=qx.AutoOffsetReset.Earliest)):
             output_stream = None  # output stream
 
-            def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+            def on_stream_received(stream: qx.StreamConsumer):
                 nonlocal incoming_stream
                 if stream.stream_id == output_stream.stream_id:
                     print("---- Test stream read {} ----".format(stream.stream_id))
                     incoming_stream = stream
                     stream.properties.on_changed = on_properties_changed
 
-            def on_properties_changed(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+            def on_properties_changed(stream: qx.StreamConsumer):
                 event.set()
 
             topic_consumer.on_stream_received = on_stream_received
@@ -148,14 +148,14 @@ class TestIntegration(unittest.TestCase):
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=qx.AutoOffsetReset.Earliest)
         output_stream = None  # output stream
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             nonlocal incoming_stream
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 incoming_stream = stream
                 stream.parameters.on_definitions_changed = on_parameters_changed
 
-        def on_parameters_changed(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_parameters_changed(stream: qx.StreamConsumer):
             event.set()
 
 
@@ -231,14 +231,14 @@ class TestIntegration(unittest.TestCase):
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=qx.AutoOffsetReset.Earliest)
         output_stream = None  # output stream
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             nonlocal incoming_stream
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 incoming_stream = stream
                 stream.events.on_definitions_changed = on_events_changed
 
-        def on_events_changed(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_events_changed(stream: qx.StreamConsumer):
             event.set()
 
 
@@ -311,15 +311,15 @@ class TestIntegration(unittest.TestCase):
 
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
-        from quixstreams import TopicConsumer, StreamConsumer
+        from src.quixstreams import TopicConsumer, StreamConsumer
         cts = qx.CancellationTokenSource()  # used for interrupting the App
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 stream.events.on_receive = on_event_data_handler
 
-        def on_event_data_handler(topic: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.EventData):
+        def on_event_data_handler(stream: qx.StreamConsumer, data: qx.EventData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -375,12 +375,12 @@ class TestIntegration(unittest.TestCase):
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
         output_stream = None  # The outgoing stream
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 stream.events.on_receive = on_event_data_handler
 
-        def on_event_data_handler(topic: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.EventData):
+        def on_event_data_handler(stream: qx.StreamConsumer, data: qx.EventData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -427,12 +427,12 @@ class TestIntegration(unittest.TestCase):
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
         output_stream = None  # The outgoing stream
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 stream.events.on_receive = on_event_data_handler
 
-        def on_event_data_handler(topic: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.EventData):
+        def on_event_data_handler(stream: qx.StreamConsumer, data: qx.EventData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -477,12 +477,12 @@ class TestIntegration(unittest.TestCase):
 
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 stream.events.on_receive = on_event_data_handler
 
-        def on_event_data_handler(topic: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.EventData):
+        def on_event_data_handler(stream: qx.StreamConsumer, data: qx.EventData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -595,7 +595,7 @@ class TestIntegration(unittest.TestCase):
 
         topic_consumer = client.create_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 event.set()
@@ -631,7 +631,7 @@ class TestIntegration(unittest.TestCase):
 
         first_stream_read : qx.StreamConsumer = None
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             print("---- Stream read {} ----".format(stream.stream_id))
             nonlocal first_stream_read
             first_stream_read = stream
@@ -679,13 +679,13 @@ class TestIntegration(unittest.TestCase):
 
         last_stream_read: qx.StreamConsumer = None
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             print("---- Stream read {} ----".format(stream.stream_id))
             nonlocal last_stream_read
             last_stream_read = stream
             stream.on_stream_closed = on_stream_closed
 
-        def on_stream_closed(topic: qx.topicconsumer, stream: qx.StreamConsumer, end_type: qx.StreamEndType):
+        def on_stream_closed(stream: qx.StreamConsumer, end_type: qx.StreamEndType):
             print("---- Committing ----".format(stream.stream_id))
             topic_consumer.commit()
             print("---- Committed ----".format(stream.stream_id))
@@ -740,14 +740,14 @@ class TestIntegration(unittest.TestCase):
         output_stream = None  # The outgoing stream
         end_type_received = None
 
-        def on_stream_received(topic: qx.topicconsumer, stream: qx.StreamConsumer):
+        def on_stream_received(stream: qx.StreamConsumer):
             if stream.stream_id != output_stream.stream_id:
                 return
 
             print("---- Stream read {} ----".format(stream.stream_id))
             stream.on_stream_closed = on_stream_closed
 
-        def on_stream_closed(topic: qx.topicconsumer, stream: qx.StreamConsumer, end_type: qx.StreamEndType):
+        def on_stream_closed(stream: qx.StreamConsumer, end_type: qx.StreamEndType):
             nonlocal end_type_received
             end_type_received = end_type
             event.set()
@@ -866,13 +866,13 @@ class TestIntegration(unittest.TestCase):
             event = threading.Event()  # used for assertion
             read_data: qx.TimeseriesData = None
 
-            def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
-                if stream.stream_id == reader.stream_id:
-                    param_buffer = reader.parameters.create_buffer()
+            def on_new_stream(stream: qx.StreamConsumer):
+                if stream.stream_id == stream.stream_id:
+                    param_buffer = stream.parameters.create_buffer()
                     param_buffer.buffer_timeout = 100
                     param_buffer.on_receive = on_parameter_data_handler
 
-            def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
                 nonlocal read_data
                 read_data = data
                 event.set()
@@ -912,13 +912,13 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         read_data: qx.TimeseriesData = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.buffer_timeout = 100
                 param_buffer.on_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -986,11 +986,11 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         read_data: qx.TimeseriesDataRaw = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 reader.parameters.on_raw_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesDataRaw):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesDataRaw):
             nonlocal read_data
             read_data = data
             event.set()
@@ -1044,12 +1044,12 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         read_data: qx.TimeseriesData = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.on_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -1102,24 +1102,24 @@ class TestIntegration(unittest.TestCase):
         read_data_raw: pd.DataFrame = None
         read_pandas_dataframe: pd.DataFrame = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.on_receive = on_parameter_data_handler
                 param_buffer.on_raw_receive = on_parameter_data_raw_handler
                 param_buffer.on_dataframe_receive = on_parameter_dataframe_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data.to_panda_dataframe()
             event.set()
 
-        def on_parameter_data_raw_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesDataRaw):
+        def on_parameter_data_raw_handler(stream: qx.StreamConsumer, data: qx.TimeseriesDataRaw):
             nonlocal read_data_raw
             read_data_raw = data.to_panda_dataframe()
             event_raw.set()
 
-        def on_parameter_dataframe_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: pd.DataFrame):
+        def on_parameter_dataframe_handler(stream: qx.StreamConsumer, data: pd.DataFrame):
             nonlocal read_pandas_dataframe
             read_pandas_dataframe = data
             event_pandas_dataframe.set()
@@ -1179,13 +1179,13 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         read_data: qx.TimeseriesData = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.buffer_timeout = 100
                 param_buffer.on_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -1230,7 +1230,7 @@ class TestIntegration(unittest.TestCase):
         read_data_raw: qx.TimeseriesDataRaw = None
         read_pandas_dataframe: pd.DataFrame = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.buffer_timeout = 100
@@ -1240,17 +1240,17 @@ class TestIntegration(unittest.TestCase):
                 params.on_raw_receive = on_parameter_raw_handler
                 params.on_dataframe_receive = on_parameter_dataframe_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data.to_panda_dataframe()
             event.set()
 
-        def on_parameter_raw_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data):
+        def on_parameter_raw_handler(stream: qx.StreamConsumer, data):
             nonlocal read_data_raw
             read_data_raw = data.to_panda_dataframe()
             event2.set()
 
-        def on_parameter_dataframe_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data):
+        def on_parameter_dataframe_handler(stream: qx.StreamConsumer, data):
             nonlocal read_pandas_dataframe
             read_pandas_dataframe = data
             event3.set()
@@ -1320,7 +1320,7 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         special_func_invokation_count = 0
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
 
@@ -1388,7 +1388,7 @@ class TestIntegration(unittest.TestCase):
 
         buffer_config.custom_trigger = custom_trigger_callback
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer(buffer_config)
 
@@ -1431,12 +1431,12 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         read_data: qx.TimeseriesData = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream( reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
                 param_buffer.on_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -1485,13 +1485,13 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         read_data: qx.TimeseriesData = None
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer("param1", "param3")
                 param_buffer.buffer_timeout = 500  # to prevent raising each timestamp on its own
                 param_buffer.on_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -1553,13 +1553,13 @@ class TestIntegration(unittest.TestCase):
         buffer_config = qx.TimeseriesBufferConfiguration()
         buffer_config.packet_size = 2
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer(buffer_config)
                 param_buffer.buffer_timeout = 1000  # to prevent raising each timestamp on its own
                 param_buffer.on_receive = on_parameter_data_handler
 
-        def on_parameter_data_handler(topic_consumer: qx.TopicConsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
             read_data = data
             event.set()
@@ -1619,7 +1619,7 @@ class TestIntegration(unittest.TestCase):
         event = threading.Event()  # used for assertion
         special_func_invokation_count = 0
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer()
 
@@ -1687,7 +1687,7 @@ class TestIntegration(unittest.TestCase):
 
         buffer_config.filter = filter_callback
 
-        def on_new_stream(topic_consumer: qx.TopicConsumer, reader: qx.StreamConsumer):
+        def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
                 param_buffer = reader.parameters.create_buffer(buffer_config)
 

@@ -22,14 +22,13 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataR
 @nativedecorator
 class StreamParametersConsumer(object):
 
-    def __init__(self, topic_consumer, stream_consumer, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamParametersConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.parameters to access an instance of it
 
             Parameters:
 
-            topic_consumer: The input topic the stream belongs to
             stream_consumer: The stream the buffer is created for
             net_pointer (.net object): Pointer to an instance of a .net StreamParametersConsumer
         """
@@ -39,7 +38,6 @@ class StreamParametersConsumer(object):
         self._interop = spci(net_pointer)
         self._buffers = []
 
-        self._topic_consumer = topic_consumer
         self._stream_consumer = stream_consumer
 
         # define events and their ref holder
@@ -64,16 +62,16 @@ class StreamParametersConsumer(object):
 
     # region on_receive
     @property
-    def on_receive(self) -> Callable[['TopicConsumer', 'StreamConsumer', TimeseriesData], None]:
+    def on_receive(self) -> Callable[['StreamConsumer', TimeseriesData], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesData format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         return self._on_receive
 
     @on_receive.setter
-    def on_receive(self, value: Callable[['TopicConsumer', 'StreamConsumer', TimeseriesData], None]) -> None:
+    def on_receive(self, value: Callable[['StreamConsumer', TimeseriesData], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesData format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         self._on_receive = value
         if self._on_receive_ref is None:
@@ -83,7 +81,7 @@ class StreamParametersConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataReadEventArgs(args_hptr)):
-                self._on_receive(self._topic_consumer, self._stream_consumer, TimeseriesData(args.get_Data()))
+                self._on_receive(self._stream_consumer, TimeseriesData(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -97,16 +95,16 @@ class StreamParametersConsumer(object):
 
     # region on_raw_receive
     @property
-    def on_raw_receive(self) -> Callable[['TopicConsumer', 'StreamConsumer', TimeseriesDataRaw], None]:
+    def on_raw_receive(self) -> Callable[['StreamConsumer', TimeseriesDataRaw], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
+        Gets the handler for when the stream receives data. First parameter is the data is received for, second is the data in TimeseriesDataRaw format.
         """
         return self._on_raw_receive
 
     @on_raw_receive.setter
-    def on_raw_receive(self, value: Callable[['TopicConsumer', 'StreamConsumer', TimeseriesDataRaw], None]) -> None:
+    def on_raw_receive(self, value: Callable[['StreamConsumer', TimeseriesDataRaw], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_receive = value
         if self._on_raw_receive_ref is None:
@@ -116,7 +114,7 @@ class StreamParametersConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
-                self._on_raw_receive(self._topic_consumer, self._stream_consumer, TimeseriesDataRaw(args.get_Data()))
+                self._on_raw_receive(self._stream_consumer, TimeseriesDataRaw(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -130,16 +128,16 @@ class StreamParametersConsumer(object):
 
     # region on_dataframe_receive
     @property
-    def on_dataframe_receive(self) -> Callable[['TopicConsumer', 'StreamConsumer', pandas.DataFrame], None]:
+    def on_dataframe_receive(self) -> Callable[['StreamConsumer', pandas.DataFrame], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
         """
         return self._on_dataframe_receive
 
     @on_dataframe_receive.setter
-    def on_dataframe_receive(self, value: Callable[['TopicConsumer', 'StreamConsumer', pandas.DataFrame], None]) -> None:
+    def on_dataframe_receive(self, value: Callable[['StreamConsumer', pandas.DataFrame], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
         """
         self._on_dataframe_receive = value
         if self._on_dataframe_receive_ref is None:
@@ -152,7 +150,7 @@ class StreamParametersConsumer(object):
                 pdr = TimeseriesDataRaw(args.get_Data())
                 pdf = pdr.to_panda_dataframe()
                 pdr.dispose()
-                self._on_dataframe_receive(self._topic_consumer, self._stream_consumer, pdf)
+                self._on_dataframe_receive(self._stream_consumer, pdf)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -166,16 +164,16 @@ class StreamParametersConsumer(object):
 
     # region on_definitions_changed
     @property
-    def on_definitions_changed(self) -> Callable[['TopicConsumer', 'StreamConsumer'], None]:
+    def on_definitions_changed(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when the stream definitions change. First parameter is the topic, second is the stream the parameter definitions changed for.
+        Gets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
         """
         return self._on_definitions_changed
 
     @on_definitions_changed.setter
-    def on_definitions_changed(self, value: Callable[['TopicConsumer', 'StreamConsumer'], None]) -> None:
+    def on_definitions_changed(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when the stream definitions change. First parameter is the topic, second is the stream the parameter definitions changed for.
+        Sets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
         """
         self._on_definitions_changed = value
         if self._on_definitions_changed_ref is None:
@@ -185,7 +183,7 @@ class StreamParametersConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := ParameterDefinitionsChangedEventArgs(args_hptr)):
-                self._on_definitions_changed(self._topic_consumer, self._stream_consumer)
+                self._on_definitions_changed(self._stream_consumer)
                 InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
@@ -234,9 +232,9 @@ class StreamParametersConsumer(object):
         buffer = None
         if buffer_configuration is not None:
             buffer_config_ptr = buffer_configuration.get_net_pointer()
-            buffer = TimeseriesBufferConsumer(self._topic_consumer, self._stream_consumer, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
+            buffer = TimeseriesBufferConsumer(self._stream_consumer, self._interop.CreateBuffer(actual_filters_uptr, buffer_config_ptr))
         else:
-            buffer = TimeseriesBufferConsumer(self._topic_consumer, self._stream_consumer, self._interop.CreateBuffer2(actual_filters_uptr))
+            buffer = TimeseriesBufferConsumer(self._stream_consumer, self._interop.CreateBuffer2(actual_filters_uptr))
 
         self._buffers.append(buffer)
         return buffer
