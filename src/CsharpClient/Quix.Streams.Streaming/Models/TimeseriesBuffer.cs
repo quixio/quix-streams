@@ -33,14 +33,14 @@ namespace Quix.Streams.Streaming.Models
         private readonly bool cleanOnFlush;
 
         /// <summary>
-        /// Event invoked when TimeseriesData is read from the buffer
+        /// Event invoked when TimeseriesData is received from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesDataReadEventArgs> OnRead;
+        public event EventHandler<TimeseriesDataReadEventArgs> OnReceived;
 
         /// <summary>
-        /// Event invoked when TimeseriesDataRaw is read from the buffer
+        /// Event invoked when TimeseriesDataRaw is received from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawRead;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReceived;
 
         // List representing internal data structure of the buffer
         private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
@@ -200,7 +200,7 @@ namespace Quix.Streams.Streaming.Models
         }
 
         /// <summary>
-        /// Gets or set the custom function which is invoked before adding the timestamp to the buffer. If returns true, <see cref="TimeseriesBuffer.OnRead"/> is invoked before adding the timestamp to it.
+        /// Gets or set the custom function which is invoked before adding the timestamp to the buffer. If returns true, <see cref="OnReceived"/> is invoked before adding the timestamp to it.
         /// Defaults to null (disabled).
         /// </summary>
         public Func<TimeseriesDataTimestamp, bool> CustomTriggerBeforeEnqueue
@@ -220,7 +220,7 @@ namespace Quix.Streams.Streaming.Models
 
 
         /// <summary>
-        /// Gets or sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, <see cref="TimeseriesBuffer.OnRead"/> is invoked with the entire buffer content
+        /// Gets or sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, <see cref="OnReceived"/> is invoked with the entire buffer content
         /// Defaults to null (disabled).
         /// </summary>
         public Func<TimeseriesData, bool> CustomTrigger
@@ -241,7 +241,7 @@ namespace Quix.Streams.Streaming.Models
         /// <summary>
         /// Writes a chunck of data into the buffer
         /// </summary>
-        /// <param name="timeseriesDataRaw">Data in <see cref="TimeseriesBuffer.OnRead"/> format</param>
+        /// <param name="timeseriesDataRaw">Data in <see cref="OnReceived"/> format</param>
         protected internal void WriteChunk(Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             if (isDisposed)
@@ -415,7 +415,7 @@ namespace Quix.Streams.Streaming.Models
                         this.bufferedFrames = new List<TimeseriesDataRaw>();
                     }
 
-                    if (this.OnRead == null && this.OnRawRead == null) return;
+                    if (this.OnReceived == null && this.OnRawReceived == null) return;
                     
                     var newPdrw = this.ConcatDataFrames(loadedData);
                     if (this.mergeOnFlush)
@@ -426,11 +426,11 @@ namespace Quix.Streams.Streaming.Models
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
 
                     if (newPdrw.Timestamps.Length <= 0) return;
-                    this.InvokeOnRawRead(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
+                    this.InvokeOnRawReceived(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
 
-                    if (this.OnRead == null) return;
+                    if (this.OnReceived == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
-                    this.InvokeOnRead(this, new TimeseriesDataReadEventArgs(null, null, data));
+                    this.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(null, null, data));
                 }
 
                 RaiseData();
@@ -443,14 +443,14 @@ namespace Quix.Streams.Streaming.Models
             }
         }
 
-        protected virtual void InvokeOnRawRead(object sender, TimeseriesDataRawReadEventArgs args)
+        protected virtual void InvokeOnRawReceived(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            this.OnRawRead?.Invoke(this, args);
+            this.OnRawReceived?.Invoke(this, args);
         } 
         
-        protected virtual void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)
+        protected virtual void InvokeOnReceive(object sender, TimeseriesDataReadEventArgs args)
         {
-            this.OnRead?.Invoke(this, args);
+            this.OnReceived?.Invoke(this, args);
         } 
 
         private void UpdateIfAllConditionsAreNull()

@@ -73,15 +73,15 @@ def read_stream(topic_consumer: qx.topicconsumer, new_stream: qx.StreamConsumer)
     print("New Stream read!" + str(datetime.datetime.now()))
     new_stream.on_stream_closed = on_stream_closed_handler
     new_stream.properties.on_changed = on_stream_properties_changed_handler
-    new_stream.parameters.on_read_dataframe = on_parameters_dataframe_handler
+    new_stream.parameters.on_dataframe_receive = on_parameters_dataframe_handler
     # param_buffer = new_stream.parameters.create_buffer()
-    # param_buffer.on_read = on_parameter_data_handler
+    # param_buffer.on_receive = on_parameter_data_handler
 
     # param_buffer_filtered = new_stream.parameters.create_buffer("numeric param 1", "string param 2")
-    # param_buffer_filtered.on_read = on_parameter_data_filtered_handler
+    # param_buffer_filtered.on_receive = on_parameter_data_filtered_handler
     # new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler
     # new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
-    # new_stream.events.on_read = on_event_data_handler
+    # new_stream.events.on_receive = on_event_data_handler
 
     # TODO implementation missing
     # new_stream.on_package_received = on_package_received_handler

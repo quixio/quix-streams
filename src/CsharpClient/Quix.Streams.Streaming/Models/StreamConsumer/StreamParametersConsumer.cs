@@ -73,13 +73,13 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         /// Event raised when data is available to read (without buffering)
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesDataReadEventArgs> OnRead;
+        public event EventHandler<TimeseriesDataReadEventArgs> OnReceive;
 
         /// <summary>
-        /// Event raised when data is available to read (without buffering) in raw transport format
+        /// Event raised when data is received (without buffering) in raw transport format
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawRead;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReceived;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -139,12 +139,12 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         private void OnTimeseriesDataEventHandler(IStreamConsumer streamConsumer, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             var tsdata = new TimeseriesData(timeseriesDataRaw, null, false, false);
-            this.OnRead?.Invoke(streamConsumer, new TimeseriesDataReadEventArgs(this.topicConsumer, streamConsumer, tsdata));
+            this.OnReceive?.Invoke(streamConsumer, new TimeseriesDataReadEventArgs(this.topicConsumer, streamConsumer, tsdata));
         }
 
         private void OnTimeseriesDataRawEventHandler(IStreamConsumer streamConsumer, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
-            this.OnRawRead?.Invoke(streamConsumer, new TimeseriesDataRawReadEventArgs(this.topicConsumer, streamConsumer, timeseriesDataRaw));
+            this.OnRawReceived?.Invoke(streamConsumer, new TimeseriesDataRawReadEventArgs(this.topicConsumer, streamConsumer, timeseriesDataRaw));
         }
 
         /// <inheritdoc/>

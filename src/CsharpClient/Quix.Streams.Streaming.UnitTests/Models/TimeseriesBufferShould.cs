@@ -17,7 +17,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void WriteData_WithDisabledConfiguration_ShouldRaiseOnReadEventsStraightForward()
+        public void WriteData_WithDisabledConfiguration_ShouldRaiseOnReceiveEventsStraightForward()
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -33,7 +33,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -67,7 +67,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -89,7 +89,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithPacketSizeConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithPacketSizeConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -107,7 +107,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.PacketSize = 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -125,7 +125,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithTimeSpanMsConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithTimeSpanMsConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -142,7 +142,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.TimeSpanInMilliseconds = 200;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -160,7 +160,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithTimeSpanNsConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithTimeSpanNsConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -178,7 +178,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.TimeSpanInNanoseconds = 200 * (long) 1e6;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -194,7 +194,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void WriteData_WithTimeSpanAndBufferTimeoutConfiguration_ShouldRaiseProperOnReadEvents()
+        public void WriteData_WithTimeSpanAndBufferTimeoutConfiguration_ShouldRaiseProperOnReceiveEvents()
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() 
@@ -209,7 +209,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -229,7 +229,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithFilterConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithFilterConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -247,7 +247,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -267,7 +267,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithBufferTimeout_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithBufferTimeout_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -285,7 +285,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.BufferTimeout = 100;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -303,7 +303,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithCustomTriggerConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithCustomTriggerConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -321,7 +321,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.CustomTrigger = (data) => data.Timestamps.Count == 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -340,7 +340,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithCustomTriggerBeforeEnqueueConfiguration_ShouldRaiseProperOnReadEvents(bool initialConfig)
+        public void WriteData_WithCustomTriggerBeforeEnqueueConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
@@ -358,7 +358,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };

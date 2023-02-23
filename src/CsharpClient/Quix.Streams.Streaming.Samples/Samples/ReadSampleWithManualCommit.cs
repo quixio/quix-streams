@@ -37,10 +37,10 @@ namespace Quix.Streams.Streaming.Samples.Samples
                 };
 
                 var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
-                buffer.OnRead += OnBufferRead;
+                buffer.OnReceived += BufferReceived;
 
-                streamConsumer.Parameters.OnRead += OnParametersOnOnRead;
-                streamConsumer.Events.OnRead += OnEventsRead;
+                streamConsumer.Parameters.OnReceive += ParametersOnOnReceive;
+                streamConsumer.Events.OnReceived += EventsReceived;
                 streamConsumer.Parameters.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnEventDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
@@ -75,21 +75,21 @@ namespace Quix.Streams.Streaming.Samples.Samples
             }
         }
         
-        void OnEventsRead(object s, EventDataReadEventArgs args)
+        void EventsReceived(object s, EventDataReadEventArgs args)
         {
             args.TopicConsumer.Commit();
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }
         
         
-        void OnParametersOnOnRead(object s, TimeseriesDataReadEventArgs args)
+        void ParametersOnOnReceive(object s, TimeseriesDataReadEventArgs args)
         {
             ((ITopicConsumer)args.Topic).Commit();
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         
         
-        void OnBufferRead(object s, TimeseriesDataReadEventArgs args)
+        void BufferReceived(object s, TimeseriesDataReadEventArgs args)
         {
             // args.Topic.Commit(data); this doesn't work just yet
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);

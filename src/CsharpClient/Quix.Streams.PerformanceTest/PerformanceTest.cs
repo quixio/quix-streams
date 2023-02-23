@@ -25,7 +25,7 @@ namespace Quix.Streams.PerformanceTest
             //{
             //    var buffer = stream.Parameters.CreateBuffer();
             //    buffer.PacketSize = readBufferSize;
-            //    buffer.OnRead += (sender, data) => 
+            //    buffer.OnReceived += (sender, data) => 
             //    {
             //        foreach(var t in data.Timestamps)
             //        {

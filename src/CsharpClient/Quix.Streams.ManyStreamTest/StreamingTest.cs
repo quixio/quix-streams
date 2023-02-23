@@ -30,7 +30,7 @@ namespace Quix.Streams.ManyStreamTest
                 /*var buffer = reader.Parameters.CreateBuffer();
                 buffer.PacketSize = 1;
 
-                buffer.OnRead += (sender, data) =>
+                buffer.OnReceived += (sender, data) =>
                 {
                     streamCounter++; 
                     Console.WriteLine($"Stream count: {streamCounter}");

@@ -58,122 +58,122 @@ class TimeseriesBuffer(object):
             self._custom_trigger = None
 
         # define events and their ref holder
-        self._on_read = None
-        self._on_read_ref = None  # keeping reference to avoid GC
+        self._on_receive = None
+        self._on_receive_ref = None  # keeping reference to avoid GC
 
-        self._on_raw_read = None
-        self._on_raw_read_ref = None  # keeping reference to avoid GC
+        self._on_raw_receive = None
+        self._on_raw_receive_ref = None  # keeping reference to avoid GC
 
-        self._on_read_dataframe = None
-        self._on_read_dataframe_ref = None  # keeping reference to avoid GC
+        self._on_dataframe_receive = None
+        self._on_dataframe_receive_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._on_read_dispose()
-        self._on_raw_read_dispose()
-        self._on_read_dataframe_dispose()
+        self._on_receive_dispose()
+        self._on_raw_receive_dispose()
+        self._on_dataframe_receive_dispose()
 
-    # region on_read
+    # region on_receive
     @property
-    def on_read(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]:
+    def on_receive(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesData format.
         """
-        return self._on_read
+        return self._on_receive
 
-    @on_read.setter
-    def on_read(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]) -> None:
+    @on_receive.setter
+    def on_receive(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesData format.
         """
-        self._on_read = value
-        if self._on_read_ref is None:
-            self._on_read_ref = self._interop_pb.add_OnRead(self._on_read_wrapper)
+        self._on_receive = value
+        if self._on_receive_ref is None:
+            self._on_receive_ref = self._interop_pb.add_OnReceived(self._on_receive_wrapper)
 
-    def _on_read_wrapper(self, stream_hptr, args_hptr):
+    def _on_receive_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataReadEventArgs(args_hptr)):
                 data = TimeseriesData(net_pointer=args.get_Data())
-                self._on_read(self._topic, self._stream, data)
+                self._on_receive(self._topic, self._stream, data)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_read_dispose(self):
-        if self._on_read_ref is not None:
-            self._interop_pb.remove_OnRead(self._on_read_ref)
-            self._on_read_ref = None
+    def _on_receive_dispose(self):
+        if self._on_receive_ref is not None:
+            self._interop_pb.remove_OnReceived(self._on_receive_ref)
+            self._on_receive_ref = None
 
-    # endregion on_read
+    # endregion on_receive
 
-    # region on_raw_read
+    # region on_raw_receive
     @property
-    def on_raw_read(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]:
+    def on_raw_receive(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the intput/output topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
-        return self._on_raw_read
+        return self._on_raw_receive
 
-    @on_raw_read.setter
-    def on_raw_read(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]) -> None:
+    @on_raw_receive.setter
+    def on_raw_receive(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in TimeseriesDataRaw format.
         """
-        self._on_raw_read = value
-        if self._on_raw_read_ref is None:
-            self._on_raw_read_ref = self._interop_pb.add_OnRawRead(self._on_raw_read_wrapper)
+        self._on_raw_receive = value
+        if self._on_raw_receive_ref is None:
+            self._on_raw_receive_ref = self._interop_pb.add_OnRawReceived(self._on_raw_receive_wrapper)
 
-    def _on_raw_read_wrapper(self, stream_hptr, args_hptr):
+    def _on_raw_receive_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
-                self._on_raw_read(self._topic, self._stream, TimeseriesDataRaw(args.get_Data()))
+                self._on_raw_receive(self._topic, self._stream, TimeseriesDataRaw(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_raw_read_dispose(self):
-        if self._on_raw_read_ref is not None:
-            self._interop_pb.remove_OnRawRead(self._on_raw_read_ref)
-            self._on_raw_read_ref = None
+    def _on_raw_receive_dispose(self):
+        if self._on_raw_receive_ref is not None:
+            self._interop_pb.remove_OnRawReceived(self._on_raw_receive_ref)
+            self._on_raw_receive_ref = None
 
-    # endregion on_raw_read
+    # endregion on_raw_receive
 
-    # region on_read_dataframe
+    # region on_dataframe_receive
     @property
-    def on_read_dataframe(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]:
+    def on_dataframe_receive(self) -> Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
         """
-        return self._on_read_dataframe
+        return self._on_dataframe_receive
 
-    @on_read_dataframe.setter
-    def on_read_dataframe(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]) -> None:
+    @on_dataframe_receive.setter
+    def on_dataframe_receive(self, value: Callable[[Union['TopicConsumer', 'TopicProducer'], Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the input/output topic, second is the stream the data is received for, third is the data in Pandas' DataFrame format.
         """
-        self._on_read_dataframe = value
-        if self._on_read_dataframe_ref is None:
-            self._on_read_dataframe_ref = self._interop_pb.add_OnRawRead(self._on_read_dataframe_wrapper)
+        self._on_dataframe_receive = value
+        if self._on_dataframe_receive_ref is None:
+            self._on_dataframe_receive_ref = self._interop_pb.add_OnRawReceived(self._on_dataframe_receive_wrapper)
 
-    def _on_read_dataframe_wrapper(self, stream_hptr, args_hptr):
+    def _on_dataframe_receive_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
                 pdr = TimeseriesDataRaw(args.get_Data())
                 pdf = pdr.to_panda_dataframe()
                 pdr.dispose()
-                self._on_read_dataframe(self._topic, self._stream, pdf)
+                self._on_dataframe_receive(self._topic, self._stream, pdf)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_read_dataframe_dispose(self):
-        if self._on_read_dataframe_ref is not None:
-            self._interop_pb.remove_OnRawRead(self._on_read_dataframe_ref)
-            self._on_read_dataframe_ref = None
+    def _on_dataframe_receive_dispose(self):
+        if self._on_dataframe_receive_ref is not None:
+            self._interop_pb.remove_OnRawReceived(self._on_dataframe_receive_ref)
+            self._on_dataframe_receive_ref = None
 
-    # endregion on_read_dataframe
+    # endregion on_dataframe_receive
 
     @property
     def filter(self) -> Callable[[TimeseriesDataTimestamp], bool]:
@@ -203,7 +203,7 @@ class TimeseriesBuffer(object):
     @property
     def custom_trigger(self) -> Callable[[TimeseriesData], bool]:
         """
-            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked with the entire buffer content
+            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_receive is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         return self._custom_trigger
@@ -211,7 +211,7 @@ class TimeseriesBuffer(object):
     @custom_trigger.setter
     def custom_trigger(self, value: Callable[[TimeseriesData], bool]):
         """
-            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked with the entire buffer content
+            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_receive is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         self._custom_trigger = value
@@ -229,7 +229,7 @@ class TimeseriesBuffer(object):
     def packet_size(self) -> Optional[int]:
         """
             Gets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-            of data the on_read event is invoked and the data is cleared from the buffer.
+            of data the on_receive event is invoked and the data is cleared from the buffer.
             Defaults to None (disabled).
         """
         return self._interop_pb.get_PacketSize()
@@ -238,7 +238,7 @@ class TimeseriesBuffer(object):
     def packet_size(self, value: Optional[int]):
         """
             Sets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-            of data the on_read event is invoked and the data is cleared from the buffer.
+            of data the on_receive event is invoked and the data is cleared from the buffer.
             Defaults to None (disabled).
         """
 
@@ -248,7 +248,7 @@ class TimeseriesBuffer(object):
     def time_span_in_nanoseconds(self) -> Optional[int]:
         """
             Gets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_receive event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
         """
@@ -259,7 +259,7 @@ class TimeseriesBuffer(object):
     def time_span_in_nanoseconds(self, value: Optional[int]):
         """
             Sets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_receive event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
         """
@@ -273,7 +273,7 @@ class TimeseriesBuffer(object):
     def time_span_in_milliseconds(self) -> Optional[int]:
         """
             Gets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_receive event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
             Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with same underlying value.
@@ -284,7 +284,7 @@ class TimeseriesBuffer(object):
     def time_span_in_milliseconds(self, value: Optional[int]):
         """
             Gets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_receive event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
             Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with same underlying value.
@@ -294,8 +294,8 @@ class TimeseriesBuffer(object):
     @property
     def buffer_timeout(self) -> Optional[int]:
         """
-            Gets the maximum duration in milliseconds for which the buffer will be held before triggering on_read event.
-            on_read event is trigger when the configured value has elapsed or other buffer condition is met.
+            Gets the maximum duration in milliseconds for which the buffer will be held before triggering on_receive event.
+            on_receive event is trigger when the configured value has elapsed or other buffer condition is met.
             Defaults to none (disabled).
         """
         return self._interop_pb.get_BufferTimeout()
@@ -303,8 +303,8 @@ class TimeseriesBuffer(object):
     @buffer_timeout.setter
     def buffer_timeout(self, value: Optional[int]):
         """
-            Sets the maximum duration in milliseconds for which the buffer will be held before triggering on_read event.
-            on_read event is trigger when the configured value has elapsed or other buffer condition is met.
+            Sets the maximum duration in milliseconds for which the buffer will be held before triggering on_receive event.
+            on_receive event is trigger when the configured value has elapsed or other buffer condition is met.
             Defaults to none (disabled).
         """
 

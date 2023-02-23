@@ -21,7 +21,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     using pandas as pd
 
     # Callback triggered for each new data frame
-    def on_read_dataframe_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+    def on_dataframe_received_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
         df = data.to_panda_dataframe()  # Incoming data frame
         output_df = pd.DataFrame()
         output_df["time"] = df["time"]
@@ -39,7 +39,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
     # Callback triggered for each new data frame
-    def on_read_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
+    def on_received_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
         with data:
             for row in data.timestamps:
                 # If braking force applied is more than 50%, we mark HardBraking with True
@@ -55,7 +55,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
 === "C\#"
     
     ``` cs
-    buffer.OnRead += (stream, args) =>
+    buffer.OnReceived += (stream, args) =>
     {
         var outputData = new TimeseriesData();
     

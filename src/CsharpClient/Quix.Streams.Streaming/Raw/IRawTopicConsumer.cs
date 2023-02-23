@@ -9,14 +9,14 @@ namespace Quix.Streams.Streaming.Raw
     {
         /// <summary>
         /// Start reading streams.
-        /// Use 'OnRead' event to read stream after executing this method
+        /// Use 'OnMessageReceived' event to read messages after executing this method
         /// </summary>
         void Subscribe();
 
         /// <summary>
         /// Event raised when a message is received from the topic
         /// </summary>
-        public event EventHandler<RawMessage> OnMessageRead;
+        public event EventHandler<RawMessage> OnMessageReceived;
 
         /// <summary>
         /// Event raised when a new error occurs

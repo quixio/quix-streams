@@ -11,7 +11,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
     {
 
         [Fact]
-        public void Receive_TimeseriesData_ShouldRaiseExpectedOnReadEvents()
+        public void Receive_TimeseriesData_ShouldRaiseExpectedOnReceivedEvents()
         {
             const int PacketSizeTest = 10;
             const int NumberTimestampsTest = 1000;
@@ -22,7 +22,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var parametersReader = new Streaming.Models.StreamConsumer.StreamParametersConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
 
             var buffer = parametersReader.CreateBuffer();
-            buffer.OnRead += (sender, args) =>
+            buffer.OnReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };

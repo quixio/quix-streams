@@ -25,46 +25,46 @@ class RawTopicConsumer(object):
         self._interop = rtpi(net_pointer)
 
         # define events and their ref holder
-        self._on_message_read = None
-        self._on_message_read_ref = None  # keeping reference to avoid GC
+        self._on_message_received = None
+        self._on_message_received_ref = None  # keeping reference to avoid GC
 
         self._on_error_occurred = None
         self._on_error_occurred_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._on_message_read_dispose()
+        self._on_message_received_dispose()
 
-    # region on_message_read
+    # region on_message_received
     @property
-    def on_message_read(self) -> Callable[['RawTopicConsumer', RawMessage], None]:
+    def on_message_received(self) -> Callable[['RawTopicConsumer', RawMessage], None]:
         """
         Gets the handler for when topic receives message. First parameter is the topic the message is received for, second is the RawMessage.
         """
-        return self._on_message_read
+        return self._on_message_received
 
-    @on_message_read.setter
-    def on_message_read(self, value: Callable[['RawTopicConsumer', RawMessage], None]) -> None:
+    @on_message_received.setter
+    def on_message_received(self, value: Callable[['RawTopicConsumer', RawMessage], None]) -> None:
         """
         Sets the handler for when topic receives message. First parameter is the topic the message is received for, second is the RawMessage.
         """
-        self._on_message_read = value
-        if self._on_message_read_ref is None:
-            self._on_message_read_ref = self._interop.add_OnMessageRead(self._on_message_read_wrapper)
+        self._on_message_received = value
+        if self._on_message_received_ref is None:
+            self._on_message_received_ref = self._interop.add_OnMessageReceived(self._on_message_received_wrapper)
 
-    def _on_message_read_wrapper(self, topic_hptr, message_hptr):
+    def _on_message_received_wrapper(self, topic_hptr, message_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
         try:
-            self._on_message_read(self, RawMessage(message_hptr))
+            self._on_message_received(self, RawMessage(message_hptr))
             InteropUtils.free_hptr(topic_hptr)
         except:
             traceback.print_exc()
 
-    def _on_message_read_dispose(self):
-        if self._on_message_read_ref is not None:
-            self._interop.remove_OnMessageRead(self._on_message_read_ref)
-            self._on_message_read_ref = None
+    def _on_message_received_dispose(self):
+        if self._on_message_received_ref is not None:
+            self._interop.remove_OnMessageReceived(self._on_message_received_ref)
+            self._on_message_received_ref = None
 
-    # endregion on_message_read
+    # endregion on_message_received
 
     # region on_error_occurred
     @property

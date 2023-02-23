@@ -727,7 +727,7 @@ For example, the following code defines a human readable name and a Severity lev
 
 ## Tags
 
-Quix Streams allows you to tag data for `TimeseriesData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags allow you to filter and group data with fast queries.
+The library allows you to tag data for `TimeseriesData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags allow you to filter and group data with fast queries.
 
 Tags work as a part of the primary key inside `TimeseriesData` and `EventData`, in combination with the default Timestamp key. If you add data values with the same Timestamps, but a different combination of Tags, the timestamp will be treated as a separate row.
 
@@ -736,6 +736,8 @@ For example, the following code:
 === "Python"
     
     ``` python
+    from quixstreams import TimeseriesData
+
     data = TimeseriesData()
     
     data.add_timestamp_nanoseconds(1) \
@@ -869,28 +871,26 @@ This is a minimal code example you can use to publish data to a topic using Quix
     ``` python
     import time
     import datetime
-    import math
     
     from quixstreams import *
     
-    # Quix injects credentials automatically to the client. Alternatively, you can always pass an SDK token manually as an argument.
-    client = QuixStreamingClient()
+    client = KafkaStreamingClient('127.0.0.1:9092')
     
-    topic_producer = client.create_topic_producer(TOPIC_ID)
-    
-    stream = topic_producer.create_stream()
-    
-    stream.properties.name = "Hello World python stream"
-    
-    for index in range(0, 3000):
-        stream.parameters \
-            .buffer \
-            .add_timestamp(datetime.datetime.utcnow()) \
-            .add_value("ParameterA", index) \
-            .publish()
-        time.sleep(0.01)
-    print("Closing stream")
-    stream.close()
+    with (topic_producer := client.create_topic_producer(TOPIC_ID)):
+        
+        stream = topic_producer.create_stream()
+        
+        stream.properties.name = "Hello World python stream"
+        
+        for index in range(0, 3000):
+            stream.parameters \
+                .buffer \
+                .add_timestamp(datetime.datetime.utcnow()) \
+                .add_value("ParameterA", index) \
+                .publish()
+            time.sleep(0.01)
+        print("Closing stream")
+        stream.close()
     ```
 
 === "C\#"
@@ -898,7 +898,6 @@ This is a minimal code example you can use to publish data to a topic using Quix
     ``` cs
     using System;
     using System.Threading;
-    using Quix.Streams.Streaming.Configuration;
     
     namespace WriteHelloWorld
     {
@@ -924,7 +923,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
                     stream.Parameters.Buffer
                         .AddTimestamp(DateTime.UtcNow)
                         .AddValue("ParameterA", index)
-                        .Write();
+                        .Publish();
     
                     Thread.Sleep(10);
                 }
@@ -939,34 +938,31 @@ This is a minimal code example you can use to publish data to a topic using Quix
 
 ## Write raw Kafka messages
 
-Quix Streams uses the message brokers' internal protocol for data transmission. This protocol is both data and speed optimized so we do encourage you to use it. For that you need to use Quix Streams on both producer and consumer sides.
+Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it, but you need to use Quix Streams on both producer and consumer sides as of today. We have plans to support most common formats in near future, but custom formats will always need to be handled manually.
 
-However, in some cases, you simply do not have the ability to run Quix Streams on both sides.
-
-To cater for these cases we added the ability to publish the raw, unformatted, messages as a byte array. This gives you the freedom to implement the protocol as needed, such as JSON, or comma-separated rows.
+For this, we have created a way to [publish](publish.md#write-raw-kafka-messages) and [subscribe](subscribe.md#read-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
 
 You can publish messages with or without a key. The following example demonstrates how to publish two messages to Kafka, one message with a key, and one without:
 
 === "Python"
     
     ``` python
-    producer = client.create_raw_topic_producer(TOPIC_ID)
-    
-    data = bytearray(bytes("TEXT CONVERTED TO BYTES",'utf-8'))
-    
-    #publish value with KEY to kafka
-    message = RawMessage(data)
-    message.key = MESSAGE_KEY
-    producer.publish(message)
-    
-    #publish value without key into kafka
-    producer.publish(data)
+    with (producer := client.create_raw_topic_producer(TOPIC_ID)):    
+        data = bytearray(bytes("TEXT CONVERTED TO BYTES",'utf-8'))
+        
+        #publish value with KEY to kafka
+        message = RawMessage(data)
+        message.key = MESSAGE_KEY
+        producer.publish(message)
+        
+        #publish value without key into kafka
+        producer.publish(data)
     ```
 
 === "C\#"
     
     ``` cs
-    var producer = client.CreateRawTopicProducer(TOPIC_ID);
+    using var producer = client.CreateRawTopicProducer(TOPIC_ID);
     
     var data = new byte[]{1,3,5,7,1,43};
     

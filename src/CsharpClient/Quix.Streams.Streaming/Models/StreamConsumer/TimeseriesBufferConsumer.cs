@@ -36,14 +36,14 @@
             this.WriteChunk(timeseriesDataRaw);
         }
 
-        protected override void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)
+        protected override void InvokeOnReceive(object sender, TimeseriesDataReadEventArgs args)
         {
-            base.InvokeOnRead(this, new TimeseriesDataReadEventArgs(this.topicConsumer, this.streamConsumer, args.Data));
+            base.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(this.topicConsumer, this.streamConsumer, args.Data));
         }
 
-        protected override void InvokeOnRawRead(object sender, TimeseriesDataRawReadEventArgs args)
+        protected override void InvokeOnRawReceived(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            base.InvokeOnRawRead(this, new TimeseriesDataRawReadEventArgs(this.topicConsumer, this.streamConsumer, args.Data));
+            base.InvokeOnRawReceived(this, new TimeseriesDataRawReadEventArgs(this.topicConsumer, this.streamConsumer, args.Data));
         }
     }
 }

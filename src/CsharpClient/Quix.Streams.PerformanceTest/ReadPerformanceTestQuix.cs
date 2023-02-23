@@ -35,7 +35,7 @@ namespace Quix.Streams.PerformanceTest
 
                 var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += (sender, args) =>
+                buffer.OnReceived += (sender, args) =>
                 {
                     //var paramCount = data.NumericValues.Count + data.StringValues.Count + data.BinaryValues.Count;
 
