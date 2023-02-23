@@ -42,7 +42,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
             {"time": 3, "string": "three"}
         ])
 
-        df_orig = timeseries_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
     def test_set_values_only_string(self):
@@ -64,7 +64,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
             {"time": 3, "string": "three"}
         ])
 
-        df_orig = timeseries_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
 
@@ -114,7 +114,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
             timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf)
             assertFrameEqual(
                         pdf,
-                        timeseries_data_raw.to_panda_dataframe()
+                        timeseries_data_raw.to_dataframe()
                     )
 
 
@@ -139,7 +139,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf).to_panda_dataframe()
+            timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf).to_dataframe()
             parsed_time=timeseries_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 

@@ -80,7 +80,7 @@ class TimeseriesDataRaw(object):
 
         return text
 
-    def to_panda_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> pd.DataFrame:
         """
         Converts TimeseriesDataRaw to pandasDataFrame
 

@@ -160,7 +160,7 @@ class TimeseriesBuffer(object):
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
                 pdr = TimeseriesDataRaw(args.get_Data())
-                pdf = pdr.to_panda_dataframe()
+                pdf = pdr.to_dataframe()
                 pdr.dispose()
                 self._on_dataframe_receive(self._stream, pdf)
             InteropUtils.free_hptr(stream_hptr)
