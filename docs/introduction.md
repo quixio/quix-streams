@@ -62,7 +62,7 @@ Refer to the [Checkpointing](features/checkpointing.md) section of this document
 
 ## Horizontal scaling
 
-Quix Streams provides horizontal scaling using the [streaming context](features/streaming-context.md) feature. Data scientists or engineers do not have to implement horizontal scaling for stream processing themselves. You can scale the processing models, from one replica to many or back while relying on the [callback system](subscribe.md#parallel-processing--this-does-not-exist) to ensure that your data is distributed between your model replicas.
+Quix Streams provides horizontal scaling using the [streaming context](features/streaming-context.md) feature. Data scientists or engineers do not have to implement horizontal scaling for stream processing themselves. You can scale the processing models, from one replica to many or back to ensure that your data is distributed between your model replicas.
 
 Refer to the [Horizontal scaling](features/horizontal-scaling.md) section of this documentation for more information.
 
