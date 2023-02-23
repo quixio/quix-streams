@@ -4,7 +4,7 @@ In this page you will find features considered for development or currently bein
 ## Streaming Data frames
 Stateful stream processing is difficult and requires very different mindset compared to batch. The goal of streaming data frames is to bridge the gap between streaming and batch and make it easier for users coming from batch. 
 
-Let's illustrate the problem on very standard example of stateful processing - rolling window of last 10 minutes data. If you perform this operation by yourself, you need to keep an eye on following:
+Let's illustrate the problem on a very standard example of stateful processing - rolling window of last 10 minutes data. If you perform this operation by yourself, you need to keep an eye on following:
  - Management of state in memory
    - Keep current rolling window in memory and remove old rows outside the window
    - Append new rows and produce new output rows
@@ -12,13 +12,12 @@ Let's illustrate the problem on very standard example of stateful processing - r
  - Internal queue with incoming messages consumed by workers is synchronized with checkpointing 
  - State recovery after service restart
 
-What we are working on is solving all of these problems in our QuixStreams library and give it familiar interface - Pandas DataFrames.
-
+What we are working on is solving all these common problems by adding some new features to the library, giving it a familiar interface of Pandas DataFrames.
 
 This is example code where rolling window is performed in streaming data frame but code looks exactly how you would do this in Jupyter notebook on static data:
 ```python
 # Create a projection for columns we need.
-df = input_stream.df[["gForceX", "gForceY", "gForceZ"]]
+df = input_stream.df[["gForceX", "gForceY", "gForceZ"]] 
 
 # Create new feature by simply combining three columns to one new column.
 df["gForceTotal"] = df["gForceX"].abs() + df["gForceY"].abs() + df["gForceZ"].abs()
