@@ -27,10 +27,10 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             this.topicProducer = topicProducer;
             this.streamProducer = streamProducer;
 
-            this.OnRawReceived += RawReceivedDataHandler;
+            this.OnRawReleased += RawReleasedDataHandler;
         }
 
-        private void RawReceivedDataHandler(object sender, TimeseriesDataRawReadEventArgs args)
+        private void RawReleasedDataHandler(object sender, TimeseriesDataRawReadEventArgs args)
         {
             this.streamProducer.Publish(args.Data);
         }
@@ -150,7 +150,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (this.isDisposed) return;
             this.isDisposed = true;
-            this.OnRawReceived -= RawReceivedDataHandler;
+            this.OnRawReleased -= RawReleasedDataHandler;
             base.Dispose();
         }
 

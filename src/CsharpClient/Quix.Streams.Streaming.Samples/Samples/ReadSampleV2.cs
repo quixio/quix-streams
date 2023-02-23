@@ -42,8 +42,8 @@ namespace Quix.Streams.Streaming.Samples.Samples
                 var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
 
-                buffer.OnReceived += BufferReceived;
-                streamConsumer.Events.OnReceived += EventsReceived;
+                buffer.OnDataReleased += BufferDataReleased;
+                streamConsumer.Events.OnDataReceived += EventsDataReceived;
                 streamConsumer.Timeseries.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnEventDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
@@ -56,12 +56,12 @@ namespace Quix.Streams.Streaming.Samples.Samples
             };
         }
         
-        void BufferReceived(object s, TimeseriesDataReadEventArgs args)
+        void BufferDataReleased(object s, TimeseriesDataReadEventArgs args)
         {
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         
-        void EventsReceived(object s, EventDataReadEventArgs args)
+        void EventsDataReceived(object s, EventDataReadEventArgs args)
         {
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }

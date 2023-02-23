@@ -41,124 +41,124 @@ class StreamTimeseriesConsumer(object):
         self._stream_consumer = stream_consumer
 
         # define events and their ref holder
-        self._on_receive = None
-        self._on_receive_ref = None  # keeping reference to avoid GC
+        self._on_data_received = None
+        self._on_data_received_ref = None  # keeping reference to avoid GC
 
-        self._on_raw_receive = None
-        self._on_raw_receive_ref = None  # keeping reference to avoid GC
+        self._on_raw_received = None
+        self._on_raw_received_ref = None  # keeping reference to avoid GC
 
-        self._on_dataframe_receive = None
-        self._on_dataframe_receive_ref = None  # keeping reference to avoid GC
+        self._on_dataframe_received = None
+        self._on_dataframe_received_ref = None  # keeping reference to avoid GC
 
         self._on_definitions_changed = None
         self._on_definitions_changed_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
         [buffer.dispose() for buffer in self._buffers]
-        self._on_receive_dispose()
-        self._on_raw_receive_dispose()
-        self._on_dataframe_receive_dispose()
+        self._on_data_received_dispose()
+        self._on_raw_received_dispose()
+        self._on_dataframe_received_dispose()
         self._on_definitions_changed_dispose()
 
     # region on_receive
     @property
-    def on_receive(self) -> Callable[['StreamConsumer', TimeseriesData], None]:
+    def on_data_received(self) -> Callable[['StreamConsumer', TimeseriesData], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
-        return self._on_receive
+        return self._on_data_received
 
-    @on_receive.setter
-    def on_receive(self, value: Callable[['StreamConsumer', TimeseriesData], None]) -> None:
+    @on_data_received.setter
+    def on_data_received(self, value: Callable[['StreamConsumer', TimeseriesData], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
-        self._on_receive = value
-        if self._on_receive_ref is None:
-            self._on_receive_ref = self._interop.add_OnReceived(self._on_receive_wrapper)
+        self._on_data_received = value
+        if self._on_data_received_ref is None:
+            self._on_data_received_ref = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
 
-    def _on_receive_wrapper(self, stream_hptr, args_hptr):
+    def _on_data_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataReadEventArgs(args_hptr)):
-                self._on_receive(self._stream_consumer, TimeseriesData(args.get_Data()))
+                self._on_data_received(self._stream_consumer, TimeseriesData(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_receive_dispose(self):
-        if self._on_receive_ref is not None:
-            self._interop.remove_OnReceived(self._on_receive_ref)
-            self._on_receive_ref = None
+    def _on_data_received_dispose(self):
+        if self._on_data_received_ref is not None:
+            self._interop.remove_OnDataReceived(self._on_data_received_ref)
+            self._on_data_received_ref = None
 
     # endregion on_receive
 
     # region on_raw_receive
     @property
-    def on_raw_receive(self) -> Callable[['StreamConsumer', TimeseriesDataRaw], None]:
+    def on_raw_received(self) -> Callable[['StreamConsumer', TimeseriesDataRaw], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the data is received for, second is the data in TimeseriesDataRaw format.
         """
-        return self._on_raw_receive
+        return self._on_raw_received
 
-    @on_raw_receive.setter
-    def on_raw_receive(self, value: Callable[['StreamConsumer', TimeseriesDataRaw], None]) -> None:
+    @on_raw_received.setter
+    def on_raw_received(self, value: Callable[['StreamConsumer', TimeseriesDataRaw], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
-        self._on_raw_receive = value
-        if self._on_raw_receive_ref is None:
-            self._on_raw_receive_ref = self._interop.add_OnRawReceived(self._on_raw_receive_wrapper)
+        self._on_raw_received = value
+        if self._on_raw_received_ref is None:
+            self._on_raw_received_ref = self._interop.add_OnRawReceived(self._on_raw_received_wrapper)
 
-    def _on_raw_receive_wrapper(self, stream_hptr, args_hptr):
+    def _on_raw_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
-                self._on_raw_receive(self._stream_consumer, TimeseriesDataRaw(args.get_Data()))
+                self._on_raw_received(self._stream_consumer, TimeseriesDataRaw(args.get_Data()))
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_raw_receive_dispose(self):
-        if self._on_raw_receive_ref is not None:
-            self._interop.remove_OnRawReceived(self._on_raw_receive_ref)
-            self._on_raw_receive_ref = None
+    def _on_raw_received_dispose(self):
+        if self._on_raw_received_ref is not None:
+            self._interop.remove_OnRawReceived(self._on_raw_received_ref)
+            self._on_raw_received_ref = None
 
     # endregion on_raw_receive
 
     # region on_dataframe_receive
     @property
-    def on_dataframe_receive(self) -> Callable[['StreamConsumer', pandas.DataFrame], None]:
+    def on_dataframe_received(self) -> Callable[['StreamConsumer', pandas.DataFrame], None]:
         """
         Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in pandas DataFrame format.
         """
-        return self._on_dataframe_receive
+        return self._on_dataframe_received
 
-    @on_dataframe_receive.setter
-    def on_dataframe_receive(self, value: Callable[['StreamConsumer', pandas.DataFrame], None]) -> None:
+    @on_dataframe_received.setter
+    def on_dataframe_received(self, value: Callable[['StreamConsumer', pandas.DataFrame], None]) -> None:
         """
         Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in pandas DataFrame format.
         """
-        self._on_dataframe_receive = value
-        if self._on_dataframe_receive_ref is None:
-            self._on_dataframe_receive_ref = self._interop.add_OnRawReceived(self._on_dataframe_receive_wrapper)
+        self._on_dataframe_received = value
+        if self._on_dataframe_received_ref is None:
+            self._on_dataframe_received_ref = self._interop.add_OnRawReceived(self._on_dataframe_received_wrapper)
 
-    def _on_dataframe_receive_wrapper(self, stream_hptr, args_hptr):
+    def _on_dataframe_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
                 pdr = TimeseriesDataRaw(args.get_Data())
                 pdf = pdr.to_dataframe()
                 pdr.dispose()
-                self._on_dataframe_receive(self._stream_consumer, pdf)
+                self._on_dataframe_received(self._stream_consumer, pdf)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_dataframe_receive_dispose(self):
-        if self._on_dataframe_receive_ref is not None:
-            self._interop.remove_OnRawReceived(self._on_dataframe_receive_ref)
-            self._on_dataframe_receive_ref = None
+    def _on_dataframe_received_dispose(self):
+        if self._on_dataframe_received_ref is not None:
+            self._interop.remove_OnRawReceived(self._on_dataframe_received_ref)
+            self._on_dataframe_received_ref = None
 
     # endregion on_dataframe_receive
 

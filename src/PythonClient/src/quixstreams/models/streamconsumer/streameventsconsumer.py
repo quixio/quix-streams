@@ -32,47 +32,47 @@ class StreamEventsConsumer(object):
         self._stream_consumer = stream_consumer
 
         # define events and their ref holder
-        self._on_receive = None
-        self._on_receive_ref = None  # keeping reference to avoid GC
+        self._on_data_received = None
+        self._on_data_received_ref = None  # keeping reference to avoid GC
 
         self._on_definitions_changed = None
         self._on_definitions_changed_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._on_receive_dispose()
+        self._on_data_received_dispose()
         self._on_definitions_changed_dispose()
 
     # region on_receive
     @property
-    def on_receive(self) -> Callable[['StreamConsumer', EventData], None]:
+    def on_data_received(self) -> Callable[['StreamConsumer', EventData], None]:
         """
         Gets the handler for when the stream receives event. First parameter is the stream the event is received for, second is the event.
         """
-        return self._on_receive
+        return self._on_data_received
 
-    @on_receive.setter
-    def on_receive(self, value: Callable[['StreamConsumer', EventData], None]) -> None:
+    @on_data_received.setter
+    def on_data_received(self, value: Callable[['StreamConsumer', EventData], None]) -> None:
         """
         Sets the handler for when the stream receives event. First parameter is the stream the event is received for, second is the event.
         """
-        self._on_receive = value
-        if self._on_receive_ref is None:
-            self._on_receive_ref = self._interop.add_OnReceived(self._on_receive_wrapper)
+        self._on_data_received = value
+        if self._on_data_received_ref is None:
+            self._on_data_received_ref = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
 
-    def _on_receive_wrapper(self, stream_hptr, args_hptr):
+    def _on_data_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
         try:
             with (args := EventDataReadEventArgs(args_hptr)):
                 data = EventData(net_pointer=args.get_Data())
-                self._on_receive(self._stream_consumer, data)
+                self._on_data_received(self._stream_consumer, data)
             InteropUtils.free_hptr(stream_hptr)
         except:
             traceback.print_exc()
 
-    def _on_receive_dispose(self):
-        if self._on_receive_ref is not None:
-            self._interop.remove_OnReceived(self._on_receive_ref)
-            self._on_receive_ref = None
+    def _on_data_received_dispose(self):
+        if self._on_data_received_ref is not None:
+            self._interop.remove_OnDataReceived(self._on_data_received_ref)
+            self._on_data_received_ref = None
 
     # endregion on_receive
 

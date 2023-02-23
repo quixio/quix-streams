@@ -91,7 +91,7 @@ namespace Quix.Streams.Speedtest
                 var buffer = reader.Timeseries.CreateBuffer();
                 buffer.TimeSpanInMilliseconds = 0; // this will cause it to give me batches for roughly each loop
 
-                buffer.OnReceived += (sender, args) =>
+                buffer.OnDataReleased += (sender, args) =>
                 {
                     var amount = args.Data.Timestamps.Sum(x => x.Parameters.Count);
                     readData.Enqueue(new Entry

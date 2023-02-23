@@ -14,7 +14,7 @@ namespace Quix.Streams.PerformanceTest
 
             var buffer = new TimeseriesBuffer(null, null, true, false);
             buffer.PacketSize = bufferSize;
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 if (onlyReceive)
                 {

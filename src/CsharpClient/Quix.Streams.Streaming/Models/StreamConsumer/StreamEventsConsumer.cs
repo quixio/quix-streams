@@ -33,7 +33,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         {
             var data = new EventData(eventDataRaw);
 
-            this.OnReceived?.Invoke(this, new EventDataReadEventArgs(this.topicConsumer, this.streamConsumer, data));
+            this.OnDataReceived?.Invoke(this, new EventDataReadEventArgs(this.topicConsumer, this.streamConsumer, data));
         }
 
         private void OnEventDefinitionsChangedHandler(IStreamConsumer sender, EventDefinitions eventDefinitions)
@@ -46,7 +46,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         /// <summary>
         /// Raised when an events data package is received for the stream
         /// </summary>
-        public event EventHandler<EventDataReadEventArgs> OnReceived;
+        public event EventHandler<EventDataReadEventArgs> OnDataReceived;
 
         /// <summary>
         /// Raised when the even definitions have changed for the stream.

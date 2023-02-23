@@ -33,7 +33,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -67,7 +67,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -107,7 +107,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.PacketSize = 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -142,7 +142,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.TimeSpanInMilliseconds = 200;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -178,7 +178,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.TimeSpanInNanoseconds = 200 * (long) 1e6;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -209,7 +209,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -247,7 +247,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -285,7 +285,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.BufferTimeout = 100;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -321,7 +321,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.CustomTrigger = (data) => data.Timestamps.Count == 2;
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -358,7 +358,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             if (!initialConfig) buffer.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
             var receivedData = new List<Streaming.Models.TimeseriesData>();
 
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };

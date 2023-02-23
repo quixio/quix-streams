@@ -37,7 +37,7 @@ namespace Quix.Streams.Speedtest
                 var buffer = reader.Timeseries.CreateBuffer();
                 buffer.PacketSize = 1;
 
-                buffer.OnReceived += (sender, args) =>
+                buffer.OnDataReleased += (sender, args) =>
                 {
                     var binaryTime = (long) args.Data.Timestamps[0].Parameters[parameterName].NumericValue;
                     var sentAt = DateTime.FromBinary(binaryTime);

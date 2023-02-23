@@ -19,7 +19,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var receivedData = new List<Streaming.Models.EventData>();
             var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
-            eventsReader.OnReceived += (sender, args) =>
+            eventsReader.OnDataReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };

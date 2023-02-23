@@ -31,9 +31,9 @@ from quixstreams import TopicConsumer, StreamConsumer
 
 def on_stream_received_handler(new_stream: StreamConsumer):
     buffer = new_stream.timeseries.create_buffer()
-    buffer.on_dataframe_received = on_dataframe_received_handler
+    buffer.on_dataframe_released = on_dataframe_released_handler
 
-def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_released_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # ... some code setting up topic_consumer
@@ -54,9 +54,9 @@ import pandas as pd
 
 def on_stream_received_handler(new_stream: StreamConsumer):
     buffer = new_stream.timeseries.create_buffer()
-    buffer.on_dataframe_received = on_dataframe_received_handler
+    buffer.on_dataframe_released = on_dataframe_released_handler
 
-def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_released_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # ... some code setting up topic_consumer

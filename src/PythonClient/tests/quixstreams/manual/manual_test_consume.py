@@ -82,15 +82,15 @@ def on_stream_received_handler(new_stream: qx.StreamConsumer):
     print("New Stream read!" + str(datetime.datetime.now()))
     new_stream.on_stream_closed = on_stream_closed_handler
     new_stream.properties.on_changed = on_stream_properties_changed_handler
-    new_stream.timeseries.on_dataframe_receive = on_parameters_dataframe_handler
-    # param_buffer = new_stream.timeseries.create_buffer()
-    # param_buffer.on_receive = on_parameter_data_handler
+    new_stream.timeseries.on_dataframe_received = on_dataframe_received_handler
+    param_buffer = new_stream.timeseries.create_buffer()
+    param_buffer.on_data_released = on_data_released_handler
 
-    # param_buffer_filtered = new_stream.timeseries.create_buffer("numeric param 1", "string param 2")
-    # param_buffer_filtered.on_receive = on_parameter_data_filtered_handler
-    # new_stream.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
-    # new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
-    # new_stream.events.on_receive = on_event_data_handler
+    param_buffer_filtered = new_stream.timeseries.create_buffer("numeric param 1", "string param 2")
+    param_buffer_filtered.on_data_released = on_timeseries_data_released_filtered_handler
+    new_stream.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
+    new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
+    new_stream.events.on_data_received = on_event_data_received_handler
 
     # TODO implementation missing
     # new_stream.on_package_received = on_package_received_handler
@@ -121,12 +121,12 @@ def on_stream_properties_changed_handler(stream: qx.StreamConsumer):
         print("Exception occurred in on_stream_properties_changed_handler: " + sys.exc_info()[1])
 
 
-def on_parameters_dataframe_handler(stream: qx.StreamConsumer, data: pd.DataFrame):
+def on_dataframe_received_handler(stream: qx.StreamConsumer, data: pd.DataFrame):
     print("RECEIVED DATAFRAME")
     print(data)
 
 
-def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+def on_data_released_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
     with data:
         try:
             print("Committing")
@@ -158,7 +158,7 @@ def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData
             print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
 
-def on_parameter_data_filtered_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+def on_timeseries_data_released_filtered_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
     with data:
         try:
             def print(*args, **kwargs):
@@ -233,7 +233,7 @@ def on_event_definitions_changed_handler(stream: qx.StreamConsumer):
         print("Exception occurred in on_event_definitions_changed_handler: " + sys.exc_info()[1])
 
 
-def on_event_data_handler(stream: qx.StreamConsumer, data: qx.EventData):
+def on_event_data_received_handler(stream: qx.StreamConsumer, data: qx.EventData):
     with data:
         try:
             print("Event data read for stream: " + stream.stream_id)

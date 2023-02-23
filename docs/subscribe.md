@@ -115,15 +115,15 @@ The following table shows an example:
 | 6         | 110   | 2    |
 
 === "Python"
-    You can subscribe to time-series data from streams using the `on_received` callback of the `StreamConsumer` instance. For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
+    You can subscribe to time-series data from streams using the `on_data_received` callback of the `StreamConsumer` instance. For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
     
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
     def on_stream_received_handler(new_stream: StreamConsumer):
-        new_stream.on_received = on_timeseries_data_read_handler
+        new_stream.on_data_received = on_timeseries_data_received_handler
     
-    def on_timeseries_data_read_handler(stream: StreamConsumer, data: TimeseriesData):
+    def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
@@ -139,12 +139,12 @@ The following table shows an example:
         Find out more about [App.run()](app-management.md)
 
 === "C\#"
-    You can subscribe to time-series data from streams using the `OnReceived` event of the `StreamConsumer` instance. For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
+    You can subscribe to time-series data from streams using the `OnDataReceived` event of the `StreamConsumer` instance. For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
     
     ``` cs
     topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
     {
-        streamConsumer.Timeseries.OnReceived += (sender, args) =>
+        streamConsumer.Timeseries.OnDataReceived += (sender, args) =>
         {
             var timestamp = args.Data.Timestamps[0].Timestamp;
             var numValue = args.Data.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -207,14 +207,13 @@ Speed - 6: 110
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for reading and writing time-series data. Use the callback `on_dataframe_received` instead of `on_received` when reading from a stream:
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for reading and writing time-series data. Use the callback `on_dataframe_received` instead of `on_data_received` when reading from a stream:
 
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer
 
 def on_stream_received_handler(new_stream: StreamConsumer):
-    buffer = new_stream.timeseries.create_buffer()
-    buffer.on_dataframe_received = on_dataframe_received_handler
+    new_stream.on_dataframe_received = on_dataframe_received_handler
 
 def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
@@ -229,10 +228,9 @@ Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format)
 from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
 def on_stream_received_handler(new_stream: StreamConsumer):
-    buffer = new_stream.timeseries.create_buffer()
-    buffer.on_received = on_timeseries_data_read_handler
+    new_stream.on_data_received = on_timeseries_data_received_handler
 
-def on_timeseries_data_read_handler(stream: StreamConsumer, data: TimeseriesData):
+def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
     with data:
         # read from input stream
         df = data.to_dataframe()
@@ -285,20 +283,20 @@ Reading data from that buffer is as simple as using its callback (Python) or eve
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
-    def on_received_handler(stream: StreamConsumer, data: TimeseriesData):
+    def on_data_released_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
             timestamp = data.timestamps[0].timestamp
             num_value = data.timestamps[0].parameters['ParameterA'].numeric_value
             print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
-    buffer.on_received = on_received_handler
-    # buffer.on_dataframe_received and other callbacks are also available, check reading without buffer for more info
+    buffer.on_data_released = on_data_released_handler
+    # buffer.on_dataframe_released and other callbacks are also available, check reading without buffer for more info
     ```
 
 === "C\#"
     
     ``` cs
-    buffer.OnReceived += (sender, args) =>
+    buffer.OnDataReleased += (sender, args) =>
     {
         var timestamp = ags.Data.Timestamps[0].Timestamp;
         var numValue = ags.Data.Timestamps[0].Parameters["ParameterA"].NumericValue;
@@ -389,19 +387,19 @@ Reading events from a stream is as easy as reading timeseries data. In this case
     from quixstreams import TopicConsumer, StreamConsumer, EventData
 
     ``` python
-    def on_event_data_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: EventData):
+    def on_event_data_received_handler(stream: StreamConsumer, data: EventData):
         with data:
             print("Event read for stream. Event Id: " + data.Id)
     
-    new_stream.events.on_received = on_event_data_handler
+    new_stream.events.on_data_received = on_event_data_received_handler
     ```
 
 === "C\#"
     
     ``` cs
-    newStream.Events.OnReceived += (stream, args) =>
+    newStream.Events.OnDataReceived += (stream, args) =>
     {
-        Console.WriteLine($"Event read for stream. Event Id: {args.Data.Id}");
+        Console.WriteLine($"Event received for stream. Event Id: {args.Data.Id}");
     };
     ```
 
@@ -650,9 +648,9 @@ This is a minimal code example you can use to read data from a topic using Quix 
     def on_stream_received_handler(new_stream: StreamConsumer):
     
         buffer = new_stream.timeseries.create_buffer()
-        buffer.on_received = on_received_handler
+        buffer.on_data_released = on_data_released_handler
     
-    def on_received_handler(stream: StreamConsumer, data: TimeseriesData):
+    def on_data_released_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
             df = data.to_dataframe()
             print(df.to_string())    
@@ -701,7 +699,7 @@ This is a minimal code example you can use to read data from a topic using Quix 
     
                     var buffer = streamConsumer.Timeseries.CreateBuffer();
     
-                    buffer.OnReceived += (sender, args) =>
+                    buffer.OnDataReleased += (sender, args) =>
                     {
                         Console.WriteLine($"ParameterA - {ags.Data.Timestamps[0].Timestamp}: {ags.Data.Timestamps.Average(a => a.Parameters["ParameterA"].NumericValue)}");
                     };
@@ -731,14 +729,14 @@ For this, we have created a way to [publish](publish.md#write-raw-kafka-messages
 
     raw_consumer = client.create_raw_topic_consumer(TOPIC_ID)
     
-    def on_raw_message_read_handler(topic: RawTopicConsumer, msg: RawMessage):
+    def on_message_received_handler(topic: RawTopicConsumer, msg: RawMessage):
         #bytearray containing bytes received from kafka
         data = msg.value
     
         #broker metadata as dict
         meta = msg.metadata
     
-    raw_consumer.on_message_read = on_raw_message_read_handler
+    raw_consumer.on_message_received = on_message_received_handler
     raw_consumer.subscribe()  # or use App.run()
     ```
 

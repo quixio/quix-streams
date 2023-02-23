@@ -50,7 +50,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
 
                 var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
-                buffer.OnReceived += (s, args) =>
+                buffer.OnDataReleased += (s, args) =>
                 {
                     // Inline manipulation
                     //data.Timestamps.ForEach(timestamp =>
@@ -76,7 +76,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
                     }
                 };
                 
-                streamConsumer.Events.OnReceived += EventsReceived;
+                streamConsumer.Events.OnDataReceived += EventsDataReceived;
                 streamConsumer.Timeseries.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnEventDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
@@ -98,7 +98,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             };
         }
 
-        void EventsReceived(object sender, EventDataReadEventArgs args)
+        void EventsDataReceived(object sender, EventDataReadEventArgs args)
         {
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }

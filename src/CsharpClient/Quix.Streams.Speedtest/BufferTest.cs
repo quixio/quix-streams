@@ -41,7 +41,7 @@ namespace Quix.Streams.Speedtest
 //                buffer.PacketSize = 111;
                 buffer.TimeSpanInMilliseconds = buffer.BufferTimeout = 1000;
 
-                buffer.OnRawReceived += (sender, args) =>
+                buffer.OnRawReleased += (sender, args) =>
                 {
 //                    var binaryTime = (long) data.Timestamps[0].Parameters[parameterName].NumericValue;
                     

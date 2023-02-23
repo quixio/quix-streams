@@ -29,7 +29,9 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
         # If braking force applied is more than 50%, we mark HardBraking with True
         output_df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
     
-        stream_output.timeseries.publish(output_df)  # Send data to the output stream
+        stream_producer.timeseries.publish(output_df)  # Send data to the output stream
+
+    stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
     ```
 
 === "Python - Plain"
@@ -38,23 +40,25 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
     # Callback triggered for each new data frame
-    def on_received_handler(stream: StreamConsumer, data: TimeseriesData):
+    def on_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
             for row in data.timestamps:
                 # If braking force applied is more than 50%, we mark HardBraking with True
                 hard_braking = row.parameters["Brake"].numeric_value > 0.5
         
-                stream_output.timeseries \
+                stream_producer.timeseries \
                     .add_timestamp(row.timestamp) \
                     .add_tag("LapNumber", row.tags["LapNumber"]) \
                     .add_value("HardBraking", hard_braking) \
                     .publish()
+
+    stream_consumer.timeseries.on_data_received = on_dataframe_received_handler
     ```
 
 === "C\#"
     
     ``` cs
-    buffer.OnReceived += (stream, args) =>
+    streamConsumer.timeseries.OnDataReceived += (stream, args) =>
     {
         var outputData = new TimeseriesData();
     
@@ -64,7 +68,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
             .AddValue("ParameterA source frequency", args.Data.Timestamps.Count);
     
         // Send data back to the stream
-        streamOutput.Timeseries.Write(outputData);
+        streamProducer.Timeseries.Publish(outputData);
     };
     ```
 

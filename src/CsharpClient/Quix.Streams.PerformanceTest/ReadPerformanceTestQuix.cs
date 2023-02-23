@@ -35,7 +35,7 @@ namespace Quix.Streams.PerformanceTest
 
                 var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
-                buffer.OnReceived += (sender, args) =>
+                buffer.OnDataReleased += (sender, args) =>
                 {
                     //var paramCount = data.NumericValues.Count + data.StringValues.Count + data.BinaryValues.Count;
 

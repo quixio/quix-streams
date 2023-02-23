@@ -35,12 +35,12 @@ namespace Quix.Streams.Streaming.Models
         /// <summary>
         /// Event invoked when TimeseriesData is received from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesDataReadEventArgs> OnReceived;
+        public event EventHandler<TimeseriesDataReadEventArgs> OnDataReleased;
 
         /// <summary>
         /// Event invoked when TimeseriesDataRaw is received from the buffer
         /// </summary>
-        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReceived;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReleased;
 
         // List representing internal data structure of the buffer
         private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
@@ -200,7 +200,7 @@ namespace Quix.Streams.Streaming.Models
         }
 
         /// <summary>
-        /// Gets or set the custom function which is invoked before adding the timestamp to the buffer. If returns true, <see cref="OnReceived"/> is invoked before adding the timestamp to it.
+        /// Gets or set the custom function which is invoked before adding the timestamp to the buffer. If returns true, <see cref="OnDataReleased"/> is invoked before adding the timestamp to it.
         /// Defaults to null (disabled).
         /// </summary>
         public Func<TimeseriesDataTimestamp, bool> CustomTriggerBeforeEnqueue
@@ -220,7 +220,7 @@ namespace Quix.Streams.Streaming.Models
 
 
         /// <summary>
-        /// Gets or sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, <see cref="OnReceived"/> is invoked with the entire buffer content
+        /// Gets or sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, <see cref="OnDataReleased"/> is invoked with the entire buffer content
         /// Defaults to null (disabled).
         /// </summary>
         public Func<TimeseriesData, bool> CustomTrigger
@@ -241,7 +241,7 @@ namespace Quix.Streams.Streaming.Models
         /// <summary>
         /// Writes a chunck of data into the buffer
         /// </summary>
-        /// <param name="timeseriesDataRaw">Data in <see cref="OnReceived"/> format</param>
+        /// <param name="timeseriesDataRaw">Data in <see cref="OnDataReleased"/> format</param>
         protected internal void WriteChunk(Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             if (isDisposed)
@@ -415,7 +415,7 @@ namespace Quix.Streams.Streaming.Models
                         this.bufferedFrames = new List<TimeseriesDataRaw>();
                     }
 
-                    if (this.OnReceived == null && this.OnRawReceived == null) return;
+                    if (this.OnDataReleased == null && this.OnRawReleased == null) return;
                     
                     var newPdrw = this.ConcatDataFrames(loadedData);
                     if (this.mergeOnFlush)
@@ -428,7 +428,7 @@ namespace Quix.Streams.Streaming.Models
                     if (newPdrw.Timestamps.Length <= 0) return;
                     this.InvokeOnRawReceived(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
 
-                    if (this.OnReceived == null) return;
+                    if (this.OnDataReleased == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
                     this.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(null, null, data));
                 }
@@ -445,12 +445,12 @@ namespace Quix.Streams.Streaming.Models
 
         protected virtual void InvokeOnRawReceived(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            this.OnRawReceived?.Invoke(this, args);
+            this.OnRawReleased?.Invoke(this, args);
         } 
         
         protected virtual void InvokeOnReceive(object sender, TimeseriesDataReadEventArgs args)
         {
-            this.OnReceived?.Invoke(this, args);
+            this.OnDataReleased?.Invoke(this, args);
         } 
 
         private void UpdateIfAllConditionsAreNull()

@@ -22,7 +22,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             var parametersReader = new Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             var buffer = parametersReader.CreateBuffer();
-            buffer.OnReceived += (sender, args) =>
+            buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
