@@ -10,7 +10,7 @@ InteropUtils.enable_debug()
 client = QuixStreamingClient("sdk-sometoken")
 
 # Open the output topic where to write data out
-topic_producer = client.create_topic_producer("hello-world-source")
+topic_producer = client.get_topic_producer("hello-world-source")
 
 stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"

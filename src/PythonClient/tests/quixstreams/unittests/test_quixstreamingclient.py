@@ -81,7 +81,7 @@ class StreamingClientTests(unittest.TestCase):
         sc.api_url = "https://test.quix.ai"
         # Act
         try:
-            sc.create_topic_consumer('sometest')
+            sc.get_topic_consumer('sometest')
         # Assert
         except Exception as ex:
             # point here is it can fail inside c#, but not python

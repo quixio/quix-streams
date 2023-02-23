@@ -21,7 +21,7 @@ namespace Quix.Streams.PerformanceTest
             // Create a client which holds generic details for creating topic consumer and producers
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            using var topicConsumer = client.CreateTopicConsumer("test");
+            using var topicConsumer = client.GetTopicConsumer("test");
 
             // Hook up events before initiating read to avoid losing out on any data
             topicConsumer.OnStreamReceived += (topic, streamConsumer) =>

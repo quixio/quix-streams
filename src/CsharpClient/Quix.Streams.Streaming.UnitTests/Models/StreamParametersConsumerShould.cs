@@ -19,7 +19,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
             var receivedData = new List<Streaming.Models.TimeseriesData>();
-            var parametersReader = new Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
+            var parametersReader = new Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             var buffer = parametersReader.CreateBuffer();
             buffer.OnReceived += (sender, args) =>
@@ -60,7 +60,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         {
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-            var parametersReader = new Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
+            var parametersReader = new Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             var parameterDefinitions = new ParameterDefinitions
             {

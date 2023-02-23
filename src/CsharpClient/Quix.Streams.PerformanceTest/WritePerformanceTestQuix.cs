@@ -25,7 +25,7 @@ namespace Quix.Streams.PerformanceTest
             // Create a client which holds generic details for creating topic consumer and producers
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            using var topicProducer = client.CreateTopicProducer("test");
+            using var topicProducer = client.GetTopicProducer("test");
 
             var stream = topicProducer.CreateStream();
             stream.Timeseries.Buffer.PacketSize = bufferSize;

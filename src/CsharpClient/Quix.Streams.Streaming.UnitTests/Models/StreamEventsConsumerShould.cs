@@ -17,7 +17,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
             var receivedData = new List<Streaming.Models.EventData>();
-            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
+            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             eventsReader.OnReceived += (sender, args) =>
             {
@@ -52,7 +52,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         {
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
+            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             var eventDefinitions = new EventDefinitions
             {

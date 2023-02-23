@@ -24,7 +24,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
 
             topicConsumer.OnStreamReceived += (s, streamConsumer) =>
             {

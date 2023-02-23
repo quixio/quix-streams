@@ -14,7 +14,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-topic_producer = client.create_topic_producer('generated-data')
+topic_producer = client.get_topic_producer('generated-data')
 
 number_of_stream = 10
 

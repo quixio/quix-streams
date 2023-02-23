@@ -30,7 +30,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             {
                 {"max.poll.interval.ms", "10000"}
             });
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
 
             var closeReadTask = new TaskCompletionSource<object>();
             var nextFail = DateTime.MinValue;

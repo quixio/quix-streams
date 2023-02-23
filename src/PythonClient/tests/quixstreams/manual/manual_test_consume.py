@@ -23,7 +23,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-topic_consumer = client.create_topic_consumer('generated-data', 'whateva', auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer('generated-data', 'whateva', auto_offset_reset=AutoOffsetReset.Latest)
 
 
 def on_streams_revoked_handler(topic_consumer: qx.TopicConsumer, readers: [qx.StreamConsumer]):

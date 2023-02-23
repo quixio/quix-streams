@@ -51,8 +51,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -220,8 +220,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -438,8 +438,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -512,7 +512,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
                 var result = Parallel.For(0, 1000, parallelOptions: new ParallelOptions()
                 {
                     MaxDegreeOfParallelism = 20
@@ -530,10 +530,10 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 var testGroup = "quix.tests-" + Guid.NewGuid().GetHashCode().ToString("X");
-                var topicConsumer1 = client.CreateTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                var topicConsumer1 = client.GetTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
 
                 var expectedStreamCount = 1;
                 long streamsRevoked = 0;
@@ -585,7 +585,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                 for (var index = 0; index <= 5; index++)
                 {
                     if (streamsReceived2 > 0) break;
-                    var topicConsumer2 = client.CreateTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                    var topicConsumer2 = client.GetTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
                     topicConsumer2.OnStreamReceived += (sender, sr) => { Interlocked.Increment(ref streamsReceived2); };
                     topicConsumer2.Subscribe();
                 }

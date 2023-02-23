@@ -24,18 +24,18 @@ You can find other ways to connect to your message broker in the [Connect](conne
 
 ## Create a topic producer
 
-In order to publish data to a topic you need an instance of `TopicProducer`. This instance allow you to publish data and additional context for streams using the provided topic. You can create an instance using the client’s `create_topic_producer` method, passing the `TOPIC` as the parameter.
+In order to publish data to a topic you need an instance of `TopicProducer`. This instance allow you to publish data and additional context for streams using the provided topic. You can create an instance using the client’s `get_topic_producer` method, passing the `TOPIC` as the parameter.
 
 === "Python"
     
     ``` python
-    topic_producer = client.create_topic_producer(TOPIC)
+    topic_producer = client.get_topic_producer(TOPIC)
     ```
 
 === "C\#"
     
     ``` cs
-    var topicProducer = client.CreateTopicProducer(TOPIC);
+    var topicProducer = client.GetTopicProducer(TOPIC);
     ```
 
 ## Create / reopen a stream
@@ -876,7 +876,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
     
     client = KafkaStreamingClient('127.0.0.1:9092')
     
-    with (topic_producer := client.create_topic_producer(TOPIC_ID)):
+    with (topic_producer := client.get_topic_producer(TOPIC_ID)):
         
         stream = topic_producer.create_stream()
         
@@ -911,7 +911,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
                 // Create a client which holds generic details for creating input and output topics
                 var client = new Quix.Streams.Streaming.QuixStreamingClient();
     
-                using var topicProducer = client.CreateTopicProducer(TOPIC_ID);
+                using var topicProducer = client.GetTopicProducer(TOPIC_ID);
     
                 var stream = topicProducer.CreateStream();
     

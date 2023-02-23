@@ -33,7 +33,7 @@ Streams are redistributed over available partitions. With an increasing number o
 The **Consumer group** is a concept of how to horizontally scale topic processing. Each consumer group has an ID, which you set when opening a connection to the topic:
 
 ``` python
-topic_consumer = client.create_topic_consumer("{topic}","{your-consumer-group-id}")
+topic_consumer = client.get_topic_consumer("{topic}","{your-consumer-group-id}")
 ```
 
 If you deploy this model with 3 instances, the partitions will be shared across the three instances to even out the load.
@@ -48,7 +48,7 @@ We can think of Kafka temporary storage as a processing queue for each partition
 ``` python
 from quixstreams import CommitMode
 
-topic_consumer = client.create_topic_consumer("{topic}","{your-consumer-group-id}", commit_settings=CommitMode.Manual)
+topic_consumer = client.get_topic_consumer("{topic}","{your-consumer-group-id}", commit_settings=CommitMode.Manual)
 topic_consumer.commit()
 ```
 

@@ -18,8 +18,8 @@ namespace Quix.Streams.PerformanceTest
         {
             var client = new TestStreamingClient(CodecType.ImprovedJson);
 
-            //var topicConsumer = client.CreateTopicConsumer();
-            var topicProducer = client.CreateTopicProducer();
+            //var topicConsumer = client.GetTopicConsumer();
+            var topicProducer = client.GetTopicProducer();
 
             //topicConsumer.OnStreamReceived += (s, stream) =>
             //{

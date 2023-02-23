@@ -119,7 +119,7 @@ class QuixStreamingClient(object):
 
         self._interop = qsci(qsci.Constructor(token, auto_create_topics, properties=net_properties_hptr, debug=debug))
 
-    def create_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
+    def get_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
                               auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
             Opens an input topic capable of reading incoming streams
@@ -141,16 +141,16 @@ class QuixStreamingClient(object):
         if isinstance(commit_settings, CommitMode):
             net_commit_settings = ec.enum_to_another(commit_settings, CommitModeInterop)
 
-            hptr = qscei.CreateTopicConsumer(self._interop.get_interop_ptr__(), topic_id_or_name, consumer_group, net_commit_settings, net_offset_reset)
+            hptr = qscei.GetTopicConsumer(self._interop.get_interop_ptr__(), topic_id_or_name, consumer_group, net_commit_settings, net_offset_reset)
         else:
             if isinstance(commit_settings, CommitOptions):
-                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, commit_settings.get_net_pointer(), net_offset_reset)
+                hptr = self._interop.GetTopicConsumer(topic_id_or_name, consumer_group, commit_settings.get_net_pointer(), net_offset_reset)
             else:
-                hptr = self._interop.CreateTopicConsumer(topic_id_or_name, consumer_group, None, net_offset_reset)
+                hptr = self._interop.GetTopicConsumer(topic_id_or_name, consumer_group, None, net_offset_reset)
 
         return TopicConsumer(hptr)
 
-    def create_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
+    def get_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
         """
             Opens an output topic capable of sending outgoing streams
 
@@ -159,7 +159,7 @@ class QuixStreamingClient(object):
             topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
         """
 
-        dotnet_pointer = self._interop.CreateTopicProducer(topic_id_or_name)
+        dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
         return TopicProducer(dotnet_pointer)
 
     def create_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:

@@ -24,18 +24,18 @@ You can find other ways to connect to your message broker in the [Connect](conne
 
 ## Create a topic consumer
 
-Topics are at the center for stream processing operations. In order to subscribe to data in a topic you need an instance of `TopicConsumer`. This instance allow you to receive all the incoming streams on the specified topic. You can create an instance using the client’s `create_topic_consumer` method, passing the `TOPIC` as the parameter.
+Topics are at the center for stream processing operations. In order to subscribe to data in a topic you need an instance of `TopicConsumer`. This instance allow you to receive all the incoming streams on the specified topic. You can create an instance using the client’s `get_topic_consumer` method, passing the `TOPIC` as the parameter.
 
 === "Python"
     
     ``` python
-    topic_consumer = client.create_topic_consumer(TOPIC)
+    topic_consumer = client.get_topic_consumer(TOPIC)
     ```
 
 === "C\#"
     
     ``` cs
-    var topicConsumer = client.CreateTopicConsumer(TOPIC);
+    var topicConsumer = client.GetTopicConsumer(TOPIC);
     ```
 
 ### Consumer group
@@ -45,13 +45,13 @@ The [Consumer group](kafka.md#consumer-group) is a concept used when you want to
 === "Python"
     
     ``` python
-    topic_consumer = client.create_topic_consumer("{topic}","{your-consumer-group-id}")
+    topic_consumer = client.get_topic_consumer("{topic}","{your-consumer-group-id}")
     ```
 
 === "C\#"
     
     ``` cs
-    var topicConsumer = client.CreateTopicConsumer("{topic}","{your-consumer-group-id}");
+    var topicConsumer = client.GetTopicConsumer("{topic}","{your-consumer-group-id}");
     ```
 
 This is how the message broker knows that all the replicas of your process want to share the load of the incoming streams between replicas. Each replica will receive only a subset of the streams incoming to the Input Topic.
@@ -439,13 +439,13 @@ If you wish to use different automatic commit intervals, use the following code:
     commit_settings.commit_every = 100 # note, you can set this to None
     commit_settings.commit_interval = 500 # note, you can set this to None
     commit_settings.auto_commit_enabled = True
-    topic_consumer = client.create_topic_consumer('yourtopic', commit_settings=commit_settings)
+    topic_consumer = client.get_topic_consumer('yourtopic', commit_settings=commit_settings)
     ```
 
 === "C\#"
     
     ``` cs
-    var topicConsumer = client.CreateTopicConsumer(topic, consumerGroup, new CommitOptions()
+    var topicConsumer = client.GetTopicConsumer(topic, consumerGroup, new CommitOptions()
     {
             CommitEvery = 100,
             CommitInterval = 500,
@@ -464,13 +464,13 @@ Some use cases need manual committing to mark completion of work, for example wh
     ``` python
     from quixstreams import CommitMode
     
-    topic_consumer = client.create_topic_consumer('yourtopic', commit_settings=CommitMode.Manual)
+    topic_consumer = client.get_topic_consumer('yourtopic', commit_settings=CommitMode.Manual)
     ```
 
 === "C\#"
     
     ``` cs
-    client.CreateTopicConsumer(topic, consumerGroup, CommitMode.Manual);
+    client.GetTopicConsumer(topic, consumerGroup, CommitMode.Manual);
     ```
 
 Then, whenever your commit condition fulfils, call:
@@ -530,17 +530,17 @@ By default, Latest is used.
 === "Python"
     
     ``` python
-    topic_consumer = client.create_topic_consumer(test_topic, auto_offset_reset=AutoOffsetReset.Latest)
+    topic_consumer = client.get_topic_consumer(test_topic, auto_offset_reset=AutoOffsetReset.Latest)
     or
-    topic_consumer = client.create_topic_consumer(test_topic, auto_offset_reset=AutoOffsetReset.Earliest)
+    topic_consumer = client.get_topic_consumer(test_topic, auto_offset_reset=AutoOffsetReset.Earliest)
     ```
 
 === "C\#"
     
     ``` cs
-    var topicConsumer = client.CreateTopicConsumer("MyTopic", autoOffset: AutoOffsetReset.Latest);
+    var topicConsumer = client.GetTopicConsumer("MyTopic", autoOffset: AutoOffsetReset.Latest);
     or
-    var topicConsumer = client.CreateTopicConsumer("MyTopic", autoOffset: AutoOffsetReset.Earliest);
+    var topicConsumer = client.GetTopicConsumer("MyTopic", autoOffset: AutoOffsetReset.Earliest);
     ```
 
 ## Revocation
@@ -644,7 +644,7 @@ This is a minimal code example you can use to read data from a topic using Quix 
     
     client = KafkaStreamingClient('127.0.0.1:9092')
     
-    topic_consumer = client.create_topic_consumer(TOPIC_ID)
+    topic_consumer = client.get_topic_consumer(TOPIC_ID)
     
     # read streams
     def on_stream_received_handler(new_stream: StreamConsumer):
@@ -692,7 +692,7 @@ This is a minimal code example you can use to read data from a topic using Quix 
                 // Create a client which holds generic details for creating input and output topics
                 var client = new KafkaStreamingClient("127.0.0.1:9092")
     
-                using var topicConsumer = client.CreateTopicConsumer(TOPIC_ID);
+                using var topicConsumer = client.GetTopicConsumer(TOPIC_ID);
     
                 // Hook up events before initiating read to avoid losing out on any data
                 topicConsumer.OnStreamReceived += (topic, streamConsumer) =>

@@ -48,7 +48,7 @@ class KafkaStreamingClient(object):
 
         self._interop = sci(sci.Constructor(broker_address, secu_opts_hptr, properties=net_properties_hptr, debug=debug))
 
-    def create_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
+    def get_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
                               auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
             Opens an input topic capable of reading incoming streams
@@ -71,16 +71,16 @@ class KafkaStreamingClient(object):
         if isinstance(commit_settings, CommitMode):
             net_commit_settings = ec.enum_to_another(commit_settings, CommitModeInterop)
 
-            hptr = kscei.CreateTopicConsumer(self._interop.get_interop_ptr__(), topic, consumer_group, net_commit_settings, net_offset_reset)
+            hptr = kscei.GetTopicConsumer(self._interop.get_interop_ptr__(), topic, consumer_group, net_commit_settings, net_offset_reset)
         else:
             if isinstance(commit_settings, CommitOptions):
-                hptr = self._interop.CreateTopicConsumer(topic, consumer_group, commit_settings.get_net_pointer(), net_offset_reset)
+                hptr = self._interop.GetTopicConsumer(topic, consumer_group, commit_settings.get_net_pointer(), net_offset_reset)
             else:
-                hptr = self._interop.CreateTopicConsumer(topic, consumer_group, None, net_offset_reset)
+                hptr = self._interop.GetTopicConsumer(topic, consumer_group, None, net_offset_reset)
 
         return TopicConsumer(hptr)
 
-    def create_topic_producer(self, topic: str) -> TopicProducer:
+    def get_topic_producer(self, topic: str) -> TopicProducer:
         """
             Opens an output topic capable of sending outgoing streams
 
@@ -88,7 +88,7 @@ class KafkaStreamingClient(object):
 
             topic (string): Name of the topic
         """
-        hptr = self._interop.CreateTopicProducer(topic)
+        hptr = self._interop.GetTopicProducer(topic)
         return TopicProducer(hptr)
 
     def create_raw_topic_consumer(self, topic: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
