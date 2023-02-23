@@ -32,6 +32,6 @@ nav:
     - 'Subscribe to data': 'subscribe.md'
     - 'Processing data': 'process.md'
     - 'State management': 'state-management.md'
-    - 'Local environment':
-      - 'Set up local environment': 'python-setup.md'
-      - 'Set up docker environment': 'docker-setup.md'
+    # - 'Local environment':
+    #   - 'Set up local environment': 'python-setup.md'
+    #   - 'Set up docker environment': 'docker-setup.md'
