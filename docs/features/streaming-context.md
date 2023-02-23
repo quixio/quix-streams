@@ -12,7 +12,7 @@ Quix Streams creates a stream context for you to group all data for a source. Am
 
 This context simplifies processing streams by providing callbacks on the subscribing side. You can keep working with each context (stream) separately or together, depending on your needs.
 
-The library also allows you to [attach metadata](subscribe.md) to streams, like ids, location, references, time or any other type of information related to the data source.
+The library also allows you to [attach metadata](../subscribe.md) to streams, like ids, location, references, time or any other type of information related to the data source.
 
 ![Attach metadata to streams using Quix Streams](../images/QuixStreamsMetadata.png)
 

@@ -40,7 +40,7 @@ In order to publish data to a topic you need an instance of `TopicProducer`. Thi
 
 ## Create / reopen a stream
 
-[Streams](features/streaming-context) are the central context of data in Quix Streams. Streams make it easy to manage, discover, and work with your data. You can create as many streams as you want using the `create_stream` method of your `TopicProducer` instance:
+[Streams](features/streaming-context.md) are the central context of data in Quix Streams. Streams make it easy to manage, discover, and work with your data. You can create as many streams as you want using the `create_stream` method of your `TopicProducer` instance:
 
 === "Python"
     
@@ -292,7 +292,7 @@ Quix Streams allows you to attach numbers, strings, or binary data to your times
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for writing time-series data. You just need to use the `publish` methods of the `stream.timeseries` or `stream.timeseries.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for writing time-series data. You just need to use the `publish` methods of the `stream.timeseries` or `stream.timeseries.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
 
 ``` python
 df = data.to_dataframe()
