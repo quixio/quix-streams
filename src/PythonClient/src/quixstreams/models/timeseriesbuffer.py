@@ -71,7 +71,7 @@ class TimeseriesBuffer(object):
         self._on_raw_released_dispose()
         self._on_dataframe_released_dispose()
 
-    # region on_receive
+    # region on_data_released
     @property
     def on_data_released(self) -> Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]:
         """
@@ -103,9 +103,9 @@ class TimeseriesBuffer(object):
             self._interop_pb.remove_OnDataReleased(self._on_data_released_ref)
             self._on_data_released_ref = None
 
-    # endregion on_receive
+    # endregion on_data_released
 
-    # region on_raw_receive
+    # region on_raw_released
     @property
     def on_raw_released(self) -> Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]:
         """
@@ -136,9 +136,9 @@ class TimeseriesBuffer(object):
             self._interop_pb.remove_OnRawReleased(self._on_raw_released_ref)
             self._on_raw_released_ref = None
 
-    # endregion on_raw_receive
+    # endregion on_raw_released
 
-    # region on_dataframe_receive
+    # region on_dataframe_released
     @property
     def on_dataframe_released(self) -> Callable[[Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]:
         """
@@ -172,7 +172,7 @@ class TimeseriesBuffer(object):
             self._interop_pb.remove_OnRawReleased(self._on_dataframe_released_ref)
             self._on_dataframe_released_ref = None
 
-    # endregion on_dataframe_receive
+    # endregion on_dataframe_released
 
     @property
     def filter(self) -> Callable[[TimeseriesDataTimestamp], bool]:
@@ -202,7 +202,7 @@ class TimeseriesBuffer(object):
     @property
     def custom_trigger(self) -> Callable[[TimeseriesData], bool]:
         """
-            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_receive is invoked with the entire buffer content
+            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_data_received is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         return self._custom_trigger
@@ -210,7 +210,7 @@ class TimeseriesBuffer(object):
     @custom_trigger.setter
     def custom_trigger(self, value: Callable[[TimeseriesData], bool]):
         """
-            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_receive is invoked with the entire buffer content
+            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_data_received is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         self._custom_trigger = value
@@ -228,7 +228,7 @@ class TimeseriesBuffer(object):
     def packet_size(self) -> Optional[int]:
         """
             Gets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-            of data the on_receive event is invoked and the data is cleared from the buffer.
+            of data the on_data_released event is invoked and the data is cleared from the buffer.
             Defaults to None (disabled).
         """
         return self._interop_pb.get_PacketSize()
@@ -237,7 +237,7 @@ class TimeseriesBuffer(object):
     def packet_size(self, value: Optional[int]):
         """
             Sets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-            of data the on_receive event is invoked and the data is cleared from the buffer.
+            of data the on_data_released event is invoked and the data is cleared from the buffer.
             Defaults to None (disabled).
         """
 
@@ -247,7 +247,7 @@ class TimeseriesBuffer(object):
     def time_span_in_nanoseconds(self) -> Optional[int]:
         """
             Gets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_receive event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
         """
@@ -258,7 +258,7 @@ class TimeseriesBuffer(object):
     def time_span_in_nanoseconds(self, value: Optional[int]):
         """
             Sets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_receive event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
         """
@@ -272,7 +272,7 @@ class TimeseriesBuffer(object):
     def time_span_in_milliseconds(self) -> Optional[int]:
         """
             Gets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_receive event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
             Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with same underlying value.
@@ -283,7 +283,7 @@ class TimeseriesBuffer(object):
     def time_span_in_milliseconds(self, value: Optional[int]):
         """
             Gets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_receive event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
             Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with same underlying value.
@@ -293,8 +293,8 @@ class TimeseriesBuffer(object):
     @property
     def buffer_timeout(self) -> Optional[int]:
         """
-            Gets the maximum duration in milliseconds for which the buffer will be held before triggering on_receive event.
-            on_receive event is trigger when the configured value has elapsed or other buffer condition is met.
+            Gets the maximum duration in milliseconds for which the buffer will be held before triggering on_data_released event.
+            on_data_released event is trigger when the configured value has elapsed or other buffer condition is met.
             Defaults to none (disabled).
         """
         return self._interop_pb.get_BufferTimeout()
@@ -302,8 +302,8 @@ class TimeseriesBuffer(object):
     @buffer_timeout.setter
     def buffer_timeout(self, value: Optional[int]):
         """
-            Sets the maximum duration in milliseconds for which the buffer will be held before triggering on_receive event.
-            on_receive event is trigger when the configured value has elapsed or other buffer condition is met.
+            Sets the maximum duration in milliseconds for which the buffer will be held before triggering on_data_released event.
+            on_data_released event is trigger when the configured value has elapsed or other buffer condition is met.
             Defaults to none (disabled).
         """
 

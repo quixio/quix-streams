@@ -60,7 +60,7 @@ class StreamTimeseriesConsumer(object):
         self._on_dataframe_received_dispose()
         self._on_definitions_changed_dispose()
 
-    # region on_receive
+    # region on_data_received
     @property
     def on_data_received(self) -> Callable[['StreamConsumer', TimeseriesData], None]:
         """
@@ -91,7 +91,7 @@ class StreamTimeseriesConsumer(object):
             self._interop.remove_OnDataReceived(self._on_data_received_ref)
             self._on_data_received_ref = None
 
-    # endregion on_receive
+    # endregion on_data_received
 
     # region on_raw_receive
     @property
@@ -215,7 +215,7 @@ class StreamTimeseriesConsumer(object):
             parameters will be available through this buffer
         :param buffer_configuration: an optional TimeseriesBufferConfiguration.
 
-        :returns: a TimeseriesBufferConsumer which will raise new parameters read via .on_receive event
+        :returns: a TimeseriesBufferConsumer which will raise new data read via .on_data_released event
         """
 
         actual_filters_uptr = None

@@ -159,18 +159,18 @@ topic_producer = client.create_topic_producer("your-kafka-topic")
 stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.parameters.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
 
 print("Sending values for 30 seconds.")
 
 for index in range(0, 3000):
-    stream.parameters \
+    stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", math.sin(index / 200.0)) \
         .add_value("ParameterB", "string value: " + str(index)) \
         .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .write()
+        .publish()
     time.sleep(0.01)
 
 print("Closing stream")
@@ -185,25 +185,24 @@ Once we have setup our producer, it's time to see how to consume data from a top
 import pandas as pd
 
 from quixstreams import *
-from quixstreams.app import App
 
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the input topic where to consume data from.
+# Open the input topic we consume data from.
 # For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.create_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
-    input_stream.parameters.on_read_dataframe = on_dataframe
+def on_stream_received_handler(new_stream: StreamConsumer):
+    new_stream.timeseries.on_dataframe_received = on_dataframe_received_handler
 
 # consume data (as Pandas DataFrame)
-def on_dataframe(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
-topic_consumer.on_stream_received = on_stream
+topic_consumer.on_stream_received = on_stream_received_handler
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit
@@ -256,8 +255,9 @@ Quix Streams base library is developed in C#. We use Interoperability wrappers a
 
 You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language-specific client. For instance for Python:
 
-- `/Python/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
-- `/Python/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
+- `/src/builds/python/windows/build_native.bat`: Generates Python Interop wrappers for Windows platform.
+- `/src/builds/python/linux/build_native.bat`: Generates Python Interop wrappers for Linux platform.
+- `/src/builds/python/mac/build_native.bat`: Generates Python Interop wrappers for Mac platform.
 
 These scripts compile the C# base library and then use the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is a structure like this:
 

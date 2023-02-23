@@ -42,7 +42,7 @@ class StreamEventsConsumer(object):
         self._on_data_received_dispose()
         self._on_definitions_changed_dispose()
 
-    # region on_receive
+    # region on_data_received
     @property
     def on_data_received(self) -> Callable[['StreamConsumer', EventData], None]:
         """
@@ -74,7 +74,7 @@ class StreamEventsConsumer(object):
             self._interop.remove_OnDataReceived(self._on_data_received_ref)
             self._on_data_received_ref = None
 
-    # endregion on_receive
+    # endregion on_data_received
 
     # region on_definitions_changed
     @property

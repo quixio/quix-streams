@@ -154,7 +154,7 @@ class TimeseriesDataRaw(object):
             possible_time_vals = data_frame.select_dtypes(include=['int', 'int64'])
             if possible_time_vals.count()[0] == 0:
                 raise Exception(
-                    "pandasdata frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
+                    "pandas data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
             time_label = possible_time_vals.columns[0]
 
         def get_value_as_type(val_type, val, type_conv=None) -> []:
