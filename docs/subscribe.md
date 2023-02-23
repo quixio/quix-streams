@@ -40,7 +40,7 @@ Topics are at the center for stream processing operations. In order to subscribe
 
 ### Consumer group
 
-The [Consumer group](kafka.md#consumer-group) is a concept used when you want to [scale horizontally](features/horizontal-scaling). Each consumer group is identified using an ID, which you set optionally when opening a connection to the topic for reading:
+The [Consumer group](kafka.md#consumer-group) is a concept used when you want to [scale horizontally](features/horizontal-scaling.md). Each consumer group is identified using an ID, which you set optionally when opening a connection to the topic for reading:
 
 === "Python"
     
@@ -207,7 +207,7 @@ Speed - 6: 110
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for reading and writing time-series data. Use the callback `on_dataframe_received` instead of `on_received` when reading from a stream:
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for reading and writing time-series data. Use the callback `on_dataframe_received` instead of `on_received` when reading from a stream:
 
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer
@@ -422,7 +422,7 @@ It is important to be aware of the commit concept when working with a broker. Co
 
 	Commits are done at a partition level when you use Kafka as a message broker. Streams that belong to the same partition are committed at the same time using the same position. Quix Streams currently does not expose the option to subscribe to only specific partitions of a topic, but commits will only ever affect partitions that are currently assigned to your client.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You can read more about the Streaming Context feature of the library [here](features/streaming-context).
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You can read more about the Streaming Context feature of the library [here](features/streaming-context.md).
 
 ### Automatic committing
 
@@ -551,7 +551,7 @@ When working with a broker, you have a certain number of topic streams assigned 
 
 	Kafka revokes entire partitions, but Quix Streams makes it easy to determine which streams are affected by providing two events you can listen to.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](features/streaming-context) feature of the library.
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](features/streaming-context.md) feature of the library.
 
 ### Streams revoking
 

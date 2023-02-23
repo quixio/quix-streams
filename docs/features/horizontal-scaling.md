@@ -1,6 +1,6 @@
 # Horizontal scaling
 
-Quix Streams provides out of box horizontal scaling using [streaming context](features/streaming-context) for automatic partitioning together with the underlying broker technology, such as kafka.
+Quix Streams provides out of box horizontal scaling using [streaming context](streaming-context.md) for automatic partitioning together with the underlying broker technology, such as kafka.
 
 Imagine the following example:
 
@@ -93,7 +93,7 @@ The same behavior will happen if we scale the "Process" deployment up or down, i
 
 Kafka uses partitions and the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html) to decide which consumers receive which messages. 
 
-Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind Quix Streams. You don’t need to worry about them because everything is abstracted within the [Streaming Context](features/streaming-context) feature of the library. The events described above will remain the same, even if Quix Streams uses another message broker technology or another rebalancing mechanism in the future.
+Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind Quix Streams. You don’t need to worry about them because everything is abstracted within the [Streaming Context](streaming-context.md) feature of the library. The events described above will remain the same, even if Quix Streams uses another message broker technology or another rebalancing mechanism in the future.
 
 !!! warning
 

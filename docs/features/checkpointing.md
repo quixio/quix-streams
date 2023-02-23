@@ -6,7 +6,7 @@ This is a very important concept when you are developing high-performance, strea
 
 Checkpointing lets you do some of this costly processing at a lower frequency, without having to worry about losing data. If, for some reason, your process is restarted or crashes and you haven’t saved all the in-memory data you are processing, the message broker will resend all the messages from the last Checkpoint when you reconnect to the topic.
 
-Refer to the [Committing / checkpointing](subscribe.md/#committing-checkpointing) section of this documentation to find out how to do Checkpointing when reading data with the library.
+Refer to the [Committing / checkpointing](subscribe.md#committing-checkpointing) section of this documentation to find out how to do Checkpointing when reading data with the library.
 
 ## Checkpointing example
 
