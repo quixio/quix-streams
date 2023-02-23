@@ -81,7 +81,7 @@ class StreamEventsProducer(object):
         """
         Publishes event into the stream.
 
-        Parameters: data: EventData object or a Pandas dataframe. columns: Column names if the dataframe has
+        Parameters: data: EventData object or a pandas dataframe. columns: Column names if the dataframe has
         different columns from 'id', 'timestamp' and 'value'. For instance if 'id' is in the column 'event_id',
         id='event_id' must be passed as an argument.
 

@@ -1,54 +1,46 @@
-# Writing time-series data
+# Publishing time-series data
 
-You publish data to Quix using streams in your topic. Quix Streams allows you to create new streams, append data to existing streams, organize streams in folders, and add context data to the streams.
-
-All the necessary code to publish data to your Quix Workspace is auto-generated when you create a project using the existing templates. In this section, we explain more in-depth how to publish data using Quix Streams.
-
-!!! tip
-
-	The [Quix Portal](https://portal.platform.quix.ai) offers you easy-to-use, auto-generated examples for reading, writing, and processing data. These examples work directly with your workspace Topics. You can deploy these examples in our serverless environment with just a few clicks. For a quick test of the capabilities of the library, we recommend starting with those auto-generated examples.
+Quix Streams allows you to publish data using stream context to your topic. It lets you create new streams, append data to existing streams, organize streams in folders, and add context to the streams.
 
 ## Connect to Quix
 
-In order to start publishing data to Quix you need an instance of the Quix client, `QuixStreamingClient`. . This is the entry point where you begin publishing to the topics.
+In order to start publishing data to Quix you need an instance of `KafkaStreamingClient`. This is the entry point where you begin publishing to the topics. To create an instance, use the following code:
 
-You can create an instance of `QuixStreamingClient` as shown here:
+=== "Python"
+	
+	``` python
+    from quixstreams import KafkaStreamingClient
+
+	client = KafkaStreamingClient('127.0.0.1:9092')
+	```
+
+=== "C\#"
+	
+	``` cs
+	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
+	```
+
+You can find other ways to connect to your message broker in the [Connect](connect.md) section.
+
+## Create a topic producer
+
+In order to publish data to a topic you need an instance of `TopicProducer`. This instance allow you to publish data and additional context for streams using the provided topic. You can create an instance using the client’s `create_topic_producer` method, passing the `TOPIC` as the parameter.
 
 === "Python"
     
     ``` python
-    client = QuixStreamingClient()
+    topic_producer = client.create_topic_producer(TOPIC)
     ```
 
 === "C\#"
     
     ``` cs
-    var client = new Quix.Streams.Streaming.QuixStreamingClient();
+    var topicProducer = client.CreateTopicProducer(TOPIC);
     ```
 
-You can find more advanced information on how to connect to Quix in the [Connect to Quix](connect.md) section.
+## Create / reopen a stream
 
-## Open a topic
-
-In order to access that topic for publishing you need an instance of `TopicProducer`. You can create an instance of `TopicProducer` using the client’s `create_topic_producer` method, passing the `TOPIC_ID` or the `TOPIC_NAME` as a parameter.
-
-=== "Python"
-    
-    ``` python
-    topic_producer = client.create_topic_producer(TOPIC_ID)
-    ```
-
-=== "C\#"
-    
-    ``` cs
-    var topicProducer = client.CreateTopicProducer(TOPIC_ID);
-    ```
-
-## Create / attach to a stream
-
-[Streams](features/streaming-context) are the central context of data in Quix. Streams make it easy to manage, discover, and work with your data. They are key to good data governance in your organization. Also, Streams are vital for [parallelizing](features/horizontal-scaling) huge data loads with an infinite number of data sources.
-
-You can create as many streams as you want using the `create_stream` method of your `TopicProducer` instance:
+[Streams](features/streaming-context) are the central context of data in Quix Streams. Streams make it easy to manage, discover, and work with your data. You can create as many streams as you want using the `create_stream` method of your `TopicProducer` instance:
 
 === "Python"
     
@@ -62,7 +54,7 @@ You can create as many streams as you want using the `create_stream` method of y
     var stream = topicProducer.CreateStream();
     ```
 
-A stream ID is auto-generated, but you can also pass a `StreamId` to the method to append or update data of an existing stream:
+A stream ID is auto-generated, but you can also pass a `StreamId` to the method to append data to an existing stream. This is also useful when you simply wish to have consistent streamid for to be able to continue the same stream in the future.
 
 === "Python"
     
@@ -78,17 +70,17 @@ A stream ID is auto-generated, but you can also pass a `StreamId` to the method 
 
 ### Stream properties
 
-As an option, you can add context to your streams by adding a name, some metadata, or a default location.
+You can add optional context to your streams by adding a name, some metadata or a default location.
 
-You can add this metadata to a stream using the `Properties` options of the generated `stream` instance:
+You can add using the `Properties` options of the generated `stream` instance:
 
 === "Python"
     
     ``` python
     stream.properties.name = "Hello World Python stream"
     stream.properties.location = "/test/location"
-    stream.properties.metadata["meta"] = "is"
-    stream.properties.metadata["working"] = "well"
+    stream.properties.metadata["metakey"] = "value"
+    stream.properties.metadata["metakey2"] = "value2"
     ```
 
 === "C\#"
@@ -96,15 +88,13 @@ You can add this metadata to a stream using the `Properties` options of the gene
     ``` cs
     stream.Properties.Name = "Hello World C# stream";
     stream.Properties.Location = "/test/location";
-    stream.Properties.Metadata["meta"] = "is";
-    stream.Properties.Metadata["working"] = "well";
+    stream.Properties.Metadata["metakey"] = "value1";
+    stream.Properties.Metadata["metakey2"] = "value2";
     ```
 
 ### Stream name
 
-The stream name is the display name of your stream in the platform. If you specify one, Quix will use it instead of the Stream Id to represent your stream inside the platform.
-
-For example, the following name:
+When using Quix SaaS, the stream name is the display name of your stream in the platform. If you specify one, Quix SaaS will use it instead of the Stream Id to represent your stream inside the platform. For example, the following name:
 
 === "Python"
     
@@ -148,7 +138,7 @@ Any streams sent without a location property will be located under the "Root" le
 
 ## Close a stream
 
-Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you have all the data you need. They will also be closed automatically when your service stops.
+Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you won't be sending any more data to signal consumers the stream is over.
 
 However, sometimes a stream can be closed for other reasons, such as if an error occurs in the publisher code, or something unexpected happens.
 
@@ -157,7 +147,7 @@ These snippets show you how to close a stream and how to specify the `StreamEndT
 === "Python"
     
     ``` python
-    stream.close()
+    stream.close()  # same as when used with StreamEndType.Closed
     stream.close(StreamEndType.Closed)
     stream.close(StreamEndType.Aborted)
     stream.close(StreamEndType.Terminated)
@@ -166,7 +156,7 @@ These snippets show you how to close a stream and how to specify the `StreamEndT
 === "C\#"
     
     ``` cs
-    stream.Close();
+    stream.Close(); // same as when used with StreamEndType.Closed
     stream.Close(StreamEndType.Closed);
     stream.Close(StreamEndType.Aborted);
     stream.Close(StreamEndType.Terminated);
@@ -180,7 +170,11 @@ The `StreamEndType` can be one of the following possible end types:
 | Aborted       | The stream was aborted by your code for your own reasons            |
 | Terminated    | The stream was terminated unexpectedly while data was being written |
 
-## Writing time-series data
+!!! note
+  
+  Terminated state is also used when subscribing to a stream but the `StreamConsumer` is closed before the stream concluded for other reasons. This can happen when closing the `TopicConsumer` for example.
+
+## Publishing time-series data
 
 You can now start writing data to your stream. [TimeseriesData](#timeseriesdata-format) is the formal class in Quix Streams which represents a time-series data packet in memory. [TimeseriesData](#timeseriesdata-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
 
@@ -190,13 +184,11 @@ You can now start writing data to your stream. [TimeseriesData](#timeseriesdata-
 
 ### TimeseriesData format
 
-[TimeseriesData](#timeseriesdata-format) is the formal class in Quix Streams which represents a time-series data packet in memory.
+TimeseriesData is the formal class in Quix Streams which represents a time series data packet in memory. The format consists of a list of Timestamps with their corresponding parameter names and values for each timestamp.
 
-[TimeseriesData](#timeseriesdata-format) consists of a list of Timestamps with their corresponding Parameter Names and Values for each timestamp.
+You should imagine a TimeseriesData as a table where the Timestamp is the first column of that table and where the parameters are the columns for the values of that table. 
 
-You should imagine a Timeseries Data as a table where the Timestamp is the first column of that table and where the Parameters are the columns for the Values of that table.
-
-The following table shows an example of Timeseries Data:
+The following table shows an example:
 
 | Timestamp | Speed | Gear |
 | --------- | ----- | ---- |
@@ -207,15 +199,15 @@ The following table shows an example of Timeseries Data:
 
 !!! tip
 
-	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of that table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
-
-Quix Streams provides several helpers to create and send `TimeseriesData` packets through the stream.
+	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of the table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
 The following code would generate the previous `TimeseriesData` and send it to the stream:
 
 === "Python"
     
     ``` python
+    from quixstreams import TimeseriesData
+
     data = TimeseriesData()
     
     data.add_timestamp_nanoseconds(1) \
@@ -255,7 +247,7 @@ The following code would generate the previous `TimeseriesData` and send it to t
     stream.Parameters.Publish(data);
     ```
 
-Although Quix allows you to send `TimeseriesData` to a stream directly, without any buffering, Quix recommends you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `TimeseriesData` through a buffer:
+Although Quix Streams allows you to send `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `TimeseriesData` through a buffer:
 
 === "Python"
     
@@ -269,19 +261,22 @@ Although Quix allows you to send `TimeseriesData` to a stream directly, without 
     stream.Parameters.Buffer.Publish(data);
     ```
 
-Visit the [Buffer](#buffer) section of this documentation to find out more about the built-in Buffer feature.
+Visit the [Buffer](#buffer) section of this documentation to find out more about the built-in buffer feature.
 
-Quix Streams allows you to attach any type of data — Numbers, Strings, or raw Binary data — to your timestamps. The following code will attach one of each to the same timestamp:
+Quix Streams allows you to attach numbers, strings, or binary data to your timestamps. The code below will attach one of each to the same timestamp:
 
 === "Python"
     
     ``` python
+    from quixstreams import TimeseriesData
+    from datetime import datetime
+
     data = TimeseriesData()
-    
-    data.add_timestamp(datetime.datetime.utcnow()) \
+
+    data.add_timestamp(datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
-        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) # use bytearray to publish binary data to a stream.
+        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8'))  # use bytearray to publish binary data to a stream.
     ```
 
 === "C\#"
@@ -295,43 +290,60 @@ Quix Streams allows you to attach any type of data — Numbers, Strings, or raw 
         .AddValue("ParameterC", Encoding.ASCII.GetBytes("Hello Quix!")); // Write binary data as a byte array.
     ```
 
+### pandas DataFrame format
+
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for writing time-series data. You just need to use the `publish` methods of the `stream.parameters` or `stream.parameters.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
+
+``` python
+df = data.to_panda_dataframe()
+stream.parameters.buffer.publish(df)
+```
+
+Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
+
+``` python
+with (data := TimeseriesData.from_panda_dataframe(df)):
+    stream.parameters.buffer.publish(data)
+```
+
+!!! tip
+
+	The conversions from pandas DataFrame to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use pandas DataFrame methods provided by Quix Streams that are optimized for doing as few conversions as possible.
+
+
 ### Timestamps
 
 Quix Streams supports common date and time formats for timestamps when adding data to a stream.
 
-Quix Streams gives you several helper functions to add new timestamps to `Buffer`, `ParamaterData`, and `EventData` instances with several types of date/time formats.
+There are several helper functions to add new timestamps to `Buffer`, `TimeseriesData`, and `EventData` instances with several types of date/time formats.
 
 These are all the common helper functions:
 
 === "Python"
     
-      - `add_timestamp(datetime: datetime)` : Add a new timestamp in `datetime` format. Default `epoch` will never be added to this.
-    
-      - `add_timestamp(time: timedelta)` : Add a new timestamp in `timedelta` format since the default `epoch` determined in the stream.
-    
-      - `add_timestamp_milliseconds(milliseconds: int)` : Add a new timestamp in milliseconds since the default `epoch` determined in the stream.
-    
+      - `add_timestamp(datetime: datetime)` : Add a new timestamp in `datetime` format. Default `epoch` will never be added to this.    
+      - `add_timestamp(time: timedelta)` : Add a new timestamp in `timedelta` format since the default `epoch` determined in the stream.    
+      - `add_timestamp_milliseconds(milliseconds: int)` : Add a new timestamp in milliseconds since the default `epoch` determined in the stream.    
       - `add_timestamp_nanoseconds(nanoseconds: int)` : Add a new timestamp in nanoseconds since the default `epoch` determined in the stream.
 
 === "C\#"
     
-      - `AddTimestamp(DateTime dateTime)` : Add a new timestamp in `DateTime` format. Default `Epoch` will never be added to this.
-    
-      - `AddTimestamp(TimeSpan timeSpan)` : Add a new timestamp in `TimeSpan` format since the default `Epoch` determined in the stream.
-    
-      - `AddTimestampMilliseconds(long timeMilliseconds)` : Add a new timestamp in milliseconds since the default `Epoch` determined in the stream.
-    
+      - `AddTimestamp(DateTime dateTime)` : Add a new timestamp in `DateTime` format. Default `Epoch` will never be added to this.    
+      - `AddTimestamp(TimeSpan timeSpan)` : Add a new timestamp in `TimeSpan` format since the default `Epoch` determined in the stream.    
+      - `AddTimestampMilliseconds(long timeMilliseconds)` : Add a new timestamp in milliseconds since the default `Epoch` determined in the stream.    
       - `AddTimestampNanoseconds(long timeNanoseconds)` : Add a new timestamp in nanoseconds since the default `Epoch` determined in the stream.
 
 #### Epoch
 
-There is a stream property called `Epoch` (set to 0 by default) that is added to every timestamp (except for datetime formats) when it’s added to the stream. You can use any value you like to act as a base, from which point timestamps will be relative to.
+There is a stream property called `Epoch` (set to 0 by default, meaning 00:00:00 on 1 January 1970) that is added to every timestamp (except for datetime formats) when it’s added to the stream. You can use any value you like to act as a base, from which point timestamps will be relative to.
 
-The following code indicates to Quix Streams to add the current date/time to each timestamp added to the stream:
+The following code indicates to Quix Streams to set the current date as epoch and add it to each timestamp added to the stream:
 
 === "Python"
     
     ``` python
+    from datetime import date
+
     stream.epoch = date.today()
     ```
 
@@ -389,50 +401,46 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
         .Write();
     ```
 
-### Buffer
+### Using a Buffer
 
-Quix Streams provides a built in `Buffer` to help you achieve high-performance data streaming without the complexity of managing underlying streaming technologies. Instead, you just have to configure the buffer with your requirements using the property `Buffer` present in the `Parameters` property of your stream.
-
-For example, the following configuration means that Quix Streams will send a packet when the size of the buffer reaches 100 timestamps:
+Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to publish data allows you to achieve better compression and higher throughput. 
 
 === "Python"
-    
+    You can use the `buffer` property embedded in the `parameters` property of your `stream`:
     ``` python
     stream.parameters.buffer.packet_size = 100
     ```
 
 === "C\#"
-    
+    You can use the `Buffer` property embedded in the `Parameters` property of your `stream`:
     ``` cs
     stream.Parameters.Buffer.PacketSize = 100;
     ```
 
-Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `Write` method of that built-in `Buffer`, passing the `TimeseriesData` to publish:
+The code above configures the buffer to send a packet when the size of the buffer reaches 100 timestamps.
 
 === "Python"
-    
+    Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `publish` method of that built-in `buffer`:
     ``` python
     stream.parameters.buffer.publish(data)
     ```
 
 === "C\#"
-    
+    Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `Publish` method of that built-in `Buffer`:
     ``` cs
     stream.Parameters.Buffer.Publish(data);
     ```
 
 Quix Streams also allows you to publish data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the buffer.
 
-The following code is an example of how to publish data to the buffer without using an explicit `TimeseriesData` instance:
-
 === "Python"
     
     ``` python
     stream.parameters.buffer \
-        .add_timestamp(datetime.datetime.utcnow()) \
+        .add_timestamp(datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
-        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) # use bytearray to publish binary data to a stream.
+        .add_value("ParameterC", bytearray("hello, Quix!", 'utf-8')) \
         .publish()
     ```
 
@@ -451,34 +459,22 @@ You can configure multiple conditions to determine when the Buffer has to releas
 
 === "Python"
     
-      - `buffer.buffer_timeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.
-    
-      - `buffer.packet_size`: The maximum packet size in terms of number of timestamps. Each time the buffer has this number of timestamps, the packet of data is released.
-    
-      - `buffer.time_span_in_nanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.
-    
-      - `buffer.time_span_in_milliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.
-    
-      - `buffer.custom_trigger_before_enqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.
-    
-      - `buffer.custom_trigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.
-    
+      - `buffer.buffer_timeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.    
+      - `buffer.packet_size`: The maximum packet size in terms of number of timestamps. Each time the buffer has this number of timestamps, the packet of data is released.    
+      - `buffer.time_span_in_nanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.    
+      - `buffer.time_span_in_milliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.    
+      - `buffer.custom_trigger_before_enqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.    
+      - `buffer.custom_trigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.    
       - `buffer.filter`: A custom function to filter the incoming data before adding it to the buffer. If it returns true, data is added, otherwise it isn’t.
 
 === "C\#"
     
-      - `Buffer.BufferTimeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.
-    
-      - `Buffer.PacketSize`: The maximum packet size in terms of number of timestamps. Each time the buffer has this number of timestamps, the packet of data is released.
-    
-      - `Buffer.TimeSpanInNanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.
-    
-      - `Buffer.TimeSpanInMilliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released. Note: This is a millisecond converter on top of `time_span_in_nanoseconds`. They both work with the same underlying value.
-    
-      - `Buffer.CustomTriggerBeforeEnqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.
-    
-      - `Buffer.CustomTrigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.
-    
+      - `Buffer.BufferTimeout`: The maximum duration in milliseconds for which the buffer will be held before releasing the data. A packet of data is released when the configured timeout value has elapsed from the last data received in the buffer.    
+      - `Buffer.PacketSize`: The maximum packet size in terms of number of timestamps. Each time the buffer has this number of timestamps, the packet of data is released.    
+      - `Buffer.TimeSpanInNanoseconds`: The maximum time between timestamps in nanoseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released.    
+      - `Buffer.TimeSpanInMilliseconds`: The maximum time between timestamps in milliseconds. When the difference between the earliest and latest buffered timestamp surpasses this number, the packet of data is released. Note: This is a millisecond converter on top of `TimeSpanInNanoseconds`. They both work with the same underlying value.    
+      - `Buffer.CustomTriggerBeforeEnqueue`: A custom function which is invoked **before** adding a new timestamp to the buffer. If it returns true, the packet of data is released before adding the timestamp to it.    
+      - `Buffer.CustomTrigger`: A custom function which is invoked **after** adding a new timestamp to the buffer. If it returns true, the packet of data is released with the entire buffer content.    
       - `Buffer.Filter`: A custom function to filter the incoming data before adding it to the buffer. If it returns true, data is added, otherwise it isn’t.
 
 #### Examples
@@ -499,7 +495,7 @@ The following buffer configuration will send data every 100ms or, if no data is 
     stream.Parameters.Buffer.BufferTimeout = 1000;
     ```
 
-The following buffer configuration will send data every 100ms window or if critical data arrives:
+The following buffer configuration will publish data every 100ms window or if critical data is added to it:
 
 === "Python"
     
@@ -517,39 +513,35 @@ The following buffer configuration will send data every 100ms window or if criti
 
 ### Parameter definitions
 
-Quix Streams allows you to define metadata for parameters and events, to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, etc. Quix uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
+Quix Streams allows you to define metadata for parameters and events to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, etc. Quix SaaS uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
 
 === "Python"  
     We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `add_definition` helper function of the `stream.parameters` property:
     
     ``` python
-    parameters.add_definition(parameter_id: str, name: str = None, description: str = None)
+    stream.parameters.add_definition('ParameterIdForCode', 'DisplayNameForHumans', 'Additional Description')
     ```
 
 === "C\#"  
     We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `AddDefinition` helper function of the `stream.Parameters` property:
     
     ``` cs
-    Parameters.AddDefinition(parameterId: string, name: string = null, description: string = null)
+    stream.Parameters.AddDefinition("ParameterIdForCode", "DisplayNameForHumans", "Additional Description")
     ```
 
-Once you have added a new definition, you can attach some additional configuration to it. This is the list of visualization and metadata options you can attach to a `ParameterDefinition`:
+Once you have added a new definition, you can attach some additional properties to it. This is the list of visualization and metadata options you can attach to a `ParameterDefinition`:
 
 === "Python"
     
-      - `set_range(minimum_value: float, maximum_value: float)` : Set the minimum and maximum range of the parameter.
-    
-      - `set_unit(unit: str)` : Set the unit of the parameter.
-    
-      - `set_format(format: str)` : Set the format of the parameter.
-    
-      - `set_custom_properties(custom_properties: str)` : Set the custom properties of the parameter.
+      - `set_range(minimum_value: float, maximum_value: float)` : Set the minimum and maximum range of the parameter.    
+      - `set_unit(unit: str)` : Set the unit of the parameter.    
+      - `set_format(format: str)` : Set the format of the parameter.    
+      - `set_custom_properties(custom_properties: str)` : Set the custom properties of the parameter for your own needs.
     
     Example:
     
     ``` python
     stream.parameters \
-        .add_location("vehicle/ecu") \
         .add_definition("vehicle-speed", "Vehicle speed", "Current vehicle speed measured using wheel sensor") \
         .set_unit("kmh") \
         .set_range(0, 400)
@@ -557,25 +549,21 @@ Once you have added a new definition, you can attach some additional configurati
 
 === "C\#"
     
-      - `SetRange(double minimumValue, double maximumValue)` : Set the minimum and maximum range of the parameter.
-    
-      - `SetUnit(string unit)` : Set the unit of the parameter.
-    
-      - `SetFormat(string format)` : Set the format of the parameter.
-    
-      - `SetCustomProperties(string customProperties)` : Set the custom properties of the parameter.
+      - `SetRange(double minimumValue, double maximumValue)` : Set the minimum and maximum range of the parameter.    
+      - `SetUnit(string unit)` : Set the unit of the parameter.    
+      - `SetFormat(string format)` : Set the format of the parameter.    
+      - `SetCustomProperties(string customProperties)` : Set the custom properties of the parameter for your own needs
     
     Example:
     
     ``` cs
     stream.Parameters
-        .AddLocation("vehicle/ecu")
         .AddDefinition("vehicle-speed", "Vehicle speed", "Current vehicle speed measured using wheel sensor")
         .SetUnit("kmh")
         .SetRange(0, 400);
     ```
 
-The Min and Max range definition sets the Y axis range in the waveform visualisation view. This definition:
+The Min and Max range definition sets the Y axis range in the waveform visualisation view in the Quix SaaS. This definition:
 
 === "Python"
     
@@ -589,9 +577,9 @@ The Min and Max range definition sets the Y axis range in the waveform visualisa
     .AddDefinition("Speed").SetRange(0, 400)
     ```
 
-Will set up this view in Visualize:
+Will set up this view in Data explorer:
 
-![visualize](images/visualisationdefinition.png)
+![Data explorer](images/visualisationdefinition.png)
 
 Adding additional `Definitions` for each parameter allows you to see data with different ranges on the same waveform view:
 
@@ -621,60 +609,15 @@ For example, setting this parameter location:
         .AddDefinition("Yaw");
     ```
 
-Will result in this parameter hierarchy in the parameter selection dialog:
-
-![parameterlocation](images/parameterlocationexample.png)
-
-### Using Data Frames
-
-If you use the Python version of Quix Streams you can use [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) for reading and writing TimeseriesData to Quix. The pandas DataFrame format is just a representation of [TimeseriesData](#timeseriesdata-format) format, where the Timestamp is mapped to a column named `time` and the rest of the parameters are mapped as columns named as the ParameterId of the parameter. Tags are mapped as columns with the prefix `TAG__` and the TagId of the tag.
-
-For example, the following [TimeseriesData](#timeseriesdata-format):
-
-| Timestamp | CarId (tag) | Speed | Gear |
-| --------- | ----------- | ----- | ---- |
-| 1         | car-1       | 120   | 3    |
-| 2         | car-2       | 123   | 3    |
-| 3         | car-1       | 125   | 3    |
-| 6         | car-2       | 110   | 2    |
-
-Is represented as the following pandas DataFrame:
-
-| time | TAG\_\_CarId | Speed | Gear |
-| ---- | ------------ | ----- | ---- |
-| 1    | car-1        | 120   | 3    |
-| 2    | car-2        | 123   | 3    |
-| 3    | car-1        | 125   | 3    |
-| 6    | car-2        | 110   | 2    |
-
-Quix Streams allows you to publish data to Quix using [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) directly. You just need to use the common `publish` methods of the `stream.parameters` and `buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
-
-``` python
-df = data.to_panda_dataframe()
-stream.parameters.buffer.publish(df)
-```
-
-Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
-
-``` python
-data = TimeseriesData.from_panda_dataframe(df)
-with data:
-    stream.parameters.buffer.publish(data)
-```
-
-!!! tip
-
-	The conversions from pandas DataFrame to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use pandas DataFrame methods provided by Quix Streams that are optimized for doing as few conversions as possible.
+Will result in this parameter hierarchy in the parameter selection dialogs.
 
 ## Writing events
 
-`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used for time-series data coming from sources that generate data at irregular intervals or without a defined structure.
+`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as json payload where properties can't be converted to individual parameters. EventData can also be better for non-standard changes such as a machine shutting down sending event named ShutDown.
 
 !!! tip
 
 	If your data source generates data at regular time intervals, or the information can be organized in a fixed list of Parameters, the [TimeseriesData](#timeseriesdata-format) format is a better fit for your time-series data.
-
-Writing Events to a stream is identical to writing [TimeseriesData](#timeseriesdata-format) values, although you don’t need to use buffering features because events don’t need high-performance throughput.
 
 ### EventData format
 
@@ -689,39 +632,29 @@ You should imagine a list of `EventData` instances as a simple table of three co
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-Quix Streams provides several helpers to create and send `EventData` packets through the stream.
-
 The following code would generate the list of `EventData` shown in the previous example and send it to the stream:
 
 === "Python"
     
     ``` python
-    events = []
+    from quixstreams import EventData
     
-    events.append(EventData("failure23", 1, "Gearbox has a failure"))
-    events.append(EventData("box-event2", 2, "Car has entered to the box"))
-    events.append(EventData("motor-off", 3, "Motor has stopped"))
-    events.append(EventData("race-event3", 6, "Race has finished"))
-    
-    stream.events.publish(events)
+    stream.events.publish(EventData("failure23", 1, "Gearbox has a failure"))
+    stream.events.publish(EventData("box-event2", 2, "Car has entered to the box"))
+    stream.events.publish(EventData("motor-off", 3, "Motor has stopped"))
+    stream.events.publish(EventData("race-event3", 6, "Race has finished"))
     ```
 
 === "C\#"
     
     ``` cs
-    var events = new List<EventData>();
-    
-    events.Add(new EventData("failure23", 1, "Gearbox has a failure"));
-    events.Add(new EventData("box-event2", 2, "Car has entered to the box"));
-    events.Add(new EventData("motor-off", 3, "Motor has stopped"));
-    events.Add(new EventData("race-event3", 6, "Race has finished"));
-    
-    stream.Events.Publish(events)
+    stream.Events.Publish(new EventData("failure23", 1, "Gearbox has a failure"));
+    stream.Events.Publish(new EventData("box-event2", 2, "Car has entered to the box"));
+    stream.Events.Publish(new EventData("motor-off", 3, "Motor has stopped"));
+    stream.Events.Publish(new EventData("race-event3", 6, "Race has finished"));
     ```
 
-Quix Streams lets you publish Events without creating `EventData` instances explicitly. To do so, you can use the same helpers present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the stream.
-
-This is an example of how to publish Events to the stream without using explicit `EventData` instances:
+Quix Streams lets you publish Events without creating `EventData` instances explicitly. To do so, you can use similar helpers to those present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the stream.
 
 === "Python"
     
@@ -772,23 +705,24 @@ As with parameters, you can attach `Definitions` to each event.
 This is the whole list of visualization and metadata options we can attach to a `EventDefinition`:
 
   - `set_level(level: EventLevel)` : Set severity level of the event.
-
-  - `set_custom_properties(custom_properties: str)` : Set the custom properties of the event.
+  - `set_custom_properties(custom_properties: str)` : Set the custom properties of the event for your own needs.
 
 For example, the following code defines a human readable name and a Severity level for the `EventA`:
 
 === "Python"
     
     ``` python
+    from quixstreams import EventLevel
     stream.events \
         .add_definition("EventA", "The Event A") \
-        .set_level(EventLevel.Critical)
+        .set_level(EventLevel.Critical) \
+        .set_custom_properties("{this could be a json}")
     ```
 
 === "C\#"
     
     ``` cs
-    stream.Events.AddDefinition("EventA", "The Event A").SetLevel(EventLevel.Critical);
+    stream.Events.AddDefinition("EventA", "The Event A").SetLevel(EventLevel.Critical).SetCustomProperties("{this could be a json}");
     ```
 
 ## Tags

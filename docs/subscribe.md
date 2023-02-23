@@ -1,10 +1,10 @@
-# Reading data
+# Subscribing to data
 
-Quix Streams allows you to read data in real time from your topics. In this section, we explain more in-depth how to read data using the library.
+Quix Streams allows you to subscribe to data in real time from your topics. In this section, we explain more in-depth how to do it using the library.
 
 ## Connect to Quix
 
-In order to start reading data from your kafka topics, you need an instance of `KafkaStreamingClient`. This is the entry point where you begin subscribing to the topics. To create an instance, use the following code:
+In order to start subscribing to data from your kafka topics, you need an instance of `KafkaStreamingClient`. This is the entry point where you begin subscribing to the topics. To create an instance, use the following code:
 
 === "Python"
 	
@@ -24,7 +24,7 @@ You can find other ways to connect to your message broker in the [Connect](conne
 
 ## Create a topic consumer
 
-Topics are at the center for stream processing operations. In order to access that topic for subscribing you need an instance of `TopicConsumer`. This instance allow you to receive all the incoming streams on the specified topic. You can create an instance using the client’s `create_topic_consumer` method, passing the `TOPIC` as the parameter.
+Topics are at the center for stream processing operations. In order to subscribe to data in a topic you need an instance of `TopicConsumer`. This instance allow you to receive all the incoming streams on the specified topic. You can create an instance using the client’s `create_topic_consumer` method, passing the `TOPIC` as the parameter.
 
 === "Python"
     
@@ -207,7 +207,7 @@ Speed - 6: 110
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for reading and writing time-series data. Use the callback `on_read_dataframe` instead of  `on_read` when reading from a stream:
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for reading and writing time-series data. Use the callback `on_read_dataframe` instead of `on_read` when reading from a stream:
 
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer
@@ -246,7 +246,7 @@ topic_consumer.subscribe()
 
 	The conversions from [TimeseriesData](#timeseriesdata-format) to pandas DataFrame have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use the `on_read_dataframe` callback provided by the library, which is optimized to do as few conversions as possible.
 
-### Using Buffer
+### Using a Buffer
 
 Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to read data allows you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
 
