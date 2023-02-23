@@ -1111,7 +1111,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
-            read_data = data.to_panda_dataframe()
+            read_data = data.to_dataframe()
             event.set()
 
         def on_parameter_data_raw_handler(stream: qx.StreamConsumer, data: qx.TimeseriesDataRaw):
@@ -1201,7 +1201,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("num_param", 83.756) \
             .add_value("binary_param", bytearray("binary_param", "UTF-8")) \
             .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8")))
-        pf = written_data.to_panda_dataframe()
+        pf = written_data.to_dataframe()
 
         stream.timeseries.buffer.add_timestamp(datetime.utcnow()).add_value("a", "b").publish()
 
@@ -1242,12 +1242,12 @@ class TestIntegration(unittest.TestCase):
 
         def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
             nonlocal read_data
-            read_data = data.to_panda_dataframe()
+            read_data = data.to_dataframe()
             event.set()
 
         def on_parameter_raw_handler(stream: qx.StreamConsumer, data):
             nonlocal read_data_raw
-            read_data_raw = data.to_panda_dataframe()
+            read_data_raw = data.to_dataframe()
             event2.set()
 
         def on_parameter_dataframe_handler(stream: qx.StreamConsumer, data):
@@ -1279,7 +1279,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param", bytearray("binary_paramer", "UTF-8")) \
             .add_value("binary_param2", bytes(bytearray("binary_param2_2", "UTF-8")))
 
-        pf = written_data.to_panda_dataframe()
+        pf = written_data.to_dataframe()
 
         stream.timeseries.buffer.publish(pf)
 
@@ -1458,7 +1458,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag1", "tag1val") \
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
-        pf = written_data.to_panda_dataframe()
+        pf = written_data.to_dataframe()
 
         stream.timeseries.publish(pf)
 

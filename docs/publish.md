@@ -295,14 +295,14 @@ Quix Streams allows you to attach numbers, strings, or binary data to your times
 If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for writing time-series data. You just need to use the `publish` methods of the `stream.timeseries` or `stream.timeseries.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
 
 ``` python
-df = data.to_panda_dataframe()
+df = data.to_dataframe()
 stream.timeseries.buffer.publish(df)
 ```
 
-Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
+Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_dataframe`:
 
 ``` python
-with (data := TimeseriesData.from_panda_dataframe(df)):
+with (data := TimeseriesData.from_dataframe(df)):
     stream.timeseries.buffer.publish(data)
 ```
 
@@ -484,15 +484,15 @@ The following buffer configuration will send data every 100ms or, if no data is 
 === "Python"
     
     ``` python
-    stream.parameters.buffer.time_span_in_milliseconds = 100
-    stream.parameters.buffer.buffer_timeout = 1000
+    stream.timeseries.buffer.time_span_in_milliseconds = 100
+    stream.timeseries.buffer.buffer_timeout = 1000
     ```
 
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer.TimeSpanInMilliseconds = 100;
-    stream.Parameters.Buffer.BufferTimeout = 1000;
+    stream.Timeseries.Buffer.TimeSpanInMilliseconds = 100;
+    stream.Timeseries.Buffer.BufferTimeout = 1000;
     ```
 
 The following buffer configuration will publish data every 100ms window or if critical data is added to it:
@@ -500,15 +500,15 @@ The following buffer configuration will publish data every 100ms window or if cr
 === "Python"
     
     ``` python
-    stream.parameters.buffer.time_span_in_milliseconds = 100
-    stream.parameters.buffer.custom_trigger = lambda data: data.timestamps[0].tags["is_critical"] == 'True'
+    stream.timeseries.buffer.time_span_in_milliseconds = 100
+    stream.timeseries.buffer.custom_trigger = lambda data: data.timestamps[0].tags["is_critical"] == 'True'
     ```
 
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer.TimeSpanInMilliseconds = 100;
-    stream.Parameters.Buffer.CustomTrigger = data => data.Timestamps[0].Tags["is_critical"] == "True";
+    stream.Timeseries.Buffer.TimeSpanInMilliseconds = 100;
+    stream.Timeseries.Buffer.CustomTrigger = data => data.Timestamps[0].Tags["is_critical"] == "True";
     ```
 
 ### Parameter definitions
@@ -516,17 +516,17 @@ The following buffer configuration will publish data every 100ms window or if cr
 Quix Streams allows you to define metadata for parameters and events to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, etc. Quix SaaS uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
 
 === "Python"  
-    We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `add_definition` helper function of the `stream.parameters` property:
+    We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `add_definition` helper function of the `stream.timeseries` property:
     
     ``` python
-    stream.parameters.add_definition('ParameterIdForCode', 'DisplayNameForHumans', 'Additional Description')
+    stream.timeseries.add_definition('ParameterIdForCode', 'DisplayNameForHumans', 'Additional Description')
     ```
 
 === "C\#"  
-    We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `AddDefinition` helper function of the `stream.Parameters` property:
+    We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `AddDefinition` helper function of the `stream.timeseries` property:
     
     ``` cs
-    stream.Parameters.AddDefinition("ParameterIdForCode", "DisplayNameForHumans", "Additional Description")
+    stream.Timeseries.AddDefinition("ParameterIdForCode", "DisplayNameForHumans", "Additional Description")
     ```
 
 Once you have added a new definition, you can attach some additional properties to it. This is the list of visualization and metadata options you can attach to a `ParameterDefinition`:
@@ -541,7 +541,7 @@ Once you have added a new definition, you can attach some additional properties 
     Example:
     
     ``` python
-    stream.parameters \
+    stream.timeseries \
         .add_definition("vehicle-speed", "Vehicle speed", "Current vehicle speed measured using wheel sensor") \
         .set_unit("kmh") \
         .set_range(0, 400)
@@ -557,7 +557,7 @@ Once you have added a new definition, you can attach some additional properties 
     Example:
     
     ``` cs
-    stream.Parameters
+    stream.Timeseries
         .AddDefinition("vehicle-speed", "Vehicle speed", "Current vehicle speed measured using wheel sensor")
         .SetUnit("kmh")
         .SetRange(0, 400);
@@ -585,14 +585,14 @@ Adding additional `Definitions` for each parameter allows you to see data with d
 
 ![ranges](images/visualisationdefinitionrangeexample.png)
 
-You can also define a `Location` before adding parameter and event definitions. Locations are used to organize the Parameters and Events in hierarchy groups in the data catalogue. To add a Location you should use the `add_location` method before adding the definitions you want to include in that group.
+You can also define a `Location` before adding parameter and event definitions. Locations are used to organize the parameters and events in hierarchy groups in the data catalogue. To add a Location you should use the `add_location` method before adding the definitions you want to include in that group.
 
 For example, setting this parameter location:
 
 === "Python"
     
     ``` python
-    stream.parameters \
+    stream.timeseries \
         .add_location("/Player/Motion/Car") \
         .add_definition("Pitch") \
         .add_definition("Roll") \
@@ -602,7 +602,7 @@ For example, setting this parameter location:
 === "C\#"
     
     ``` cs
-    stream.Parameters
+    stream.Timeseries
         .AddLocation("/Player/Motion/Car")
         .AddDefinition("Pitch")
         .AddDefinition("Roll")
@@ -819,7 +819,7 @@ The following example of good tagging practice enables you to query the maximum 
 === "Python"
     
     ``` python
-    stream.parameters.buffer \
+    stream.timeseries.buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_tag("vehicle-plate", "SL96 XCX") \
         .add_tag("driver-id", "Peter") \
@@ -831,7 +831,7 @@ The following example of good tagging practice enables you to query the maximum 
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer
+    stream.Timeseries.Buffer
         .AddTimestamp(DateTime.UtcNow)
         .AddTag("vehicle-plate", "SL96 XCX")
         .AddTag("driver-id", "Peter")
@@ -845,7 +845,7 @@ The following example of bad tagging practice will lead to excessive cardinality
 === "Python"
     
     ``` python
-    stream.parameters.buffer \
+    stream.timeseries.buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_tag("Speed", 53) \
         .add_value("Gear", 4) \
@@ -855,7 +855,7 @@ The following example of bad tagging practice will lead to excessive cardinality
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer
+    stream.Timeseries.Buffer
         .AddTimestamp(DateTime.UtcNow)
         .AddTag("Speed", 53)
         .AddValue("Gear", 4)
@@ -883,7 +883,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
         stream.properties.name = "Hello World python stream"
         
         for index in range(0, 3000):
-            stream.parameters \
+            stream.timeseries \
                 .buffer \
                 .add_timestamp(datetime.datetime.utcnow()) \
                 .add_value("ParameterA", index) \
@@ -920,7 +920,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
                 Console.WriteLine("Sending values for 30 seconds");
                 for (var index = 0; index < 3000; index++)
                 {
-                    stream.Parameters.Buffer
+                    stream.Timeseries.Buffer
                         .AddTimestamp(DateTime.UtcNow)
                         .AddValue("ParameterA", index)
                         .Publish();

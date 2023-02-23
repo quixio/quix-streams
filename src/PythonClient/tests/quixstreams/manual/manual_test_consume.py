@@ -134,7 +134,7 @@ def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData
             global test_parameter_data_count
             print("Timeseries data read for stream: " + stream.stream_id)
             # can convert to panda if wanted
-            pf = data.to_panda_dataframe()
+            pf = data.to_dataframe()
             # but for the following code, using original data, this is how you convert back:
             pfdata = qx.TimeseriesData.from_panda_dataframe(pf)
             with pfdata:
@@ -166,7 +166,7 @@ def on_parameter_data_filtered_handler(stream: qx.StreamConsumer, data: qx.Times
             global test_parameter_data_filtered_count
             print("Timeseries data read for stream: " + stream.stream_id)
             # can convert to panda if wanted
-            pf = data.to_panda_dataframe()
+            pf = data.to_dataframe()
             # but for the following code, using original data, this is how you convert back:
             pfdata = qx.TimeseriesData.from_panda_dataframe(pf)
             with pfdata:

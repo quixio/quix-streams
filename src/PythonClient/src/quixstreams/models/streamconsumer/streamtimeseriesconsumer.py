@@ -130,14 +130,14 @@ class StreamTimeseriesConsumer(object):
     @property
     def on_dataframe_receive(self) -> Callable[['StreamConsumer', pandas.DataFrame], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in pandas DataFrame format.
         """
         return self._on_dataframe_receive
 
     @on_dataframe_receive.setter
     def on_dataframe_receive(self, value: Callable[['StreamConsumer', pandas.DataFrame], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in Pandas' DataFrame format.
+        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in pandas DataFrame format.
         """
         self._on_dataframe_receive = value
         if self._on_dataframe_receive_ref is None:

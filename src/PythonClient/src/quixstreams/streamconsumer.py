@@ -78,14 +78,14 @@ class StreamConsumer(object):
 
     # region on_stream_closed
     @property
-    def on_stream_closed(self) -> Callable[['TopicConsumer', 'StreamConsumer', 'StreamEndType'], None]:
+    def on_stream_closed(self) -> Callable[['StreamConsumer', 'StreamEndType'], None]:
         """
         Gets the handler for when the stream closes. First parameter is the stream which closes, second is the close type.
         """
         return self._on_stream_closed
 
     @on_stream_closed.setter
-    def on_stream_closed(self, value: Callable[['TopicConsumer', 'StreamConsumer', 'StreamEndType'], None]) -> None:
+    def on_stream_closed(self, value: Callable[['StreamConsumer', 'StreamEndType'], None]) -> None:
         """
         Sets the handler for when the stream closes. First parameter is the stream which closes, second is the close type.
         """
@@ -112,14 +112,14 @@ class StreamConsumer(object):
 
     # region on_package_received
     @property
-    def on_package_received(self) -> Callable[['TopicConsumer', 'StreamConsumer', any], None]:
+    def on_package_received(self) -> Callable[['StreamConsumer', any], None]:
         """
         Gets the handler for when the stream receives a package of any type. First parameter is the stream which receives it, second is the package.
         """
         return self._on_package_received
 
     @on_package_received.setter
-    def on_package_received(self, value: Callable[['TopicConsumer', 'StreamConsumer', any], None]) -> None:
+    def on_package_received(self, value: Callable[['StreamConsumer', any], None]) -> None:
         """
         Sets the handler for when the stream receives a package of any type. First parameter is the stream which receives it, second is the package.
         """

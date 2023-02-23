@@ -43,7 +43,7 @@ class TimeseriesDataTests(unittest.TestCase):
                       .add_value("param1", 3)
 
         # Act
-        pdf = timeseries_data.to_panda_dataframe()
+        pdf = timeseries_data.to_dataframe()
         # Assert
         self.assertEqual(100, pdf["time"][0])
         self.assertEqual(1, pdf["param1"][0])
@@ -417,7 +417,7 @@ class TimeseriesDataTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            timeseries_data_raw = TimeseriesData.from_panda_dataframe(pdf).to_panda_dataframe()
+            timeseries_data_raw = TimeseriesData.from_panda_dataframe(pdf).to_dataframe()
             parsed_time=timeseries_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 

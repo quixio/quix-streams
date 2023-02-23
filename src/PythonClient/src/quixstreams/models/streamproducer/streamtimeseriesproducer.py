@@ -130,7 +130,7 @@ class StreamTimeseriesProducer(object):
             self._interop.Publish2(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
-            data = TimeseriesDataRaw.from_panda_dataframe(packet)
+            data = TimeseriesDataRaw.from_dataframe(packet)
             with data:
                 self._interop.Publish2(data.get_net_pointer())
             return

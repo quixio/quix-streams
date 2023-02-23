@@ -223,7 +223,7 @@ topic_consumer.on_stream_received = on_stream_received_handler
 topic_consumer.subscribe()
 ```
     
-Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format) to a pandas DataFrame using the method `to_panda_dataframe`:
+Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format) to a pandas DataFrame using the method `to_dataframe`:
 
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
@@ -235,7 +235,7 @@ def on_stream_received_handler(new_stream: StreamConsumer):
 def on_timeseries_data_read_handler(stream: StreamConsumer, data: TimeseriesData):
     with data:
         # read from input stream
-        df = data.to_panda_dataframe()
+        df = data.to_dataframe()
         print(df.to_string())
 
 topic_consumer.on_stream_received = on_stream_received_handler
@@ -654,7 +654,7 @@ This is a minimal code example you can use to read data from a topic using Quix 
     
     def on_received_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
-            df = data.to_panda_dataframe()
+            df = data.to_dataframe()
             print(df.to_string())    
     
     # Hook up events before initiating read to avoid losing out on any data

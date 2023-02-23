@@ -22,7 +22,6 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
 
     # Callback triggered for each new data frame
     def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
-        df = data.to_panda_dataframe()  # Incoming data frame
         output_df = pd.DataFrame()
         output_df["time"] = df["time"]
         output_df["TAG__LapNumber"] = df["TAG__LapNumber"]

@@ -86,7 +86,7 @@ class StreamEventsProducer(object):
         id='event_id' must be passed as an argument.
 
         Raises:
-            TypeError if the data argument is neither an EventData nor Pandas dataframe.
+            TypeError if the data argument is neither an EventData nor pandas dataframe.
         """
         if isinstance(data, EventData):
             self._interop.Publish(data.get_net_pointer())
