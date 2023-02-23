@@ -112,3 +112,41 @@ To use the library’s state management feature create an instance of `LocalFile
     //list all keys in the storage
     await storage.GetAllKeysAsync();
     ```
+
+## In memory storage
+
+In Python there is another storage available as an experimental feature called `InMemoryStorage`. It works identical to `LocalFileStorage` and also supports dictionary operations such as `del` or iteration.
+
+InMemoryStorage can be used on its own using code below:
+``` python
+from quixstreams import InMemoryStorage
+
+storage = InMemoryStorage()
+storage.clear()
+storage.set("floatval", 12.51)
+storage.set("stringval", "str")
+storage.set("boolval", True)
+storage.set("objval", {"dic": "tionary"})
+```
+
+Alternative can also be used with a backing storage:
+``` python
+from quixstreams import InMemoryStorage, LocalFileStorage
+
+storage = InMemoryStorage(LocalFileStorage("state/test"))
+storage.clear()
+storage.set("floatval", 12.51)
+storage.set("stringval", "str")
+storage.set("boolval", True)
+storage.set("objval", {"dic": "tionary"})
+storage.flush()  # to write to backing storage
+
+# can be useful to hook it to consumer.on_committing
+topic_consumer.on_committing = storage.flush
+# or 
+def on_committing_handler(topic_consumer: qx.TopicConsumer):
+    print("Committing!")
+    storage.flush()  # to write to backing storage
+
+topic_consumer.on_committing = on_committing_handler
+```
