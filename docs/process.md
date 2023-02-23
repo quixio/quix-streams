@@ -21,7 +21,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     using pandas as pd
 
     # Callback triggered for each new data frame
-    def on_dataframe_received_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+    def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
         df = data.to_panda_dataframe()  # Incoming data frame
         output_df = pd.DataFrame()
         output_df["time"] = df["time"]
@@ -30,7 +30,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
         # If braking force applied is more than 50%, we mark HardBraking with True
         output_df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
     
-        stream_output.parameters.publish(output_df)  # Send data to the output stream
+        stream_output.timeseries.publish(output_df)  # Send data to the output stream
     ```
 
 === "Python - Plain"
@@ -39,13 +39,13 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
     # Callback triggered for each new data frame
-    def on_received_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, data: TimeseriesData):
+    def on_received_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
             for row in data.timestamps:
                 # If braking force applied is more than 50%, we mark HardBraking with True
                 hard_braking = row.parameters["Brake"].numeric_value > 0.5
         
-                stream_output.parameters \
+                stream_output.timeseries \
                     .add_timestamp(row.timestamp) \
                     .add_tag("LapNumber", row.tags["LapNumber"]) \
                     .add_value("HardBraking", hard_braking) \
@@ -65,7 +65,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
             .AddValue("ParameterA source frequency", args.Data.Timestamps.Count);
     
         // Send data back to the stream
-        streamOutput.Parameters.Write(outputData);
+        streamOutput.Timeseries.Write(outputData);
     };
     ```
 

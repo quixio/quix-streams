@@ -47,15 +47,15 @@ This will trigger two events, one in the blue replica indicating that "stream 4"
 === "Python"
     
     ``` python
-    def read_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
+    def on_stream_received_handler(new_stream: StreamConsumer):
         print("New stream received:" + new_stream.stream_id)
     
-    def streams_revoked(topic_consumer: TopicConsumer, streams_revoked: [StreamConsumer]):
+    def on_streams_revoked_handler(topic_consumer: TopicConsumer, streams_revoked: [StreamConsumer]):
         for stream in streams_revoked:
             print("Stream revoked:" + stream.stream_id)
     
-    topic_consumer.on_stream_received = read_stream
-    topic_consumer.on_streams_revoked = streams_revoked
+    topic_consumer.on_stream_received = on_stream_received_handler
+    topic_consumer.on_streams_revoked = on_streams_revoked_handler
     ```
 
 === "C\#"

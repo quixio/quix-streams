@@ -223,7 +223,7 @@ The following code would generate the previous `TimeseriesData` and send it to t
         .add_value("Speed", 110) \
         .add_value("Gear", 2)
     
-    stream.parameters.publish(data)
+    stream.timeseries.publish(data)
     ```
 
 === "C\#"
@@ -244,7 +244,7 @@ The following code would generate the previous `TimeseriesData` and send it to t
         .AddValue("Speed", 110)
         .AddValue("Gear", 2);
     
-    stream.Parameters.Publish(data);
+    stream.Timeseries.Publish(data);
     ```
 
 Although Quix Streams allows you to send `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `TimeseriesData` through a buffer:
@@ -252,13 +252,13 @@ Although Quix Streams allows you to send `TimeseriesData` to a stream directly, 
 === "Python"
     
     ``` python
-    stream.parameters.buffer.publish(data)
+    stream.timeseries.buffer.publish(data)
     ```
 
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer.Publish(data);
+    stream.Timeseries.Buffer.Publish(data);
     ```
 
 Visit the [Buffer](#buffer) section of this documentation to find out more about the built-in buffer feature.
@@ -292,18 +292,18 @@ Quix Streams allows you to attach numbers, strings, or binary data to your times
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for writing time-series data. You just need to use the `publish` methods of the `stream.parameters` or `stream.parameters.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames) for writing time-series data. You just need to use the `publish` methods of the `stream.timeseries` or `stream.timeseries.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
 
 ``` python
 df = data.to_panda_dataframe()
-stream.parameters.buffer.publish(df)
+stream.timeseries.buffer.publish(df)
 ```
 
 Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_panda_dataframe`:
 
 ``` python
 with (data := TimeseriesData.from_panda_dataframe(df)):
-    stream.parameters.buffer.publish(data)
+    stream.timeseries.buffer.publish(data)
 ```
 
 !!! tip
@@ -358,7 +358,7 @@ Adding data without using Epoch property:
 === "Python"
     
     ``` python
-    stream.parameters.buffer \
+    stream.timeseries.buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
@@ -368,7 +368,7 @@ Adding data without using Epoch property:
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer
+    stream.Timeseries.Buffer
         .AddTimestamp(DateTime.UtcNow)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")
@@ -382,7 +382,7 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
     ``` python
     stream.epoch = date.today()
     
-    stream.parameters.buffer \
+    stream.timeseries.buffer \
         .add_timestamp_milliseconds(1000) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
@@ -394,7 +394,7 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
     ``` cs
     stream.Epoch = DateTime.Today;
     
-    stream.Parameters.Buffer
+    stream.Timeseries.Buffer
         .AddTimestampInMilliseconds(1000)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")
@@ -408,13 +408,13 @@ Quix Streams provides you with an optional programmable buffer which you can tai
 === "Python"
     You can use the `buffer` property embedded in the `parameters` property of your `stream`:
     ``` python
-    stream.parameters.buffer.packet_size = 100
+    stream.timeseries.buffer.packet_size = 100
     ```
 
 === "C\#"
     You can use the `Buffer` property embedded in the `Parameters` property of your `stream`:
     ``` cs
-    stream.Parameters.Buffer.PacketSize = 100;
+    stream.Timeseries.Buffer.PacketSize = 100;
     ```
 
 The code above configures the buffer to send a packet when the size of the buffer reaches 100 timestamps.
@@ -422,13 +422,13 @@ The code above configures the buffer to send a packet when the size of the buffe
 === "Python"
     Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `publish` method of that built-in `buffer`:
     ``` python
-    stream.parameters.buffer.publish(data)
+    stream.timeseries.buffer.publish(data)
     ```
 
 === "C\#"
     Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `Publish` method of that built-in `Buffer`:
     ``` cs
-    stream.Parameters.Buffer.Publish(data);
+    stream.Timeseries.Buffer.Publish(data);
     ```
 
 Quix Streams also allows you to publish data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the buffer.
@@ -436,7 +436,7 @@ Quix Streams also allows you to publish data to the buffer without creating a `T
 === "Python"
     
     ``` python
-    stream.parameters.buffer \
+    stream.timeseries.buffer \
         .add_timestamp(datetime.utcnow()) \
         .add_value("ParameterA", 10) \
         .add_value("ParameterB", "hello") \
@@ -447,7 +447,7 @@ Quix Streams also allows you to publish data to the buffer without creating a `T
 === "C\#"
     
     ``` cs
-    stream.Parameters.Buffer
+    stream.Timeseries.Buffer
         .AddTimestamp(DateTime.UtcNow)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")

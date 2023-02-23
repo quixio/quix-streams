@@ -29,11 +29,11 @@ Your code might look something like this:
 ```py
 from quixstreams import TopicConsumer, StreamConsumer
 
-def on_stream_received_handler(topic: TopicConsumer, new_stream: StreamConsumer):
-    buffer = new_stream.parameters.create_buffer()
+def on_stream_received_handler(new_stream: StreamConsumer):
+    buffer = new_stream.timeseries.create_buffer()
     buffer.on_dataframe_received = on_dataframe_received_handler
 
-def on_dataframe_received_handler(topic: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # ... some code setting up topic_consumer
@@ -52,11 +52,11 @@ So your code would look like this instead:
 from quixstreams import App, TopicConsumer, StreamConsumer
 import pandas as pd
 
-def on_stream_received_handler(topic: TopicConsumer, new_stream: StreamConsumer):
-    buffer = new_stream.parameters.create_buffer()
+def on_stream_received_handler(new_stream: StreamConsumer):
+    buffer = new_stream.timeseries.create_buffer()
     buffer.on_dataframe_received = on_dataframe_received_handler
 
-def on_dataframe_received_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # ... some code setting up topic_consumer
