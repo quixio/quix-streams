@@ -9,7 +9,7 @@ using Quix.Streams.Transport.Kafka;
 namespace Quix.Streams.Process.Common.Test
 {
     /// <summary>
-    /// Kafka Consumer that uses a mocked Message broker for test purposes
+    /// Kafka consumer that uses a mocked Message broker for test purposes
     /// </summary>
     public class TestTelemetryKafkaConsumer : TelemetryKafkaConsumer
     {

@@ -29,8 +29,8 @@ Your code might look something like this:
 ```py
 from quixstreams import TopicConsumer, StreamConsumer
 
-def on_stream_received_handler(new_stream: StreamConsumer):
-    buffer = new_stream.timeseries.create_buffer()
+def on_stream_received_handler(stream_received: StreamConsumer):
+    buffer = stream_received.timeseries.create_buffer()
     buffer.on_dataframe_released = on_dataframe_released_handler
 
 def on_dataframe_released_handler(stream: StreamConsumer, df: pd.DataFrame):
@@ -52,8 +52,8 @@ So your code would look like this instead:
 from quixstreams import App, TopicConsumer, StreamConsumer
 import pandas as pd
 
-def on_stream_received_handler(new_stream: StreamConsumer):
-    buffer = new_stream.timeseries.create_buffer()
+def on_stream_received_handler(stream_received: StreamConsumer):
+    buffer = stream_received.timeseries.create_buffer()
     buffer.on_dataframe_released = on_dataframe_released_handler
 
 def on_dataframe_released_handler(stream: StreamConsumer, df: pd.DataFrame):
@@ -199,7 +199,7 @@ If you use `App.run()`, this is greatly simplified into the following much small
 ```py
 from quixstreams import App
 # run a while loop
-# open the input topics
+# Subscribe to the input topics
 # listen for termination
 # close topic consumers and producers
 App.run()

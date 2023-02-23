@@ -17,8 +17,8 @@ This situation will trigger an event on topic consumer in the blue replica indic
 === "Python"
     
     ``` python
-    def on_stream_received_handler(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
-        print("New stream received:" + new_stream.stream_id)
+    def on_stream_received_handler(topic_consumer: TopicConsumer, stream_received: StreamConsumer):
+        print("Stream received:" + stream_received.stream_id)
     
     topic_consumer.on_stream_received = on_stream_received_handler
     ```
@@ -47,8 +47,8 @@ This will trigger two events, one in the blue replica indicating that "stream 4"
 === "Python"
     
     ``` python
-    def on_stream_received_handler(new_stream: StreamConsumer):
-        print("New stream received:" + new_stream.stream_id)
+    def on_stream_received_handler(stream_received: StreamConsumer):
+        print("Stream received:" + stream_received.stream_id)
     
     def on_streams_revoked_handler(topic_consumer: TopicConsumer, streams_revoked: [StreamConsumer]):
         for stream in streams_revoked:

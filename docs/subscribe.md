@@ -68,8 +68,8 @@ This is how the message broker knows that all the replicas of your process want 
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer
 
-    def on_stream_received_handler(new_stream: StreamConsumer):
-        print("New stream read:" + new_stream.stream_id)
+    def on_stream_received_handler(stream_received: StreamConsumer):
+        print("Stream received:" + stream_received.stream_id)
     
     topic_consumer.on_stream_received = on_stream_received_handler
     topic_consumer.subscribe()
@@ -120,8 +120,8 @@ The following table shows an example:
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
-    def on_stream_received_handler(new_stream: StreamConsumer):
-        new_stream.on_data_received = on_timeseries_data_received_handler
+    def on_stream_received_handler(stream_received: StreamConsumer):
+        stream_received.on_data_received = on_timeseries_data_received_handler
     
     def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
@@ -212,8 +212,8 @@ If you use the Python version of Quix Streams you can use [pandas DataFrame](fea
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer
 
-def on_stream_received_handler(new_stream: StreamConsumer):
-    new_stream.on_dataframe_received = on_dataframe_received_handler
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.on_dataframe_received = on_dataframe_received_handler
 
 def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
@@ -227,8 +227,8 @@ Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format)
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
-def on_stream_received_handler(new_stream: StreamConsumer):
-    new_stream.on_data_received = on_timeseries_data_received_handler
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.on_data_received = on_timeseries_data_received_handler
 
 def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
     with data:
@@ -391,7 +391,7 @@ Reading events from a stream is as easy as reading timeseries data. In this case
         with data:
             print("Event read for stream. Event Id: " + data.Id)
     
-    new_stream.events.on_data_received = on_event_data_received_handler
+    stream_received.events.on_data_received = on_event_data_received_handler
     ```
 
 === "C\#"
@@ -607,7 +607,7 @@ You can detect stream closure with the `on_stream_closed` callback which has the
     def on_stream_closed_handler(stream: StreamConsumer, end_type: StreamEndType):
             print("Stream closed with {}".format(end_type))
     
-    new_stream.on_stream_closed = on_stream_closed_handler
+    stream_received.on_stream_closed = on_stream_closed_handler
     ```
 
 === "C\#"
@@ -645,9 +645,8 @@ This is a minimal code example you can use to read data from a topic using Quix 
     topic_consumer = client.get_topic_consumer(TOPIC_ID)
     
     # read streams
-    def on_stream_received_handler(new_stream: StreamConsumer):
-    
-        buffer = new_stream.timeseries.create_buffer()
+    def on_stream_received_handler(stream_received: StreamConsumer):    
+        buffer = stream_received.timeseries.create_buffer()
         buffer.on_data_released = on_data_released_handler
     
     def on_data_released_handler(stream: StreamConsumer, data: TimeseriesData):

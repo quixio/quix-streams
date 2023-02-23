@@ -37,7 +37,7 @@ namespace Quix.Streams.Streaming
         /// Initializes a new instance of <see cref="StreamProducer"/>
         /// </summary>
         /// <param name="topicProducer">The producer which owns the <see cref="StreamProducer"/></param>
-        /// <param name="createKafkaProducer">Function factory to create a Kafka Producer from Process layer.</param>
+        /// <param name="createKafkaProducer">Function factory to create a Kafka producer from Process layer.</param>
         /// <param name="streamId">Optional. Stream Id of the stream created</param>
         internal StreamProducer(ITopicProducerInternal topicProducer, Func<string, TelemetryKafkaProducer> createKafkaProducer, string streamId = null)
             :base(streamId)

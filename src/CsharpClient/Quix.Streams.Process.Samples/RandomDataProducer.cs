@@ -7,7 +7,7 @@
  namespace Quix.Streams.Process.Samples
 {
     /// <summary>
-    /// Simply reader component that generates random tdata messages and writes them to the output.
+    /// Simple reader component that generates random timeseries data messages and sends them to the output.
     /// </summary>
     public class RandomDataProducer : StreamComponent
     {

@@ -82,9 +82,9 @@ class TimeseriesDataRaw(object):
 
     def to_dataframe(self) -> pd.DataFrame:
         """
-        Converts TimeseriesDataRaw to pandasDataFrame
+        Converts TimeseriesDataRaw to pandas DataFrame
 
-        :return: Converted pandasDataFrame
+        :return: Converted pandas DataFrame
         """
 
         if len(self.timestamps) == 0:

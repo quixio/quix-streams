@@ -189,13 +189,13 @@ from quixstreams import *
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the input topic we consume data from.
+# Get the consumer for the input topic
 # For testing purposes we remove consumer group and always read from latest data.
 topic_consumer = client.get_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream_received_handler(new_stream: StreamConsumer):
-    new_stream.timeseries.on_dataframe_received = on_dataframe_received_handler
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
 # consume data (as Pandas DataFrame)
 def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):

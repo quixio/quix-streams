@@ -73,27 +73,27 @@ test_parameter_definition_count = 0
 start = None
 
 
-def on_stream_received_handler(new_stream: qx.StreamConsumer):
+def on_stream_received_handler(stream_received: qx.StreamConsumer):
     import datetime
     global start
     if start is None:
         start = datetime.datetime.now()
 
     print("New Stream read!" + str(datetime.datetime.now()))
-    new_stream.on_stream_closed = on_stream_closed_handler
-    new_stream.properties.on_changed = on_stream_properties_changed_handler
-    new_stream.timeseries.on_dataframe_received = on_dataframe_received_handler
-    param_buffer = new_stream.timeseries.create_buffer()
+    stream_received.on_stream_closed = on_stream_closed_handler
+    stream_received.properties.on_changed = on_stream_properties_changed_handler
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
+    param_buffer = stream_received.timeseries.create_buffer()
     param_buffer.on_data_released = on_data_released_handler
 
-    param_buffer_filtered = new_stream.timeseries.create_buffer("numeric param 1", "string param 2")
+    param_buffer_filtered = stream_received.timeseries.create_buffer("numeric param 1", "string param 2")
     param_buffer_filtered.on_data_released = on_timeseries_data_released_filtered_handler
-    new_stream.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
-    new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
-    new_stream.events.on_data_received = on_event_data_received_handler
+    stream_received.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
+    stream_received.events.on_definitions_changed = on_event_definitions_changed_handler
+    stream_received.events.on_data_received = on_event_data_received_handler
 
     # TODO implementation missing
-    # new_stream.on_package_received = on_package_received_handler
+    # stream_received.on_package_received = on_package_received_handler
 
 
 def on_stream_closed_handler(stream: qx.StreamConsumer, end_type: qx.StreamEndType):

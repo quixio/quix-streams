@@ -43,7 +43,7 @@ namespace Quix.Streams.Streaming
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
-        /// <param name="telemetryKafkaConsumer">Kafka Consumer from Process layer</param>
+        /// <param name="telemetryKafkaConsumer">Kafka consumer from Process layer</param>
         public TopicConsumer(TelemetryKafkaConsumer telemetryKafkaConsumer)
         {
             telemetryKafkaConsumer.ForEach(streamId =>

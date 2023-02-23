@@ -265,9 +265,9 @@ class TimeseriesData(object):
     @staticmethod
     def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesData':
         """
-        Converts pandasDataFrame to TimeseriesData
+        Converts pandas DataFrame to TimeseriesData
 
-        :param data_frame: The pandasDataFrame to convert to TimeseriesData
+        :param data_frame: The pandas DataFrame to convert to TimeseriesData
         :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
         :return: Converted TimeseriesData
         """

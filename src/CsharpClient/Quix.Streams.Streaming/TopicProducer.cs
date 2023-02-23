@@ -20,7 +20,7 @@ namespace Quix.Streams.Streaming
         /// <summary>
         /// Initializes a new instance of <see cref="TopicProducer"/>
         /// </summary>
-        /// <param name="createKafkaProducer">Function factory to create a Kafka Producer from Process layer.</param>
+        /// <param name="createKafkaProducer">Function factory to create a Kafka producer from Process layer.</param>
         public TopicProducer(Func<string, TelemetryKafkaProducer> createKafkaProducer)
         {
             this.createKafkaProducer = createKafkaProducer;

@@ -11,7 +11,7 @@ namespace Quix.Streams.Process.Kafka
         /// <summary>
         /// Open kafka input based on the configuration provided
         /// </summary>
-        /// <param name="config">Kafka Producer configuration</param>
+        /// <param name="config">Kafka producer configuration</param>
         /// <param name="topic">Topic Id</param>
         /// <returns>New instance of Kafka Input Transport layer</returns>
         public static IKafkaProducer OpenKafkaInput(KafkaProducerConfiguration config, string topic)
@@ -31,7 +31,7 @@ namespace Quix.Streams.Process.Kafka
         /// <summary>
         /// Open kafka input with a byte splitter based on the configuration provided
         /// </summary>
-        /// <param name="config">Kafka Producer configuration</param>
+        /// <param name="config">Kafka producer configuration</param>
         /// <param name="topic">Topic Id</param>
         /// <param name="byteSplitter">Byte splitter (output)</param> // TODO: Remove this dependency from Process layer
         /// <returns>New instance of Kafka Input Transport layer</returns>
