@@ -27,7 +27,7 @@ namespace Quix.Streams.ManyStreamTest
                     streamCounter++;
                     Console.WriteLine($"Stream count: {streamCounter}");
                 };
-                /*var buffer = reader.Parameters.CreateBuffer();
+                /*var buffer = reader.Timeseries.CreateBuffer();
                 buffer.PacketSize = 1;
 
                 buffer.OnReceived += (sender, data) =>
@@ -43,10 +43,10 @@ namespace Quix.Streams.ManyStreamTest
                 var stream = topicProducer.CreateStream();
                 var data = new Quix.Streams.Streaming.Models.TimeseriesData();
                 data.AddTimestampNanoseconds(10).AddValue("test", DateTime.UtcNow.ToBinary());
-                stream.Parameters.Buffer.Publish(data);
+                stream.Timeseries.Buffer.Publish(data);
                 stream.Events.AddTimestampNanoseconds(10).AddValue("test1", "val1");
                 stream.Properties.Location = "/test";
-                stream.Parameters.AddDefinition("test");
+                stream.Timeseries.AddDefinition("test");
                 stream.Events.AddDefinition("test1");
                 stream.Close();
             }

@@ -14,28 +14,28 @@ from ...native.Python.InteropHelpers.ExternalTypes.System.Array import Array as 
 from ...native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 from ...native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.ParameterDefinitionsChangedEventArgs import ParameterDefinitionsChangedEventArgs
-from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamParametersConsumer import StreamParametersConsumer as spci
+from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamTimeseriesConsumer import StreamTimeseriesConsumer as stsci
 from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataRawReadEventArgs import TimeseriesDataRawReadEventArgs
 from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataReadEventArgs import TimeseriesDataReadEventArgs
 
 
 @nativedecorator
-class StreamParametersConsumer(object):
+class StreamTimeseriesConsumer(object):
 
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamParametersConsumer.
+            Initializes a new instance of StreamTimeseriesConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.parameters to access an instance of it
 
             Parameters:
 
             stream_consumer: The stream the buffer is created for
-            net_pointer (.net object): Pointer to an instance of a .net StreamParametersConsumer
+            net_pointer (.net object): Pointer to an instance of a .net StreamTimeseriesConsumer
         """
         if net_pointer is None:
-            raise Exception("StreamParametersConsumer is none")
+            raise Exception("StreamTimeseriesConsumer is none")
 
-        self._interop = spci(net_pointer)
+        self._interop = stsci(net_pointer)
         self._buffers = []
 
         self._stream_consumer = stream_consumer

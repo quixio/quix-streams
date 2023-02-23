@@ -35,7 +35,7 @@ namespace Quix.Streams.Speedtest
                     return;
                 }
 
-                var buffer = reader.Parameters.CreateBuffer();
+                var buffer = reader.Timeseries.CreateBuffer();
                 buffer.PacketSize = 1;
 
                 buffer.OnRawReceived += (sender, args) =>
@@ -57,7 +57,7 @@ namespace Quix.Streams.Speedtest
             };
             topicConsumer.Subscribe();
 
-            stream.Parameters.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
+            stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
             var PACKET_SIZE = 100000;
             
@@ -77,7 +77,7 @@ namespace Quix.Streams.Speedtest
                 }
                 data.Timestamps = timestamps;
                 data.NumericValues.Add(parameterName, values);
-                stream.Parameters.Publish(data);
+                stream.Timeseries.Publish(data);
                 Thread.Sleep(1);
             }
             

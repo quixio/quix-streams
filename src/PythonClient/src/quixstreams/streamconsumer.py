@@ -6,7 +6,7 @@ from typing import Callable
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
 from .models.streamconsumer.streameventsconsumer import StreamEventsConsumer
-from .models.streamconsumer.streamparametersconsumer import StreamParametersConsumer
+from .models.streamconsumer.streamtimeseriesconsumer import StreamTimeseriesConsumer
 from .models.streamconsumer.streampropertiesconsumer import StreamPropertiesConsumer
 from .models.streamendtype import StreamEndType
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -30,9 +30,9 @@ class StreamConsumer(object):
         """
         self._interop = sci(net_pointer)
         self._topic = topic_consumer
-        self._streamParametersReader = None  # Holding reference to avoid GC
-        self._streamEventsReader = None  # Holding reference to avoid GC
-        self._streamPropertiesReader = None  # Holding reference to avoid GC
+        self._streamTimeseriesConsumer = None  # Holding reference to avoid GC
+        self._streamEventsConsumer = None  # Holding reference to avoid GC
+        self._streamPropertiesConsumer = None  # Holding reference to avoid GC
 
         # define events and their ref holder
         self._on_stream_closed = None
@@ -60,12 +60,12 @@ class StreamConsumer(object):
             self._on_close_cb_always_ref = self._interop.add_OnStreamClosed(_on_close_cb_always_wrapper)
 
     def _finalizerfunc(self):
-        if self._streamParametersReader is not None:
-            self._streamParametersReader.dispose()
-        if self._streamEventsReader is not None:
-            self._streamEventsReader.dispose()
-        if self._streamPropertiesReader is not None:
-            self._streamPropertiesReader.dispose()
+        if self._streamTimeseriesConsumer is not None:
+            self._streamTimeseriesConsumer.dispose()
+        if self._streamEventsConsumer is not None:
+            self._streamEventsConsumer.dispose()
+        if self._streamPropertiesConsumer is not None:
+            self._streamPropertiesConsumer.dispose()
         self._on_stream_closed_dispose()
         self._on_package_received_dispose()
 
@@ -155,28 +155,30 @@ class StreamConsumer(object):
 
     @property
     def properties(self) -> StreamPropertiesConsumer:
-        """ Gets the reader for accessing the properties and metadata of the stream """
-        if self._streamPropertiesReader is None:
-            self._streamPropertiesReader = StreamPropertiesConsumer(self, self._interop.get_Properties())
-        return self._streamPropertiesReader
+        """
+        Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values
+        """
+        if self._streamPropertiesConsumer is None:
+            self._streamPropertiesConsumer = StreamPropertiesConsumer(self, self._interop.get_Properties())
+        return self._streamPropertiesConsumer
 
     @property
     def events(self) -> StreamEventsConsumer:
         """
-        Gets the reader for accessing event related information of the stream such as definitions and event values
+        Gets the consumer for accessing event related information of the stream such as event definitions and values
         """
-        if self._streamEventsReader is None:
-            self._streamEventsReader = StreamEventsConsumer(self, self._interop.get_Events())
-        return self._streamEventsReader
+        if self._streamEventsConsumer is None:
+            self._streamEventsConsumer = StreamEventsConsumer(self, self._interop.get_Events())
+        return self._streamEventsConsumer
 
     @property
-    def parameters(self) -> StreamParametersConsumer:
+    def timeseries(self) -> StreamTimeseriesConsumer:
         """
         Gets the reader for accessing parameter related information of the stream such as definitions and parameter values
         """
-        if self._streamParametersReader is None:
-            self._streamParametersReader = StreamParametersConsumer(self, self._interop.get_Parameters())
-        return self._streamParametersReader
+        if self._streamTimeseriesConsumer is None:
+            self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
+        return self._streamTimeseriesConsumer
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         return self._interop.get_interop_ptr__()

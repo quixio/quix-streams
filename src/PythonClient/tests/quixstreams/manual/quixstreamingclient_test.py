@@ -14,13 +14,13 @@ topic_producer = client.create_topic_producer("hello-world-source")
 
 stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
-stream.parameters.add_definition("ParameterA").set_range(-1.2, 1.2)
-stream.parameters.buffer.time_span_in_milliseconds = 100
+stream.timeseries.add_definition("ParameterA").set_range(-1.2, 1.2)
+stream.timeseries.buffer.time_span_in_milliseconds = 100
 
 print("Sending values for 30 seconds.")
 
 for index in range(0, 3000):
-    stream.parameters \
+    stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", math.sin(index / 200.0) + math.sin(index) / 5.0) \

@@ -28,7 +28,7 @@ namespace Quix.Streams.PerformanceTest
             using var topicProducer = client.CreateTopicProducer("test");
 
             var stream = topicProducer.CreateStream();
-            stream.Parameters.Buffer.PacketSize = bufferSize;
+            stream.Timeseries.Buffer.PacketSize = bufferSize;
             Console.WriteLine("Stream Created.");
 
             while (!ct.IsCancellationRequested && iteration <= 20)
@@ -53,7 +53,7 @@ namespace Quix.Streams.PerformanceTest
                 }
 
 
-                stream.Parameters.Buffer.Publish(data);
+                stream.Timeseries.Buffer.Publish(data);
 
                 sentCount += paramCount * data.Timestamps.Count;
                 timeIteration++;

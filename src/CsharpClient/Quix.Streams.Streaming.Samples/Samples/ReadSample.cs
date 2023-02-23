@@ -43,13 +43,13 @@ namespace Quix.Streams.Streaming.Samples.Samples
                     //CustomFilter = (timestamp) => timestamp.TimestampMilliseconds % 1000 == 0
                 };
 
-                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
 
 
                 buffer.OnReceived += BufferReceived;
                 streamConsumer.Events.OnReceived += EventsReceived;
-                streamConsumer.Parameters.OnDefinitionsChanged += OnParameterDefinitionsChanged;
+                streamConsumer.Timeseries.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
                 streamConsumer.OnStreamClosed += (s, args) =>
@@ -83,9 +83,9 @@ namespace Quix.Streams.Streaming.Samples.Samples
             // var outData = data.Clone();
 
             // Send using buffer
-            //streamProducer.Parameters.Buffer.Publish(data);
+            //streamProducer.Timeseries.Buffer.Publish(data);
             // Send without using buffer
-            //streamProducer.Parameters.Publish(data);
+            //streamProducer.Timeseries.Publish(data);
 
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
@@ -105,7 +105,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
         
         void OnParameterDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
         {
-            foreach (var definition in args.Stream.Parameters.Definitions)
+            foreach (var definition in args.Stream.Timeseries.Definitions)
             {
                 Console.WriteLine($"Parameter definition -> StreamId: {args.Stream.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
             }

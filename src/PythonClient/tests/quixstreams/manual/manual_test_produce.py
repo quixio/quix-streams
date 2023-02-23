@@ -60,19 +60,19 @@ for stream_number in range(number_of_stream):
     event_tags = [f"event tag {number}" for number in range(max(number_of_parameters_tag, number_of_parameters_tag))]
 
     print(f"--- Sending parameter definitions for stream {stream_number} ---")
-    stream.parameters.default_location = "/params/"
+    stream.timeseries.default_location = "/params/"
     for parameter in parameter_names_numerics:
-        stream.parameters.add_location("/params/numeric") \
+        stream.timeseries.add_location("/params/numeric") \
             .add_definition(parameter, parameter, f"This is {parameter}") \
             .set_unit("hz").set_format("{0} hz").set_range(-1000, 1000)
 
     for parameter in parameter_names_strings:
-        stream.parameters.add_location("/params/string") \
+        stream.timeseries.add_location("/params/string") \
             .add_definition(parameter, parameter, f"This is {parameter}") \
             .set_custom_properties("{\"generator\":\"python\"")
 
     for parameter in parameter_names_binary:
-        stream.parameters.add_location("/params/binary") \
+        stream.timeseries.add_location("/params/binary") \
             .add_definition(parameter, parameter, f"This is {parameter}") \
             .set_custom_properties("{\"type\":\"base64\"")
 
@@ -89,7 +89,7 @@ for stream_number in range(number_of_stream):
     for index, tag in enumerate(parameter_tags):
         if index == number_of_parameters_default_tag:
             break
-        stream.parameters.buffer.default_tags[tag] = f"parameter tag value {index}"
+        stream.timeseries.buffer.default_tags[tag] = f"parameter tag value {index}"
 
     for index, tag in enumerate(event_tags):
         if index == number_of_events_default_tag:
@@ -102,7 +102,7 @@ for stream_number in range(number_of_stream):
 
         # use buffer
         if variant == 0:
-            param_builder = stream.parameters.buffer
+            param_builder = stream.timeseries.buffer
             event_builder = stream.events
             for points_index in range(number_of_data_points_per_loop):
                 # send parameters
@@ -165,7 +165,7 @@ for stream_number in range(number_of_stream):
                             break
                         pdts.add_tag(tag, f"new parameter tag value {index}")
 
-                stream.parameters.publish(tsdata)
+                stream.timeseries.publish(tsdata)
 
         if variant == 2:
 
@@ -211,7 +211,7 @@ for stream_number in range(number_of_stream):
                 rows[rowindex] = row
 
             pdf = pd.DataFrame(rows, columns=headers)
-            stream.parameters.publish(pdf)
+            stream.timeseries.publish(pdf)
 
     print(f"--- Closing stream {stream_number} ---")
     endtype = qx.StreamEndType(stream_number % 2 + 1)

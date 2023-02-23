@@ -11,11 +11,11 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
     /// <summary>
     /// Helper class for writing <see cref="ParameterDefinition"/> and <see cref="TimeseriesData"/>
     /// </summary>
-    public class StreamParametersProducer : IDisposable
+    public class StreamTimeseriesProducer : IDisposable
     {
         private readonly IStreamProducerInternal streamProducer;
 
-        private readonly ILogger logger = Logging.CreateLogger<StreamParametersProducer>();
+        private readonly ILogger logger = Logging.CreateLogger<StreamTimeseriesProducer>();
 
         private string location;
         private readonly ParameterDefinitionsManager parameterDefinitionsManager = new ParameterDefinitionsManager();
@@ -26,11 +26,11 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         private readonly object flushLock = new object();
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamParametersProducer"/>
+        /// Initializes a new instance of <see cref="StreamTimeseriesProducer"/>
         /// </summary>
         /// <param name="topicProducer">The topic producer to publish to with</param>
         /// <param name="streamProducer">Stream writer owner</param>
-        internal StreamParametersProducer(ITopicProducer topicProducer, IStreamProducerInternal streamProducer)
+        internal StreamTimeseriesProducer(ITopicProducer topicProducer, IStreamProducerInternal streamProducer)
         {
             this.streamProducer = streamProducer;
 
@@ -57,7 +57,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
 
             for (var index = 0; index < data.Timestamps.Count; index++)
@@ -82,7 +82,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
 
             long epochDiff = this.streamProducer.Epoch.ToUnixNanoseconds();
@@ -128,21 +128,21 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             {
                 if (isDisposed)
                 {
-                    throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                    throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
                 }
                 this.location = this.parameterDefinitionsManager.ReformatLocation(value);
             }
         }
 
         /// <summary>
-        /// Adds a list of definitions to the <see cref="StreamParametersProducer"/>. Configure it with the builder methods.
+        /// Adds a list of definitions to the <see cref="StreamTimeseriesProducer"/>. Configure it with the builder methods.
         /// </summary>
         /// <param name="definitions">List of definitions</param>
         public void AddDefinitions(List<ParameterDefinition> definitions)
         {
             if (isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
             definitions.ForEach(d => this.parameterDefinitionsManager.AddDefinition(d.ConvertToProcessDefinition(), d.Location));
 
@@ -150,7 +150,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Adds a new parameter definition to the <see cref="StreamParametersProducer"/>. Configure it with the builder methods.
+        /// Adds a new parameter definition to the <see cref="StreamTimeseriesProducer"/>. Configure it with the builder methods.
         /// </summary>
         /// <param name="parameterId">The id of the parameter. Must match the parameter id used to send data.</param>
         /// <param name="name">The human friendly display name of the parameter</param>
@@ -160,7 +160,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
             var parameterDefinition = this.CreateDefinition(this.location, parameterId, name, description);
 
@@ -178,7 +178,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
             this.parameterDefinitionsManager.GenerateLocations(location);
 
@@ -191,7 +191,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
             var parameterDefinition = new Process.Models.ParameterDefinition
             {
@@ -219,7 +219,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (!force && isDisposed)
             {
-                throw new ObjectDisposedException(nameof(StreamParametersProducer));
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
 
             try

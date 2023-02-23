@@ -111,8 +111,8 @@ class TestIntegration(unittest.TestCase):
                 output_stream.properties.parents.append("testParentId1")
                 output_stream.properties.parents.append("testParentId2")
                 output_stream.properties.time_of_recording = datetime.utcnow()
-                output_stream.parameters.buffer.add_timestamp(datetime.utcnow()).add_value("test", 1)
-                output_stream.parameters.flush()
+                output_stream.timeseries.buffer.add_timestamp(datetime.utcnow()).add_value("test", 1)
+                output_stream.timeseries.flush()
                 output_stream.properties.flush()
                 output_stream.close()
                 print("Closed")
@@ -153,7 +153,7 @@ class TestIntegration(unittest.TestCase):
             if stream.stream_id == output_stream.stream_id:
                 print("---- Test stream read {} ----".format(stream.stream_id))
                 incoming_stream = stream
-                stream.parameters.on_definitions_changed = on_parameters_changed
+                stream.timeseries.on_definitions_changed = on_parameters_changed
 
         def on_parameters_changed(stream: qx.StreamConsumer):
             event.set()
@@ -170,16 +170,16 @@ class TestIntegration(unittest.TestCase):
         output_stream = topic_producer.create_stream()
 
         print("---- Setting stream parameter definitions ----")
-        output_stream.parameters.default_location = "/the/location"
-        output_stream.parameters.add_definition("ParameterA")
-        output_stream.parameters.add_location("/the/otherlocation") \
+        output_stream.timeseries.default_location = "/the/location"
+        output_stream.timeseries.add_definition("ParameterA")
+        output_stream.timeseries.add_location("/the/otherlocation") \
             .add_definition("ParameterB", "Parameter B", "Some description") \
             .set_range(1.23456, 7.890) \
             .set_unit("C") \
             .set_format("0.0000f") \
             .set_custom_properties("{""jsonprop"": true }") \
 
-        output_stream.parameters.flush()
+        output_stream.timeseries.flush()
         output_stream.close()
         print("Closed")
         topic_producer.dispose()
@@ -189,7 +189,7 @@ class TestIntegration(unittest.TestCase):
 
         self.assertIsNotNone(incoming_stream)
 
-        pdefs = incoming_stream.parameters.definitions
+        pdefs = incoming_stream.timeseries.definitions
 
         self.assertEqual(len(pdefs), 2)
 
@@ -868,7 +868,7 @@ class TestIntegration(unittest.TestCase):
 
             def on_new_stream(stream: qx.StreamConsumer):
                 if stream.stream_id == stream.stream_id:
-                    param_buffer = stream.parameters.create_buffer()
+                    param_buffer = stream.timeseries.create_buffer()
                     param_buffer.buffer_timeout = 100
                     param_buffer.on_receive = on_parameter_data_handler
 
@@ -882,15 +882,15 @@ class TestIntegration(unittest.TestCase):
 
             # Act
             stream = topic_producer.create_stream()
-            stream.parameters.buffer.packet_size = 10  # this is to enforce buffering until we want
+            stream.timeseries.buffer.packet_size = 10  # this is to enforce buffering until we want
             # Send parameter Data for datetime
             utc_now = datetime.utcnow()  # for assertion purposes save it
-            stream.parameters.buffer \
+            stream.timeseries.buffer \
                 .add_timestamp(utc_now) \
                 .add_value("binary_param", bytearray("binary_param", "UTF-8")) \
                 .publish()
 
-            stream.parameters.buffer.flush()
+            stream.timeseries.buffer.flush()
 
             # Assert
             self.waitforresult(event)
@@ -914,7 +914,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
                 param_buffer.buffer_timeout = 100
                 param_buffer.on_receive = on_parameter_data_handler
 
@@ -928,10 +928,10 @@ class TestIntegration(unittest.TestCase):
 
         # Act
         stream = topic_producer.create_stream()
-        stream.parameters.buffer.packet_size = 10  # this is to enforce buffering until we want
+        stream.timeseries.buffer.packet_size = 10  # this is to enforce buffering until we want
         # Send parameter Data for datetime
         utc_now = datetime.utcnow()  # for assertion purposes save it
-        stream.parameters.buffer \
+        stream.timeseries.buffer \
             .add_timestamp(utc_now) \
             .add_value("string_param", "value1") \
             .add_value("num_param", 123.43) \
@@ -942,7 +942,7 @@ class TestIntegration(unittest.TestCase):
             .publish()
 
         # Send timeseries data in nanoseconds relative to epoch
-        stream.parameters.buffer \
+        stream.timeseries.buffer \
             .add_timestamp_nanoseconds(123456789) \
             .add_value("string_param", "value1") \
             .add_value("num_param", 83.756) \
@@ -950,8 +950,8 @@ class TestIntegration(unittest.TestCase):
             .publish()
 
         # Send timeseries data in timedelta relative to a new epoch
-        stream.parameters.buffer.epoch = datetime(2018, 1, 2)
-        stream.parameters.buffer \
+        stream.timeseries.buffer.epoch = datetime(2018, 1, 2)
+        stream.timeseries.buffer \
             .add_timestamp(timedelta(seconds=1, milliseconds=555)) \
             .add_value("num_param", 123.32) \
             .add_value("binary_param", bytearray("binary_param4", "UTF-8")) \
@@ -963,9 +963,9 @@ class TestIntegration(unittest.TestCase):
             .add_value("num_param", 83.756) \
             .add_value("binary_param", bytearray("binary_param4", "UTF-8"))
 
-        stream.parameters.buffer.publish(written_data)
+        stream.timeseries.buffer.publish(written_data)
 
-        stream.parameters.buffer.flush()
+        stream.timeseries.buffer.flush()
 
         # Assert
         self.waitforresult(event)
@@ -988,7 +988,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                reader.parameters.on_raw_receive = on_parameter_data_handler
+                reader.timeseries.on_raw_receive = on_parameter_data_handler
 
         def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesDataRaw):
             nonlocal read_data
@@ -1013,7 +1013,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1046,7 +1046,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
                 param_buffer.on_receive = on_parameter_data_handler
 
         def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
@@ -1072,7 +1072,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1104,7 +1104,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
                 param_buffer.on_receive = on_parameter_data_handler
                 param_buffer.on_raw_receive = on_parameter_data_raw_handler
                 param_buffer.on_dataframe_receive = on_parameter_dataframe_handler
@@ -1142,7 +1142,7 @@ class TestIntegration(unittest.TestCase):
             .add_tag("tag2", "tag2val") \
             .remove_tag("tag2")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         print("------ Written ------")
@@ -1181,7 +1181,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
                 param_buffer.buffer_timeout = 100
                 param_buffer.on_receive = on_parameter_data_handler
 
@@ -1203,9 +1203,9 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8")))
         pf = written_data.to_panda_dataframe()
 
-        stream.parameters.buffer.add_timestamp(datetime.utcnow()).add_value("a", "b").publish()
+        stream.timeseries.buffer.add_timestamp(datetime.utcnow()).add_value("a", "b").publish()
 
-        stream.parameters.buffer.flush()
+        stream.timeseries.buffer.flush()
 
         # Assert
         self.waitforresult(event)
@@ -1232,11 +1232,11 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
                 param_buffer.buffer_timeout = 100
                 param_buffer.on_receive = on_parameter_data_handler
 
-                params = reader.parameters
+                params = reader.timeseries
                 params.on_raw_receive = on_parameter_raw_handler
                 params.on_dataframe_receive = on_parameter_dataframe_handler
 
@@ -1260,7 +1260,7 @@ class TestIntegration(unittest.TestCase):
 
         # Act
         stream = topic_producer.create_stream()
-        stream.parameters.buffer.packet_size = 10  # to enforce disabling of output buffer
+        stream.timeseries.buffer.packet_size = 10  # to enforce disabling of output buffer
         written_data = qx.TimeseriesData()
 
         written_data.add_timestamp_nanoseconds(10) \
@@ -1281,9 +1281,9 @@ class TestIntegration(unittest.TestCase):
 
         pf = written_data.to_panda_dataframe()
 
-        stream.parameters.buffer.publish(pf)
+        stream.timeseries.buffer.publish(pf)
 
-        stream.parameters.buffer.flush()
+        stream.timeseries.buffer.flush()
 
         # Assert
         self.waitforresult(event)
@@ -1322,7 +1322,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
 
                 def custom_trigger_callback(parameter_data: qx.TimeseriesData) -> bool:
                     nonlocal special_func_invokation_count
@@ -1354,7 +1354,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1390,7 +1390,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer(buffer_config)
+                param_buffer = reader.timeseries.create_buffer(buffer_config)
 
         topic_consumer.on_stream_received = on_new_stream
         topic_consumer.subscribe()
@@ -1411,7 +1411,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1433,7 +1433,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream( reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
                 param_buffer.on_receive = on_parameter_data_handler
 
         def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
@@ -1460,7 +1460,7 @@ class TestIntegration(unittest.TestCase):
             .remove_tag("tag2")
         pf = written_data.to_panda_dataframe()
 
-        stream.parameters.publish(pf)
+        stream.timeseries.publish(pf)
 
         # Assert
         print("------ Written ------")
@@ -1487,7 +1487,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer("param1", "param3")
+                param_buffer = reader.timeseries.create_buffer("param1", "param3")
                 param_buffer.buffer_timeout = 500  # to prevent raising each timestamp on its own
                 param_buffer.on_receive = on_parameter_data_handler
 
@@ -1515,7 +1515,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         expected_data = qx.TimeseriesData()
@@ -1555,7 +1555,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer(buffer_config)
+                param_buffer = reader.timeseries.create_buffer(buffer_config)
                 param_buffer.buffer_timeout = 1000  # to prevent raising each timestamp on its own
                 param_buffer.on_receive = on_parameter_data_handler
 
@@ -1583,7 +1583,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         expected_data = qx.TimeseriesData()
@@ -1621,7 +1621,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer()
+                param_buffer = reader.timeseries.create_buffer()
 
                 def filter(parameter_data_timestamp: qx.TimeseriesDataTimestamp) -> bool:
                     nonlocal special_func_invokation_count
@@ -1653,7 +1653,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         self.waitforresult(event)
@@ -1689,7 +1689,7 @@ class TestIntegration(unittest.TestCase):
 
         def on_new_stream(reader: qx.StreamConsumer):
             if stream.stream_id == reader.stream_id:
-                param_buffer = reader.parameters.create_buffer(buffer_config)
+                param_buffer = reader.timeseries.create_buffer(buffer_config)
 
         topic_consumer.on_stream_received = on_new_stream
         topic_consumer.subscribe()
@@ -1710,7 +1710,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("param1", 2) \
             .add_value("param3", "test")
 
-        stream.parameters.publish(written_data)
+        stream.timeseries.publish(written_data)
 
         # Assert
         self.waitforresult(event)

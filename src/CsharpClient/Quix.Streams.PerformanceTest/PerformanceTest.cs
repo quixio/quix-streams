@@ -23,7 +23,7 @@ namespace Quix.Streams.PerformanceTest
 
             //topicConsumer.OnStreamReceived += (s, stream) =>
             //{
-            //    var buffer = stream.Parameters.CreateBuffer();
+            //    var buffer = stream.Timeseries.CreateBuffer();
             //    buffer.PacketSize = readBufferSize;
             //    buffer.OnReceived += (sender, data) => 
             //    {
@@ -37,13 +37,13 @@ namespace Quix.Streams.PerformanceTest
             //topicConsumer.Subscribe();
 
             var stream = topicProducer.CreateStream();
-            stream.Parameters.Buffer.PacketSize = writeBufferSize;
+            stream.Timeseries.Buffer.PacketSize = writeBufferSize;
 
             DateTime lastUpdate = DateTime.UtcNow;
 
             while (!ct.IsCancellationRequested)
             {
-                var builder = stream.Parameters.Buffer.AddTimestamp(DateTime.UtcNow);
+                var builder = stream.Timeseries.Buffer.AddTimestamp(DateTime.UtcNow);
                 for(var i = 0; i < paramCount; i++)
                 {
                     builder = builder.AddValue($"param{i}", i);

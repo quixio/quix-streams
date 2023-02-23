@@ -16,7 +16,7 @@ class TimeseriesBufferConsumer(TimeseriesBuffer):
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p = None):
         """
             Initializes a new instance of TimeseriesBufferConsumer.
-            NOTE: Do not initialize this class manually, use StreamParametersConsumer.create_buffer to create it
+            NOTE: Do not initialize this class manually, use StreamTimeseriesConsumer.create_buffer to create it
 
             Parameters:
             stream_consumer: The stream the buffer is created for

@@ -28,7 +28,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
 
         private long lastHeartbeatRebroadcastTime = 0;  // in milliseconds
         private int heartbeatRebroadcastFlushInterval = 30*1000;
-        private readonly ILogger<StreamParametersProducer> logger = Logging.CreateLogger<StreamParametersProducer>();
+        private readonly ILogger<StreamTimeseriesProducer> logger = Logging.CreateLogger<StreamTimeseriesProducer>();
 
         /// <summary>
         /// Automatic flush interval of the properties metadata into the channel [ in milliseconds ]

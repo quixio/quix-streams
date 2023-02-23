@@ -14,7 +14,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         private readonly IStreamConsumerInternal streamConsumer;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamParametersConsumer"/>
+        /// Initializes a new instance of <see cref="StreamTimeseriesConsumer"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the stream to what this reader belongs to</param>
         /// <param name="streamConsumer">Stream reader owner</param>

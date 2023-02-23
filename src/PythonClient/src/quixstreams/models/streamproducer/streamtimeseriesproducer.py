@@ -7,29 +7,29 @@ from .timeseriesbufferproducer import TimeseriesBufferProducer
 from ...builders import ParameterDefinitionBuilder
 from ...helpers.nativedecorator import nativedecorator
 from ...models import TimeseriesData, TimeseriesDataRaw
-from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.StreamParametersProducer import StreamParametersProducer as sppi
+from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.StreamTimeseriesProducer import StreamTimeseriesProducer as stspi
 
 
 @nativedecorator
-class StreamParametersProducer(object):
+class StreamTimeseriesProducer(object):
     """
         Group all the Parameters properties, builders and helpers that allow to stream parameter values and parameter definitions to the platform.
     """
 
     def __init__(self, stream_producer, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamParametersProducer.
+            Initializes a new instance of StreamTimeseriesProducer.
 
             Parameters:
 
             stream_producer: The stream the writer is created for
-            net_pointer: Pointer to an instance of a .net StreamParametersProducer.
+            net_pointer: Pointer to an instance of a .net StreamTimeseriesProducer.
         """
 
         if net_pointer is None:
-            raise Exception("StreamParametersProducer is none")
+            raise Exception("StreamTimeseriesProducer is none")
 
-        self._interop = sppi(net_pointer)
+        self._interop = stspi(net_pointer)
         self._buffer = None
         self._stream_producer = stream_producer
 

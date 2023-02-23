@@ -14,7 +14,7 @@ namespace Quix.Streams.Streaming
         private readonly ITopicConsumer topicConsumer;
         private readonly ILogger logger = Logging.CreateLogger<StreamConsumer>();
         private readonly StreamPropertiesConsumer streamPropertiesConsumer;
-        private readonly StreamParametersConsumer streamParametersConsumer;
+        private readonly StreamTimeseriesConsumer streamTimeseriesConsumer;
         private readonly StreamEventsConsumer streamEventsConsumer;
         private bool isClosed = false;
 
@@ -31,7 +31,7 @@ namespace Quix.Streams.Streaming
             this.topicConsumer = topicConsumer;
             // Managed readers
             this.streamPropertiesConsumer = new StreamPropertiesConsumer(this.topicConsumer, this);
-            this.streamParametersConsumer = new StreamParametersConsumer(this.topicConsumer, this);
+            this.streamTimeseriesConsumer = new StreamTimeseriesConsumer(this.topicConsumer, this);
             this.streamEventsConsumer = new StreamEventsConsumer(this.topicConsumer, this);
 
             InitializeStreaming();
@@ -49,7 +49,7 @@ namespace Quix.Streams.Streaming
         public StreamPropertiesConsumer Properties => streamPropertiesConsumer;
 
         /// <inheritdoc />
-        public StreamParametersConsumer Parameters => streamParametersConsumer;
+        public StreamTimeseriesConsumer Timeseries => streamTimeseriesConsumer;
 
         /// <inheritdoc />
         public StreamEventsConsumer Events => streamEventsConsumer;
@@ -146,7 +146,7 @@ namespace Quix.Streams.Streaming
             isClosed = true;
             this.logger.LogTrace("StreamConsumer: OnStreamEndReceived");
 
-            this.Parameters.Buffers.ForEach(buffer => buffer.Dispose());
+            this.Timeseries.Buffers.ForEach(buffer => buffer.Dispose());
             
             this.OnStreamClosed?.Invoke(this, new StreamClosedEventArgs(this.topicConsumer, this, endType));
         }
@@ -154,7 +154,7 @@ namespace Quix.Streams.Streaming
         public override void Dispose()
         {
             this.streamEventsConsumer.Dispose();
-            this.streamParametersConsumer.Dispose();
+            this.streamTimeseriesConsumer.Dispose();
             this.streamPropertiesConsumer.Dispose();
             base.Dispose();
         }

@@ -24,7 +24,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
     def __init__(self, stream_producer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of TimeseriesBufferProducer.
-            NOTE: Do not initialize this class manually, use StreamParametersProducer.buffer to access an instance of it
+            NOTE: Do not initialize this class manually, use StreamTimeseriesProducer.buffer to access an instance of it
 
             Parameters:
 

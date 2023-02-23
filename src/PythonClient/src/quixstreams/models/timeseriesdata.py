@@ -238,7 +238,7 @@ class TimeseriesData(object):
             index = headers["time"]
             obj[index] = pdts.timestamp_nanoseconds
 
-            for key, val in pdts.parameters.items():
+            for key, val in pdts.timeseries.items():
                 index = headers[key]
                 if val.type == ParameterValueType.Numeric:
                     obj[index] = val.numeric_value

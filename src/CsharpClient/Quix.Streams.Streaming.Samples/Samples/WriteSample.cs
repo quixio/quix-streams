@@ -20,8 +20,8 @@ namespace Quix.Streams.Streaming.Samples.Samples
                 stream.Properties.AddParent("1234");
                 stream.Properties.Metadata["test_key"] = "test_value";
 
-                stream.Parameters.AddDefinition("param1").SetRange(0, 10).SetUnit("kmh");
-                stream.Parameters.AddDefinition("param2").SetRange(0, 10).SetUnit("kmh");
+                stream.Timeseries.AddDefinition("param1").SetRange(0, 10).SetUnit("kmh");
+                stream.Timeseries.AddDefinition("param2").SetRange(0, 10).SetUnit("kmh");
 
                 stream.Epoch = DateTime.UtcNow;
 
@@ -31,12 +31,12 @@ namespace Quix.Streams.Streaming.Samples.Samples
                 stream.Events.AddTimestampMilliseconds(10).AddValue("e1", "value 1").AddTag("tag1", "tagValue")
                     .Publish();
 
-                stream.Parameters.Buffer.PacketSize = 10;
+                stream.Timeseries.Buffer.PacketSize = 10;
 
                 var i = 0;
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    stream.Parameters.Buffer.Publish(GenerateTimeseriesData(10 * i));
+                    stream.Timeseries.Buffer.Publish(GenerateTimeseriesData(10 * i));
                     Thread.Sleep(10);
                     i++;
                 }

@@ -37,7 +37,7 @@ namespace Quix.Streams.Speedtest
                 }
 
                 Console.WriteLine("START READING " + reader.StreamId);
-                var buffer = reader.Parameters.CreateBuffer();
+                var buffer = reader.Timeseries.CreateBuffer();
 //                buffer.PacketSize = 111;
                 buffer.TimeSpanInMilliseconds = buffer.BufferTimeout = 1000;
 
@@ -70,8 +70,8 @@ namespace Quix.Streams.Speedtest
             while (!ct.IsCancellationRequested)
             {
                 var dataraw = this.generateRawChunk(size, totalcnt+=size);
-                stream.Parameters.Publish(dataraw);
-                stream.Parameters.Flush();
+                stream.Timeseries.Publish(dataraw);
+                stream.Timeseries.Flush();
                 Thread.Sleep(5);
             }
             

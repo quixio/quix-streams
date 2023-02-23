@@ -25,12 +25,12 @@ namespace Quix.Streams.Streaming
         StreamPropertiesProducer Properties { get; }
 
         /// <summary>
-        /// Helper for doing anything related to parameters of the stream. Use to send parameter definitions, groups or values. 
+        /// Gets the producer for publishing timeseries related information of the stream such as parameter definitions and values 
         /// </summary>
-        StreamParametersProducer Parameters { get; }
+        StreamTimeseriesProducer Timeseries { get; }
 
         /// <summary>
-        /// Helper for doing anything related to events of the stream. Use to send event definitions, groups or values. 
+        /// Gets the producer for publishing event related information of the stream such as event definitions and values  
         /// </summary>
         StreamEventsProducer Events { get; }
 

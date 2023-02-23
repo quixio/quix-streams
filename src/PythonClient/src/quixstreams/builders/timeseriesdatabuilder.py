@@ -96,7 +96,7 @@ class TimeseriesDataBuilder(object):
 
     def publish(self):
         """
-        Publishes the values to the StreamParametersProducer buffer. See StreamParametersProducer buffer settings for more information when the values are sent to the broker
+        Publishes the values to the StreamTimeseriesProducer buffer. See StreamTimeseriesProducer buffer settings for more information when the values are sent to the broker
         """
 
         self._interop.Publish()

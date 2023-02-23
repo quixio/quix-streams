@@ -88,7 +88,7 @@ namespace Quix.Streams.Speedtest
 
                 mre.Set();
 
-                var buffer = reader.Parameters.CreateBuffer();
+                var buffer = reader.Timeseries.CreateBuffer();
                 buffer.TimeSpanInMilliseconds = 0; // this will cause it to give me batches for roughly each loop
 
                 buffer.OnReceived += (sender, args) =>
@@ -105,9 +105,9 @@ namespace Quix.Streams.Speedtest
             topicConsumer.Subscribe();
 
             
-            stream.Parameters.Buffer.PacketSize = 1000;
-            stream.Parameters.Buffer.TimeSpanInMilliseconds = 1000;
-            stream.Parameters.Buffer.BufferTimeout = 1000;
+            stream.Timeseries.Buffer.PacketSize = 1000;
+            stream.Timeseries.Buffer.TimeSpanInMilliseconds = 1000;
+            stream.Timeseries.Buffer.BufferTimeout = 1000;
 
             var generator = new Generator();
             var stringParameters = generator.GenerateParameters(10).ToList();
@@ -139,7 +139,7 @@ namespace Quix.Streams.Speedtest
                     }
                     index++;
                 }
-                stream.Parameters.Buffer.Publish(data);
+                stream.Timeseries.Buffer.Publish(data);
             }
             
             stream.Close();

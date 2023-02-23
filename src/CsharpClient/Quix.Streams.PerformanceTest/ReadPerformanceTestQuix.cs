@@ -33,7 +33,7 @@ namespace Quix.Streams.PerformanceTest
                     PacketSize = bufferSize,
                 };
 
-                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
                 buffer.OnReceived += (sender, args) =>
                 {
