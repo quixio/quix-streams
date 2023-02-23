@@ -104,14 +104,14 @@ class StreamTimeseriesProducer(object):
                      pdf = panda.DataFrame({'time': [1, 5],
                      'panda_param': [123.2, 5]})
 
-                     instance.write(pdf)
+                     instance.publish(pdf)
 
                 Send a panda data frame with multiple values
                      pdf = panda.DataFrame({'time': [1, 5, 10],
                      'panda_param': [123.2, None, 12],
                      'panda_param2': ["val1", "val2", None])
 
-                     instance.write(pdf)
+                     instance.publish(pdf)
 
                 Send a panda data frame with tags
                      pdf = panda.DataFrame({'time': [1, 5, 10],
@@ -119,7 +119,7 @@ class StreamTimeseriesProducer(object):
                      'TAG__Tag1': ["v1", 2, None],
                      'TAG__Tag2': [1, None, 3]})
 
-                     instance.write(pdf)
+                     instance.publish(pdf)
 
             for other type examples see the specific type
         """
