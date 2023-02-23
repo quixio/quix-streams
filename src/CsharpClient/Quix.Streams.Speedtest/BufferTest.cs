@@ -22,8 +22,8 @@ namespace Quix.Streams.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
 
             var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);
@@ -37,11 +37,11 @@ namespace Quix.Streams.Speedtest
                 }
 
                 Console.WriteLine("START READING " + reader.StreamId);
-                var buffer = reader.Parameters.CreateBuffer();
+                var buffer = reader.Timeseries.CreateBuffer();
 //                buffer.PacketSize = 111;
                 buffer.TimeSpanInMilliseconds = buffer.BufferTimeout = 1000;
 
-                buffer.OnRawRead += (sender, args) =>
+                buffer.OnRawReleased += (sender, args) =>
                 {
 //                    var binaryTime = (long) data.Timestamps[0].Parameters[parameterName].NumericValue;
                     
@@ -70,8 +70,8 @@ namespace Quix.Streams.Speedtest
             while (!ct.IsCancellationRequested)
             {
                 var dataraw = this.generateRawChunk(size, totalcnt+=size);
-                stream.Parameters.Write(dataraw);
-                stream.Parameters.Flush();
+                stream.Timeseries.Publish(dataraw);
+                stream.Timeseries.Flush();
                 Thread.Sleep(5);
             }
             

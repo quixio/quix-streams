@@ -1,4 +1,4 @@
 from .streameventsproducer import StreamEventsProducer
-from .streamparametersproducer import StreamParametersProducer
+from .streamtimeseriesproducer import StreamTimeseriesProducer
 from .streampropertiesproducer import StreamPropertiesProducer
 from .timeseriesbufferproducer import TimeseriesBufferProducer

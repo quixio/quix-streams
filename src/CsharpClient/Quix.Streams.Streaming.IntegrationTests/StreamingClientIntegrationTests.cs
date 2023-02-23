@@ -51,8 +51,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -220,8 +220,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -315,8 +315,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
                         }
                     };
 
-                    stream.Parameters.AddDefinition("p1", "P0 parameter", "Desc 1").SetRange(0, 10).SetUnit("kmh");
-                    stream.Parameters.AddDefinition("p2", "P1 parameter", "Desc 2").SetRange(0, 10).SetUnit("kmh");
+                    stream.Timeseries.AddDefinition("p1", "P0 parameter", "Desc 1").SetRange(0, 10).SetUnit("kmh");
+                    stream.Timeseries.AddDefinition("p2", "P1 parameter", "Desc 2").SetRange(0, 10).SetUnit("kmh");
 
                     stream.Events.AddDefinition("evid3", "evName3");
                     stream.Events.AddDefinition("evid4", "evName4");
@@ -333,15 +333,15 @@ namespace Quix.Streams.Streaming.IntegrationTests
                     expectedData.Add(GenerateTimeseriesData(0));
                     expectedData.Add(GenerateTimeseriesData(10));
 
-                    stream.Parameters.Buffer.Epoch = ((long) 100000).FromUnixNanoseconds();
-                    stream.Parameters.Buffer.PacketSize = 10;
+                    stream.Timeseries.Buffer.Epoch = ((long) 100000).FromUnixNanoseconds();
+                    stream.Timeseries.Buffer.PacketSize = 10;
                     for (var i = 0; i < 20; i++)
                     {
-                        stream.Parameters.Buffer.AddTimestampNanoseconds(i)
+                        stream.Timeseries.Buffer.AddTimestampNanoseconds(i)
                             .AddValue("p0", i)
                             .AddValue("p1", i)
                             .AddValue("p2", i)
-                            .Write();
+                            .Publish();
                     }
 
                     SpinWait.SpinUntil(() => data.Count == 2, 2000);
@@ -396,7 +396,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                     stream.Events.AddTimestampNanoseconds(123456789)
                         .AddValue("abc", "Iamvalue")
                         .AddTag("one", "two")
-                        .Write();
+                        .Publish();
 
                     SpinWait.SpinUntil(() => events.Count == 1, 2000);
                     events[0].Should().BeEquivalentTo(inputEvents[0]);
@@ -406,18 +406,18 @@ namespace Quix.Streams.Streaming.IntegrationTests
                     stream.Events.AddTimestampNanoseconds(123456789)
                         .AddValue("abc", "Iamvalue")
                         .AddTag("one", "two")
-                        .Write();
+                        .Publish();
                     stream.Events.AddTimestampNanoseconds(123456790)
                         .AddValue("efg", "Iamvalue2")
                         .AddTag("three", "fwo")
-                        .Write();
+                        .Publish();
                     stream.Events.Epoch = now;
                     stream.Events.AddTimestamp(now)
                         .AddValue("datetimetest", "Iamvalue3")
-                        .Write();
+                        .Publish();
                     stream.Events.AddTimestamp(TimeSpan.FromSeconds(10))
                         .AddValue("timespan", "Iamvalue4")
-                        .Write();
+                        .Publish();
 
                     SpinWait.SpinUntil(() => events.Count == 4, 2000);
                     events.Should().BeEquivalentTo(inputEvents);
@@ -438,8 +438,8 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicConsumer = client.CreateTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -465,11 +465,11 @@ namespace Quix.Streams.Streaming.IntegrationTests
                 {
                     streamId = stream.StreamId;
 
-                    stream.Parameters.Buffer.AddTimestampNanoseconds(100)
+                    stream.Timeseries.Buffer.AddTimestampNanoseconds(100)
                         .AddValue("p0", 1)
                         .AddValue("p1", 2)
                         .AddValue("p2", 3)
-                        .Write();
+                        .Publish();
 
                     SpinWait.SpinUntil(() => streamStarted, 20000);
                     Assert.True(streamStarted, "Stream is not started on reader.");
@@ -491,11 +491,11 @@ namespace Quix.Streams.Streaming.IntegrationTests
                     // Second stream
                     using (var stream2 = topicProducer.CreateStream(streamId))
                     {
-                        stream2.Parameters.Buffer.AddTimestampNanoseconds(100)
+                        stream2.Timeseries.Buffer.AddTimestampNanoseconds(100)
                             .AddValue("p0", 1)
                             .AddValue("p1", 2)
                             .AddValue("p2", 3)
-                            .Write();
+                            .Publish();
                     }
 
                     SpinWait.SpinUntil(() => streamStarted, 2000);
@@ -512,7 +512,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
                 var result = Parallel.For(0, 1000, parallelOptions: new ParallelOptions()
                 {
                     MaxDegreeOfParallelism = 20
@@ -530,10 +530,10 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             RunTest(() =>
             {
-                var topicProducer = client.CreateTopicProducer("integration-tests");
+                var topicProducer = client.GetTopicProducer("integration-tests");
 
                 var testGroup = "quix.tests-" + Guid.NewGuid().GetHashCode().ToString("X");
-                var topicConsumer1 = client.CreateTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                var topicConsumer1 = client.GetTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
 
                 var expectedStreamCount = 1;
                 long streamsRevoked = 0;
@@ -554,10 +554,10 @@ namespace Quix.Streams.Streaming.IntegrationTests
                         this.output.WriteLine("Generating data for streams");
                         foreach (var stream in streams)
                         {
-                            stream.Parameters.Buffer.AddTimestamp(DateTime.UtcNow)
+                            stream.Timeseries.Buffer.AddTimestamp(DateTime.UtcNow)
                                 .AddValue("p0", 1)
-                                .Write();
-                            stream.Parameters.Buffer.Flush();
+                                .Publish();
+                            stream.Timeseries.Buffer.Flush();
                         }
 
                         await Task.Delay(1000, cts.Token);
@@ -585,7 +585,7 @@ namespace Quix.Streams.Streaming.IntegrationTests
                 for (var index = 0; index <= 5; index++)
                 {
                     if (streamsReceived2 > 0) break;
-                    var topicConsumer2 = client.CreateTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                    var topicConsumer2 = client.GetTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
                     topicConsumer2.OnStreamReceived += (sender, sr) => { Interlocked.Increment(ref streamsReceived2); };
                     topicConsumer2.Subscribe();
                 }

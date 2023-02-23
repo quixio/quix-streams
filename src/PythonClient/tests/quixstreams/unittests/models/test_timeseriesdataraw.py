@@ -42,7 +42,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
             {"time": 3, "string": "three"}
         ])
 
-        df_orig = timeseries_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
     def test_set_values_only_string(self):
@@ -64,7 +64,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
             {"time": 3, "string": "three"}
         ])
 
-        df_orig = timeseries_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
 
@@ -75,21 +75,21 @@ class TimeseriesDataRawTests(unittest.TestCase):
         ])
 
         # act
-        raw = TimeseriesDataRaw.from_panda_dataframe(df)
+        raw = TimeseriesDataRaw.from_dataframe(df)
         data = raw.convert_to_timeseriesdata()
-        result = data.to_panda_dataframe()
+        result = data.to_dataframe()
 
         # assert
         assert_frame_equal(df.sort_index(axis=1), result.sort_index(axis=1), check_names=True)
 
-    def test_from_panda_dataframe(self):
+    def test_from_dataframe(self):
         # arrange
         df = pandas.DataFrame([
             {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
         ])
 
         # act
-        raw = TimeseriesDataRaw.from_panda_dataframe(df)
+        raw = TimeseriesDataRaw.from_dataframe(df)
         raw_ptr = raw.get_net_pointer()
         reloaded_from_csharp = TimeseriesDataRaw(raw_ptr)  # this will force us to load data back from the assigned values in c# rather than checking against potentially cached vals
 
@@ -111,10 +111,10 @@ class TimeseriesDataRawTests(unittest.TestCase):
                 df2 = df2.reset_index(drop=True)
                 assert_frame_equal(df1.sort_index(axis=1), df2.sort_index(axis=1), check_names=True, **kwds )
 
-            timeseries_data_raw = TimeseriesDataRaw.from_panda_dataframe(pdf)
+            timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf)
             assertFrameEqual(
                         pdf,
-                        timeseries_data_raw.to_panda_dataframe()
+                        timeseries_data_raw.to_dataframe()
                     )
 
 
@@ -139,7 +139,7 @@ class TimeseriesDataRawTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            timeseries_data_raw = TimeseriesDataRaw.from_panda_dataframe(pdf).to_panda_dataframe()
+            timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf).to_dataframe()
             parsed_time=timeseries_data_raw.loc[0, 'time']
             self.assertEqual(time, parsed_time)
 

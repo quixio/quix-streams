@@ -23,7 +23,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
 
             topicConsumer.OnStreamReceived += (sender, streamConsumer) =>
             {
@@ -39,12 +39,12 @@ namespace Quix.Streams.Streaming.Samples.Samples
                     //CustomFilter = (timestamp) => timestamp.TimestampMilliseconds % 1000 == 0
                 };
 
-                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
 
-                buffer.OnRead += OnBufferRead;
-                streamConsumer.Events.OnRead += OnEventsRead;
-                streamConsumer.Parameters.OnDefinitionsChanged += OnParameterDefinitionsChanged;
+                buffer.OnDataReleased += BufferDataReleased;
+                streamConsumer.Events.OnDataReceived += EventsDataReceived;
+                streamConsumer.Timeseries.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnEventDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
                 streamConsumer.OnStreamClosed += OnStreamClosed;
@@ -56,19 +56,19 @@ namespace Quix.Streams.Streaming.Samples.Samples
             };
         }
         
-        void OnBufferRead(object s, TimeseriesDataReadEventArgs args)
+        void BufferDataReleased(object s, TimeseriesDataReadEventArgs args)
         {
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         
-        void OnEventsRead(object s, EventDataReadEventArgs args)
+        void EventsDataReceived(object s, EventDataReadEventArgs args)
         {
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }
         
         void OnParameterDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
         {
-            foreach (var definition in args.Stream.Parameters.Definitions)
+            foreach (var definition in args.Stream.Timeseries.Definitions)
             {
                 Console.WriteLine($"Parameter definition -> StreamId: {args.Stream.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
             }

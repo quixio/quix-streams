@@ -5,13 +5,13 @@ using Quix.Streams.Process.Models;
 namespace Quix.Streams.Process.Samples
 {
     /// <summary>
-    /// Simply modifier component that reads tdata messages, change one of his values, and writes the message again to the output.
+    /// Simple modifier component that reads tdata messages, change one of his values, and writes the message again to the output.
     /// </summary>
-    public class SimplyModifier : StreamComponent
+    public class SimpleModifier : StreamComponent
     {
         private readonly int num;
 
-        public SimplyModifier(int num)
+        public SimpleModifier(int num)
         {
             this.num = num;
 

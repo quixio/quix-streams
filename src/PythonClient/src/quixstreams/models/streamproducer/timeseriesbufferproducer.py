@@ -21,14 +21,13 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         Class used to write to StreamProducer in a buffered manner
     """
 
-    def __init__(self, topic_producer, stream_producer, net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_producer, net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of TimeseriesBufferProducer.
-            NOTE: Do not initialize this class manually, use StreamParametersProducer.buffer to access an instance of it
+            NOTE: Do not initialize this class manually, use StreamTimeseriesProducer.buffer to access an instance of it
 
             Parameters:
 
-            topic_producer: The output topic the stream belongs to
             stream_producer: The stream the buffer is created for
             net_pointer: Pointer to an instance of a .net TimeseriesBufferProducer
         """
@@ -36,7 +35,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             raise Exception("TimeseriesBufferProducer is none")
 
         self._interop = tsbpi(net_pointer)
-        TimeseriesBuffer.__init__(self, topic_producer, stream_producer, net_pointer)
+        TimeseriesBuffer.__init__(self, stream_producer, net_pointer)
 
     @property
     def default_tags(self) -> Dict[str, str]:
@@ -89,9 +88,9 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         """Immediately writes the data from the buffer without waiting for buffer condition to fulfill"""
         self._interop.Flush()
 
-    def write(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
+    def publish(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
         """
-            Writes the given packet to the stream without any buffering.
+            Publishes the given packet to the stream without any buffering.
 
             :param packet: The packet containing TimeseriesData or panda DataFrame
 
@@ -106,14 +105,14 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
                      pdf = panda.DataFrame({'time': [1, 5],
                      'panda_param': [123.2, 5]})
 
-                     instance.write(pdf)
+                     instance.publish(pdf)
 
                 Send a panda data frame with multiple values
                      pdf = panda.DataFrame({'time': [1, 5, 10],
                      'panda_param': [123.2, None, 12],
                      'panda_param2': ["val1", "val2", None])
 
-                     instance.write(pdf)
+                     instance.publish(pdf)
 
                 Send a panda data frame with tags
                      pdf = panda.DataFrame({'time': [1, 5, 10],
@@ -121,16 +120,16 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
                      'TAG__Tag1': ["v1", 2, None],
                      'TAG__Tag2': [1, None, 3]})
 
-                     instance.write(pdf)
+                     instance.publish(pdf)
 
             for other type examples see the specific type
         """
         if isinstance(packet, TimeseriesData):
-            self._interop.Write(packet.get_net_pointer())
+            self._interop.Publish(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
             data = TimeseriesData.from_panda_dataframe(packet)
             with data:
-                self._interop.Write(data.get_net_pointer())
+                self._interop.Publish(data.get_net_pointer())
             return
         raise Exception("Write for the given type " + str(type(packet)) + " is not supported")

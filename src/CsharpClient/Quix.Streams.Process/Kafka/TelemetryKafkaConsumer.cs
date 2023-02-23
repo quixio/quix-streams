@@ -26,7 +26,7 @@ namespace Quix.Streams.Process.Kafka
         /// <summary>
         /// Event raised when an exception occurs during the Reading processes
         /// </summary>
-        public event EventHandler<Exception> OnReadException;
+        public event EventHandler<Exception> OnReceiveException;
         
         /// <summary>
         /// Event raised with streams belonging to kafka partition(s) revoked
@@ -106,7 +106,7 @@ namespace Quix.Streams.Process.Kafka
 
         private void ReadingExceptionHandler(object sender, Exception e)
         {
-            if (this.OnReadException == null)
+            if (this.OnReceiveException == null)
             {
                 if (e is KafkaException)
                 {
@@ -119,7 +119,7 @@ namespace Quix.Streams.Process.Kafka
             }
             else
             {
-                this.OnReadException?.Invoke(sender, e);
+                this.OnReceiveException?.Invoke(sender, e);
             }
         }
 

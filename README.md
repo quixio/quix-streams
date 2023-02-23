@@ -62,7 +62,7 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 You can install the library for amd64 platforms using the package manager for Python Packages:
 
 ```shell
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev19 --user
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
 ```
 
 ### Installing on M1/M2 Mac
@@ -124,7 +124,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 19. Install Quix Streams:
 
     ```
-    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev19 --user
+    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
     ```
 
 20. You can now run your code that uses Quix Streams:
@@ -159,18 +159,18 @@ topic_producer = client.create_topic_producer("your-kafka-topic")
 stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.parameters.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
 
 print("Sending values for 30 seconds.")
 
 for index in range(0, 3000):
-    stream.parameters \
+    stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", math.sin(index / 200.0)) \
         .add_value("ParameterB", "string value: " + str(index)) \
         .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .write()
+        .publish()
     time.sleep(0.01)
 
 print("Closing stream")
@@ -185,25 +185,24 @@ Once we have setup our producer, it's time to see how to consume data from a top
 import pandas as pd
 
 from quixstreams import *
-from quixstreams.app import App
 
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the input topic where to consume data from.
+# Get the consumer for the input topic
 # For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.create_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
-    input_stream.parameters.on_read_dataframe = on_dataframe
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
 # consume data (as Pandas DataFrame)
-def on_dataframe(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
-topic_consumer.on_stream_received = on_stream
+topic_consumer.on_stream_received = on_stream_received_handler
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit
@@ -212,7 +211,7 @@ App.run()
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/read.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/write.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
 ## Library features
 
@@ -256,8 +255,9 @@ Quix Streams base library is developed in C#. We use Interoperability wrappers a
 
 You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language-specific client. For instance for Python:
 
-- `/Python/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
-- `/Python/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
+- `/src/builds/python/windows/build_native.bat`: Generates Python Interop wrappers for Windows platform.
+- `/src/builds/python/linux/build_native.bat`: Generates Python Interop wrappers for Linux platform.
+- `/src/builds/python/mac/build_native.bat`: Generates Python Interop wrappers for Mac platform.
 
 These scripts compile the C# base library and then use the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is a structure like this:
 

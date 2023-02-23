@@ -20,13 +20,13 @@ class StreamProducer(object):
         Handles writing stream to a topic
     """
 
-    def __init__(self, topic_producer, net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_producer: 'TopicProducer', net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamProducer.
             NOTE: Do not initialize this class manually, use StreamingClient.create_stream to write streams
 
             Parameters:
-
+            topic_producer: The topic producer the stream producer publishes to
             net_object (.net object): The .net object representing a StreamProducer
         """
 
@@ -34,10 +34,10 @@ class StreamProducer(object):
             raise Exception("StreamProducer is none")
 
         self._interop = spi(net_pointer)
-        self._topic_producer = topic_producer
-        self._streamParametersWriter = None  # Holding reference to avoid GC
-        self._streamEventsWriter = None  # Holding reference to avoid GC
-        self._streamPropertiesWriter = None  # Holding reference to avoid GC
+        self._topic = topic_producer
+        self._streamTimeseriesProducer = None  # Holding reference to avoid GC
+        self._streamEventsProducer = None  # Holding reference to avoid GC
+        self._streamPropertiesProducer = None  # Holding reference to avoid GC
 
         # define events and their ref holder
         self._on_write_exception = None
@@ -46,13 +46,20 @@ class StreamProducer(object):
         self._stream_id = self._interop.get_StreamId()
 
     def _finalizerfunc(self):
-        if self._streamParametersWriter is not None:
-            self._streamParametersWriter.dispose()
-        if self._streamEventsWriter is not None:
-            self._streamEventsWriter.dispose()
-        if self._streamPropertiesWriter is not None:
-            self._streamPropertiesWriter.dispose()
+        if self._streamTimeseriesProducer is not None:
+            self._streamTimeseriesProducer.dispose()
+        if self._streamEventsProducer is not None:
+            self._streamEventsProducer.dispose()
+        if self._streamPropertiesProducer is not None:
+            self._streamPropertiesProducer.dispose()
         self._on_write_exception_dispose()
+
+    @property
+    def topic(self) -> 'TopicProducer':
+        """
+        Gets the topic the stream is writing to
+        """
+        return self._topic
 
     # region on_write_exception
     @property
@@ -112,26 +119,28 @@ class StreamProducer(object):
     @property
     def properties(self) -> StreamPropertiesProducer:
         """Properties of the stream. The changes will automatically be sent after a slight delay"""
-        if self._streamPropertiesWriter is None:
-            self._streamPropertiesWriter = StreamPropertiesProducer(self._interop.get_Properties())
-        return self._streamPropertiesWriter
+        if self._streamPropertiesProducer is None:
+            self._streamPropertiesProducer = StreamPropertiesProducer(self._interop.get_Properties())
+        return self._streamPropertiesProducer
 
     @property
-    def parameters(self) -> StreamParametersProducer:
-        """Helper for doing anything related to parameters of the stream. Use to send parameter definitions,
-        groups or values """
+    def timeseries(self) -> StreamTimeseriesProducer:
+        """
+        Gets the producer for publishing timeseries related information of the stream such as parameter definitions and values
+        """
 
-        if self._streamParametersWriter is None:
-            self._streamParametersWriter = StreamParametersProducer(self._topic_producer, self, self._interop.get_Parameters())
-        return self._streamParametersWriter
+        if self._streamTimeseriesProducer is None:
+            self._streamTimeseriesProducer = StreamTimeseriesProducer(self, self._interop.get_Timeseries())
+        return self._streamTimeseriesProducer
 
     @property
     def events(self) -> StreamEventsProducer:
-        """Helper for doing anything related to events of the stream. Use to send event definitions, groups or
-        values. """
-        if self._streamEventsWriter is None:
-            self._streamEventsWriter = StreamEventsProducer(self._interop.get_Events())
-        return self._streamEventsWriter
+        """
+        Gets the producer for publishing event related information of the stream such as event definitions and values
+        """
+        if self._streamEventsProducer is None:
+            self._streamEventsProducer = StreamEventsProducer(self._interop.get_Events())
+        return self._streamEventsProducer
 
     def close(self, end_type: StreamEndType = StreamEndType.Closed):
         """

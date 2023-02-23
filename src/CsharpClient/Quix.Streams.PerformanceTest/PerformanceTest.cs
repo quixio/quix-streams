@@ -18,14 +18,14 @@ namespace Quix.Streams.PerformanceTest
         {
             var client = new TestStreamingClient(CodecType.ImprovedJson);
 
-            //var topicConsumer = client.CreateTopicConsumer();
-            var topicProducer = client.CreateTopicProducer();
+            //var topicConsumer = client.GetTopicConsumer();
+            var topicProducer = client.GetTopicProducer();
 
             //topicConsumer.OnStreamReceived += (s, stream) =>
             //{
-            //    var buffer = stream.Parameters.CreateBuffer();
+            //    var buffer = stream.Timeseries.CreateBuffer();
             //    buffer.PacketSize = readBufferSize;
-            //    buffer.OnRead += (sender, data) => 
+            //    buffer.OnDataReleased += (sender, data) => 
             //    {
             //        foreach(var t in data.Timestamps)
             //        {
@@ -37,19 +37,19 @@ namespace Quix.Streams.PerformanceTest
             //topicConsumer.Subscribe();
 
             var stream = topicProducer.CreateStream();
-            stream.Parameters.Buffer.PacketSize = writeBufferSize;
+            stream.Timeseries.Buffer.PacketSize = writeBufferSize;
 
             DateTime lastUpdate = DateTime.UtcNow;
 
             while (!ct.IsCancellationRequested)
             {
-                var builder = stream.Parameters.Buffer.AddTimestamp(DateTime.UtcNow);
+                var builder = stream.Timeseries.Buffer.AddTimestamp(DateTime.UtcNow);
                 for(var i = 0; i < paramCount; i++)
                 {
                     builder = builder.AddValue($"param{i}", i);
                 }
                 builder.AddTag("tagTest", "Test");
-                builder.Write();
+                builder.Publish();
 
                 sentCount += paramCount;
 

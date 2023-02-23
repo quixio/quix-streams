@@ -3,23 +3,23 @@
 namespace Quix.Streams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// Builder for creating <see cref="ParameterDefinition"/> for <see cref="StreamParametersProducer"/>
+    /// Builder for creating <see cref="ParameterDefinition"/> for <see cref="StreamTimeseriesProducer"/>
     /// </summary>
     public class ParameterDefinitionBuilder
     {
-        private readonly StreamParametersProducer streamParametersProducer;
+        private readonly StreamTimeseriesProducer streamTimeseriesProducer;
         private readonly string location;
         private Process.Models.ParameterDefinition definition;
 
         /// <summary>
         /// Initializes a new instance of <see cref="ParameterDefinitionBuilder"/>
         /// </summary>
-        /// <param name="streamParametersProducer">Parameters writer owner</param>
+        /// <param name="streamTimeseriesProducer">Parameters writer owner</param>
         /// <param name="location">Location selected for the Parameter definition builder</param>
         /// <param name="definition">Parameter definition instance managed by the builder</param>
-        public ParameterDefinitionBuilder(StreamParametersProducer streamParametersProducer, string location, Process.Models.ParameterDefinition definition = null)
+        public ParameterDefinitionBuilder(StreamTimeseriesProducer streamTimeseriesProducer, string location, Process.Models.ParameterDefinition definition = null)
         {
-            this.streamParametersProducer = streamParametersProducer;
+            this.streamTimeseriesProducer = streamTimeseriesProducer;
             this.location = location;
             this.definition = definition;
         }
@@ -109,7 +109,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// <returns>Parameter definition builder to define the parameter properties</returns>
         public ParameterDefinitionBuilder AddDefinition(string parameterId, string name = null, string description = null)
         {
-            this.definition = this.streamParametersProducer.CreateDefinition(this.location, parameterId, name, description);
+            this.definition = this.streamTimeseriesProducer.CreateDefinition(this.location, parameterId, name, description);
 
             return this;
         }

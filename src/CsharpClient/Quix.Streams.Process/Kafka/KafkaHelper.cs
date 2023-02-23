@@ -11,10 +11,10 @@ namespace Quix.Streams.Process.Kafka
         /// <summary>
         /// Open kafka input based on the configuration provided
         /// </summary>
-        /// <param name="config">Kafka Writer configuration</param>
+        /// <param name="config">Kafka producer configuration</param>
         /// <param name="topic">Topic Id</param>
         /// <returns>New instance of Kafka Input Transport layer</returns>
-        public static IKafkaProducer OpenKafkaInput(KafkaWriterConfiguration config, string topic)
+        public static IKafkaProducer OpenKafkaInput(KafkaProducerConfiguration config, string topic)
         {
             // Create kafka input
             var pubConfig = new Transport.Kafka.PublisherConfiguration(config.BrokerList, config.Properties)
@@ -31,11 +31,11 @@ namespace Quix.Streams.Process.Kafka
         /// <summary>
         /// Open kafka input with a byte splitter based on the configuration provided
         /// </summary>
-        /// <param name="config">Kafka Writer configuration</param>
+        /// <param name="config">Kafka producer configuration</param>
         /// <param name="topic">Topic Id</param>
         /// <param name="byteSplitter">Byte splitter (output)</param> // TODO: Remove this dependency from Process layer
         /// <returns>New instance of Kafka Input Transport layer</returns>
-        public static IKafkaProducer OpenKafkaInput(KafkaWriterConfiguration config, string topic, out IByteSplitter byteSplitter)
+        public static IKafkaProducer OpenKafkaInput(KafkaProducerConfiguration config, string topic, out IByteSplitter byteSplitter)
         {
             // Create kafka input
             var pubConfig = new Transport.Kafka.PublisherConfiguration(config.BrokerList, config.Properties)

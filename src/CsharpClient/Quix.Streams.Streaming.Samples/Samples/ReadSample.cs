@@ -26,7 +26,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
 
             var closeReadTask = new TaskCompletionSource<object>();
             topicConsumer.OnStreamReceived += (sender, streamConsumer) =>
@@ -43,13 +43,13 @@ namespace Quix.Streams.Streaming.Samples.Samples
                     //CustomFilter = (timestamp) => timestamp.TimestampMilliseconds % 1000 == 0
                 };
 
-                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
 
 
-                buffer.OnRead += OnBufferRead;
-                streamConsumer.Events.OnRead += OnEventsRead;
-                streamConsumer.Parameters.OnDefinitionsChanged += OnParameterDefinitionsChanged;
+                buffer.OnDataReleased += BufferDataReleased;
+                streamConsumer.Events.OnDataReceived += EventsDataReceived;
+                streamConsumer.Timeseries.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
                 streamConsumer.OnStreamClosed += (s, args) =>
@@ -70,7 +70,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             };
         }
         
-        void OnBufferRead(object s, TimeseriesDataReadEventArgs args)
+        void BufferDataReleased(object s, TimeseriesDataReadEventArgs args)
         {
             // Inline manipulation
             //data.Timestamps.ForEach(timestamp =>
@@ -82,15 +82,15 @@ namespace Quix.Streams.Streaming.Samples.Samples
             // Cloning data
             // var outData = data.Clone();
 
-            // Send using writer buffer
-            //streamProducer.Parameters.Buffer.Write(data);
-            // Send without using writer buffer
-            //streamProducer.Parameters.Write(data);
+            // Send using buffer
+            //streamProducer.Timeseries.Buffer.Publish(data);
+            // Send without using buffer
+            //streamProducer.Timeseries.Publish(data);
 
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         
-        void OnEventsRead(object s, EventDataReadEventArgs args)
+        void EventsDataReceived(object s, EventDataReadEventArgs args)
         {
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }
@@ -105,7 +105,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
         
         void OnParameterDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
         {
-            foreach (var definition in args.Stream.Parameters.Definitions)
+            foreach (var definition in args.Stream.Timeseries.Definitions)
             {
                 Console.WriteLine($"Parameter definition -> StreamId: {args.Stream.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
             }

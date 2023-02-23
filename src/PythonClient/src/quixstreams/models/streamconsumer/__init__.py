@@ -1,3 +1,3 @@
 from .streameventsconsumer import StreamEventsConsumer
-from .streamparametersconsumer import StreamParametersConsumer
+from .streamtimeseriesconsumer import StreamTimeseriesConsumer
 from .streampropertiesconsumer import StreamPropertiesConsumer

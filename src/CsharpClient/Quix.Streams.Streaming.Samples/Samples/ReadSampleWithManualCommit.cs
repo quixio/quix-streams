@@ -24,7 +24,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
             timer.Start();
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId, CommitMode.Manual);
 
             topicConsumer.OnStreamReceived += (s, streamConsumer) =>
             {
@@ -36,12 +36,12 @@ namespace Quix.Streams.Streaming.Samples.Samples
                     BufferTimeout = null,
                 };
 
-                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
-                buffer.OnRead += OnBufferRead;
+                var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
+                buffer.OnDataReleased += BufferDataReleased;
 
-                streamConsumer.Parameters.OnRead += OnParametersOnOnRead;
-                streamConsumer.Events.OnRead += OnEventsRead;
-                streamConsumer.Parameters.OnDefinitionsChanged += OnParameterDefinitionsChanged;
+                streamConsumer.Timeseries.OnDataReceived += ParametersOnOnDataReceived;
+                streamConsumer.Events.OnDataReceived += EventsDataReceived;
+                streamConsumer.Timeseries.OnDefinitionsChanged += OnParameterDefinitionsChanged;
                 streamConsumer.Events.OnDefinitionsChanged += OnEventDefinitionsChanged;
                 streamConsumer.Properties.OnChanged += OnPropertiesChanged;
             };
@@ -69,27 +69,27 @@ namespace Quix.Streams.Streaming.Samples.Samples
 
         void OnParameterDefinitionsChanged(object s, ParameterDefinitionsChangedEventArgs args)
         {
-            foreach (var definition in args.Stream.Parameters.Definitions)
+            foreach (var definition in args.Stream.Timeseries.Definitions)
             {
                 Console.WriteLine($"Parameter definition -> StreamId: {args.Stream.StreamId} - Parameter definition '{definition.Id}' with name '{definition.Name}'");
             }
         }
         
-        void OnEventsRead(object s, EventDataReadEventArgs args)
+        void EventsDataReceived(object s, EventDataReadEventArgs args)
         {
             args.TopicConsumer.Commit();
             Console.WriteLine($"Event data -> StreamId: '{args.Stream.StreamId}' - Event '{args.Data.Id}' with value '{args.Data.Value}'");
         }
         
         
-        void OnParametersOnOnRead(object s, TimeseriesDataReadEventArgs args)
+        void ParametersOnOnDataReceived(object s, TimeseriesDataReadEventArgs args)
         {
             ((ITopicConsumer)args.Topic).Commit();
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);
         }
         
         
-        void OnBufferRead(object s, TimeseriesDataReadEventArgs args)
+        void BufferDataReleased(object s, TimeseriesDataReadEventArgs args)
         {
             // args.Topic.Commit(data); this doesn't work just yet
             Interlocked.Add(ref counter, args.Data.Timestamps.Count);

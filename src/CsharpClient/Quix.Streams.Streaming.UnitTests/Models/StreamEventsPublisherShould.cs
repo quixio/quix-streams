@@ -13,7 +13,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
     {
 
         [Fact]
-        public void Events_AddValue_ShouldWriteExpected()
+        public void Events_AddValue_ShouldPublishExpected()
         {
             // Arrange
             var streamProducer = Substitute.For<IStreamProducerInternal>();
@@ -29,13 +29,13 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             eventsWriter.AddTimestampNanoseconds(100)
                 .AddValue("test_param1", "1")
                 .AddValue("test_param2", "2")
-                .Write();
+                .Publish();
             eventsWriter.AddTimestampNanoseconds(200)
                 .AddValue("test_param2", "3")
-                .Write();
+                .Publish();
             eventsWriter.AddTimestampNanoseconds(300)
                 .AddValue("test_param1", "4")
-                .Write();
+                .Publish();
 
             // Assert
             sentData.Count.Should().Be(4);
@@ -70,7 +70,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void Events_AddValuesWithTags_ShouldWriteExpected()
+        public void Events_AddValuesWithTags_ShouldPublishExpected()
         {
             // Arrange
             var streamProducer = Substitute.For<IStreamProducerInternal>();
@@ -78,27 +78,27 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             streamProducer.Publish(Arg.Do<EventDataRaw>(x => sentData.Add(x)));
             streamProducer.Publish(Arg.Do<ICollection<EventDataRaw>>(x => sentData.AddRange(x.ToList())));
 
-            var eventsWriter = new Streaming.Models.StreamProducer.StreamEventsProducer(streamProducer);
+            var eventsProducer = new Streaming.Models.StreamProducer.StreamEventsProducer(streamProducer);
             var epoch = new DateTime(2000, 01, 01);
-            eventsWriter.Epoch = epoch;
+            eventsProducer.Epoch = epoch;
 
             // Act
-            eventsWriter.AddTimestampNanoseconds(100)
+            eventsProducer.AddTimestampNanoseconds(100)
                 .AddValue("test_param1", "1")
                 .AddValue("test_param2", "2")
                 .AddTag("tag1", "value1")
-                .Write();
+                .Publish();
 
-            eventsWriter.DefaultTags["default1"] = "value1";
-            eventsWriter.DefaultTags["default2"] = "value2";
+            eventsProducer.DefaultTags["default1"] = "value1";
+            eventsProducer.DefaultTags["default2"] = "value2";
 
-            eventsWriter.AddTimestampNanoseconds(200)
+            eventsProducer.AddTimestampNanoseconds(200)
                 .AddValue("test_param2", "3")
                 .AddTag("tag1", "value1")
-                .Write();
-            eventsWriter.AddTimestampNanoseconds(300)
+                .Publish();
+            eventsProducer.AddTimestampNanoseconds(300)
                 .AddValue("test_param1", "4")
-                .Write();
+                .Publish();
 
             // Assert
             sentData.Count.Should().Be(4);
@@ -148,7 +148,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void Events_AddValueWithMixedTimestamps_ShouldWriteExpected()
+        public void Events_AddValueWithMixedTimestamps_ShouldPublishExpected()
         {
             // Arrange
             var streamProducer = Substitute.For<IStreamProducerInternal>();
@@ -164,13 +164,13 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             eventsWriter.AddTimestamp(new DateTime(1999, 01, 01))
                 .AddValue("test_param1", "1")
                 .AddValue("test_param2", "2")
-                .Write();
+                .Publish();
             eventsWriter.AddTimestamp(new TimeSpan(01, 02, 03))
                 .AddValue("test_param2", "2")
-                .Write();
+                .Publish();
             eventsWriter.AddTimestampNanoseconds(300)
                 .AddValue("test_param3", "3")
-                .Write();
+                .Publish();
 
             // Assert
             sentData.Count.Should().Be(4);
@@ -205,7 +205,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void Events_WriteDirectWithEventDataInstancesAndDefaultEpoch_ShouldWriteExpected()
+        public void Events_WriteDirectWithEventDataInstancesAndDefaultEpoch_ShouldPublishExpected()
         {
             // Arrange
             var streamProducer = Substitute.For<IStreamProducerInternal>();
@@ -220,16 +220,16 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             // Act
             var data1 = new Streaming.Models.EventData( "test_param1", new DateTime(1999, 01, 01), "1");
             var data2 = new Streaming.Models.EventData("test_param2", new DateTime(1999, 01, 01), "2");
-            eventsWriter.Write(new Streaming.Models.EventData[] { data1, data2 });
+            eventsWriter.Publish(new Streaming.Models.EventData[] { data1, data2 });
 
             eventsWriter.DefaultTags["default1"] = "value1";
             eventsWriter.DefaultTags["default2"] = "value2";
 
             var data3 = new Streaming.Models.EventData("test_param2", new TimeSpan(01, 02, 03), "2").AddTag("extraTag", "value1");
-            eventsWriter.Write(data3);
+            eventsWriter.Publish(data3);
 
             var data4 = new Streaming.Models.EventData("test_param3", 300, "3");
-            eventsWriter.Write(data4);
+            eventsWriter.Publish(data4);
 
             // Assert
             sentData.Count.Should().Be(4);
@@ -288,8 +288,8 @@ namespace Quix.Streams.Streaming.UnitTests.Models
             // Act
             var data1 = new Streaming.Models.EventData("test_param2", new TimeSpan(01, 02, 03), "2").AddTag("extraTag", "value1");
 
-            eventsWriter.Write(data1);
-            eventsWriter.Write(data1);
+            eventsWriter.Publish(data1);
+            eventsWriter.Publish(data1);
 
             // Assert
             sentData.Count.Should().Be(2);
@@ -316,7 +316,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void AddDefinition_WithLocation_ShouldProduceExpectedDefinitions()
+        public void AddDefinition_WithLocation_ShouldPublishExpectedDefinitions()
         {
             // Arrange
             var streamProducer = Substitute.For<IStreamProducerInternal>();

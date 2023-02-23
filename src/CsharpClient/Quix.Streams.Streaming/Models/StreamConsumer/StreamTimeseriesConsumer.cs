@@ -8,17 +8,17 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
     /// <summary>
     /// Helper class for reader <see cref="ParameterDefinitions"/> and <see cref="TimeseriesData"/>
     /// </summary>
-    public class StreamParametersConsumer : IDisposable
+    public class StreamTimeseriesConsumer : IDisposable
     {
         private readonly ITopicConsumer topicConsumer;
         private readonly IStreamConsumerInternal streamConsumer;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamParametersConsumer"/>
+        /// Initializes a new instance of <see cref="StreamTimeseriesConsumer"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the stream to what this reader belongs to</param>
         /// <param name="streamConsumer">Stream reader owner</param>
-        internal StreamParametersConsumer(ITopicConsumer topicConsumer, IStreamConsumerInternal streamConsumer)
+        internal StreamTimeseriesConsumer(ITopicConsumer topicConsumer, IStreamConsumerInternal streamConsumer)
         {
             this.topicConsumer = topicConsumer;
             this.streamConsumer = streamConsumer;
@@ -73,13 +73,13 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         /// Event raised when data is available to read (without buffering)
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesDataReadEventArgs> OnRead;
+        public event EventHandler<TimeseriesDataReadEventArgs> OnDataReceived;
 
         /// <summary>
-        /// Event raised when data is available to read (without buffering) in raw transport format
+        /// Event raised when data is received (without buffering) in raw transport format
         /// This event does not use Buffers and data will be raised as they arrive without any processing.
         /// </summary>
-        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawRead;
+        public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReceived;
 
         /// <summary>
         /// Gets the latest set of event definitions
@@ -139,12 +139,12 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         private void OnTimeseriesDataEventHandler(IStreamConsumer streamConsumer, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             var tsdata = new TimeseriesData(timeseriesDataRaw, null, false, false);
-            this.OnRead?.Invoke(streamConsumer, new TimeseriesDataReadEventArgs(this.topicConsumer, streamConsumer, tsdata));
+            this.OnDataReceived?.Invoke(streamConsumer, new TimeseriesDataReadEventArgs(this.topicConsumer, streamConsumer, tsdata));
         }
 
         private void OnTimeseriesDataRawEventHandler(IStreamConsumer streamConsumer, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
-            this.OnRawRead?.Invoke(streamConsumer, new TimeseriesDataRawReadEventArgs(this.topicConsumer, streamConsumer, timeseriesDataRaw));
+            this.OnRawReceived?.Invoke(streamConsumer, new TimeseriesDataRawReadEventArgs(this.topicConsumer, streamConsumer, timeseriesDataRaw));
         }
 
         /// <inheritdoc/>

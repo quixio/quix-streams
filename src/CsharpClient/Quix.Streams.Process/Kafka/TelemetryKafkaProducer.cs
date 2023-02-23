@@ -8,7 +8,7 @@ using Quix.Streams.Transport.Kafka;
 namespace Quix.Streams.Process.Kafka
 {
     /// <summary>
-    /// Kafka writer component implementation.
+    /// Kafka producer component implementation.
     /// It writes all the incoming messages to Kafka with a new StreamId.
     /// </summary>
     public class TelemetryKafkaProducer : StreamComponent, IDisposable

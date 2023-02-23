@@ -15,8 +15,8 @@ namespace Quix.Streams.ManyStreamTest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
 
             int streamCounter = 0;
             
@@ -27,10 +27,10 @@ namespace Quix.Streams.ManyStreamTest
                     streamCounter++;
                     Console.WriteLine($"Stream count: {streamCounter}");
                 };
-                /*var buffer = reader.Parameters.CreateBuffer();
+                /*var buffer = reader.Timeseries.CreateBuffer();
                 buffer.PacketSize = 1;
 
-                buffer.OnRead += (sender, data) =>
+                buffer.OnDataReleased += (sender, data) =>
                 {
                     streamCounter++; 
                     Console.WriteLine($"Stream count: {streamCounter}");
@@ -43,10 +43,10 @@ namespace Quix.Streams.ManyStreamTest
                 var stream = topicProducer.CreateStream();
                 var data = new Quix.Streams.Streaming.Models.TimeseriesData();
                 data.AddTimestampNanoseconds(10).AddValue("test", DateTime.UtcNow.ToBinary());
-                stream.Parameters.Buffer.Write(data);
+                stream.Timeseries.Buffer.Publish(data);
                 stream.Events.AddTimestampNanoseconds(10).AddValue("test1", "val1");
                 stream.Properties.Location = "/test";
-                stream.Parameters.AddDefinition("test");
+                stream.Timeseries.AddDefinition("test");
                 stream.Events.AddDefinition("test1");
                 stream.Close();
             }

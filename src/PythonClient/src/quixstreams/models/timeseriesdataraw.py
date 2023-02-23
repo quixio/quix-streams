@@ -80,11 +80,11 @@ class TimeseriesDataRaw(object):
 
         return text
 
-    def to_panda_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> pd.DataFrame:
         """
-        Converts TimeseriesDataRaw to Panda DataFrame
+        Converts TimeseriesDataRaw to pandas DataFrame
 
-        :return: Converted Panda DataFrame
+        :return: Converted pandas DataFrame
         """
 
         if len(self.timestamps) == 0:
@@ -131,11 +131,11 @@ class TimeseriesDataRaw(object):
         return pd.DataFrame(rows, columns=headers)
 
     @staticmethod
-    def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesDataRaw':
+    def from_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesDataRaw':
         """
-        Converts Panda DataFrame to TimeseriesData
+        Converts from pandas DataFrame to TimeseriesDataRaw
 
-        :param data_frame: The Panda DataFrame to convert to TimeseriesData
+        :param data_frame: The pandas DataFrame to convert to TimeseriesData
         :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
         :return: Converted TimeseriesData
         """
@@ -154,7 +154,7 @@ class TimeseriesDataRaw(object):
             possible_time_vals = data_frame.select_dtypes(include=['int', 'int64'])
             if possible_time_vals.count()[0] == 0:
                 raise Exception(
-                    "Panda data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
+                    "pandas DataFrame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
             time_label = possible_time_vals.columns[0]
 
         def get_value_as_type(val_type, val, type_conv=None) -> []:

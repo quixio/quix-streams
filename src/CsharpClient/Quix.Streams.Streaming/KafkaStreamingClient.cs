@@ -85,7 +85,7 @@ namespace Quix.Streams.Streaming
         /// <param name="options">The settings to use for committing</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public ITopicConsumer CreateTopicConsumer(string topic, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest)
+        public ITopicConsumer GetTopicConsumer(string topic, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest)
         {
             var kafkaReaderConfiguration = new TelemetryKafkaConsumerConfiguration(brokerAddress, consumerGroup, brokerProperties)
             {
@@ -136,9 +136,9 @@ namespace Quix.Streams.Streaming
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public ITopicProducer CreateTopicProducer(string topic)
+        public ITopicProducer GetTopicProducer(string topic)
         {
-            var topicProducer = new TopicProducer(new KafkaWriterConfiguration(brokerAddress, brokerProperties), topic);
+            var topicProducer = new TopicProducer(new KafkaProducerConfiguration(brokerAddress, brokerProperties), topic);
             
             Quix.Streams.Streaming.App.Register(topicProducer);
 
@@ -160,18 +160,18 @@ namespace Quix.Streams.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public static ITopicConsumer CreateTopicConsumer(this KafkaStreamingClient client, string topic, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
+        public static ITopicConsumer GetTopicConsumer(this KafkaStreamingClient client, string topic, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
         {
             switch (commitMode)
             {
                 case CommitMode.Automatic:
-                    return client.CreateTopicConsumer(topic, consumerGroup, autoOffset: autoOffset);
+                    return client.GetTopicConsumer(topic, consumerGroup, autoOffset: autoOffset);
                 case CommitMode.Manual:
                     var commitOptions = new CommitOptions()
                     {
                         AutoCommitEnabled = false
                     };
-                    return client.CreateTopicConsumer(topic, consumerGroup, commitOptions, autoOffset);
+                    return client.GetTopicConsumer(topic, consumerGroup, commitOptions, autoOffset);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(commitMode), commitMode, null);
             }

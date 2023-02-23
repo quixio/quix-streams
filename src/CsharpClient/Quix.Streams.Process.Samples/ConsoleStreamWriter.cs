@@ -5,7 +5,7 @@ using Quix.Streams.Process.Models;
 namespace Quix.Streams.Process.Samples
 {
     /// <summary>
-    /// Simply writer component that writes tdata messages through the console
+    /// Simple writer component that writes tdata messages through the console
     /// </summary>
     public class ConsoleStreamWriter : StreamComponent
     {

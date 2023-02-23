@@ -76,12 +76,12 @@ class EventDataBuilder(object):
         self.__wrapped.AddTags(prep_tags_dict)
         return self
 
-    def write(self):
+    def publish(self):
         """
-        Writes the values to the StreamEventsProducer buffer. See StreamEventsProducer buffer settings for more information when the values are sent to the broker
+        Publishes the values to the StreamEventsProducer buffer. See StreamEventsProducer buffer settings for more information when the values are sent to the broker
         """
 
-        self._interop.Write()
+        self._interop.Publish()
 
         if not self._entered:
             self.dispose()

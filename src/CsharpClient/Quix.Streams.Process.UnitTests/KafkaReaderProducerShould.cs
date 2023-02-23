@@ -10,15 +10,15 @@ using Xunit.Abstractions;
 
 namespace Quix.Streams.Process.UnitTests
 {
-    public class KafkaReaderWriterShould
+    public class KafkaConsumerProducerShould
     {
-        public KafkaReaderWriterShould(ITestOutputHelper helper)
+        public KafkaConsumerProducerShould(ITestOutputHelper helper)
         {
             Quix.Streams.Logging.Factory = helper.CreateLoggerFactory();
         }
         
         [Fact]
-        public void KafkaReaderWriter_AfterSendSeveralStreams_ShouldReadProperStreams()
+        public void KafkaConsumerProducer_AfterSendSeveralStreams_ShouldReadProperStreams()
         {
             RegisterTestCodecs();
 
@@ -33,9 +33,9 @@ namespace Quix.Streams.Process.UnitTests
 
             bool streamStarted = false;
 
-            // Create Kafka Reader
-            var kafkaReader = new TestTelemetryKafkaConsumer(testBroker);
-            kafkaReader.ForEach(streamId =>
+            // Create Kafka consumer
+            var kafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
+            kafkaConsumer.ForEach(streamId =>
             {
                 streamStarted = true;
 
@@ -55,7 +55,7 @@ namespace Quix.Streams.Process.UnitTests
                 return s;
             });
 
-            kafkaReader.Start();
+            kafkaConsumer.Start();
 
             // Create streams
             var stream1 = new StreamProcess()
@@ -72,7 +72,7 @@ namespace Quix.Streams.Process.UnitTests
             stream3.Send(testModel2);
 
             // ASSERT
-            Assert.Equal(3, kafkaReader.ContextCache.GetAll().Count);
+            Assert.Equal(3, kafkaConsumer.ContextCache.GetAll().Count);
             Assert.Contains(("StreamId_1", typeof(TestModel1)), results);
             Assert.DoesNotContain(("StreamId_1", typeof(TestModel2)), results);
             Assert.Contains(("StreamId_2", typeof(TestModel1)), results);
@@ -93,7 +93,7 @@ namespace Quix.Streams.Process.UnitTests
             stream1.Send(streamEnd);
 
             // ASSERT
-            Assert.Equal(2, kafkaReader.ContextCache.GetAll().Count);
+            Assert.Equal(2, kafkaConsumer.ContextCache.GetAll().Count);
 
             // ACT - RE-OPEN TEST
             streamStarted = false;
@@ -101,11 +101,11 @@ namespace Quix.Streams.Process.UnitTests
 
             // ASSERT RE-OPEN TEST
             Assert.True(streamStarted);
-            Assert.Equal(3, kafkaReader.ContextCache.GetAll().Count);
+            Assert.Equal(3, kafkaConsumer.ContextCache.GetAll().Count);
         }
 
         [Fact]
-        public void KafkaReaderWriter_WithoutRegisterCodecs_ShouldRaiseExceptions()
+        public void KafkaConsumerProducer_WithoutRegisterCodecs_ShouldRaiseExceptions()
         {
             UnregisterTestCodecs();
 
@@ -114,7 +114,7 @@ namespace Quix.Streams.Process.UnitTests
             TestModel1 testModel1 = new TestModel1();
             bool raised = false;
 
-            // Create Kafka Reader
+            // Create Kafka consumer
             TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
@@ -122,7 +122,7 @@ namespace Quix.Streams.Process.UnitTests
                 return s;
             });
 
-            // Create Kafka Writer
+            // Create Kafka producer
             TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
             var stream1 = new StreamProcess()
                 .AddComponent(telemetryKafkaProducer);
@@ -137,7 +137,7 @@ namespace Quix.Streams.Process.UnitTests
         }
 
         [Fact]
-        public void KafkaReaderWriter_WithErrorsOnSend_ShouldRaiseExceptions()
+        public void KafkaConsumerProducer_WithErrorsOnSend_ShouldRaiseExceptions()
         {
             RegisterTestCodecs();
 
@@ -146,7 +146,7 @@ namespace Quix.Streams.Process.UnitTests
             TestModel1 testModel1 = new TestModel1();
             bool raised = false;
 
-            // Create Kafka Reader
+            // Create Kafka consumer
             TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
@@ -154,7 +154,7 @@ namespace Quix.Streams.Process.UnitTests
                 return s;
             });
 
-            // Create Kafka Writer
+            // Create Kafka producer
             TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
             var stream1 = new StreamProcess()
                 .AddComponent(telemetryKafkaProducer);

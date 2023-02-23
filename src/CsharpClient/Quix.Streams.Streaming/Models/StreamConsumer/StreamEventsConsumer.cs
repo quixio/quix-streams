@@ -14,7 +14,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         private readonly IStreamConsumerInternal streamConsumer;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamParametersConsumer"/>
+        /// Initializes a new instance of <see cref="StreamTimeseriesConsumer"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the stream to what this reader belongs to</param>
         /// <param name="streamConsumer">Stream reader owner</param>
@@ -33,7 +33,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         {
             var data = new EventData(eventDataRaw);
 
-            this.OnRead?.Invoke(this, new EventDataReadEventArgs(this.topicConsumer, this.streamConsumer, data));
+            this.OnDataReceived?.Invoke(this, new EventDataReadEventArgs(this.topicConsumer, this.streamConsumer, data));
         }
 
         private void OnEventDefinitionsChangedHandler(IStreamConsumer sender, EventDefinitions eventDefinitions)
@@ -44,9 +44,9 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         }
 
         /// <summary>
-        /// Raised when an events data package is read for the stream
+        /// Raised when an events data package is received for the stream
         /// </summary>
-        public event EventHandler<EventDataReadEventArgs> OnRead;
+        public event EventHandler<EventDataReadEventArgs> OnDataReceived;
 
         /// <summary>
         /// Raised when the even definitions have changed for the stream.

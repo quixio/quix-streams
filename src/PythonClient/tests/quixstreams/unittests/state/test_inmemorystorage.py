@@ -3,13 +3,18 @@ import unittest
 
 from src.quixstreams.state.statevalue import StateValue
 from src.quixstreams.state.localfilestorage import LocalFileStorage
+from src.quixstreams.state.inmemorystorage import InMemoryStorage
 
 
-class LocalFileStorageTests(unittest.TestCase):
+class InMemoryStorageTests(unittest.TestCase):
+
+    @staticmethod
+    def create_in_memory_storage():
+        return InMemoryStorage(LocalFileStorage("./state-files"))
 
     def test_setget_float(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -31,7 +36,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_int(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -47,7 +52,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_string(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -63,7 +68,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_bool(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -79,7 +84,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_binary(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -99,7 +104,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_none(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -113,7 +118,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_object(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -128,7 +133,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_statevalue(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         try:
@@ -145,7 +150,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_get_all_keys(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         storage.set("Key1", 12.51)
@@ -161,7 +166,7 @@ class LocalFileStorageTests(unittest.TestCase):
 
     def test_clear(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         storage.set("Key1", 12.51)
@@ -179,7 +184,7 @@ class LocalFileStorageTests(unittest.TestCase):
     
     def test_remove_key(self):
         # Arrange
-        storage = LocalFileStorage("./state-files")
+        storage = InMemoryStorageTests.create_in_memory_storage()
         storage.clear()
 
         storage.set("Key_To_Remove", 12.51)

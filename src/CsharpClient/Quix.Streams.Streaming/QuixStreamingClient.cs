@@ -51,7 +51,7 @@ namespace Quix.Streams.Streaming
         /// <summary>
         /// The base API uri. Defaults to <c>https://portal-api.platform.quix.ai</c>, or environment variable <c>Quix__Portal__Api</c> if available.
         /// </summary>
-        public Uri ApiUrl = new Uri("https://portal-api.platform.quix.ai");
+        public Uri ApiUrl = new Uri("https://portal-api.platform.quix.io");
         
         /// <summary>
         /// The period for which some API responses will be cached to avoid excessive amount of calls. Defaults to 1 minute.
@@ -116,14 +116,14 @@ namespace Quix.Streams.Streaming
         /// <param name="options">The settings to use for committing</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public ITopicConsumer CreateTopicConsumer(string topicIdOrName, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest)
+        public ITopicConsumer GetTopicConsumer(string topicIdOrName, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
             
             var (client, topicId, ws) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, options) = GetValidConsumerGroup(topicIdOrName, consumerGroup, options).ConfigureAwait(false).GetAwaiter().GetResult();
             
-            return client.CreateTopicConsumer(topicId, consumerGroup, options, autoOffset);
+            return client.GetTopicConsumer(topicId, consumerGroup, options, autoOffset);
         }
 
         /// <summary>
@@ -158,17 +158,17 @@ namespace Quix.Streams.Streaming
         }
         
         /// <summary>
-        /// Open an topic producer capable of publishing quixstreams messages 
+        /// Gets a topic producer to publish stream messages 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public ITopicProducer CreateTopicProducer(string topicIdOrName)
+        public ITopicProducer GetTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
             var (client, topicId, _) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.CreateTopicProducer(topicId);
+            return client.GetTopicProducer(topicId);
         }
 
         private async Task<(string, CommitOptions)> GetValidConsumerGroup(string topicIdOrName, string originalConsumerGroup, CommitOptions commitOptions)
@@ -705,7 +705,7 @@ namespace Quix.Streams.Streaming
     public static class QuixStreamingClientExtensions
     {
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive incoming streams
+        /// Gets a topic consumer capable of subscribing to receive streams in the specified topic
         /// </summary>
         /// <param name="client">Quix Streaming client instance</param>
         /// <param name="topicId">Id of the topic. Should look like: myvery-myworkspace-mytopic</param>
@@ -713,18 +713,18 @@ namespace Quix.Streams.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public static ITopicConsumer CreateTopicConsumer(this QuixStreamingClient client, string topicId, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
+        public static ITopicConsumer GetTopicConsumer(this QuixStreamingClient client, string topicId, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
         {
             switch (commitMode)
             {
                 case CommitMode.Automatic:
-                    return client.CreateTopicConsumer(topicId, consumerGroup, null, autoOffset);
+                    return client.GetTopicConsumer(topicId, consumerGroup, null, autoOffset);
                 case CommitMode.Manual:
                     var commitOptions = new CommitOptions()
                     {
                         AutoCommitEnabled = false
                     };
-                    return client.CreateTopicConsumer(topicId, consumerGroup, commitOptions, autoOffset);
+                    return client.GetTopicConsumer(topicId, consumerGroup, commitOptions, autoOffset);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(commitMode), commitMode, null);
             }

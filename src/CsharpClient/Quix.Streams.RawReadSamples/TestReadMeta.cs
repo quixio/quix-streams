@@ -16,7 +16,7 @@ namespace Quix.Streams.RawReadSamples
             {
                 Console.WriteLine($"Exception occurred: {e}");
             };
-            rawReader.OnMessageRead += (sender, message) =>
+            rawReader.OnMessageReceived += (sender, message) =>
             {
                 var text = Encoding.UTF8.GetString((byte[])message.Value);
                 Console.WriteLine($"received -> {text}");

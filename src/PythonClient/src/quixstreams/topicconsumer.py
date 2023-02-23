@@ -56,16 +56,16 @@ class TopicConsumer(object):
 
     # region on_stream_received
     @property
-    def on_stream_received(self) -> Callable[['TopicConsumer', 'StreamConsumer'], None]:
+    def on_stream_received(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the stream.
+        Gets the handler for when a stream is received for the topic. First parameter is the stream.
         """
         return self._on_stream_received
 
     @on_stream_received.setter
-    def on_stream_received(self, value: Callable[['TopicConsumer', 'StreamConsumer'], None]) -> None:
+    def on_stream_received(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the stream.
+        Sets the handler for when a stream is received for the topic. First parameter is the stream.
         """
         self._on_stream_received = value
         if self._on_stream_received_ref is None:
@@ -76,7 +76,7 @@ class TopicConsumer(object):
         try:
             stream = StreamConsumer(stream_hptr, self, lambda s: self._active_streams.remove(s))
             self._active_streams.append(stream)
-            self._on_stream_received(self, stream)
+            self._on_stream_received(stream)
             InteropUtils.free_hptr(topic_hptr)
         except:
             traceback.print_exc()
