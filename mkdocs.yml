@@ -24,7 +24,6 @@ nav:
       - 'Message splitting': 'features/message-splitting.md'
       - 'Data serialization': 'features/data-serialization.md'
       - 'Multiple data types': 'features/multiple-data-types.md'
-      - 'Broker configuration': 'features/broker-configuration.md'
       - 'Checkpointing': 'features/checkpointing.md'
       - 'Horizontal scaling': 'features/horizontal-scaling.md'
     - 'Connect to Quix': 'connect.md'
