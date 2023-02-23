@@ -220,7 +220,6 @@ This library provides several features and solves common problems you face when 
 
 - <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. It let's you produce <b>multiple streams</b> through the same topic and enables the message broker to <b>parallelize loads</b> reliably across multiple consumers. It also allows stateful processing to be resiliently parallelised.     
 
-- <b>Stream metadata</b>: Quix Streams allows you to attached metadata to a Stream context and to the definition of Parameters and Events. The library manages the <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary to improve efficiency. 
 
 - <b>Time-series data serialization and de-serialization</b>: Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughput and reduce latency.
 
@@ -228,15 +227,86 @@ This library provides several features and solves common problems you face when 
 
 - <b>Built-in time-series buffers</b>: If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for producing and consuming, allowing several configurations for balancing between latency and cost.
 
+    - For example, you can configure the library to release rows from the buffer whenever 100 items of timestamped data are collected or when a certain number of milliseconds in data have elapsed. Note that this is using time in data, not the consumer clock. 
+
+        ```python
+        # We subscribe to gForce columns.
+        buffer = stream_consumer.parameters.create_buffer("gForceX", "gForceY", "gForceZ")
+
+        # Configure buffer.
+        buffer.packet_size = 100
+        buffer.time_span_in_milliseconds = 100
+        ```
+
+    - You can easily read from the buffer and process it with the on_receive function.
+
+        ```python
+        def on_read_dataframe(stream: StreamConsumer, df: pd.DataFrame):
+            df["total"] = df["price"] * df["items_count"]
+
+        # Subscribe with a method to process data from the buffer.
+        buffer.on_receive = on_g_force
+        ```
+
 - <b>Support for data frames</b>: In many use cases, multiple time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. The library uses a tabular system that can work for instance with <b>Pandas DataFrames</b> natively. Each row has a timestamp and <b>user-defined tags</b> as indexes.
 
 - <b>Multiple data types</b>: This library allows you to produce and consume different types of mixed data in the same timestamp, like <b>Numbers</b>, <b>Strings</b> or <b>Binary data</b>.
 
+    ```python
+    video_stream = cv2.VideoCapture(camera_video_feed["value"])
+    success, image = video_stream.read()
+    while success:
+        frame_bytes = cv2.imencode('.jpg', image)[1]
+        self.output_stream.parameters.buffer.add_timestamp_nanoseconds(time.time_ns()) \
+                        .add_value("image", frame_bytes) \
+                        .add_value("Lat", lat) / 5.0) \
+                        .add_value("Long", long) / 5.0) \
+                        .publish()
+
+        stream.events \
+                .add_timestamp_in_nanoseconds(time.time_ns()) \
+                .add_value("driver_bell", "Doors 3 bell activated by passenger") \
+                .publish()
+    ```
+
+- <b>Stateful processing</b>
+To use the Quix Streams state management feature, you can create an instance of LocalFileStorage or use one of our helper classes to manage the state such as InMemoryStorage. Here is an example of a stateful operation sum for a selected column in data. 
+
+    ```python
+    state = InMemoryStorage(LocalFileStorage())
+
+    def on_g_force(topic, stream_consumer: StreamConsumer, data: TimeseriesData):
+
+        for row in data.timestamps:
+                    # Append G-Force sensor value to accumulated state (SUM).
+            state[stream_consumer.stream_id] += abs(row.parameters["gForceX"].numeric_value)
+                    
+                    # Attach new column with aggregated values.
+            row.add_value("gForceX_sum", state[stream_consumer.stream_id])
+
+            # Send updated rows to the producer topic.
+        topic_producer.get_or_create_stream(stream_consumer.stream_id).parameters.publish(data)
+
+
+    # read streams
+    def read_stream(topic_consumer: TopicConsumer, stream_consumer: StreamConsumer):
+        # If there is no record for this stream, create a default value.
+            if stream_consumer.stream_id not in state:
+            state[stream_consumer.stream_id] = 0
+            
+            # We subscribe to gForceX column.
+        stream_consumer.parameters.create_buffer("gForceX").on_read = on_g_force
+
+
+    topic_consumer.on_stream_received = read_stream
+    topic_consumer.on_committed = state.flush
+    ```
+
+- <b>Stream metadata</b>: Quix Streams allows you to attached metadata to a Stream context and to the definition of Parameters and Events. The library manages the <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary to improve efficiency. 
+
 - <b>Message splitting</b>: Quix Streams automatically handles <b>large messages</b> on the producer side, splitting them up if required. You no longer need to worry about Kafka message limits. On the consumer side, those messages are automatically merged back.
 
 - <b>Message Broker configuration</b>: Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time. The library take care of Kafka configuration by default allowing refined configuration only when needed.
-
-- <b>Checkpointing</b>: Quix Streams allows manual or automatic checkpointing when you consume data from a Kafka Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point.
 
 - <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.
 
