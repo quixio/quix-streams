@@ -1,6 +1,6 @@
 # Horizontal scaling
 
-The Quix SDK provides horizontal scaling with the [streaming context](/sdk/features/streaming-context). This means a data scientist or data engineer does not have to implement parallel processing themselves.
+Quix Streams provides horizontal scaling with the [streaming context](/sdk/features/streaming-context). This means a data scientist or data engineer does not have to implement parallel processing themselves.
 
 Imagine the following example:
 
@@ -12,21 +12,21 @@ Now, one of the replicas crashes (the purple one), and the "stream 4" is assigne
 
 ![Purple replica crashes](../images/QuixHorizontalScaling2.png)
 
-This situation will trigger an event on the SDK in the blue replica indicating that "stream 4" has been received:
+This situation will trigger an event on Quix Streams in the blue replica indicating that "stream 4" has been received:
 
 === "Python"
     
     ``` python
-    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+    def read_stream(topic_consumer: InputTopic, new_stream: StreamConsumer):
         print("New stream received:" + new_stream.stream_id)
     
-    input_topic.on_stream_received = read_stream
+    topic_consumer.on_stream_received = read_stream
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, newStream) =>
+    topicConsumer.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream received: {newStream.StreamId}");
     };
@@ -47,26 +47,26 @@ This will trigger two events, one in the blue replica indicating that "stream 4"
 === "Python"
     
     ``` python
-    def read_stream(input_topic: InputTopic, new_stream: StreamReader):
+    def read_stream(topic_consumer: InputTopic, new_stream: StreamConsumer):
         print("New stream received:" + new_stream.stream_id)
     
-    def streams_revoked(input_topic: InputTopic, streams_revoked: [StreamReader]):
+    def streams_revoked(topic_consumer: InputTopic, streams_revoked: [StreamConsumer]):
         for stream in streams_revoked:
             print("Stream revoked:" + stream.stream_id)
     
-    input_topic.on_stream_received = read_stream
-    input_topic.on_streams_revoked = streams_revoked
+    topic_consumer.on_stream_received = read_stream
+    topic_consumer.on_streams_revoked = streams_revoked
     ```
 
 === "C\#"
     
     ``` cs
-    inputTopic.OnStreamReceived += (topic, newStream) =>
+    topicConsumer.OnStreamReceived += (topic, newStream) =>
     {
         Console.WriteLine($"New stream received: {newStream.StreamId}");
     };
     
-    inputTopic.OnStreamsRevoked += (topic, streamsRevoked) =>
+    topicConsumer.OnStreamsRevoked += (topic, streamsRevoked) =>
     {
         foreach (var stream in streamsRevoked)
         {
@@ -87,13 +87,13 @@ Output on the purple replica:
 New stream received: stream 4
 ```
 
-The same behavior will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on the Quix SDK.
+The same behavior will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on Quix Streams.
 
 ## Rebalancing mechanism and partitions
 
 Kafka uses partitions and the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html) to decide which consumers receive which messages. 
 
-Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind the Quix SDK. You don’t need to worry about them because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context) feature of the SDK. The events described above will remain the same, even if the SDK uses another Message Broker technology or another rebalancing mechanism in the future.
+Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind Quix Streams. You don’t need to worry about them because everything is abstracted within the [Streaming Context](/sdk/features/streaming-context) feature of the SDK. The events described above will remain the same, even if Quix Streams uses another Message Broker technology or another rebalancing mechanism in the future.
 
 !!! warning
 

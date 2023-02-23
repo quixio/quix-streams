@@ -6,9 +6,9 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using InteropHelpers.Interop;
 using InteropHelpers.Interop.ExternalTypes.System;
+using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using Quix.InteropGenerator.Writers.Shared;
 
 namespace Quix.InteropGenerator.Writers.CsharpInteropWriter;

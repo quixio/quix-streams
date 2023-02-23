@@ -62,7 +62,7 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 You can install the library for amd64 platforms using the package manager for Python Packages:
 
 ```shell
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev17 --user
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev19 --user
 ```
 
 ### Installing on M1/M2 Mac
@@ -124,7 +124,7 @@ To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 e
 19. Install Quix Streams:
 
     ```
-    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev17 --user
+    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev19 --user
     ```
 
 20. You can now run your code that uses Quix Streams:
@@ -153,10 +153,10 @@ from quixstreams import KafkaStreamingClient
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the output topic where to produce data to.
-output_topic = client.open_output_topic("your-kafka-topic")
+# Open the topic producer to publish to the output topic
+topic_producer = client.create_topic_producer("your-kafka-topic")
 
-stream = output_topic.create_stream()
+stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.properties.metadata["my-metadata"] = "my-metadata-value"
 stream.parameters.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
@@ -192,19 +192,18 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the input topic where to consume data from.
 # For testing purposes we remove consumer group and always read from latest data.
-input_topic = client.open_input_topic("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.create_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(input_stream: StreamReader):
+def on_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
+    input_stream.parameters.on_read_dataframe = on_dataframe
 
-    # consume data (as Pandas DataFrame)
-    def on_read_pandas(df: pd.DataFrame):
-        print(df.to_string())
-
-    input_stream.parameters.on_read_pandas += on_read_pandas
+# consume data (as Pandas DataFrame)
+def on_dataframe(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
-input_topic.on_stream_received += on_stream
+topic_consumer.on_stream_received = on_stream
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit
@@ -251,7 +250,7 @@ This library is actively in developing process. We have some features planned in
 
 ### Interoperability wrappers
 
-The Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement support for other languages such as <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/).
+Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement support for other languages such as <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/).
 
 You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language-specific client. For instance for Python:
 
@@ -310,7 +309,7 @@ Each layer has his own responsibilities:
  
 - <b>Streaming layer</b>: This is the main layer of the library that users should use by default. It includes all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsibility of this layer is the <b>embedded time-series buffer</b> system.
 
-- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of the Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
+- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
 
 - <b>Transport layer</b>: This layer is responsible for the <b>communication with the message broker</b> and implementing some features to deal with the message broker's features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible for implementing a `wrapping messages system` to allow different message types of the library Protocol, and to define the base classes for the `Codecs` implementation of each messages of that Protocol on the upper layers of the library. For <b>Kafka</b> support, this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), which uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka).
 

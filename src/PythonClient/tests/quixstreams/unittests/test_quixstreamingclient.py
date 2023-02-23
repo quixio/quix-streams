@@ -75,13 +75,13 @@ class StreamingClientTests(unittest.TestCase):
         # Assert
         self.assertEqual("https://test.quix.ai/", sc.api_url)
 
-    def test_open_topic(self):
+    def test_create_topic(self):
         os.environ["Quix__Sdk__Token"] = "something"
         sc = QuixStreamingClient()
         sc.api_url = "https://test.quix.ai"
         # Act
         try:
-            sc.open_input_topic('sometest')
+            sc.create_topic_consumer('sometest')
         # Assert
         except Exception as ex:
             # point here is it can fail inside c#, but not python

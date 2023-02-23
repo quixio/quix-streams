@@ -21,42 +21,41 @@ from quixstreams.app import App
 
 ## Start reading
 
-In order to start reading from an input topic you need to make a call to the `start_reading()` method. Your Python code won’t be able to read any data from the broker if you have missed this step. It makes sense to add this call near the end of the code, just before your 'keep busy' `while` loop.
+In order to start reading from an input topic you need to make a call to the `subscribe()` method. Your Python code won’t be able to read any data from the broker if you have missed this step. It makes sense to add this call near the end of the code, just before your 'keep busy' `while` loop.
 
 Your code might look something like this:
 
 ```py
-def read_stream(new_stream: StreamReader):
+def read_stream(new_stream: StreamConsumer):
 
     buffer = new_stream.parameters.create_buffer()
 
-    def on_pandas_frame_handler(df: pd.DataFrame):
+    def on_dataframe_handler(stream: StreamConsumer, df: pd.DataFrame):
         print(df.to_string())
 
-    buffer.on_read_pandas += on_pandas_frame_handler
+    buffer.on_read_dataframe = on_dataframe_handler
 
-input_topic.on_stream_received += read_stream
-input_topic.start_reading()
+topic_consumer.on_stream_received = read_stream
+topic_consumer.subscribe()
 
 while(True)
     print('running')
 ```
 
-However, using `App.run()` you no longer need the call to `start_reading()`, because it is called for you. 
+However, using `App.run()` you no longer need the call to `subscribe()`, because it is called for you. 
 
 So your code would look like this instead:
 
 ```py
-def read_stream(new_stream: StreamReader):
+def read_stream(new_stream: StreamConsumer):
 
     buffer = new_stream.parameters.create_buffer()
+    buffer.on_read_dataframe = on_dataframe_handler
 
-    def on_pandas_frame_handler(df: pd.DataFrame):
-        print(df.to_string())
+def on_dataframe_handler(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
 
-    buffer.on_read_pandas += on_pandas_frame_handler
-
-input_topic.on_stream_received += read_stream
+topic_consumer.on_stream_received = read_stream
 
 App.run()
 ```
@@ -103,11 +102,11 @@ You can ensure the streams are closed by calling the following code just before 
 ```py
 # dispose the topic(s) and close the stream(s)
 print('Closing streams...')
-input_topic.dispose()
-output_topic.dispose()
+topic_consumer.dispose()
+topic_producer.dispose()
 ```
 
-Here, you dispose of the input topic, which stops new data from being received, and then dispose of the output topic. This code is easy and straightforward, however it's just more boilerplate that you have to remember.
+Here, you dispose of the topic consumer, which stops new data from being received, and then dispose of the topic producer. This code is easy and straightforward, however it's just more boilerplate that you have to remember.
 
 Once again, `App.run()` encapsulates this and handles this for you, so the code above becomes:
 
@@ -140,12 +139,12 @@ App.run()
 
 # Bring it all together
 
-You have seen how you could start reading from streams, handle termination signals, dispose of input and output topics, and how to keep your code running. 
+You have seen how you could start subscribing to streams, handle termination signals, dispose of topics consumers and producers, and how to keep your code running. 
 
 To recap, here is an example of your code without using `App.run`, all in one snippet:
 
 ```py
-input_topic.start_reading()  # initiate read
+topic_consumer.subscribe()  # initiate read
 
 # Hook up to termination signal (for docker image) and CTRL-C
 print('Listening to streams. Press CTRL-C to exit.')
@@ -156,8 +155,8 @@ event = threading.Event()
 def signal_handler(sig, frame):
     # dispose the topic(s) and close the stream(s)
     print('Closing streams...')
-    input_topic.dispose()
-    output_topic.dispose()
+    topic_consumer.dispose()
+    topic_producer.dispose()
 
     print('Setting termination flag')
     event.set()
@@ -177,7 +176,7 @@ If you use `App.run()`, this is greatly simplified into the following much small
 # run a while loop
 # open the input topics
 # listen for termination
-# close input and output topics
+# close topic consumers and producers
 App.run()
 print('Exiting')
 ```

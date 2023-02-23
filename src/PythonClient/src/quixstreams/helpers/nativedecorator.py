@@ -1,7 +1,9 @@
 import weakref
 
+
 def _dummy(*args, **kwargs):
     pass
+
 
 def nativedecorator(cls):
     orig_init = cls.__init__
@@ -31,7 +33,6 @@ def nativedecorator(cls):
             return
         orig_dispose(self, *args, **kwargs)
         self._nativedecorator_finalizer()
-
 
     cls.__init__ = new_init
     cls._finalizerfunc = new_finalizerfunc

@@ -180,7 +180,7 @@ public class TypeWriter : BaseWriter
         //writer.DecrementIndent();
         if (!blittable) await writer.WriteAsync($"del {this.TypePythonName}._weakrefs[self._pointer.value]");
         if (!blittable) await writer.WriteAsync("InteropUtils.free_hptr(self._pointer)");
-        else  await writer.WriteAsync("InteropUtils.free_uptr(self._pointer)");
+        else await writer.WriteAsync("InteropUtils.free_uptr(self._pointer)");
         await writer.WriteAsync("self._finalizer.detach()");
         writer.DecrementIndent();
         

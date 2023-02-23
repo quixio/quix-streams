@@ -1,8 +1,8 @@
-from typing import Optional
 import ctypes
-from ..native.Python.QuixSdkTransport.Fw.CommitOptions import CommitOptions as coi
+from typing import Optional
 
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixStreamsTransport.Fw.CommitOptions import CommitOptions as coi
 
 
 @nativedecorator

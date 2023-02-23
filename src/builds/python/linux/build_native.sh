@@ -16,11 +16,11 @@ echo "Building for linux architecture $archname with dotnet runtime id $dotnetru
 interopfolder=../../../InteropGenerator
 csharpfolder=../../../CsharpClient
 pythonfolder=../../../PythonClient
-streamingoutpath=$csharpfolder/Quix.Sdk.Streaming/bin/Publish/linux
+streamingoutpath=$csharpfolder/Quix.Streams.Streaming/bin/Publish/linux
 echo build streaming
-dotnet publish $csharpfolder/Quix.Sdk.Streaming/Quix.Sdk.Streaming.csproj -c debug -o $streamingoutpath
+dotnet publish $csharpfolder/Quix.Streams.Streaming/Quix.Streams.Streaming.csproj -c debug -o $streamingoutpath
 if [[ $? != 0 ]]; then
-    echo "Failed dotnet build Quix.Sdk.Streaming.csproj"
+    echo "Failed dotnet build Quix.Streams.Streaming.csproj"
     exit 2
 fi
 
@@ -35,7 +35,7 @@ fi
 echo run interop generator
 interopoutput=$interopfolder/InteropOutput
 interopconfig=$interopfolder/InteropConfig
-"$interopgeneratoroutput/Quix.InteropGenerator" -a "$streamingoutpath/Quix.Sdk.Streaming.dll" -o "$interopoutput"  -c "$interopconfig"
+"$interopgeneratoroutput/Quix.InteropGenerator" -a "$streamingoutpath/Quix.Streams.Streaming.dll" -o "$interopoutput"  -c "$interopconfig"
 if [[ $? != 0 ]]; then
     echo "Failed InteropGenerator run"
     exit 4

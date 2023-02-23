@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <Configurations>Debug;Release;Python</Configurations>
+        <Platforms>AnyCPU</Platforms>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Quix.Streams.Process\Quix.Streams.Process.csproj" />
+      <ProjectReference Include="..\Quix.Streams.Streaming\Quix.Streams.Streaming.csproj" />
+      <ProjectReference Include="..\Quix.Streams.Transport.Kafka\Quix.Streams.Transport.Kafka.csproj" />
+      <ProjectReference Include="..\Quix.Streams.Transport\Quix.Streams.Transport.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="7.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="appsettings.json">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+</Project>

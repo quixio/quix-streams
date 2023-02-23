@@ -18,9 +18,9 @@ public interface IIndentWriter
 public class IndentContentWriter : IIndentWriter, IContentWriter
 {
     private readonly Func<string, Task> writeFunc;
-    private int indent = 0;
-    private bool isLastEmpty = false;
-    private const int indentSize = 4;
+    private int indent;
+    private bool isLastEmpty;
+    private const int IndentSize = 4;
 
     public IndentContentWriter(Func<string, Task> writeFunc, int startingIndent = 0)
     {
@@ -33,7 +33,7 @@ public class IndentContentWriter : IIndentWriter, IContentWriter
         this.Write(line).RunSynchronously();
     }
 
-    void IContentWriter.WriteEmptyLine(bool force = false)
+    void IContentWriter.WriteEmptyLine(bool force)
     {
         this.WriteEmptyLine(false).RunSynchronously();
     }
@@ -55,12 +55,12 @@ public class IndentContentWriter : IIndentWriter, IContentWriter
 
     public void IncrementIndent()
     {
-        indent += indentSize;
+        indent += IndentSize;
     }
 
     public void DecrementIndent()
     {
-        if (indent > indentSize) indent -= indentSize;
+        if (indent > IndentSize) indent -= IndentSize;
         else indent = 0;
     }
 }

@@ -136,7 +136,7 @@ public class DictionaryInterop
             var valueConverted = valueConverter(value);
             dict.Add(keyConverted, valueConverted);
         }
-
+        
         return dict;
     }
     

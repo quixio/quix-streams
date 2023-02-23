@@ -14,7 +14,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-output_topic = client.open_output_topic('generated-data')
+topic_producer = client.create_topic_producer('generated-data')
 
 number_of_stream = 10
 
@@ -34,12 +34,12 @@ number_of_streamproperties_metadata = 5
 number_of_data_loop = 100
 number_of_data_points_per_loop = 10
 
-def on_write_exception_handler(stream: qx.StreamWriter, ex: BaseException):
+def on_write_exception_handler(stream: qx.StreamProducer, ex: BaseException):
     print(ex.args[0])
 
 for stream_number in range(number_of_stream):
     print(f"--- Sending Stream {stream_number} ---")
-    stream = output_topic.create_stream()
+    stream = topic_producer.create_stream()
     stream.on_write_exception = on_write_exception_handler
 
     print(f"--- Setting stream properties for stream {stream_number} ---")
@@ -143,11 +143,11 @@ for stream_number in range(number_of_stream):
 
         # use writer directly rather than via buffer
         if variant == 1:
-            pdata = qx.ParameterData()
-            with pdata:
+            tsdata = qx.TimeseriesData()
+            with tsdata:
                 for points_index in range(number_of_data_points_per_loop):
                     # send parameters
-                    pdts = pdata.add_timestamp(datetime.datetime.utcnow())
+                    pdts = tsdata.add_timestamp(datetime.datetime.utcnow())
 
                     for parameter in parameter_names_numerics:
                         pdts = pdts.add_value(parameter, random.uniform(-1000, 1000))
@@ -165,7 +165,7 @@ for stream_number in range(number_of_stream):
                             break
                         pdts.add_tag(tag, f"new parameter tag value {index}")
 
-                stream.parameters.write(pdata)
+                stream.parameters.write(tsdata)
 
         if variant == 2:
 
@@ -217,4 +217,4 @@ for stream_number in range(number_of_stream):
     endtype = qx.StreamEndType(stream_number % 2 + 1)
     stream.close(qx.StreamEndType.Aborted)
 
-output_topic.dispose()
+topic_producer.dispose()

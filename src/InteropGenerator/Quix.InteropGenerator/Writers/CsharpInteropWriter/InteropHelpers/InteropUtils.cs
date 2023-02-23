@@ -53,7 +53,7 @@ public class InteropUtils
         if (obj == null) return IntPtr.Zero;
         var handle = GCHandle.Alloc(obj);
         var ptr = GCHandle.ToIntPtr(handle);
-        LogDebug("Allocated Ptr: {0}, type: {1}, {2}", ptr,typeof(T).FullName , obj == null ? "is null" : "is not null");
+        LogDebug("Allocated Ptr: {0}, type: {1}, {2}", ptr,typeof(T).FullName, obj == null ? "is null" : "is not null");
         return ptr;
     }
     
@@ -323,9 +323,9 @@ public class InteropUtils
     /// <param name="ex">The exception to raise</param>
     public static void RaiseException(Exception ex)
     {
+        LogDebug(ex.ToString());
         using var state = pyApi.Value.EnsureGILState();
         pyApi.Value.RaiseException(ex);
-        LogDebug(ex.ToString());
     }
     
     [UnmanagedCallersOnly(EntryPoint = "interoputils_enabledebug")]
@@ -458,12 +458,12 @@ public class InteropUtils
         return pointer;
     }
 
-    public static string PtrToStringUTF8(IntPtr uptr)
+    public static string PtrToStringUTF8(IntPtr uptr, bool free = true)
     {
         if (uptr == IntPtr.Zero) return null;
         var res =  Marshal.PtrToStringUTF8(uptr);
         LogDebug("Converting UPtr->Str: {0}->{1}", uptr, res);
-        FreeUPtr(uptr);
+        if (free) FreeUPtr(uptr);
         return res;
     }
     

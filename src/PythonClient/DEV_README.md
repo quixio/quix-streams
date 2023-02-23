@@ -50,7 +50,7 @@ brew install librdkafka
 ## Start build
 Navigate to build_native_linux.sh folder 
 ```
-cd WHEREVER_YOUR_ROOT_IS/Quix.Sdk/PythonClient
+cd WHEREVER_YOUR_ROOT_IS/Quix.Streams/PythonClient
 . ./build_native_mac.sh
 . ./build_wheel_mac.sh
 ```
@@ -80,7 +80,7 @@ brew install librdkafka
 ## Start build
 Navigate to build_native_linux.sh folder 
 ```
-cd WHEREVER_YOUR_ROOT_IS/Quix.Sdk/PythonClient
+cd WHEREVER_YOUR_ROOT_IS/Quix.Streams/PythonClient
 . ./build_native_mac.sh
 . ./build_wheel_mac.sh
 
@@ -121,7 +121,7 @@ The absolute minimum to test the installed package use the following `.py` file 
 ```
 echo "import quixstreams as qx" >> main.py
 echo "client = qx.KafkaStreamingClient('127.0.0.1:9092', None)" >> main.py
-echo "client.open_output_topic('testinstall')" >> main.py
+echo "client.create_topic_producer('testinstall')" >> main.py
 python3 main.py
 ```
 Note: unless you have a local kafka running, this is expected to fail by logging Kafka producer exceptions.
@@ -133,8 +133,8 @@ docker run -it \
     --platform=linux/amd64 \
     --entrypoint /bin/bash \
     --network=host \
-    --volume /mnt/f/Work/source/Quix.Sdk/builds/python/linux/build-result:/build-result \
-    --volume /mnt/f/Work/source/Quix.Sdk/PythonClient/tests/quixstreams/manual:/manual \
+    --volume /mnt/f/Work/source/Quix.Streams/builds/python/linux/build-result:/build-result \
+    --volume /mnt/f/Work/source/Quix.Streams/PythonClient/tests/quixstreams/manual:/manual \
     python:3.11.1-slim-buster
 ```
 

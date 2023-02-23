@@ -1,10 +1,10 @@
-# Kafka and Quix SDK
+# Kafka and Quix Streams
 
-The Quix SDK helps you to leverage Kafka’s powerful features with ease.
+Quix Streams helps you to leverage Kafka’s powerful features with ease.
 
 ## Why this is important
 
-Kafka is a powerful but complex technology to master. Using the Quix SDK, you can leverage the power of Kafka without worrying about mastering it. There are just a couple of important concepts to grasp, the rest is handled in the background by the SDK.
+Kafka is a powerful but complex technology to master. Using Quix Streams, you can leverage the power of Kafka without worrying about mastering it. There are just a couple of important concepts to grasp, the rest is handled in the background by Quix Streams.
 
 ## Concepts
 
@@ -22,7 +22,7 @@ Each topic has temporary storage. Every message sent to the topic will live in K
 
 ### Topic partitions
 
-Each Kafka topic is created with a number of partitions. You can add more partitions later, but you can’t remove them. Each partition is an independent queue that preserves the order of messages. **The Quix SDK restricts all messages inside one stream to the same single partition.** That means that inside one stream, a consumer can rely on the order of messages. Partitions are spread across your Kafka cluster, over different Kafka nodes, for improved performance.
+Each Kafka topic is created with a number of partitions. You can add more partitions later, but you can’t remove them. Each partition is an independent queue that preserves the order of messages. **Quix Streams restricts all messages inside one stream to the same single partition.** That means that inside one stream, a consumer can rely on the order of messages. Partitions are spread across your Kafka cluster, over different Kafka nodes, for improved performance.
 
 #### Redistribution of load
 
@@ -37,7 +37,7 @@ Streams are redistributed over available partitions. With an increasing number o
 The **Consumer group** is a concept of how to horizontally scale topic processing. Each consumer group has an ID, which you set when opening a connection to the topic:
 
 ``` python
-output_topic = client.open_input_topic("{topic}","{your-consumer-group-id}")
+topic_producer = client.create_topic_consumer("{topic}","{your-consumer-group-id}")
 ```
 
 If you deploy this model with a replica set to 3, your model will be deployed in three instances as members of one consumer group. This group will share partitions between each other and therefore share the load.
@@ -48,11 +48,11 @@ If you deploy this model with a replica set to 3, your model will be deployed in
 
 ### Checkpointing
 
-We can think of Kafka temporary storage as a processing queue for each partition. Consumer groups read from this queue and regularly commit offsets to track which messages were already processed. By default, this is done by the Quix SDK automatically, but you can override that by manually committing an offset when you are done processing a set of rows.
+We can think of Kafka temporary storage as a processing queue for each partition. Consumer groups read from this queue and regularly commit offsets to track which messages were already processed. By default, this is done by Quix Streams automatically, but you can override that by manually committing an offset when you are done processing a set of rows.
 
 ``` python
-input_topic = client.open_input_topic('Telemetry', commit_settings=CommitMode.Manual)
-input_topic.commit()
+topic_consumer = client.create_topic_consumer('Telemetry', commit_settings=CommitMode.Manual)
+topic_consumer.commit()
 ```
 
 The consumer group is playing an important role here as offset commits are associated with the consumer group ID. That means that if you connect to the same topic with a different consumer group ID, the model will start reading from the start of the Kafka queue.
