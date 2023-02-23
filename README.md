@@ -28,7 +28,7 @@ Using Quix Streams, you can:
 - Produce time-series and event data to a Kafka Topic.
 - Consume time-series and event data from a Kafka Topic.
 - Process data by creating pipelines using <b>publish–subscribe</b> pattern.
-- Group data by streams to send different type of data (Timeseries data, events, metadata or binary) into one ordered stream of data.
+- Group data by streams to send different type of data (Timeseries, events, metadata or binary) into one ordered stream of data.
 
 ## What is time-series data?
 
@@ -67,7 +67,7 @@ python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstrea
 
 ### Installing on M1/M2 Mac
 
-To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
+We are working very hard to support apple silicon (M1 and M2-based) Macs natively. To install Quix Streams in meantime on apple silicon, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
 
 1. To make sure you have Rosetta installed, open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
 
@@ -137,7 +137,7 @@ You have now successfully installed Quix Streams on M1/M2 architectures.
 
 ### Prepare your Kafka Cluster
 
-This library needs to utilize a message broker to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
+This library needs to utilize a message broker to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field for streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
 ### Producing time-series data
 
@@ -170,7 +170,7 @@ for index in range(0, 3000):
         .add_value("ParameterA", math.sin(index / 200.0)) \
         .add_value("ParameterB", "string value: " + str(index)) \
         .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .write()
+        .publish()
     time.sleep(0.01)
 
 print("Closing stream")
@@ -184,7 +184,7 @@ Once we have setup our producer, it's time to see how to consume data from a top
 ```python
 import pandas as pd
 
-from quixstreams import *
+from quixstreams import KafkaStreamingClient, StreamConsumer
 from quixstreams.app import App
 
 # Client connecting to Kafka instance locally without authentication. 
@@ -192,15 +192,15 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the input topic where to consume data from.
 # For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.create_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
-
-# consume streams
-def on_stream(topic_consumer: TopicConsumer, new_stream: StreamConsumer):
-    input_stream.parameters.on_read_dataframe = on_dataframe
+topic_consumer = client.create_topic_consumer("your-kafka-topic")
 
 # consume data (as Pandas DataFrame)
-def on_dataframe(topic_consumer: TopicConsumer, stream: StreamConsumer, df: pd.DataFrame):
-    print(df.to_string())
+def on_dataframe(stream: StreamConsumer, df: pd.DataFrame):
+    print(d)
+    
+# consume streams
+def on_stream(new_stream: StreamConsumer):
+    new_stream.parameters.on_receive = on_dataframe
 
 # Hook up events before initiating read to avoid losing out on any data
 topic_consumer.on_stream_received = on_stream
