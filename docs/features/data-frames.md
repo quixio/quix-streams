@@ -11,7 +11,7 @@ For example, the following [TimeseriesData](../consume.md#timeseriesdata-format)
 | 3         | car-1       | 125   | 3    |
 | 6         | car-2       | 110   | 2    |
 
-Is represented as the following pandas Data Frame:
+Is represented as the following pandas DataFrame:
 
 | time | TAG\_\_CarId | Speed | Gear |
 | ---- | ------------ | ----- | ---- |

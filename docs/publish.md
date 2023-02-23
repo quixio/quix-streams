@@ -299,7 +299,7 @@ df = data.to_dataframe()
 stream.timeseries.buffer.publish(df)
 ```
 
-Alternatively, you can convert a pandas Data Frame to a [TimeseriesData](#timeseriesdata-format) using the method `from_dataframe`:
+Alternatively, you can convert a pandas DataFrame to a [TimeseriesData](#timeseriesdata-format) using the method `from_dataframe`:
 
 ``` python
 with (data := TimeseriesData.from_dataframe(df)):
