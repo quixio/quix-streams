@@ -133,14 +133,14 @@ namespace Quix.Streams.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public IRawTopicConsumer CreateRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
+        public IRawTopicConsumer GetRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
             var (client, topicId, _) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
             (consumerGroup, _) = GetValidConsumerGroup(topicIdOrName, consumerGroup, null).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.CreateRawTopicConsumer(topicId, consumerGroup, autoOffset);
+            return client.GetRawTopicConsumer(topicId, consumerGroup, autoOffset);
         }
 
         /// <summary>
@@ -148,13 +148,13 @@ namespace Quix.Streams.Streaming
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public IRawTopicProducer CreateRawTopicProducer(string topicIdOrName)
+        public IRawTopicProducer GetRawTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
 
             var (client, topicId, _) = this.ValidateTopicAndCreateClient(topicIdOrName).ConfigureAwait(false).GetAwaiter().GetResult();
 
-            return client.CreateRawTopicProducer(topicId);
+            return client.GetRawTopicProducer(topicId);
         }
         
         /// <summary>

@@ -742,7 +742,7 @@ For this, we have created a way to [publish](publish.md#write-raw-kafka-messages
 === "C\#"
     
     ``` cs
-    var rawConsumer = client.CreateRawTopicConsumer(TOPIC_ID)
+    var rawConsumer = client.GetRawTopicConsumer(TOPIC_ID)
     
     rawConsumer.OnMessageRead += (sender, message) =>
     {

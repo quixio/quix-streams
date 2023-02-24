@@ -10,7 +10,7 @@ namespace Quix.Streams.RawReadSamples
         public static void Run()
         {
             var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var rawWriter = streamingClient.CreateRawTopicProducer("RawWriteKey");
+            var rawWriter = streamingClient.GetRawTopicProducer("RawWriteKey");
 
             var nanos = DateTime.Now.ToString("HH:mm:ss:fff") + (DateTime.Now.Ticks / 10);
 
