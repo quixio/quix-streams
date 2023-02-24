@@ -154,7 +154,7 @@ from quixstreams import KafkaStreamingClient
 client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the topic producer to publish to the output topic
-topic_producer = client.create_topic_producer("your-kafka-topic")
+topic_producer = client.get_topic_producer("your-kafka-topic")
 
 stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
