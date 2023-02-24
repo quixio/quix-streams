@@ -1,12 +1,12 @@
 # Migrating from previous versions
 
-We aim to not do breaking changes unless necessary, and if we do, do them at the same time. However, when they're necessary we'll include migration steps from previous versions here. To avoid excessive verboseness, unless there is a language specific difference more than naming conventions (casing vs underscore), only one will be shown
+We aim to not do breaking changes unless necessary, and if we do, do them at the same time. However, when they're necessary we'll include migration steps from previous versions here. To avoid excessive verboseness, unless there is a language specific difference more than naming conventions (casing vs underscore), only one will be shown.
 
 ## 0.4.* -> 0.5.0
 
 ### The library is renamed
 
-For python, the library is renamed to `quixstreams` from `quixstreaming`, while for C# the packages will be available under `Quix.Streams.*` rather than `Quix.Sdk.*`. The latter resulted in namespace changes also.
+For python, the library is renamed to `quixstreams` from `quixstreaming`, while for C# the packages will be available under `Quix.Streams.*` rather than `Quix.Sdk.*`. The latter also resulted in namespace changes.
 
 ### Library availability
 
@@ -16,17 +16,17 @@ For python it was done by using
 ```
 pip install quixstreaming --extra-index-url https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/pypi/simple/
 ``` 
-Now should be installed from official PyPi feed using
+Now it should be installed from the official PyPi feed using
 ```
 pip install quixstreams
 ```
-We currently publish in-dev versions to test pypi, can try these using
+We currently publish in-dev versions to test pypi, you can try these using
 ```
 pip install quixstreams --extra-index-url https://test.pypi.org/simple/
 ```
 Note: The original feed will be maintained for some time, but should be treated as deprecated.
 
-For C#, our feed still is, we're working on our public nuget packages.
+For C#, we are still using our feed, but we're working on our public nuget packages which will be availabe very soon.
 ```
 https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/nuget/v3/index.json
 ```
@@ -35,7 +35,7 @@ https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_
 
 We renamed the StreamingClient to be more specific to the technology it works with.
 
-### OutputTopic and InputTopic classes renamed to TopicProducer and TopicProducer
+### OutputTopic and InputTopic classes renamed to TopicProducer and TopicConsumer
 
 This also brought several other changes to the code, see them below
 
@@ -147,9 +147,9 @@ topic_consumer.subscribe()
 
 ### Event changes
 
-Some of the callbacks have updated signature in name or amount of arguments.
+Some of the callbacks have updated signature in the name or amount of arguments.
 
-In addition , in python the event subscriptions ( +=, -= ) changed to callback assignments. 
+In addition, in python the event subscriptions ( +=, -= ) changed to callback assignments. 
 
 === Python before
 ``` python
@@ -226,7 +226,7 @@ input_topic.on_stream_received += on_stream_received_handler
 
 # Note, that in the new version you have access to all necessary scopes in the callback
 # without having to rely on the scope of the on_stream_received_handler
-# This allows you to have the callbacks defined elsewhere a lot easier
+# This allows you to have the callbacks defined elsewhere more easily
 # Another example will be given in a different section, but here maintaining
 # the previous structure to allow for easier understanding of the changes
 def on_stream_received_handler(stream_received : StreamConsumer):
