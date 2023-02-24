@@ -39,19 +39,21 @@ We renamed the StreamingClient to be more specific to the technology it works wi
 
 This also brought several other changes to the code, see them below
 
-=== Python before
-``` python
-output_topic = client.open_output_topic(TOPIC)
-input_topic = client.open_input_topic(TOPIC)
-# !!! Important change. input_topic used to default to a consumer group called 'Default' with Earliest offset.
-```
+=== "Python before"
 
-=== Python after
-``` python
-topic_producer = client.get_topic_producer(TOPIC)
-topic_consumer = client.get_topic_consumer(TOPIC)
-# !!! Important change. topic_consumer no longer uses consumer group by default and defaults to Latest offset. (Latest to avoid always reprocessing entire topic)
-```
+    ``` python
+    output_topic = client.open_output_topic(TOPIC)
+    input_topic = client.open_input_topic(TOPIC)
+    # !!! Important change. input_topic used to default to a consumer group called 'Default' with Earliest offset.
+    ```
+
+=== "Python after"
+
+    ``` python
+    topic_producer = client.get_topic_producer(TOPIC)
+    topic_consumer = client.get_topic_consumer(TOPIC)
+    # !!! Important change. topic_consumer no longer uses consumer group by default and defaults to Latest offset. (Latest to avoid always reprocessing entire topic)
+    ```
 
 ### Readers and Writers renamed to Consumers and Producers
 
@@ -68,113 +70,123 @@ This will mainly affect code in python where typehint is provided for functions 
 
 The class itself is renamed, see below for changes:
 
-=== Python before
-``` python
-from quixstreams import ParameterData
+=== "Python before"
 
-data = ParameterData()
+    ``` python
+    from quixstreams import ParameterData
 
-data.add_timestamp_nanoseconds(1) \
-    .add_value("Speed", 120) \
-    .add_value("Gear", 3)
-```
+    data = ParameterData()
 
-=== Python after
-``` python
-from quixstreams import TimeseriesData
+    data.add_timestamp_nanoseconds(1) \
+        .add_value("Speed", 120) \
+        .add_value("Gear", 3)
+    ```
 
-data = TimeseriesData()
+=== "Python after"
 
-data.add_timestamp_nanoseconds(1) \
-    .add_value("Speed", 120) \
-    .add_value("Gear", 3)
-```
+    ``` python
+    from quixstreams import TimeseriesData
+
+    data = TimeseriesData()
+
+    data.add_timestamp_nanoseconds(1) \
+        .add_value("Speed", 120) \
+        .add_value("Gear", 3)
+    ```
 
 And the property on streams is also renamed:
 
-=== Python before
-``` python
-stream.parameters.…
-```
+=== "Python before"
 
-=== Python after
-``` python
-stream.timeseries.…
-```
+    ``` python
+    stream.parameters.…
+    ```
+
+=== "Python after"
+
+    ``` python
+    stream.timeseries.…
+    ```
 
 ### pandas DataFrame changes
 
 Any pandas DataFrame given to you by callbacks or from methods will expose the timestamp as 'timestamp' rather than 'time'.
 In addition `from|to_panda_frame` got renamed to `from|to_dataframe`
 
-=== Python before
-``` python
-data = ParameterData()
+=== "Python before"
 
-data.add_timestamp_nanoseconds(1) \
-    .add_value("Speed", 120) \
-    .add_value("Gear", 3)
+    ``` python
+    data = ParameterData()
 
-df = data.to_panda_frame()
-time_col = df['time']
+    data.add_timestamp_nanoseconds(1) \
+        .add_value("Speed", 120) \
+        .add_value("Gear", 3)
 
-```
+    df = data.to_panda_frame()
+    time_col = df['time']
 
-=== Python after
-``` python
+    ```
 
-data = TimeseriesData()
+=== "Python after"
 
-data.add_timestamp_nanoseconds(1) \
-    .add_value("Speed", 120) \
-    .add_value("Gear", 3)
+    ``` python
 
-df = data.to_dataframe()
-timestamp_col = df['timestamp']
-```
+    data = TimeseriesData()
+
+    data.add_timestamp_nanoseconds(1) \
+        .add_value("Speed", 120) \
+        .add_value("Gear", 3)
+
+    df = data.to_dataframe()
+    timestamp_col = df['timestamp']
+    ```
 
 ### .Write renamed to .Publish to be in sync with Producer
 
-=== Python before
-``` python
-stream.parameters.write(…)
+=== "Python before"
 
-stream.parameters.buffer \
-    .add_timestamp(datetime.utcnow()) \
-    .add_value("parameter", 10) \
-    .write()
+    ``` python
+    stream.parameters.write(…)
 
-stream.events.write(…)
+    stream.parameters.buffer \
+        .add_timestamp(datetime.utcnow()) \
+        .add_value("parameter", 10) \
+        .write()
 
-raw_output_topic.write(…)
-```
+    stream.events.write(…)
 
-=== Python after
-``` python
-stream.timeseries.publish(…)
+    raw_output_topic.write(…)
+    ```
 
-stream.timeseries.buffer \
-    .add_timestamp(datetime.utcnow()) \
-    .add_value("parameter", 10) \
-    .publish()
+=== "Python after"
 
-stream.events.publish(…)
+    ``` python
+    stream.timeseries.publish(…)
 
-raw_topic_producer.publish(…)
-```
+    stream.timeseries.buffer \
+        .add_timestamp(datetime.utcnow()) \
+        .add_value("parameter", 10) \
+        .publish()
+
+    stream.events.publish(…)
+
+    raw_topic_producer.publish(…)
+    ```
 
 
 ### .StartReading renamed to .Subscribe to be in sync with Producer
 
-=== Python before
-``` python
-input_topic.start_reading()
-```
+=== "Python before"
 
-=== Python after
-``` python
-topic_consumer.subscribe()
-```
+    ``` python
+    input_topic.start_reading()
+    ```
+
+=== "Python after"
+
+    ``` python
+    topic_consumer.subscribe()
+    ```
 
 ### Event changes
 
@@ -182,149 +194,151 @@ Some of the callbacks have updated signature in the name or amount of arguments.
 
 In addition, in python the event subscriptions ( +=, -= ) changed to callback assignments. 
 
-=== Python before
-``` python
-… the rest of your code, such as client and input/output creation
+=== "Python before"
 
-def on_stream_received_handler(stream_read : StreamReader):
+    ``` python
+    … the rest of your code, such as client and input/output creation
 
-    buffer = stream_read.parameters.create_buffer() # or stream_read.parameters.buffer if don't want separate buffer with different filters and buffer condition
+    def on_stream_received_handler(stream_read : StreamReader):
 
-    # data event subscriptions
-    def on_parameter_pandas_dataframe_handler(data: pandas.DataFrame):
-        pass
+        buffer = stream_read.parameters.create_buffer() # or stream_read.parameters.buffer if don't want separate buffer with different filters and buffer condition
 
-    stream_read.parameters.on_read_pandas += on_parameters_pandas_dataframe_handler
-    buffer.on_read_pandas += on_parameters_pandas_dataframe_handler
+        # data event subscriptions
+        def on_parameter_pandas_dataframe_handler(data: pandas.DataFrame):
+            pass
 
-
-    def on_parameter_data_handler(data: ParameterData):
-        pass
-
-    stream_read.parameters.on_read += on_parameter_data_handler
-    buffer.on_read += on_parameter_data_handler
+        stream_read.parameters.on_read_pandas += on_parameters_pandas_dataframe_handler
+        buffer.on_read_pandas += on_parameters_pandas_dataframe_handler
 
 
-    def on_parameter_raw_data_handler(data: ParameterDataRaw):
-        pass
+        def on_parameter_data_handler(data: ParameterData):
+            pass
 
-    stream_read.parameters.on_read_raw += on_parameter_raw_data_handler
-    buffer.on_read_raw += on_parameter_raw_data_handler
-
-    def on_event_data_handler(data: EventData):
-        pass
-
-    new_stream.events.on_read += on_event_data_handler
+        stream_read.parameters.on_read += on_parameter_data_handler
+        buffer.on_read += on_parameter_data_handler
 
 
-    # metadata event subscriptions
-    def on_stream_closed_handler(end_type: StreamEndType):
-        pass 
+        def on_parameter_raw_data_handler(data: ParameterDataRaw):
+            pass
 
-    stream_read.on_stream_closed += on_stream_closed_handler
+        stream_read.parameters.on_read_raw += on_parameter_raw_data_handler
+        buffer.on_read_raw += on_parameter_raw_data_handler
 
+        def on_event_data_handler(data: EventData):
+            pass
 
-    def on_stream_properties_changed_handler():
-        pass
-    
-    stream_read.properties.on_changed += on_stream_properties_changed_handler
-    
-
-    def on_parameter_definitions_changed_handler():
-        pass
-
-    new_stream.parameters.on_definitions_changed += on_parameter_definitions_changed_handler
+        new_stream.events.on_read += on_event_data_handler
 
 
-    def on_event_definitions_changed_handler():
-        pass
+        # metadata event subscriptions
+        def on_stream_closed_handler(end_type: StreamEndType):
+            pass 
 
-    new_stream.events.on_definitions_changed += on_event_definitions_changed_handler
-
-    def on_package_received_handler(stream: StreamReader, package: StreamPackage):
-        pass
-
-    new_stream.on_package_received += on_package_received_handler
-
-input_topic.on_stream_received += on_stream_received_handler
-
-… the rest of your code
-```
-
-=== Python after
-``` python
-… the rest of your code, such as client and consumer/producer creation
-
-# Note, that in the new version you have access to all necessary scopes in the callback
-# without having to rely on the scope of the on_stream_received_handler
-# This allows you to have the callbacks defined elsewhere more easily
-# Another example will be given in a different section, but here maintaining
-# the previous structure to allow for easier understanding of the changes
-def on_stream_received_handler(stream_received : StreamConsumer):
-
-    buffer = stream_received.timeseries.create_buffer() # or stream_received.timeseries.buffer if don't want separate buffer with different filters and buffer condition
-
-    # data callback assignments
-    def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame):  # Note the stream being available
-        pass
-
-    stream_received.parameters.on_dataframe_received = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
-    buffer.on_dataframe_released = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
+        stream_read.on_stream_closed += on_stream_closed_handler
 
 
-    def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):  # Note the stream being available
-        pass
+        def on_stream_properties_changed_handler():
+            pass
+        
+        stream_read.properties.on_changed += on_stream_properties_changed_handler
+        
 
-    stream_received.parameters.on_data_received = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
-    buffer.on_data_released = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
+        def on_parameter_definitions_changed_handler():
+            pass
 
-
-    def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: ParameterDataRaw):  # Note the stream being available
-        pass
-
-    stream_received.parameters.on_raw_received = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
-    buffer.on_raw_released = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
-
-    def on_event_data_handler(stream: StreamConsumer, data: EventData):  # Note the stream being available
-        pass
-
-    new_stream.events.on_data_received = on_event_data_handler  # note the rename and it is no longer +=
+        new_stream.parameters.on_definitions_changed += on_parameter_definitions_changed_handler
 
 
-    # metadata callback assignments
-    def on_stream_closed_handler(stream: StreamConsumer, end_type: StreamEndType):  # Note the stream being available
-        pass 
+        def on_event_definitions_changed_handler():
+            pass
 
-    stream_received.on_stream_closed = on_stream_closed_handler  # note it is no longer +=
+        new_stream.events.on_definitions_changed += on_event_definitions_changed_handler
+
+        def on_package_received_handler(stream: StreamReader, package: StreamPackage):
+            pass
+
+        new_stream.on_package_received += on_package_received_handler
+
+    input_topic.on_stream_received += on_stream_received_handler
+
+    … the rest of your code
+    ```
+
+=== "Python after"
+
+    ``` python
+    … the rest of your code, such as client and consumer/producer creation
+
+    # Note, that in the new version you have access to all necessary scopes in the callback
+    # without having to rely on the scope of the on_stream_received_handler
+    # This allows you to have the callbacks defined elsewhere more easily
+    # Another example will be given in a different section, but here maintaining
+    # the previous structure to allow for easier understanding of the changes
+    def on_stream_received_handler(stream_received : StreamConsumer):
+
+        buffer = stream_received.timeseries.create_buffer() # or stream_received.timeseries.buffer if don't want separate buffer with different filters and buffer condition
+
+        # data callback assignments
+        def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame):  # Note the stream being available
+            pass
+
+        stream_received.parameters.on_dataframe_received = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
+        buffer.on_dataframe_released = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
 
 
-    def on_stream_properties_changed_handler(stream: StreamConsumer):  # Note the stream being available
-        pass
-    
-    stream_received.properties.on_changed = on_stream_properties_changed_handler  # note it is no longer +=
-    
+        def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):  # Note the stream being available
+            pass
 
-    def on_parameter_definitions_changed_handler(stream: StreamConsumer):  # Note the stream being available
-        pass
-
-    new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler  # note it is no longer +=
+        stream_received.parameters.on_data_received = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
+        buffer.on_data_released = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
 
 
-    def on_event_definitions_changed_handler(stream: StreamConsumer):  # Note the stream being available
-        pass
+        def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: ParameterDataRaw):  # Note the stream being available
+            pass
 
-    new_stream.events.on_definitions_changed = on_event_definitions_changed_handler  # note it is no longer +=
+        stream_received.parameters.on_raw_received = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
+        buffer.on_raw_released = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
+
+        def on_event_data_handler(stream: StreamConsumer, data: EventData):  # Note the stream being available
+            pass
+
+        new_stream.events.on_data_received = on_event_data_handler  # note the rename and it is no longer +=
 
 
-    def on_package_received_handler(stream: StreamConsumer, package: StreamPackage):
-        pass
+        # metadata callback assignments
+        def on_stream_closed_handler(stream: StreamConsumer, end_type: StreamEndType):  # Note the stream being available
+            pass 
 
-    new_stream.on_package_received = on_package_received_handler  # note it is no longer +=
+        stream_received.on_stream_closed = on_stream_closed_handler  # note it is no longer +=
 
-input_topic.on_stream_received = on_stream_received_handler  # note it is no longer +=
 
-… the rest of your code
-```
+        def on_stream_properties_changed_handler(stream: StreamConsumer):  # Note the stream being available
+            pass
+        
+        stream_received.properties.on_changed = on_stream_properties_changed_handler  # note it is no longer +=
+        
+
+        def on_parameter_definitions_changed_handler(stream: StreamConsumer):  # Note the stream being available
+            pass
+
+        new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler  # note it is no longer +=
+
+
+        def on_event_definitions_changed_handler(stream: StreamConsumer):  # Note the stream being available
+            pass
+
+        new_stream.events.on_definitions_changed = on_event_definitions_changed_handler  # note it is no longer +=
+
+
+        def on_package_received_handler(stream: StreamConsumer, package: StreamPackage):
+            pass
+
+        new_stream.on_package_received = on_package_received_handler  # note it is no longer +=
+
+    input_topic.on_stream_received = on_stream_received_handler  # note it is no longer +=
+
+    … the rest of your code
+    ```
 
 ### In python topic is now available for the stream
 
