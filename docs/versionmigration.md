@@ -102,6 +102,37 @@ stream.parameters.…
 stream.timeseries.…
 ```
 
+### pandas DataFrame changes
+
+Any pandas DataFrame given to you by callbacks or from methods will expose the timestamp as 'timestamp' rather than 'time'.
+In addition `from|to_panda_frame` got renamed to `from|to_dataframe`
+
+=== Python before
+``` python
+data = ParameterData()
+
+data.add_timestamp_nanoseconds(1) \
+    .add_value("Speed", 120) \
+    .add_value("Gear", 3)
+
+df = data.to_panda_frame()
+time_col = df['time']
+
+```
+
+=== Python after
+``` python
+
+data = TimeseriesData()
+
+data.add_timestamp_nanoseconds(1) \
+    .add_value("Speed", 120) \
+    .add_value("Gear", 3)
+
+df = data.to_dataframe()
+timestamp_col = df['timestamp']
+```
+
 ### .Write renamed to .Publish to be in sync with Producer
 
 === Python before
