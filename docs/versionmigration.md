@@ -241,7 +241,7 @@ def on_stream_received_handler(stream_received : StreamConsumer):
     buffer.on_dataframe_released = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
 
 
-    def on_data_releasedorreceived_handler(stream: StreamConsumer, data: qx.TimeseriesData):  # Note the stream being available
+    def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):  # Note the stream being available
         pass
 
     stream_read.parameters.on_data_received = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
@@ -328,7 +328,7 @@ def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame
     # do great things
     stream.topic.commit() # or any other topic method/property
 
-def on_data_releasedorreceived_handler(stream: StreamConsumer, data: qx.TimeseriesData):
+def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):
     pass
     
 def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: ParameterDataRaw):
