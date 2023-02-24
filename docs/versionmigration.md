@@ -178,7 +178,7 @@ topic_consumer.subscribe()
 
 ### Event changes
 
-Some of the callbacks have updated signature in the name or amount of arguments.
+Some of the callbacks have updated signature in the name or amount of arguments. In C# this will be easy to detect, therefore ommitting the details.
 
 In addition, in python the event subscriptions ( +=, -= ) changed to callback assignments. 
 
