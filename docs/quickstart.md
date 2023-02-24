@@ -6,7 +6,7 @@ This guide covers how to:
 
 * Create a consumer
 * Create a producer
-* Create a pub/sub thingy
+* Create a producer/consumer transform 
 * Connect to Quix Platform
 
 ## Prerequisites
@@ -59,19 +59,18 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the input topic where to consume data from.
 # For testing purposes we remove consumer group and always read from latest data.
-input_topic = client.open_input_topic("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(input_topic: InputTopic, input_stream: StreamReader):
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
-    # consume data (as Pandas DataFrame)
-    def on_read_dataframe(stream: StreamReader, df: pd.DataFrame):
-        print(df.to_string())
-
-    input_stream.parameters.on_read_dataframe = on_read_dataframe
+# consume data (as Pandas DataFrame)
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
-input_topic.on_stream_received = on_stream
+topic_consumer.on_stream_received = on_stream_received_handler
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit
@@ -101,19 +100,18 @@ The code will wait for published messages and then print information about any m
 
     # Open the input topic where to consume data from.
     # For testing purposes we remove consumer group and always read from latest data.
-    input_topic = client.open_input_topic("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest) # (3)
+    input_topic = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest) # (3)
 
     # consume streams
-    def on_stream(input_topic: InputTopic, input_stream: StreamReader): # (4)
+    def on_stream_received_handler(stream_received: StreamConsumer): # (4)
+        stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler # (5)
 
-        # consume data (as Pandas DataFrame)
-        def on_read_dataframe(stream: StreamReader, df: pd.DataFrame): # (5)
-            print(df.to_string()) # (6)
-
-        input_stream.parameters.on_read_dataframe = on_read_dataframe # (7)
+    # consume data (as Pandas DataFrame)
+    def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame): # (6)
+        print(df.to_string()) # (7)
 
     # Hook up events before initiating read to avoid losing out on any data
-    input_topic.on_stream_received = on_stream # (8)
+    topic_consumer.on_stream_received = on_stream_received_handler # (8)
 
     print("Listening to streams. Press CTRL-C to exit.")
     # Handle graceful exit
@@ -124,9 +122,9 @@ The code will wait for published messages and then print information about any m
     2. Connects to a Kafka server. In this case the Kafka server is running locally.
     3. Opens the specified topic for reading.
     4. A function definition for the stream callback. This stream event handler will be called for all stream events across all streams.
-    5. This function defines a Pandas data event callback.
-    6. The function simply prints a Pandas data frame in this example.
-    7. Registers the Pandas data reader callback. This is registered for data events within a stream, not globally for all streams. This is efficient as you might not need to use this handler on many streams.
+    5. Registers the Pandas data reader callback. This is registered for data events within a stream, not globally for all streams. This is efficient as you might not need to use this handler on many streams.
+    6. This function defines a Pandas data event callback.
+    7. The function simply prints a Pandas data frame in this example.
     8. Registers the stream callback.
     9. Runs the application, and registers code to monitor termination signals. On shutdown the code performs tasks such as closing open file handles, flushing buffers, shutting down threads, and freeing up allocated memory. It also closes input and output streams in the correct order, and creates topics that don't exist on startup.
 
@@ -149,23 +147,23 @@ from quixstreams import KafkaStreamingClient
 client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the output topic where to produce data to.
-output_topic = client.open_output_topic("quickstart-topic")
+topic_producer = client.get_topic_producer("quickstart-topic")
 
-stream = output_topic.create_stream()
+stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.parameters.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
 
 print("Sending values for 30 seconds.")
 
 for index in range(0, 3000):
-    stream.parameters \
+    stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", math.sin(index / 200.0)) \
         .add_value("ParameterB", "string value: " + str(index)) \
         .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .write()
+        .publish()
     time.sleep(0.01)
 
 print("Closing stream")
@@ -211,23 +209,23 @@ You've now created and tested both a producer and consumer that uses Quix Stream
     client = KafkaStreamingClient('127.0.0.1:9092') # (1)
 
     # Open the output topic where to produce data to.
-    output_topic = client.open_output_topic("quickstart-topic") # (2)
+    topic_producer = client.get_topic_producer("quickstart-topic") # (2)
 
-    stream = output_topic.create_stream() # (3)
+    stream = topic_producer.create_stream() # (3)
     stream.properties.name = "Quixstart Python stream" # (4)
     stream.properties.metadata["my-metadata"] = "my-metadata-value" # (5)
-    stream.parameters.buffer.time_span_in_milliseconds = 100   # (6)
+    stream.timeseries.buffer.time_span_in_milliseconds = 100   # (6)
 
     print("Sending values for 30 seconds.")
 
     for index in range(0, 3000):
-        stream.parameters \
+        stream.timeseries \
             .buffer \
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("ParameterA", math.sin(index / 200.0)) \
             .add_value("ParameterB", "string value: " + str(index)) \
             .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-            .write() # (7)
+            .publish() # (7)
         time.sleep(0.01)
 
     print("Closing stream")
@@ -242,6 +240,94 @@ You've now created and tested both a producer and consumer that uses Quix Stream
     6. Sets a stream buffer property. In this case `time_span_in_milliseconds` is set to 100. The data is then sent in 100ms chunks.
     7. Writes parameter data to the stream buffer. A time stamp is added. Also, data of different data types can be added, such as numbers, strings, and binary data.
     8. Closes the stream.
+
+## Consumer-producer transform
+
+Typically a transform block in Quix will receive some data on an input topic, perform some processing on the data, and then publish data to an output topic. Example code that does this is shown here:
+
+```python
+from quixstreams import KafkaStreamingClient, StreamConsumer
+from quixstreams.app import App
+import os
+import pandas as pd
+
+client = KafkaStreamingClient('127.0.0.1:9092')
+
+print("Opening consumer and producer topics")
+
+topic_consumer = client.get_topic_consumer("quickstart-topic")
+topic_producer = client.get_topic_producer("output-topic")
+
+def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame):
+    print(df) 
+    # Transform your data here.
+    print('transformed')
+    # write data to output topic
+    topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df)
+
+# read streams
+def on_stream_received_handler(stream_consumer: StreamConsumer):
+    stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
+    
+topic_consumer.on_stream_received = on_stream_received_handler
+
+# Hook up to termination signal (for docker image) and CTRL-C
+print("Listening to streams. Press CTRL-C to exit.")
+
+# Handle graceful exit
+App.run()
+```
+
+This example reads data in from the `quickstart-topic` topic, and then writes the transformed data out to the `output-topic` topic. The approach is to use callbacks to make the code event driven. You register a callback to handle data on a stream, and then when data is received, the callback to handle data frames is registered and invoked.
+
+This approach of consuming, transforming, and producing data is a fundamental of building data processing pipelines in Quix.
+
+??? example "Understand the code"
+
+    Click on the annotations to understand the producer/consumer code:
+
+    ```python
+    from quixstreams import KafkaStreamingClient, StreamConsumer
+    from quixstreams.app import App
+    import os
+    import pandas as pd
+
+    client = KafkaStreamingClient('127.0.0.1:9092') # (1)
+
+    print("Opening consumer and producer topics")
+
+    topic_consumer = client.get_topic_consumer("quickstart-topic") # (2)
+    topic_producer = client.get_topic_producer("output-topic") # (3)
+
+    def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame): # (4)
+        print(df) 
+        # Transform your data here.
+        print('transformed')
+        # write data to output topic
+        topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df) # (5)
+
+    # read streams
+    def on_stream_received_handler(stream_consumer: StreamConsumer): # (6)
+        stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler # (7)
+        
+    topic_consumer.on_stream_received = on_stream_received_handler # (8)
+
+    # Hook up to termination signal (for docker image) and CTRL-C
+    print("Listening to streams. Press CTRL-C to exit.")
+
+    # Handle graceful exit
+    App.run() # (9)
+    ```
+
+    1. Opens a connection to the Kafka server.
+    2. Opens the consumer topic, the topic is created if it does not exist.
+    3. Opens the producer topic, the topic is created if it does not exist.
+    4. Defines the data frame handler function. In this case it publishes data to the consumer stream.
+    5. Gets a stream on the producer topic, creating the stream if it does not exist, and then publishes data to this stream.
+    6. Defines the consumer stream data handler. It simply regsiters the data frame handler in this example.
+    7. Registers the data frame handler for the consumer stream.
+    8. Registers the consumer stream data handler.
+    9. Runs the application, and registers code to monitor termination signals. On shutdown the code performs tasks such as closing open file handles, flushing buffers, shutting down threads, and freeing up allocated memory. It also closes input and output streams in the correct order, and creates topics that don't exist on startup.
 
 ## Connecting to Quix Platform
 
