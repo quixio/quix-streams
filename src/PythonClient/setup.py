@@ -72,7 +72,7 @@ try:
         package_dir={'': 'src'},
         data_files=get_data_files(),
         classifiers=[
-            "Development Status :: 2 - Pre-Alpha",
+            "Development Status :: 3 - Alpha",
             "Intended Audience :: Developers",
             "License :: OSI Approved :: Apache Software License",
             "Operating System :: Microsoft :: Windows",
