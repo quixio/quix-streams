@@ -121,7 +121,7 @@ The following table shows an example:
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
     def on_stream_received_handler(stream_received: StreamConsumer):
-        stream_received.on_data_received = on_timeseries_data_received_handler
+        stream_received.timeseries.on_data_received = on_timeseries_data_received_handler
     
     def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
         with data:
@@ -213,7 +213,7 @@ If you use the Python version of Quix Streams you can use [pandas DataFrame](fea
 from quixstreams import TopicConsumer, StreamConsumer
 
 def on_stream_received_handler(stream_received: StreamConsumer):
-    stream_received.on_dataframe_received = on_dataframe_received_handler
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
 def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
     print(df.to_string())
@@ -228,7 +228,7 @@ Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format)
 from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
 
 def on_stream_received_handler(stream_received: StreamConsumer):
-    stream_received.on_data_received = on_timeseries_data_received_handler
+    stream_received.timeseries.on_data_received = on_timeseries_data_received_handler
 
 def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
     with data:
