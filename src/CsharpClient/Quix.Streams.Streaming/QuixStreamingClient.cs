@@ -51,7 +51,7 @@ namespace Quix.Streams.Streaming
         /// <summary>
         /// The base API uri. Defaults to <c>https://portal-api.platform.quix.ai</c>, or environment variable <c>Quix__Portal__Api</c> if available.
         /// </summary>
-        public Uri ApiUrl = new Uri("https://portal-api.platform.quix.io");
+        public Uri ApiUrl = new Uri("https://portal-api.platform.quix.ai");
         
         /// <summary>
         /// The period for which some API responses will be cached to avoid excessive amount of calls. Defaults to 1 minute.
