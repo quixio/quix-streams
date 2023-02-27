@@ -223,7 +223,7 @@ python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstrea
 This library needs to utilize a message broker to send and receive data. Quix uses [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
 **To install and test Kafka locally**:
-* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.<br><br>
+* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.<br>
 * Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
 
   * **Linux / macOS**
