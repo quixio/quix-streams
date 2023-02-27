@@ -1,10 +1,50 @@
+# Connect to Kafka
+
+Connect to kafka using the `KafkaStreamingClient` class provided by the library. This is a Kafka specific client implementation that requires some explicit configuration but allows you to connect to any Kafka cluster even outside Quix SaaS.
+
+When your broker requires no authentication, you can use the following code to create a client to connect to it:
+
+=== "Python"
+	
+	``` python
+    from quixstreams import KafkaStreamingClient
+
+	client = KafkaStreamingClient('127.0.0.1:9092')
+	```
+
+=== "C\#"
+	
+	``` cs
+	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
+	```
+
+If your broker is secured, the library provides easy authentication when using username and password with an optional certificate to validate server identity. The following code shows you how to set up the `SecurityOptions` for your connection and how to create a `KafkaStreamingClient` instance to start [subscribing](subscribe.md) to topics and [publishing](publish.md) time series data:
+    
+### Set up the SecurityOptions for your connection
+    
+=== "Python"
+	
+	``` python
+    from quixstreams import SecurityOptions, KafkaStreamingClient
+
+	security = SecurityOptions(CERTIFICATES_FOLDER, QUIX_USER, QUIX_PASSWORD)
+	client = KafkaStreamingClient('127.0.0.1:9093', security)  # additional details can be set using `properties=`
+	```
+
+=== "C\#"
+	
+	``` cs
+	var security = new SecurityOptions(CERTIFICATES_FOLDER, QUIX_USER, QUIX_PASSWORD);
+	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9093", security);
+	```
+
 # Connect to Quix
 
-The Quix SDK comes with a streaming client that enables you to connect to Quix easily, to read data from Quix, and to write data to Quix. The streaming client manages the connections between your application and Quix and makes sure that the data is delivered reliably to and from your application.
+Quix Streams comes with a streaming client that enables you to connect to Quix SaaS topics easily. The streaming client manages the connections between your application and Quix and makes sure that the data is delivered reliably to and from your application. You can still use `KafkaStreamingClient` and manually set details, but `QuixStreamingClient` is a much easier way to connect.
 
 ## Using QuixStreamingClient
 
-Starting with 0.4.0, we’re offering QuixStreamingClient, which handles the cumbersome part of setting up your streaming credentials using the Quix API. When you’re running the app in the [online IDE](/platform/definitions/#online-ide) or as a [deployment](/platform/definitions#deployment), all you have to do is the following:
+QuixStreamingClient handles the cumbersome part of setting up your streaming credentials using the Quix API. When you’re running the app in our online IDE or as a Quix deployment, all you have to do is the following:
 
 
 ### Initialize the Client
@@ -12,74 +52,31 @@ Starting with 0.4.0, we’re offering QuixStreamingClient, which handles the cum
 === "Python"
     
     ``` python
+    from quixstreams import QuixStreamingClient
+
     client = QuixStreamingClient()
     ```
 
 === "C\#"
     
     ``` cs
-    var client = new Quix.Sdk.Streaming.QuixStreamingClient();
+    var client = new Quix.Streams.Streaming.QuixStreamingClient();
     ```
 
-If you wish to run the same code locally, you’ll have to provide an OAuth2.0 bearer token. We have created a purpose made token for this, called [SDK token](/platform/how-to/use-sdk-token). Once you have the token you will have to provide it as an argument to QuixStreamingClient or set `Quix__Sdk__Token` environment variable.
+If you wish to run the same code locally, you’ll have to provide an OAuth2.0 bearer token. We have created a purpose made token for this, called `SDK token`. Once you have the token you will have to provide it as an argument to QuixStreamingClient or set `Quix__Sdk__Token` environment variable.
 
-### Initialize the Client with an SDK Token
+### Initialize the Client with a token
 
 === "Python"
     
     ``` python
+    from quixstreams import QuixStreamingClient
+    
     client = QuixStreamingClient('your_token')
     ```
 
 === "C\#"
     
     ``` cs
-    var client = new Quix.Sdk.Streaming.QuixStreamingClient("your_token");
+    var client = new Quix.Streams.Streaming.QuixStreamingClient("your_token");
     ```
-
-Using the streaming client is another way to communicate with a broker. It is a Kafka specific client implementation that requires some explicit configuration but allows you to connect to any Kafka cluster even outside Quix platform. It involves the following steps:
-
-1. Obtain a client certificate and credentials (security context) for your application.
-2. Create a streaming client.
-
-A security context consists of a client certificate, username, and password. Quix generates these automatically for you when you create a project using the templates provided on the Quix Portal. If necessary, you can download these credentials separately from Topics option on Quix Portal.
-
-The following code shows you how to set up the `SecurityOptions` for your connection and how to create a `StreamingClient` instance to start [Reading](/sdk/read.md) and [Writing](/sdk/write.md) real-time time series data with Quix:
-    
-### Set up the SecurityOptions for your connection
-    
-=== "Python"
-	
-	``` python
-	security = SecurityOptions(CERTIFICATES_FOLDER, QUIX_USER, QUIX_PASSWORD)
-	client = StreamingClient('kafka-k1.quix.ai:9093,kafka-k2.quix.ai:9093,kafka-k3.quix.ai:9093', security)
-	```
-
-=== "C\#"
-	
-	``` cs
-	var security = new SecurityOptions(CERTIFICATES_FOLDER, QUIX_USER, QUIX_PASSWORD);
-	var client = new Quix.Sdk.Streaming.StreamingClient("kafka-k1.quix.ai:9093,kafka-k2.quix.ai:9093,kafka-k3.quix.ai:9093", security);
-	```
-
-=== "JavaScript"
-
-	Quix web APIs are secured with OAuth2.0 bearer scheme. Therefore, all HTTP requests to Quix must contain a valid bearer token. You can generate a personal access token (PAT) for use as a bearer token from the portal by following the following steps:
-	
-	  1. Navigate to your profile by clicking on your avatar and selecting "Profile" from the drop-down menu.
-	
-	  2. Select "Personal Access Tokens" tab on the profile page.
-	
-	  3. Click on "Generate Token" button to open a dialog to set a name and an expiry date for the PAT and
-	  click on "Create" to generate the PAT.
-     
-    !!! tip
-    
-		For your convenience, when you create a new project on the Quix platform, the credentials are generated and set in the code for you. However, it is good practice to move them out of the code to a more secure location like environment variables or a keystore, depending on your development platform.
-    
-    When you deploy your application to Quix, you can store them on Quix as environment variables.
-    
-    
-    
-
-

@@ -1,19 +1,27 @@
 # State management
 
-A Quix deployment and its underlying code can be restarted multiple times. This can happen because of either user intervention (manually stopping and starting the deployment) or because of a runtime error in the code. In the second case, where a runtime error is detected, the Quix Serverless Environment automatically detects the problem and restarts the underlying service in an attempt to recover from the fault.
+Your code may get restarted multiple times. An user intervention (like manually stopping and starting) or runtime error could cause your application to terminate. 
 
-Due to the code being run in memory, each time a deployment restarts, internal variables will be reset. For example, if you were to calculate the count of the elements in the stream, this counter would get reset on each restart. The counter would then starts at the default variable not knowing what was the last known value in the state of previous run before program stopped working.
+!!! note
 
-The Quix SDK has state management built in to allow values to be used and persisted across restarts of a given deployment. We persist the state to dedicated and private key-value pair storage in your workspace.
+	When using the Quix SaaS, the platform automatically detects the problem and restarts the underlying service in an attempt to recover from the fault.
+
+Due to the code being run in memory, each time a deployment restarts, internal variables will be reset. For example, if you were to calculate the count of the elements in the stream, this counter would get reset on each restart. The counter would then start at the default value not knowing what was the last known value in the state of the previous run before program terminated.
+
+Quix Streams has state management built in to allow values to be used and persisted across restarts of a given deployment. Quix Streams persists your state using your filesystem at the moment. We have plans to bring you different type of state stores in the future.
+
+!!! note
+
+	When using the Quix Saas, the platform provides your replicas with a shared state store when enabled.
 
 ## Usage
 
-To use the SDK’s state management feature create an instance of *LocalFileStorage*. This is in *quixstreaming.state.localfilestorage*. Then use the set, get, containsKey and clear methods to manipulate the state as needed.
+To use the library’s state management feature create an instance of `LocalFileStorage`, then use the available methods on the instance to manipulate the state as needed.
 
 === "Python"
     
     ``` python
-    from quixstreaming.state.localfilestorage import LocalFileStorage
+    from quixstreams import LocalFileStorage
     
     storage = LocalFileStorage()
     
@@ -30,7 +38,7 @@ To use the SDK’s state management feature create an instance of *LocalFileStor
     storage.set("KEY4", False)
     
     #check if the storage contains key
-    storage.containsKey("KEY1")
+    storage.contains_key("KEY1")
     
     #get value
     value = storage.get("KEY1")
@@ -104,3 +112,41 @@ To use the SDK’s state management feature create an instance of *LocalFileStor
     //list all keys in the storage
     await storage.GetAllKeysAsync();
     ```
+
+## In memory storage
+
+In Python there is another storage available as an experimental feature called `InMemoryStorage`. It works identical to `LocalFileStorage` and also supports dictionary operations such as `del` or iteration.
+
+InMemoryStorage can be used on its own using code below:
+``` python
+from quixstreams import InMemoryStorage
+
+storage = InMemoryStorage()
+storage.clear()
+storage.set("floatval", 12.51)
+storage.set("stringval", "str")
+storage.set("boolval", True)
+storage.set("objval", {"dic": "tionary"})
+```
+
+Alternative can also be used with a backing storage:
+``` python
+from quixstreams import InMemoryStorage, LocalFileStorage
+
+storage = InMemoryStorage(LocalFileStorage("state/test"))
+storage.clear()
+storage.set("floatval", 12.51)
+storage.set("stringval", "str")
+storage.set("boolval", True)
+storage.set("objval", {"dic": "tionary"})
+storage.flush()  # to write to backing storage
+
+# can be useful to hook it to consumer.on_committing
+topic_consumer.on_committing = storage.flush
+# or 
+def on_committing_handler(topic_consumer: qx.TopicConsumer):
+    print("Committing!")
+    storage.flush()  # to write to backing storage
+
+topic_consumer.on_committing = on_committing_handler
+```

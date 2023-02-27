@@ -14,7 +14,7 @@
 
 <b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and resource savings.
 
-Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language ,together with Quix Streams.
+Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language, together with Quix Streams.
 
 Quix Streams currently supports the following languages:
 
@@ -57,13 +57,83 @@ Quix streams is a library specialized in processing <b>high-frequency data</b>, 
 
 ## Getting Started 🏄
 
-### Installing the library
+### Installing the library on Intel
 
-You can <b>install</b> the library using the package manager for Python Packages:
+You can install the library for amd64 platforms using the package manager for Python Packages:
 
 ```shell
-pip install quix-streams
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
 ```
+
+### Installing on M1/M2 Mac
+
+To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
+
+1. To make sure you have Rosetta installed, open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
+
+2. If you don't have Brew installed, install it using the instructions on the [Brew homepage](https://brew.sh). Make sure that after the install script runs, that you perform any configuration recommended by the script.
+
+3. Install an additional terminal, such as iTerm2. You could do this, for example, with `brew install iterm2`.
+
+4. Open finder, go to Applications, and locate iTerm2.
+
+5. Right-click the iTerm2 application icon to display the context-sensitive menu, and select the menu item `Duplicate`.
+
+6. Rename the duplicate created to `iTerm2 rosetta`.
+
+7. Right-click `iTerm2 rosetta` again and select `Get Info`.
+
+8. Tick the `Open using rosetta` checkbox, so that iTerm2 is always opened using Rosetta.
+
+9. Launch `iTerm2 rosetta` by double-clicking it.
+
+10. On the command line, run the `arch` command. This will display `i386`. If not, check your steps so far.
+
+11. Install Brew again. This installs a new copy of Brew to a new directory structure for i386 (x86_64).
+
+12. Open your Zsh profile file, `~/.zprofile`, using a text editor such as Nano. For example, with the command `nano ~/.zprofile`.
+
+13. Add the following code to `~/.zprofile`:
+
+    ```
+    if [ $(arch) = "i386" ]; then
+        PATH="/usr/local/bin/brew:${PATH}"
+        eval "$(/usr/local/bin/brew shellenv)"
+    fi
+    ```
+
+    This will ensure that when you open `iTerm2 rosetta`, your `brew` command will point at the correct (x86_64) Brew installation.
+
+14. Reload your Zsh profile by running `source ~/.zprofile`, or opening a new instance of `iTerm2 rosetta`.
+
+15. Install Python with the command `brew install python3`.
+
+16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`. If not sure, check with `ls /usr/local/Cellar`.
+
+17. Open your `~/.zprofile` file again, and add the following line inside the `if` statement:
+
+    ```
+    if [ $(arch) = "i386" ]; then
+        PATH="/usr/local/Cellar/python@3.10/3.10.9/bin:${PATH}"
+        ...
+    fi
+    ```
+
+18. Reload your Zsh profile by running `source ~/.zprofile`, or by starting a new instance of `iTerm2 rosetta`.
+
+19. Install Quix Streams:
+
+    ```
+    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
+    ```
+
+20. You can now run your code that uses Quix Streams:
+    
+    ```
+    python3 yourcode.py
+    ```
+
+You have now successfully installed Quix Streams on M1/M2 architectures.
 
 ### Prepare your Kafka Cluster
 
@@ -83,24 +153,24 @@ from quixstreams import KafkaStreamingClient
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the output topic where to produce data to.
-output_topic = client.open_output_topic("your-kafka-topic")
+# Open the topic producer to publish to the output topic
+topic_producer = client.get_topic_producer("your-kafka-topic")
 
-stream = output_topic.create_stream()
+stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
 stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.parameters.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
 
 print("Sending values for 30 seconds.")
 
 for index in range(0, 3000):
-    stream.parameters \
+    stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("ParameterA", math.sin(index / 200.0)) \
         .add_value("ParameterB", "string value: " + str(index)) \
         .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .write()
+        .publish()
     time.sleep(0.01)
 
 print("Closing stream")
@@ -115,26 +185,24 @@ Once we have setup our producer, it's time to see how to consume data from a top
 import pandas as pd
 
 from quixstreams import *
-from quixstreams.app import App
 
 # Client connecting to Kafka instance locally without authentication. 
 client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the input topic where to consume data from.
+# Get the consumer for the input topic
 # For testing purposes we remove consumer group and always read from latest data.
-input_topic = client.open_input_topic("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
-def on_stream(input_stream: StreamReader):
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
-    # consume data (as Pandas DataFrame)
-    def on_read_pandas(df: pd.DataFrame):
-        print(df.to_string())
-
-    input_stream.parameters.on_read_pandas += on_read_pandas
+# consume data (as Pandas DataFrame)
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
 
 # Hook up events before initiating read to avoid losing out on any data
-input_topic.on_stream_received += on_stream
+topic_consumer.on_stream_received = on_stream_received_handler
 
 print("Listening to streams. Press CTRL-C to exit.")
 # Handle graceful exit
@@ -143,7 +211,7 @@ App.run()
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/read.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/write.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
 ## Library features
 
@@ -183,29 +251,30 @@ This library is actively in developing process. We have some features planned in
 
 ### Interoperability wrappers
 
-The Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement support for other languages such as <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/).
+Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement support for other languages such as <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/).
 
 You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language-specific client. For instance for Python:
 
-- `/Python/buildwindows.bat`: Generates Python Interop wrappers for Windows platform.
-- `/Python/buildlinux.sh`: Generates Python Interop wrappers for Linux platform.
+- `/src/builds/python/windows/build_native.bat`: Generates Python Interop wrappers for Windows platform.
+- `/src/builds/python/linux/build_native.bat`: Generates Python Interop wrappers for Linux platform.
+- `/src/builds/python/mac/build_native.bat`: Generates Python Interop wrappers for Mac platform.
 
 These scripts compile the C# base library and then use the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is a structure like this:
 
 ```
 
    ┌───────────────────────────┐
-   │   Python client library   │    /Python/lib/quixstreaming
+   │   Python client library   │    /Python/lib/quixstreams
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │  Python Interop wrapper   │    /Python/lib/quixstreaming/native/Python  (auto-generated)
+   │  Python Interop wrapper   │    /Python/lib/quixstreams/native/Python  (auto-generated)
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │  C# AoT compiled library  │    /Python/lib/quixstreaming/native/win64   (auto-generated)
+   │  C# AoT compiled library  │    /Python/lib/quixstreams/native/win64   (auto-generated)
    └───────────────────────────┘
 
 ```
@@ -242,7 +311,7 @@ Each layer has his own responsibilities:
  
 - <b>Streaming layer</b>: This is the main layer of the library that users should use by default. It includes all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsibility of this layer is the <b>embedded time-series buffer</b> system.
 
-- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of the Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
+- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
 
 - <b>Transport layer</b>: This layer is responsible for the <b>communication with the message broker</b> and implementing some features to deal with the message broker's features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible for implementing a `wrapping messages system` to allow different message types of the library Protocol, and to define the base classes for the `Codecs` implementation of each messages of that Protocol on the upper layers of the library. For <b>Kafka</b> support, this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), which uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka).
 
@@ -250,7 +319,7 @@ For more information and general questions about the architecture of the library
 
 ## Using Quix Streams with Quix SaaS platform
 
-This library doesn't have any dependency on any commercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantatges out of the box during your development process such as auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics, and more.
+This library doesn't have any dependency on any commercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantages out of the box during your development process such as auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics, and more.
 
 ## Contribution Guide
 
