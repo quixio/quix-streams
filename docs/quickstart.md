@@ -1,20 +1,28 @@
 # Quickstart
 
-In this quickstart guide you will learn how to start using the Quix Streams SDK as quickly as possible.
+Quix Streams provides you with a library for developing real-time streaming applications focused on time-series data.
 
-This guide covers how to:
+If you would like to know more about Quix Streams, you can view the [Quix Streams GitHub repository](https://github.com/quixio/quix-streams){target=_blank}. Quix Streams is open source under the Apache 2.0 license.
+
+In this quickstart guide you will learn how to start using Quix Streams as quickly as possible. This guide covers how to:
 
 * Create a consumer
 * Create a producer
 * Create a producer/consumer transform 
-* Connect to Quix Platform
+* Connect to the Quix Platform
+
+The typical stream processing pipline you create with Quix Streams involves producers, consumers, and transforms. Producers publish information into a topic, consumers subscribe to read information from a topic. Transforms typically consume data, process it in some way, and then publish the transformed data to a topic, or stream within a topic.
+
+In this guide you'll learn how to create a producer that publishes data to a topic, a consumer that reads data from a topic, and a simple transform that consumes data from a topic, transforms it, and then publishes the new data to a topic.
+
+Initially you will work with your local Kafka installation, and then you'll learn how you can connect to Quix Platform. In Quix Platform you can build your stream processing pipelines graphically.
 
 ## Prerequisites
 
 The prerequisites for this guide are as follows:
 
 * [Python 3.x](https://www.python.org/downloads/){target=_blank}.
-* You have a local installation of [Kafka](https://kafka.apache.org/documentation/){target=_blank} up and running.
+* You have a local installation of [Kafka](https://kafka.apache.org/documentation/){target=_blank} up and running. You use this to test your code.
 
 Optionally:
 
@@ -22,7 +30,7 @@ Optionally:
 
 ## Getting help
 
-If you need help with this guide, then please join our public Slack community [`The Stream`](https://quix.io/slack-invite){target=_blank} and ask any questions you have there.
+If you need help with this guide, then please join our public Slack community [`The Stream`](https://quix.io/slack-invite){target=_blank}, and ask any questions you have there.
 
 ## Install
 
@@ -38,13 +46,19 @@ Install Quix Streams for Python locally:
 pip install quixstreams
 ```
 
-You can also read information on the [PyPi page](https://pypi.org/project/quixstreams/){target=_blank} for Quix Streams.
+You can read information about installation for your platform on the [PyPi page](https://pypi.org/project/quixstreams/){target=_blank} for Quix Streams.
+
+The [README](https://github.com/quixio/quix-streams) for Quix Streams also has the latest information on installation.
+
+!!! note
+
+    The following sections assume you have a local installation of [Kafka](https://kafka.apache.org/){target=_blank} running. 
 
 ## Create a Consumer
 
-To create a simple consumer follow these steps:
+To create a simple consumer, follow these steps:
 
-1. Create a directory for your project, and change into the project directory. 
+1. Create a directory for your project, you can call it anything you want, and change into the project directory. 
 
 2. Create a file called `consumer.py` that contains the following code:
 
@@ -260,8 +274,7 @@ topic_producer = client.get_topic_producer("output-topic")
 
 def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame):
     print(df) 
-    # Transform your data here.
-    print('transformed')
+    print('Data transformed') # Transform your data here
     # write data to output topic
     topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df)
 
@@ -301,8 +314,7 @@ This approach of consuming, transforming, and producing data is a fundamental of
 
     def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame): # (4)
         print(df) 
-        # Transform your data here.
-        print('transformed')
+        print('Data transformed') # Transform your data here
         # write data to output topic
         topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df) # (5)
 
@@ -341,9 +353,9 @@ To connect to the Quix Platform using Quix Streams, you will need to provide a t
 
 2. In the Quix Platform, click on `Topics` on the left-hand navigation. 
 
-3. Click on the gear icon. The Broker Settings dialog is displayed. 
+3. Click on the gear icon. The `Broker Settings` dialog is displayed. 
 
-4. Copy token 1 to the clipboard. You will use that in the code that connects to the Quix platform.
+4. Copy `token 1` to the clipboard. You will use that in the code that connects to the Quix platform.
 
 ### Code to connect to Quix Platform
 
@@ -358,11 +370,48 @@ client = QuixStreamingClient('<your-token>') # Token 1 from Topics in portal
 
 This connects to the Quix Platform, rather than your local Kafka installation, which is the code you saw previously in this guide.
 
+A further example is to rewrite the consumer-producer program you created earlier in this Quickstart, to work with Quix Platform:
+
+```python
+from quixstreams import QuixStreamingClient, StreamConsumer
+from quixstreams.app import App
+import os
+import pandas as pd
+
+client = QuixStreamingClient('<your_sdk_token>')
+
+print("Opening consumer and producer topics")
+
+topic_consumer = client.get_topic_consumer("quickstart-topic")
+topic_producer = client.get_topic_producer("output-topic")
+
+def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame):
+    print(df) 
+    # Transform your data here.
+    print('transformed')
+    # write data to output topic
+    topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df)
+
+# read streams
+def on_stream_received_handler(stream_consumer: StreamConsumer):
+    stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
+    
+topic_consumer.on_stream_received = on_stream_received_handler
+
+# Hook up to termination signal (for docker image) and CTRL-C
+print("Listening to streams. Press CTRL-C to exit.")
+
+# Handle graceful exit
+App.run()
+```
+
 ## Next steps
 
 Try one of the following resources to continue your Quix learning journey:
 
 * [Get a free Quix account](https://portal.platform.quix.ai/self-sign-up){target=_blank}
+
+* [Quix Streams GitHub](https://github.com/quixio/quix-streams){target=_blank}
 
 * [Quix definitions](../../definitions.md)
 
