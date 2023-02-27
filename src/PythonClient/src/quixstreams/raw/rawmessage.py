@@ -37,9 +37,10 @@ class RawMessage(object):
     """
 
     @property
-    def key(self) -> str:
+    def key(self) -> bytes:
         """Get the optional key of the message. Depending on broker and message it is not guaranteed """
-        return self._interop.get_Key()
+        keys_uptr = self._interop.get_Key()
+        return Array.ReadBytes(keys_uptr)
 
     """
     Set the message key

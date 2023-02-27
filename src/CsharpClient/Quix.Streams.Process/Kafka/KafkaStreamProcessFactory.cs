@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using Quix.Streams.Transport.IO;
 using Quix.Streams.Transport.Kafka;
 
@@ -22,7 +23,7 @@ namespace Quix.Streams.Process.Kafka
         /// <returns>Whether retrieval was successful</returns>
         protected override bool TryGetStreamId(TransportContext transportContext, out string streamId)
         {
-            streamId = transportContext.GetKey();
+            streamId = Encoding.UTF8.GetString(transportContext.GetKey());
             if (streamId == null) return false;
             if (streamId.IndexOfAny(new char[] {'/', '\\'}) > -1)
             {

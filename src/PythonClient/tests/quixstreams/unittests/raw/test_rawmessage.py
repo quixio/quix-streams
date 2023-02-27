@@ -35,3 +35,12 @@ class RawMessageTests(unittest.TestCase):
         message.value = raw_message.value
         # Assert
         self.assertEqual(message.value, message_bytes)
+
+    def test_set_key(self):
+        # Act
+        message_bytes = bytes("Test Quix Raw with bytes", "utf-8")
+        message = RawMessage(message_bytes)
+        message_key_bytes = bytes("Test key", "utf-8")
+        message.key = bytes("Test key", "utf-8")
+        # Assert
+        self.assertEqual(message.key, message_key_bytes)

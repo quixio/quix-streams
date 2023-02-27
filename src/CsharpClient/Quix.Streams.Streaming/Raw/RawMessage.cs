@@ -15,7 +15,7 @@ namespace Quix.Streams.Streaming.Raw
                 );
 
         internal RawMessage(
-            string key,
+            byte[] key,
             byte[] value,
             Lazy<ReadOnlyDictionary<string,string>> metadata)
         {
@@ -30,7 +30,7 @@ namespace Quix.Streams.Streaming.Raw
         /// <param name="key">Key of the message</param>
         /// <param name="value">Value of the message</param>
         public RawMessage(
-            string key,
+            byte[] key,
             byte[] value):this(key, value, null)
         {
         }
@@ -47,7 +47,7 @@ namespace Quix.Streams.Streaming.Raw
         /// <summary>
         /// The optional key of the message. Depending on broker and message it is not guaranteed
         /// </summary>
-        public string Key;
+        public byte[] Key;
 
         /// <summary>
         /// The value of the message

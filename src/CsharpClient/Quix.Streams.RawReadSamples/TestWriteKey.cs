@@ -21,7 +21,7 @@ namespace Quix.Streams.RawReadSamples
 
                 Console.WriteLine("Wrote 1 package");
                 rawWriter.Publish(new Streaming.Raw.RawMessage(
-                    $"{nanos+i}",
+                    Encoding.UTF8.GetBytes($"{nanos+i}"),
                     data
                 ));
 

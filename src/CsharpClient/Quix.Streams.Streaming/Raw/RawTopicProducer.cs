@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using Quix.Streams.Transport.IO;
 using Quix.Streams.Transport.Kafka;
 
