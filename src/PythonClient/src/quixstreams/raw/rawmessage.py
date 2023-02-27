@@ -3,7 +3,7 @@ from typing import Union, Dict
 
 from ..helpers.nativedecorator import nativedecorator
 from ..models.netdict import NetDict
-from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
 from ..native.Python.QuixStreamsStreaming.Raw.RawMessage import RawMessage as rmi
 
 
@@ -17,8 +17,8 @@ class RawMessage(object):
         if isinstance(data, ctypes.c_void_p):
             self._interop = rmi(data)
         elif isinstance(data, (bytes, bytearray)):
-            # TODO
-            self._interop = rmi(rmi.Constructor2(data))
+            data_uptr = Array.WriteBytes(data)
+            self._interop = rmi(rmi.Constructor2(data_uptr))
         else:
             raise Exception("Bad data type '" + type(data) + "' for the message. Must be ctypes_c.void_p, bytes or bytearray.")
 
@@ -46,9 +46,10 @@ class RawMessage(object):
     """
 
     @key.setter
-    def key(self, value: str):
+    def key(self, value: Union[bytearray, bytes]):
         """Set the message key"""
-        self._interop.set_Key(value)
+        key_uptr = Array.WriteBytes(value)
+        self._interop.set_Key(key_uptr)
 
     """
     Get message value (bytes content of message)
@@ -58,16 +59,16 @@ class RawMessage(object):
     def value(self):
         """Get message value (bytes content of message)"""
         if self._value is None:
-            val_hptr = self._interop.get_Value()
-            self._value = ai.ReadBytes(val_hptr)
+            val_uptr = self._interop.get_Value()
+            self._value = ai.ReadBytes(val_uptr)
         return self._value
 
     @value.setter
     def value(self, value: Union[bytearray, bytes]):
         """Set message value (bytes content of message)"""
         self._value = None  # in case it is read back, will be set again
-        # todo
-        self._interop.set_Value(value)
+        data_uptr = Array.WriteBytes(value)
+        self._interop.set_Value(data_uptr)
 
     """
     Get wrapped message metadata

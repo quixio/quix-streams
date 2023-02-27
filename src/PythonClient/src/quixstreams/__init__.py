@@ -41,7 +41,7 @@ from .quixstreamingclient import QuixStreamingClient
 from .streamconsumer import StreamConsumer
 from .app import App, CancellationTokenSource, CancellationToken
 from .kafkastreamingclient import KafkaStreamingClient
-from .raw import RawMessage
+from .raw import *
 
 from .topicproducer import TopicProducer
 
