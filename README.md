@@ -206,6 +206,8 @@ For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/
 
 ## Getting started 🏄
 
+To get started, you need to install the Quix Streams library and connect to a running Kafka instance. If you're on a Mac with an **M1** or **M2** chip, you'll need to follow a few extra steps.
+
 ### Install Quix Streams
 
 Install Quix streams with the following command: 
