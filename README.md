@@ -33,6 +33,127 @@ You can use Quix Streams to:
   - producing the results back to another Kafka Topic.
 - group data by streams while attaching metadata to each stream.
 
+## Getting started 🏄
+
+To get started, you need to install the Quix Streams library and connect to a running Kafka instance. If you're on a Mac with an **M1** or **M2** chip, you'll need to follow a few extra steps.
+
+### Install Quix Streams
+
+Install Quix streams with the following command: 
+
+```shell
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
+```
+
+* To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
+
+### Install Kafka
+
+This library needs to utilize a message broker to send and receive data. Quix uses [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
+
+**To install and test Kafka locally**:
+* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.
+* Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
+
+  * **Linux / macOS**
+    ```
+    <kafka_dir>/bin/zookeeper-server-start.sh config/zookeeper.properties
+    <kafka_dir>/bin/zookeeper-server-start.sh config/server.properties
+    ```
+
+  * **Windows**
+    ```
+    <kafka_dir>\bin\windows\zookeeper-server-start.bat.\config\zookeeper.properties
+    <kafka_dir>\bin\windows\kafka-server-start.bat .\config\server.properties
+    ```
+* Create a test topic with the `kafka-topics` script.
+  
+  * **Linux / macOS**
+    `<kafka_dir>/bin/kafka-topics.sh --create --topic mytesttopic --bootstrap-server localhost:9092`
+
+  * **Windows**
+    `bin\windows\kafka-topics.bat --create --topic mytesttopic --bootstrap-server localhost:9092`
+
+You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
+
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk-intro.html) in our official documentation. 
+
+However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
+
+### Producing time-series data
+
+Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
+
+```python
+import time
+import datetime
+import math
+
+from quixstreams import KafkaStreamingClient
+
+# Client connecting to Kafka instance locally without authentication. 
+client = KafkaStreamingClient('127.0.0.1:9092')
+
+# Open the topic producer to publish to the output topic
+topic_producer = client.get_topic_producer("mytesttopic")
+
+stream = topic_producer.create_stream()
+stream.properties.name = "Hello World python stream"
+stream.properties.metadata["my-metadata"] = "my-metadata-value"
+stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+
+print("Sending values for 30 seconds.")
+
+for index in range(0, 3000):
+    stream.timeseries \
+        .buffer \
+        .add_timestamp(datetime.datetime.utcnow()) \
+        .add_value("ParameterA", math.sin(index / 200.0)) \
+        .add_value("ParameterB", "string value: " + str(index)) \
+        .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
+        .publish()
+    time.sleep(0.01)
+
+print("Closing stream")
+stream.close()
+```
+
+### Consuming time-series data
+
+Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
+
+```python
+import pandas as pd
+
+from quixstreams import *
+
+# Client connecting to Kafka instance locally without authentication. 
+client = KafkaStreamingClient('127.0.0.1:9092')
+
+# Get the consumer for the input topic
+# For testing purposes we remove consumer group and always read from latest data.
+topic_consumer = client.get_topic_consumer("mytesttopic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+
+# consume streams
+def on_stream_received_handler(stream_received: StreamConsumer):
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
+
+# consume data (as Pandas DataFrame)
+def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+    print(df.to_string())
+
+# Hook up events before initiating read to avoid losing out on any data
+topic_consumer.on_stream_received = on_stream_received_handler
+
+print("Listening to streams. Press CTRL-C to exit.")
+# Handle graceful exit
+App.run()
+```
+
+Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
+
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
+
 ## Library features
 
 The following features are designed to address common issues faced when developing real-time streaming applications:
@@ -240,127 +361,6 @@ The library also includes a number of other enhancements that are designed to si
 
 For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/sdk/introduction.html).
 
-
-## Getting started 🏄
-
-To get started, you need to install the Quix Streams library and connect to a running Kafka instance. If you're on a Mac with an **M1** or **M2** chip, you'll need to follow a few extra steps.
-
-### Install Quix Streams
-
-Install Quix streams with the following command: 
-
-```shell
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
-```
-
-* To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
-
-### Install Kafka
-
-This library needs to utilize a message broker to send and receive data. Quix uses [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
-
-**To install and test Kafka locally**:
-* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.
-* Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
-
-  * **Linux / macOS**
-    ```
-    <kafka_dir>/bin/zookeeper-server-start.sh config/zookeeper.properties
-    <kafka_dir>/bin/zookeeper-server-start.sh config/server.properties
-    ```
-
-  * **Windows**
-    ```
-    <kafka_dir>\bin\windows\zookeeper-server-start.bat.\config\zookeeper.properties
-    <kafka_dir>\bin\windows\kafka-server-start.bat .\config\server.properties
-    ```
-* Create a test topic with the `kafka-topics` script.
-  
-  * **Linux / macOS**
-    `<kafka_dir>/bin/kafka-topics.sh --create --topic mytesttopic --bootstrap-server localhost:9092`
-
-  * **Windows**
-    `bin\windows\kafka-topics.bat --create --topic mytesttopic --bootstrap-server localhost:9092`
-
-You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
-
-To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk-intro.html) in our official documentation. 
-
-However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
-
-### Producing time-series data
-
-Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
-
-```python
-import time
-import datetime
-import math
-
-from quixstreams import KafkaStreamingClient
-
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
-
-# Open the topic producer to publish to the output topic
-topic_producer = client.get_topic_producer("mytesttopic")
-
-stream = topic_producer.create_stream()
-stream.properties.name = "Hello World python stream"
-stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
-
-print("Sending values for 30 seconds.")
-
-for index in range(0, 3000):
-    stream.timeseries \
-        .buffer \
-        .add_timestamp(datetime.datetime.utcnow()) \
-        .add_value("ParameterA", math.sin(index / 200.0)) \
-        .add_value("ParameterB", "string value: " + str(index)) \
-        .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .publish()
-    time.sleep(0.01)
-
-print("Closing stream")
-stream.close()
-```
-
-### Consuming time-series data
-
-Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
-
-```python
-import pandas as pd
-
-from quixstreams import *
-
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
-
-# Get the consumer for the input topic
-# For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.get_topic_consumer("mytesttopic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
-
-# consume streams
-def on_stream_received_handler(stream_received: StreamConsumer):
-    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
-
-# consume data (as Pandas DataFrame)
-def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
-    print(df.to_string())
-
-# Hook up events before initiating read to avoid losing out on any data
-topic_consumer.on_stream_received = on_stream_received_handler
-
-print("Listening to streams. Press CTRL-C to exit.")
-# Handle graceful exit
-App.run()
-```
-
-Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
-
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
 
 ### What's Next
 
