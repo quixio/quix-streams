@@ -3,7 +3,6 @@ import weakref
 from ..native.Python.InteropHelpers.ExternalTypes.System.List import List as li
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 
-
 class NetReadOnlyList(object):
     """
         Experimental. Acts as a proxy between a .net collection and a python list. Useful if .net collection is observable and reacts to changes
@@ -26,7 +25,11 @@ class NetReadOnlyList(object):
         self._finalizer = weakref.finalize(self, self._finalizerfunc)
 
     def _finalizerfunc(self):
+        self._finalizer.detach()
         InteropUtils.free_hptr(self._pointer)
+
+    def dispose(self):
+        self._finalizer()
 
     def _get_actual_from(self, value):
         return self._converter_from_python(value)
