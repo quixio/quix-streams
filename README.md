@@ -164,7 +164,7 @@ Streaming contexts allow you to bundle data from one data source into the same s
 * In the following sample, the `create_stream` function is used to create a stream called _bus-123AAAV_ which gets assigned to one particular consumer and will receive messages in the correct order: 
 
     ```python
-    topic_producer = client.create_topic_producer("data")
+    topic_producer = client.get_topic_producer("data")
 
     stream = topic_producer.create_stream("bus-123AAAV")
     # Message 1 sent (the stream context)
@@ -172,7 +172,7 @@ Streaming contexts allow you to bundle data from one data source into the same s
     stream.properties.name = "BUS 123 AAAV"
     # Message 2 sent (the human-readable identifier the bus)
 
-    stream.parameters \
+    stream.timeseries\
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
         .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
@@ -195,14 +195,14 @@ Quix Streams serializes and deserializes time-series data using different codecs
 
     ```python
     # Open the producer topic where the data should be published.
-    topic_producer = client.create_topic_producer("data")
+    topic_producer = client.get_topic_producer("data")
     # Create a new stream for each device.
     stream = topic_producer.create_stream("bus-123AAAV")
     print("Sending values for 30 seconds.")
 
     for index in range(0, 3000):
         
-        stream.parameters \
+        stream.timeseries\
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
             .add_value("Long", math.sin(index / 200.0) + math.sin(index) / 5.0) \
@@ -258,7 +258,7 @@ This library allows you to produce and consume different types of mixed data in 
 
     ```python 
     # Open the producer topic where to publish data.
-    topic_producer = client.create_topic_producer("data")
+    topic_producer = client.get_topic_producer("data")
 
     # Create a new stream for each device.
     stream = topic_producer.create_stream("bus-123AAAV")
@@ -267,7 +267,7 @@ This library allows you to produce and consume different types of mixed data in 
 
     def on_new_camera_frame(frame_bytes):
         
-        stream.parameters \
+        stream.timeseries\
             .buffer \
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("camera_frame", frame_bytes) \
