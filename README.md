@@ -76,7 +76,7 @@ This library needs to utilize a message broker to send and receive data. Quix us
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
-To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk-intro.html) in our official documentation. 
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk/quickstart.html) in our official documentation. 
 
 However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
 
