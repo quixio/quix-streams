@@ -35,7 +35,7 @@ You can use Quix Streams to:
 
 ## Library features
 
-This library provides several features and solves common problems you face when developing real-time streaming applications. 
+The following features are designed to address common issues faced when developing real-time streaming applications:
 
 ### Streaming contexts
 Streaming contexts allow you to bundle data from one data source into the same scope with supplementary metadata—thus enabling workloads to be horizontally scaled with multiple replicas.
@@ -214,7 +214,7 @@ Install Quix streams with the following command:
 python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
 ```
 
-* To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide:[Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
+* To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
 
 ### Install Kafka
 
