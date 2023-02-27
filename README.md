@@ -224,7 +224,6 @@ This library needs to utilize a message broker to send and receive data. Quix us
 
 **To install and test Kafka locally**:
 * Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.<br><br>
-
 * Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
 
   * **Linux / macOS**
