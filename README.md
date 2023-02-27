@@ -189,7 +189,44 @@ This library allows you to produce and consume different types of mixed data in 
                 .publish()
     ```
 
-### Other features
+### Support for stateful processing 
+
+Quix Streams includes a state management feature that let's you store intermediate steps in complex calculations. To use it, you can create an instance of `LocalFileStorage` or use one of our helper classes to manage the state such as `InMemoryStorage`. 
+Here's an example of a stateful operation sum for a selected column in data.
+
+```python
+state = InMemoryStorage(LocalFileStorage())
+
+def on_g_force(topic, stream_consumer: StreamConsumer, data: TimeseriesData):
+
+    for row in data.timestamps:
+				# Append G-Force sensor value to accumulated state (SUM).
+        state[stream_consumer.stream_id] += abs(row.parameters["gForceX"].numeric_value)
+				
+				# Attach new column with aggregated values.
+        row.add_value("gForceX_sum", state[stream_consumer.stream_id])
+
+		# Send updated rows to the producer topic.
+    topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(data)
+
+
+# read streams
+def read_stream(topic_consumer: TopicConsumer, stream_consumer: StreamConsumer):
+    # If there is no record for this stream, create a default value.
+		if stream_consumer.stream_id not in state:
+        state[stream_consumer.stream_id] = 0
+		
+		# We subscribe to gForceX column.
+    stream_consumer.timeseries.create_buffer("gForceX").on_read = on_g_force
+
+
+topic_consumer.on_stream_received = read_stream
+topic_consumer.on_committed = state.flush
+```
+
+## Performance and Usability Enhancements
+
+The library also includes a number of other enhancements that are designed to simplify the process of managing configuration and performance when interacting with Kafka:
 
 - <b>No schema registry required</b>: Quix Streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b><br>.
 
@@ -201,7 +238,7 @@ This library allows you to produce and consume different types of mixed data in 
 
 - <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.<br>
 
-For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/sdk/introduction.html)
+For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/sdk/introduction.html).
 
 
 ## Getting started 🏄
@@ -247,9 +284,13 @@ This library needs to utilize a message broker to send and receive data. Quix us
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk-intro.html) in our official documentation. 
+
+However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
+
 ### Producing time-series data
 
-Now you can start producing time-series data into a Kafka Topic. Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
+Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
 
 ```python
 import time
@@ -287,7 +328,7 @@ stream.close()
 
 ### Consuming time-series data
 
-Once we have setup our producer, it's time to see how to consume data from a topic. Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
+Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
 
 ```python
 import pandas as pd
@@ -347,7 +388,7 @@ Note that this is exactly how you would do the same calculation on static data i
 
 There's also no need to get your head around the complexity of stateful processing on streaming data—this will all be managed by the library. Moreover, although it will still feel like Pandas, it will use binary tables under the hood—which adds a significant performance boost compared to traditional Pandas DataFrames.
 
-To find our when it's ready, make sure you watch this  repo.
+To find out when the next version is ready, make sure you watch this repo.
 
 ## Using Quix Streams with the Quix SaaS platform
 
