@@ -62,40 +62,40 @@ To create a simple consumer, follow these steps:
 
 2. Create a file called `consumer.py` that contains the following code:
 
-```python
-import pandas as pd
+    ```python
+    import pandas as pd
 
-from quixstreams import *
-from quixstreams.app import App
+    from quixstreams import *
+    from quixstreams.app import App
 
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
+    # Client connecting to Kafka instance locally without authentication. 
+    client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the input topic where to consume data from.
-# For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+    # Open the input topic where to consume data from.
+    # For testing purposes we remove consumer group and always read from latest data.
+    topic_consumer = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
-# consume streams
-def on_stream_received_handler(stream_received: StreamConsumer):
-    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
+    # consume streams
+    def on_stream_received_handler(stream_received: StreamConsumer):
+        stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
-# consume data (as Pandas DataFrame)
-def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
-    print(df.to_string())
+    # consume data (as Pandas DataFrame)
+    def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+        print(df.to_string())
 
-# Hook up events before initiating read to avoid losing out on any data
-topic_consumer.on_stream_received = on_stream_received_handler
+    # Hook up events before initiating read to avoid losing out on any data
+    topic_consumer.on_stream_received = on_stream_received_handler
 
-print("Listening to streams. Press CTRL-C to exit.")
-# Handle graceful exit
-App.run()
-```
+    print("Listening to streams. Press CTRL-C to exit.")
+    # Handle graceful exit
+    App.run()
+    ```
 
 3. Run the code:
 
-```shell
-python consumer.py
-```
+    ```shell
+    python consumer.py
+    ```
 
 The code will wait for published messages and then print information about any messages received to the console. You'll next build a suitable producer than can publish messages to the example topic.
 
@@ -150,61 +150,61 @@ To create a simple producer follow these steps:
 
 2. In your project directory, create a file called `producer.py` that contains the following code:
 
-```python
-import time
-import datetime
-import math
+    ```python
+    import time
+    import datetime
+    import math
 
-from quixstreams import KafkaStreamingClient
+    from quixstreams import KafkaStreamingClient
 
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
+    # Client connecting to Kafka instance locally without authentication. 
+    client = KafkaStreamingClient('127.0.0.1:9092')
 
-# Open the output topic where to produce data to.
-topic_producer = client.get_topic_producer("quickstart-topic")
+    # Open the output topic where to produce data to.
+    topic_producer = client.get_topic_producer("quickstart-topic")
 
-stream = topic_producer.create_stream()
-stream.properties.name = "Hello World python stream"
-stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+    stream = topic_producer.create_stream()
+    stream.properties.name = "Hello World python stream"
+    stream.properties.metadata["my-metadata"] = "my-metadata-value"
+    stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
 
-print("Sending values for 30 seconds.")
+    print("Sending values for 30 seconds.")
 
-for index in range(0, 3000):
-    stream.timeseries \
-        .buffer \
-        .add_timestamp(datetime.datetime.utcnow()) \
-        .add_value("ParameterA", math.sin(index / 200.0)) \
-        .add_value("ParameterB", "string value: " + str(index)) \
-        .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
-        .publish()
-    time.sleep(0.01)
+    for index in range(0, 3000):
+        stream.timeseries \
+            .buffer \
+            .add_timestamp(datetime.datetime.utcnow()) \
+            .add_value("ParameterA", math.sin(index / 200.0)) \
+            .add_value("ParameterB", "string value: " + str(index)) \
+            .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
+            .publish()
+        time.sleep(0.01)
 
-print("Closing stream")
-stream.close()
-```
+    print("Closing stream")
+    stream.close()
+    ```
 
 3. Run the code:
 
-```shell
-python producer.py
-```
+    ```shell
+    python producer.py
+    ```
 
 The code will publish a series of messages to the specified topic.
 
 4. Switch to the consumer terminal tab and view the messages being displayed. The following shows an example data frame:
 
-```
-                  time  ParameterA          ParameterB ParameterC
-0  1675695013706982000    0.687444  string value: 2990    b'QUIX'
-1  1675695013719422000    0.683804  string value: 2991    b'QUIX'
-2  1675695013730504000    0.680147  string value: 2992    b'QUIX'
-3  1675695013745346000    0.676473  string value: 2993    b'QUIX'
-4  1675695013756586000    0.672782  string value: 2994    b'QUIX'
-5  1675695013769315000    0.669075  string value: 2995    b'QUIX'
-6  1675695013782740000    0.665351  string value: 2996    b'QUIX'
-7  1675695013796677000    0.661610  string value: 2997    b'QUIX'
-```
+    ```
+                    time  ParameterA          ParameterB ParameterC
+    0  1675695013706982000    0.687444  string value: 2990    b'QUIX'
+    1  1675695013719422000    0.683804  string value: 2991    b'QUIX'
+    2  1675695013730504000    0.680147  string value: 2992    b'QUIX'
+    3  1675695013745346000    0.676473  string value: 2993    b'QUIX'
+    4  1675695013756586000    0.672782  string value: 2994    b'QUIX'
+    5  1675695013769315000    0.669075  string value: 2995    b'QUIX'
+    6  1675695013782740000    0.665351  string value: 2996    b'QUIX'
+    7  1675695013796677000    0.661610  string value: 2997    b'QUIX'
+    ```
 
 You've now created and tested both a producer and consumer that uses Quix Streams.
 
