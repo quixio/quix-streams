@@ -223,7 +223,7 @@ python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstrea
 This library needs to utilize a message broker to send and receive data. Quix uses [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
 **To install and test Kafka locally**:
-* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.<br>
+* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.
 * Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
 
   * **Linux / macOS**
@@ -240,10 +240,10 @@ This library needs to utilize a message broker to send and receive data. Quix us
 * Create a test topic with the `kafka-topics` script.
   
   * **Linux / macOS**
-    `<kafka_dir>/bin/kafka-topics.sh --create --topic mytest --bootstrap-server localhost:9092`
+    `<kafka_dir>/bin/kafka-topics.sh --create --topic mytesttopic --bootstrap-server localhost:9092`
 
   * **Windows**
-    `bin\windows\kafka-topics.bat --create --topic mytest --bootstrap-server localhost:9092`
+    `bin\windows\kafka-topics.bat --create --topic mytesttopic --bootstrap-server localhost:9092`
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
@@ -262,7 +262,7 @@ from quixstreams import KafkaStreamingClient
 client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the topic producer to publish to the output topic
-topic_producer = client.get_topic_producer("mytest")
+topic_producer = client.get_topic_producer("mytesttopic")
 
 stream = topic_producer.create_stream()
 stream.properties.name = "Hello World python stream"
@@ -299,7 +299,7 @@ client = KafkaStreamingClient('127.0.0.1:9092')
 
 # Get the consumer for the input topic
 # For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.get_topic_consumer("mytest", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer("mytesttopic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
 # consume streams
 def on_stream_received_handler(stream_received: StreamConsumer):
