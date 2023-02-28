@@ -1,6 +1,6 @@
 # Migrating from previous versions
 
-We aim to not do breaking changes unless necessary, and if we do, do them at the same time. However, when they're necessary we'll include migration steps from previous versions here. To avoid excessive verboseness, unless there is a language specific difference more than naming conventions (casing vs underscore), only one will be shown.
+Our goal is to minimize the occurrence of breaking changes, and if we do need to make them, we'll do so simultaneously. In cases where such changes are necessary, we'll provide migration steps from previous versions to assist in the transition. To prevent undue verbosity, we'll only show one difference unless it's language-specific, such as naming conventions (casing vs underscore).
 
 ## 0.4.* -> 0.5.0
 
@@ -10,7 +10,7 @@ For python, the library is renamed to `quixstreams` from `quixstreaming`, while 
 
 ### Library availability
 
-The library used to be closed source and distributed through our public feed.
+Previously, the library was not open source and was distributed via our public feed.
 
 For python it was done by using 
 ```
@@ -26,7 +26,7 @@ pip install quixstreams --extra-index-url https://test.pypi.org/simple/
 ```
 Note: The original feed will be maintained for some time, but should be treated as deprecated.
 
-For C#, we are still using our feed, but we're working on our public nuget packages which will be availabe very soon.
+We are currently using our feed for C#, but we're in the process of developing our public NuGet packages, which will be made available shortly.
 ```
 https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/nuget/v3/index.json
 ```
@@ -57,7 +57,7 @@ This also brought several other changes to the code, see them below
 
 ### Readers and Writers renamed to Consumers and Producers
 
-This will mainly affect code in python where typehint is provided for functions or in C# when event is subscribed with a method having specific signiture rather than a lambda. The changes are:
+The modifications will have the most significant impact on Python code that includes type hints in functions or C# code that subscribes events using a method with a particular signature rather than a lambda expression. The alterations are as follows:
 
 - `StreamReader|Writer` -> `StreamConsumer|Producer`
 - `StreamPropertiesReader|Writer` -> `StreamPropertiesConsumer|Producer`
@@ -110,7 +110,7 @@ And the property on streams is also renamed:
 
 ### pandas DataFrame changes
 
-Any pandas DataFrame given to you by callbacks or from methods will expose the timestamp as 'timestamp' rather than 'time'.
+All pandas DataFrames provided to you by callbacks or methods will expose the timestamp as 'timestamp' instead of 'time'.
 In addition `from|to_panda_frame` got renamed to `from|to_dataframe`
 
 === "Python before"
@@ -190,9 +190,9 @@ In addition `from|to_panda_frame` got renamed to `from|to_dataframe`
 
 ### Event changes
 
-Some of the callbacks have updated signature in the name or amount of arguments. In C# this will be easy to detect, therefore ommitting the details.
+Certain callbacks have altered signatures, either in the name or number of arguments. In the case of C#, detecting these changes will be straightforward, and thus, the specifics will be omitted.
 
-In addition, in python the event subscriptions ( +=, -= ) changed to callback assignments. 
+Furthermore, in Python, event subscriptions (+=, -=) have been replaced with callback assignments.
 
 === "Python before"
 
@@ -269,11 +269,10 @@ In addition, in python the event subscriptions ( +=, -= ) changed to callback as
     ``` python
     … the rest of your code, such as client and consumer/producer creation
 
-    # Note, that in the new version you have access to all necessary scopes in the callback
-    # without having to rely on the scope of the on_stream_received_handler
-    # This allows you to have the callbacks defined elsewhere more easily
-    # Another example will be given in a different section, but here maintaining
-    # the previous structure to allow for easier understanding of the changes
+    # Please note that in the new version, you'll have access to all the required scopes within the callback,
+    # eliminating the need to rely on the on_stream_received_handler's scope. This makes it simpler to define
+    # callbacks in other locations. Another example will be provided in a separate section, but here we'll
+    # maintain the previous structure for easier comprehension of the changes.
     def on_stream_received_handler(stream_received : StreamConsumer):
 
         buffer = stream_received.timeseries.create_buffer() # or stream_received.timeseries.buffer if don't want separate buffer with different filters and buffer condition
@@ -401,7 +400,7 @@ def on_package_received_handler(stream: StreamConsumer, package: StreamPackage):
 
 ### 'with' statement should be used with some classes in python
 
-Some of the classes use unmanaged resources underneath now and in order to avoid leaving memory unreleased, we added the python 'with' syntax to manage it.
+Certain classes now use unmanaged resources, and to prevent memory leaks, we have incorporated the Python 'with' syntax for resource management.
 
 These are:
 - EventData: important to be disposed whenever manually created or received in callbacks
@@ -434,7 +433,7 @@ def on_stream_received_handler(stream_received : StreamConsumer):
 
 input_topic.on_stream_received = on_stream_received_handler
 
-# Note that these could be in a different file completely, defined by other classes, having access to all context of the stream and topic it is for
+# Please note that these could be defined in a separate file by other classes with access to the context of the stream and the associated topic.
 def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame):
     pfdata = TimeseriesData.from_panda_dataframe(data)
     with pfdata:  # should be used because TimeseriesData needs it
