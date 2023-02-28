@@ -3,7 +3,7 @@
 .idea/
 #ignore stored data directories from the test runs
 
-builds/python/**/build-result
+builds/**/**/build-result
 
 # Native stuff
 #PythonClient/lib/quixstreaming/native

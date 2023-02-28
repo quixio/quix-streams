@@ -8,6 +8,18 @@
     <LangVersion>8.0</LangVersion>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <Version>0.5.0.0</Version>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
+    <FileVersion>0.5.0.0</FileVersion>
+    <InformationalVersion>0.5.0.0</InformationalVersion>
+    <Company>Quix Analytics Ltd</Company>
+    <Authors>devs@quix.io</Authors>
+    <Product>Quix.Streams.Streaming</Product>
+    <Description>Library for streaming telemetry data</Description>
+    <Copyright>Copyright © Quix Analytics Ltd 2020</Copyright>
+  </PropertyGroup>
+
   <PropertyGroup Condition=" '$(Configuration)' == 'Python'">
     <SelfContained>True</SelfContained>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -32,7 +44,7 @@
   <ItemGroup>
     <None Include="..\.editorconfig" Link=".editorconfig" />
   </ItemGroup>
-  
+
   <ItemGroup>
     <PackageReference Include="Mono.Posix" Version="7.1.0-final.1.21458.1" />
     <PackageReference Include="System.Collections.Immutable" Version="1.7.0" />
@@ -41,7 +53,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Quix.Streams.Logging\Quix.Streams.Logging.csproj" />
     <ProjectReference Include="..\Quix.Streams.Process\Quix.Streams.Process.csproj" />
     <ProjectReference Include="..\Quix.Streams.State\Quix.Streams.State.csproj" />
   </ItemGroup>
