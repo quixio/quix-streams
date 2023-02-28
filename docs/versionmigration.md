@@ -44,7 +44,9 @@ This also brought several other changes to the code, see them below
     ``` python
     output_topic = client.open_output_topic(TOPIC)
     input_topic = client.open_input_topic(TOPIC)
-    # !!! Important change. input_topic used to default to a consumer group called 'Default' with Earliest offset.
+    # !!! There was a significant modification made to `open_input_topic`,
+    # which changed its default behavior from using a consumer group named 'Default'
+    # with the `Earliest` offset to no consumer group and `Latest` offset.
     ```
 
 === "Python after"
@@ -52,7 +54,9 @@ This also brought several other changes to the code, see them below
     ``` python
     topic_producer = client.get_topic_producer(TOPIC)
     topic_consumer = client.get_topic_consumer(TOPIC)
-    # !!! Important change. topic_consumer no longer uses consumer group by default and defaults to Latest offset. (Latest to avoid always reprocessing entire topic)
+    # !!! There was a significant modification made to `get_topic_consumer`,
+    # which changed its default behavior from using a consumer group named 'Default'
+    # with the `Earliest` offset to no consumer group and `Latest` offset.
     ```
 
 ### Readers and Writers renamed to Consumers and Producers
@@ -403,6 +407,7 @@ def on_package_received_handler(stream: StreamConsumer, package: StreamPackage):
 Certain classes now use unmanaged resources, and to prevent memory leaks, we have incorporated the Python 'with' syntax for resource management.
 
 These are:
+
 - EventData: important to be disposed whenever manually created or received in callbacks
 - TimeseriesData: important to be disposed whenever manually created or received in callbacks
 - TimeseriesDataRaw: important to be disposed whenever manually created or received in callbacks
