@@ -282,21 +282,21 @@ In addition, in python the event subscriptions ( +=, -= ) changed to callback as
         def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame):  # Note the stream being available
             pass
 
-        stream_received.parameters.on_dataframe_received = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
-        buffer.on_dataframe_released = on_parameters_pandas_dataframe_handler  # note the rename and it is no longer +=
+        stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler  # note the rename and it is no longer +=
+        buffer.on_dataframe_released = on_dataframe_received_handler  # note the rename and it is no longer +=
 
 
         def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):  # Note the stream being available
             pass
 
-        stream_received.parameters.on_data_received = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
+        stream_received.timeseries.on_data_received = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
         buffer.on_data_released = on_data_releasedorreceived_handler  # note the rename and it is no longer +=
 
 
-        def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: ParameterDataRaw):  # Note the stream being available
+        def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesDataRaw):  # Note the stream being available
             pass
 
-        stream_received.parameters.on_raw_received = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
+        stream_received.timeseries.on_raw_received = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
         buffer.on_raw_released = on_rawdata_releasedorreceived_handler  # note the rename and it is no longer +=
 
         def on_event_data_handler(stream: StreamConsumer, data: EventData):  # Note the stream being available
@@ -321,7 +321,7 @@ In addition, in python the event subscriptions ( +=, -= ) changed to callback as
         def on_parameter_definitions_changed_handler(stream: StreamConsumer):  # Note the stream being available
             pass
 
-        new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler  # note it is no longer +=
+        new_stream.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler  # note it is no longer +=
 
 
         def on_event_definitions_changed_handler(stream: StreamConsumer):  # Note the stream being available
@@ -339,7 +339,6 @@ In addition, in python the event subscriptions ( +=, -= ) changed to callback as
 
     … the rest of your code
     ```
-
 ### In python topic is now available for the stream
 
 This paired with the event changes (read above), lets you drastically alter your callback setup. The code above can now be expressed us such:
@@ -352,17 +351,17 @@ def on_stream_received_handler(stream_received : StreamConsumer):
     buffer = stream_received.timeseries.create_buffer() # or stream_received.timeseries.buffer if don't want separate buffer with different filters and buffer condition
 
     # data callback assignments.
-    stream_received.parameters.on_dataframe_received = on_parameters_pandas_dataframe_handler
-    buffer.on_dataframe_released = on_parameters_pandas_dataframe_handler
-    stream_received.parameters.on_data_received = on_data_releasedorreceived_handler
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
+    buffer.on_dataframe_released = on_dataframe_received_handler
+    stream_received.timeseries.on_data_received = on_data_releasedorreceived_handler
     buffer.on_data_released = on_data_releasedorreceived_handler
-    stream_received.parameters.on_raw_received = on_rawdata_releasedorreceived_handler
+    stream_received.timeseries.on_raw_received = on_rawdata_releasedorreceived_handler
     buffer.on_raw_released = on_rawdata_releasedorreceived_handler
     new_stream.events.on_data_received = on_event_data_handler
     # metadata callback assignments
     stream_received.on_stream_closed = on_stream_closed_handler
     stream_received.properties.on_changed = on_stream_properties_changed_handler
-    new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler
+    new_stream.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
     new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
     new_stream.on_package_received = on_package_received_handler
 
@@ -376,7 +375,7 @@ def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame
 def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):
     pass
     
-def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: ParameterDataRaw):
+def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesDataRaw):
     pass
 
 def on_event_data_handler(stream: StreamConsumer, data: EventData):
@@ -396,6 +395,62 @@ def on_event_definitions_changed_handler(stream: StreamConsumer):
 
 def on_package_received_handler(stream: StreamConsumer, package: StreamPackage):
     pass
+
+… the rest of your code
+```
+
+### 'with' statement should be used with some classes in python
+
+Some of the classes use unmanaged resources underneath now and in order to avoid leaving memory unreleased, we added the python 'with' syntax to manage it.
+
+These are:
+- EventData: important to be disposed whenever manually created or received in callbacks
+- TimeseriesData: important to be disposed whenever manually created or received in callbacks
+- TimeseriesDataRaw: important to be disposed whenever manually created or received in callbacks
+- StreamPackage: important to be disposed whenever manually created or received in callbacks
+- StreamConsumer: also supports `dispose()` and automatically disposes when stream is closed.
+- StreamProducer: also supports `dispose()` and automatically disposes when stream is closed.
+- TopicConsumer: unless you're frequently subscribing to topics, this is not something you have to be too concerned about.
+- TopicProducer: unless you're frequently subscribing to topics, this is not something you have to be too concerned about.
+
+Example code:
+
+``` python
+… the rest of your code, such as client and consumer/producer creation
+
+def on_stream_received_handler(stream_received : StreamConsumer):
+
+    # data callback assignments.
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
+    stream_received.timeseries.on_data_received = on_data_releasedorreceived_handler
+    stream_received.timeseries.on_raw_received = on_rawdata_releasedorreceived_handler
+    new_stream.events.on_data_received = on_event_data_handler
+    # metadata callback assignments
+    stream_received.on_stream_closed = on_stream_closed_handler
+    stream_received.properties.on_changed = on_stream_properties_changed_handler
+    new_stream.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
+    new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
+    new_stream.on_package_received = on_package_received_handler
+
+input_topic.on_stream_received = on_stream_received_handler
+
+# Note that these could be in a different file completely, defined by other classes, having access to all context of the stream and topic it is for
+def on_dataframe_received_handler(stream: StreamConsumer, data: pandas.DataFrame):
+    pfdata = TimeseriesData.from_panda_dataframe(data)
+    with pfdata:  # should be used because TimeseriesData needs it
+        pass
+
+def on_data_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesData):
+    with data:
+        pass
+    
+def on_rawdata_releasedorreceived_handler(stream: StreamConsumer, data: TimeseriesDataRaw):
+    with data:
+        pass
+
+def on_event_data_handler(stream: StreamConsumer, data: EventData):
+    with data:
+        pass
 
 … the rest of your code
 ```

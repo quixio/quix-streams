@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from quixstreams import RawMessage
+from src.quixstreams import RawMessage
 
 from src.quixstreams import EventData, App
 
