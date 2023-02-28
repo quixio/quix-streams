@@ -109,7 +109,7 @@ namespace Quix.Streams.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public IRawTopicConsumer CreateRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
+        public IRawTopicConsumer GetRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             var rawTopicConsumer = new RawTopicConsumer(brokerAddress, topic, consumerGroup, brokerProperties, autoOffset ?? AutoOffsetReset.Latest);
 
@@ -123,7 +123,7 @@ namespace Quix.Streams.Streaming
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public IRawTopicProducer CreateRawTopicProducer(string topic)
+        public IRawTopicProducer GetRawTopicProducer(string topic)
         {
             var rawTopicProducer = new RawTopicProducer(brokerAddress, topic, brokerProperties);
 

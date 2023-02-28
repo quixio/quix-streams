@@ -151,7 +151,7 @@ namespace Quix.Streams.Transport.Kafka
         /// </summary>
         /// <param name="transportContext">The transport context to retrieve the key from</param>
         /// <returns>The key if found, else null</returns>
-        public static string GetKey(this TransportContext transportContext)
+        public static byte[] GetKey(this TransportContext transportContext)
         {
             if (transportContext == null) return null;
             if (!transportContext.TryGetValue(KnownKafkaTransportContextKeys.Key, out var key))
@@ -159,7 +159,7 @@ namespace Quix.Streams.Transport.Kafka
                 return null;
             }
 
-            return (string)key;
+            return (byte[])key;
         }
 
         /// <summary>
@@ -167,7 +167,7 @@ namespace Quix.Streams.Transport.Kafka
         /// </summary>
         /// <param name="transportContext">The transport context to set the key for</param>
         /// <param name="key">The kafka key</param>
-        public static void SetKey(this TransportContext transportContext, string key)
+        public static void SetKey(this TransportContext transportContext, byte[] key)
         {
             transportContext[KnownKafkaTransportContextKeys.Key] = key;
         }
@@ -180,9 +180,9 @@ namespace Quix.Streams.Transport.Kafka
         /// </summary>
         /// <param name="package">The package to retrieve the key from</param>
         /// <returns>The key if found, else null</returns>
-        public static string GetKey(this Package package)
+        public static byte[] GetKey(this Package package)
         {
-            return  package.TransportContext.GetKey();
+            return package.TransportContext.GetKey();
         }
 
         /// <summary>
@@ -190,7 +190,7 @@ namespace Quix.Streams.Transport.Kafka
         /// </summary>
         /// <param name="package">The package to set the key for</param>
         /// <param name="key">The kafka key</param>
-        public static void SetKey(this Package package, string key)
+        public static void SetKey(this Package package, byte[] key)
         {
             package.TransportContext.SetKey(key);
         }

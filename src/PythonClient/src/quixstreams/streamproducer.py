@@ -151,6 +151,4 @@ class StreamProducer(object):
 
         self._interop.Close(dotnet_end_type)
 
-        refcount = sys.getrefcount(self)
-        if refcount == -1:  # TODO figure out correct number
-            self.dispose()
+        self.dispose()

@@ -40,9 +40,9 @@ class StreamPropertiesConsumer(object):
 
     def _finalizerfunc(self):
         if self._metadata is not None:
-            InteropUtils.free_hptr(self._metadata.get_net_pointer())
+            self._metadata.dispose()
         if self._parents is not None:
-            InteropUtils.free_hptr(self._parents.get_net_pointer())
+            self._parents.dispose()
         self._on_changed_dispose()
 
     # region on_changed

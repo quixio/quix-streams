@@ -25,7 +25,7 @@ namespace Quix.Streams.Transport.Kafka
         private readonly ConsumerTopicConfiguration consumerTopicConfiguration;
         private readonly object workerThreadLock = new object();
 
-        private IConsumer<string, byte[]> consumer;
+        private IConsumer<byte[], byte[]> consumer;
         private bool disposed;
         private bool closing;
         private bool disconnected; // connection is deemed dead
@@ -223,7 +223,7 @@ namespace Quix.Streams.Transport.Kafka
                 closing = false;
                 this.lastRevokeCancelAction?.Invoke();
             //    this.config.Debug = "all";
-                var consumerBuilder = new ConsumerBuilder<string, byte[]>(this.config);
+                var consumerBuilder = new ConsumerBuilder<byte[], byte[]>(this.config);
                 consumerBuilder.SetErrorHandler(this.ConsumerErrorHandler);
                 consumerBuilder.SetOffsetsCommittedHandler(this.AutomaticOffsetsCommittedHandler);
                 consumerBuilder.SetStatisticsHandler(this.ConsumerStatisticsHandler);
@@ -351,7 +351,7 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private void AutomaticOffsetsCommittedHandler(IConsumer<string, byte[]> consumer, CommittedOffsets offsets)
+        private void AutomaticOffsetsCommittedHandler(IConsumer<byte[], byte[]> consumer, CommittedOffsets offsets)
         {
             if (this.logger.IsEnabled(LogLevel.Trace))
             {
@@ -362,13 +362,13 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private void ConsumerLogHandler(IConsumer<string, byte[]> consumer, LogMessage msg)
+        private void ConsumerLogHandler(IConsumer<byte[], byte[]> consumer, LogMessage msg)
         {
             //
             // Console.WriteLine(msg.Message);
         }
         
-        private void PartitionsLostHandler(IConsumer<string, byte[]> consumer, List<TopicPartitionOffset> topicPartitionOffsets)
+        private void PartitionsLostHandler(IConsumer<byte[], byte[]> consumer, List<TopicPartitionOffset> topicPartitionOffsets)
         {
             try
             {
@@ -392,7 +392,7 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private void PartitionsRevokedHandler(IConsumer<string, byte[]> consumer, List<TopicPartitionOffset> topicPartitionOffsets)
+        private void PartitionsRevokedHandler(IConsumer<byte[], byte[]> consumer, List<TopicPartitionOffset> topicPartitionOffsets)
         {
             try
             {
@@ -449,7 +449,7 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private void PartitionsAssignedHandler(IConsumer<string, byte[]> consumer, List<TopicPartition> topicPartitions)
+        private void PartitionsAssignedHandler(IConsumer<byte[], byte[]> consumer, List<TopicPartition> topicPartitions)
         {
             try
             {
@@ -544,12 +544,12 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private void ConsumerStatisticsHandler(IConsumer<string, byte[]> consumer, string statisticsJson)
+        private void ConsumerStatisticsHandler(IConsumer<byte[], byte[]> consumer, string statisticsJson)
         {
             //
         }
 
-        private void ConsumerErrorHandler(IConsumer<string, byte[]> consumer, Error error)
+        private void ConsumerErrorHandler(IConsumer<byte[], byte[]> consumer, Error error)
         {
             this.OnErrorOccurredHandler(new KafkaException(error));
         }
@@ -630,7 +630,7 @@ namespace Quix.Streams.Transport.Kafka
         public void Close()
         {
             if (this.consumer == null) return;
-            IConsumer<string, byte[]> cons;
+            IConsumer<byte[], byte[]> cons;
             lock (this.consumerLock)
             {
                 cons = this.consumer;
@@ -892,7 +892,7 @@ namespace Quix.Streams.Transport.Kafka
         }
 
 
-        private async Task AddMessage(ConsumeResult<string, byte[]> result)
+        private async Task AddMessage(ConsumeResult<byte[], byte[]> result)
         {
             var args = KafkaHelper.FromResult(result);
             try
@@ -950,6 +950,6 @@ namespace Quix.Streams.Transport.Kafka
         }
 
         
-        private delegate bool ShouldSkipConsumeResult(ConsumeResult<string, byte[]> consumeResult);
+        private delegate bool ShouldSkipConsumeResult(ConsumeResult<byte[], byte[]> consumeResult);
     }
 }

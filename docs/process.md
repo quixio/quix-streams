@@ -23,7 +23,10 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     # Callback triggered for each new data frame
     def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
         output_df = pd.DataFrame()
-        output_df["time"] = df["time"]
+        # you can use 'time', 'timestamp', 'datetime' for your own dataframes, but
+        # when you are given a dataframe by this call or data.to_dataframe
+        # 'timestamp' will be used as the column name
+        output_df["time"] = df["timestamp"]
         output_df["TAG__LapNumber"] = df["TAG__LapNumber"]
     
         # If braking force applied is more than 50%, we mark HardBraking with True

@@ -91,7 +91,7 @@ class KafkaStreamingClient(object):
         hptr = self._interop.GetTopicProducer(topic)
         return TopicProducer(hptr)
 
-    def create_raw_topic_consumer(self, topic: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
+    def get_raw_topic_consumer(self, topic: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
             Opens an input topic for reading raw data from the stream
 
@@ -105,10 +105,10 @@ class KafkaStreamingClient(object):
         if auto_offset_reset is not None:
             py_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
-        raw_topic_hptr = self._interop.CreateRawTopicConsumer(topic, consumer_group, py_offset_reset)
+        raw_topic_hptr = self._interop.GetRawTopicConsumer(topic, consumer_group, py_offset_reset)
         return RawTopicConsumer(raw_topic_hptr)
 
-    def create_raw_topic_producer(self, topic: str) -> RawTopicProducer:
+    def get_raw_topic_producer(self, topic: str) -> RawTopicProducer:
         """
            Opens an input topic for writing raw data to the stream
 
@@ -116,5 +116,5 @@ class KafkaStreamingClient(object):
 
            topic (string): Name of the topic
         """
-        raw_topic_hptr = self._interop.CreateRawTopicProducer(topic)
+        raw_topic_hptr = self._interop.GetRawTopicProducer(topic)
         return RawTopicProducer(raw_topic_hptr)

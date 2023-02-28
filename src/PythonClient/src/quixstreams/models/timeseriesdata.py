@@ -196,7 +196,7 @@ class TimeseriesData(object):
         def _build_headers(pdts):
             # object containing the index to the result array
             headers = {
-                'time': 0
+                'timestamp': 0
             }
             default_row = [
                 None
@@ -235,7 +235,7 @@ class TimeseriesData(object):
             obj = default_row.copy()
 
             # time
-            index = headers["time"]
+            index = headers["timestamp"]
             obj[index] = pdts.timestamp_nanoseconds
 
             for key, val in pdts.parameters.items():

@@ -50,21 +50,15 @@ public class DictionaryInterop
 
             // Create and fill array for keys
             var (keyConverter, keyType) = EnumerableInterop.GetTypeConverterToUnmanaged(kpairTypes[0]);
-            InteropUtils.LogDebug("1");
             var targetKeys = (IEnumerable)targetType.GetProperty("Keys").GetValue(target);
-            InteropUtils.LogDebug("2");
             var keys = Array.CreateInstance(keyType, count);
-            InteropUtils.LogDebug("3");
             var keyEnumerator = targetKeys.GetEnumerator();
-            InteropUtils.LogDebug("4");
             var index = 0;
             while (keyEnumerator.MoveNext())
             {
-                InteropUtils.LogDebug("5");
                 keys.SetValue(keyConverter(keyEnumerator.Current), index);
                 index++;
             }
-            InteropUtils.LogDebug("6");
 
             // create and fill array for values
             var (valueConverter, valueType) = EnumerableInterop.GetTypeConverterToUnmanaged(kpairTypes[1]);
@@ -114,7 +108,7 @@ public class DictionaryInterop
     /// Converts a dictionary which is an array of length 2 of keys and values to a managed dictionary
     /// <see cref="HPtrToUPtr"/> for the opposite way
     /// </summary>
-    public static TDictionary FromUPtr<TDictionary, TKey, TValue>(IntPtr dictionaryUPtr) where TDictionary : class, IDictionary, new()
+    internal static TDictionary FromUPtr<TDictionary, TKey, TValue>(IntPtr dictionaryUPtr) where TDictionary : class, IDictionary, new()
     {
         InteropUtils.LogDebug($"Converting Dictionary<{typeof(TKey)},{typeof(TValue)}> with ptr {dictionaryUPtr}");
         if (dictionaryUPtr == IntPtr.Zero) return null;
@@ -164,6 +158,7 @@ public class DictionaryInterop
         catch (Exception ex)
         {
             InteropUtils.LogDebug($"Exception in dictionary_clear");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
             InteropUtils.RaiseException(ex);
         }
     }
@@ -171,49 +166,91 @@ public class DictionaryInterop
     [UnmanagedCallersOnly(EntryPoint = "dictionary_remove")]
     public static void Remove(IntPtr dictionaryHPtr, IntPtr keyHPtr)
     {
-        var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
-        var keyType = target.GetType().GetGenericArguments()[0];
+        try
+        {
+            var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
+            var keyType = target.GetType().GetGenericArguments()[0];
 
-        object key = InteropUtils.PtrToObject(keyHPtr, keyType);
-        
-        target.Remove(key);
+            object key = InteropUtils.PtrToObject(keyHPtr, keyType);
+
+            target.Remove(key);
+        }
+        catch (Exception ex)
+        {
+            InteropUtils.LogDebug("Exception in dictionary_remove");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
+            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}");
+            InteropUtils.RaiseException(ex);
+        }
     }
     
     [UnmanagedCallersOnly(EntryPoint = "dictionary_get_count")]
     public static int GetCount(IntPtr dictionaryHPtr)
     {
-        var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
-        return target.Count;
+        try
+        {
+            var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
+            return target.Count;
+        }
+        catch (Exception ex)
+        {
+            InteropUtils.LogDebug("Exception in dictionary_set_value");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
+            InteropUtils.RaiseException(ex);
+            return default;
+        }
     }
     
     [UnmanagedCallersOnly(EntryPoint = "dictionary_set_value")]
     public static void SetValue(IntPtr dictionaryHPtr, IntPtr keyHPtr, IntPtr valHPtr)
     {
-        var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
-        var targetType = target.GetType();
-        var keyType = targetType.GetGenericArguments()[0];
-        var valType = targetType.GetGenericArguments()[1];
-        
-        object value = InteropUtils.PtrToObject(valHPtr, valType);
+        try
+        {
+            var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
+            var targetType = target.GetType();
+            var keyType = targetType.GetGenericArguments()[0];
+            var valType = targetType.GetGenericArguments()[1];
 
-        object key = InteropUtils.PtrToObject(keyHPtr, keyType);
+            object value = InteropUtils.PtrToObject(valHPtr, valType);
 
-        target[key] = value;
+            object key = InteropUtils.PtrToObject(keyHPtr, keyType);
+
+            target[key] = value;
+        }
+        catch (Exception ex)
+        {
+            InteropUtils.LogDebug("Exception in dictionary_set_value");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
+            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}");
+            InteropUtils.LogDebug($"Arg valHPtr (IntPtr) has value: {valHPtr}");
+            InteropUtils.RaiseException(ex);
+        }
     }
     
     [UnmanagedCallersOnly(EntryPoint = "dictionary_get_value")]
     public static IntPtr GetValue(IntPtr dictionaryHPtr, IntPtr keyHPtr)
     {
-        var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
-        var targetType = target.GetType();
-        var keyType = targetType.GetGenericArguments()[0];
-        var valType = targetType.GetGenericArguments()[1];
+        try
+        {
+            var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
+            var targetType = target.GetType();
+            var keyType = targetType.GetGenericArguments()[0];
+            var valType = targetType.GetGenericArguments()[1];
 
-        object key = InteropUtils.PtrToObject(keyHPtr, keyType);
-        
-        var value = target[key];
+            object key = InteropUtils.PtrToObject(keyHPtr, keyType);
 
-        return InteropUtils.ObjectToPtr(value, valType);
+            var value = target[key];
+
+            return InteropUtils.ObjectToPtr(value, valType);
+        }
+        catch (Exception ex)
+        {
+            InteropUtils.LogDebug("Exception in dictionary_get_value");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
+            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}");
+            InteropUtils.RaiseException(ex);
+            return default;
+        }
     }
     
     [UnmanagedCallersOnly(EntryPoint = "dictionary_get_keys")]
@@ -229,7 +266,8 @@ public class DictionaryInterop
         }
         catch (Exception ex)
         {
-            InteropUtils.LogDebug($"Exception in dictionary_hptr_to_uptr");
+            InteropUtils.LogDebug($"Exception in dictionary_get_keys");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
             InteropUtils.RaiseException(ex);
             return default;
         }
@@ -248,7 +286,8 @@ public class DictionaryInterop
         }
         catch (Exception ex)
         {
-            InteropUtils.LogDebug($"Exception in dictionary_hptr_to_uptr");
+            InteropUtils.LogDebug($"Exception in dictionary_get_values");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
             InteropUtils.RaiseException(ex);
             return default;
         }

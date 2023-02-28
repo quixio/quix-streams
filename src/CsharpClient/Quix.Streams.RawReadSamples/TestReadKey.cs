@@ -9,7 +9,7 @@ namespace Quix.Streams.RawReadSamples
         public static void Run()
         {
             var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var rawTopicConsumer = streamingClient.CreateRawTopicConsumer("RawSampleKey");
+            var rawTopicConsumer = streamingClient.GetRawTopicConsumer("RawSampleKey");
 
 
             rawTopicConsumer.OnErrorOccurred += (s, e) =>
@@ -18,8 +18,9 @@ namespace Quix.Streams.RawReadSamples
             };
             rawTopicConsumer.OnMessageReceived += (sender, message) =>
             {
-                var text = Encoding.UTF8.GetString((byte[])message.Value);
-                var key = message.Key != null ? message.Key : "???`";
+                var text = Encoding.UTF8.GetString(message.Value);
+                var key = Encoding.UTF8.GetString(message.Key);
+                if (string.IsNullOrEmpty(key)) key = "???";
                 Console.WriteLine($"received -> {key} = {text}");
             };
 

@@ -102,6 +102,8 @@ class StreamConsumer(object):
             InteropUtils.free_hptr(sender_hptr)
         except:
             traceback.print_exc()
+        finally:
+            self.dispose()
 
     def _on_stream_closed_dispose(self):
         if self._on_stream_closed_ref is not None:

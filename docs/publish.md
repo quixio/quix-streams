@@ -962,7 +962,7 @@ You can publish messages with or without a key. The following example demonstrat
 === "C\#"
     
     ``` cs
-    using var producer = client.CreateRawTopicProducer(TOPIC_ID);
+    using var producer = client.GetRawTopicProducer(TOPIC_ID);
     
     var data = new byte[]{1,3,5,7,1,43};
     
@@ -972,7 +972,7 @@ You can publish messages with or without a key. The following example demonstrat
         data
     ));
     
-    //Publish value withhout key into kafka
+    //Publish value withhout key to kafka
     producer.Publish(new Streaming.Raw.RawMessage(
         data
     ));

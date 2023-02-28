@@ -10,7 +10,7 @@ namespace Quix.Streams.RawReadSamples
         public static void Run()
         {
             var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var rawWriter = streamingClient.CreateRawTopicProducer("RawWriteKey");
+            var rawWriter = streamingClient.GetRawTopicProducer("RawWriteKey");
 
             var nanos = DateTime.Now.ToString("HH:mm:ss:fff") + (DateTime.Now.Ticks / 10);
 
@@ -21,7 +21,7 @@ namespace Quix.Streams.RawReadSamples
 
                 Console.WriteLine("Wrote 1 package");
                 rawWriter.Publish(new Streaming.Raw.RawMessage(
-                    $"{nanos+i}",
+                    Encoding.UTF8.GetBytes($"{nanos+i}"),
                     data
                 ));
 

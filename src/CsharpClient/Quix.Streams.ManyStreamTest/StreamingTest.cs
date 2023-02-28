@@ -10,8 +10,8 @@ namespace Quix.Streams.ManyStreamTest
     {
         public void Run(CancellationToken ct)
         {
-            Logging.UpdateFactory(LogLevel.Trace);
-            CodecRegistry.Register(CodecType.ImprovedJson);
+            Logging.UpdateFactory(LogLevel.Debug);
+            //CodecRegistry.Register(CodecType.ImprovedJson);
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 

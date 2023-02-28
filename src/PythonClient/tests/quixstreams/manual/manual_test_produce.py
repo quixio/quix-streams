@@ -170,7 +170,7 @@ for stream_number in range(number_of_stream):
         if variant == 2:
 
             headers = [
-                "time",
+                "timestamp",
                 *map(lambda x: x, parameter_names_numerics),
                 *map(lambda x: x, parameter_names_strings),
                 *map(lambda x: x, parameter_names_binary),

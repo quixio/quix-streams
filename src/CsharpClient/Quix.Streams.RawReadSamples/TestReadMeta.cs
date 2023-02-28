@@ -9,7 +9,7 @@ namespace Quix.Streams.RawReadSamples
         public static void Run()
         {
             var streamingClient = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
-            var rawReader = streamingClient.CreateRawTopicConsumer("RawSampleMeta");
+            var rawReader = streamingClient.GetRawTopicConsumer("RawSampleMeta");
 
 
             rawReader.OnErrorOccurred += (s, e) =>

@@ -91,7 +91,7 @@ class TimeseriesDataRaw(object):
             return pd.DataFrame()
 
         headers = [
-            "time",
+            "timestamp",
             *map(lambda x: x[0], self.numeric_values.items()),
             *map(lambda x: x[0], self.string_values.items()),
             *map(lambda x: x[0], self.binary_values.items()),

@@ -162,7 +162,7 @@ class QuixStreamingClient(object):
         dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
         return TopicProducer(dotnet_pointer)
 
-    def create_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
+    def get_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
             Opens an input topic for reading raw data from the stream
 
@@ -176,10 +176,10 @@ class QuixStreamingClient(object):
         if auto_offset_reset is not None:
             net_offset_reset = ec.enum_to_another(auto_offset_reset, AutoOffsetResetInterop)
 
-        dotnet_pointer = self._interop.CreateRawTopicConsumer(topic_id_or_name, consumer_group, net_offset_reset)
+        dotnet_pointer = self._interop.GetRawTopicConsumer(topic_id_or_name, consumer_group, net_offset_reset)
         return RawTopicConsumer(dotnet_pointer)
 
-    def create_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
+    def get_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
         """
             Opens an input topic for writing raw data to the stream
 
@@ -187,7 +187,7 @@ class QuixStreamingClient(object):
 
             topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
         """
-        dotnet_pointer = self._interop.CreateRawTopicProducer(topic_id_or_name)
+        dotnet_pointer = self._interop.GetRawTopicProducer(topic_id_or_name)
         return RawTopicProducer(dotnet_pointer)
 
     @property

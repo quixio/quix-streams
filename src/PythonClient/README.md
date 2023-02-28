@@ -1,4 +1,4 @@
-# Github Page
+# GitHub Page
 For more info, check https://github.com/quixio/quix-streams
 
 # Requirements to run

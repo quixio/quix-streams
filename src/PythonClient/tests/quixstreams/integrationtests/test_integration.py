@@ -1318,18 +1318,18 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        special_func_invokation_count = 0
+        special_func_invocation_count = 0
 
         def on_stream_received_handler(stream_received: qx.StreamConsumer):
             if stream.stream_id == stream_received.stream_id:
                 param_buffer = stream_received.timeseries.create_buffer()
 
                 def custom_trigger_callback(parameter_data: qx.TimeseriesData) -> bool:
-                    nonlocal special_func_invokation_count
-                    special_func_invokation_count += 1
+                    nonlocal special_func_invocation_count
+                    special_func_invocation_count += 1
                     print("==== Custom Trigger ====")
                     print(str(parameter_data))
-                    if special_func_invokation_count == 3:
+                    if special_func_invocation_count == 3:
                         event.set()
                     return True
 
@@ -1359,7 +1359,7 @@ class TestIntegration(unittest.TestCase):
         # Assert
         self.waitforresult(event)
         topic_consumer.dispose()  # cleanup
-        self.assertEqual(3, special_func_invokation_count)
+        self.assertEqual(3, special_func_invocation_count)
 
     def test_parameters_read_with_custom_trigger_from_buffer_config(self):
         return # TODO
@@ -1373,16 +1373,16 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        special_func_invokation_count = 0
+        special_func_invocation_count = 0
 
         buffer_config = qx.TimeseriesBufferConfiguration()
 
         def custom_trigger_callback(parameter_data: qx.TimeseriesData) -> bool:
-            nonlocal special_func_invokation_count
-            special_func_invokation_count += 1
+            nonlocal special_func_invocation_count
+            special_func_invocation_count += 1
             print("==== Custom Trigger ====")
             print(str(parameter_data))
-            if special_func_invokation_count == 3:
+            if special_func_invocation_count == 3:
                 event.set()
             return True
 
@@ -1416,7 +1416,7 @@ class TestIntegration(unittest.TestCase):
         # Assert
         self.waitforresult(event)
         topic_consumer.dispose()  # cleanup
-        self.assertEqual(3, special_func_invokation_count)
+        self.assertEqual(3, special_func_invocation_count)
 
     def test_parameters_write_panda_direct_and_read(self):
         # Arrange
@@ -1617,18 +1617,18 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        special_func_invokation_count = 0
+        special_func_invocation_count = 0
 
         def on_stream_received_handler(stream_received: qx.StreamConsumer):
             if stream.stream_id == stream_received.stream_id:
                 param_buffer = stream_received.timeseries.create_buffer()
 
                 def filter(parameter_data_timestamp: qx.TimeseriesDataTimestamp) -> bool:
-                    nonlocal special_func_invokation_count
-                    special_func_invokation_count += 1
+                    nonlocal special_func_invocation_count
+                    special_func_invocation_count += 1
                     print("==== Filter ====")
                     print(str(parameter_data_timestamp))
-                    if special_func_invokation_count == 3:
+                    if special_func_invocation_count == 3:
                         event.set()
                     return True
 
@@ -1658,10 +1658,9 @@ class TestIntegration(unittest.TestCase):
         # Assert
         self.waitforresult(event)
         topic_consumer.dispose()  # cleanup
-        self.assertEqual(3, special_func_invokation_count)
+        self.assertEqual(3, special_func_invocation_count)
 
     def test_parameters_read_with_filter_from_buffer_config(self):
-        return  # TODO with high importance
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
         topic_name = sys._getframe().f_code.co_name  # current method name
@@ -1672,16 +1671,16 @@ class TestIntegration(unittest.TestCase):
 
         stream = None  # The outgoing stream
         event = threading.Event()  # used for assertion
-        special_func_invokation_count = 0
+        special_func_invocation_count = 0
 
         buffer_config = qx.TimeseriesBufferConfiguration()
 
         def filter_callback(parameter_data_timestamp: qx.TimeseriesDataTimestamp) -> bool:
-            nonlocal special_func_invokation_count
-            special_func_invokation_count += 1
+            nonlocal special_func_invocation_count
+            special_func_invocation_count += 1
             print("==== Filter ====")
             print(str(parameter_data_timestamp))
-            if special_func_invokation_count == 3:
+            if special_func_invocation_count == 3:
                 event.set()
             return True
 
@@ -1715,5 +1714,56 @@ class TestIntegration(unittest.TestCase):
         # Assert
         self.waitforresult(event)
         topic_consumer.dispose()  # cleanup
-        self.assertEqual(3, special_func_invokation_count)
+        self.assertEqual(3, special_func_invocation_count)
+# endregion
+
+# region raw
+    def test_raw_read_write(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_consumer = client.get_raw_topic_consumer(topic_name, consumer_group=consumer_group)
+        topic_producer = client.get_raw_topic_producer(topic_name)
+
+        received_messages: [qx.RawMessage] = []
+        event = threading.Event()  # used for assertion
+        counter = 0
+
+        def on_message_received_handler(topic: qx.RawTopicConsumer, message: qx.RawMessage):
+            nonlocal received_messages, counter
+            received_messages.append(message)
+            counter = counter + 1
+            if counter == 3:
+                event.set()
+
+        topic_consumer.on_message_received = on_message_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        message_bytes = bytes("Test Quix Raw with bytes", "utf-8")
+        topic_producer.publish(message_bytes)
+        message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
+        topic_producer.publish(message_bytearray)
+        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        topic_producer.publish(message_raw)
+
+        self.waitforresult(event)
+        topic_consumer.dispose()  # cleanup
+
+        # Assert
+        self.assertEqual(len(received_messages), 3)
+        self.assertEqual(received_messages[0].value, message_bytes)
+        self.assertEqual(received_messages[1].value, message_bytearray)
+        self.assertEqual(received_messages[2].value, message_raw.value)
+
+        keys = received_messages[0].metadata.keys()
+        self.assertIn('MessageGroupKey', keys)
+        self.assertIn('KafkaTopic', keys)
+        self.assertIn('KafkaKey', keys)
+        self.assertIn('KafkaPartition', keys)
+        self.assertIn('KafkaOffset', keys)
+        self.assertIn('KafkaDateTime', keys)
+        self.assertIn('KafkaMessageSize', keys)
 # endregion
