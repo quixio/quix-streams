@@ -103,7 +103,6 @@ import quixstreams as qx
 import time
 import datetime
 import math
-import os
 
 
 # Quix injects credentials automatically to the client. 
@@ -141,14 +140,13 @@ Here's an example of how to <b>consume</b> time-series data from a Kafka Topic w
 
 ```python
 import quixstreams as qx
-import os
 import pandas as pd
 
 
 client = qx.QuixStreamingClient()
 
 # get the topic consumer for a specific consumer group
-topic_consumer = client.get_topic_consumer(topic_id_or_name = os.environ["input"],
+topic_consumer = client.get_topic_consumer(topic_id_or_name = "mytesttopic",
                                            consumer_group = "empty-destination")
 
 
