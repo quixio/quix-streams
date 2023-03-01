@@ -45,7 +45,7 @@ class TimeseriesData(object):
 
     # TODO
     # @classmethod
-    # def from_timestamps(cls, timestamps: List[Quix.Streams.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
+    # def from_timestamps(cls, timestamps: List[QuixStreams.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
     #     """
     #         Creates a new instance of TimeseriesData with the provided timestamps rows.
     #
@@ -55,14 +55,14 @@ class TimeseriesData(object):
     #
     #     """
     #
-    #     dotnet_list = System.Collections.Generic.List[Quix.Streams.Streaming.models.timeseriesdataTimestamp]([])
+    #     dotnet_list = System.Collections.Generic.List[QuixStreams.Streaming.models.timeseriesdataTimestamp]([])
     #     for item in timestamps:
     #         dotnet_item = item.convert_to_net()
     #         dotnet_list.Add(dotnet_item)
     #
     #     self = cls()
     #
-    #     self.__wrapped = Quix.Streams.Streaming.models.timeseriesdata(dotnet_list, merge, clean)
+    #     self.__wrapped = QuixStreams.Streaming.models.timeseriesdata(dotnet_list, merge, clean)
     #
     #     return self
 
@@ -179,7 +179,7 @@ class TimeseriesData(object):
         """
 
         raise NotImplemented("To be implemented in upcoming versions")
-        dotnet_list = System.Collections.Generic.List[Quix.Streams.Streaming.models.timeseriesdataTimestamp]([])
+        dotnet_list = System.Collections.Generic.List[QuixStreams.Streaming.models.timeseriesdataTimestamp]([])
         for item in timestamp_list:
             dotnet_item = item.convert_to_net()
             dotnet_list.Add(dotnet_item)

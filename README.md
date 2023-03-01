@@ -290,19 +290,19 @@ This base library is organized in 3 main layers:
 ```
 
    ┌───────────────────────────┐
-   │      Streaming layer      │    /CSharp/Quix.Streams.Streaming
+   │      Streaming layer      │    /CSharp/QuixStreams.Streaming
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │      Telemetry layer      │    /CSharp/Quix.Streams.Telemetry
+   │      Telemetry layer      │    /CSharp/QuixStreams.Telemetry
    └─────────────┬─────────────┘
                  │
                  │
    ┌─────────────▼─────────────┐
-   │   Kafka Transport layer   │    /CSharp/Quix.Streams.Transport.Kafka
+   │   Kafka Transport layer   │    /CSharp/QuixStreams.Transport.Kafka
    ├───────────────────────────┤
-   │      Transport layer      │    /CSharp/Quix.Streams.Transport
+   │      Transport layer      │    /CSharp/QuixStreams.Transport
    └───────────────────────────┘
 
 ```

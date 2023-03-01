@@ -5,7 +5,7 @@ VisualStudioVersion = 17.3.32901.215
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quix.InteropGenerator", "Quix.InteropGenerator\Quix.InteropGenerator.csproj", "{A4599980-E5B3-4440-B95C-BA837A249989}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quix.Streams.Streaming.Interop", "InteropOutput\Csharp\Quix.Streams.Streaming.Interop\Quix.Streams.Streaming.Interop.csproj", "{21A2551A-6E2B-48F0-A331-31C040AFB3D7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuixStreams.Streaming.Interop", "InteropOutput\Csharp\QuixStreams.Streaming.Interop\QuixStreams.Streaming.Interop.csproj", "{21A2551A-6E2B-48F0-A331-31C040AFB3D7}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Quix.InteropGenerator.LogChecker", "Quix.InteropGenerator.LogChecker\Quix.InteropGenerator.LogChecker.csproj", "{5BCF5E8B-7544-41ED-95F9-E3E264DA8AD1}"
 EndProject

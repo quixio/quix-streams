@@ -32,9 +32,9 @@ FOR /f %%i IN ('python -c "import platform;plat=platform.uname();print(f\"{plat.
 set interopfolder=../../../InteropGenerator
 set csharpfolder=../../../CsharpClient
 set pythonfolder=../../../PythonClient
-set streamingoutpath=%csharpfolder%/Quix.Streams.Streaming/bin/Publish/win-x64
+set streamingoutpath=%csharpfolder%/QuixStreams.Streaming/bin/Publish/win-x64
 ::echo build streaming
-dotnet publish %csharpfolder%/Quix.Streams.Streaming/Quix.Streams.Streaming.csproj -c release -o %streamingoutpath%
+dotnet publish %csharpfolder%/QuixStreams.Streaming/QuixStreams.Streaming.csproj -c release -o %streamingoutpath%
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
 set interopgeneratoroutput=%interopfolder%/Quix.InteropGenerator/bin/Publish/win-x64
@@ -46,7 +46,7 @@ if "%noregen%"=="False" (
 	if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
 	echo run interop generator
-	"%interopgeneratoroutput%/Quix.InteropGenerator.exe" -a "%streamingoutpath%/Quix.Streams.Streaming.dll" -o "%interopoutput%"  -c "%interopconfig%"
+	"%interopgeneratoroutput%/Quix.InteropGenerator.exe" -a "%streamingoutpath%/QuixStreams.Streaming.dll" -o "%interopoutput%"  -c "%interopconfig%"
 	if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 ) else (
 	echo Not regenerating interop projects due to --noregen flag	

@@ -15,7 +15,7 @@ When your broker requires no authentication, you can use the following code to c
 === "C\#"
 	
 	``` cs
-	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
+	var client = new QuixStreams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
 	```
 
 If your broker is secured, the library provides easy authentication when using username and password with an optional certificate to validate server identity. The following code shows you how to set up the `SecurityOptions` for your connection and how to create a `KafkaStreamingClient` instance to start [subscribing](subscribe.md) to topics and [publishing](publish.md) time series data:
@@ -35,7 +35,7 @@ If your broker is secured, the library provides easy authentication when using u
 	
 	``` cs
 	var security = new SecurityOptions(CERTIFICATES_FOLDER, QUIX_USER, QUIX_PASSWORD);
-	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9093", security);
+	var client = new QuixStreams.Streaming.KafkaStreamingClient("127.0.0.1:9093", security);
 	```
 
 # Connect to Quix
@@ -60,7 +60,7 @@ QuixStreamingClient handles the cumbersome part of setting up your streaming cre
 === "C\#"
     
     ``` cs
-    var client = new Quix.Streams.Streaming.QuixStreamingClient();
+    var client = new QuixStreams.Streaming.QuixStreamingClient();
     ```
 
 If you wish to run the same code locally, you’ll have to provide an OAuth2.0 bearer token. We have created a purpose made token for this, called `SDK token`. Once you have the token you will have to provide it as an argument to QuixStreamingClient or set `Quix__Sdk__Token` environment variable.
@@ -78,5 +78,5 @@ If you wish to run the same code locally, you’ll have to provide an OAuth2.0 b
 === "C\#"
     
     ``` cs
-    var client = new Quix.Streams.Streaming.QuixStreamingClient("your_token");
+    var client = new QuixStreams.Streaming.QuixStreamingClient("your_token");
     ```

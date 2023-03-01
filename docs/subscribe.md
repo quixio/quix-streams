@@ -17,7 +17,7 @@ In order to start subscribing to data from your kafka topics, you need an instan
 === "C\#"
 	
 	``` cs
-	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
+	var client = new QuixStreams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
 	```
 
 You can find other ways to connect to your message broker in the [Connect](connect.md) section.
@@ -672,9 +672,9 @@ This is a minimal code example you can use to read data from a topic using Quix 
     using System;
     using System.Linq;
     using System.Threading;
-    using Quix.Streams.Streaming;
-    using Quix.Streams.Streaming.Configuration;
-    using Quix.Streams.Streaming.Models;
+    using QuixStreams.Streaming;
+    using QuixStreams.Streaming.Configuration;
+    using QuixStreams.Streaming.Models;
     
     
     namespace ReadHelloWorld
