@@ -4,8 +4,8 @@ using System.Linq;
 using FluentAssertions;
 using FluentAssertions.Equivalency;
 using NSubstitute;
-using Quix.Streams.Process.Models;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry.Models;
+using Quix.Streams.Telemetry.Models.Utility;
 using Xunit;
 
 namespace Quix.Streams.Streaming.UnitTests.Models

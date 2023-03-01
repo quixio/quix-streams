@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry.Models.Utility;
 using Quix.Streams.Streaming.Utils;
 
 namespace Quix.Streams.Streaming.Models

@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Quix.Streams.Process.Common.Test\Quix.Streams.Process.Common.Test.csproj" />
+    <ProjectReference Include="..\Quix.Streams.Telemetry.Common.Test\Quix.Streams.Telemetry.Common.Test.csproj" />
     <ProjectReference Include="..\Quix.Streams.Streaming\Quix.Streams.Streaming.csproj" />
     <ProjectReference Include="..\Quix.TestBase\Quix.TestBase.csproj" />
   </ItemGroup>

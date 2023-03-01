@@ -31,7 +31,7 @@
             base.Dispose();
         }
 
-        private void OnTimeseriesDataEventHandler(IStreamConsumer streamConsumer, Process.Models.TimeseriesDataRaw timeseriesDataRaw)
+        private void OnTimeseriesDataEventHandler(IStreamConsumer streamConsumer, Telemetry.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             this.WriteChunk(timeseriesDataRaw);
         }

@@ -38,7 +38,7 @@ namespace Quix.Streams.Streaming
         /// Close the stream and flush the pending data to stream.
         /// </summary>
         /// <param name="streamState">Stream closing state</param>
-        void Close(Process.Models.StreamEndType streamState = Process.Models.StreamEndType.Closed);
+        void Close(Telemetry.Models.StreamEndType streamState = Telemetry.Models.StreamEndType.Closed);
         
         /// <summary>
         /// Event raised when an exception occurred during the writing processes

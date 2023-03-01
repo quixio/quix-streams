@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using Quix.Streams.Process.Kafka;
+using Quix.Streams.Telemetry.Kafka;
 using Quix.TestBase.Extensions;
 using Xunit;
 using Xunit.Abstractions;

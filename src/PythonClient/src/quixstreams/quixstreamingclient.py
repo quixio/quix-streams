@@ -9,7 +9,7 @@ from .models.autooffsetreset import AutoOffsetReset
 from .models.commitmode import CommitMode
 from .models.commitoptions import CommitOptions
 from .models.netdict import NetDict
-from .native.Python.QuixStreamsProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
+from .native.Python.QuixStreamsTelemetry.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
 from .native.Python.QuixStreamsStreaming.Models.CommitMode import CommitMode as CommitModeInterop
 from .native.Python.QuixStreamsStreaming.QuixStreamingClient import QuixStreamingClient as qsci
 from .native.Python.QuixStreamsStreaming.QuixStreamingClientExtensions import QuixStreamingClientExtensions as qscei

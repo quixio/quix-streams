@@ -4,10 +4,10 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process;
-using Quix.Streams.Process.Kafka;
-using Quix.Streams.Process.Models;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry;
+using Quix.Streams.Telemetry.Kafka;
+using Quix.Streams.Telemetry.Models;
+using Quix.Streams.Telemetry.Models.Utility;
 using Quix.Streams.Streaming.Exceptions;
 using Quix.Streams.Streaming.Models.StreamProducer;
 
@@ -95,14 +95,14 @@ namespace Quix.Streams.Streaming
 
 
         /// <inheritdoc />
-        public void Publish(Process.Models.StreamProperties properties)
+        public void Publish(Telemetry.Models.StreamProperties properties)
         {
             CheckIfClosed();
             this.Send(properties);
         }
 
         /// <inheritdoc />
-        public void Publish(Process.Models.TimeseriesDataRaw rawData)
+        public void Publish(Telemetry.Models.TimeseriesDataRaw rawData)
         {
             CheckIfClosed();
             var send = this.Send(rawData);
@@ -120,7 +120,7 @@ namespace Quix.Streams.Streaming
         }
 
         /// <inheritdoc />
-        public void Publish(List<Process.Models.TimeseriesDataRaw> data)
+        public void Publish(List<Telemetry.Models.TimeseriesDataRaw> data)
         {
             CheckIfClosed();
             foreach(var d in data)
@@ -130,7 +130,7 @@ namespace Quix.Streams.Streaming
         }
 
         /// <inheritdoc />
-        public void Publish(Process.Models.ParameterDefinitions definitions)
+        public void Publish(Telemetry.Models.ParameterDefinitions definitions)
         {
             CheckIfClosed();
             definitions.Validate();
@@ -153,7 +153,7 @@ namespace Quix.Streams.Streaming
         }
 
         /// <inheritdoc />
-        public void Publish(Process.Models.EventDataRaw eventDataRaw)
+        public void Publish(Telemetry.Models.EventDataRaw eventDataRaw)
         {
             CheckIfClosed();
             if (eventDataRaw == null) throw new ArgumentNullException(nameof(eventDataRaw));
@@ -162,7 +162,7 @@ namespace Quix.Streams.Streaming
         }
 
         /// <inheritdoc />
-        public void Publish(ICollection<Process.Models.EventDataRaw> events)
+        public void Publish(ICollection<Telemetry.Models.EventDataRaw> events)
         {
             CheckIfClosed();
             if (events == null) throw new ArgumentNullException(nameof(events));
@@ -182,7 +182,7 @@ namespace Quix.Streams.Streaming
         }
 
         /// <inheritdoc />
-        public void Publish(Process.Models.EventDefinitions definitions)
+        public void Publish(Telemetry.Models.EventDefinitions definitions)
         {
             CheckIfClosed();
             definitions.Validate();
@@ -223,7 +223,7 @@ namespace Quix.Streams.Streaming
 
 
         /// <inheritdoc />
-        public void Close(Process.Models.StreamEndType streamState = Process.Models.StreamEndType.Closed)
+        public void Close(Telemetry.Models.StreamEndType streamState = Telemetry.Models.StreamEndType.Closed)
         {
             lock (this.closeLock)
             {

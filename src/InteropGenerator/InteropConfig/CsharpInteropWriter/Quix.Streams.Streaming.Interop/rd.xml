@@ -8,7 +8,7 @@
             <Type Name="Quix.Streams.Streaming.Models.ParameterValue[]" Dynamic="Required All" />
             <Type Name="Quix.Streams.Streaming.KafkaStreamingClientExtensions" Dynamic="Required All" />
         </Assembly>
-        <Assembly Name="Quix.Streams.Process" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
+        <Assembly Name="Quix.Streams.Telemetry" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
         <Assembly Name="Quix.Streams.State">
             <Type Name="Quix.Streams.State.Storage.IStateStorage" Dynamic="Required All" />
             <Type Name="Quix.Streams.State.Storage.StorageExtensions" Dynamic="Required All" />
@@ -17,7 +17,7 @@
             <Type Name="Quix.Streams.State.StateValue+StateType" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="Confluent.Kafka" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
-        <Assembly Name="Quix.Streams.Logging">
+        <Assembly Name="Quix.Streams.Transport">
             <Type Name="Quix.Streams.Logging" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="Confluent.Kafka">

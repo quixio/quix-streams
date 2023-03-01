@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <Configurations>Debug;Release;Python</Configurations>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.5.0.0</Version>
+    <AssemblyVersion>0.5.0.0</AssemblyVersion>
+    <FileVersion>0.5.0.0</FileVersion>
+    <InformationalVersion>0.5.0.0</InformationalVersion>
+    <Company>Quix Analytics Ltd</Company>
+    <Authors>devs@quix.io</Authors>
+    <Product>Quix.Streams.Telemetry</Product>
+    <Description>Library introducing basic models for telemetry data using Quix.Streams.Transport</Description>
+    <Copyright>Copyright © Quix Analytics Ltd 2020</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.17.0" />
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quix.Streams.Transport\Quix.Streams.Transport.csproj" />
+    <ProjectReference Include="..\Quix.Streams.Transport.Kafka\Quix.Streams.Transport.Kafka.csproj" />
+  </ItemGroup>
+
+</Project>

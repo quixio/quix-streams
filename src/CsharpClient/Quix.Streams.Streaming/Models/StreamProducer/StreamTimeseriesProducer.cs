@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process.Managers;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry.Managers;
+using Quix.Streams.Telemetry.Models.Utility;
 using Quix.Streams.Streaming.Exceptions;
 
 namespace Quix.Streams.Streaming.Models.StreamProducer
@@ -78,7 +78,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write data timeseries data raw directly to stream
         /// </summary>
         /// <param name="data">Timeseries data to write</param>
-        public void Publish(Process.Models.TimeseriesDataRaw data)
+        public void Publish(Telemetry.Models.TimeseriesDataRaw data)
         {
             if (isDisposed)
             {
@@ -100,7 +100,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
                 updatedTimestamps[i] = data.Timestamps[i] + epochDiff;
             }
 
-            Process.Models.TimeseriesDataRaw new_data = new Process.Models.TimeseriesDataRaw(
+            Telemetry.Models.TimeseriesDataRaw new_data = new Telemetry.Models.TimeseriesDataRaw(
                 data.Epoch, 
                 updatedTimestamps, 
                 data.NumericValues, 
@@ -187,13 +187,13 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             return builder;
         }
 
-        internal Process.Models.ParameterDefinition CreateDefinition(string location, string parameterId, string name, string description)
+        internal Telemetry.Models.ParameterDefinition CreateDefinition(string location, string parameterId, string name, string description)
         {
             if (isDisposed)
             {
                 throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
-            var parameterDefinition = new Process.Models.ParameterDefinition
+            var parameterDefinition = new Telemetry.Models.ParameterDefinition
             {
                 Id = parameterId,
                 Name = name,

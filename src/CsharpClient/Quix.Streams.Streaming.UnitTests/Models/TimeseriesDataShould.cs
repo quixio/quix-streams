@@ -168,7 +168,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         public void LoadFromProcessData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataDuplicatedTimestamps = new Streams.Process.Models.TimeseriesDataRaw()
+            var dataDuplicatedTimestamps = new Streams.Telemetry.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100, 100, 100, 200, 200 },
@@ -188,7 +188,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
                 }
             };
 
-            var dataWithoutDuplicatedTimestamps = new Streams.Process.Models.TimeseriesDataRaw()
+            var dataWithoutDuplicatedTimestamps = new Streams.Telemetry.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 , 200, 200 },
@@ -221,7 +221,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         public void LoadFromProcessData_WithNullValues_ShouldCreateInstanceAsExpected()
         {
             // Arrange
-            var dataWithNulls = new Streams.Process.Models.TimeseriesDataRaw()
+            var dataWithNulls = new Streams.Telemetry.Models.TimeseriesDataRaw()
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100, 200, 300, 400, 500 },

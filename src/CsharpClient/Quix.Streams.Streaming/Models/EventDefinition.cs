@@ -33,17 +33,17 @@
         public string CustomProperties { get; internal set; }
 
         /// <summary>
-        /// Gets the level of the event. Defaults to <see cref="Process.Models.EventLevel.Information"/>
+        /// Gets the level of the event. Defaults to <see cref="Telemetry.Models.EventLevel.Information"/>
         /// </summary>
-        public Process.Models.EventLevel Level { get; internal set; } = Process.Models.EventLevel.Information;
+        public Telemetry.Models.EventLevel Level { get; internal set; } = Telemetry.Models.EventLevel.Information;
 
         /// <summary>
         /// Converts the Event definition to Process layer structure
         /// </summary>
         /// <returns>Process layer Event definition</returns>
-        internal Process.Models.EventDefinition ConvertToProcessDefinition()
+        internal Telemetry.Models.EventDefinition ConvertToProcessDefinition()
         {
-            return new Process.Models.EventDefinition 
+            return new Telemetry.Models.EventDefinition 
             {
                 Id = this.Id,
                 Name = this.Name,

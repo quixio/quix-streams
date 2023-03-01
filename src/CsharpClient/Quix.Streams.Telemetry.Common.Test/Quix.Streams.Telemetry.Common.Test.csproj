@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Configurations>Debug;Release;Python</Configurations>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quix.Streams.Telemetry\Quix.Streams.Telemetry.csproj" />
+    <ProjectReference Include="..\Quix.Streams.Transport\Quix.Streams.Transport.csproj" />
+  </ItemGroup>
+
+</Project>

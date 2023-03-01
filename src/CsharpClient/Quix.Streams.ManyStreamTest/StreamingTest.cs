@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming;
 
 namespace Quix.Streams.ManyStreamTest

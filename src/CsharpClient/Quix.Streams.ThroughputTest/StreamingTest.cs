@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming;
 using Quix.Streams.ThroughputTest;
 

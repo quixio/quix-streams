@@ -53,7 +53,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Quix.Streams.Process\Quix.Streams.Process.csproj" />
+    <ProjectReference Include="..\Quix.Streams.Telemetry\Quix.Streams.Telemetry.csproj" />
     <ProjectReference Include="..\Quix.Streams.State\Quix.Streams.State.csproj" />
   </ItemGroup>
 

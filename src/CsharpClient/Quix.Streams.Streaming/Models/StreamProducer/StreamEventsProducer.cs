@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process.Managers;
-using Quix.Streams.Process.Models;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry.Managers;
+using Quix.Streams.Telemetry.Models;
+using Quix.Streams.Telemetry.Models.Utility;
 using Quix.Streams.Streaming.Exceptions;
 
 namespace Quix.Streams.Streaming.Models.StreamProducer
@@ -185,13 +185,13 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             return builder;
         }
 
-        internal Process.Models.EventDefinition CreateDefinition(string location, string eventId, string name, string description)
+        internal Telemetry.Models.EventDefinition CreateDefinition(string location, string eventId, string name, string description)
         {
             if (isDisposed)
             {
                 throw new ObjectDisposedException(nameof(StreamEventsProducer));
             }
-            var eventDefinition = new Process.Models.EventDefinition
+            var eventDefinition = new Telemetry.Models.EventDefinition
             {
                 Id = eventId,
                 Name = name,
@@ -288,7 +288,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             this.logger.Log(LogLevel.Trace, "{0} event(s) sent.", events.Count);
         }
 
-        internal void Publish(ICollection<Process.Models.EventDataRaw> events)
+        internal void Publish(ICollection<Telemetry.Models.EventDataRaw> events)
         {
             if (isDisposed)
             {

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using FluentAssertions;
 using NSubstitute;
-using Quix.Streams.Process.Common.Test;
-using Quix.Streams.Process.Kafka;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Common.Test;
+using Quix.Streams.Telemetry.Kafka;
+using Quix.Streams.Telemetry.Models;
 using Xunit;
 
 namespace Quix.Streams.Streaming.UnitTests.Process

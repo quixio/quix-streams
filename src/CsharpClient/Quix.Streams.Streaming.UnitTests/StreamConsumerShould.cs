@@ -1,5 +1,5 @@
 using FluentAssertions;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Xunit;
 
 namespace Quix.Streams.Streaming.UnitTests

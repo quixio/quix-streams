@@ -22,40 +22,40 @@ namespace Quix.Streams.Streaming
         /// <summary>
         /// Publish a stream properties to the stream
         /// </summary>
-        void Publish(Process.Models.StreamProperties properties);
+        void Publish(Telemetry.Models.StreamProperties properties);
 
         /// <summary>
         /// Publish a single Timeseries data package to the stream
         /// </summary>
-        void Publish(Process.Models.TimeseriesDataRaw rawData);
+        void Publish(Telemetry.Models.TimeseriesDataRaw rawData);
 
         /// <summary>
         /// Publish a set of Timeseries data packages to the stream
         /// </summary>
-        void Publish(List<Process.Models.TimeseriesDataRaw> data);
+        void Publish(List<Telemetry.Models.TimeseriesDataRaw> data);
 
         /// <summary>
         /// Write the optional Parameter definition properties describing the hierarchical grouping of parameters
         /// Please note, new calls will not result in merged set with previous calls. New calls supersede previously sent values.
         /// </summary>
-        void Publish(Process.Models.ParameterDefinitions definitions);
+        void Publish(Telemetry.Models.ParameterDefinitions definitions);
 
         /// <summary>
         /// Publish a single event to the stream
         /// </summary>
         /// <param name="eventDataRaw">Event to send</param>
-        void Publish(Process.Models.EventDataRaw eventDataRaw);
+        void Publish(Telemetry.Models.EventDataRaw eventDataRaw);
 
         /// <summary>
         /// Publish a set of events to the stream 
         /// </summary>
         /// <param name="events">Events to send</param>
-        void Publish(ICollection<Process.Models.EventDataRaw> events);
+        void Publish(ICollection<Telemetry.Models.EventDataRaw> events);
 
         /// <summary>
         /// Write the optional Event definition properties describing the hierarchical grouping of events
         /// Please note, new calls will not result in merged set with previous calls. New calls supersede previously sent values.
         /// </summary>
-        void Publish(Process.Models.EventDefinitions definitions);
+        void Publish(Telemetry.Models.EventDefinitions definitions);
     }
 }

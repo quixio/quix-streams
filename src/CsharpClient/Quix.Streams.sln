@@ -9,11 +9,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Streaming.Samp
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Streaming.UnitTests", "Quix.Streams.Streaming.UnitTests\Quix.Streams.Streaming.UnitTests.csproj", "{6EAC0582-35C1-45F8-B214-99217D52806D}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Process", "Quix.Streams.Process\Quix.Streams.Process.csproj", "{CCEC11B8-2CCE-4AD5-8094-FFD92C3AA42C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Telemetry", "Quix.Streams.Telemetry\Quix.Streams.Telemetry.csproj", "{CCEC11B8-2CCE-4AD5-8094-FFD92C3AA42C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Streaming.IntegrationTests", "Quix.Streams.Streaming.IntegrationTests\Quix.Streams.Streaming.IntegrationTests.csproj", "{F3FA5616-9E34-4B8D-9DB9-29C05D223EA4}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Process.Common.Test", "Quix.Streams.Process.Common.Test\Quix.Streams.Process.Common.Test.csproj", "{AA9570F5-8275-431B-8955-CFEE282FCBA4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Telemetry.Common.Test", "Quix.Streams.Telemetry.Common.Test\Quix.Streams.Telemetry.Common.Test.csproj", "{AA9570F5-8275-431B-8955-CFEE282FCBA4}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Transport", "Quix.Streams.Transport\Quix.Streams.Transport.csproj", "{34864168-27E3-4C6A-94BA-0A7E51EFC5BD}"
 EndProject
@@ -23,9 +23,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Transport.Unit
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Transport.Samples", "Quix.Streams.Transport.Samples\Quix.Streams.Transport.Samples.csproj", "{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Process.UnitTests", "Quix.Streams.Process.UnitTests\Quix.Streams.Process.UnitTests.csproj", "{73D77A25-E684-4825-8884-722D9F667F6D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Telemetry.UnitTests", "Quix.Streams.Telemetry.UnitTests\Quix.Streams.Telemetry.UnitTests.csproj", "{73D77A25-E684-4825-8884-722D9F667F6D}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Process.Samples", "Quix.Streams.Process.Samples\Quix.Streams.Process.Samples.csproj", "{E85B2995-C540-440A-B5AD-7E950117AE8D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Quix.Streams.Telemetry.Samples", "Quix.Streams.Telemetry.Samples\Quix.Streams.Telemetry.Samples.csproj", "{E85B2995-C540-440A-B5AD-7E950117AE8D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}"
 EndProject

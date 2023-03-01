@@ -1,7 +1,7 @@
 ﻿using System;
-using Quix.Streams.Process.Common.Test;
-using Quix.Streams.Process.Kafka;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Common.Test;
+using Quix.Streams.Telemetry.Kafka;
+using Quix.Streams.Telemetry.Models;
 
 namespace Quix.Streams.Streaming.UnitTests
 {

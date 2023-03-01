@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Quix.Streams.Process.Models;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry.Models;
+using Quix.Streams.Telemetry.Models.Utility;
 using Quix.Streams.Streaming.Utils;
 
 namespace Quix.Streams.Streaming.Models
@@ -12,7 +12,7 @@ namespace Quix.Streams.Streaming.Models
     /// </summary>
     public class TimeseriesData
     {
-        internal Process.Models.TimeseriesDataRaw rawData;
+        internal Telemetry.Models.TimeseriesDataRaw rawData;
         internal Dictionary<string, Parameter> parameterList;
         internal List<int> timestampsList;
 
@@ -41,7 +41,7 @@ namespace Quix.Streams.Streaming.Models
         /// <param name="parametersFilter">List of parameters to filter</param>
         /// <param name="merge">Merge duplicated timestamps</param>
         /// <param name="clean">Clean timestamps without values</param>
-        public TimeseriesData(Process.Models.TimeseriesDataRaw rawData, string[] parametersFilter = null, bool merge = true, bool clean = true)
+        public TimeseriesData(Telemetry.Models.TimeseriesDataRaw rawData, string[] parametersFilter = null, bool merge = true, bool clean = true)
         {
             this.rawData = rawData;
             this.epochsIncluded = new bool[rawData.Timestamps.Count()];
@@ -266,7 +266,7 @@ namespace Quix.Streams.Streaming.Models
             }
         }
 
-        internal Process.Models.TimeseriesDataRaw ConvertToProcessData(bool merge = true, bool clean = true)
+        internal Telemetry.Models.TimeseriesDataRaw ConvertToProcessData(bool merge = true, bool clean = true)
         {
             if (merge)
             {

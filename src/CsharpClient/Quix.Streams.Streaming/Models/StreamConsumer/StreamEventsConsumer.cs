@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 
 namespace Quix.Streams.Streaming.Models.StreamConsumer
 {
@@ -29,7 +29,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
 
         }
 
-        private void OnEventDataHandler(IStreamConsumer sender, Process.Models.EventDataRaw eventDataRaw)
+        private void OnEventDataHandler(IStreamConsumer sender, Telemetry.Models.EventDataRaw eventDataRaw)
         {
             var data = new EventData(eventDataRaw);
 
@@ -59,7 +59,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
         /// </summary>
         public IList<EventDefinition> Definitions { get; private set; } 
 
-        private void LoadFromProcessDefinitions(Process.Models.EventDefinitions definitions)
+        private void LoadFromProcessDefinitions(Telemetry.Models.EventDefinitions definitions)
         {
             // Create a new list instead of modifying publicly available list to avoid threading issues like
             // user iterating the list then us changing it during it
@@ -73,7 +73,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
             this.Definitions = defs;
         }
 
-        private List<EventDefinition> ConvertEventDefinitions(List<Process.Models.EventDefinition> eventDefinitions, string location)
+        private List<EventDefinition> ConvertEventDefinitions(List<Telemetry.Models.EventDefinition> eventDefinitions, string location)
         {
             var result = eventDefinitions.Select(d => new EventDefinition
             {
@@ -88,7 +88,7 @@ namespace Quix.Streams.Streaming.Models.StreamConsumer
             return result;
         }
 
-        private List<EventDefinition> ConvertGroupEventDefinitions(List<Process.Models.EventGroupDefinition> eventGroupDefinitions, string location)
+        private List<EventDefinition> ConvertGroupEventDefinitions(List<Telemetry.Models.EventGroupDefinition> eventGroupDefinitions, string location)
         {
             var result = new List<EventDefinition>();
 

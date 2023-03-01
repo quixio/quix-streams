@@ -26,7 +26,7 @@ namespace Quix.Streams.Streaming.Samples.Samples
                 stream.Epoch = DateTime.UtcNow;
 
                 stream.Events.AddDefinition("e1", "e1 name", "e1 description")
-                    .SetLevel(Process.Models.EventLevel.Critical);
+                    .SetLevel(Telemetry.Models.EventLevel.Critical);
 
                 stream.Events.AddTimestampMilliseconds(10).AddValue("e1", "value 1").AddTag("tag1", "tagValue")
                     .Publish();

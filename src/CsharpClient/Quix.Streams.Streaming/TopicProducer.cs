@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using Quix.Streams.Process.Kafka;
+using Quix.Streams.Telemetry.Kafka;
 using Quix.Streams.Transport.Kafka;
 
 namespace Quix.Streams.Streaming

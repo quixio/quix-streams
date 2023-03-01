@@ -10,7 +10,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         private readonly StreamEventsProducer streamEventsProducer;
         private readonly long timestampNanoseconds;
 
-        private readonly List<Process.Models.EventDataRaw> events = new List<Process.Models.EventDataRaw>();
+        private readonly List<Telemetry.Models.EventDataRaw> events = new List<Telemetry.Models.EventDataRaw>();
         private readonly Dictionary<string, string> tags;
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// <returns></returns>
         public EventDataBuilder AddValue(string eventId, string value)
         {
-            var @event = new Process.Models.EventDataRaw()
+            var @event = new Telemetry.Models.EventDataRaw()
             {
                 Id = eventId,
                 Timestamp = timestampNanoseconds,

@@ -1,5 +1,5 @@
 ﻿using System;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming.Models.StreamConsumer;
 
 namespace Quix.Streams.Streaming
@@ -43,7 +43,7 @@ namespace Quix.Streams.Streaming
     
     public class PackageReceivedEventArgs
     {
-        public PackageReceivedEventArgs(ITopicConsumer topicConsumer, IStreamConsumer consumer, Process.Models.StreamPackage package)
+        public PackageReceivedEventArgs(ITopicConsumer topicConsumer, IStreamConsumer consumer, Telemetry.Models.StreamPackage package)
         {
             this.TopicConsumer = topicConsumer;
             this.Stream = consumer;
@@ -52,7 +52,7 @@ namespace Quix.Streams.Streaming
         
         public ITopicConsumer TopicConsumer { get; }
         public IStreamConsumer Stream { get; }
-        public Process.Models.StreamPackage Package { get; }
+        public Telemetry.Models.StreamPackage Package { get; }
     }
 
     public class StreamClosedEventArgs

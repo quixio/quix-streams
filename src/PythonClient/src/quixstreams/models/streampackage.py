@@ -4,7 +4,7 @@ from typing import Dict
 from .. import TimeseriesDataRaw
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixStreamsProcess.Models.StreamPackage import StreamPackage as spi
+from ..native.Python.QuixStreamsTelemetry.Models.StreamPackage import StreamPackage as spi
 from ..native.Python.SystemPrivateCoreLib.System.Type import Type as NetType
 
 

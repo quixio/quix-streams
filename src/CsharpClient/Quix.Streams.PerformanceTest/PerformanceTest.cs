@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Threading;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming.UnitTests;
 
 namespace Quix.Streams.PerformanceTest

@@ -15,7 +15,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Quix.Streams.Process.Kafka;
+using Quix.Streams.Telemetry.Kafka;
 using Quix.Streams.Streaming.Configuration;
 using Quix.Streams.Streaming.Exceptions;
 using Quix.Streams.Streaming.Models;

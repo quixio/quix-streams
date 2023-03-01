@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 
 namespace Quix.Streams.Streaming.Models.StreamProducer
 {

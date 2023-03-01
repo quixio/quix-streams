@@ -1,5 +1,5 @@
 ﻿using System;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 
 namespace Quix.Streams.Streaming
 {
@@ -12,27 +12,27 @@ namespace Quix.Streams.Streaming
         /// <summary>
         /// Event raised when the Stream Properties have changed.
         /// </summary>
-        event Action<IStreamConsumer, Process.Models.StreamProperties> OnStreamPropertiesChanged;
+        event Action<IStreamConsumer, Telemetry.Models.StreamProperties> OnStreamPropertiesChanged;
 
         /// <summary>
-        /// Event raised when the <see cref="Process.Models.ParameterDefinitions"/> have been changed.
+        /// Event raised when the <see cref="Telemetry.Models.ParameterDefinitions"/> have been changed.
         /// </summary>
-        event Action<IStreamConsumer, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
+        event Action<IStreamConsumer, Telemetry.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
 
         /// <summary>
-        /// Event raised when the <see cref="Process.Models.EventDefinitions"/> have been changed.
+        /// Event raised when the <see cref="Telemetry.Models.EventDefinitions"/> have been changed.
         /// </summary>
-        event Action<IStreamConsumer, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
+        event Action<IStreamConsumer, Telemetry.Models.EventDefinitions> OnEventDefinitionsChanged;
 
         /// <summary>
         /// Event raised when a new package of <see cref="TimeseriesDataRaw"/> values have been received.
         /// </summary>
-        event Action<IStreamConsumer, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
+        event Action<IStreamConsumer, Telemetry.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <summary>
         /// Event raised when a new package of <see cref="EventDataRaw"/> values have been received.
         /// </summary>
-        event Action<IStreamConsumer, Process.Models.EventDataRaw> OnEventData;
+        event Action<IStreamConsumer, Telemetry.Models.EventDataRaw> OnEventData;
 
     }
 }

@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Quix.Streams.Process\Quix.Streams.Process.csproj" />
+      <ProjectReference Include="..\Quix.Streams.Telemetry\Quix.Streams.Telemetry.csproj" />
       <ProjectReference Include="..\Quix.Streams.Streaming\Quix.Streams.Streaming.csproj" />
       <ProjectReference Include="..\Quix.Streams.Transport.Kafka\Quix.Streams.Transport.Kafka.csproj" />
       <ProjectReference Include="..\Quix.Streams.Transport\Quix.Streams.Transport.csproj" />

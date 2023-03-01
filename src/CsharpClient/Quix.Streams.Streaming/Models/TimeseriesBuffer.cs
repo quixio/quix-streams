@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming.Models.StreamConsumer;
 
 namespace Quix.Streams.Streaming.Models
@@ -242,7 +242,7 @@ namespace Quix.Streams.Streaming.Models
         /// Writes a chunck of data into the buffer
         /// </summary>
         /// <param name="timeseriesDataRaw">Data in <see cref="OnDataReleased"/> format</param>
-        protected internal void WriteChunk(Process.Models.TimeseriesDataRaw timeseriesDataRaw)
+        protected internal void WriteChunk(Telemetry.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
             if (isDisposed)
             {

@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using FluentAssertions;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Quix.TestBase.Extensions;
 using Xunit;
 using Xunit.Abstractions;

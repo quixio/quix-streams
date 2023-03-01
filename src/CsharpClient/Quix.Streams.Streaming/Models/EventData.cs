@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Quix.Streams.Process.Models;
-using Quix.Streams.Process.Models.Utility;
+using Quix.Streams.Telemetry.Models;
+using Quix.Streams.Telemetry.Models.Utility;
 
 namespace Quix.Streams.Streaming.Models
 {
@@ -62,7 +62,7 @@ namespace Quix.Streams.Streaming.Models
         /// Create a new Event Data instance loading data from <see cref="EventDataRaw"/> type instance
         /// </summary>
         /// <param name="rawData">Event Data to load from</param>
-        internal EventData(Process.Models.EventDataRaw rawData)
+        internal EventData(Telemetry.Models.EventDataRaw rawData)
         {
             this.LoadFromProcessData(rawData);
         }
@@ -72,7 +72,7 @@ namespace Quix.Streams.Streaming.Models
             this.Tags = newTags;
         }
 
-        private void LoadFromProcessData(Process.Models.EventDataRaw rawData)
+        private void LoadFromProcessData(Telemetry.Models.EventDataRaw rawData)
         {
             this.EpochIncluded = true;
             this.TimestampNanoseconds = rawData.Timestamp;
@@ -91,9 +91,9 @@ namespace Quix.Streams.Streaming.Models
             this.SetTags(data.Tags.ToDictionary(kv => kv.Key, kv => kv.Value));
         }
 
-        internal Process.Models.EventDataRaw ConvertToProcessData()
+        internal Telemetry.Models.EventDataRaw ConvertToProcessData()
         {
-            return new Process.Models.EventDataRaw
+            return new Telemetry.Models.EventDataRaw
             {
                 Timestamp = this.TimestampNanoseconds,
                 Id = this.Id,

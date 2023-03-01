@@ -2,7 +2,7 @@ from enum import Enum
 
 from .helpers.enumconverter import EnumConverter as ec
 from .native.Python.MicrosoftExtensionsLoggingAbstractions.Microsoft.Extensions.Logging.LogLevel import LogLevel as LogLevelInterop
-from .native.Python.QuixStreamsLogging.Logging import Logging as LoggingInterop
+from .native.Python.QuixStreamsTransport.Quix.Streams.Logging import Logging as LoggingInterop
 
 
 class LogLevel(Enum):

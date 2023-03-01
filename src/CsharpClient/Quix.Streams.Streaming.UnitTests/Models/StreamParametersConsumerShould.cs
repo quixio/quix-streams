@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using FluentAssertions;
 using NSubstitute;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 using Xunit;
 
 namespace Quix.Streams.Streaming.UnitTests.Models

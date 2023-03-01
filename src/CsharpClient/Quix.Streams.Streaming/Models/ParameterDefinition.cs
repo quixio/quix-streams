@@ -56,9 +56,9 @@
         /// Converts the Parameter definition to Process layer structure
         /// </summary>
         /// <returns>Process layer Parameter definition</returns>
-        internal Process.Models.ParameterDefinition ConvertToProcessDefinition()
+        internal Telemetry.Models.ParameterDefinition ConvertToProcessDefinition()
         {
-            return new Process.Models.ParameterDefinition 
+            return new Telemetry.Models.ParameterDefinition 
             {
                 Id = this.Id,
                 Name = this.Name,

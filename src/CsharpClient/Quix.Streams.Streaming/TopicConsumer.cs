@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Linq;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process;
-using Quix.Streams.Process.Kafka;
+using Quix.Streams.Telemetry;
+using Quix.Streams.Telemetry.Kafka;
 
 namespace Quix.Streams.Streaming
 {

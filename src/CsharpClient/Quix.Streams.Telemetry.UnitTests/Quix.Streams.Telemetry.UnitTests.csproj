@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Configurations>Debug;Release;Python</Configurations>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.2.0" />
+    <PackageReference Include="NSubstitute" Version="4.2.1" />
+    <PackageReference Include="xunit" Version="2.4.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+    <PackageReference Include="coverlet.collector" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Quix.Streams.Telemetry.Common.Test\Quix.Streams.Telemetry.Common.Test.csproj" />
+    <ProjectReference Include="..\Quix.Streams.Telemetry\Quix.Streams.Telemetry.csproj" />
+    <ProjectReference Include="..\Quix.TestBase\Quix.TestBase.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <Content Include="..\..\TestCertificates\ca.cert">
+      <Link>TestCertificates\ca.cert</Link>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  
+</Project>

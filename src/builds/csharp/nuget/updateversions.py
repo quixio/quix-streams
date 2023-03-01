@@ -70,7 +70,7 @@ result_root_path = get_output_path()
 
 projects = [
     os.path.join(source_root_path, "Quix.Streams.Streaming/Quix.Streams.Streaming.csproj"),
-    os.path.join(source_root_path, "Quix.Streams.Process/Quix.Streams.Process.csproj"),
+    os.path.join(source_root_path, "Quix.Streams.Telemetry/Quix.Streams.Telemetry.csproj"),
     os.path.join(source_root_path, "Quix.Streams.Transport/Quix.Streams.Transport.csproj"),
     os.path.join(source_root_path, "Quix.Streams.Transport.Kafka/Quix.Streams.Transport.Kafka.csproj"),
     os.path.join(source_root_path, "Quix.Streams.State/Quix.Streams.State.csproj")

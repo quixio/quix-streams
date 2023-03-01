@@ -1,5 +1,5 @@
 ﻿using System;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Models;
 
 namespace Quix.Streams.Streaming.Models.StreamProducer
 {
@@ -10,7 +10,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
     {
         private readonly StreamEventsProducer streamEventsProducer;
         private readonly string location;
-        private Process.Models.EventDefinition properties;
+        private Telemetry.Models.EventDefinition properties;
 
         /// <summary>
         /// Initializes a new instance of <see cref="EventDefinitionBuilder"/>
@@ -18,7 +18,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// <param name="streamEventsProducer">Events writer owner</param>
         /// <param name="location">Location selected for the Event definition builder</param>
         /// <param name="properties">Events definition instance managed by the builder</param>
-        public EventDefinitionBuilder(StreamEventsProducer streamEventsProducer, string location, Process.Models.EventDefinition properties = null)
+        public EventDefinitionBuilder(StreamEventsProducer streamEventsProducer, string location, Telemetry.Models.EventDefinition properties = null)
         {
             this.streamEventsProducer = streamEventsProducer;
             this.location = location;

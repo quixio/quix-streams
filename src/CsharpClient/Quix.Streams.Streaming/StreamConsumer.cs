@@ -1,7 +1,7 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming.Models.StreamConsumer;
 
 namespace Quix.Streams.Streaming
@@ -62,31 +62,31 @@ namespace Quix.Streams.Streaming
 
 
         /// <inheritdoc />
-        public virtual event Action<IStreamConsumer, Process.Models.StreamProperties> OnStreamPropertiesChanged;
+        public virtual event Action<IStreamConsumer, Telemetry.Models.StreamProperties> OnStreamPropertiesChanged;
 
         /// <inheritdoc />
-        public virtual event Action<IStreamConsumer, Process.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
+        public virtual event Action<IStreamConsumer, Telemetry.Models.ParameterDefinitions> OnParameterDefinitionsChanged;
 
         /// <inheritdoc />
-        public virtual event Action<IStreamConsumer, Process.Models.TimeseriesDataRaw> OnTimeseriesData;
+        public virtual event Action<IStreamConsumer, Telemetry.Models.TimeseriesDataRaw> OnTimeseriesData;
 
         /// <inheritdoc />
-        public virtual  event Action<IStreamConsumer, Process.Models.EventDataRaw> OnEventData;
+        public virtual  event Action<IStreamConsumer, Telemetry.Models.EventDataRaw> OnEventData;
 
         /// <inheritdoc />
-        public virtual  event Action<IStreamConsumer, Process.Models.EventDefinitions> OnEventDefinitionsChanged;
+        public virtual  event Action<IStreamConsumer, Telemetry.Models.EventDefinitions> OnEventDefinitionsChanged;
 
         private void InitializeStreaming()
         {
             // Modifiers
             // this.AddComponent(SimpleModifier)
 
-            this.Subscribe<Process.Models.StreamProperties>(OnStreamPropertiesReceived);
-            this.Subscribe<Process.Models.TimeseriesDataRaw>(OnTimeseriesDataReceived);
-            this.Subscribe<Process.Models.ParameterDefinitions>(OnParameterDefinitionsReceived);
-            this.Subscribe<Process.Models.EventDataRaw[]>(OnEventDataReceived);
-            this.Subscribe<Process.Models.EventDefinitions>(OnEventDefinitionsReceived);
-            this.Subscribe<Process.Models.StreamEnd>(OnStreamEndReceived);
+            this.Subscribe<Telemetry.Models.StreamProperties>(OnStreamPropertiesReceived);
+            this.Subscribe<Telemetry.Models.TimeseriesDataRaw>(OnTimeseriesDataReceived);
+            this.Subscribe<Telemetry.Models.ParameterDefinitions>(OnParameterDefinitionsReceived);
+            this.Subscribe<Telemetry.Models.EventDataRaw[]>(OnEventDataReceived);
+            this.Subscribe<Telemetry.Models.EventDefinitions>(OnEventDefinitionsReceived);
+            this.Subscribe<Telemetry.Models.StreamEnd>(OnStreamEndReceived);
             this.Subscribe(OnStreamPackageReceived);
 
             this.OnClosed += () =>
@@ -95,31 +95,31 @@ namespace Quix.Streams.Streaming
             };
         }
 
-        private void OnStreamPackageReceived(IStreamProcess streamProcess, Quix.Streams.Process.Models.StreamPackage package)
+        private void OnStreamPackageReceived(IStreamProcess streamProcess, Quix.Streams.Telemetry.Models.StreamPackage package)
         {
             this.logger.LogTrace("StreamConsumer: OnPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));
         }
 
-        private void OnStreamPropertiesReceived(IStreamProcess streamProcess, Process.Models.StreamProperties obj)
+        private void OnStreamPropertiesReceived(IStreamProcess streamProcess, Telemetry.Models.StreamProperties obj)
         {
             this.logger.LogTrace("StreamConsumer: OnStreamPropertiesReceived");
             this.OnStreamPropertiesChanged?.Invoke(this, obj);
         }
 
-        private void OnTimeseriesDataReceived(IStreamProcess streamProcess, Process.Models.TimeseriesDataRaw obj)
+        private void OnTimeseriesDataReceived(IStreamProcess streamProcess, Telemetry.Models.TimeseriesDataRaw obj)
         {
             this.logger.LogTrace("StreamConsumer: OnTimeseriesDataReceived. Data packet of size = {0}", obj.Timestamps.Length);
             this.OnTimeseriesData?.Invoke(this, obj);
         }
 
-        private void OnParameterDefinitionsReceived(IStreamProcess streamProcess, Process.Models.ParameterDefinitions obj)
+        private void OnParameterDefinitionsReceived(IStreamProcess streamProcess, Telemetry.Models.ParameterDefinitions obj)
         {
             this.logger.LogTrace("StreamConsumer: OnParameterDefinitionsReceived");
             this.OnParameterDefinitionsChanged?.Invoke(this, obj);
         }
 
-        private void OnEventDataReceived(IStreamProcess streamProcess, Process.Models.EventDataRaw[] events)
+        private void OnEventDataReceived(IStreamProcess streamProcess, Telemetry.Models.EventDataRaw[] events)
         {
             this.logger.LogTrace("StreamConsumer: OnEventDataReceived");
             for (var index = 0; index < events.Length; index++)
@@ -129,13 +129,13 @@ namespace Quix.Streams.Streaming
             }
         }
 
-        private void OnEventDefinitionsReceived(IStreamProcess streamProcess, Process.Models.EventDefinitions obj)
+        private void OnEventDefinitionsReceived(IStreamProcess streamProcess, Telemetry.Models.EventDefinitions obj)
         {
             this.logger.LogTrace("StreamConsumer: OnEventDefinitionsReceived");
             this.OnEventDefinitionsChanged?.Invoke(this, obj);
         }
 
-        private void OnStreamEndReceived(IStreamProcess streamProcess, Process.Models.StreamEnd obj)
+        private void OnStreamEndReceived(IStreamProcess streamProcess, Telemetry.Models.StreamEnd obj)
         {
             RaiseStreamClosed(obj.StreamEndType);
         }

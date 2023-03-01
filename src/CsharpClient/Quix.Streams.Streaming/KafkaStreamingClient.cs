@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
-using Quix.Streams.Process.Configuration;
-using Quix.Streams.Process.Kafka;
-using Quix.Streams.Process.Models;
+using Quix.Streams.Telemetry.Configuration;
+using Quix.Streams.Telemetry.Kafka;
+using Quix.Streams.Telemetry.Models;
 using Quix.Streams.Streaming.Configuration;
 using Quix.Streams.Streaming.Models;
 using Quix.Streams.Streaming.Raw;
