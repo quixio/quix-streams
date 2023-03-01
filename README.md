@@ -51,8 +51,6 @@ Time-series data is often plotted on a graph with the x-axis representing the ti
 
 ## Getting started 🏄
 
-We are working very hard to support Apple silicon (M1 and M2-based) Macs natively. To install Quix Streams in meantime on apple silicon, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
-
 ### Install Quix Streams
 
 Install Quix streams with the following command: 

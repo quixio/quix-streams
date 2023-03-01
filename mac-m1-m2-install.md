@@ -1,6 +1,5 @@
 # Installing on Quix Streams on a M1/M2 Mac:
-
-Rosetta amd64 emulation is currently required for Apple silicon (M1 and M2-based) Macs
+We are working very hard to support Apple silicon (M1 and M2-based) Macs natively. 
 
 To install Quix Streams on M1/M2 Macs, follow these steps: 
 
