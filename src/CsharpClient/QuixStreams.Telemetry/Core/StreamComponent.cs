@@ -4,13 +4,13 @@ using System.Threading;
 namespace QuixStreams.Telemetry
 {
     /// <summary>
-    /// Implements one Component in a Stream process chain. All components of a stream process derive from this class.
+    /// Implements one Component in a Stream pipeline chain. All components of a stream pipeline derive from this class.
     /// Each component is connected to one another using Input and Output connection points. 
-    /// These connection points are used internally in the derived components to read, write and transform messages in a process.
+    /// These connection points are used internally in the derived components to read, write and transform messages in a pipeline.
     /// </summary>
     public class StreamComponent : IStreamComponent
     {
-        private IStreamProcess streamProcess;
+        private IStreamPipeline streamPipeline;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamComponent"/>
@@ -22,28 +22,28 @@ namespace QuixStreams.Telemetry
         }
 
         /// <summary>
-        /// Cancellation token of the Stream Process
+        /// Cancellation token of the Stream pipeline
         /// </summary>
         public CancellationToken CancellationToken { get; set; } = default;
 
         /// <inheritdoc />
-        public IStreamProcess StreamProcess
+        public IStreamPipeline StreamPipeline
         {
-            get => streamProcess;
+            get => streamPipeline;
             set
             {
-                if (streamProcess != value)
+                if (streamPipeline != value)
                 {
-                    streamProcess = value;
-                    this.OnStreamProcessAssigned?.Invoke();
+                    streamPipeline = value;
+                    this.OnStreamPipelineAssigned?.Invoke();
                 }
             }
         }
 
         /// <summary>
-        /// Handler raised when a Stream process is assigned to the component
+        /// Handler raised when a Stream pipeline is assigned to the component
         /// </summary>
-        public Action OnStreamProcessAssigned = null;
+        public Action OnStreamPipelineAssigned = null;
 
 
         /// <inheritdoc />

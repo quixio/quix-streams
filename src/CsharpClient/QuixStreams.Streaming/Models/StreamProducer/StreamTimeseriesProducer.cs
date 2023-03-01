@@ -72,7 +72,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            this.streamProducer.Publish(data.ConvertToProcessData());
+            this.streamProducer.Publish(data.ConvertToTelemetryData());
         }
 
         /// <summary>
@@ -145,7 +145,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
             {
                 throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
             }
-            definitions.ForEach(d => this.parameterDefinitionsManager.AddDefinition(d.ConvertToProcessDefinition(), d.Location));
+            definitions.ForEach(d => this.parameterDefinitionsManager.AddDefinition(d.ConvertToTelemetrysDefinition(), d.Location));
 
             this.ResetFlushDefinitionsTimer();
         }

@@ -571,8 +571,8 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             // Assert
             sentData.Count.Should().Be(1);
-            var processData = sentData[0];
-            processData.Should().BeEquivalentTo(new TimeseriesDataRaw
+            var timeseriesDataRaw = sentData[0];
+            timeseriesDataRaw.Should().BeEquivalentTo(new TimeseriesDataRaw
             {
                 Epoch = 0,
                 Timestamps = new long[] { 100 + epoch.ToUnixNanoseconds(), 200 + epoch.ToUnixNanoseconds(), 300 + epoch.ToUnixNanoseconds() },
@@ -592,7 +592,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             });
 
             // Act
-            var data = new QuixStreams.Streaming.Models.TimeseriesData(processData);
+            var data = new QuixStreams.Streaming.Models.TimeseriesData(timeseriesDataRaw);
             data.Should().BeEquivalentTo(incomingData, options => options.Including(info => info.WhichGetterHas(FluentAssertions.Common.CSharpAccessModifier.Public)));
         }
 

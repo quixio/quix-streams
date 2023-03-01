@@ -44,7 +44,7 @@ namespace QuixStreams.Streaming
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
-        /// <param name="telemetryKafkaConsumer">Kafka consumer from Process layer</param>
+        /// <param name="telemetryKafkaConsumer">Kafka consumer from Telemetry layer</param>
         public TopicConsumer(TelemetryKafkaConsumer telemetryKafkaConsumer)
         {
             telemetryKafkaConsumer.ForEach(streamId =>
@@ -85,12 +85,12 @@ namespace QuixStreams.Streaming
             this.OnRevoking?.Invoke(this, EventArgs.Empty);
         }
 
-        private void StreamsRevokedEventHandler(IStreamProcess[] obj)
+        private void StreamsRevokedEventHandler(IStreamPipeline[] obj)
         {
             if (this.OnStreamsRevoked == null) return;
             if (obj == null || obj.Length == 0) return;
             
-            // This is relying on the assumption that the StreamConsumer that we've created in the StreamProcessFactoryHandler (see kafkareader.foreach)
+            // This is relying on the assumption that the StreamConsumer that we've created in the StreamPipelineFactoryHandler (see kafkareader.foreach)
             // is being returned here.
             var readers = obj.Select(y => y as IStreamConsumer).Where(y => y != null).ToArray();
             if (readers.Length == 0) return;

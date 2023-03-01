@@ -9,8 +9,8 @@ using QuixStreams.Transport.Kafka;
 namespace QuixStreams.Telemetry.Kafka
 {
     /// <summary>
-    /// KafkaReader initializes transport layer classes and sets up a <see cref="StreamProcessFactory"/> to detect new streams in Kafka topic 
-    /// and start new <see cref="StreamProcess"/> instances where all the messages of the stream are going to be sent.
+    /// KafkaReader initializes transport layer classes and sets up a <see cref="StreamPipelineFactory"/> to detect new streams in Kafka topic 
+    /// and start new <see cref="StreamPipeline"/> instances where all the messages of the stream are going to be sent.
     /// </summary>
     public class TelemetryKafkaConsumer: IDisposable
     {
@@ -18,8 +18,8 @@ namespace QuixStreams.Telemetry.Kafka
         private QuixStreams.Transport.TransportConsumer transportConsumer;
         private bool isDisposed = false;
 
-        private StreamProcessFactory streamProcessFactory;
-        private Func<string, IStreamProcess> streamProcessFactoryHandler;
+        private StreamPipelineFactory streamPipelineFactory;
+        private Func<string, IStreamPipeline> streamPipelineFactoryHandler;
         private IKafkaConsumer kafkaConsumer;
         private readonly Action<CommitOptions> configureCommitOptions;
 
@@ -31,7 +31,7 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Event raised with streams belonging to kafka partition(s) revoked
         /// </summary>
-        public event Action<IStreamProcess[]> OnStreamsRevoked;
+        public event Action<IStreamPipeline[]> OnStreamsRevoked;
 
         /// <summary>
         /// Raised when the kafka topic will became unavailable, but it is still possible at this point
@@ -133,12 +133,12 @@ namespace QuixStreams.Telemetry.Kafka
 
             // Transport layer -> Streaming layer
             ContextCache = new StreamContextCache();
-            this.streamProcessFactory = new KafkaStreamProcessFactory(this.transportConsumer, streamProcessFactoryHandler, ContextCache);
-            this.streamProcessFactory.OnStreamsRevoked += StreamsRevokedHandler;
+            this.streamPipelineFactory = new KafkaStreamPipelineFactory(this.transportConsumer, streamPipelineFactoryHandler, ContextCache);
+            this.streamPipelineFactory.OnStreamsRevoked += StreamsRevokedHandler;
             this.transportConsumer.OnRevoking += RevokingHandler;
             this.transportConsumer.OnCommitted += CommittedHandler;
             this.transportConsumer.OnCommitting += CommitingHandler;
-            this.streamProcessFactory.Open();
+            this.streamPipelineFactory.Open();
         }
 
         private void CommittedHandler(object sender, OnCommittedEventArgs e)
@@ -156,7 +156,7 @@ namespace QuixStreams.Telemetry.Kafka
             this.OnRevoking?.Invoke(this, EventArgs.Empty);
         }
 
-        private void StreamsRevokedHandler(IStreamProcess[] obj)
+        private void StreamsRevokedHandler(IStreamPipeline[] obj)
         {
             OnStreamsRevoked?.Invoke(obj);
         }
@@ -164,17 +164,17 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Function to execute for each stream received by the reader.
         /// </summary>
-        /// <param name="streamProcessFactoryHandler">Handler factory to execute for each Stream detected in the incoming messages in order 
-        /// to create a new <see cref="StreamProcess"/> for each stream. 
-        /// The handler function receives a StreamId and has to return a <see cref="StreamProcess"/>.</param>
-        public void ForEach(Func<string, IStreamProcess> streamProcessFactoryHandler)
+        /// <param name="streamPipelineFactoryHandler">Handler factory to execute for each Stream detected in the incoming messages in order 
+        /// to create a new <see cref="StreamPipeline"/> for each stream. 
+        /// The handler function receives a StreamId and has to return a <see cref="StreamPipeline"/>.</param>
+        public void ForEach(Func<string, IStreamPipeline> streamPipelineFactoryHandler)
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
-            this.streamProcessFactoryHandler = streamProcessFactoryHandler;
+            this.streamPipelineFactoryHandler = streamPipelineFactoryHandler;
         }
 
         /// <summary>
-        /// Stops reading from Kafka and closes all the Stream Processes.
+        /// Stops reading from Kafka and closes all the Stream pipelinees.
         /// </summary>
         public void Stop()
         {
@@ -194,11 +194,11 @@ namespace QuixStreams.Telemetry.Kafka
 
             this.kafkaConsumer?.Close();
 
-            // Stream process factory
-            if (this.streamProcessFactory != null)
+            // Stream pipeline factory
+            if (this.streamPipelineFactory != null)
             {
-                this.streamProcessFactory.Close();
-                this.streamProcessFactory.OnStreamsRevoked -= this.StreamsRevokedHandler;
+                this.streamPipelineFactory.Close();
+                this.streamPipelineFactory.OnStreamsRevoked -= this.StreamsRevokedHandler;
             }
         }
 
@@ -211,7 +211,7 @@ namespace QuixStreams.Telemetry.Kafka
 
             this.kafkaConsumer = null;
             this.transportConsumer = null;
-            this.streamProcessFactory = null;
+            this.streamPipelineFactory = null;
         }
 
         /// <summary>

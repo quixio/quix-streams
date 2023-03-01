@@ -18,7 +18,7 @@ namespace QuixStreams.Streaming
     /// Stream writer interface. Stands for a new stream that we want to send to the platform.
     /// It provides you helper properties to stream data like parameter values, events, definitions and all the information you can persist to the platform.
     /// </summary>
-    internal class StreamProducer: StreamProcess, IStreamProducerInternal
+    internal class StreamProducer: StreamPipeline, IStreamProducerInternal
     {
         public event Action<Type> OnBeforeSend;
         private readonly ILogger logger = Logging.CreateLogger<StreamProducer>();
@@ -38,7 +38,7 @@ namespace QuixStreams.Streaming
         /// Initializes a new instance of <see cref="StreamProducer"/>
         /// </summary>
         /// <param name="topicProducer">The producer which owns the <see cref="StreamProducer"/></param>
-        /// <param name="createKafkaProducer">Function factory to create a Kafka producer from Process layer.</param>
+        /// <param name="createKafkaProducer">Function factory to create a Kafka producer from Telemetry layer.</param>
         /// <param name="streamId">Optional. Stream Id of the stream created</param>
         internal StreamProducer(ITopicProducerInternal topicProducer, Func<string, TelemetryKafkaProducer> createKafkaProducer, string streamId = null)
             :base(streamId)

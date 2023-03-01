@@ -53,10 +53,10 @@
         public string CustomProperties { get; internal set; }
 
         /// <summary>
-        /// Converts the Parameter definition to Process layer structure
+        /// Converts the Parameter definition to Telemetry layer structure
         /// </summary>
-        /// <returns>Process layer Parameter definition</returns>
-        internal QuixStreams.Telemetry.Models.ParameterDefinition ConvertToProcessDefinition()
+        /// <returns>Telemetry layer Parameter definition</returns>
+        internal QuixStreams.Telemetry.Models.ParameterDefinition ConvertToTelemetrysDefinition()
         {
             return new QuixStreams.Telemetry.Models.ParameterDefinition 
             {

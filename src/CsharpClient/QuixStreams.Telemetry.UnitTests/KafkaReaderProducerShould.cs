@@ -41,18 +41,18 @@ namespace QuixStreams.Telemetry.UnitTests
             {
                 streamStarted = true;
 
-                var s = new StreamProcess(streamId);
-                s.Subscribe((streamProcess, package) =>
+                var s = new StreamPipeline(streamId);
+                s.Subscribe((streamPipeline, package) =>
                 {
-                    results.Add((streamProcess.StreamId, package.Type));
+                    results.Add((streamPipeline.StreamId, package.Type));
                 });
-                s.Subscribe<TestModel1>((streamProcess, model) =>
+                s.Subscribe<TestModel1>((streamPipeline, model) =>
                 {
-                    resultsModel1.Add((streamProcess.StreamId, model.Id));
+                    resultsModel1.Add((streamPipeline.StreamId, model.Id));
                 });
-                s.Subscribe<TestModel2>((streamProcess, model) =>
+                s.Subscribe<TestModel2>((streamPipeline, model) =>
                 {
-                    resultsModel2.Add((streamProcess.StreamId, model.Id));
+                    resultsModel2.Add((streamPipeline.StreamId, model.Id));
                 });
                 return s;
             });
@@ -60,11 +60,11 @@ namespace QuixStreams.Telemetry.UnitTests
             kafkaConsumer.Start();
 
             // Create streams
-            var stream1 = new StreamProcess()
+            var stream1 = new StreamPipeline()
                 .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_1"));
-            var stream2 = new StreamProcess()
+            var stream2 = new StreamPipeline()
                 .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_2"));
-            var stream3 = new StreamProcess()
+            var stream3 = new StreamPipeline()
                 .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_3"));
 
             // ACT
@@ -120,13 +120,13 @@ namespace QuixStreams.Telemetry.UnitTests
             TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
-                var s = new StreamProcess(streamId);
+                var s = new StreamPipeline(streamId);
                 return s;
             });
 
             // Create Kafka producer
             TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
-            var stream1 = new StreamProcess()
+            var stream1 = new StreamPipeline()
                 .AddComponent(telemetryKafkaProducer);
 
             telemetryKafkaProducer.OnWriteException += (sender, e) => raised = true;
@@ -152,13 +152,13 @@ namespace QuixStreams.Telemetry.UnitTests
             TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
-                var s = new StreamProcess(streamId);
+                var s = new StreamPipeline(streamId);
                 return s;
             });
 
             // Create Kafka producer
             TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
-            var stream1 = new StreamProcess()
+            var stream1 = new StreamPipeline()
                 .AddComponent(telemetryKafkaProducer);
 
             telemetryKafkaProducer.OnWriteException += (sender, e) => raised = true;

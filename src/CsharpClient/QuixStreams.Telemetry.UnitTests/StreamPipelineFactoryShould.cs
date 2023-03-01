@@ -13,9 +13,9 @@ using Xunit.Abstractions;
 
 namespace QuixStreams.Telemetry.UnitTests
 {
-    public class StreamProcessFactoryShould
+    public class StreamPipelineFactoryShould
     {
-        public StreamProcessFactoryShould(ITestOutputHelper outputHelper)
+        public StreamPipelineFactoryShould(ITestOutputHelper outputHelper)
         {
             Logging.Factory = outputHelper.CreateLoggerFactory();
         }
@@ -25,14 +25,14 @@ namespace QuixStreams.Telemetry.UnitTests
         {
             // Arrange
             var consumer = Substitute.For<IConsumer>();
-            var factory = new TestStreamProcessFactory(consumer, (s) => new StreamProcess());
+            var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
 
             // Act
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
-                {TestStreamProcessFactory.TransportContextStreamIdKey, "ABCDE"}
+                {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
             consumer.OnNewPackage(package);
 
@@ -48,7 +48,7 @@ namespace QuixStreams.Telemetry.UnitTests
             var consumer = Substitute.For<IConsumer>();
             var elapsedTimes = new List<long>();
             var sw = new Stopwatch();
-            var factory = new TestStreamProcessFactory(consumer, (s) =>
+            var factory = new TestStreamPipelineFactory(consumer, (s) =>
             {
                 elapsedTimes.Add(sw.ElapsedMilliseconds);
                 sw.Restart();
@@ -61,7 +61,7 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
-                {TestStreamProcessFactory.TransportContextStreamIdKey, "somestreamid"}
+                {TestStreamPipelineFactory.TransportContextStreamIdKey, "somestreamid"}
             }));
             sw.Restart();
 
@@ -70,7 +70,7 @@ namespace QuixStreams.Telemetry.UnitTests
             // Act & Assert
 
             action.Should().Throw<Exception>().Which.Message.Should()
-                .BeEquivalentTo("Exception while creating a new stream process for stream somestreamid. Failed 10 times. Reached maximum retry count.");
+                .BeEquivalentTo("Exception while creating a new stream pipeline for stream somestreamid. Failed 10 times. Reached maximum retry count.");
             
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
@@ -91,12 +91,12 @@ namespace QuixStreams.Telemetry.UnitTests
         {
             // Arrange
             var consumer = Substitute.For<IConsumer>();
-            var factory = new TestStreamProcessFactory(consumer, (s) => new StreamProcess());
+            var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
-                {TestStreamProcessFactory.TransportContextStreamIdKey, "ABCDE"}
+                {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
             consumer.OnNewPackage(package);
 
@@ -105,7 +105,7 @@ namespace QuixStreams.Telemetry.UnitTests
             // Act
             package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
-                {TestStreamProcessFactory.TransportContextStreamIdKey, "ABCDE"}
+                {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
             consumer.OnNewPackage(package);
 
@@ -114,24 +114,24 @@ namespace QuixStreams.Telemetry.UnitTests
         }
 
         [Fact]
-        public void StreamProcessCloses_TrackedAsActiveStream_ShouldNoLongerBeTrackedAsActiveStream()
+        public void StreamPipelineCloses_TrackedAsActiveStream_ShouldNoLongerBeTrackedAsActiveStream()
         {
             // Arrange
             var consumer = Substitute.For<IConsumer>();
-            var process = new StreamProcess();
-            var factory = new TestStreamProcessFactory(consumer, (s) => process);
+            var streamPipeline = new StreamPipeline();
+            var factory = new TestStreamPipelineFactory(consumer, (s) => streamPipeline);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
-                {TestStreamProcessFactory.TransportContextStreamIdKey, process.StreamId}
+                {TestStreamPipelineFactory.TransportContextStreamIdKey, streamPipeline.StreamId}
             }));
             consumer.OnNewPackage(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
             // Act
-            factory.ContextCache.GetAll().Values.First().StreamProcess.Close();
+            factory.ContextCache.GetAll().Values.First().StreamPipeline.Close();
 
             // Assert
 
@@ -143,20 +143,20 @@ namespace QuixStreams.Telemetry.UnitTests
         {
             // Arrange
             var consumer = Substitute.For<IConsumer>();
-            var process = new StreamProcess();
-            var factory = new TestStreamProcessFactory(consumer, (s) => process);
+            var streamPipeline = new StreamPipeline();
+            var factory = new TestStreamPipelineFactory(consumer, (s) => streamPipeline);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
             {
-                {TestStreamProcessFactory.TransportContextStreamIdKey, process.StreamId}
+                {TestStreamPipelineFactory.TransportContextStreamIdKey, streamPipeline.StreamId}
             }));
             consumer.OnNewPackage(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
             // Act
-            process.Send(new StreamEnd());
+            streamPipeline.Send(new StreamEnd());
 
             // Assert
 
@@ -164,17 +164,17 @@ namespace QuixStreams.Telemetry.UnitTests
         }
 
 
-        class TestStreamProcessFactory : StreamProcessFactory
+        class TestStreamPipelineFactory : StreamPipelineFactory
         {
             public const string TransportContextStreamIdKey = "StreamId";
             
-            public TestStreamProcessFactory(Transport.IO.IConsumer transportConsumer, Func<string, IStreamProcess> streamProcessFactoryHandler) : this(transportConsumer, streamProcessFactoryHandler, new StreamContextCache())
+            public TestStreamPipelineFactory(Transport.IO.IConsumer transportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler) : this(transportConsumer, streamPipelineFactoryHandler, new StreamContextCache())
             {
             }
 
-            public TestStreamProcessFactory(Transport.IO.IConsumer transportConsumer,
-                Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache cache) : base(
-                transportConsumer, streamProcessFactoryHandler, cache)
+            public TestStreamPipelineFactory(Transport.IO.IConsumer transportConsumer,
+                Func<string, IStreamPipeline> streamPipelineFactoryHandler, IStreamContextCache cache) : base(
+                transportConsumer, streamPipelineFactoryHandler, cache)
             {
                 this.ContextCache = cache;
             }

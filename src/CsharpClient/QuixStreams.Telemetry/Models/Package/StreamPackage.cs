@@ -5,7 +5,7 @@ using QuixStreams.Transport.IO;
 namespace QuixStreams.Telemetry.Models
 {
     /// <summary>
-    /// Default model implementation for non-typed message packages of the Process layer. It holds a value and its type.
+    /// Default model implementation for non-typed message packages of the Telemetry layer. It holds a value and its type.
     /// </summary>
     public class StreamPackage
     {

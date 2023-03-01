@@ -30,7 +30,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 var eventData = new QuixStreams.Streaming.Models.EventData($"event{i}", 100 * i, $"test_event_value{i}")
                     .AddTag($"tag{i}", $"{i}");
 
-                streamConsumer.OnEventData += Raise.Event<Action<IStreamConsumer, EventDataRaw>>(streamConsumer, eventData.ConvertToProcessData());
+                streamConsumer.OnEventData += Raise.Event<Action<IStreamConsumer, EventDataRaw>>(streamConsumer, eventData.ConvertToTelemetryData());
             }
 
             // Assert

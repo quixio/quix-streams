@@ -266,7 +266,7 @@ namespace QuixStreams.Streaming.Models
             }
         }
 
-        internal QuixStreams.Telemetry.Models.TimeseriesDataRaw ConvertToProcessData(bool merge = true, bool clean = true)
+        internal QuixStreams.Telemetry.Models.TimeseriesDataRaw ConvertToTelemetryData(bool merge = true, bool clean = true)
         {
             if (merge)
             {
@@ -521,13 +521,13 @@ namespace QuixStreams.Streaming.Models
                 return false;
             }
 
-            var rawA = this.ConvertToProcessData();
-            var rawB = c.ConvertToProcessData();
+            var rawA = this.ConvertToTelemetryData();
+            var rawB = c.ConvertToTelemetryData();
 
             MergeEpoch(rawA);
             MergeEpoch(rawB);
 
-            c.ConvertToProcessData().ToJson();
+            c.ConvertToTelemetryData().ToJson();
 
             return rawA.ToJson() == rawB.ToJson();
         }

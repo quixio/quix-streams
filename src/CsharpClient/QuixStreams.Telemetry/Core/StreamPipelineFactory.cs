@@ -13,22 +13,22 @@ using QuixStreams.Transport.IO;
 namespace QuixStreams.Telemetry
 {
     /// <summary>
-    /// The factory detects new streams from the transport layer and creates new <see cref="IStreamProcess"/>es.
-    /// It also maintains a list of active stream processes and the components associated to them.
+    /// The factory detects new streams from the transport layer and creates new <see cref="IStreamPipeline"/>es.
+    /// It also maintains a list of active stream pipelinees and the components associated to them.
     /// </summary>
-    internal abstract class StreamProcessFactory
+    internal abstract class StreamPipelineFactory
     {
-        private readonly ILogger logger = Logging.CreateLogger<StreamProcessFactory>();
+        private readonly ILogger logger = Logging.CreateLogger<StreamPipelineFactory>();
         private readonly object openCloseLock = new object();
         private bool isOpen;
         private IConsumer transportConsumer;
-        private Func<string, IStreamProcess> streamProcessFactoryHandler;
+        private Func<string, IStreamPipeline> streamPipelineFactoryHandler;
         private readonly IStreamContextCache contextCache;
         private Action onClose = () => { };
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         
         
-        public event Action<IStreamProcess[]> OnStreamsRevoked;
+        public event Action<IStreamPipeline[]> OnStreamsRevoked;
 
         private int maxRetryDuration = 60000;
 
@@ -74,16 +74,16 @@ namespace QuixStreams.Telemetry
         public int MaxRetries { get; set; } = -1;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="StreamProcessFactory"/>
+        /// Initializes a new instance of <see cref="StreamPipelineFactory"/>
         /// </summary>
         /// <param name="transportConsumer">Transport layer to read from</param>
-        /// <param name="streamProcessFactoryHandler">Handler factory to execute for each Stream detected in the incoming messages in order to create a new <see cref="StreamProcess"/> for each stream. 
-        /// The handler function receives a StreamId and has to return a <see cref="StreamProcess"/>.</param>
+        /// <param name="streamPipelineFactoryHandler">Handler factory to execute for each Stream detected in the incoming messages in order to create a new <see cref="StreamPipeline"/> for each stream. 
+        /// The handler function receives a StreamId and has to return a <see cref="StreamPipeline"/>.</param>
         /// <param name="contextCache">The cache to store created stream contexts</param>
-        public StreamProcessFactory(QuixStreams.Transport.IO.IConsumer transportConsumer, Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache contextCache)
+        public StreamPipelineFactory(QuixStreams.Transport.IO.IConsumer transportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler, IStreamContextCache contextCache)
         {
             this.transportConsumer = transportConsumer ?? throw new ArgumentNullException(nameof(transportConsumer));
-            this.streamProcessFactoryHandler = streamProcessFactoryHandler ?? throw new ArgumentNullException(nameof(streamProcessFactoryHandler));
+            this.streamPipelineFactoryHandler = streamPipelineFactoryHandler ?? throw new ArgumentNullException(nameof(streamPipelineFactoryHandler));
             this.contextCache = contextCache ?? throw new ArgumentNullException(nameof(contextCache));
         }
 
@@ -160,17 +160,17 @@ namespace QuixStreams.Telemetry
                     sContext => sContext.Value.LastTransportContext,
                     (tContext, sContext) => sContext).ToList();
                 
-                OnStreamsRevoked?.Invoke(affectedStreamContexts.Select(y=> y.Value.StreamProcess).ToArray());
+                OnStreamsRevoked?.Invoke(affectedStreamContexts.Select(y=> y.Value.StreamPipeline).ToArray());
                 
                 foreach (var affectedContext in affectedStreamContexts)
                 {
                     try
                     {
-                        affectedContext.Value.StreamProcess.Close();
+                        affectedContext.Value.StreamPipeline.Close();
                     }
                     catch (Exception ex)
                     {
-                        logger.LogTrace(ex, "Exception while closing stream process after revocation.");
+                        logger.LogTrace(ex, "Exception while closing stream pipeline after revocation.");
                         // Ignore fails, they may have been closed in a callback of OnStreamsRevoked
                     }
                 }
@@ -189,18 +189,18 @@ namespace QuixStreams.Telemetry
         {
             if (package == null)
             {
-                this.logger.LogWarning("StreamProcessFactory: Null package. Malformed package?");
+                this.logger.LogWarning("StreamPipelineFactory: Null package. Malformed package?");
                 return Task.CompletedTask;
             }
             
             if (package.TransportContext == null)
             {
-                this.logger.LogWarning("StreamProcessFactory: failed to get stream id from message due to lack of transport context. Malformed package?");
+                this.logger.LogWarning("StreamPipelineFactory: failed to get stream id from message due to lack of transport context. Malformed package?");
                 return Task.CompletedTask;;
             }
             if (!this.TryGetStreamId(package.TransportContext, out var streamId))
             {
-                this.logger.LogWarning("StreamProcessFactory: failed to get stream id from message. Malformed package?");
+                this.logger.LogWarning("StreamPipelineFactory: failed to get stream id from message. Malformed package?");
                 return Task.CompletedTask;;
             }
 
@@ -212,19 +212,19 @@ namespace QuixStreams.Telemetry
                     streamContext = new StreamContext(streamId);
                     if (!this.contextCache.TryAdd(streamContext))
                     {
-                        this.logger.LogError("StreamProcessFactory: failed to cache stream context. {0}", streamContext.StreamId);
+                        this.logger.LogError("StreamPipelineFactory: failed to cache stream context. {0}", streamContext.StreamId);
                         return Task.CompletedTask;;
                     }
 
-                    this.logger.LogTrace("StreamProcessFactory: package is for a new stream");
-                    // Create the new Stream Process with the Stream Factory handler
-                    // Stream Process class stands for a specific Stream with its own processes and state (if it exists)
+                    this.logger.LogTrace("StreamPipelineFactory: package is for a new stream");
+                    // Create the new Stream pipeline with the Stream Factory handler
+                    // Stream pipeline class stands for a specific Stream with its own pipeline  and state (if it exists)
                     var retryCount = 0;
                     do
                     {
                         try
                         {
-                            streamContext.StreamProcess = this.streamProcessFactoryHandler.Invoke(streamId);
+                            streamContext.StreamPipeline = this.streamPipelineFactoryHandler.Invoke(streamId);
                             break; // success, no retry
                         }
                         catch (Exception ex)
@@ -233,10 +233,10 @@ namespace QuixStreams.Telemetry
                             if (retryCount >= this.MaxRetries && this.MaxRetries != -1)
                             {
                                 this.contextCache.Remove(streamId);
-                                throw new Exception($"Exception while creating a new stream process for stream {streamId}. Failed {retryCount} times. Reached maximum retry count.", ex);
+                                throw new Exception($"Exception while creating a new stream pipeline for stream {streamId}. Failed {retryCount} times. Reached maximum retry count.", ex);
                             }
                             var waitFor = Math.Min(retryCount * this.RetryIncrease, this.MaxRetryDuration); 
-                            this.logger.LogError(ex, "Exception while creating a new stream process for stream {0}. Failed {1} times. Waiting {2}ms then retrying again.", streamId, retryCount, waitFor);
+                            this.logger.LogError(ex, "Exception while creating a new stream pipeline for stream {0}. Failed {1} times. Waiting {2}ms then retrying again.", streamId, retryCount, waitFor);
                             try
                             {
                                 this.cancellationTokenSource.Token.WaitHandle.WaitOne(
@@ -250,17 +250,17 @@ namespace QuixStreams.Telemetry
                     } while (true); // the inner breaks/throws will deal with this
 
                     // Saving Transport metadata for discretionary usings by Stream Components
-                    streamContext.StreamProcess.SourceMetadata = new Dictionary<string, string>(package.TransportContext.ToDictionary(kv => kv.Key, kv => kv.Value.ToString()));
+                    streamContext.StreamPipeline.SourceMetadata = new Dictionary<string, string>(package.TransportContext.ToDictionary(kv => kv.Key, kv => kv.Value.ToString()));
 
 
-                    // Close the stream process if we received an StreamEnd message
-                    this.logger.LogTrace("StreamProcessFactory: subscribing to StreamEnd for the new stream. {0}", streamContext.StreamId);
-                    streamContext.StreamProcess.OnClosing += () =>
+                    // Close the stream pipeline if we received an StreamEnd message
+                    this.logger.LogTrace("StreamPipelineFactory: subscribing to StreamEnd for the new stream. {0}", streamContext.StreamId);
+                    streamContext.StreamPipeline.OnClosing += () =>
                     {
                         this.contextCache.Remove(streamContext.StreamId);
-                        this.logger.LogTrace("StreamProcessFactory: Removed stream from dictionary of streams {0} due to stream closing", streamContext.StreamId);
+                        this.logger.LogTrace("StreamPipelineFactory: Removed stream from dictionary of streams {0} due to stream closing", streamContext.StreamId);
                     };
-                    streamContext.StreamProcess.Subscribe<StreamEnd>(OnStreamFinished);
+                    streamContext.StreamPipeline.Subscribe<StreamEnd>(OnStreamFinished);
                 }
 
                 streamContext.LastUncommittedTransportContext = package.TransportContext;
@@ -271,11 +271,11 @@ namespace QuixStreams.Telemetry
             var streamPackage = new StreamPackage(package);
 
             // Send the Stream Package to the stream
-            return streamContext.StreamProcess.Send(streamPackage);
+            return streamContext.StreamPipeline.Send(streamPackage);
         }
 
         /// <summary>
-        /// Close reading subscription from Transport layer and close all the Stream processes managed by the factory
+        /// Close reading subscription from Transport layer and close all the Stream pipelinees managed by the factory
         /// </summary>
         public void Close()
         {
@@ -292,7 +292,7 @@ namespace QuixStreams.Telemetry
                     // Close the streams
                     foreach (var keyValuePair in this.contextCache.GetAll())
                     {
-                        keyValuePair.Value.StreamProcess.Close();
+                        keyValuePair.Value.StreamPipeline.Close();
                     }
                 }
 
@@ -300,12 +300,12 @@ namespace QuixStreams.Telemetry
             }
         }
 
-        // Close the stream process if we received an StreamEnd message
-        private void OnStreamFinished(IStreamProcess stream, StreamEnd obj)
+        // Close the stream pipeline if we received an StreamEnd message
+        private void OnStreamFinished(IStreamPipeline stream, StreamEnd obj)
         {
-            this.logger.LogTrace("StreamProcessFactory: OnStreamFinished -> closing stream");
+            this.logger.LogTrace("StreamPipelineFactory: OnStreamFinished -> closing stream");
             stream.Close();
-            this.logger.LogTrace("StreamProcessFactory: OnStreamFinished -> stream closed");
+            this.logger.LogTrace("StreamPipelineFactory: OnStreamFinished -> stream closed");
         }
 
     }

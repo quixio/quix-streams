@@ -62,7 +62,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void Copy_WithParameterFilter_OnProcessData_ShouldCreateInstanceAsExpected()
+        public void Copy_WithParameterFilter_OnTelemetryData_ShouldCreateInstanceAsExpected()
         {
             // Arrange
             var data = new TimeseriesData();
@@ -79,8 +79,8 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 .AddTag("tag1", "value1");
 
             // Act
-            var processData = data.ConvertToProcessData();
-            var filtered = new TimeseriesData(processData, new[] { "param1", "param3" });
+            var telemetryData = data.ConvertToTelemetryData();
+            var filtered = new TimeseriesData(telemetryData, new[] { "param1", "param3" });
 
             // Assert
             filtered.Timestamps.Count.Should().Be(1);
@@ -93,7 +93,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void ConvertToProcessData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
+        public void ConvertToTelemetrysData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
         {
             // Arrange
             var dataDuplicatedTimestamps = new TimeseriesData();
@@ -153,19 +153,19 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 .AddTag("tag1", "value2");
 
             // Act
-            var processData1 = dataDuplicatedTimestamps.ConvertToProcessData();
-            var processData2 = dataWithoutDuplicatedTimestamps.ConvertToProcessData();
+            var telemetryData1 = dataDuplicatedTimestamps.ConvertToTelemetryData();
+            var telemetryData2 = dataWithoutDuplicatedTimestamps.ConvertToTelemetryData();
 
             // Assert
-            processData1.Timestamps.Length.Should().Be(3);
-            processData1.BinaryValues.Should().NotBeEmpty();
-            processData1.StringValues.Should().NotBeEmpty();
-            processData1.NumericValues.Should().NotBeEmpty();
-            processData1.Should().BeEquivalentTo(processData2);
+            telemetryData1.Timestamps.Length.Should().Be(3);
+            telemetryData1.BinaryValues.Should().NotBeEmpty();
+            telemetryData1.StringValues.Should().NotBeEmpty();
+            telemetryData1.NumericValues.Should().NotBeEmpty();
+            telemetryData1.Should().BeEquivalentTo(telemetryData2);
         }
 
         [Fact]
-        public void LoadFromProcessData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
+        public void LoadFromTelemetryData_WithDuplicatedTimestamps_ShouldCreateInstanceAsExpected()
         {
             // Arrange
             var dataDuplicatedTimestamps = new QuixStreams.Telemetry.Models.TimeseriesDataRaw()
@@ -218,7 +218,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void LoadFromProcessData_WithNullValues_ShouldCreateInstanceAsExpected()
+        public void LoadFromTelemetryData_WithNullValues_ShouldCreateInstanceAsExpected()
         {
             // Arrange
             var dataWithNulls = new QuixStreams.Telemetry.Models.TimeseriesDataRaw()
@@ -269,13 +269,13 @@ namespace QuixStreams.Streaming.UnitTests.Models
             var data1 = new TimeseriesData(dataWithNulls);
 
             // Assert
-            data1.ConvertToProcessData().Should().BeEquivalentTo(dataWithNulls);
-            data1.ConvertToProcessData().Should().BeEquivalentTo(expectedData.ConvertToProcessData());
+            data1.ConvertToTelemetryData().Should().BeEquivalentTo(dataWithNulls);
+            data1.ConvertToTelemetryData().Should().BeEquivalentTo(expectedData.ConvertToTelemetryData());
         }
 
 
         [Fact]
-        public void ConvertToProcessData_WithDuplicatedTimestampsAndDifferentTags_ShouldCreateInstanceAsExpected()
+        public void ConvertToTelemetrysData_WithDuplicatedTimestampsAndDifferentTags_ShouldCreateInstanceAsExpected()
         {
             // Arrange
             var dataDuplicatedTimestamps = new TimeseriesData();
@@ -290,11 +290,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             expected.AddTimestampMilliseconds(100).AddValue("b", "3").AddTag("c", "val2");
 
             // Act
-            var processData1 = dataDuplicatedTimestamps.ConvertToProcessData();
-            var processData2 = expected.ConvertToProcessData();
+            var telemetryData1 = dataDuplicatedTimestamps.ConvertToTelemetryData();
+            var telemetryData2 = expected.ConvertToTelemetryData();
 
             // Assert
-            processData1.Should().BeEquivalentTo(processData2);
+            telemetryData1.Should().BeEquivalentTo(telemetryData2);
         }
 
         [Fact]

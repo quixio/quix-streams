@@ -31,7 +31,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
         private void OnParameterDefinitionsChangedEventHandler(IStreamConsumer sender, ParameterDefinitions parameterDefinitions)
         {
-            this.LoadFromProcessDefinitions(parameterDefinitions);
+            this.LoadFromTelemetryDefinitions(parameterDefinitions);
 
             this.OnDefinitionsChanged?.Invoke(this.streamConsumer, new ParameterDefinitionsChangedEventArgs(this.topicConsumer, this.streamConsumer));
         }
@@ -91,7 +91,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// </summary>
         internal List<TimeseriesBufferConsumer> Buffers { get; private set; } = new List<TimeseriesBufferConsumer>();
 
-        private void LoadFromProcessDefinitions(QuixStreams.Telemetry.Models.ParameterDefinitions definitions)
+        private void LoadFromTelemetryDefinitions(QuixStreams.Telemetry.Models.ParameterDefinitions definitions)
         {
             var defs = new List<ParameterDefinition>();
             

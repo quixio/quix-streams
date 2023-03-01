@@ -108,9 +108,9 @@ namespace QuixStreams.Telemetry
         public readonly string StreamId;
 
         /// <summary>
-        /// Stream Process of the Stream
+        /// Stream pipeline of the Stream
         /// </summary>
-        public IStreamProcess StreamProcess;
+        public IStreamPipeline StreamPipeline;
 
         /// <summary>
         /// Last uncommitted Transport Context received

@@ -6,12 +6,12 @@ using QuixStreams.Transport.Kafka;
 namespace QuixStreams.Telemetry.Kafka
 {
     /// <summary>
-    /// <see cref="StreamProcessFactory"/> implemented for Kafka.
+    /// <see cref="StreamPipelineFactory"/> implemented for Kafka.
     /// It takes the StreamId from Message Key instead of a Metadata parameter from the default implementation
     /// </summary>
-    internal class KafkaStreamProcessFactory : StreamProcessFactory
+    internal class KafkaStreamPipelineFactory : StreamPipelineFactory
     {
-        public KafkaStreamProcessFactory(IConsumer transportConsumer, Func<string, IStreamProcess> streamProcessFactoryHandler, IStreamContextCache cache) : base(transportConsumer, streamProcessFactoryHandler, cache)
+        public KafkaStreamPipelineFactory(IConsumer transportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler, IStreamContextCache cache) : base(transportConsumer, streamPipelineFactoryHandler, cache)
         {
         }
 

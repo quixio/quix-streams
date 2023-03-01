@@ -13,7 +13,7 @@ namespace QuixStreams.Telemetry.Kafka
         /// Initializes a new instance of <see cref="TelemetryKafkaConsumerConfiguration"/>
         /// </summary>
         /// <param name="brokerList">Broker list of the Kafka cluster</param>
-        /// <param name="consumerGroupId">Consumer group id of the reading process. If null, consumer group is not used and only consuming new messages.</param>
+        /// <param name="consumerGroupId">Consumer group id of the reading pipeline. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="properties">Extra Kafka configuration properties</param>
         public TelemetryKafkaConsumerConfiguration(string brokerList, string consumerGroupId = null, IDictionary<string, string> properties = null)
         {
@@ -36,7 +36,7 @@ namespace QuixStreams.Telemetry.Kafka
         public string BrokerList { get; }
 
         /// <summary>
-        /// Consumer group id of the reading process
+        /// Consumer group id of the reading pipeline
         /// </summary>
         public string ConsumerGroupId { get; }
 

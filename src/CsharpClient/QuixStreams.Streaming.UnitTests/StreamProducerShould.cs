@@ -8,7 +8,7 @@ using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using Xunit;
 
-namespace QuixStreams.Streaming.UnitTests.Process
+namespace QuixStreams.Streaming.UnitTests.Telemetry
 {
     public class StreamProducerShould
     {

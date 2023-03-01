@@ -37,7 +37,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
                     .AddValue($"test_string_param{i}", $"{i}")
                     .AddTag($"tag{i}", $"{i}");
 
-                streamConsumer.OnTimeseriesData += Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer, timeseriesData.ConvertToProcessData());
+                streamConsumer.OnTimeseriesData += Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer, timeseriesData.ConvertToTelemetryData());
             }
 
             // Assert

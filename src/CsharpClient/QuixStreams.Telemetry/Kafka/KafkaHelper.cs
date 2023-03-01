@@ -33,7 +33,7 @@ namespace QuixStreams.Telemetry.Kafka
         /// </summary>
         /// <param name="config">Kafka producer configuration</param>
         /// <param name="topic">Topic Id</param>
-        /// <param name="byteSplitter">Byte splitter (output)</param> // TODO: Remove this dependency from Process layer
+        /// <param name="byteSplitter">Byte splitter (output)</param> // TODO: Remove this dependency from Telemetry layer
         /// <returns>New instance of Kafka Input Transport layer</returns>
         public static IKafkaProducer OpenKafkaInput(KafkaProducerConfiguration config, string topic, out IByteSplitter byteSplitter)
         {

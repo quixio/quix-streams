@@ -7,7 +7,7 @@ namespace QuixStreams.Telemetry
     /// <summary>
     /// Stands for an input/output connection point to receive and send data in a Stream Component
     /// Each Stream Component has an Input and an Output instances of this interface, where we are going to receive and send messages respectively.
-    /// This Input and Output are also used to connect Components in a Process, like when we "AddComponent" in a StreamProcess class.
+    /// This Input and Output are also used to connect Components in a Pipeline, like when we "AddComponent" in a StreamPipeline class.
     /// </summary>
     public interface IIOComponentConnection
     {

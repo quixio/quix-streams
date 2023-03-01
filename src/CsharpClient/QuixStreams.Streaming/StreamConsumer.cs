@@ -10,7 +10,7 @@ namespace QuixStreams.Streaming
     /// <summary>
     /// Handles reading data for the assigned stream from the protocol.
     /// </summary>
-    internal class StreamConsumer : StreamProcess, IStreamConsumerInternal
+    internal class StreamConsumer : StreamPipeline, IStreamConsumerInternal
     {
         private readonly ITopicConsumer topicConsumer;
         private readonly ILogger logger = Logging.CreateLogger<StreamConsumer>();
@@ -21,10 +21,10 @@ namespace QuixStreams.Streaming
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamConsumer"/>
-        /// This constructor is called internally by the Stream Process factory.
+        /// This constructor is called internally by the <see cref="StreamPipelineFactory"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the reader belongs to</param>
-        /// <param name="streamId">Stream Id of the source that has generated this Stream Process. 
+        /// <param name="streamId">Stream Id of the source that has generated this Stream Consumer. 
         /// Commonly the Stream Id will be coming from the protocol. 
         /// If no stream Id is passed, like when a new stream is created for producing data, a Guid is generated automatically.</param>
         internal StreamConsumer(ITopicConsumer topicConsumer, string streamId): base(streamId)
@@ -96,31 +96,31 @@ namespace QuixStreams.Streaming
             };
         }
 
-        private void OnStreamPackageReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.StreamPackage package)
+        private void OnStreamPackageReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamPackage package)
         {
             this.logger.LogTrace("StreamConsumer: OnPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));
         }
 
-        private void OnStreamPropertiesReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.StreamProperties obj)
+        private void OnStreamPropertiesReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamProperties obj)
         {
             this.logger.LogTrace("StreamConsumer: OnStreamPropertiesReceived");
             this.OnStreamPropertiesChanged?.Invoke(this, obj);
         }
 
-        private void OnTimeseriesDataReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.TimeseriesDataRaw obj)
+        private void OnTimeseriesDataReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.TimeseriesDataRaw obj)
         {
             this.logger.LogTrace("StreamConsumer: OnTimeseriesDataReceived. Data packet of size = {0}", obj.Timestamps.Length);
             this.OnTimeseriesData?.Invoke(this, obj);
         }
 
-        private void OnParameterDefinitionsReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.ParameterDefinitions obj)
+        private void OnParameterDefinitionsReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.ParameterDefinitions obj)
         {
             this.logger.LogTrace("StreamConsumer: OnParameterDefinitionsReceived");
             this.OnParameterDefinitionsChanged?.Invoke(this, obj);
         }
 
-        private void OnEventDataReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.EventDataRaw[] events)
+        private void OnEventDataReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.EventDataRaw[] events)
         {
             this.logger.LogTrace("StreamConsumer: OnEventDataReceived");
             for (var index = 0; index < events.Length; index++)
@@ -130,13 +130,13 @@ namespace QuixStreams.Streaming
             }
         }
 
-        private void OnEventDefinitionsReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.EventDefinitions obj)
+        private void OnEventDefinitionsReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.EventDefinitions obj)
         {
             this.logger.LogTrace("StreamConsumer: OnEventDefinitionsReceived");
             this.OnEventDefinitionsChanged?.Invoke(this, obj);
         }
 
-        private void OnStreamEndReceived(IStreamProcess streamProcess, QuixStreams.Telemetry.Models.StreamEnd obj)
+        private void OnStreamEndReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamEnd obj)
         {
             RaiseStreamClosed(obj.StreamEndType);
         }

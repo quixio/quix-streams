@@ -7,16 +7,16 @@ using Xunit;
 
 namespace QuixStreams.Telemetry.UnitTests
 {
-    public class StreamProcessShould
+    public class StreamPipelineShould
     {
         [Fact]
         public void Send_AfterAddComponent_ShouldExecuteSubscribersHandlers()
         {
             // Arrange
-            IStreamProcess process = new StreamProcess();
+            IStreamPipeline pipeline = new StreamPipeline();
             StreamComponent component = new StreamComponent();
             component.Input.LinkTo(component.Output);
-            process.AddComponent(component);
+            pipeline.AddComponent(component);
 
             TestModel1 testModel1 = new TestModel1();
             TestModel1 handledModel1 = null;
@@ -25,15 +25,15 @@ namespace QuixStreams.Telemetry.UnitTests
             TestModel2 handledModel2 = null;
 
             int num = 0;
-            process.Subscribe<TestModel1>((stream, test) =>
+            pipeline.Subscribe<TestModel1>((stream, test) =>
             {
                 handledModel1 = test;
                 num++;
             });
 
             // Act
-            process.Send(testModel1);
-            process.Send(testModel2);
+            pipeline.Send(testModel1);
+            pipeline.Send(testModel2);
 
             // Assert
             Assert.Equal(testModel1, handledModel1);
@@ -47,7 +47,7 @@ namespace QuixStreams.Telemetry.UnitTests
         [InlineData("in\\valid\\stream\\id", true)]
         public void Constructor_StreamId_ShouldDoExpected(string streamId, bool throwArgumentOutOfRangeException)
         {
-            Action action = () =>  new StreamProcess(streamId);
+            Action action = () =>  new StreamPipeline(streamId);
             if (throwArgumentOutOfRangeException)
             {
                 action.Should().Throw<ArgumentOutOfRangeException>();
@@ -63,10 +63,10 @@ namespace QuixStreams.Telemetry.UnitTests
         public void Send_WithPackageSubscription_ShouldExecutePackageSubscribersHandlers()
         {
             // Arrange
-            IStreamProcess process = new StreamProcess();
+            IStreamPipeline pipeline = new StreamPipeline();
             StreamComponent component = new StreamComponent();
             component.Input.LinkTo(component.Output);
-            process.AddComponent(component);
+            pipeline.AddComponent(component);
 
             TestModel1 testModel1 = new TestModel1();
             TestModel1 handledModel1 = null;
@@ -75,25 +75,25 @@ namespace QuixStreams.Telemetry.UnitTests
 
             StreamPackage handledPackage = null;
 
-            process.Subscribe((stream, test) =>
+            pipeline.Subscribe((stream, test) =>
             {
                 handledPackage = test;
             });
 
-            process.Subscribe<TestModel1>((stream, test) =>
+            pipeline.Subscribe<TestModel1>((stream, test) =>
             {
                 handledModel1 = test;
             });
 
             // Act
-            process.Send(new StreamPackage(typeof(TestModel1), testModel1));
+            pipeline.Send(new StreamPackage(typeof(TestModel1), testModel1));
 
             // Assert
             Assert.Equal(testModel1, handledModel1);
             Assert.Equal(testModel1, handledPackage.Value);
 
             // Act
-            process.Send(new StreamPackage(typeof(TestModel2), testModel2));
+            pipeline.Send(new StreamPackage(typeof(TestModel2), testModel2));
 
             // Assert
             Assert.Equal(testModel1, handledModel1);

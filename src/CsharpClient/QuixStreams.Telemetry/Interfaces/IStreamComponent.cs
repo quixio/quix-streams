@@ -2,7 +2,7 @@
 namespace QuixStreams.Telemetry
 {
     /// <summary>
-    /// Stands for one Component in a Stream process chain.
+    /// Stands for one Component in a Stream pipeline chain.
     /// Each component is connected to one another using Input and Output connection points
     /// </summary>
     public interface IStreamComponent
@@ -18,8 +18,8 @@ namespace QuixStreams.Telemetry
         IIOComponentConnection Output { get; }
 
         /// <summary>
-        /// Stream process that owns the component
+        /// Stream pipeline that owns the component
         /// </summary>
-        IStreamProcess StreamProcess { get; set; }
+        IStreamPipeline StreamPipeline { get; set; }
     }
 }

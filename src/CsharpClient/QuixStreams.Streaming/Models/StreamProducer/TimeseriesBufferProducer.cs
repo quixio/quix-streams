@@ -116,7 +116,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            this.WriteChunk(data.ConvertToProcessData(false, false)); // use merge & clean of Buffer is more efficient
+            this.WriteChunk(data.ConvertToTelemetryData(false, false)); // use merge & clean of Buffer is more efficient
         }
 
         

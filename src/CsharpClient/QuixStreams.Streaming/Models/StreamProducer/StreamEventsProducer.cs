@@ -144,7 +144,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
             {
                 throw new ObjectDisposedException(nameof(StreamEventsProducer));
             }
-            definitions.ForEach(d => this.eventDefinitionsManager.AddDefinition(d.ConvertToProcessDefinition(), d.Location));
+            definitions.ForEach(d => this.eventDefinitionsManager.AddDefinition(d.ConvertToTelemetryDefinition(), d.Location));
 
             this.ResetFlushDefinitionsTimer();
         }
@@ -258,7 +258,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            this.streamProducer.Publish(data.ConvertToProcessData());
+            this.streamProducer.Publish(data.ConvertToTelemetryData());
             this.logger.Log(LogLevel.Trace, "event '{0}' sent.", data.Id);
         }
 
@@ -283,7 +283,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            var batch = events.Select(e => e.ConvertToProcessData()).ToArray();
+            var batch = events.Select(e => e.ConvertToTelemetryData()).ToArray();
 
             this.streamProducer.Publish(batch);
             this.logger.Log(LogLevel.Trace, "{0} event(s) sent.", events.Count);

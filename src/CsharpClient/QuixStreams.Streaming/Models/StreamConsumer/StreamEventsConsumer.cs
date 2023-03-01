@@ -38,7 +38,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
         private void OnEventDefinitionsChangedHandler(IStreamConsumer sender, EventDefinitions eventDefinitions)
         {
-            this.LoadFromProcessDefinitions(eventDefinitions);
+            this.LoadFromTelemetryDefinitions(eventDefinitions);
 
             this.OnDefinitionsChanged?.Invoke(this, new EventDefinitionsChangedEventArgs(this.topicConsumer, this.streamConsumer));
         }
@@ -59,7 +59,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// </summary>
         public IList<EventDefinition> Definitions { get; private set; } 
 
-        private void LoadFromProcessDefinitions(QuixStreams.Telemetry.Models.EventDefinitions definitions)
+        private void LoadFromTelemetryDefinitions(QuixStreams.Telemetry.Models.EventDefinitions definitions)
         {
             // Create a new list instead of modifying publicly available list to avoid threading issues like
             // user iterating the list then us changing it during it

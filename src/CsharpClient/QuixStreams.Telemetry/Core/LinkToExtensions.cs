@@ -1,7 +1,7 @@
 ﻿namespace QuixStreams.Telemetry
 {
     /// <summary>
-    /// Extensions methods to link stream processes together
+    /// Extensions methods to link stream pipelinees together
     /// </summary>
     public static class LinkToExtensions
     {
@@ -19,14 +19,14 @@
         }
 
         /// <summary>
-        /// Links two stream processes
+        /// Links two stream pipelinees
         /// </summary>
-        /// <param name="source">Source stream process where to take messages from</param>
-        /// <param name="target">Target stream process where to send messages to</param>
-        /// <returns>Same stream process that used this method, allowing to chain several links in the same line of code</returns>
-        public static IStreamProcess LinkTo(this IStreamProcess source, IStreamProcess target)
+        /// <param name="source">Source stream pipeline where to take messages from</param>
+        /// <param name="target">Target stream pipeline where to send messages to</param>
+        /// <returns>Same stream pipeline that used this method, allowing to chain several links in the same line of code</returns>
+        public static IStreamPipeline LinkTo(this IStreamPipeline source, IStreamPipeline target)
         {
-            source.Subscribe((process, package) => target.Send(package));
+            source.Subscribe((streamPipeline, package) => target.Send(package));
 
             return source;
         }

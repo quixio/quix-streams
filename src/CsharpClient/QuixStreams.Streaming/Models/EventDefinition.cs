@@ -40,10 +40,10 @@ namespace QuixStreams.Streaming.Models
         public QuixStreams.Telemetry.Models.EventLevel Level { get; internal set; } = QuixStreams.Telemetry.Models.EventLevel.Information;
 
         /// <summary>
-        /// Converts the Event definition to Process layer structure
+        /// Converts the Event definition to Telemetry layer structure
         /// </summary>
-        /// <returns>Process layer Event definition</returns>
-        internal QuixStreams.Telemetry.Models.EventDefinition ConvertToProcessDefinition()
+        /// <returns>Telemetry layer Event definition</returns>
+        internal QuixStreams.Telemetry.Models.EventDefinition ConvertToTelemetryDefinition()
         {
             return new QuixStreams.Telemetry.Models.EventDefinition 
             {

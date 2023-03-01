@@ -19,12 +19,12 @@ namespace QuixStreams.Telemetry.Samples
         private void InitializeStreaming()
         {
             this.Input.Subscribe<TimeseriesDataRaw>(OnTimeseriesDataReceived);
-            this.OnStreamProcessAssigned = OnStreamProcessAssignedHandler;
+            this.OnStreamPipelineAssigned = OnStreamPipelineAssignedHandler;
         }
 
-        private void OnStreamProcessAssignedHandler()
+        private void OnStreamPipelineAssignedHandler()
         {
-            logger.LogInformation("Stream started. StreamId = {0}", this.StreamProcess.StreamId);
+            logger.LogInformation("Stream started. StreamId = {0}", this.StreamPipeline.StreamId);
         }
 
         private void OnTimeseriesDataReceived(TimeseriesDataRaw tdata)

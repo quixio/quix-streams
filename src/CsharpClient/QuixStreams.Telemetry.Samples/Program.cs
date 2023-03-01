@@ -27,7 +27,7 @@
             //KafkaReader kafkaReader = new TestKafkaReader(testBroker);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
-                var s = new StreamProcess(streamId)
+                var s = new StreamPipeline(streamId)
                     .AddComponent(new SimpleModifier(69))
                     .AddComponent(new ConsoleStreamWriter());
 
@@ -38,7 +38,7 @@
 
             // Writing to Kafka (Random data)
             var randomDataReader = new RandomDataProducer();
-            var stream = new StreamProcess()
+            var stream = new StreamPipeline()
                 .AddComponent(randomDataReader)
                 //.AddComponent(new SimplyModifier(69))
                 .AddComponent(new TelemetryKafkaProducer(KafkaHelper.OpenKafkaInput(new KafkaProducerConfiguration(Configuration.Config.BrokerList, Configuration.Config.Properties), Configuration.Config.Topic), null));
