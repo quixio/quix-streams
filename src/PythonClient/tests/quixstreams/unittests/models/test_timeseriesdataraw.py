@@ -37,12 +37,12 @@ class TimeseriesDataRawTests(unittest.TestCase):
 
         # assert
         expected_df = pandas.DataFrame([
-            {"time": 1, "TAG__tag1": "t1", "numeric": 3, "string": "one", "binary": bytes("byte1", "utf-8")},
-            {"time": 2, "TAG__tag1": "t2", "numeric": 12.32},
-            {"time": 3, "string": "three"}
+            {"timestamp": 1, "TAG__tag1": "t1", "numeric": 3, "string": "one", "binary": bytes("byte1", "utf-8")},
+            {"timestamp": 2, "TAG__tag1": "t2", "numeric": 12.32},
+            {"timestamp": 3, "string": "three"}
         ])
 
-        df_orig = timeseries_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
     def test_set_values_only_string(self):
@@ -59,37 +59,37 @@ class TimeseriesDataRawTests(unittest.TestCase):
 
         # assert
         expected_df = pandas.DataFrame([
-            {"time": 1, "string": "one"},
-            {"time": 2},
-            {"time": 3, "string": "three"}
+            {"timestamp": 1, "string": "one"},
+            {"timestamp": 2},
+            {"timestamp": 3, "string": "three"}
         ])
 
-        df_orig = timeseries_data.to_panda_dataframe()
+        df_orig = timeseries_data.to_dataframe()
         assert_frame_equal(expected_df.sort_index(axis=1), df_orig.sort_index(axis=1), check_names=True)
 
 
     def test_convert_to_timeseriesdata(self):
         # arrange
         df = pandas.DataFrame([
-            {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
+            {"timestamp": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
         ])
 
         # act
-        raw = TimeseriesDataRaw.from_panda_dataframe(df)
+        raw = TimeseriesDataRaw.from_dataframe(df)
         data = raw.convert_to_timeseriesdata()
-        result = data.to_panda_dataframe()
+        result = data.to_dataframe()
 
         # assert
         assert_frame_equal(df.sort_index(axis=1), result.sort_index(axis=1), check_names=True)
 
-    def test_from_panda_dataframe(self):
+    def test_from_dataframe(self):
         # arrange
         df = pandas.DataFrame([
-            {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
+            {"timestamp": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number": 0.123, "string": "string value", "binary": bytes("binary", "utf-8")}
         ])
 
         # act
-        raw = TimeseriesDataRaw.from_panda_dataframe(df)
+        raw = TimeseriesDataRaw.from_dataframe(df)
         raw_ptr = raw.get_net_pointer()
         reloaded_from_csharp = TimeseriesDataRaw(raw_ptr)  # this will force us to load data back from the assigned values in c# rather than checking against potentially cached vals
 
@@ -111,39 +111,39 @@ class TimeseriesDataRawTests(unittest.TestCase):
                 df2 = df2.reset_index(drop=True)
                 assert_frame_equal(df1.sort_index(axis=1), df2.sort_index(axis=1), check_names=True, **kwds )
 
-            timeseries_data_raw = TimeseriesDataRaw.from_panda_dataframe(pdf)
+            timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf)
             assertFrameEqual(
                         pdf,
-                        timeseries_data_raw.to_panda_dataframe()
+                        timeseries_data_raw.to_dataframe()
                     )
 
 
-        _assert_test(pandas.DataFrame([{"time": 1000000}]))
-        _assert_test(pandas.DataFrame([{"time": 1000000}, {"time": 2000000}, {"time": 3000000}]))
+        _assert_test(pandas.DataFrame([{"timestamp": 1000000}]))
+        _assert_test(pandas.DataFrame([{"timestamp": 1000000}, {"timestamp": 2000000}, {"timestamp": 3000000}]))
 
 
         _assert_test(pandas.DataFrame([
-            {"time": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number1":0.123, "number2":0.123}
+            {"timestamp": 1000000, "TAG__tag1": "tag1_value", "TAG__tag2": "tag2_value", "number1":0.123, "number2":0.123}
         ]))
         _assert_test(pandas.DataFrame([
-            {"time": 1000000, "TAG__tag1": "tag1_value_1", "TAG__tag2": "tag2_value_1", "number1":0.123, "number2":0.123},
-            {"time": 2000000, "TAG__tag1": "tag1_value_2", "TAG__tag2": "tag2_value_2", "number1":0.623, "number2":0.1312}
+            {"timestamp": 1000000, "TAG__tag1": "tag1_value_1", "TAG__tag2": "tag2_value_1", "number1":0.123, "number2":0.123},
+            {"timestamp": 2000000, "TAG__tag1": "tag1_value_2", "TAG__tag2": "tag2_value_2", "number1":0.623, "number2":0.1312}
         ]))
 
         _assert_test(pandas.DataFrame([
-            {"time": 1000000, "TAG__tag1": "tag1_value_1", "TAG__tag2": "tag2_value_1", "number1": 0.123,
+            {"timestamp": 1000000, "TAG__tag1": "tag1_value_1", "TAG__tag2": "tag2_value_1", "number1": 0.123,
              "number2": 0.123},
-            {"time": 2000000, "TAG__tag1": "tag1_value_2", "TAG__tag2": "tag2_value_2", "number1": 0.623,
+            {"timestamp": 2000000, "TAG__tag1": "tag1_value_2", "TAG__tag2": "tag2_value_2", "number1": 0.623,
              "number2": 0.1312}
         ]).head(2).tail(1))
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            timeseries_data_raw = TimeseriesDataRaw.from_panda_dataframe(pdf).to_panda_dataframe()
-            parsed_time=timeseries_data_raw.loc[0, 'time']
+            timeseries_data_raw = TimeseriesDataRaw.from_dataframe(pdf).to_dataframe()
+            parsed_time=timeseries_data_raw.loc[0, 'timestamp']
             self.assertEqual(time, parsed_time)
 
-        _assert_time(pandas.DataFrame([{"value": 0.1,"time": 1000000}]), 1000000)
+        _assert_time(pandas.DataFrame([{"value": 0.1,"timestamp": 1000000}]), 1000000)
         _assert_time(pandas.DataFrame([{"TiMe": 2000000, "value": 0.1}]), 2000000)
         _assert_time(pandas.DataFrame([{"value": 0.1,"datetime": 3000000}]), 3000000)
         _assert_time(pandas.DataFrame([{"TiMeSTAMP": 5000000, "value": 0.1}]), 5000000)

@@ -29,25 +29,25 @@ namespace Quix.Streams.Streaming.IntegrationTests
             var topicName = "streaming-raw-integration-test";
             
                         
-            var justCreateMeMyTopic = client.CreateRawTopicProducer(topicName);
+            var justCreateMeMyTopic = client.GetRawTopicProducer(topicName);
             justCreateMeMyTopic.Dispose(); // should cause a flush
             Thread.Sleep(5000); // This is only necessary because the container we use for kafka and how a topic creation is handled for the unit test
 
 
-            var topicConsumer = client.CreateRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
+            var topicConsumer = client.GetRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
 
             var toSend = new byte[] { 1, 2, 0, 4, 6, 123, 54, 2 };
             var received = new List<byte[]>();
 
 
-            topicConsumer.OnMessageRead += (sender, message) =>
+            topicConsumer.OnMessageReceived += (sender, message) =>
             {
                 received.Add(message.Value);
             };
 
             topicConsumer.Subscribe();
 
-            var topicProducer = client.CreateRawTopicProducer(topicName);
+            var topicProducer = client.GetRawTopicProducer(topicName);
             topicProducer.Publish(new Raw.RawMessage(toSend));
 
             SpinWait.SpinUntil(() => received.Count > 0, 5000);
@@ -67,23 +67,23 @@ namespace Quix.Streams.Streaming.IntegrationTests
         {
             var topicName = "streaming-raw-integration-test2";
             
-            var justCreateMeMyTopic = client.CreateRawTopicProducer(topicName);
+            var justCreateMeMyTopic = client.GetRawTopicProducer(topicName);
             justCreateMeMyTopic.Dispose(); // should cause a flush
             Thread.Sleep(5000); // This is only necessary because the container we use for kafka and how a topic creation is handled for the unit test
 
-            var topicConsumer = client.CreateRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
+            var topicConsumer = client.GetRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
 
             var toSend = new byte[] { 1, 2, 0, 4, 6, 123, 54, 2 };
             var received = new List<byte[]>();
 
 
-            topicConsumer.OnMessageRead += (sender, message) =>
+            topicConsumer.OnMessageReceived += (sender, message) =>
             {
                 received.Add(message.Value);
             };
 
             topicConsumer.Subscribe();
-            var topicProducer = client.CreateRawTopicProducer(topicName);
+            var topicProducer = client.GetRawTopicProducer(topicName);
             topicProducer.Publish(new Raw.RawMessage(toSend));
 
             SpinWait.SpinUntil(() => received.Count > 0, 5000);

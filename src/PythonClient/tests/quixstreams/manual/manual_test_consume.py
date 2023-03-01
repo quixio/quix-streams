@@ -5,6 +5,7 @@ import datetime
 import sys
 
 import pandas as pd
+from src.quixstreams import AutoOffsetReset
 
 from src.quixstreams.logging import Logging, LogLevel
 
@@ -22,10 +23,10 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-topic_consumer = client.create_topic_consumer('generated-data', None, commit_settings=commit_settings, auto_offset_reset=qx.AutoOffsetReset.Earliest)
+topic_consumer = client.get_topic_consumer('generated-data', 'whateva', auto_offset_reset=AutoOffsetReset.Latest)
 
 
-def on_streams_revoked_handler(topic: qx.TopicConsumer, readers: [qx.StreamConsumer]):
+def on_streams_revoked_handler(topic_consumer: qx.TopicConsumer, readers: [qx.StreamConsumer]):
     try:
         for reader in readers:
             print("Stream " + reader.stream_id + " got revoked")
@@ -40,15 +41,24 @@ def on_committed_handler(topic_consumer: qx.TopicConsumer):
 
 def on_committing_handler(topic_consumer: qx.TopicConsumer):
     print("Committing!")
+    storage.flush()  # to write to backing storage
 
 
 def on_revoking_handler(topic_consumer: qx.topicconsumer):
     print("Revoking!")
 
+from src.quixstreams.state import LocalFileStorage, InMemoryStorage
+
+storage = InMemoryStorage(LocalFileStorage("state/test"))
+storage.clear()
+storage.set("floatval", 12.51)
+storage.set("stringval", "str")
+storage.set("boolval", True)
+storage.set("objval", {"dic": "tionary"})
 
 topic_consumer.on_streams_revoked = on_streams_revoked_handler
 topic_consumer.on_committed = on_committed_handler
-topic_consumer.on_committing = on_committing_handler
+topic_consumer.on_committing = storage.flush
 topic_consumer.on_revoking = on_revoking_handler
 
 #read streams
@@ -63,30 +73,30 @@ test_parameter_definition_count = 0
 start = None
 
 
-def read_stream(topic_consumer: qx.topicconsumer, new_stream: qx.StreamConsumer):
+def on_stream_received_handler(stream_received: qx.StreamConsumer):
     import datetime
     global start
     if start is None:
         start = datetime.datetime.now()
 
     print("New Stream read!" + str(datetime.datetime.now()))
-    new_stream.on_stream_closed = on_stream_closed_handler
-    # new_stream.properties.on_changed = on_stream_properties_changed_handler
-    # new_stream.parameters.on_read_dataframe = on_parameters_dataframe_handler
-    # param_buffer = new_stream.parameters.create_buffer()
-    # param_buffer.on_read = on_parameter_data_handler
+    stream_received.on_stream_closed = on_stream_closed_handler
+    stream_received.properties.on_changed = on_stream_properties_changed_handler
+    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
+    param_buffer = stream_received.timeseries.create_buffer()
+    param_buffer.on_data_released = on_data_released_handler
 
-    # param_buffer_filtered = new_stream.parameters.create_buffer("numeric param 1", "string param 2")
-    # param_buffer_filtered.on_read = on_parameter_data_filtered_handler
-    # new_stream.parameters.on_definitions_changed = on_parameter_definitions_changed_handler
-    # new_stream.events.on_definitions_changed = on_event_definitions_changed_handler
-    # new_stream.events.on_read = on_event_data_handler
+    param_buffer_filtered = stream_received.timeseries.create_buffer("numeric param 1", "string param 2")
+    param_buffer_filtered.on_data_released = on_timeseries_data_released_filtered_handler
+    stream_received.timeseries.on_definitions_changed = on_parameter_definitions_changed_handler
+    stream_received.events.on_definitions_changed = on_event_definitions_changed_handler
+    stream_received.events.on_data_received = on_event_data_received_handler
 
     # TODO implementation missing
-    # new_stream.on_package_received = on_package_received_handler
+    # stream_received.on_package_received = on_package_received_handler
 
 
-def on_stream_closed_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer, end_type: qx.StreamEndType):
+def on_stream_closed_handler(stream: qx.StreamConsumer, end_type: qx.StreamEndType):
     try:
         print("Stream", stream.stream_id, "closed with", end_type, " started at ", start, " finished at ", datetime.datetime.now())
         global test_close_count
@@ -95,7 +105,7 @@ def on_stream_closed_handler(topic_consumer: qx.topicconsumer, stream: qx.Stream
         print("Exception occurred in on_stream_closed_handler: " + sys.exc_info()[1])
 
 
-def on_stream_properties_changed_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer):
+def on_stream_properties_changed_handler(stream: qx.StreamConsumer):
     try:
         print("Stream properties read for stream: " + stream.stream_id)
         print("Name", stream.properties.name, sep=": ")
@@ -111,12 +121,12 @@ def on_stream_properties_changed_handler(topic_consumer: qx.topicconsumer, strea
         print("Exception occurred in on_stream_properties_changed_handler: " + sys.exc_info()[1])
 
 
-def on_parameters_dataframe_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer, data: pd.DataFrame):
+def on_dataframe_received_handler(stream: qx.StreamConsumer, data: pd.DataFrame):
     print("RECEIVED DATAFRAME")
     print(data)
 
 
-def on_parameter_data_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+def on_data_released_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
     with data:
         try:
             print("Committing")
@@ -124,7 +134,7 @@ def on_parameter_data_handler(topic_consumer: qx.topicconsumer, stream: qx.Strea
             global test_parameter_data_count
             print("Timeseries data read for stream: " + stream.stream_id)
             # can convert to panda if wanted
-            pf = data.to_panda_dataframe()
+            pf = data.to_dataframe()
             # but for the following code, using original data, this is how you convert back:
             pfdata = qx.TimeseriesData.from_panda_dataframe(pf)
             with pfdata:
@@ -148,7 +158,7 @@ def on_parameter_data_handler(topic_consumer: qx.topicconsumer, stream: qx.Strea
             print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
 
-def on_parameter_data_filtered_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer, data: qx.TimeseriesData):
+def on_timeseries_data_released_filtered_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
     with data:
         try:
             def print(*args, **kwargs):
@@ -156,7 +166,7 @@ def on_parameter_data_filtered_handler(topic_consumer: qx.topicconsumer, stream:
             global test_parameter_data_filtered_count
             print("Timeseries data read for stream: " + stream.stream_id)
             # can convert to panda if wanted
-            pf = data.to_panda_dataframe()
+            pf = data.to_dataframe()
             # but for the following code, using original data, this is how you convert back:
             pfdata = qx.TimeseriesData.from_panda_dataframe(pf)
             with pfdata:
@@ -180,11 +190,11 @@ def on_parameter_data_filtered_handler(topic_consumer: qx.topicconsumer, stream:
             print("Exception occurred in on_parameter_data_handler: " + sys.exc_info()[1])
 
 
-def on_parameter_definitions_changed_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer):
+def on_parameter_definitions_changed_handler(stream: qx.StreamConsumer):
     try:
         print("Parameter definitions read for stream: " + stream.stream_id)
 
-        definitions = stream.parameters.definitions
+        definitions = stream.timeseries.definitions
 
         print("==== Parameter Definitions ====")
         for definition in definitions:
@@ -203,7 +213,7 @@ def on_parameter_definitions_changed_handler(topic_consumer: qx.topicconsumer, s
         print("Exception occurred in on_parameter_definitions_changed_handler: " + sys.exc_info()[1])
 
 
-def on_event_definitions_changed_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer):
+def on_event_definitions_changed_handler(stream: qx.StreamConsumer):
     try:
         print("Event definitions read for stream: " + stream.stream_id)
 
@@ -223,7 +233,7 @@ def on_event_definitions_changed_handler(topic_consumer: qx.topicconsumer, strea
         print("Exception occurred in on_event_definitions_changed_handler: " + sys.exc_info()[1])
 
 
-def on_event_data_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamConsumer, data: qx.EventData):
+def on_event_data_received_handler(stream: qx.StreamConsumer, data: qx.EventData):
     with data:
         try:
             print("Event data read for stream: " + stream.stream_id)
@@ -240,7 +250,7 @@ def on_event_data_handler(topic_consumer: qx.topicconsumer, stream: qx.StreamCon
             print("Exception occurred in on_event_data_handler: " + sys.exc_info()[1])
 
 
-def on_package_received_handler(topic_consumer: qx.topicconsumer, sender: qx.StreamConsumer, package: StreamPackage):
+def on_package_received_handler(sender: qx.StreamConsumer, package: StreamPackage):
     with package:
         try:
             print("Package: " + package.to_json())
@@ -248,6 +258,6 @@ def on_package_received_handler(topic_consumer: qx.topicconsumer, sender: qx.Str
             print("Exception occurred in on_package_received_handler: " + sys.exc_info()[1])
 
 
-topic_consumer.on_stream_received = read_stream
+topic_consumer.on_stream_received = on_stream_received_handler
 
 App.run()

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Quix.Streams.Transport.Fw;
@@ -54,7 +55,7 @@ namespace Quix.Streams.Transport.Samples.Samples
                 var currentCounter = counter;
                 var value = new Lazy<byte[]>(bytes);
                 var msg = new Package<byte[]>(value, null);
-                msg.SetKey($"CustomSize {currentCounter}");
+                msg.SetKey(Encoding.UTF8.GetBytes($"CustomSize {currentCounter}"));
 
                 var sendTask = producer.Publish(msg, ct);
                 sendTask.ContinueWith(t => Console.WriteLine($"Exception on send: {t.Exception}"), TaskContinuationOptions.OnlyOnFaulted);

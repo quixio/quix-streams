@@ -22,7 +22,7 @@ namespace Quix.Streams.Streaming
         public event Action<Type> OnBeforeSend;
         private readonly ILogger logger = Logging.CreateLogger<StreamProducer>();
         private readonly StreamPropertiesProducer streamPropertiesProducer;
-        private readonly StreamParametersProducer streamParametersProducer;
+        private readonly StreamTimeseriesProducer streamTimeseriesProducer;
         private readonly StreamEventsProducer streamEventsProducer;
         private readonly ITopicProducerInternal topicProducer;
         private object closeLock = new object();
@@ -37,13 +37,13 @@ namespace Quix.Streams.Streaming
         /// Initializes a new instance of <see cref="StreamProducer"/>
         /// </summary>
         /// <param name="topicProducer">The producer which owns the <see cref="StreamProducer"/></param>
-        /// <param name="createKafkaWriter">Function factory to create a Kafka Writer from Process layer.</param>
+        /// <param name="createKafkaProducer">Function factory to create a Kafka producer from Process layer.</param>
         /// <param name="streamId">Optional. Stream Id of the stream created</param>
-        internal StreamProducer(ITopicProducerInternal topicProducer, Func<string, TelemetryKafkaProducer> createKafkaWriter, string streamId = null)
+        internal StreamProducer(ITopicProducerInternal topicProducer, Func<string, TelemetryKafkaProducer> createKafkaProducer, string streamId = null)
             :base(streamId)
         {
             // Modifiers
-            var writer = createKafkaWriter(StreamId);
+            var writer = createKafkaProducer(StreamId);
             writer.OnWriteException += (s, e) =>
             {
                 if (this.OnWriteException == null)
@@ -59,7 +59,7 @@ namespace Quix.Streams.Streaming
 
             // Managed writers
             this.streamPropertiesProducer = new StreamPropertiesProducer(this);
-            this.streamParametersProducer = new StreamParametersProducer(topicProducer, this);
+            this.streamTimeseriesProducer = new StreamTimeseriesProducer(topicProducer, this);
             this.streamEventsProducer = new StreamEventsProducer(this);
 
             this.topicProducer = topicProducer;
@@ -79,7 +79,7 @@ namespace Quix.Streams.Streaming
             {
                 epoch = value.ToUnixNanoseconds();
                 // Change underlying Parameters and Events default Epoch
-                this.Parameters.Buffer.Epoch = value;
+                this.Timeseries.Buffer.Epoch = value;
                 this.Events.Epoch = value;
             }
         }
@@ -88,7 +88,7 @@ namespace Quix.Streams.Streaming
         public StreamPropertiesProducer Properties => streamPropertiesProducer;
 
         /// <inheritdoc />
-        public StreamParametersProducer Parameters => streamParametersProducer;
+        public StreamTimeseriesProducer Timeseries => streamTimeseriesProducer;
 
         /// <inheritdoc />
         public StreamEventsProducer Events => streamEventsProducer;
@@ -234,7 +234,7 @@ namespace Quix.Streams.Streaming
 
                 // Flush pending managed writers
                 this.streamPropertiesProducer.Dispose();
-                this.streamParametersProducer.Dispose();
+                this.streamTimeseriesProducer.Dispose();
                 this.streamEventsProducer.Dispose();
 
                 // Send close

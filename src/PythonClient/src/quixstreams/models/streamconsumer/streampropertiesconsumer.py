@@ -15,14 +15,13 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamPropertie
 @nativedecorator
 class StreamPropertiesConsumer(object):
 
-    def __init__(self, topic_consumer, stream_consumer: 'StreamConsumer', net_pointer: ctypes.c_void_p):
+    def __init__(self, stream_consumer: 'StreamConsumer', net_pointer: ctypes.c_void_p):
         """
             Initializes a new instance of StreamPropertiesConsumer.
             NOTE: Do not initialize this class manually, use StreamConsumer.properties to access an instance of it
 
             Parameters:
 
-            topic_consumer: The input topic the stream belongs to
             stream_consumer: The stream the buffer is created for
             net_pointer: Pointer to an instance of a .net StreamPropertiesConsumer
         """
@@ -30,7 +29,6 @@ class StreamPropertiesConsumer(object):
             raise Exception("StreamPropertiesConsumer is none")
 
         self._interop = spci(net_pointer)
-        self._topic_consumer = topic_consumer
         self._stream_consumer = stream_consumer
 
         # define events and their ref holder
@@ -42,23 +40,23 @@ class StreamPropertiesConsumer(object):
 
     def _finalizerfunc(self):
         if self._metadata is not None:
-            InteropUtils.free_hptr(self._metadata.get_net_pointer())
+            self._metadata.dispose()
         if self._parents is not None:
-            InteropUtils.free_hptr(self._parents.get_net_pointer())
+            self._parents.dispose()
         self._on_changed_dispose()
 
     # region on_changed
     @property
-    def on_changed(self) -> Callable[['TopicConsumer', 'StreamConsumer'], None]:
+    def on_changed(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when the stream properties changed. First parameter is the topic, second is the stream it is invoked for.
+        Gets the handler for when the stream properties changed. First parameter is the stream it is invoked for.
         """
         return self._on_changed
 
     @on_changed.setter
-    def on_changed(self, value: Callable[['TopicConsumer', 'StreamConsumer'], None]) -> None:
+    def on_changed(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when the stream properties changed. First parameter is the topic, second is the stream it is invoked for.
+        Sets the handler for when the stream properties changed. First parameter is the stream it is invoked for.
         """
         self._on_changed = value
         if self._on_changed_ref is None:
@@ -68,7 +66,7 @@ class StreamPropertiesConsumer(object):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
         try:
             with (args := StreamPropertiesChangedEventArgs(args_hptr)):
-                self._on_changed(self._topic_consumer, self._stream_consumer)
+                self._on_changed(self._stream_consumer)
             InteropUtils.free_hptr(sender_hptr)
         except:
             traceback.print_exc()

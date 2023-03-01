@@ -4,4 +4,4 @@ Serialization can be difficult, especially if it’s done with performance in mi
 
 ![Quix Timeseries Data serialization](../images/QuixStreamsSerialization.png)
 
-Quix Streams automatically serializes data from native types in your language. You can work with familiar types, such as [Pandas DataFrames](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe), or use our own TimeseriesData class without worrying about the conversions that are done for you by the SDK.
+Quix Streams automatically serializes data from native types in your language. You can work with familiar types, such as [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe), or use our own TimeseriesData without worrying about the conversions that are done for you by the library.

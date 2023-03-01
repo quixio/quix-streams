@@ -11,7 +11,7 @@ from ..native.Python.QuixStreamsStreaming.Models.TimeseriesBufferConfiguration i
 class TimeseriesBufferConfiguration(object):
     """
     Describes the configuration for parameter buffers
-    When none of the buffer conditions are configured, the buffer immediate invokes the on_read
+    When none of the buffer conditions are configured, the buffer immediate invokes the on_data_released
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p = None):
@@ -55,7 +55,7 @@ class TimeseriesBufferConfiguration(object):
     def packet_size(self) -> Optional[int]:
         """
             Gets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-            of data the on_read event is invoked and the data is cleared from the buffer.
+            of data the on_data_released event is invoked and the data is cleared from the buffer.
             Defaults to None (disabled).
         """
         return self._interop.get_PacketSize()
@@ -64,7 +64,7 @@ class TimeseriesBufferConfiguration(object):
     def packet_size(self, value: Optional[int]):
         """
             Sets the max packet size in terms of values for the buffer. Each time the buffer has this amount
-            of data the on_read event is invoked and the data is cleared from the buffer.
+            of data the on_data_released event is invoked and the data is cleared from the buffer.
             Defaults to None (disabled).
         """
         self._interop.set_PacketSize(value)
@@ -73,7 +73,7 @@ class TimeseriesBufferConfiguration(object):
     def time_span_in_nanoseconds(self) -> Optional[int]:
         """
             Gets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
         """
@@ -83,7 +83,7 @@ class TimeseriesBufferConfiguration(object):
     def time_span_in_nanoseconds(self, value: Optional[int]):
         """
             Sets the maximum time between timestamps for the buffer in nanoseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
         """
@@ -94,7 +94,7 @@ class TimeseriesBufferConfiguration(object):
     def time_span_in_milliseconds(self) -> Optional[int]:
         """
             Gets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
             Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with same underlying value.
@@ -105,7 +105,7 @@ class TimeseriesBufferConfiguration(object):
     def time_span_in_milliseconds(self, value: Optional[int]):
         """
             Gets the maximum time between timestamps for the buffer in milliseconds. When the difference between the
-            earliest and latest buffered timestamp surpasses this number the on_read event
+            earliest and latest buffered timestamp surpasses this number the on_data_released event
             is invoked and the data is cleared from the buffer.
             Defaults to none (disabled).
             Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with same underlying value.
@@ -116,8 +116,8 @@ class TimeseriesBufferConfiguration(object):
     @property
     def buffer_timeout(self) -> Optional[int]:
         """
-            Gets the maximum duration in milliseconds for which the buffer will be held before triggering on_read event.
-            on_read event is triggered when the configured value has elapsed or other buffer condition is met.
+            Gets the maximum duration in milliseconds for which the buffer will be held before triggering on_data_released event.
+            on_data_released event is triggered when the configured value has elapsed or other buffer condition is met.
             Defaults to none (disabled).
         """
         return self._interop.get_BufferTimeout()
@@ -125,8 +125,8 @@ class TimeseriesBufferConfiguration(object):
     @buffer_timeout.setter
     def buffer_timeout(self, value: Optional[int]):
         """
-            Sets the maximum duration in milliseconds for which the buffer will be held before triggering on_read event.
-            on_read event is triggered when the configured value has elapsed or other buffer condition is met.
+            Sets the maximum duration in milliseconds for which the buffer will be held before triggering on_data_released event.
+            on_data_released event is triggered when the configured value has elapsed or other buffer condition is met.
             Defaults to none (disabled).
         """
 
@@ -135,7 +135,7 @@ class TimeseriesBufferConfiguration(object):
     @property
     def custom_trigger_before_enqueue(self) -> Callable[[TimeseriesDataTimestamp], bool]:
         """
-            Gets the custom function which is invoked before adding the timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked before adding the timestamp to it.
+            Gets the custom function which is invoked before adding the timestamp to the buffer. If returns true, TimeseriesBuffer.on_data_released is invoked before adding the timestamp to it.
             Defaults to none (disabled).
         """
         return self._custom_trigger_before_enqueue
@@ -143,7 +143,7 @@ class TimeseriesBufferConfiguration(object):
     @custom_trigger_before_enqueue.setter
     def custom_trigger_before_enqueue(self, value: Callable[[TimeseriesDataTimestamp], bool]):
         """
-            Sets the custom function which is invoked before adding the timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked before adding the timestamp to it.
+            Sets the custom function which is invoked before adding the timestamp to the buffer. If returns true, TimeseriesBuffer.on_data_released is invoked before adding the timestamp to it.
             Defaults to none (disabled).
         """
         self._custom_trigger_before_enqueue = value
@@ -185,7 +185,7 @@ class TimeseriesBufferConfiguration(object):
     @property
     def custom_trigger(self) -> Callable[[TimeseriesData], bool]:
         """
-            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked with the entire buffer content
+            Gets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_data_released is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         return self._custom_trigger
@@ -193,7 +193,7 @@ class TimeseriesBufferConfiguration(object):
     @custom_trigger.setter
     def custom_trigger(self, value: Callable[[TimeseriesData], bool]):
         """
-            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_read is invoked with the entire buffer content
+            Sets the custom function which is invoked after adding a new timestamp to the buffer. If returns true, TimeseriesBuffer.on_data_released is invoked with the entire buffer content
             Defaults to none (disabled).
         """
         self._custom_trigger = value

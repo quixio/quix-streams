@@ -1,5 +1,5 @@
 site_name: 'Quix Docs'
-site_description: 'Quix SDK Documentation'
+site_description: 'Quix Streams Documentation'
 repo_url: https://github.com/quixai/quix-streams/docs
 edit_uri: tree/master/docs
 
@@ -16,7 +16,8 @@ markdown_extensions:
 
 nav:
     - 'Introduction': '../sdk-intro.html'
-    - 'Kafka and Quix SDK': 'kafka.md'
+    - 'Quickstart': 'quickstart.md'
+    - 'Kafka and Quix Streams': 'kafka.md'
     - 'Features overview':
       - 'Streaming context': 'features/streaming-context.md'
       - 'Built-in buffers': 'features/builtin-buffers.md'
@@ -24,15 +25,15 @@ nav:
       - 'Message splitting': 'features/message-splitting.md'
       - 'Data serialization': 'features/data-serialization.md'
       - 'Multiple data types': 'features/multiple-data-types.md'
-      - 'Broker configuration': 'features/broker-configuration.md'
       - 'Checkpointing': 'features/checkpointing.md'
       - 'Horizontal scaling': 'features/horizontal-scaling.md'
     - 'Connect to Quix': 'connect.md'
     - 'App management': 'app-management.md'
-    - 'Writing data': 'write.md'
-    - 'Reading data': 'read.md'
+    - 'Publishing data': 'publish.md'
+    - 'Subscribe to data': 'subscribe.md'
     - 'Processing data': 'process.md'
     - 'State management': 'state-management.md'
-    - 'Local environment':
-      - 'Set up local environment': 'python-setup.md'
-      - 'Set up docker environment': 'docker-setup.md'
+    - 'Migrating from older': 'versionmigration.md'
+    # - 'Local environment':
+    #   - 'Set up local environment': 'python-setup.md'
+    #   - 'Set up docker environment': 'docker-setup.md'

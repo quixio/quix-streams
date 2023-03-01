@@ -76,7 +76,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// <summary>
         /// Writes the events
         /// </summary>
-        public void Write()
+        public void Publish()
         {
             // Tags
             foreach(var ev in this.events)
@@ -84,7 +84,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
                 ev.Tags = this.tags;
             }
 
-            this.streamEventsProducer.Write(this.events);
+            this.streamEventsProducer.Publish(this.events);
         }
 
     }

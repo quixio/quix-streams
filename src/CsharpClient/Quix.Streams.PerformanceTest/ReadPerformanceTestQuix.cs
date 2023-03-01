@@ -21,7 +21,7 @@ namespace Quix.Streams.PerformanceTest
             // Create a client which holds generic details for creating topic consumer and producers
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            using var topicConsumer = client.CreateTopicConsumer("test");
+            using var topicConsumer = client.GetTopicConsumer("test");
 
             // Hook up events before initiating read to avoid losing out on any data
             topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
@@ -33,9 +33,9 @@ namespace Quix.Streams.PerformanceTest
                     PacketSize = bufferSize,
                 };
 
-                var buffer = streamConsumer.Parameters.CreateBuffer(bufferConfiguration);
+                var buffer = streamConsumer.Timeseries.CreateBuffer(bufferConfiguration);
 
-                buffer.OnRead += (sender, args) =>
+                buffer.OnDataReleased += (sender, args) =>
                 {
                     //var paramCount = data.NumericValues.Count + data.StringValues.Count + data.BinaryValues.Count;
 

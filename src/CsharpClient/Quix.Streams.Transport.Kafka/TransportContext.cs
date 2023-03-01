@@ -30,7 +30,7 @@
         /// The key used to identify the time the message was received by kafka
         /// Type is <see cref="DateTime" /> in UTC
         /// </summary>
-        public const string DateTime = "KafkaDataTime";
+        public const string DateTime = "KafkaDateTime";
 
         /// <summary>
         /// The key used to identify the message size read from kafka. This is uncompressed size

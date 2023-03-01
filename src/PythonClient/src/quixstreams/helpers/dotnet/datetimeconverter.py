@@ -55,7 +55,6 @@ class DateTimeConverter:
         if value is None:
             return None
 
-        # TODO inner constructor might leak memory
         ms = int((value.microsecond - value.microsecond % 1000) / 1000)
         result_hptr = dti.Constructor12(value.year, value.month, value.day, value.hour, value.minute, value.second, ms, value.microsecond % 1000)
         return result_hptr
@@ -80,7 +79,7 @@ class DateTimeConverter:
         if uptr is None:
             return None
 
-        with (ts := tsi(uptr)):
+        with (ts := tsi(uptr, finalize=False)):  # get_Ticks already disposes
             ticks = ts.get_Ticks()
             # due to precision loss when converting to float during division,
             # it is better to remove the ticks describing microsecond and add in another operation

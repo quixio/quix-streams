@@ -26,7 +26,7 @@ namespace Quix.Streams.Transport.Kafka
         private readonly ProduceDelegate produce;
 
         private long lastFlush = -1;
-        private IProducer<string, byte[]> producer;
+        private IProducer<byte[], byte[]> producer;
         private readonly ThreadingTimer timer;
         private List<TopicPartition> partitionsToKeepAliveWith = new List<TopicPartition>();
         private readonly Action setupKeepAlive;
@@ -44,7 +44,7 @@ namespace Quix.Streams.Transport.Kafka
             SetConfigId(topicConfiguration);
             if (topicConfiguration.Partition == Partition.Any)
             {
-                this.produce = (key, value, handler, _) => this.producer.Produce(topicConfiguration.Topic, new Message<string, byte[]> { Key = key, Value = value }, handler);
+                this.produce = (key, value, handler, _) => this.producer.Produce(topicConfiguration.Topic, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
                 hbAction = () =>
                 {
                     this.logger.LogTrace("[{0}] Creating admin client to retrieve metadata for keep alive details", this.configId);
@@ -94,7 +94,7 @@ namespace Quix.Streams.Transport.Kafka
             else
             {
                 var topicPartition = new TopicPartition(topicConfiguration.Topic, topicConfiguration.Partition);
-                this.produce = (key, value, handler, _) => this.producer.Produce(topicPartition, new Message<string, byte[]> { Key = key, Value = value }, handler);
+                this.produce = (key, value, handler, _) => this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
                 hbAction = () =>
                 {
                     partitionsToKeepAliveWith.Add(topicPartition);
@@ -138,7 +138,7 @@ namespace Quix.Streams.Transport.Kafka
             {
                 if (this.producer != null) return;
 
-                this.producer = new ProducerBuilder<string, byte[]>(this.config)
+                this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
                     .Build();
 
@@ -152,10 +152,10 @@ namespace Quix.Streams.Transport.Kafka
 
         private void SendKeepAlive()
         {
-            void ProduceKeepAlive(string key, byte[] message, Action<DeliveryReport<string, byte[]>> deliveryHandler, object state)
+            void ProduceKeepAlive(byte[] key, byte[] message, Action<DeliveryReport<byte[], byte[]>> deliveryHandler, object state)
             {
                 var topicPartition = (TopicPartition) state;
-                this.producer.Produce(topicPartition, new Message<string, byte[]> { Key = key, Value = message }, deliveryHandler);
+                this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = message }, deliveryHandler);
             }
             
             try
@@ -173,7 +173,7 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private void ErrorHandler(IProducer<string, byte[]> producer, Error error)
+        private void ErrorHandler(IProducer<byte[], byte[]> producer, Error error)
         {
             // TODO possibly allow delegation of error up
             var ex = new KafkaException(error);
@@ -258,17 +258,17 @@ namespace Quix.Streams.Transport.Kafka
 
             if (cancellationToken.IsCancellationRequested)
             {
-                return Task.FromCanceled<DeliveryResult<string, byte[]>>(cancellationToken);
+                return Task.FromCanceled<DeliveryResult<byte[], byte[]>>(cancellationToken);
             }
 
-            var taskSource = new TaskCompletionSource<DeliveryResult<string, byte[]>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var taskSource = new TaskCompletionSource<DeliveryResult<byte[], byte[]>>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            void DeliveryHandler(DeliveryReport<string, byte[]> report)
+            void DeliveryHandler(DeliveryReport<byte[], byte[]> report)
             {
                 if (report.Error?.IsError == true)
                 {
                     var wrappedError = new Error(report.Error.Code, $"[{this.configId}] {report.Error.Reason}", report.Error.IsFatal);
-                    taskSource.SetException(new ProduceException<string, byte[]>(wrappedError, report));
+                    taskSource.SetException(new ProduceException<byte[], byte[]>(wrappedError, report));
                     return;
                 }
 
@@ -347,6 +347,6 @@ namespace Quix.Streams.Transport.Kafka
             }
         }
 
-        private delegate void ProduceDelegate(string key, byte[] message, Action<DeliveryReport<string, byte[]>> deliveryHandler, object state);
+        private delegate void ProduceDelegate(byte[] key, byte[] message, Action<DeliveryReport<byte[], byte[]>> deliveryHandler, object state);
     }
 }

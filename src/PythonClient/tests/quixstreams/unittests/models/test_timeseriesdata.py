@@ -43,19 +43,19 @@ class TimeseriesDataTests(unittest.TestCase):
                       .add_value("param1", 3)
 
         # Act
-        pdf = timeseries_data.to_panda_dataframe()
+        pdf = timeseries_data.to_dataframe()
         # Assert
-        self.assertEqual(100, pdf["time"][0])
+        self.assertEqual(100, pdf["timestamp"][0])
         self.assertEqual(1, pdf["param1"][0])
         self.assertEqual("string two", pdf["param2"][0])
         self.assertEqual("tag val1", pdf["TAG__tag1"][0])
 
-        self.assertEqual(100, pdf["time"][1])
+        self.assertEqual(100, pdf["timestamp"][1])
         self.assertEqual(2, pdf["param1"][1])
         self.assertEqual("string two_b", pdf["param2"][1])
         self.assertEqual("tag val2", pdf["TAG__tag1"][1])
 
-        self.assertEqual(200, pdf["time"][2])
+        self.assertEqual(200, pdf["timestamp"][2])
         self.assertEqual(3, pdf["param1"][2])
         self.assertTrue(pdf["param2"][2] is None)
         self.assertTrue(pdf["TAG__tag1"][2] is None)
@@ -63,13 +63,13 @@ class TimeseriesDataTests(unittest.TestCase):
     def test_convert_from_panda_data_frame_with_numeric_header_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
-        pdf.at[0, "time"] = 100
+        pdf.at[0, "timestamp"] = 100
         pdf.at[0, 1] = 1
 
-        pdf.at[1, "time"] = 100
+        pdf.at[1, "timestamp"] = 100
         pdf.at[1, 1] = 2
 
-        pdf.at[2, "time"] = 200
+        pdf.at[2, "timestamp"] = 200
         pdf.at[2, 1] = 3
 
         # Act
@@ -93,20 +93,20 @@ class TimeseriesDataTests(unittest.TestCase):
     def test_convert_from_panda_data_frame_with_time_as_string_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
-        pdf.at[0, "time"] = str(datetime(1970, 1, 1, 0, 0, 1, 0, timezone.utc))
+        pdf.at[0, "timestamp"] = str(datetime(1970, 1, 1, 0, 0, 1, 0, timezone.utc))
         pdf.at[0, "param1"] = 1
 
-        pdf.at[1, "time"] = str(datetime(2025, 12, 30, 15, 16, 24, 123456, timezone.utc))
+        pdf.at[1, "timestamp"] = str(datetime(2025, 12, 30, 15, 16, 24, 123456, timezone.utc))
         pdf.at[1, "param1"] = 2
 
         tz = timezone(timedelta(seconds=3600))
-        pdf.at[2, "time"] = str(datetime(2030, 12, 10, 14, 13, 13, 0, tz))
+        pdf.at[2, "timestamp"] = str(datetime(2030, 12, 10, 14, 13, 13, 0, tz))
         pdf.at[2, "param1"] = 3
 
-        pdf.at[3, "time"] = str(2023138793000000000)
+        pdf.at[3, "timestamp"] = str(2023138793000000000)
         pdf.at[3, "param1"] = 4
 
-        pdf.at[4, "time"] = str("2020-12-11 10:00")
+        pdf.at[4, "timestamp"] = str("2020-12-11 10:00")
         pdf.at[4, "param1"] = 5
 
         # Act
@@ -131,10 +131,10 @@ class TimeseriesDataTests(unittest.TestCase):
     def test_convert_from_panda_data_frame_with_time_as_datetime_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
-        pdf.at[0, "time"] = datetime(1970, 1, 1, 0, 0, 1, 0, timezone.utc)
+        pdf.at[0, "timestamp"] = datetime(1970, 1, 1, 0, 0, 1, 0, timezone.utc)
         pdf.at[0, "param1"] = 1
 
-        pdf.at[1, "time"] = datetime(2025, 12, 30, 15, 16, 24, 123456, timezone.utc)
+        pdf.at[1, "timestamp"] = datetime(2025, 12, 30, 15, 16, 24, 123456, timezone.utc)
         pdf.at[1, "param1"] = 2
 
         # Act
@@ -153,11 +153,11 @@ class TimeseriesDataTests(unittest.TestCase):
         # Arrange
         pdf = pandas.DataFrame()
         tz = timezone(timedelta(seconds=14400))
-        pdf.at[0, "time"] = datetime(1970, 1, 1, 4, 0, 1, 0, tz)
+        pdf.at[0, "timestamp"] = datetime(1970, 1, 1, 4, 0, 1, 0, tz)
         pdf.at[0, "param1"] = 1
 
         tz2 = timezone(timedelta(seconds=-14400))
-        pdf.at[1, "time"] = datetime(2025, 12, 30, 11, 16, 24, 123456, tz2)
+        pdf.at[1, "timestamp"] = datetime(2025, 12, 30, 11, 16, 24, 123456, tz2)
         pdf.at[1, "param1"] = 2
 
         # Act
@@ -176,11 +176,11 @@ class TimeseriesDataTests(unittest.TestCase):
         # Arrange
         pdf = pandas.DataFrame()
         time1 = datetime(1970, 1, 1, 0, 0, 1, 0)
-        pdf.at[0, "time"] = time1
+        pdf.at[0, "timestamp"] = time1
         pdf.at[0, "param1"] = 1
 
         time2 = datetime(2025, 12, 30, 15, 16, 24, 123456)
-        pdf.at[1, "time"] = time2
+        pdf.at[1, "timestamp"] = time2
         pdf.at[1, "param1"] = 2
 
         # Act
@@ -201,13 +201,13 @@ class TimeseriesDataTests(unittest.TestCase):
     def test_convert_from_panda_data_frame_with_time_timecol_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
-        pdf.at[0, "time"] = 100
+        pdf.at[0, "timestamp"] = 100
         pdf.at[0, "param1"] = 1
 
-        pdf.at[1, "time"] = 100
+        pdf.at[1, "timestamp"] = 100
         pdf.at[1, "param1"] = 2
 
-        pdf.at[2, "time"] = 200
+        pdf.at[2, "timestamp"] = 200
         pdf.at[2, "param1"] = 3
 
         # Act
@@ -357,18 +357,18 @@ class TimeseriesDataTests(unittest.TestCase):
     def test_convert_from_panda_data_frame_to_timeseries_data(self):
         # Arrange
         pdf = pandas.DataFrame()
-        pdf.at[0, "time"] = 100
+        pdf.at[0, "timestamp"] = 100
         pdf.at[0, "param1"] = 1.32
         pdf.at[0, "param2"] = "two"
         pdf.at[0, "TAG__tag1"] = "val1"
 
-        pdf.at[1, "time"] = 100
+        pdf.at[1, "timestamp"] = 100
         pdf.at[1, "param1"] = 2
         pdf.at[1, "param2"] = "two_b"
         pdf.at[1, "param3"] = bytes(bytearray("bytes", "UTF-8"))
         pdf.at[1, "TAG__tag1"] = "val2"
 
-        pdf.at[2, "time"] = 200
+        pdf.at[2, "timestamp"] = 200
         pdf.at[2, "param1"] = 3
 
         # Act
@@ -399,7 +399,7 @@ class TimeseriesDataTests(unittest.TestCase):
     def test_convert_from_panda_data_frame_to_timeseries_data_with_epoch(self):
         # Arrange
         pdf = pandas.DataFrame()
-        pdf.at[0, "time"] = 100
+        pdf.at[0, "timestamp"] = 100
         pdf.at[0, "param1"] = 1
         pdf.at[0, "param2"] = "two"
         pdf.at[0, "TAG__tag1"] = "val1"
@@ -417,11 +417,11 @@ class TimeseriesDataTests(unittest.TestCase):
 
     def test_multiple_time_columns(self):
         def _assert_time(pdf, time):
-            timeseries_data_raw = TimeseriesData.from_panda_dataframe(pdf).to_panda_dataframe()
-            parsed_time=timeseries_data_raw.loc[0, 'time']
+            timeseries_data_raw = TimeseriesData.from_panda_dataframe(pdf).to_dataframe()
+            parsed_time=timeseries_data_raw.loc[0, 'timestamp']
             self.assertEqual(time, parsed_time)
 
-        _assert_time(pandas.DataFrame([{"value": 0.1,"time": 1000000}]), 1000000)
+        _assert_time(pandas.DataFrame([{"value": 0.1,"timestamp": 1000000}]), 1000000)
         _assert_time(pandas.DataFrame([{"TiMe": 2000000, "value": 0.1}]), 2000000)
         _assert_time(pandas.DataFrame([{"value": 0.1,"datetime": 3000000}]), 3000000)
         _assert_time(pandas.DataFrame([{"TiMeSTAMP": 5000000, "value": 0.1}]), 5000000)

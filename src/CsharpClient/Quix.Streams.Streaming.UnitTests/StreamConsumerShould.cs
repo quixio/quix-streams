@@ -10,7 +10,7 @@ namespace Quix.Streams.Streaming.UnitTests
         public void Close_ShouldRaiseTerminatedCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().CreateTopicConsumer(), "asdf");
+            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
             StreamEndType? endType = null;
             streamConsumer.OnStreamClosed += (sender, args) =>
             {
@@ -28,7 +28,7 @@ namespace Quix.Streams.Streaming.UnitTests
         public void Dispose_ShouldRaiseTerminatedCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().CreateTopicConsumer(), "asdf");
+            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
             StreamEndType? endType = null;
             streamConsumer.OnStreamClosed += (sender, args) =>
             {
@@ -46,7 +46,7 @@ namespace Quix.Streams.Streaming.UnitTests
         public void SendStreamEnd_ShouldRaiseExpectedCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().CreateTopicConsumer(), "asdf");
+            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
             StreamEndType? endType = null;
             streamConsumer.OnStreamClosed += (sender, args) =>
             {
@@ -64,7 +64,7 @@ namespace Quix.Streams.Streaming.UnitTests
         public void SendStreamEndAndClose_ShouldRaiseOnlyStreamEndCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().CreateTopicConsumer(), "asdf");
+            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
             StreamEndType? endType = null;
             var closeCount = 0;
             streamConsumer.OnStreamClosed += (sender, args) =>

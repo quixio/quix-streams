@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
@@ -50,7 +51,7 @@ namespace Quix.Streams.Transport.Samples.Samples
                 }
 
                 var package = new Package<ExampleModel>(new Lazy<ExampleModel>(new ExampleModel()), metaData);
-                package.SetKey($"DataSet {counter}");
+                package.SetKey(Encoding.UTF8.GetBytes($"DataSet {counter}"));
 
                 var sendTask = producer.Publish(package, ct);
                 sendTask.ContinueWith(t => Console.WriteLine($"Exception on send: {t.Exception}"), TaskContinuationOptions.OnlyOnFaulted);

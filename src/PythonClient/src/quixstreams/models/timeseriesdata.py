@@ -42,8 +42,8 @@ class TimeseriesData(object):
             [pdstamp.dispose() for pdstamp in self._timestamps]
             self._timestamps = None
 
-            # TODO
 
+    # TODO
     # @classmethod
     # def from_timestamps(cls, timestamps: List[Quix.Streams.Streaming.models.timeseriesdataTimestamp], merge: bool = True, clean: bool = True):
     #     """
@@ -178,7 +178,7 @@ class TimeseriesData(object):
             Sets the data as rows of TimeseriesDataTimestamp
         """
 
-        raise NotImplemented("TODO")
+        raise NotImplemented("To be implemented in upcoming versions")
         dotnet_list = System.Collections.Generic.List[Quix.Streams.Streaming.models.timeseriesdataTimestamp]([])
         for item in timestamp_list:
             dotnet_item = item.convert_to_net()
@@ -186,17 +186,17 @@ class TimeseriesData(object):
 
         self.__wrapped.Timestamps = dotnet_list
 
-    def to_panda_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self) -> pd.DataFrame:
         """
-        Converts TimeseriesData to Panda DataFrame
+        Converts TimeseriesData to pandas DataFrame
 
-        :return: Converted Panda DataFrame
+        :return: Converted pandas DataFrame
         """
 
         def _build_headers(pdts):
             # object containing the index to the result array
             headers = {
-                'time': 0
+                'timestamp': 0
             }
             default_row = [
                 None
@@ -235,7 +235,7 @@ class TimeseriesData(object):
             obj = default_row.copy()
 
             # time
-            index = headers["time"]
+            index = headers["timestamp"]
             obj[index] = pdts.timestamp_nanoseconds
 
             for key, val in pdts.parameters.items():
@@ -265,9 +265,9 @@ class TimeseriesData(object):
     @staticmethod
     def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesData':
         """
-        Converts Panda DataFrame to TimeseriesData
+        Converts pandas DataFrame to TimeseriesData
 
-        :param data_frame: The Panda DataFrame to convert to TimeseriesData
+        :param data_frame: The pandas DataFrame to convert to TimeseriesData
         :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
         :return: Converted TimeseriesData
         """

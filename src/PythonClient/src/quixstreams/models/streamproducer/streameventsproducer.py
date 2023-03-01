@@ -77,26 +77,26 @@ class StreamEventsProducer(object):
         dotnet_value = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(dotnet_value)
 
-    def write(self, data: Union[EventData, pd.DataFrame], **columns) -> None:
+    def publish(self, data: Union[EventData, pd.DataFrame], **columns) -> None:
         """
-        Writes event into the stream.
+        Publishes event into the stream.
 
-        Parameters: data: EventData object or a Pandas dataframe. columns: Column names if the dataframe has
+        Parameters: data: EventData object or a pandas dataframe. columns: Column names if the dataframe has
         different columns from 'id', 'timestamp' and 'value'. For instance if 'id' is in the column 'event_id',
         id='event_id' must be passed as an argument.
 
         Raises:
-            TypeError if the data argument is neither an EventData nor Pandas dataframe.
+            TypeError if the data argument is neither an EventData nor pandas dataframe.
         """
         if isinstance(data, EventData):
-            self._interop.Write(data.get_net_pointer())
+            self._interop.Publish(data.get_net_pointer())
         elif isinstance(data, pd.DataFrame):
             id = 'id' if 'id' not in columns else columns['id']
             timestamp = 'timestamp' if 'timestamp' not in columns else columns['timestamp']
             value = 'value' if 'value' not in columns else columns['value']
             for row in data.itertuples():
                 event = EventData(event_id=getattr(row, id), time=getattr(row, timestamp), value=getattr(row, value))
-                self._interop.Write(event.get_net_pointer())
+                self._interop.Publish(event.get_net_pointer())
         else:
             raise TypeError(str(type(data)) + " is not supported.")
 

@@ -6,14 +6,14 @@ namespace Quix.Streams.Process.Kafka
     /// <summary>
     /// Kafka broker configuration for <see cref="TelemetryKafkaProducer"/>
     /// </summary>
-    public class KafkaWriterConfiguration
+    public class KafkaProducerConfiguration
     {
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaWriterConfiguration"/>
+        /// Initializes a new instance of <see cref="KafkaProducerConfiguration"/>
         /// </summary>
         /// <param name="brokerList">Broker list of the Kafka cluster</param>
         /// <param name="properties">Extra Kafka configuration properties</param>
-        public KafkaWriterConfiguration(string brokerList, IDictionary<string, string> properties = null)
+        public KafkaProducerConfiguration(string brokerList, IDictionary<string, string> properties = null)
         {
             if (string.IsNullOrWhiteSpace(brokerList))
             {

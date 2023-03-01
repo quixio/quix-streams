@@ -10,16 +10,16 @@ namespace Quix.Streams.Streaming.UnitTests.Models
     public class StreamEventsConsumerShould
     {
         [Fact]
-        public void Receive_EventData_ShouldRaiseExpectedOnReadEvents()
+        public void Receive_EventData_ShouldRaiseExpectedOnReceiveEvents()
         {
             const int NumberEventsTest = 1000;
 
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
             var receivedData = new List<Streaming.Models.EventData>();
-            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
+            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
-            eventsReader.OnRead += (sender, args) =>
+            eventsReader.OnDataReceived += (sender, args) =>
             {
                 receivedData.Add(args.Data);
             };
@@ -52,7 +52,7 @@ namespace Quix.Streams.Streaming.UnitTests.Models
         {
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().CreateTopicConsumer(), streamConsumer);
+            var eventsReader = new Streaming.Models.StreamConsumer.StreamEventsConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             var eventDefinitions = new EventDefinitions
             {

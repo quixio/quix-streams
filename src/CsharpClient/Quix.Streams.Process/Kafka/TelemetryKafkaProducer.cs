@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Quix.Streams.Process.Models;
@@ -8,7 +9,7 @@ using Quix.Streams.Transport.Kafka;
 namespace Quix.Streams.Process.Kafka
 {
     /// <summary>
-    /// Kafka writer component implementation.
+    /// Kafka producer component implementation.
     /// It writes all the incoming messages to Kafka with a new StreamId.
     /// </summary>
     public class TelemetryKafkaProducer : StreamComponent, IDisposable
@@ -65,7 +66,7 @@ namespace Quix.Streams.Process.Kafka
                     throw new InvalidOperationException("Writer is already closed.");
                 }
 
-                transportPackage.SetKey(StreamId);
+                transportPackage.SetKey(Encoding.UTF8.GetBytes(StreamId));
 
                 await this.transportProducer.Publish(transportPackage, this.CancellationToken);
                 await this.Output.Send(package);

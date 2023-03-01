@@ -91,7 +91,7 @@ namespace Quix.Streams.Streaming.Model.Samples
             var quixStreamClient = new QuixStreamingClient(Streaming.Samples.Configuration.QuixStreamingClientConfig.Token);
             quixStreamClient.ApiUrl = new Uri(Streaming.Samples.Configuration.QuixStreamingClientConfig.PortalApi);
 
-            var topicProducer = quixStreamClient.CreateTopicConsumer("iddqd");
+            var topicProducer = quixStreamClient.GetTopicConsumer("iddqd");
         }
     }
 }

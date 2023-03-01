@@ -12,7 +12,7 @@ class ParameterDefinition(object):
         """
         Initializes a new instance of ParameterDefinition
 
-        NOTE: Do not initialize this class manually. Instances of it are available on StreamParametersConsumer.definitions
+        NOTE: Do not initialize this class manually. Instances of it are available on StreamTimeseriesConsumer.definitions
         :param net_pointer: Pointer to an instance of a .net ParameterDefinition.
         """
 

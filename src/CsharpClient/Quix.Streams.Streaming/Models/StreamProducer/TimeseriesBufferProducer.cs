@@ -27,10 +27,10 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             this.topicProducer = topicProducer;
             this.streamProducer = streamProducer;
 
-            this.OnRawRead += RawReadDataHandler;
+            this.OnRawReleased += RawReleasedDataHandler;
         }
 
-        private void RawReadDataHandler(object sender, TimeseriesDataRawReadEventArgs args)
+        private void RawReleasedDataHandler(object sender, TimeseriesDataRawReadEventArgs args)
         {
             this.streamProducer.Publish(args.Data);
         }
@@ -95,7 +95,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         /// Write timeseries data to the buffer
         /// </summary>
         /// <param name="data">Data to write</param>
-        public void Write(TimeseriesData data)
+        public void Publish(TimeseriesData data)
         {
             for(var index = 0; index < data.Timestamps.Count; index++)
             {
@@ -133,14 +133,14 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
             this.FlushData(false);
         }
         
-        protected override void InvokeOnRead(object sender, TimeseriesDataReadEventArgs args)
+        protected override void InvokeOnReceive(object sender, TimeseriesDataReadEventArgs args)
         {
-            base.InvokeOnRead(this, new TimeseriesDataReadEventArgs(this.topicProducer, this.streamProducer, args.Data));
+            base.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(this.topicProducer, this.streamProducer, args.Data));
         }
 
-        protected override void InvokeOnRawRead(object sender, TimeseriesDataRawReadEventArgs args)
+        protected override void InvokeOnRawReceived(object sender, TimeseriesDataRawReadEventArgs args)
         {
-            base.InvokeOnRawRead(this, new TimeseriesDataRawReadEventArgs(this.topicProducer, this.streamProducer, args.Data));
+            base.InvokeOnRawReceived(this, new TimeseriesDataRawReadEventArgs(this.topicProducer, this.streamProducer, args.Data));
         }
 
         /// <summary>
@@ -150,7 +150,7 @@ namespace Quix.Streams.Streaming.Models.StreamProducer
         {
             if (this.isDisposed) return;
             this.isDisposed = true;
-            this.OnRawRead -= RawReadDataHandler;
+            this.OnRawReleased -= RawReleasedDataHandler;
             base.Dispose();
         }
 

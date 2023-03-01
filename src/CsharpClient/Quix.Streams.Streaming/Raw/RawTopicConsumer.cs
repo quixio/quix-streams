@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Text;
 using Quix.Streams.Process.Kafka;
 using Quix.Streams.Transport.Kafka;
 
@@ -18,7 +19,7 @@ namespace Quix.Streams.Streaming.Raw
         bool errorHandlerRegistered = false;
 
         /// <inheritdoc />
-        public event EventHandler<RawMessage> OnMessageRead;
+        public event EventHandler<RawMessage> OnMessageReceived;
         
         /// <inheritdoc />
         public event EventHandler OnDisposed;
@@ -102,7 +103,7 @@ namespace Quix.Streams.Streaming.Raw
                        }
                        return new ReadOnlyDictionary<string, string>(vals);
                    });
-                this.OnMessageRead?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
+                this.OnMessageReceived?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
             };
 
             kafkaConsumer.Open();

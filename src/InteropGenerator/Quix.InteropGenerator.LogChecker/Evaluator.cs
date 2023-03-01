@@ -14,30 +14,38 @@ public class Evaluator
 
     public void Add(LogParser.ILineParser parser)
     {
-        switch (parser)
+        try
         {
-            case LogParser.PtrAllocationLineParser ptrAllocation:
-                allocationCount++;
-                remainingAllocations.Add(ptrAllocation.Ptr, ptrAllocation);
-                allocations[ptrAllocation.Ptr] = ptrAllocation;
-                break;
-            case LogParser.PtrFreedLineParser ptrFreed:
+            switch (parser)
             {
-                releaseCount++;
-                if (!remainingAllocations.Remove(ptrFreed.Ptr))
+                case LogParser.PtrAllocationLineParser ptrAllocation:
+                    allocationCount++;
+                    remainingAllocations.Add(ptrAllocation.Ptr, ptrAllocation);
+                    allocations[ptrAllocation.Ptr] = ptrAllocation;
+                    break;
+                case LogParser.PtrFreedLineParser ptrFreed:
                 {
-                    if (allocations.TryGetValue(ptrFreed.Ptr, out var lastAllocation))
+                    releaseCount++;
+                    if (!remainingAllocations.Remove(ptrFreed.Ptr))
                     {
-                        unnecessaryPtrFree.Add((ptrFreed, lastAllocation));
+                        if (allocations.TryGetValue(ptrFreed.Ptr, out var lastAllocation))
+                        {
+                            unnecessaryPtrFree.Add((ptrFreed, lastAllocation));
+                        }
+                        else
+                        {
+                            oddStuff.Add((ptrFreed, $"Freed pointer {ptrFreed.Ptr} without it being allocated"));
+                        }
                     }
-                    else
-                    {
-                        oddStuff.Add((ptrFreed, $"Freed pointer {ptrFreed.Ptr} without it being allocated"));
-                    }
-                }
 
-                break;
+                    break;
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Line {parser.LineNumber} has exception");
+            throw;
         }
     }
 

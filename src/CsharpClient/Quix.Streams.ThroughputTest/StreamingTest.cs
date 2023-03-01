@@ -30,8 +30,8 @@ namespace Quix.Streams.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
 
             var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);
@@ -88,10 +88,10 @@ namespace Quix.Streams.Speedtest
 
                 mre.Set();
 
-                var buffer = reader.Parameters.CreateBuffer();
+                var buffer = reader.Timeseries.CreateBuffer();
                 buffer.TimeSpanInMilliseconds = 0; // this will cause it to give me batches for roughly each loop
 
-                buffer.OnRead += (sender, args) =>
+                buffer.OnDataReleased += (sender, args) =>
                 {
                     var amount = args.Data.Timestamps.Sum(x => x.Parameters.Count);
                     readData.Enqueue(new Entry
@@ -105,9 +105,9 @@ namespace Quix.Streams.Speedtest
             topicConsumer.Subscribe();
 
             
-            stream.Parameters.Buffer.PacketSize = 1000;
-            stream.Parameters.Buffer.TimeSpanInMilliseconds = 1000;
-            stream.Parameters.Buffer.BufferTimeout = 1000;
+            stream.Timeseries.Buffer.PacketSize = 1000;
+            stream.Timeseries.Buffer.TimeSpanInMilliseconds = 1000;
+            stream.Timeseries.Buffer.BufferTimeout = 1000;
 
             var generator = new Generator();
             var stringParameters = generator.GenerateParameters(10).ToList();
@@ -139,7 +139,7 @@ namespace Quix.Streams.Speedtest
                     }
                     index++;
                 }
-                stream.Parameters.Buffer.Write(data);
+                stream.Timeseries.Buffer.Publish(data);
             }
             
             stream.Close();

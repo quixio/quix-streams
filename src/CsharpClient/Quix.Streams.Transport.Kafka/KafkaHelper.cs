@@ -12,7 +12,7 @@ namespace Quix.Streams.Transport.Kafka
         /// </summary>
         /// <param name="consumeResult">The consume result to parse</param>
         /// <returns>The package</returns>
-        public static Package<byte[]> FromResult(ConsumeResult<string, byte[]> consumeResult)
+        public static Package<byte[]> FromResult(ConsumeResult<byte[], byte[]> consumeResult)
         {
             var tContext = new TransportContext(new Dictionary<string, object>
             {

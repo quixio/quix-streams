@@ -5,7 +5,7 @@ from src.quixstreams.state.statevalue import StateValue
 from src.quixstreams.state.localfilestorage import LocalFileStorage
 
 
-class StateTest(unittest.TestCase):
+class LocalFileStorageTests(unittest.TestCase):
 
     def test_setget_float(self):
         # Arrange

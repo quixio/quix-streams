@@ -52,7 +52,11 @@ class ReadOnlyNetDict(object):
         self._finalizer = weakref.finalize(self, self._finalizerfunc)
 
     def _finalizerfunc(self):
+        self._finalizer.detach()
         InteropUtils.free_hptr(self._pointer)
+
+    def dispose(self):
+        self._finalizer()
 
     def _get_actual_key_from(self, key) -> Any:
         return self._key_converter_from_python(key)

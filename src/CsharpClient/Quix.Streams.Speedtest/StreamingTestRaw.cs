@@ -21,8 +21,8 @@ namespace Quix.Streams.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var topicConsumer = client.CreateTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
-            var topicProducer = client.CreateTopicProducer(Configuration.Config.Topic);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
 
             var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);
@@ -35,10 +35,10 @@ namespace Quix.Streams.Speedtest
                     return;
                 }
 
-                var buffer = reader.Parameters.CreateBuffer();
+                var buffer = reader.Timeseries.CreateBuffer();
                 buffer.PacketSize = 1;
 
-                buffer.OnRawRead += (sender, args) =>
+                buffer.OnRawReleased += (sender, args) =>
                 {
                     var binaryTime = (long) args.Data.Timestamps[0];
                     var sentAt = DateTime.FromBinary(binaryTime);
@@ -57,7 +57,7 @@ namespace Quix.Streams.Speedtest
             };
             topicConsumer.Subscribe();
 
-            stream.Parameters.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
+            stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
             var PACKET_SIZE = 100000;
             
@@ -77,7 +77,7 @@ namespace Quix.Streams.Speedtest
                 }
                 data.Timestamps = timestamps;
                 data.NumericValues.Add(parameterName, values);
-                stream.Parameters.Write(data);
+                stream.Timeseries.Publish(data);
                 Thread.Sleep(1);
             }
             
