@@ -21,7 +21,7 @@ Quix Streams currently supports the following languages:
 - Python 
 - C#
 
-Quix Streams is [designed to be extended](#interoperability-wrappers) to multiple programming languages. 
+Quix Streams is [designed to be extended](/arch-notes.md) to multiple programming languages. 
 
 You can use Quix Streams to:
 
