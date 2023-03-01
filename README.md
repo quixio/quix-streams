@@ -241,7 +241,7 @@ If you’re sending data at <b>high frequency</b>, processing each message can b
     buffer.time_span_in_milliseconds = 100
     ```
 
-* You can then read from the buffer and process it with the `on_read` function.
+* You can then consume from the buffer and process it with the `on_read_dataframe` function.
 
     ```python
     def on_read_dataframe(stream: StreamConsumer, df: pd.DataFrame):
