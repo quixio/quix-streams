@@ -12,23 +12,23 @@
 
 # What is Quix Streams?
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>time-series data</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and resource savings.
+<b>Quix Streams</b> is a stream processing library, focused on <b>time-series data</b> and ease of use. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and save resources without introducing delay.
 
-Quix Streams <b>does not use</b> any Domain Specific Language or Embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language, together with Quix Streams.
+Quix Streams <b>does not use</b> any domain-specific language or embedded framework, it's a library that you can use in your code base. This means that with Quix Streams you can use any external library for your chosen language. For example in Python, you can leverage Pandas, NumPy, PyTorch, TensorFlow, Transformers, OpenCV. 
 
 Quix Streams currently supports the following languages:
 
 - Python 
 - C#
 
-Quix Streams is [designed to be extended](#interoperability-wrappers) to multiple programming languages. 
+Quix Streams is [designed to be extended](/arch-notes.md) to multiple programming languages. 
 
-Using Quix Streams, you can:
+You can use Quix Streams to:
 
-- Produce time-series and event data to a Kafka Topic.
-- Consume time-series and event data from a Kafka Topic.
-- Process data by consuming it from one Kafka Topic, process it, and then producing the results back to another Kafka Topic.
-- Group data by Streams attaching metadata to them.
+- produce time-series and event data to a Kafka topic.
+- consume time-series and event data from a Kafka topic.
+- process data by creating pipelines using the <b>publish–subscribe</b> pattern.
+- Group data by streams to send different types of data (Timeseries, events, metadata or binary) into one ordered stream of data.
 
 ## What is time-series data?
 
@@ -49,117 +49,76 @@ Time-series data is often plotted on a graph with the x-axis representing the ti
 
 ![Telemetry](./images/telemetry.png)
 
-### High-frequency data
+## Getting started 🏄
 
-High-frequency data is a type of <b>time-series data</b> that is collected at a very high rate, often at intervals of less than a second. Because high-frequency data is collected at such a high rate, it can be difficult to analyze and visualize using traditional methods. As a result, specialized techniques and tools are often used to process and analyze high-frequency data.
+### Install Quix Streams
 
-Quix streams is a library specialized in processing <b>high-frequency data</b>, although it can be used to process and analyze any kind of time-series or non-timeseries data.
-
-## Getting Started 🏄
-
-### Installing the library on Intel
-
-You can install the library for amd64 platforms using the package manager for Python Packages:
+Install Quix streams with the following command: 
 
 ```shell
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev25 --user
+python3 -m pip install quixstreams
 ```
 
-### Installing on M1/M2 Mac
+* To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
 
-To install Quix Streams on apple silicon (M1 and M2-based) Macs, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
+### Install Kafka
 
-1. To make sure you have Rosetta installed, open Mac Terminal, and run the command `softwareupdate --install-rosetta`.
+This library needs to utilize a message broker to send and receive data. Quix uses [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
-2. If you don't have Brew installed, install it using the instructions on the [Brew homepage](https://brew.sh). Make sure that after the install script runs, that you perform any configuration recommended by the script.
+**To install and test Kafka locally**:
+* Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.
+* Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
 
-3. Install an additional terminal, such as iTerm2. You could do this, for example, with `brew install iterm2`.
-
-4. Open finder, go to Applications, and locate iTerm2.
-
-5. Right-click the iTerm2 application icon to display the context-sensitive menu, and select the menu item `Duplicate`.
-
-6. Rename the duplicate created to `iTerm2 rosetta`.
-
-7. Right-click `iTerm2 rosetta` again and select `Get Info`.
-
-8. Tick the `Open using rosetta` checkbox, so that iTerm2 is always opened using Rosetta.
-
-9. Launch `iTerm2 rosetta` by double-clicking it.
-
-10. On the command line, run the `arch` command. This will display `i386`. If not, check your steps so far.
-
-11. Install Brew again. This installs a new copy of Brew to a new directory structure for i386 (x86_64).
-
-12. Open your Zsh profile file, `~/.zprofile`, using a text editor such as Nano. For example, with the command `nano ~/.zprofile`.
-
-13. Add the following code to `~/.zprofile`:
-
+  * **Linux / macOS**
     ```
-    if [ $(arch) = "i386" ]; then
-        PATH="/usr/local/bin/brew:${PATH}"
-        eval "$(/usr/local/bin/brew shellenv)"
-    fi
+    <kafka_dir>/bin/zookeeper-server-start.sh config/zookeeper.properties
+    <kafka_dir>/bin/zookeeper-server-start.sh config/server.properties
     ```
 
-    This will ensure that when you open `iTerm2 rosetta`, your `brew` command will point at the correct (x86_64) Brew installation.
-
-14. Reload your Zsh profile by running `source ~/.zprofile`, or opening a new instance of `iTerm2 rosetta`.
-
-15. Install Python with the command `brew install python3`.
-
-16. Using log messages from `brew`, check where Python was installed, for example: `/usr/local/Cellar/python@3.10/3.10.9/bin/python3`. If not sure, check with `ls /usr/local/Cellar`.
-
-17. Open your `~/.zprofile` file again, and add the following line inside the `if` statement:
-
+  * **Windows**
     ```
-    if [ $(arch) = "i386" ]; then
-        PATH="/usr/local/Cellar/python@3.10/3.10.9/bin:${PATH}"
-        ...
-    fi
+    <kafka_dir>\bin\windows\zookeeper-server-start.bat.\config\zookeeper.properties
+    <kafka_dir>\bin\windows\kafka-server-start.bat .\config\server.properties
     ```
+* Create a test topic with the `kafka-topics` script.
+  
+  * **Linux / macOS**
+    `<kafka_dir>/bin/kafka-topics.sh --create --topic mytesttopic --bootstrap-server localhost:9092`
 
-18. Reload your Zsh profile by running `source ~/.zprofile`, or by starting a new instance of `iTerm2 rosetta`.
+  * **Windows**
+    `bin\windows\kafka-topics.bat --create --topic mytesttopic --bootstrap-server localhost:9092`
 
-19. Install Quix Streams:
+You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
-    ```
-    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev25 --user
-    ```
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk/quickstart.html) in our official documentation. 
 
-20. You can now run your code that uses Quix Streams:
-    
-    ```
-    python3 yourcode.py
-    ```
-
-You have now successfully installed Quix Streams on M1/M2 architectures.
-
-### Prepare your Kafka Cluster
-
-This library needs to utilize a message broker to send and receive data. We use [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
+However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
 
 ### Producing time-series data
 
-Now you can start producing time-series data into a Kafka Topic. Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
+Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
 
 ```python
+import quixstreams as qx
 import time
 import datetime
 import math
 
-from quixstreams import KafkaStreamingClient
 
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
+# Quix injects credentials automatically to the client. 
+# Alternatively, you can always pass an SDK token manually as an argument.
+client = qx.QuixStreamingClient()
 
-# Open the topic producer to publish to the output topic
-topic_producer = client.get_topic_producer("your-kafka-topic")
+# Open the output topic which is where data will be streamed out to
+topic_producer = client.get_topic_producer(topic_id_or_name = "mytesttopic")
 
+# Set stream ID or leave parameters empty to get stream ID generated.
 stream = topic_producer.create_stream()
-stream.properties.name = "Hello World python stream"
-stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+stream.properties.name = "Hello World Python stream"
+
+# Add metadata about time series data you are about to send. 
+stream.timeseries.add_definition("ParameterA").set_range(-1.2, 1.2)
+stream.timeseries.buffer.time_span_in_milliseconds = 100
 
 print("Sending values for 30 seconds.")
 
@@ -167,9 +126,7 @@ for index in range(0, 3000):
     stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
-        .add_value("ParameterA", math.sin(index / 200.0)) \
-        .add_value("ParameterB", "string value: " + str(index)) \
-        .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
+        .add_value("ParameterA", math.sin(index / 200.0) + math.sin(index) / 5.0) \
         .publish()
     time.sleep(0.01)
 
@@ -179,34 +136,39 @@ stream.close()
 
 ### Consuming time-series data
 
-Once we have setup our producer, it's time to see how to consume data from a topic. Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
+Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
 
 ```python
+import quixstreams as qx
 import pandas as pd
 
-from quixstreams import *
 
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
+client = qx.QuixStreamingClient()
 
-# Get the consumer for the input topic
-# For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.get_topic_consumer("your-kafka-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+# get the topic consumer for a specific consumer group
+topic_consumer = client.get_topic_consumer(topic_id_or_name = "mytesttopic",
+                                           consumer_group = "empty-destination")
 
-# consume streams
-def on_stream_received_handler(stream_received: StreamConsumer):
-    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
-# consume data (as Pandas DataFrame)
-def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
-    print(df.to_string())
+def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.DataFrame):
+    # do something with the data here
+    print(df)
 
-# Hook up events before initiating read to avoid losing out on any data
+
+def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+    # subscribe to new DataFrames being received
+    # if you aren't familiar with DataFrames there are other callbacks available
+    # refer to the docs here: https://docs.quix.io/sdk/subscribe.html
+    stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
+
+
+# subscribe to new streams being received
 topic_consumer.on_stream_received = on_stream_received_handler
 
 print("Listening to streams. Press CTRL-C to exit.")
-# Handle graceful exit
-App.run()
+
+# Handle termination signals and provide a graceful exit
+qx.App.run()
 ```
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
@@ -215,115 +177,244 @@ For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/s
 
 ## Library features
 
-This library provides several features and solves common problems you face when developing real-time streaming applications. 
+The following features are designed to address common issues faced when developing real-time streaming applications:
 
-- <b>Stream context</b>: Quix Streams handles stream contexts for you, so all the data from one data source is bundled in the same scope. It let's you produce <b>multiple streams</b> through the same topic and enables the message broker to <b>parallelize loads</b> reliably across multiple consumers. 
+### Streaming contexts
+Streaming contexts allow you to bundle data from one data source into the same scope with supplementary metadata—thus enabling workloads to be horizontally scaled with multiple replicas.
 
-- <b>Stream metadata</b>: Quix Streams allows you to attached metadata to a Stream context and to the definition of Parameters and Events. The library manages the <b>metadata communication</b> behind the scenes, only sending and receiving it when necessary to improve efficiency.
+* In the following sample, the `create_stream` function is used to create a stream called _bus-123AAAV_ which gets assigned to one particular consumer and will receive messages in the correct order: 
 
-- <b>Time-series data serialization and de-serialization</b>: Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughtput and reduce latency.
+    ```python
+    topic_producer = client.get_topic_producer("data")
 
-- <b>No schema registry needed</b>: Quix Streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b>.
+    stream = topic_producer.create_stream("bus-123AAAV")
+    # Message 1 sent (the stream context)
 
-- <b>Built-in time-series buffers</b>: If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for producing and consuming, allowing several configurations for balancing between latency and cost.
+    stream.properties.name = "BUS 123 AAAV"
+    # Message 2 sent (the human-readable identifier the bus)
 
-- <b>Support for data frames</b>: In many use cases, multiple time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. The library uses a tabular system that can work for instance with <b>Pandas DataFrames</b> natively. Each row has a timestamp and <b>user-defined tags</b> as indexes.
+    stream.timeseries\
+        .buffer \
+        .add_timestamp(datetime.datetime.utcnow()) \
+        .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
+        .add_value("Long", math.sin(index / 200.0) + math.sin(index) / 5.0) \
+        .publish()
+    # Message 3 sent (the time-series telemetry data from the bus)
 
-- <b>Multiple data types</b>: This library allows you to produce and consume different types of mixed data in the same timestamp, like <b>Numbers</b>, <b>Strings</b> or <b>Binary data</b>.
+    stream.events \
+            .add_timestamp_in_nanoseconds(time.time_ns()) \
+            .add_value("driver_bell", "Doors 3 bell activated by passenger") \
+            .publish()
+    # Message 4 sent (an event related to something that happened on the bus)
+    ```
 
-- <b>Message splitting</b>: Quix Streams automatically handles <b>large messages</b> on the producer side, splitting them up if required. You no longer need to worry about Kafka message limits. On the consumer side, those messages are automatically merged back.
+### Time-series data serialization and deserialization
 
-- <b>Message Broker configuration</b>: Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time. The library take care of Kafka configuration by default allowing refined configuration only when needed.
+Quix Streams serializes and deserializes time-series data using different codecs and optimizations to <b>minimize payloads</b> in order to increase throughput and reduce latency.
 
-- <b>Checkpointing</b>: Quix Streams allows manual or automatic checkpointing when you consume data from a Kafka Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point.
+* The following example shows data being appended to as stream with the `add_value` method.<br><br>
 
-- <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.
+    ```python
+    # Open the producer topic where the data should be published.
+    topic_producer = client.get_topic_producer("data")
+    # Create a new stream for each device.
+    stream = topic_producer.create_stream("bus-123AAAV")
+    print("Sending values for 30 seconds.")
 
-For a detailed overview of features, [visit our docs.](https://www.quix.io/docs/sdk/introduction.html)
+    for index in range(0, 3000):
+        
+        stream.timeseries\
+            .add_timestamp(datetime.datetime.utcnow()) \
+            .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
+            .add_value("Long", math.sin(index / 200.0) + math.sin(index) / 5.0) \
+            .publish()
+    ```
 
-### Coming soon
+### Built-in time-series buffers
 
-This library is actively in developing process. We have some features planned in the [road map](https://github.com/orgs/quixai/projects/1) of the library coming soon:
+If you’re sending data at <b>high frequency</b>, processing each message can be costly. The library provides built-in time-series buffers for producing and consuming, allowing several configurations for balancing between latency and cost.
 
-(WIP)
+* For example, you can configure the library to release a packet from the buffer whenever 100 items of timestamped data are collected or when a certain number of milliseconds in data have elapsed (note that this is using time in the data, not the consumer clock).
 
-## Library architecture notes
+    ```
+    buffer.packet_size = 100
+    buffer.time_span_in_milliseconds = 100
+    ```
 
-### Interoperability wrappers
+* You can then consume from the buffer and process it with the `on_read_dataframe` function.
 
-Quix Streams base library is developed in C#. We use Interoperability wrappers around <b>C# AoT (Ahead of Time) compiled code</b> to implement support for other languages such as <b>Python</b>. These Interop wrappers are auto-generated using a project called `InteropGenerator` included in the same repository. Ahead-of-time native compilation was a feature introduced officially on .NET 7. Learn more [here](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/).
+    ```python
+    def on_read_dataframe(stream: StreamConsumer, df: pd.DataFrame):
+        df["total"] = df["price"] * df["items_count"]
 
-You can generate these Wrappers again using the `shell scripts` provided for each platform inside the language-specific client. For instance for Python:
+        topic_producer.get_or_create_stream(stream.stream_id).timeseries_data.write(df)
 
-- `/src/builds/python/windows/build_native.bat`: Generates Python Interop wrappers for Windows platform.
-- `/src/builds/python/linux/build_native.bat`: Generates Python Interop wrappers for Linux platform.
-- `/src/builds/python/mac/build_native.bat`: Generates Python Interop wrappers for Mac platform.
+    buffer.on_dataframe_released = on_read_dataframe_handler
+    ```
 
-These scripts compile the C# base library and then use the `InteropGenerator` project to generate the AoT compiled version of the library and the Interops wrappers around that. The result is a structure like this:
+### Support for DataFrames
 
+Time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. The library uses a tabular system that can work for instance with <b>Pandas DataFrames</b> natively. Each row has a timestamp and <b>user-defined tags</b> as indexes.
+
+```python
+# Callback triggered for each new data frame
+def on_parameter_data_handler(stream: StreamConsumer, df: pd.DataFrame):
+    
+    # If the braking force applied is more than 50%, we mark HardBraking with True
+    df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
+
+    stream_producer.parameters.publish(df)  # Send data back to the stream
 ```
 
-   ┌───────────────────────────┐
-   │   Python client library   │    /Python/lib/quixstreams
-   └─────────────┬─────────────┘
-                 │
-                 │
-   ┌─────────────▼─────────────┐
-   │  Python Interop wrapper   │    /Python/lib/quixstreams/native/Python  (auto-generated)
-   └─────────────┬─────────────┘
-                 │
-                 │
-   ┌─────────────▼─────────────┐
-   │  C# AoT compiled library  │    /Python/lib/quixstreams/native/win64   (auto-generated)
-   └───────────────────────────┘
+### Multiple data types
 
+This library allows you to produce and consume different types of mixed data in the same timestamp, like <b>Numbers</b>, <b>Strings</b> or <b>Binary data</b>.
+
+* For example, you can produce both time-series data and large binary blobs together.<br><br>
+
+    Often, you’ll want to combine time series data with binary data. In the following example, we combine bus's onboard camera with telemetry from its ECU unit so we can analyze the onboard camera feed with context.
+
+    ```python 
+    # Open the producer topic where to publish data.
+    topic_producer = client.get_topic_producer("data")
+
+    # Create a new stream for each device.
+    stream = topic_producer.create_stream("bus-123AAAV")
+
+    telemetry = BusVehicle.get_vehicle_telemetry("bus-123AAAV")
+
+    def on_new_camera_frame(frame_bytes):
+        
+        stream.timeseries\
+            .buffer \
+            .add_timestamp(datetime.datetime.utcnow()) \
+            .add_value("camera_frame", frame_bytes) \
+            .add_value("speed", telemetry.get_speed()) \
+            .publish()
+        
+    telemetry.on_new_camera_frame = on_new_camera_frame
+    ```
+
+* You can also produce events that include payloads:<br><br>For example, you might need to listen for changes in time-series or binary streams and produce an event (such as "speed limit exceeded"). These  might require some kind of document to send along with the event message (e.g. transaction invoices, or a speeding ticket with photographic proof). Here's an example for a speeding camera:
+  
+    ```python
+    # Callback triggered for each new data frame.
+    def on_data_frame_handler(stream: StreamConsumer, df: pd.DataFrame):
+            
+        # We filter rows where the driver was speeding.
+        above_speed_limit = df[df["speed"] > 130]
+
+        # If there is a record of speeding, we sent a ticket.
+        if df.shape[0] > O:
+
+            # We find the moment with the highest speed.
+            max_speed_moment = df['speed'].idxmax()
+            speed = df.loc[max_speed_moment]
+            time = df.loc[max_speed_moment]["time"]
+
+            # We create a document that will be consumed by the ticket service.
+            speeding_ticket = {
+                'vehicle': stream.stream_id,
+                        'time': time,
+                        'speed': speed,
+                        'fine': (speed - 130) * 100,
+                        'photo_proof': df.loc[max_speed_moment]["camera_frame"]
+                    }
+
+            topic_producer.get_or_create_stream(stream.stream_id) \
+                .events \
+                .add_timestamp_in_nanoseconds(time) \
+                .add_value("ticket", json.dumps(speeding_ticket)) \
+                .publish()
+    ```
+
+### Support for stateful processing 
+
+Quix Streams includes a state management feature that let's you store intermediate steps in complex calculations. To use it, you can create an instance of `LocalFileStorage` or use one of our helper classes to manage the state such as `InMemoryStorage`. 
+Here's an example of a stateful operation sum for a selected column in data.
+
+```python
+state = InMemoryStorage(LocalFileStorage())
+
+def on_g_force(stream_consumer: StreamConsumer, data: TimeseriesData):
+
+    for row in data.timestamps:
+		# Append G-Force sensor value to accumulated state (SUM).
+        state[stream_consumer.stream_id] += abs(row.parameters["gForceX"].numeric_value)
+				
+		# Attach new column with aggregated values.
+        row.add_value("gForceX_sum", state[stream_consumer.stream_id])
+
+	# Send updated rows to the producer topic.
+    topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(data)
+
+
+# read streams
+def read_stream(stream_consumer: StreamConsumer):
+        # If there is no record for this stream, create a default value.
+		if stream_consumer.stream_id not in state:
+            state[stream_consumer.stream_id] = 0
+		
+	# We subscribe to gForceX column.
+    stream_consumer.timeseries.create_buffer("gForceX").on_read = on_g_force
+
+
+topic_consumer.on_stream_received = read_stream
+topic_consumer.on_committed = state.flush
 ```
 
-The non auto-generated `Python client library` still needs to be maintained manually, but this is expected because each language has its own language-specific features and naming conventions that we want to keep aligned with the language user expectations. If you want to add a new feature of the library that is common to all the languages, you should implement that feature in the C# base library first, re-generate the Interop wrappers, and then modify the Python client library to wire up the new feature of the base library.
+## Performance and Usability Enhancements
 
-### Base library
+The library also includes a number of other enhancements that are designed to simplify the process of managing configuration and performance when interacting with Kafka:
 
-Quix Streams base library is implemented in C#, therefore if your target language is C#, you will use that base library without any [Interoperability wrapper](#interoperability-wrappers) involved on the execution. 
+- <b>No schema registry required</b>: Quix Streams doesn't need a schema registry to send different set of types or parameters, this is handled internally by the protocol. This means that you can send <b>more than one schema per topic</b><br>.
 
-This base library is organized in 3 main layers:
+- <b>Message splitting</b>: Quix Streams automatically handles <b>large messages</b> on the producer side, splitting them up if required. You no longer need to worry about Kafka message limits. On the consumer side, those messages are automatically merged back.<br><br>
 
+- <b>Message Broker configuration</b>: Many configuration settings are needed to use Kafka at its best, and the ideal configuration takes time. Quix Streams takes care of Kafka configuration by default but also supports custom configurations.<br><br>
+
+- <b>Checkpointing</b>: Quix Streams supports manual or automatic checkpointing when you consume data from a Kafka Topic. This provides the ability to inform the Message Broker that you have already processed messages up to one point.<br><br>
+
+- <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.<br>
+
+For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/sdk/introduction.html).
+
+
+### What's Next
+
+This library is being actively developed. We have some more features planned in the library's [road map](https://github.com/orgs/quixai/projects/1) coming soon. The main highlight a new feature called "streaming data frames" that simplifies stateful stream processing for users coming from a batch processing environment. It eliminates the need for users to manage state in memory, update rolling windows, deal with checkpointing and state persistence, and manage state recovery after a service unexpectedly restarts. By introducing a familiar interface to Pandas DataFrames, we hopes to make stream processing even more accessible to data professionals who are new to streaming data.
+
+The following example shows how you would perform rolling window calculation on a streaming data frame:
+
+```python
+# Create a projection for columns we need.
+df = consumer_stream.df[["gForceX", "gForceY", "gForceZ"]] 
+
+# Create new feature by simply combining three columns to one new column.
+df["gForceTotal"] = df["gForceX"].abs() + df["gForceY"].abs() + df["gForceZ"].abs()
+
+# Calculate rolling window of previous column for last 10 minutes
+df["gForceTotal_avg10s"] = df["gForceTotal"].rolling("10m").mean()
+
+# Loop through the stream row by row as data flows through the service. 
+# The async iterator will stop the code if there is no new data incoming from the consumer stream
+async for row in df:
+    print(row)
+    await producer_stream.write(row)
 ```
+Note that this is exactly how you would do the same calculation on static data in Jupyter notebook—so will be easy to learn for those of you who are used to batch processing. 
 
-   ┌───────────────────────────┐
-   │      Streaming layer      │    /CSharp/QuixStreams.Streaming
-   └─────────────┬─────────────┘
-                 │
-                 │
-   ┌─────────────▼─────────────┐
-   │      Telemetry layer      │    /CSharp/QuixStreams.Telemetry
-   └─────────────┬─────────────┘
-                 │
-                 │
-   ┌─────────────▼─────────────┐
-   │   Kafka Transport layer   │    /CSharp/QuixStreams.Transport.Kafka
-   ├───────────────────────────┤
-   │      Transport layer      │    /CSharp/QuixStreams.Transport
-   └───────────────────────────┘
+There's also no need to get your head around the complexity of stateful processing on streaming data—this will all be managed by the library. Moreover, although it will still feel like Pandas, it will use binary tables under the hood—which adds a significant performance boost compared to traditional Pandas DataFrames.
 
-```
+To find out when the next version is ready, make sure you watch this repo.
 
-Each layer has his own responsibilities:
- 
-- <b>Streaming layer</b>: This is the main layer of the library that users should use by default. It includes all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsibility of this layer is the <b>embedded time-series buffer</b> system.
-
-- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Process` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
-
-- <b>Transport layer</b>: This layer is responsible for the <b>communication with the message broker</b> and implementing some features to deal with the message broker's features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revokation`, `connectivity issues recovering` among others. This layer is also responsible for implementing a `wrapping messages system` to allow different message types of the library Protocol, and to define the base classes for the `Codecs` implementation of each messages of that Protocol on the upper layers of the library. For <b>Kafka</b> support, this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), which uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka).
-
-For more information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
-
-## Using Quix Streams with Quix SaaS platform
+## Using Quix Streams with the Quix SaaS platform
 
 This library doesn't have any dependency on any commercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantages out of the box during your development process such as auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics, and more.
 
 ## Contribution Guide
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) and familiarize yourself with our [architecture](./arch-notes.md) for how you can best give feedback and contribute. 
 
 ## Need help?
 
