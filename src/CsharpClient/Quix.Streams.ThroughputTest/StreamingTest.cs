@@ -30,7 +30,7 @@ namespace Quix.Streams.Speedtest
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
-            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerId);
+            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic);
             var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
 
             var stream = topicProducer.CreateStream();
