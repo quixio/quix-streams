@@ -61,6 +61,7 @@ namespace QuixStreams.Streaming
                 }
             };
 
+            logger.LogDebug("Setting up termination signal handling for {0}", Environment.OSVersion.Platform);
             switch (Environment.OSVersion.Platform)
             {
                 case PlatformID.Win32NT:
@@ -108,6 +109,7 @@ namespace QuixStreams.Streaming
                 case PlatformID.Xbox:
                     Console.CancelKeyPress += (sender, args) =>
                     {
+                        logger.LogDebug("Termination signal: {0}", "CancelKeyPressEvent");
                         waitForProcessShutdownStart.Set();
                     };
                     AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
