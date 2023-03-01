@@ -6,7 +6,7 @@ Our goal is to minimize the occurrence of breaking changes, and if we do need to
 
 ### The library is renamed
 
-For python, the library is renamed to `quixstreams` from `quixstreaming`, while for C# the packages will be available under `Quix.Streams.*` rather than `Quix.Sdk.*`. The latter also resulted in namespace changes.
+For python, the library is renamed to `quixstreams` from `quixstreaming`, while for C# the packages will be available under `QuixStreams.*` rather than `Quix.Sdk.*`. The latter also resulted in namespace changes.
 
 ### Library availability
 

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+		<Configurations>Debug;Release;Python</Configurations>
+		<Platforms>AnyCPU</Platforms>
+		<LangVersion>8.0</LangVersion>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<PackageId>QuixIO.Streams.State</PackageId>
+		<Version>0.5.0.0</Version>
+		<AssemblyVersion>0.5.0.0</AssemblyVersion>
+		<FileVersion>0.5.0.0</FileVersion>
+		<InformationalVersion>0.5.0.0</InformationalVersion>
+		<Company>Quix Analytics Ltd</Company>
+		<Authors>devs@quix.io</Authors>
+		<Product>QuixStreams.State</Product>
+		<Description>State abstraction and implementation for Quix Streams</Description>
+		<Copyright>Copyright © Quix Analytics Ltd 2020</Copyright>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)' == 'Python'">
+		<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+			<_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.Collections.Immutable" Version="1.7.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\QuixStreams.Telemetry\QuixStreams.Telemetry.csproj" />
+	</ItemGroup>
+
+</Project>

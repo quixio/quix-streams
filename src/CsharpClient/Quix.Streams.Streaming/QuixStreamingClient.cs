@@ -15,18 +15,18 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Quix.Streams.Telemetry.Kafka;
-using Quix.Streams.Streaming.Configuration;
-using Quix.Streams.Streaming.Exceptions;
-using Quix.Streams.Streaming.Models;
-using Quix.Streams.Streaming.QuixApi;
-using Quix.Streams.Streaming.QuixApi.Portal;
-using Quix.Streams.Streaming.QuixApi.Portal.Requests;
-using Quix.Streams.Streaming.Raw;
-using Quix.Streams.Streaming.Utils;
-using Quix.Streams.Transport.Fw;
+using QuixStreams.Telemetry.Kafka;
+using QuixStreams.Streaming.Configuration;
+using QuixStreams.Streaming.Exceptions;
+using QuixStreams.Streaming.Models;
+using QuixStreams.Streaming.QuixApi;
+using QuixStreams.Streaming.QuixApi.Portal;
+using QuixStreams.Streaming.QuixApi.Portal.Requests;
+using QuixStreams.Streaming.Raw;
+using QuixStreams.Streaming.Utils;
+using QuixStreams.Transport.Fw;
 
-namespace Quix.Streams.Streaming
+namespace QuixStreams.Streaming
 {
     /// <summary>
     /// Streaming client for Kafka configured automatically using Environment Variables and Quix platform endpoints.
@@ -192,7 +192,7 @@ namespace Quix.Streams.Streaming
                 };
                 
                 // Hacky workaround to an issue that Kafka client can't be left with no GroupId, but it still uses it for ACL checks.
-                Quix.Streams.Transport.Kafka.ConsumerConfiguration.ConsumerGroupIdWhenNotSet = ws.WorkspaceId + "-" + Guid.NewGuid().ToString("N").Substring(0, 10);
+                QuixStreams.Transport.Kafka.ConsumerConfiguration.ConsumerGroupIdWhenNotSet = ws.WorkspaceId + "-" + Guid.NewGuid().ToString("N").Substring(0, 10);
                 return (null, newCommitOptions);
             }
             

@@ -36,11 +36,11 @@ sleep 1
 interopfolder=../../../InteropGenerator
 csharpfolder=../../../CsharpClient
 pythonfolder=../../../PythonClient
-streamingoutpath=$csharpfolder/Quix.Streams.Streaming/bin/Publish/mac
+streamingoutpath=$csharpfolder/QuixStreams.Streaming/bin/Publish/mac
 echo build streaming
-dotnet publish $csharpfolder/Quix.Streams.Streaming/Quix.Streams.Streaming.csproj -c debug -o $streamingoutpath
+dotnet publish $csharpfolder/QuixStreams.Streaming/QuixStreams.Streaming.csproj -c debug -o $streamingoutpath
 if [[ $? != 0 ]]; then
-	echo "Failed dotnet build Quix.Streams.Streaming.csproj"
+	echo "Failed dotnet build QuixStreams.Streaming.csproj"
 	exit 2
 fi
 
@@ -55,7 +55,7 @@ fi
 echo run interop generator
 interopoutput=$interopfolder/InteropOutput
 interopconfig=$interopfolder/InteropConfig
-"$interopgeneratoroutput/Quix.InteropGenerator" -a "$streamingoutpath/Quix.Streams.Streaming.dll" -o "$interopoutput"  -c "$interopconfig"
+"$interopgeneratoroutput/Quix.InteropGenerator" -a "$streamingoutpath/QuixStreams.Streaming.dll" -o "$interopoutput"  -c "$interopconfig"
 if [[ $? != 0 ]]; then
 	echo "Failed InteropGenerator run"
 	exit 4
