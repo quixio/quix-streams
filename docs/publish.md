@@ -17,7 +17,7 @@ In order to start publishing data to Quix you need an instance of `KafkaStreamin
 === "C\#"
 	
 	``` cs
-	var client = new Quix.Streams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
+	var client = new QuixStreams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
 	```
 
 You can find other ways to connect to your message broker in the [Connect](connect.md) section.
@@ -909,7 +909,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
             static void Main()
             {
                 // Create a client which holds generic details for creating input and output topics
-                var client = new Quix.Streams.Streaming.QuixStreamingClient();
+                var client = new QuixStreams.Streaming.QuixStreamingClient();
     
                 using var topicProducer = client.GetTopicProducer(TOPIC_ID);
     

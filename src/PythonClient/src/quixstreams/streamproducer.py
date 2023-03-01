@@ -10,7 +10,7 @@ from .helpers.nativedecorator import nativedecorator
 from .models import *
 from .models.streamproducer import *
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .native.Python.QuixStreamsProcess.Models.StreamEndType import StreamEndType as StreamEndTypeInterop
+from .native.Python.QuixStreamsTelemetry.Models.StreamEndType import StreamEndType as StreamEndTypeInterop
 from .native.Python.QuixStreamsStreaming.IStreamProducer import IStreamProducer as spi
 
 

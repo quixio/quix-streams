@@ -50,7 +50,7 @@ brew install librdkafka
 ## Start build
 Navigate to build_native_linux.sh folder 
 ```
-cd WHEREVER_YOUR_ROOT_IS/Quix.Streams/PythonClient
+cd WHEREVER_YOUR_ROOT_IS/QuixStreams/PythonClient
 . ./build_native_mac.sh
 . ./build_wheel_mac.sh
 ```
@@ -80,7 +80,7 @@ brew install librdkafka
 ## Start build
 Navigate to build_native_linux.sh folder 
 ```
-cd WHEREVER_YOUR_ROOT_IS/Quix.Streams/PythonClient
+cd WHEREVER_YOUR_ROOT_IS/QuixStreams/PythonClient
 . ./build_native_mac.sh
 . ./build_wheel_mac.sh
 
@@ -133,8 +133,8 @@ docker run -it \
     --platform=linux/amd64 \
     --entrypoint /bin/bash \
     --network=host \
-    --volume /mnt/f/Work/source/Quix.Streams/builds/python/linux/build-result:/build-result \
-    --volume /mnt/f/Work/source/Quix.Streams/PythonClient/tests/quixstreams/manual:/manual \
+    --volume /mnt/f/Work/source/QuixStreams/builds/python/linux/build-result:/build-result \
+    --volume /mnt/f/Work/source/QuixStreams/PythonClient/tests/quixstreams/manual:/manual \
     python:3.11.1-slim-buster
 ```
 

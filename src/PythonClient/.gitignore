@@ -8,6 +8,8 @@ env/
 #ignore native
 src/quixstreams/native/
 tests/quixstreams/manual/certificates/
+tests/quixstreams/manual/state/test/**
+**/debuglogs_**
 
 #ignore build results
 build/

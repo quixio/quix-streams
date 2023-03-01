@@ -108,7 +108,7 @@ class TopicConsumer(object):
     def _on_streams_revoked_wrapper(self, topic_hptr, streams_uptr):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
         # TODO
-        # revoked_arg = list(map(lambda x: StreamConsumer(Quix.Streams.Streaming.IStreamConsumer(x)), arg))
+        # revoked_arg = list(map(lambda x: StreamConsumer(QuixStreams.Streaming.IStreamConsumer(x)), arg))
         # self.on_streams_revoked.fire(revoked_arg)
         streams = []
         try:

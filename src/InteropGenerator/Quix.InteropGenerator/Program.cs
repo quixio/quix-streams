@@ -77,7 +77,7 @@ public class Program
         
         var whitelist = new List<string>()
         {
-            "^Quix\\.Streams\\.*"
+            "^QuixStreams\\.*"
         }.Select(y => new Regex(y, RegexOptions.Compiled)).ToList();
         
         if (Directory.Exists(options.OutputPathRoot)) Directory.Delete(options.OutputPathRoot, true);

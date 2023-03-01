@@ -5,7 +5,7 @@ from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
 from .models import CommitOptions, CommitMode, AutoOffsetReset
 from .models.netdict import NetDict
-from .native.Python.QuixStreamsProcess.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
+from .native.Python.QuixStreamsTelemetry.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
 from .native.Python.QuixStreamsStreaming.KafkaStreamingClient import KafkaStreamingClient as sci
 from .native.Python.QuixStreamsStreaming.KafkaStreamingClientExtensions import KafkaStreamingClientExtensions as kscei
 from .native.Python.QuixStreamsStreaming.Models.CommitMode import CommitMode as CommitModeInterop
