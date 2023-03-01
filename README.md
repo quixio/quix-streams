@@ -27,8 +27,8 @@ You can use Quix Streams to:
 
 - produce time-series and event data to a Kafka topic.
 - consume time-series and event data from a Kafka topic.
-- process data by creating pipelines using <b>publish–subscribe</b> pattern.
-- Group data by streams to send different type of data (Timeseries, events, metadata or binary) into one ordered stream of data.
+- process data by creating pipelines using the <b>publish–subscribe</b> pattern.
+- Group data by streams to send different types of data (Timeseries, events, metadata or binary) into one ordered stream of data.
 
 ## What is time-series data?
 
@@ -110,8 +110,8 @@ import os
 # Alternatively, you can always pass an SDK token manually as an argument.
 client = qx.QuixStreamingClient()
 
-# Open the output topic where to write data out
-topic_producer = client.get_topic_producer(topic_id_or_name = os.environ["output"])
+# Open the output topic which is where data will be streamed out to
+topic_producer = client.get_topic_producer(topic_id_or_name = "mytesttopic")
 
 # Set stream ID or leave parameters empty to get stream ID generated.
 stream = topic_producer.create_stream()
@@ -390,7 +390,7 @@ The following example shows how you would perform rolling window calculation on 
 
 ```python
 # Create a projection for columns we need.
-df = input_stream.df[["gForceX", "gForceY", "gForceZ"]] 
+df = consumer_stream.df[["gForceX", "gForceY", "gForceZ"]] 
 
 # Create new feature by simply combining three columns to one new column.
 df["gForceTotal"] = df["gForceX"].abs() + df["gForceY"].abs() + df["gForceZ"].abs()
@@ -398,11 +398,11 @@ df["gForceTotal"] = df["gForceX"].abs() + df["gForceY"].abs() + df["gForceZ"].ab
 # Calculate rolling window of previous column for last 10 minutes
 df["gForceTotal_avg10s"] = df["gForceTotal"].rolling("10m").mean()
 
-# Loop through the stream row by row as data frow through the service. 
-# Async iterator will stop the code if there is no new data incoming from i 
+# Loop through the stream row by row as data flows through the service. 
+# The async iterator will stop the code if there is no new data incoming from the consumer stream
 async for row in df:
     print(row)
-    await output_stream.write(row)
+    await producer_stream.write(row)
 ```
 Note that this is exactly how you would do the same calculation on static data in Jupyter notebook—so will be easy to learn for those of you who are used to batch processing. 
 
