@@ -61,7 +61,7 @@ To get started, you need to install the Quix Streams library and connect to a ru
 Install Quix streams with the following command: 
 
 ```shell
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
+python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0 --user
 ```
 
 * To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
