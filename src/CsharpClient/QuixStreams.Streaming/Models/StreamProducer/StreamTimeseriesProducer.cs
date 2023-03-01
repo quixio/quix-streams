@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
+using QuixStreams.Streaming.Exceptions;
 using QuixStreams.Telemetry.Managers;
 using QuixStreams.Telemetry.Models.Utility;
-using QuixStreams.Streaming.Exceptions;
 
 namespace QuixStreams.Streaming.Models.StreamProducer
 {

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Confluent.Kafka;
-using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Transport.IO;
 using QuixStreams.Transport.Kafka;

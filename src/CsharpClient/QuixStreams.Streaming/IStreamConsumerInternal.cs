@@ -1,5 +1,4 @@
 ﻿using System;
-using QuixStreams;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming

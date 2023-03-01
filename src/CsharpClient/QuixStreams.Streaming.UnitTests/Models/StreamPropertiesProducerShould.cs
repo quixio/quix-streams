@@ -1,9 +1,8 @@
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
-using QuixStreams;
-using QuixStreams.Streaming.Models.StreamProducer;
 using Quix.TestBase.Extensions;
+using QuixStreams.Streaming.Models.StreamProducer;
 using Xunit;
 using Xunit.Abstractions;
 

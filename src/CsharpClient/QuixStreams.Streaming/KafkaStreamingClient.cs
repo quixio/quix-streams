@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
-using QuixStreams.Telemetry.Configuration;
-using QuixStreams.Telemetry.Kafka;
-using QuixStreams.Telemetry.Models;
 using QuixStreams.Streaming.Configuration;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Telemetry.Configuration;
+using QuixStreams.Telemetry.Kafka;
+using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming

@@ -4,13 +4,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
+using QuixStreams.Streaming.Exceptions;
+using QuixStreams.Streaming.Models.StreamProducer;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
-using QuixStreams.Streaming.Exceptions;
-using QuixStreams.Streaming.Models.StreamProducer;
 
 namespace QuixStreams.Streaming
 {

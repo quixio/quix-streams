@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
-using QuixStreams.Telemetry.Models;
 using QuixStreams.Streaming.Models.StreamConsumer;
+using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming.Models
 {

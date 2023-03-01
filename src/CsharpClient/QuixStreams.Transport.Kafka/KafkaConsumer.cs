@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 using QuixStreams.Transport.Fw;
 using QuixStreams.Transport.IO;
 

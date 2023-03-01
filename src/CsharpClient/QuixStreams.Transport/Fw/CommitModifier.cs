@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 using QuixStreams.Transport.IO;
 
 namespace QuixStreams.Transport.Fw

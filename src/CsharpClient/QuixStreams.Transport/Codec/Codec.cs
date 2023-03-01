@@ -1,6 +1,5 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 
 namespace QuixStreams.Transport.Codec
 {

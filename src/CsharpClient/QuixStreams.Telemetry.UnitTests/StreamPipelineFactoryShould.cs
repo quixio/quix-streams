@@ -4,10 +4,9 @@ using System.Diagnostics;
 using System.Linq;
 using FluentAssertions;
 using NSubstitute;
-using QuixStreams;
+using Quix.TestBase.Extensions;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.IO;
-using Quix.TestBase.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 

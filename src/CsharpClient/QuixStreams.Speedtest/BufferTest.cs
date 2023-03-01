@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using QuixStreams.Streaming;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
-using QuixStreams.Streaming;
 
 namespace QuixStreams.Speedtest
 {

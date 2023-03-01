@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Mono.Unix;
 using Mono.Unix.Native;
-using QuixStreams;
 using QuixStreams.Streaming.Raw;
 
 namespace QuixStreams.Streaming
@@ -75,6 +74,7 @@ namespace QuixStreams.Streaming
                     
                     AppDomain.CurrentDomain.ProcessExit += (sender, e) =>   
                     {
+                        logger.LogDebug("ProcessExit invoked");
                         // Don't unwind until main exits
                         waitForMainExit.Wait();
                     };                    
@@ -94,8 +94,10 @@ namespace QuixStreams.Streaming
                         logger.LogDebug("Termination signal: {0}", signal.Signum);
                         waitForProcessShutdownStart.Set();
                     }, cancellationToken);
+                    
                     AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
                     {
+                        logger.LogDebug("ProcessExit invoked");
                         // Don't unwind until main exits
                         waitForMainExit.Wait();
                     };
@@ -110,6 +112,7 @@ namespace QuixStreams.Streaming
                     };
                     AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
                     {
+                        logger.LogDebug("ProcessExit invoked");
                         // We got a SIGTERM, signal that graceful shutdown has started
                         waitForProcessShutdownStart.Set();
                         

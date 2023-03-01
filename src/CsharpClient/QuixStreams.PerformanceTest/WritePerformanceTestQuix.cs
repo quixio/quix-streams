@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
-using QuixStreams.Telemetry.Models.Utility;
 using QuixStreams.Streaming;
 using QuixStreams.Streaming.Models;
+using QuixStreams.Telemetry.Models.Utility;
 
 namespace QuixStreams.PerformanceTest
 {

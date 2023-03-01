@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Text;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Transport.Kafka;
 
