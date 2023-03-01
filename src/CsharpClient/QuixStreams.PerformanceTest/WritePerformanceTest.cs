@@ -50,7 +50,7 @@ namespace QuixStreams.PerformanceTest
                     }
                 }
 
-                var raw = data.ConvertToTelemetryData(false, false);
+                var raw = data.ConvertToTimeseriesDataRaw(false, false);
 
                 buffer.WriteChunk(raw);
 

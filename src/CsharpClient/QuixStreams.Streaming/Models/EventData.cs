@@ -64,7 +64,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="rawData">Event Data to load from</param>
         internal EventData(QuixStreams.Telemetry.Models.EventDataRaw rawData)
         {
-            this.LoadFromTelemetryData(rawData);
+            this.LoadFromEventDataRaw(rawData);
         }
 
         internal void SetTags(IDictionary<string, string> newTags)
@@ -72,7 +72,7 @@ namespace QuixStreams.Streaming.Models
             this.Tags = newTags;
         }
 
-        private void LoadFromTelemetryData(QuixStreams.Telemetry.Models.EventDataRaw rawData)
+        private void LoadFromEventDataRaw(QuixStreams.Telemetry.Models.EventDataRaw rawData)
         {
             this.EpochIncluded = true;
             this.TimestampNanoseconds = rawData.Timestamp;
@@ -91,7 +91,7 @@ namespace QuixStreams.Streaming.Models
             this.SetTags(data.Tags.ToDictionary(kv => kv.Key, kv => kv.Value));
         }
 
-        internal QuixStreams.Telemetry.Models.EventDataRaw ConvertToTelemetryData()
+        internal QuixStreams.Telemetry.Models.EventDataRaw ConvertToEventDataRaw()
         {
             return new QuixStreams.Telemetry.Models.EventDataRaw
             {

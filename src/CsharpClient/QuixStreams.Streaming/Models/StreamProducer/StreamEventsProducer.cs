@@ -258,7 +258,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            this.streamProducer.Publish(data.ConvertToTelemetryData());
+            this.streamProducer.Publish(data.ConvertToEventDataRaw());
             this.logger.Log(LogLevel.Trace, "event '{0}' sent.", data.Id);
         }
 
@@ -283,7 +283,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            var batch = events.Select(e => e.ConvertToTelemetryData()).ToArray();
+            var batch = events.Select(e => e.ConvertToEventDataRaw()).ToArray();
 
             this.streamProducer.Publish(batch);
             this.logger.Log(LogLevel.Trace, "{0} event(s) sent.", events.Count);

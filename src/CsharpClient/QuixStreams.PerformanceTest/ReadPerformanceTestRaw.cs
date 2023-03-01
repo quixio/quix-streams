@@ -59,7 +59,7 @@ namespace QuixStreams.PerformanceTest
                 timestamp.AddTag("tagTest", "Test");
 
             }
-            var raw = data.ConvertToTelemetryData(false, false);
+            var raw = data.ConvertToTimeseriesDataRaw(false, false);
 
             var iteration = 0;
             long result = 0;

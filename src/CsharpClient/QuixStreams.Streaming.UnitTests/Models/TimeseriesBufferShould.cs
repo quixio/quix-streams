@@ -40,7 +40,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
 
             // Assert
             receivedData.Count.Should().Be(5);
@@ -74,7 +74,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
 
             // Assert
             receivedData.Count.Should().Be(1);
@@ -114,7 +114,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
 
             // Assert
             receivedData.Count.Should().Be(2);
@@ -149,7 +149,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
 
             // Assert
             receivedData.Count.Should().Be(2);
@@ -185,7 +185,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
 
             // Assert
             receivedData.Count.Should().Be(2);
@@ -216,7 +216,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
             Thread.Sleep(1000);
 
             // Assert
@@ -254,7 +254,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
             Thread.Sleep(1000);
 
             // Assert
@@ -292,7 +292,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
             Thread.Sleep(1000);
 
             // Assert
@@ -328,7 +328,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
             Thread.Sleep(1000);
 
             // Assert
@@ -365,7 +365,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
 
             //Act
             var data = this.GenerateTimeseriesData();
-            buffer.WriteChunk(data.ConvertToTelemetryData(false, false));
+            buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
             Thread.Sleep(1000);
 
             // Assert

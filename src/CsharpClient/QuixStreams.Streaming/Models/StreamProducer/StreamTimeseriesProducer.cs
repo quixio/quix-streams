@@ -72,7 +72,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 }
             }
 
-            this.streamProducer.Publish(data.ConvertToTelemetryData());
+            this.streamProducer.Publish(data.ConvertToTimeseriesDataRaw());
         }
 
         /// <summary>
