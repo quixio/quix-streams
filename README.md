@@ -12,9 +12,9 @@
 
 # What is Quix Streams?
 
-<b>Quix Streams</b> is a library for developing <b>real-time</b> streaming applications focused on <b>[time-series data](#what-is-time-series-data)</b> and high-performance. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and resource savings.
+<b>Quix Streams</b> is a stream processing library, focused on <b>time-series data</b> and ease of use. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and save resources without introducing delay.
 
-Quix Streams <b>does not use</b> any domain-specific language or embedded framework, it's a library that you can use in your code base. This means you can use any data processing library for your chosen language, together with Quix Streams.
+Quix Streams <b>does not use</b> any domain-specific language or embedded framework, it's a library that you can use in your code base. This means that with Quix Streams you can use any external library for your chosen language. For example in Python, you can leverage Pandas, NumPy, PyTorch, TensorFlow, Transformers, OpenCV. 
 
 Quix Streams currently supports the following languages:
 
@@ -27,11 +27,8 @@ You can use Quix Streams to:
 
 - produce time-series and event data to a Kafka topic.
 - consume time-series and event data from a Kafka topic.
-- create a data pipeline step by:
-  - consuming data from one Kafka Topic.
-  - processing the data with an ML model or algorithm.
-  - producing the results back to another Kafka Topic.
-- group data by streams while attaching metadata to each stream.
+- process data by creating pipelines using <b>publish–subscribe</b> pattern.
+- Group data by streams to send different type of data (Timeseries, events, metadata or binary) into one ordered stream of data.
 
 ## What is time-series data?
 
@@ -54,14 +51,14 @@ Time-series data is often plotted on a graph with the x-axis representing the ti
 
 ## Getting started 🏄
 
-To get started, you need to install the Quix Streams library and connect to a running Kafka instance. If you're on a Mac with an **M1** or **M2** chip, you'll need to follow a few extra steps.
+We are working very hard to support Apple silicon (M1 and M2-based) Macs natively. To install Quix Streams in meantime on apple silicon, rosetta amd64 emulation is necessary at this time. Follow these instructions: 
 
 ### Install Quix Streams
 
 Install Quix streams with the following command: 
 
 ```shell
-python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0 --user
+python3 -m pip install quixstreams
 ```
 
 * To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](mac-m1-m2-install.md).
@@ -104,22 +101,27 @@ However, the following examples will give you a basic idea of how to produce and
 Here's an example of how to <b>produce</b> time-series data into a Kafka Topic with Python.
 
 ```python
+import quixstreams as qx
 import time
 import datetime
 import math
+import os
 
-from quixstreams import KafkaStreamingClient
 
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
+# Quix injects credentials automatically to the client. 
+# Alternatively, you can always pass an SDK token manually as an argument.
+client = qx.QuixStreamingClient()
 
-# Open the topic producer to publish to the output topic
-topic_producer = client.get_topic_producer("mytesttopic")
+# Open the output topic where to write data out
+topic_producer = client.get_topic_producer(topic_id_or_name = os.environ["output"])
 
+# Set stream ID or leave parameters empty to get stream ID generated.
 stream = topic_producer.create_stream()
-stream.properties.name = "Hello World python stream"
-stream.properties.metadata["my-metadata"] = "my-metadata-value"
-stream.timeseries.buffer.time_span_in_milliseconds = 100   # Send data in 100 ms chunks
+stream.properties.name = "Hello World Python stream"
+
+# Add metadata about time series data you are about to send. 
+stream.timeseries.add_definition("ParameterA").set_range(-1.2, 1.2)
+stream.timeseries.buffer.time_span_in_milliseconds = 100
 
 print("Sending values for 30 seconds.")
 
@@ -127,9 +129,7 @@ for index in range(0, 3000):
     stream.timeseries \
         .buffer \
         .add_timestamp(datetime.datetime.utcnow()) \
-        .add_value("ParameterA", math.sin(index / 200.0)) \
-        .add_value("ParameterB", "string value: " + str(index)) \
-        .add_value("ParameterC", bytearray.fromhex("51 55 49 58")) \
+        .add_value("ParameterA", math.sin(index / 200.0) + math.sin(index) / 5.0) \
         .publish()
     time.sleep(0.01)
 
@@ -142,31 +142,37 @@ stream.close()
 Here's an example of how to <b>consume</b> time-series data from a Kafka Topic with Python:
 
 ```python
+import quixstreams as qx
+import os
 import pandas as pd
 
-from quixstreams import *
 
-# Client connecting to Kafka instance locally without authentication. 
-client = KafkaStreamingClient('127.0.0.1:9092')
+client = qx.QuixStreamingClient()
 
-# Get the consumer for the input topic
-# For testing purposes we remove consumer group and always read from latest data.
-topic_consumer = client.get_topic_consumer("mytesttopic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+# get the topic consumer for a specific consumer group
+topic_consumer = client.get_topic_consumer(topic_id_or_name = os.environ["input"],
+                                           consumer_group = "empty-destination")
 
-# consume streams
-def on_stream_received_handler(stream_received: StreamConsumer):
-    stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
-# consume data (as Pandas DataFrame)
-def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
-    print(df.to_string())
+def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.DataFrame):
+    # do something with the data here
+    print(df)
 
-# Hook up events before initiating read to avoid losing out on any data
+
+def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+    # subscribe to new DataFrames being received
+    # if you aren't familiar with DataFrames there are other callbacks available
+    # refer to the docs here: https://docs.quix.io/sdk/subscribe.html
+    stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
+
+
+# subscribe to new streams being received
 topic_consumer.on_stream_received = on_stream_received_handler
 
 print("Listening to streams. Press CTRL-C to exit.")
-# Handle graceful exit
-App.run()
+
+# Handle termination signals and provide a graceful exit
+qx.App.run()
 ```
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
@@ -247,7 +253,7 @@ If you’re sending data at <b>high frequency</b>, processing each message can b
 
         topic_producer.get_or_create_stream(stream.stream_id).timeseries_data.write(df)
 
-    buffer.on_received_dataframe = on_read_dataframe_handler
+    buffer.on_dataframe_released = on_read_dataframe_handler
     ```
 
 ### Support for DataFrames
@@ -256,15 +262,12 @@ Time-series parameters are emitted at the same time, so they share one timestamp
 
 ```python
 # Callback triggered for each new data frame
-def on_parameter_data_handler(df: pd.DataFrame):
-    output_df = pd.DataFrame()
-    output_df["time"] = df["time"]
-    output_df["TAG__LapNumber"] = df["TAG__LapNumber"]
-
+def on_parameter_data_handler(stream: StreamConsumer, df: pd.DataFrame):
+    
     # If the braking force applied is more than 50%, we mark HardBraking with True
-    output_df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
+    df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
 
-    stream_producer.parameters.publish(output_df)  # Send data back to the stream
+    stream_producer.parameters.publish(df)  # Send data back to the stream
 ```
 
 ### Multiple data types
@@ -300,7 +303,7 @@ This library allows you to produce and consume different types of mixed data in 
   
     ```python
     # Callback triggered for each new data frame.
-    def on_data_frame_handler(topic, stream: StreamConsumer, df: pd.DataFrame):
+    def on_data_frame_handler(stream: StreamConsumer, df: pd.DataFrame):
             
         # We filter rows where the driver was speeding.
         above_speed_limit = df[df["speed"] > 130]
@@ -337,26 +340,26 @@ Here's an example of a stateful operation sum for a selected column in data.
 ```python
 state = InMemoryStorage(LocalFileStorage())
 
-def on_g_force(topic, stream_consumer: StreamConsumer, data: TimeseriesData):
+def on_g_force(stream_consumer: StreamConsumer, data: TimeseriesData):
 
     for row in data.timestamps:
-				# Append G-Force sensor value to accumulated state (SUM).
+		# Append G-Force sensor value to accumulated state (SUM).
         state[stream_consumer.stream_id] += abs(row.parameters["gForceX"].numeric_value)
 				
-				# Attach new column with aggregated values.
+		# Attach new column with aggregated values.
         row.add_value("gForceX_sum", state[stream_consumer.stream_id])
 
-		# Send updated rows to the producer topic.
+	# Send updated rows to the producer topic.
     topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(data)
 
 
 # read streams
-def read_stream(topic_consumer: TopicConsumer, stream_consumer: StreamConsumer):
-    # If there is no record for this stream, create a default value.
+def read_stream(stream_consumer: StreamConsumer):
+        # If there is no record for this stream, create a default value.
 		if stream_consumer.stream_id not in state:
-        state[stream_consumer.stream_id] = 0
+            state[stream_consumer.stream_id] = 0
 		
-		# We subscribe to gForceX column.
+	# We subscribe to gForceX column.
     stream_consumer.timeseries.create_buffer("gForceX").on_read = on_g_force
 
 

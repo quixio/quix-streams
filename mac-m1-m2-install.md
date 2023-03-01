@@ -59,7 +59,7 @@ To install Quix Streams on M1/M2 Macs, follow these steps:
 19. Install Quix Streams:
 
     ```
-    python3 -m pip install --extra-index-url https://test.pypi.org/simple/ quixstreams==0.5.0.dev23 --user
+    python3 -m pip install quixstreams --user
     ```
 
 20. You can now run your code that uses Quix Streams:
