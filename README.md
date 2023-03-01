@@ -415,7 +415,7 @@ This library doesn't have any dependency on any commercial product, but if you u
 
 ## Contribution Guide
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) and familiarize yourself with our [architecture](./arch-notes.md) for how you can best give feedback and contribute. 
 
 ## Need help?
 
