@@ -21,7 +21,7 @@ Quix Streams currently supports the following languages:
 - Python 
 - C#
 
-Quix Streams is [designed to be extended](/arch-notes.md) to multiple programming languages. 
+Quix Streams is [designed to be extended](https://github.com/quixio/quix-streams/blob/main/arch-notes.md) to multiple programming languages. 
 
 You can use Quix Streams to:
 
@@ -414,7 +414,7 @@ This library doesn't have any dependency on any commercial product, but if you u
 
 ## Contribution Guide
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixio/quix-streams/blob/main/CONTRIBUTING.md) and familiarize yourself with our [architecture](./arch-notes.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixio/quix-streams/blob/main/CONTRIBUTING.md) and familiarize yourself with our [architecture](https://github.com/quixio/quix-streams/blob/main/arch-notes.md) for how you can best give feedback and contribute. 
 
 ## Need help?
 
