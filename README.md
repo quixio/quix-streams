@@ -438,4 +438,4 @@ Quix Streams is licensed under the Apache 2.0 license. View a copy of the Licens
 
 You can follow us on [Twitter](https://twitter.com/quix_io) and [Linkedin](https://www.linkedin.com/company/70925173) where we share our latest tutorials, forthcoming community events and the occasional meme.  
 
-If you have any questions or feedback - write to us at support@quix.ai!
+If you have any questions or feedback - write to us at support@quix.io!
