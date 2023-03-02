@@ -63,24 +63,22 @@ To create a simple consumer, follow these steps:
 2. Create a file called `consumer.py` that contains the following code:
 
     ```python
+    import quixstreams as qx
     import pandas as pd
 
-    from quixstreams import *
-    from quixstreams.app import App
-
     # Client connecting to Kafka instance locally without authentication. 
-    client = KafkaStreamingClient('127.0.0.1:9092')
+    client = qx.KafkaStreamingClient('127.0.0.1:9092')
 
     # Open the input topic where to consume data from.
     # For testing purposes we remove consumer group and always read from latest data.
     topic_consumer = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
 
     # consume streams
-    def on_stream_received_handler(stream_received: StreamConsumer):
+    def on_stream_received_handler(stream_received: qx.StreamConsumer):
         stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler
 
     # consume data (as Pandas DataFrame)
-    def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+    def on_dataframe_received_handler(stream: qx.StreamConsumer, df: pd.DataFrame):
         print(df.to_string())
 
     # Hook up events before initiating read to avoid losing out on any data
@@ -88,7 +86,7 @@ To create a simple consumer, follow these steps:
 
     print("Listening to streams. Press CTRL-C to exit.")
     # Handle graceful exit
-    App.run()
+    qx.App.run()
     ```
 
 3. Run the code:
@@ -104,32 +102,31 @@ The code will wait for published messages and then print information about any m
     Click on the annotations to understand the consumer code:
 
     ```python
+    import quixstreams as qx
     import pandas as pd # (1)
 
-    from quixstreams import *
-    from quixstreams.app import App
 
     # Client connecting to Kafka instance locally without authentication. 
-    client = KafkaStreamingClient('127.0.0.1:9092') # (2)
+    client = qx.KafkaStreamingClient('127.0.0.1:9092') # (2)
 
     # Open the input topic where to consume data from.
     # For testing purposes we remove consumer group and always read from latest data.
     input_topic = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest) # (3)
 
     # consume streams
-    def on_stream_received_handler(stream_received: StreamConsumer): # (4)
+    def on_stream_received_handler(stream_received: qx.StreamConsumer): # (4)
         stream_received.timeseries.on_dataframe_received = on_dataframe_received_handler # (5)
 
     # consume data (as Pandas DataFrame)
-    def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame): # (6)
+    def on_dataframe_received_handler(stream: qx.StreamConsumer, df: pd.DataFrame): # (6)
         print(df.to_string()) # (7)
 
     # Hook up events before initiating read to avoid losing out on any data
-    topic_consumer.on_stream_received = on_stream_received_handler # (8)
+    input_topic.on_stream_received = on_stream_received_handler # (8)
 
     print("Listening to streams. Press CTRL-C to exit.")
     # Handle graceful exit
-    App.run() # (9)
+    qx.App.run() # (9)
     ```
 
     1. Imports the [Pandas library](https://pandas.pydata.org/){target=_blank} can be used to handle tabular data in Quix Streams. This library is supported because it is widely used.
@@ -151,14 +148,14 @@ To create a simple producer follow these steps:
 2. In your project directory, create a file called `producer.py` that contains the following code:
 
     ```python
+    import quixstreams as qx
     import time
     import datetime
     import math
 
-    from quixstreams import KafkaStreamingClient
 
     # Client connecting to Kafka instance locally without authentication. 
-    client = KafkaStreamingClient('127.0.0.1:9092')
+    client = qx.KafkaStreamingClient('127.0.0.1:9092')
 
     # Open the output topic where to produce data to.
     topic_producer = client.get_topic_producer("quickstart-topic")
@@ -213,14 +210,14 @@ You've now created and tested both a producer and consumer that uses Quix Stream
     Click on the annotations to understand the producer code:
 
     ```python
+    import quixstreams as qx
     import time
     import datetime
     import math
 
-    from quixstreams import KafkaStreamingClient
 
     # Client connecting to Kafka instance locally without authentication. 
-    client = KafkaStreamingClient('127.0.0.1:9092') # (1)
+    client = qx.KafkaStreamingClient('127.0.0.1:9092') # (1)
 
     # Open the output topic where to produce data to.
     topic_producer = client.get_topic_producer("quickstart-topic") # (2)
@@ -260,26 +257,25 @@ You've now created and tested both a producer and consumer that uses Quix Stream
 Typically a transform block in Quix will receive some data on an input topic, perform some processing on the data, and then publish data to an output topic. Example code that does this is shown here:
 
 ```python
-from quixstreams import KafkaStreamingClient, StreamConsumer
-from quixstreams.app import App
-import os
+import quixstreams as qx
 import pandas as pd
 
-client = KafkaStreamingClient('127.0.0.1:9092')
+
+client = qx.KafkaStreamingClient('127.0.0.1:9092')
 
 print("Opening consumer and producer topics")
 
 topic_consumer = client.get_topic_consumer("quickstart-topic")
 topic_producer = client.get_topic_producer("output-topic")
 
-def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.DataFrame):
     print(df) 
     print('Data transformed') # Transform your data here
     # write data to output topic
     topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df)
 
 # read streams
-def on_stream_received_handler(stream_consumer: StreamConsumer):
+def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
     stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
     
 topic_consumer.on_stream_received = on_stream_received_handler
@@ -288,7 +284,7 @@ topic_consumer.on_stream_received = on_stream_received_handler
 print("Listening to streams. Press CTRL-C to exit.")
 
 # Handle graceful exit
-App.run()
+qx.App.run()
 ```
 
 This example reads data in from the `quickstart-topic` topic, and then writes the transformed data out to the `output-topic` topic. The approach is to use callbacks to make the code event driven. You register a callback to handle data on a stream, and then when data is received, the callback to handle data frames is registered and invoked.
@@ -300,26 +296,24 @@ This approach of consuming, transforming, and producing data is a fundamental of
     Click on the annotations to understand the producer/consumer code:
 
     ```python
-    from quixstreams import KafkaStreamingClient, StreamConsumer
-    from quixstreams.app import App
-    import os
+    import quixstreams as qx
     import pandas as pd
 
-    client = KafkaStreamingClient('127.0.0.1:9092') # (1)
+    client = qx.KafkaStreamingClient('127.0.0.1:9092') # (1)
 
     print("Opening consumer and producer topics")
 
     topic_consumer = client.get_topic_consumer("quickstart-topic") # (2)
     topic_producer = client.get_topic_producer("output-topic") # (3)
 
-    def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame): # (4)
+    def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.DataFrame): # (4)
         print(df) 
         print('Data transformed') # Transform your data here
         # write data to output topic
         topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df) # (5)
 
     # read streams
-    def on_stream_received_handler(stream_consumer: StreamConsumer): # (6)
+    def on_stream_received_handler(stream_consumer: qx.StreamConsumer): # (6)
         stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler # (7)
         
     topic_consumer.on_stream_received = on_stream_received_handler # (8)
@@ -328,7 +322,7 @@ This approach of consuming, transforming, and producing data is a fundamental of
     print("Listening to streams. Press CTRL-C to exit.")
 
     # Handle graceful exit
-    App.run() # (9)
+    qx.App.run() # (9)
     ```
 
     1. Opens a connection to the Kafka server.
@@ -362,10 +356,10 @@ To connect to the Quix Platform using Quix Streams, you will need to provide a t
 The following code snippet shows you how to connect to the Quix Platform:
 
 ```python
-from quixstreams import QuixStreamingClient
+import quixstreams as qx
 
 # connect to Quix platform with token
-client = QuixStreamingClient('<your-token>') # Token 1 from Topics in portal
+client = qx.QuixStreamingClient('<your-token>') # Token 1 from Topics in portal
 ```
 
 This connects to the Quix Platform, rather than your local Kafka installation, which is the code you saw previously in this guide.
@@ -373,19 +367,17 @@ This connects to the Quix Platform, rather than your local Kafka installation, w
 A further example is to rewrite the consumer-producer program you created earlier in this Quickstart, to work with Quix Platform:
 
 ```python
-from quixstreams import QuixStreamingClient, StreamConsumer
-from quixstreams.app import App
-import os
+import quixstreams as qx
 import pandas as pd
 
-client = QuixStreamingClient('<your_sdk_token>')
+client = qx.QuixStreamingClient('<your_sdk_token>')
 
 print("Opening consumer and producer topics")
 
 topic_consumer = client.get_topic_consumer("quickstart-topic")
 topic_producer = client.get_topic_producer("output-topic")
 
-def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFrame):
+def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.DataFrame):
     print(df) 
     # Transform your data here.
     print('transformed')
@@ -393,7 +385,7 @@ def on_dataframe_received_handler(stream_consumer: StreamConsumer, df: pd.DataFr
     topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df)
 
 # read streams
-def on_stream_received_handler(stream_consumer: StreamConsumer):
+def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
     stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
     
 topic_consumer.on_stream_received = on_stream_received_handler
@@ -402,7 +394,7 @@ topic_consumer.on_stream_received = on_stream_received_handler
 print("Listening to streams. Press CTRL-C to exit.")
 
 # Handle graceful exit
-App.run()
+qx.App.run()
 ```
 
 ## Next steps
