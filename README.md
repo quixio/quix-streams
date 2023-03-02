@@ -8,7 +8,7 @@
 [![Events](https://img.shields.io/badge/-Events-blueviolet)](https://quix.io/community#events)
 [![YouTube](https://img.shields.io/badge/YouTube-FF0000.svg?logo=youtube)](https://www.youtube.com/channel/UCrijXvbQg67m9-le28c7rPA)
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/sdk/introduction.html)
-[![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixai/projects/1)
+[![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
 # What is Quix Streams?
 
@@ -382,7 +382,7 @@ For a detailed overview of features, [visit our documentation](https://www.quix.
 
 ### What's Next
 
-This library is being actively developed. We have some more features planned in the library's [road map](https://github.com/orgs/quixai/projects/1) coming soon. The main highlight a new feature called "streaming data frames" that simplifies stateful stream processing for users coming from a batch processing environment. It eliminates the need for users to manage state in memory, update rolling windows, deal with checkpointing and state persistence, and manage state recovery after a service unexpectedly restarts. By introducing a familiar interface to Pandas DataFrames, we hopes to make stream processing even more accessible to data professionals who are new to streaming data.
+This library is being actively developed. We have some more features planned in the library's [roadmap](https://github.com/orgs/quixio/projects/1) coming soon. The main highlight a new feature called "streaming data frames" that simplifies stateful stream processing for users coming from a batch processing environment. It eliminates the need for users to manage state in memory, update rolling windows, deal with checkpointing and state persistence, and manage state recovery after a service unexpectedly restarts. By introducing a familiar interface to Pandas DataFrames, we hopes to make stream processing even more accessible to data professionals who are new to streaming data.
 
 The following example shows how you would perform rolling window calculation on a streaming data frame:
 
@@ -414,15 +414,15 @@ This library doesn't have any dependency on any commercial product, but if you u
 
 ## Contribution Guide
 
-Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixai/quix-streams/blob/main/CONTRIBUTING.md) and familiarize yourself with our [architecture](./arch-notes.md) for how you can best give feedback and contribute. 
+Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before. We're very open to any feedback or code contributions to this OSS project ❤️. Before contributing, please read our [Contributing File](https://github.com/quixio/quix-streams/blob/main/CONTRIBUTING.md) and familiarize yourself with our [architecture](./arch-notes.md) for how you can best give feedback and contribute. 
 
 ## Need help?
 
-If you run into any problems, ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixai/quix-streams/issues)
+If you run into any problems, ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixio/quix-streams/issues)
 
 ## Roadmap
 
-You can view and contribute to our feature [roadmap](https://github.com/orgs/quixai/projects/1).
+You can view and contribute to our feature [roadmap](https://github.com/orgs/quixio/projects/1).
 
 ## Community 👭
 
@@ -432,7 +432,7 @@ Join other software engineers in [The Stream](https://quix.io/slack-invite), an 
 
 ## License
 
-Quix Streams is licensed under the Apache 2.0 license. View a copy of the License file [here](https://github.com/quixai/quix-streams/blob/main/LICENSE).
+Quix Streams is licensed under the Apache 2.0 license. View a copy of the License file [here](https://github.com/quixio/quix-streams/blob/main/LICENSE).
 
 ## Stay in touch 👋
 
