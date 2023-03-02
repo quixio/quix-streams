@@ -223,7 +223,7 @@ Quix Streams serializes and deserializes time-series data using different codecs
 
     for index in range(0, 3000):
         
-        stream.timeseries\
+        stream.timeseries \
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
             .add_value("Long", math.sin(index / 200.0) + math.sin(index) / 5.0) \
@@ -258,12 +258,12 @@ Time-series parameters are emitted at the same time, so they share one timestamp
 
 ```python
 # Callback triggered for each new data frame
-def on_parameter_data_handler(stream: StreamConsumer, df: pd.DataFrame):
+def on_timeseries_data_handler(stream: StreamConsumer, df: pd.DataFrame):
     
     # If the braking force applied is more than 50%, we mark HardBraking with True
     df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
 
-    stream_producer.parameters.publish(df)  # Send data back to the stream
+    stream_producer.timeseries.publish(df)  # Send data back to the stream
 ```
 
 ### Multiple data types
