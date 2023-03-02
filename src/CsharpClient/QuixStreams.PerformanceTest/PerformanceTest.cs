@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
-using QuixStreams.Telemetry.Models;
 using QuixStreams.Streaming.UnitTests;
+using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.PerformanceTest
 {

@@ -2,8 +2,8 @@
 using System.Linq;
 using System.Threading;
 using FluentAssertions;
-using QuixStreams.Streaming.Models;
 using Quix.TestBase.Extensions;
+using QuixStreams.Streaming.Models;
 using Xunit;
 using Xunit.Abstractions;
 

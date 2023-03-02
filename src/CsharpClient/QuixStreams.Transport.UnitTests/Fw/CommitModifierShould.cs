@@ -5,10 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
+using Quix.TestBase.Extensions;
 using QuixStreams.Transport.Fw;
 using QuixStreams.Transport.IO;
 using QuixStreams.Transport.UnitTests.Helpers;
-using Quix.TestBase.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 

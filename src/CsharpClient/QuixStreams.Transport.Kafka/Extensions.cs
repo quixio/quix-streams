@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 using QuixStreams.Transport.IO;
 
 namespace QuixStreams.Transport.Kafka
@@ -199,7 +198,9 @@ namespace QuixStreams.Transport.Kafka
         internal static bool IsKeepAlivePackage(this Package package)
         {
             var key = package.GetKey();
-            return key != null && key.Equals(Constants.KeepAlivePackage.GetKey());
+            if (key == null) return false;
+            if (key.Length != Constants.KeepAlivePackageKey.Length) return false;
+            return key.SequenceEqual(Constants.KeepAlivePackageKey);
         }
     }
 }

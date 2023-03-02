@@ -5,10 +5,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Quix.TestBase.Extensions;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
-using Quix.TestBase.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 

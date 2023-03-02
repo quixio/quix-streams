@@ -1,6 +1,4 @@
-﻿using QuixStreams;
-
-namespace QuixStreams.Streaming.Models
+﻿namespace QuixStreams.Streaming.Models
 {
 
     /// <summary>

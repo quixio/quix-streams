@@ -1,6 +1,6 @@
 ﻿using System;
-using QuixStreams.Telemetry.Models;
 using QuixStreams.Streaming.Models.StreamConsumer;
+using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming
 {

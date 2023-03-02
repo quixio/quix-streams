@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 using QuixStreams.Streaming;
 
 namespace QuixStreams.ManyStreamTest

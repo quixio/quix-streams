@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
-using QuixStreams.Streaming.Models;
 
 namespace QuixStreams.PerformanceTest
 {

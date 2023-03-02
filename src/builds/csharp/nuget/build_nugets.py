@@ -8,7 +8,7 @@ from typing import List
 
 version = "0.5.0.0"
 informal_version = "0.5.0.0"
-nuget_version = "0.5.0.0-dev25"
+nuget_version = "0.5.0.0"
 
 
 def updatecsproj(projfilepath):

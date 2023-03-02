@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
 using QuixStreams.Transport.IO;

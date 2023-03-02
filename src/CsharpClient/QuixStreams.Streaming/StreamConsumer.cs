@@ -1,9 +1,8 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
+using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Streaming.Models.StreamConsumer;
 
 namespace QuixStreams.Streaming
 {

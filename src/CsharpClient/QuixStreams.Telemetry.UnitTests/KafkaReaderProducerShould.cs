@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using Microsoft.VisualStudio.TestPlatform.ObjectModel;
+using Quix.TestBase.Extensions;
 using QuixStreams.Telemetry.Common.Test;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.UnitTests.Helpers;
-using Quix.TestBase.Extensions;
-using QuixStreams.Telemetry;
 using Xunit;
 using Xunit.Abstractions;
 

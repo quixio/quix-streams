@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using Microsoft.Extensions.Logging;
-using QuixStreams;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
 

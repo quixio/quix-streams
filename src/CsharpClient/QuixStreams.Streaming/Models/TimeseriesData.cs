@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
-using QuixStreams.Streaming.Utils;
 
 namespace QuixStreams.Streaming.Models
 {

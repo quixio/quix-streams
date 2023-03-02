@@ -11,8 +11,9 @@ namespace QuixStreams.Transport.Kafka
     internal class Constants
     {
         public static readonly Regex ExceptionMsRegex = new Regex(" (\\d+)ms", RegexOptions.Compiled);
-        private static readonly byte[] Key = Encoding.UTF8.GetBytes("___KA___");
+        public static readonly byte[] KeepAlivePackageKey = Encoding.UTF8.GetBytes("___KA___");
         public static Package KeepAlivePackage;
+        
 
         static Constants()
         {
@@ -27,7 +28,7 @@ namespace QuixStreams.Transport.Kafka
             
             Debug.Assert(KeepAlivePackage != null);
             
-            KeepAlivePackage.SetKey(Key);
+            KeepAlivePackage.SetKey(KeepAlivePackageKey);
         }
     }
 }
