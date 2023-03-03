@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Telemetry.Models;
@@ -552,7 +554,7 @@ namespace QuixStreams.Streaming.Models
             {
                 newDictionary.Add(kvp.Key, GenerateArrayMaskFilterMethod(kvp.Value, selectRows));
             }
-
+            
             return newDictionary;
         }
 
@@ -564,11 +566,18 @@ namespace QuixStreams.Streaming.Models
         /// <returns>Filtered array</returns>
         private static T[] GenerateArrayMaskFilterMethod<T>(T[] inp, List<int> selectRows)
         {
-            T[] ret = new T[selectRows.Count()];
-            int index = 0;
-            for (var i = 0; i < selectRows.Count; i++)
+            var ret = new T[selectRows.Count];
+            if (selectRows.Count > 1)
             {
-                ret[index++] = inp[selectRows[i]];
+                Parallel.ForEach(selectRows, (index, state, i) => { ret[i] = inp[index]; });
+            }
+            else
+            {
+                var index = 0;
+                foreach (var t in selectRows)
+                {
+                 ret[index++] = inp[t];
+                }
             }
             return ret;
         }
@@ -676,14 +685,18 @@ namespace QuixStreams.Streaming.Models
 
             int rowsLen = newTimestamps.Length;
 
-            Dictionary<string, string[]> newTagValues = new Dictionary<string, string[]>();
-            Dictionary<string, double?[]> newNumericValues = new Dictionary<string, double?[]>();
-            Dictionary<string, string[]> newStringValues = new Dictionary<string, string[]>();
-            Dictionary<string, byte[][]> newBinaryValues = new Dictionary<string, byte[][]>();
+            Dictionary<string, string[]> newTagValues;
+            Dictionary<string, double?[]> newNumericValues ;
+            Dictionary<string, string[]> newStringValues;
+            Dictionary<string, byte[][]> newBinaryValues;
 
             int index = 0;
             if (parametersFilter.Length > 0)
             {
+                newTagValues = new Dictionary<string, string[]>();
+                newNumericValues = new Dictionary<string, double?[]>();
+                newStringValues = new Dictionary<string, string[]>();
+                newBinaryValues = new Dictionary<string, byte[][]>();
                 for (var i = 0; i < TimeseriesDataRaws.Count(); i++)
                 {
                     ExtendDictionaryWithKeyFilter(TimeseriesDataRaws[i].NumericValues, this.parametersFilterSet, index, rowsLen, newNumericValues);
@@ -695,14 +708,18 @@ namespace QuixStreams.Streaming.Models
             }
             else
             {
-                for (var i = 0; i < TimeseriesDataRaws.Count(); i++)
-                {
-                    ExtendDictionary(TimeseriesDataRaws[i].NumericValues, index, rowsLen, newNumericValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].BinaryValues, index, rowsLen, newBinaryValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].StringValues, index, rowsLen, newStringValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].TagValues, index, rowsLen, newTagValues);
-                    index += TimeseriesDataRaws[i].Timestamps.Length;
-                }
+                newNumericValues = ExtendDictionary(TimeseriesDataRaws.Select(x => x.NumericValues));
+                newBinaryValues = ExtendDictionary(TimeseriesDataRaws.Select(x => x.BinaryValues));
+                newStringValues = ExtendDictionary(TimeseriesDataRaws.Select(x => x.StringValues));
+                newTagValues = ExtendDictionary(TimeseriesDataRaws.Select(x => x.TagValues));
+                // for (var i = 0; i < TimeseriesDataRaws.Count(); i++)
+                // {
+                //     ExtendDictionary(TimeseriesDataRaws[i].NumericValues, index, rowsLen, newNumericValues);
+                //     ExtendDictionary(TimeseriesDataRaws[i].BinaryValues, index, rowsLen, newBinaryValues);
+                //     ExtendDictionary(TimeseriesDataRaws[i].StringValues, index, rowsLen, newStringValues);
+                //     ExtendDictionary(TimeseriesDataRaws[i].TagValues, index, rowsLen, newTagValues);
+                //     index += TimeseriesDataRaws[i].Timestamps.Length;
+                // }
             }
 
             var ret = new TimeseriesDataRaw(
@@ -740,6 +757,27 @@ namespace QuixStreams.Streaming.Models
                 index += item.Length;
             }
             return ret;
+        }
+
+        private static Dictionary<string, T[]> ExtendDictionary<T>(IEnumerable<Dictionary<string, T[]>> originals)
+        {
+            var destination = new Dictionary<string, List<T>>();
+            foreach (var dict in originals)
+            {
+                foreach (var kvp in dict)
+                {
+                    if (destination.TryGetValue(kvp.Key, out var existingValues))
+                    {
+                        existingValues.AddRange(kvp.Value);
+                    }
+                    else
+                    {
+                        destination.Add(kvp.Key, new List<T>(kvp.Value));
+                    }
+                }
+            }
+
+            return destination.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToArray());
         }
 
         private static void ExtendDictionary<T>(Dictionary<string, T[]> mergeWith, int index, int defaultLen, Dictionary<string, T[]> originalDict)

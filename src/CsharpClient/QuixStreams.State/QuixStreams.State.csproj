@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
 		<DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
 		<Configurations>Debug;Release;Python</Configurations>
 		<Platforms>AnyCPU</Platforms>
 		<LangVersion>8.0</LangVersion>
+		<TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
 	</PropertyGroup>
 
 	<PropertyGroup>
@@ -33,7 +33,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="System.Collections.Immutable" Version="1.7.0" />
+		<PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>

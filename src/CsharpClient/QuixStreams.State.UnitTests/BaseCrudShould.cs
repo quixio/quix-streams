@@ -61,7 +61,7 @@ namespace QuixStreams.State.UnitTests
             // Act & Assert
             Func<Task> action = () => testString(storage, "VAL3", "123");
             
-            action.Should().NotThrow<FormatException>();
+            await action.Should().NotThrowAsync<FormatException>();
         }
 
         [TestMethod]

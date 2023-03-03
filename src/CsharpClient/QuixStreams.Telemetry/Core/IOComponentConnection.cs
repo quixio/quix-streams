@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Telemetry.Models;
@@ -70,11 +71,15 @@ namespace QuixStreams.Telemetry
             }
 
             // Package Subscriptions
+            
             foreach (var subscription in this.packageSubscriptions)
             {
                 this.logger.LogTrace("IOComponentConnection: {0} package has {1} generic package subscription", package.Type.Name, packageSubscriptions.Count);
                 var task = subscription?.Invoke(package);
-                if (task != null) await task;
+                if (task != null)
+                {
+                    await task;
+                }
             }
         }
 

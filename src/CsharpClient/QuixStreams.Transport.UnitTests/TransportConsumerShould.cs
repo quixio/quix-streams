@@ -32,7 +32,7 @@ namespace QuixStreams.Transport.UnitTests
             transportConsumer.Commit(new [] {transportContext, transportContext2});
 
             // Assert
-            committed.Should().BeEquivalentTo(transportContext, transportContext2);
+            committed.Should().BeEquivalentTo(new [] {transportContext, transportContext2});
         }
         
         [Fact]

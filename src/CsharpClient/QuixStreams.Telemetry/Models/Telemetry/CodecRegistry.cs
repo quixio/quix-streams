@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using QuixStreams.Telemetry.Models.Codecs;
 using QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs;
 using QuixStreams.Transport.Fw.Codecs;
 

@@ -1,11 +1,17 @@
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
+using QuixStreams.Telemetry.Models.Codecs;
 using QuixStreams.Transport.Codec;
 
-namespace QuixStreams.Telemetry.Models.Codecs
+namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
 {
     /// <summary>
     /// TimeseriesData Protobuf Codec implementation
@@ -106,62 +112,34 @@ namespace QuixStreams.Telemetry.Models.Codecs
         {
             if (inp == null)
                 return;
-            foreach (var keyValuePair in inp)
-            {
-                var row = new TimeseriesDataRawProto.Types.StringValues()
+            
+            var rows = inp
+                .AsParallel()
+                .Select(keyValuePair => new TimeseriesDataRawProto.Types.StringValues
                 {
-                    Header = keyValuePair.Key
-                };
-
-
-                string[] strings = new string[keyValuePair.Value.Length];
-                bool[] isNulls = new bool[keyValuePair.Value.Length];
-
-                int len = keyValuePair.Value.Length;
-                for (var i = 0; i < len; ++i)
-                {
-                    var isnull = keyValuePair.Value[i] == null;
-                    var value = isnull ? "" : (string) keyValuePair.Value[i];
-
-                    isNulls[i] = isnull;
-                    strings[i] = value;
-                }
-                
-                row.Isnull.AddRange(isNulls);
-                row.Values.AddRange(strings);
-
-                ret.Add(row);
-            }
+                    Header = keyValuePair.Key,
+                    Values = { keyValuePair.Value.Select(v => v ?? "") },
+                    Isnull = { keyValuePair.Value.Select(v => v == null) }
+                });
+    
+            ret.AddRange(rows);
 
         }
-
         private void SerializeNumerics(Dictionary<string, double?[]> inp, RepeatedField<TimeseriesDataRawProto.Types.NumericValues> ret)
         {
             if (inp == null)
                 return;
-            foreach (var keyValuePair in inp)
-            {
-                var row = new TimeseriesDataRawProto.Types.NumericValues()
+    
+            var rows = inp
+                .AsParallel()
+                .Select(keyValuePair => new TimeseriesDataRawProto.Types.NumericValues
                 {
-                    Header = keyValuePair.Key
-                };
-
-                int len = keyValuePair.Value.Length;
-                double[] values = new double[len];
-                bool[] isNulls = new bool[len];
-                for (var i = 0; i < len; ++i)
-                {
-                    var isnull = keyValuePair.Value[i] == null;
-                    var value = isnull ? 0 : (double)keyValuePair.Value[i];
-
-                    isNulls[i] = isnull;
-                    values[i] = value;
-                }
-                row.Isnull.AddRange(isNulls);
-                row.Values.AddRange(values);
-                
-                ret.Add(row);
-            }
+                    Header = keyValuePair.Key,
+                    Values = { keyValuePair.Value.Select(v => v.GetValueOrDefault()) },
+                    Isnull = { keyValuePair.Value.Select(v => v == null) }
+                });
+    
+            ret.AddRange(rows);
         }
         
         private void SerializeBinaries(Dictionary<string, byte[][]> inp, RepeatedField<TimeseriesDataRawProto.Types.BinaryValues> ret)
@@ -196,7 +174,7 @@ namespace QuixStreams.Telemetry.Models.Codecs
         /// <inheritdoc />
         public override TimeseriesDataRaw Deserialize(byte[] contentBytes)
         {
-            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes));
+            var raw = TimeseriesDataRawProto.Parser.ParseFrom(contentBytes.AsSpan());
 
             var numericValues = DeserializeNumerics(raw.NumericValues);
             var stringValues = DeserializeStrings(raw.StringValues);
@@ -217,23 +195,31 @@ namespace QuixStreams.Telemetry.Models.Codecs
         /// <inheritdoc />
         public override byte[] Serialize(TimeseriesDataRaw obj)
         {
-            using (MemoryStream memStream = new MemoryStream())
+            var cl = new TimeseriesDataRawProto
             {
-                byte[] ret;
-                var cl = new TimeseriesDataRawProto
-                {
-                    Epoch = obj.Epoch,
-                };
-                cl.Timestamps.AddRange(obj.Timestamps);
-                SerializeBinaries(obj.BinaryValues, cl.BinaryValues);
-                SerializeStrings(obj.StringValues, cl.StringValues);
-                SerializeStrings(obj.TagValues, cl.TagValues);
-                SerializeNumerics(obj.NumericValues, cl.NumericValues);
-                cl.WriteTo(memStream);
-                memStream.Flush();
-                ret = memStream.ToArray();
-                return ret;
-            }
+                Epoch = obj.Epoch,
+            };
+            cl.Timestamps.AddRange(obj.Timestamps);
+
+            // var actions = new Action[]
+            // {
+            //     () => SerializeBinaries(obj.BinaryValues, cl.BinaryValues),
+            //     () => SerializeStrings(obj.StringValues, cl.StringValues),
+            //     () => SerializeStrings(obj.TagValues, cl.TagValues),
+            //     () => SerializeNumerics(obj.NumericValues, cl.NumericValues)
+            // };
+            // // run serialization in parallel
+            // actions.AsParallel().ForAll(a => a());
+            
+            SerializeBinaries(obj.BinaryValues, cl.BinaryValues);
+            SerializeStrings(obj.StringValues, cl.StringValues);
+            SerializeStrings(obj.TagValues, cl.TagValues);
+            SerializeNumerics(obj.NumericValues, cl.NumericValues);
+            var size = cl.CalculateSize();
+            Span<byte> span = new byte[size];
+            cl.WriteTo(span);
+            
+            return span.ToArray();
         }
         
     }

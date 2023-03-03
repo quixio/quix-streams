@@ -1,7 +1,6 @@
 ﻿using System.Linq;
 using FluentAssertions;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Telemetry.Models.Codecs;
 using QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs;
 using QuixStreams.Transport.Fw;
 using QuixStreams.Transport.Fw.Codecs;
