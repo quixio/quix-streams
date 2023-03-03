@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using QuixStreams.Streaming;
+using QuixStreams.Streaming.UnitTests;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.ThroughputTest;
 
@@ -18,11 +19,10 @@ namespace QuixStreams.ThroughputTest
             // usage stuff
             
             // CodecRegistry.Register(CodecType.ImprovedJson);
-            
-            var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
+            var client = new TestStreamingClient();
 
-            var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic);
-            var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
+            var topicConsumer = client.GetTopicConsumer();
+            var topicProducer = client.GetTopicProducer();
 
             var stream = topicProducer.CreateStream();
             Console.WriteLine("Test stream: " + stream.StreamId);

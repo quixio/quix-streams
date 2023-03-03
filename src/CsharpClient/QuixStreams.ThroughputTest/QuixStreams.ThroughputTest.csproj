@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\QuixStreams.Streaming.UnitTests\QuixStreams.Streaming.UnitTests.csproj" />
         <ProjectReference Include="..\QuixStreams.Streaming\QuixStreams.Streaming.csproj" />
     </ItemGroup>
 
