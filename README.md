@@ -105,9 +105,8 @@ import datetime
 import math
 
 
-# Quix injects credentials automatically to the client. 
-# Alternatively, you can always pass an SDK token manually as an argument.
-client = qx.QuixStreamingClient()
+# Connect to your kafka client
+client = qx.KafkaStreamingClient('127.0.0.1:9092')
 
 # Open the output topic which is where data will be streamed out to
 topic_producer = client.get_topic_producer(topic_id_or_name = "mytesttopic")
@@ -143,7 +142,8 @@ import quixstreams as qx
 import pandas as pd
 
 
-client = qx.QuixStreamingClient()
+# Connect to your kafka client
+client = qx.KafkaStreamingClient('127.0.0.1:9092')
 
 # get the topic consumer for a specific consumer group
 topic_consumer = client.get_topic_consumer(topic_id_or_name = "mytesttopic",
