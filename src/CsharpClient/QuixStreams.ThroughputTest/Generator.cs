@@ -26,7 +26,8 @@ namespace QuixStreams.ThroughputTest
         public string GenerateStringValue(int length)
         {
             var buffer = new byte[length];
-            return Encoding.UTF8.GetString(buffer);
+            this.random.NextBytes(buffer);
+            return Convert.ToBase64String(buffer);
         }
 
         public double GenerateNumericValue()

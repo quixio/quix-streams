@@ -74,11 +74,12 @@ namespace QuixStreams.ThroughputTest
                 }
 
                 mre.Set();
+                timer.Start();
 
                 var buffer = reader.Timeseries.CreateBuffer();
-                buffer.TimeSpanInMilliseconds = 0; // this will cause it to give me batches for roughly each loop
 
-                buffer.OnRawReleased += (sender2, args) =>
+                //reader.Timeseries.OnRawReceived += (sender2, args) =>
+                buffer.OnRawReleased += (sender2, args) => 
                 {
                     var amount = args.Data.NumericValues.Keys.Count;
                     amount += args.Data.StringValues.Keys.Count;
@@ -94,78 +95,94 @@ namespace QuixStreams.ThroughputTest
             // stream.Timeseries.Buffer.BufferTimeout = 1000;
             stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
-            var generator = new Generator();
-            var stringParameters = generator.GenerateParameters(10).ToList();
-            var numericParameters = generator.GenerateParameters(90).ToList();
-            long index = 0;
+            
             stream.Epoch = DateTime.UtcNow;
-            timer.Start();
             stream.Properties.Name = "Throughput test Stream"; // this is here to avoid sending data until reader is ready
             while (!ct.IsCancellationRequested)
             {
                 if (mre.WaitOne(TimeSpan.FromSeconds(1))) break;
             }
+            
+            long index = 0;
+            int totalLength = 3250;
+            var datalist = GenerateData().Take(300).ToList();
 
+            index = 0;
             while (!ct.IsCancellationRequested)
             {
-                var data = new TimeseriesDataRaw();
-                data.Epoch = 0;
-                var totalLength = 3250;
-
-                var timestamps = new long[totalLength];
-                
-                var numericValues = new Dictionary<string, double?[]>();
-                var stringValues = new Dictionary<string, string[]>();
-                for (var loopCount = 0; loopCount < totalLength; loopCount++)
-                {
-                    timestamps[loopCount] = DateTime.UtcNow.ToBinary();
-                    foreach (var stringParameter in stringParameters)
-                    {
-                        if (!generator.HasValue())
-                        {
-                            continue;
-                        }
-                        if (!stringValues.TryGetValue(stringParameter, out var stringArray))
-                        {
-                            stringArray = new string[totalLength];
-                            stringValues[stringParameter] = stringArray;
-                        }
-
-                        stringArray[loopCount] = generator.GenerateStringValue(8);
-                    }
-                    foreach (var numericParameter in numericParameters)
-                    {
-                        if (!generator.HasValue())
-                        {
-                            continue;
-                        }
-                        if (!numericValues.TryGetValue(numericParameter, out var numericArray))
-                        {
-                            numericArray = new double?[totalLength];
-                            numericValues[numericParameter] = numericArray;
-                        }
-
-                        numericArray[loopCount] = generator.GenerateNumericValue();
-                    }
-                    
-                    index++;
-                }
-
-                foreach (var numericParameter in numericParameters)
-                {
-                    data.NumericValues.Add(numericParameter, numericValues[numericParameter]);
-                }
-                foreach (var stringParameter in stringParameters)
-                {
-                    data.StringValues.Add(stringParameter, stringValues[stringParameter]);
-                }
-                data.Timestamps = timestamps;
-                stream.Timeseries.Publish(data);
+                stream.Timeseries.Publish(datalist[0]);
+                index++;
             }
             
             stream.Close();
             topicConsumer.Dispose();
         }
-        
+
+        private TimeseriesDataRaw GenerateDataRaw(Generator generator, List<string> stringParameters, List<string> numericParameters)
+        {
+            var totalLength = 3250;
+
+            var timestamps = new long[totalLength];
+
+            var numericValues = new Dictionary<string, double?[]>();
+            var stringValues = new Dictionary<string, string[]>();
+
+            var data = new TimeseriesDataRaw();
+            for (var loopCount = 0; loopCount < totalLength; loopCount++)
+            {
+                timestamps[loopCount] = DateTime.UtcNow.ToBinary();
+                foreach (var stringParameter in stringParameters)
+                {
+                    if (!generator.HasValue())
+                    {
+                        continue;
+                    }
+
+                    if (!stringValues.TryGetValue(stringParameter, out var stringArray))
+                    {
+                        stringArray = new string[totalLength];
+                        stringValues[stringParameter] = stringArray;
+                    }
+
+                    stringArray[loopCount] = generator.GenerateStringValue(8);
+                }
+
+                foreach (var numericParameter in numericParameters)
+                {
+                    if (!generator.HasValue())
+                    {
+                        continue;
+                    }
+
+                    if (!numericValues.TryGetValue(numericParameter, out var numericArray))
+                    {
+                        numericArray = new double?[totalLength];
+                        numericValues[numericParameter] = numericArray;
+                    }
+
+                    numericArray[loopCount] = generator.GenerateNumericValue();
+                }
+            }
+
+            data.StringValues = stringValues;
+            data.NumericValues = numericValues;
+            data.Timestamps = timestamps;
+
+            return data;
+        }
+
+        private IEnumerable<TimeseriesDataRaw> GenerateData()
+        {
+            var generator = new Generator();
+            var stringParameters = generator.GenerateParameters(10).ToList();
+            var numericParameters = generator.GenerateParameters(90).ToList();
+
+
+            while (true)
+            {
+                yield return GenerateDataRaw(generator, stringParameters, numericParameters);
+            }
+        }
+
     }
 }
