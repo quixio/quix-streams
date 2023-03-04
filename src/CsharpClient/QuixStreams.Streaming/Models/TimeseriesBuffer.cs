@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -260,58 +261,64 @@ namespace QuixStreams.Streaming.Models
 
             lock (this._lock)
             {
-
-                var epoch = timeseriesDataRaw.Epoch;
-                int startIndex = 0;
-                TimeseriesData timeseriesData = null;
-
-                for (var i = 0; i < timeseriesDataRaw.Timestamps.Length; i++)
+                if (this.bufferingDisabled)
                 {
-                    var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(timeseriesDataRaw, i);
-                    if (!flushCondition && this.customTriggerBeforeEnqueue != null)
+                    bufferedFrames.Add(timeseriesDataRaw);
+                    this.totalRowsCount += timeseriesDataRaw.Timestamps.Length;
+                    FlushData(false);
+                }
+                else
+                {
+
+                    var epoch = timeseriesDataRaw.Epoch;
+                    int startIndex = 0;
+                    TimeseriesData timeseriesData = null;
+
+                    for (var i = 0; i < timeseriesDataRaw.Timestamps.Length; i++)
                     {
-                        if (timeseriesData == null)
+                        var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(timeseriesDataRaw, i);
+                        if (!flushCondition && this.customTriggerBeforeEnqueue != null)
                         {
-                            timeseriesData = new TimeseriesData(timeseriesDataRaw, null, false, false);
+                            if (timeseriesData == null)
+                            {
+                                timeseriesData = new TimeseriesData(timeseriesDataRaw, null, false, false);
+                            }
+
+                            flushCondition = this.customTriggerBeforeEnqueue(timeseriesData.Timestamps[i]);
                         }
 
-                        flushCondition = this.customTriggerBeforeEnqueue(timeseriesData.Timestamps[i]);
+                        if (flushCondition)
+                        {
+                            // add pending rows before flushing
+                            var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex);
+                            bufferedFrames.Add(splitData);
+
+                            FlushData(false);
+
+                            startIndex = i;
+                        }
+
+                        // Enqueue
+                        this.totalRowsCount++;
+
+                        if (EvaluateFlushDataConditionsAfterEnqueue(timeseriesDataRaw, startIndex, i))
+                        {
+                            var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex + 1);
+                            bufferedFrames.Add(splitData);
+
+                            FlushData(false);
+
+                            startIndex = i + 1;
+                        }
+
                     }
 
-                    if (flushCondition)
+                    if (startIndex < timeseriesDataRaw.Timestamps.Length)
                     {
-                        // add pending rows before flushing
-                        var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex);
-                        bufferedFrames.Add(splitData);
-
-                        FlushData(false);
-
-                        startIndex = i;
+                        this.bufferedFrames.Add(SelectPdrRows(timeseriesDataRaw, startIndex));
                     }
-
-                    // Enqueue
-                    this.totalRowsCount++;
-
-                    if (EvaluateFlushDataConditionsAfterEnqueue(timeseriesDataRaw, startIndex, i))
-                    {
-                        var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex + 1);
-                        bufferedFrames.Add(splitData);
-
-                        FlushData(false);
-
-                        startIndex = i + 1;
-                    }
-
                 }
 
-                if (startIndex < timeseriesDataRaw.Timestamps.Length)
-                {
-                    this.bufferedFrames.Add(SelectPdrRows(timeseriesDataRaw, startIndex));
-                }
-            }
-
-            lock (_lock)
-            {
                 if (this.bufferedFrames.Any() && this.bufferTimeout != null)
                 {
                     lock (flushBufferTimeoutTimer)
@@ -349,11 +356,6 @@ namespace QuixStreams.Streaming.Models
 
         private bool EvaluateFlushDataConditionsAfterEnqueue(TimeseriesDataRaw timeseriesDataRawInProgress, int startIndex, int endIndex)
         {
-            if (this.bufferingDisabled)
-            {
-                return true;
-            }
-
             if (this.totalRowsCount >= this.packetSize) return true; // can only evaluate to true if packetsize isn't null
 
             if (this.customTrigger != null)
@@ -547,7 +549,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="originalDictionary">Original dictionary</param>
         /// <param name="selectRows">List of indexes of the array to filter</param>
         /// <returns>Filtered dictionary</returns>
-        private static Dictionary<string, T[]> GenerateDictionaryMaskFilterMethod<T>(Dictionary<string, T[]> originalDictionary, List<int> selectRows)
+        private static Dictionary<string, T[]>GenerateDictionaryMaskFilterMethod<T>(Dictionary<string, T[]> originalDictionary, List<int> selectRows)
         {
             var newDictionary = new Dictionary<string, T[]>(originalDictionary.Count);
             foreach (var kvp in originalDictionary)
