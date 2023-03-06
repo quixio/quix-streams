@@ -17,7 +17,7 @@ namespace QuixStreams.ThroughputTest
             };
             
             
-            new StreamingTest().Run(cts.Token);
+            new StreamingTestRaw().Run(cts.Token, false);
         }
     }
 }
