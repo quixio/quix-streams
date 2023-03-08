@@ -14,7 +14,7 @@ namespace QuixStreams.Streaming.Models
     /// <summary>
     /// Class used to read from the stream in a buffered manner
     /// </summary>
-    public class TimeseriesBuffer: IDisposable
+    public class TimeseriesBufferOld: IDisposable
     {
         private bool isDisposed = false;
         private ILogger logger = Logging.CreateLogger(typeof(TimeseriesDataRaw));
@@ -46,13 +46,7 @@ namespace QuixStreams.Streaming.Models
         public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReleased;
 
         // List representing internal data structure of the buffer
-        // private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();        
-        private List<(int Start, int Count, TimeseriesBufferData data)> bufferedFrames = new List<(int, int, TimeseriesBufferData)>();
-
-
-        // private TimeseriesBufferData timeseriesBufferData = new TimeseriesBufferData();
-        private TimeseriesBufferData timeseriesBufferData = BufferOps.Get();
-
+        private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
         private object _lock;
         private int totalRowsCount = 0; // Totals rows count in bufferedFrames
 
@@ -70,7 +64,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="parametersFilter">List of parameters to filter</param>
         /// <param name="mergeOnFlush">Merge timestamps with the same timestamp and tags when releasing data from the buffer</param>
         /// <param name="cleanOnFlush">Clean timestamps with only null values when releasing data from the buffer</param>
-        internal TimeseriesBuffer(TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter = null, bool mergeOnFlush = true, bool cleanOnFlush = true)
+        internal TimeseriesBufferOld(TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter = null, bool mergeOnFlush = true, bool cleanOnFlush = true)
         {
             this.parametersFilter = parametersFilter ?? Array.Empty<string>();
             this.parametersFilterSet = new HashSet<string>(this.parametersFilter);
@@ -269,8 +263,7 @@ namespace QuixStreams.Streaming.Models
             {
                 if (this.bufferingDisabled)
                 {
-                    // TODO: Find solution for this
-                    // bufferedFrames.Add(timeseriesDataRaw);
+                    bufferedFrames.Add(timeseriesDataRaw);
                     this.totalRowsCount += timeseriesDataRaw.Timestamps.Length;
                     FlushData(false);
                 }
@@ -280,13 +273,9 @@ namespace QuixStreams.Streaming.Models
                     // var epoch = timeseriesDataRaw.Epoch;
                     int startIndex = 0;
                     TimeseriesData timeseriesData = null;
-                    
-                    timeseriesBufferData.Timestamps = new long[timeseriesDataRaw.Timestamps.Length];
-                    timeseriesBufferData.Parameters = new TimeseriesBufferDataValue[timeseriesDataRaw.Timestamps.Length][];
-                    
+
                     for (var i = 0; i < timeseriesDataRaw.Timestamps.Length; i++)
                     {
-                        BufferOps.AddTimestampToBuffer(ref timeseriesBufferData, timeseriesDataRaw, i);
                         var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(timeseriesDataRaw, i);
                         if (!flushCondition && this.customTriggerBeforeEnqueue != null)
                         {
@@ -301,10 +290,9 @@ namespace QuixStreams.Streaming.Models
                         if (flushCondition)
                         {
                             // add pending rows before flushing
-                            //var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex);
-                            //var splitData = BufferOps.ExtractRawData(timeseriesBufferData, startIndex, i - startIndex);
-                            bufferedFrames.Add((startIndex, i - startIndex, timeseriesBufferData));
-                            
+                            var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex);
+                            bufferedFrames.Add(splitData);
+
                             FlushData(false);
 
                             startIndex = i;
@@ -315,10 +303,8 @@ namespace QuixStreams.Streaming.Models
 
                         if (EvaluateFlushDataConditionsAfterEnqueue(timeseriesDataRaw, startIndex, i))
                         {
-                            //var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex + 1);
-                            //var splitData = BufferOps.ExtractRawData(timeseriesBufferData, startIndex, i - startIndex + 1);
-                            // bufferedFrames.Add(splitData);
-                            bufferedFrames.Add((startIndex, i - startIndex + 1, timeseriesBufferData));
+                            var splitData = SelectPdrRows(timeseriesDataRaw, startIndex, i - startIndex + 1);
+                            bufferedFrames.Add(splitData);
 
                             FlushData(false);
 
@@ -329,14 +315,10 @@ namespace QuixStreams.Streaming.Models
 
                     if (startIndex < timeseriesDataRaw.Timestamps.Length)
                     {
-                        // this.bufferedFrames.Add(SelectPdrRows(timeseriesDataRaw, startIndex));
-                        // this.bufferedFrames.Add(BufferOps.ExtractRawData(timeseriesBufferData, startIndex, null));
-                        this.bufferedFrames.Add((startIndex, timeseriesDataRaw.Timestamps.Length - startIndex, timeseriesBufferData));
+                        this.bufferedFrames.Add(SelectPdrRows(timeseriesDataRaw, startIndex));
                     }
                 }
 
-                // timeseriesBufferData.Parameters.Clear();
-                // timeseriesBufferData.Timestamps.Clear();
                 if (this.bufferedFrames.Any() && this.bufferTimeout != null)
                 {
                     lock (flushBufferTimeoutTimer)
@@ -346,8 +328,6 @@ namespace QuixStreams.Streaming.Models
                             Timeout.Infinite); // Reset / Enable timer
                     }
                 }
-
-                timeseriesBufferData = BufferOps.Get();
             }
 
         }
@@ -378,39 +358,38 @@ namespace QuixStreams.Streaming.Models
         {
             if (this.totalRowsCount >= this.packetSize) return true; // can only evaluate to true if packetsize isn't null
 
-            // TODO: Add custom triggers
-            // if (this.customTrigger != null)
-            // {
-            //     if (this.CustomTrigger(GenerateTimeseriesDataFromBuffer(timeseriesDataRawInProgress, startIndex, endIndex))) return true;
-            // }
+            if (this.customTrigger != null)
+            {
+                if (this.CustomTrigger(GenerateTimeseriesDataFromBuffer(timeseriesDataRawInProgress, startIndex, endIndex))) return true;
+            }
 
             return false;
         }
 
-        // private TimeseriesData GenerateTimeseriesDataFromBuffer(TimeseriesDataRaw timeseriesDataRawInProgress, int startIndex, int endIndex)
-        // {
-        //     List<TimeseriesDataTimestamp> timestamps = new List<TimeseriesDataTimestamp>();
-        //     TimeseriesData timeseriesData = null;
-        //
-        //     // Rows already on buffer
-        //     foreach (var raw in this.bufferedFrames)
-        //     {
-        //         timeseriesData = new TimeseriesData(raw, null, false, false);
-        //         foreach (var timeseriesDataTimestamp in timeseriesData.Timestamps)
-        //         {
-        //             timestamps.Add(timeseriesDataTimestamp);
-        //         }
-        //     }
-        //
-        //     // Row on current processing TimeseriesDataRaw
-        //     timeseriesData = new TimeseriesData(timeseriesDataRawInProgress, null, false, false);
-        //     for(var i = startIndex; i <= endIndex; i++) 
-        //     {
-        //         timestamps.Add(timeseriesData.Timestamps[i]);
-        //     }
-        //
-        //     return new TimeseriesData(timestamps, false, false);
-        // }
+        private TimeseriesData GenerateTimeseriesDataFromBuffer(TimeseriesDataRaw timeseriesDataRawInProgress, int startIndex, int endIndex)
+        {
+            List<TimeseriesDataTimestamp> timestamps = new List<TimeseriesDataTimestamp>();
+            TimeseriesData timeseriesData = null;
+
+            // Rows already on buffer
+            foreach (var raw in this.bufferedFrames)
+            {
+                timeseriesData = new TimeseriesData(raw, null, false, false);
+                foreach (var timeseriesDataTimestamp in timeseriesData.Timestamps)
+                {
+                    timestamps.Add(timeseriesDataTimestamp);
+                }
+            }
+
+            // Row on current processing TimeseriesDataRaw
+            timeseriesData = new TimeseriesData(timeseriesDataRawInProgress, null, false, false);
+            for(var i = startIndex; i <= endIndex; i++) 
+            {
+                timestamps.Add(timeseriesData.Timestamps[i]);
+            }
+
+            return new TimeseriesData(timestamps, false, false);
+        }
         
         /// <summary>
         /// Flush data from the buffer and release it to make it available for Read events subscribers
@@ -429,28 +408,25 @@ namespace QuixStreams.Streaming.Models
             {
                 void RaiseData() // private function to help early return
                 {
-                    List<(int Start, int Count, TimeseriesBufferData Data)> loadedData;
+                    List<TimeseriesDataRaw> loadedData;
 
                     lock (this._lock)
                     {
                         if (this.totalRowsCount == 0) return; // check again in case it changes since entering the condition
-                        loadedData = new List<(int Start, int Count, TimeseriesBufferData Data)>(this.bufferedFrames);
+                        loadedData = new List<TimeseriesDataRaw>(this.bufferedFrames);
                         if (loadedData.Count == 0) return; // this shouldn't be possible any more, but safer code won't hurt
                         this.totalRowsCount = 0;
-                        // this.bufferedFrames = new List<TimeseriesDataRaw>();
-                        this.bufferedFrames.Clear();
+                        this.bufferedFrames = new List<TimeseriesDataRaw>();
                     }
 
                     if (this.OnDataReleased == null && this.OnRawReleased == null) return;
                     
-                    // var newPdrw = this.ConcatDataFrames(loadedData);
-                    // if (this.mergeOnFlush)
-                    // {
-                    //     newPdrw = this.MergeTimestamps(newPdrw);
-                    // }
-                    // var (start, count) = BufferOps.MergeIndices(loadedData);
-                    var newPdrw = BufferOps.ExtractRawData(loadedData); 
-                    
+                    var newPdrw = this.ConcatDataFrames(loadedData);
+                    if (this.mergeOnFlush)
+                    {
+                        newPdrw = this.MergeTimestamps(newPdrw);
+                    }
+
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
 
                     if (newPdrw.Timestamps.Length <= 0) return;
@@ -459,7 +435,6 @@ namespace QuixStreams.Streaming.Models
                     if (this.OnDataReleased == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
                     this.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(null, null, data));
-                    BufferOps.Release(loadedData);
                 }
 
                 RaiseData();
