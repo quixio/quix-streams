@@ -60,7 +60,7 @@ namespace QuixStreams.Transport.Fw
             {
                 return Task.CompletedTask;
             }
-
+            
             var mergedPackageBytes = this.merger.Merge(bytePackage, out var bufferId);
 
             if (mergedPackageBytes == null)
@@ -116,6 +116,7 @@ namespace QuixStreams.Transport.Fw
             return RaiseNextPackageIfReady();
         }
 
+        
         private async Task RaiseNextPackageIfReady()
         {
             // The logic here has to be locked, because it touches multiple objects based on condition of other ones

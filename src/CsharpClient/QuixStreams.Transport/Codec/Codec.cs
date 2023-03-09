@@ -26,7 +26,7 @@ namespace QuixStreams.Transport.Codec
         public abstract TContent Deserialize(byte[] contentBytes);
 
         /// <inheritdoc />
-        public abstract byte[] Serialize(TContent obj);
+        public abstract Span<byte> Serialize(TContent obj);
 
         /// <inheritdoc />
         public virtual bool TryDeserialize(byte[] contentBytes, out object content)
@@ -48,7 +48,7 @@ namespace QuixStreams.Transport.Codec
         public virtual Type Type { get; } = typeof(TContent);
 
         /// <inheritdoc />
-        public virtual bool TrySerialize(object obj, out byte[] serialized)
+        public virtual bool TrySerialize(object obj, out Span<byte> serialized)
         {
             serialized = null;
             if (obj is TContent typeValue)
@@ -58,6 +58,7 @@ namespace QuixStreams.Transport.Codec
             }
 
             return false;
+
         }
     }
 }

@@ -30,6 +30,12 @@ namespace QuixStreams.Transport.Fw
         /// <returns>An awaitable <see cref="Task"/></returns>
         public Task Send(Package package, CancellationToken cancellationToken = default)
         {
+            return Task.Factory.StartNew(() => SendTask(package, cancellationToken), cancellationToken);
+            //return SendTask(package, cancellationToken);
+        }
+
+        private Task SendTask(Package package, CancellationToken cancellationToken = default)
+        {
             if (cancellationToken.IsCancellationRequested) return Task.FromCanceled(cancellationToken);
             if (this.OnNewPackage == null) return Task.CompletedTask;
             var modelKey = ModelKeyRegistry.GetModelKey(package.Type);
@@ -42,6 +48,7 @@ namespace QuixStreams.Transport.Fw
             var bytePackage = this.SerializePackage(package, codec, new CodecBundle(modelKey, codec.Id));
             return this.OnNewPackage(bytePackage);
         }
+        
 
         /// <summary>
         /// Serialize Model package into byte package
@@ -53,7 +60,7 @@ namespace QuixStreams.Transport.Fw
         private Package<byte[]> SerializePackage(Package package, ICodec codec, CodecBundle valueCodecBundle)
         {
             var value = this.GetSerializedValue(package, codec);
-            var transportPackageValue = new TransportPackageValue(value, valueCodecBundle, package.MetaData);
+            var transportPackageValue = new TransportPackageValue(value.ToArray(), valueCodecBundle, package.MetaData);
             var serializedTransportPackageValue = TransportPackageValueCodec.Serialize(transportPackageValue);
             
             return new Package<byte[]>(serializedTransportPackageValue, null, package.TransportContext);
@@ -65,7 +72,7 @@ namespace QuixStreams.Transport.Fw
         /// <param name="package"></param>
         /// <param name="codec"></param>
         /// <returns></returns>
-        private byte[] GetSerializedValue(Package package, ICodec codec)
+        private Span<byte> GetSerializedValue(Package package, ICodec codec)
         {
             if (codec == null)
             {

@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using QuixStreams.Transport.Codec;
@@ -108,27 +110,29 @@ namespace QuixStreams.Telemetry.Models.Codecs
                 return;
             foreach (var keyValuePair in inp)
             {
+                var name = keyValuePair.Key;
+                var dataValue = keyValuePair.Value;
                 var row = new TimeseriesDataRawProto.Types.StringValues()
                 {
-                    Header = keyValuePair.Key
+                    Header = name
                 };
+                
+                var len = keyValuePair.Value.Length;
 
+                var values = new RepeatedField<string> { Capacity = len };
+                var isNulls = new RepeatedField<bool> { Capacity = len };
 
-                string[] strings = new string[keyValuePair.Value.Length];
-                bool[] isNulls = new bool[keyValuePair.Value.Length];
-
-                int len = keyValuePair.Value.Length;
                 for (var i = 0; i < len; ++i)
                 {
-                    var isnull = keyValuePair.Value[i] == null;
+                    var isnull = dataValue[i] == null;
                     var value = isnull ? "" : (string) keyValuePair.Value[i];
 
-                    isNulls[i] = isnull;
-                    strings[i] = value;
+                    isNulls.Add(isnull);
+                    values.Add(value);
                 }
                 
-                row.Isnull.AddRange(isNulls);
-                row.Values.AddRange(strings);
+                row.Isnull = isNulls;
+                row.Values = values;
 
                 ret.Add(row);
             }
@@ -138,27 +142,34 @@ namespace QuixStreams.Telemetry.Models.Codecs
         private void SerializeNumerics(Dictionary<string, double?[]> inp, RepeatedField<TimeseriesDataRawProto.Types.NumericValues> ret)
         {
             if (inp == null)
+            {
                 return;
+            }
+            
             foreach (var keyValuePair in inp)
             {
+                var name = keyValuePair.Key;
+                var dataValue = keyValuePair.Value;
                 var row = new TimeseriesDataRawProto.Types.NumericValues()
                 {
-                    Header = keyValuePair.Key
+                    Header = name
                 };
-
-                int len = keyValuePair.Value.Length;
-                double[] values = new double[len];
-                bool[] isNulls = new bool[len];
+            
+                var len = dataValue.Length;
+                
+                var values = new RepeatedField<double> { Capacity = len };
+                var isNulls = new RepeatedField<bool> { Capacity = len };
+                
                 for (var i = 0; i < len; ++i)
                 {
-                    var isnull = keyValuePair.Value[i] == null;
-                    var value = isnull ? 0 : (double)keyValuePair.Value[i];
-
-                    isNulls[i] = isnull;
-                    values[i] = value;
+                    var isnull = !dataValue[i].HasValue;
+                    var value = dataValue[i].GetValueOrDefault(0);
+            
+                    isNulls.Add(isnull);
+                    values.Add(value);
                 }
-                row.Isnull.AddRange(isNulls);
-                row.Values.AddRange(values);
+                row.Isnull = isNulls;
+                row.Values = values;
                 
                 ret.Add(row);
             }
@@ -215,26 +226,33 @@ namespace QuixStreams.Telemetry.Models.Codecs
         }
         
         /// <inheritdoc />
-        public override byte[] Serialize(TimeseriesDataRaw obj)
+        public override Span<byte> Serialize(TimeseriesDataRaw obj)
         {
-            using (MemoryStream memStream = new MemoryStream())
+            var cl = new TimeseriesDataRawProto
             {
-                byte[] ret;
-                var cl = new TimeseriesDataRawProto
-                {
-                    Epoch = obj.Epoch,
-                };
-                cl.Timestamps.AddRange(obj.Timestamps);
-                SerializeBinaries(obj.BinaryValues, cl.BinaryValues);
-                SerializeStrings(obj.StringValues, cl.StringValues);
-                SerializeStrings(obj.TagValues, cl.TagValues);
-                SerializeNumerics(obj.NumericValues, cl.NumericValues);
-                cl.WriteTo(memStream);
-                memStream.Flush();
-                ret = memStream.ToArray();
-                return ret;
-            }
+                Epoch = obj.Epoch
+            };
+            
+            cl.Timestamps.AddRange(obj.Timestamps);
+
+            var actions = new []
+            {
+                Task.Factory.StartNew(() => SerializeBinaries(obj.BinaryValues, cl.BinaryValues)),
+                Task.Factory.StartNew(() => SerializeStrings(obj.StringValues, cl.StringValues)),
+                Task.Factory.StartNew(() => SerializeStrings(obj.TagValues, cl.TagValues)),
+                Task.Factory.StartNew(() => SerializeNumerics(obj.NumericValues, cl.NumericValues))
+            };
+            Task.WaitAll(actions);
+            
+            // SerializeBinaries(obj.BinaryValues, cl.BinaryValues);
+            // SerializeStrings(obj.StringValues, cl.StringValues);
+            // SerializeStrings(obj.TagValues, cl.TagValues);
+            // SerializeNumerics(obj.NumericValues, cl.NumericValues);
+            
+            var size = cl.CalculateSize();
+            Span<byte> span = new byte[size];
+            cl.WriteTo(span);
+            return span;
         }
-        
     }
 }
