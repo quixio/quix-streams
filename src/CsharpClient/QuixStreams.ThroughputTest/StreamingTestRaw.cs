@@ -66,7 +66,7 @@ namespace QuixStreams.ThroughputTest
                     
                     // remove outliers
                     var outliersRemovedMessage = "";
-                    if (!double.IsNaN(std) && parameters.Count > 10)
+                    if (!double.IsNaN(std) && parameters.Count % 10 == 0)
                     {
                         var lowThreshold = mean - std * 2;
                         var highThreshold = mean + std * 2;
@@ -126,10 +126,10 @@ namespace QuixStreams.ThroughputTest
             topicConsumer.Subscribe();
 
             
-            // stream.Timeseries.Buffer.PacketSize = 1000;
+            stream.Timeseries.Buffer.PacketSize = 1000;
             // stream.Timeseries.Buffer.TimeSpanInMilliseconds = 1000;
             // stream.Timeseries.Buffer.BufferTimeout = 1000;
-            stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
+            //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
             
             stream.Epoch = DateTime.UtcNow;
@@ -140,7 +140,7 @@ namespace QuixStreams.ThroughputTest
             }
             
             var index = 0;
-            var totalSamples = 300;
+            var totalSamples = 30;
             var datalist = GenerateData().Take(totalSamples).ToList();
 
             index = 0;
