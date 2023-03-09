@@ -63,7 +63,7 @@ namespace QuixStreams.Transport.Samples.Samples
                     });
                 }
 
-                var package = new Package<ExampleModel>(new Lazy<ExampleModel>(new ExampleModel()), metaData);
+                var package = new Package<ExampleModel>(new ExampleModel(), metaData);
                 package.SetKey(Encoding.UTF8.GetBytes($"DataSet {counter}"));
 
                 var sendTask = producer.Publish(package, ct);

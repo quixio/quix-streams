@@ -45,7 +45,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             sw.Elapsed.TotalMilliseconds.Should().BeLessThan(50); // I'm giving Task Library 50 ms to get its act together and call what it needs to. Usually takes ~1-2ms
             task.IsCompleted.Should().BeTrue();
             nonGeneric.Should().NotBeNull();
-            ((byte[])nonGeneric.Value.Value).Should().BeEquivalentTo(package.Value.Value);
+            ((byte[])nonGeneric.Value).Should().BeEquivalentTo(package.Value.Value);
             nonGeneric.MetaData.Should().BeEquivalentTo(package.MetaData);
             nonGeneric.TransportContext.Should().BeEquivalentTo(package.TransportContext);
         }
@@ -179,7 +179,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             packagesReceived.Count().Should().Be(3); // the last segment arrived for the package wrapping the normal package, so both the normal and the merged release
 
             // Assert
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
         }
         
@@ -232,7 +232,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Assert
             tasks.All(x=> x.IsCompleted).Should().BeTrue();
             packagesReceived.Count().Should().Be(1);
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
         }
         
@@ -285,7 +285,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Assert
             tasks.All(x=> x.IsCompleted).Should().BeTrue();
             packagesReceived.Count().Should().Be(1);
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
         }
 
@@ -405,7 +405,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Assert
             tasks.All(x=> x.IsCompleted).Should().BeTrue();
             packagesReceived.Count().Should().Be(2);
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
             merger.Received(1).Purge("p1");
             merger.Received(1).Purge(Arg.Any<string>()); // the non-fragments shouldn't get purged - and cause exceptions in merger -

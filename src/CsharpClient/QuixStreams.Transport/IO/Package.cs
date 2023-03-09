@@ -14,8 +14,8 @@ namespace QuixStreams.Transport.IO
         /// <param name="value">The lazy content value</param>
         /// <param name="metaData">The content meta data</param>
         /// <param name="transportContext">The extra context relevant for transporting the package</param>
-        public Package(Lazy<TContent> value, MetaData metaData = null, TransportContext transportContext = null) :
-            base(typeof(TContent), new Lazy<object>(() => value.Value), metaData, transportContext)
+        public Package(TContent value, MetaData metaData = null, TransportContext transportContext = null) :
+            base(typeof(TContent), value, metaData, transportContext)
         {
             this.Value = value;
         }
@@ -23,7 +23,7 @@ namespace QuixStreams.Transport.IO
         /// <summary>
         /// The content value of the package
         /// </summary>
-        public new Lazy<TContent> Value { get; }
+        public new TContent Value { get; }
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ namespace QuixStreams.Transport.IO
         /// <param name="value">The lazy content value</param>
         /// <param name="metaData">The content meta data</param>
         /// <param name="transportContext">The extra context relevant for transporting the package</param>
-        public Package(Type type, Lazy<object> value, MetaData metaData = null, TransportContext transportContext = null)
+        public Package(Type type, object value, MetaData metaData = null, TransportContext transportContext = null)
         {
             this.Type = type;
             this.Value = value;
@@ -56,7 +56,7 @@ namespace QuixStreams.Transport.IO
         /// <summary>
         /// The content value of the package
         /// </summary>
-        public Lazy<object> Value { get; protected set; }
+        public object Value { get; protected set; }
 
         /// <summary>
         /// The transport context of the package
@@ -92,7 +92,7 @@ namespace QuixStreams.Transport.IO
                 return false;
             }
 
-            convertedPackage = new Package<TContent>(new Lazy<TContent>(() => (TContent) this.Value.Value), this.MetaData, this.TransportContext);
+            convertedPackage = new Package<TContent>((TContent)this.Value, this.MetaData, this.TransportContext);
             return true;
         }
     }

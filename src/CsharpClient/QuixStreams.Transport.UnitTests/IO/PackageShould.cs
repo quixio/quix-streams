@@ -58,7 +58,7 @@ namespace QuixStreams.Transport.UnitTests.IO
             var package = new Package(typeof(object), new Lazy<object>(() => (object)(1 + 2 + 3)));
 
             // Assert
-            ((int)package.Value.Value).Should().Be(6);
+            ((int)package.Value).Should().Be(6);
         }
 
         [Fact]
@@ -69,7 +69,7 @@ namespace QuixStreams.Transport.UnitTests.IO
 
             // Assert
             package.Value.Value.Should().Be(6);
-            ((int)((Package)package).Value.Value).Should().Be(6);
+            ((int)((Package)package).Value).Should().Be(6);
         }
 
 
@@ -87,7 +87,7 @@ namespace QuixStreams.Transport.UnitTests.IO
 
             // Act
             package.Value.Value.Should().Be(6);
-            ((int)((Package)package).Value.Value).Should().Be(6);
+            ((int)((Package)package).Value).Should().Be(6);
 
             // Assert
             counter.Should().Be(1);

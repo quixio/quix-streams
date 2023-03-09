@@ -52,14 +52,11 @@ namespace QuixStreams.Transport.Fw
         /// <returns>The package serialized lazily</returns>
         private Package<byte[]> SerializePackage(Package package, ICodec codec, CodecBundle valueCodecBundle)
         {
-            var lazyTransportPackageValue = new Lazy<byte[]>(() =>
-            {
-                var lazyValue = new Lazy<byte[]>(() => this.GetSerializedValue(package, codec));
-                var transportPackageValue = new TransportPackageValue(lazyValue, valueCodecBundle, package.MetaData);
-                return TransportPackageValueCodec.Serialize(transportPackageValue);
-            });
-
-            return new Package<byte[]>(lazyTransportPackageValue, null, package.TransportContext);
+            var value = this.GetSerializedValue(package, codec);
+            var transportPackageValue = new TransportPackageValue(value, valueCodecBundle, package.MetaData);
+            var serializedTransportPackageValue = TransportPackageValueCodec.Serialize(transportPackageValue);
+            
+            return new Package<byte[]>(serializedTransportPackageValue, null, package.TransportContext);
         }
 
         /// <summary>
@@ -75,7 +72,7 @@ namespace QuixStreams.Transport.Fw
                 throw new SerializationException($"Failed to serialize type '{package.Type}', because no codec is available");
             }
 
-            if (codec.TrySerialize(package.Value.Value, out var serializedValue))
+            if (codec.TrySerialize(package.Value, out var serializedValue))
             {
                 return serializedValue;
             }

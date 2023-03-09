@@ -286,7 +286,7 @@ namespace QuixStreams.Transport.Kafka
                     {
                         tryCount++;
                         var key = package.GetKey();
-                        var byteArray = (byte[]) package.Value.Value;
+                        var byteArray = (byte[]) package.Value;
                         handler(key, byteArray, DeliveryHandler, state);
                         success = true;
                     }

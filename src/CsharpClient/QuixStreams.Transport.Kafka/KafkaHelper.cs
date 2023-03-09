@@ -24,8 +24,7 @@ namespace QuixStreams.Transport.Kafka
                 {KnownKafkaTransportContextKeys.DateTime, consumeResult.Message.Timestamp.UtcDateTime},
                 {KnownKafkaTransportContextKeys.MessageSize, consumeResult.Message.Value.Length}
             });
-            var value = new Lazy<byte[]>(() => consumeResult.Message.Value);
-            return new Package<byte[]>(value, null, tContext);
+            return new Package<byte[]>(consumeResult.Message.Value, null, tContext);
         }
     }
 }
