@@ -83,13 +83,13 @@ namespace QuixStreams.Transport.Kafka
             {
                 consumerProperties["socket.keepalive.enable"] = "true"; // default to true
             }
-            /*
-             https://github.com/edenhill/librdkafka/issues/3109 not yet implemented
-            if (!producerProperties.ContainsKey("connections.max.idle.ms"))
+
+            if (!consumerProperties.ContainsKey("connections.max.idle.ms"))
             {
-                producerProperties["connections.max.idle.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
+                consumerProperties["connections.max.idle.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
                 // see more at https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
-            }*/
+            }
+            
             if (!consumerProperties.ContainsKey("metadata.max.age.ms"))
             {
                 consumerProperties["metadata.max.age.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
