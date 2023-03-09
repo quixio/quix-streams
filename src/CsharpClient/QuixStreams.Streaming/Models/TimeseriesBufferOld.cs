@@ -14,7 +14,7 @@ namespace QuixStreams.Streaming.Models
     /// <summary>
     /// Class used to read from the stream in a buffered manner
     /// </summary>
-    public class TimeseriesBufferOld: IDisposable
+    public class TimeseriesBuffer: IDisposable
     {
         private bool isDisposed = false;
         private ILogger logger = Logging.CreateLogger(typeof(TimeseriesDataRaw));
@@ -64,7 +64,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="parametersFilter">List of parameters to filter</param>
         /// <param name="mergeOnFlush">Merge timestamps with the same timestamp and tags when releasing data from the buffer</param>
         /// <param name="cleanOnFlush">Clean timestamps with only null values when releasing data from the buffer</param>
-        internal TimeseriesBufferOld(TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter = null, bool mergeOnFlush = true, bool cleanOnFlush = true)
+        internal TimeseriesBuffer(TimeseriesBufferConfiguration bufferConfiguration, string[] parametersFilter = null, bool mergeOnFlush = true, bool cleanOnFlush = true)
         {
             this.parametersFilter = parametersFilter ?? Array.Empty<string>();
             this.parametersFilterSet = new HashSet<string>(this.parametersFilter);

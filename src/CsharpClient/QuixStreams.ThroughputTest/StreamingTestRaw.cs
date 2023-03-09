@@ -127,10 +127,10 @@ namespace QuixStreams.ThroughputTest
             topicConsumer.Subscribe();
 
             
-            // stream.Timeseries.Buffer.PacketSize = 1000;
+            stream.Timeseries.Buffer.PacketSize = 1000;
             // stream.Timeseries.Buffer.TimeSpanInMilliseconds = 1000;
             // stream.Timeseries.Buffer.BufferTimeout = 1000;
-            stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
+            //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
             
             stream.Epoch = DateTime.UtcNow;

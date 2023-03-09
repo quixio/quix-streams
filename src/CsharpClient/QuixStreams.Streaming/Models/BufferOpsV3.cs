@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Buffers;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.ObjectPool;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming.Models
@@ -67,8 +63,7 @@ namespace QuixStreams.Streaming.Models
                     throw new ArgumentException("The loaded data is inconsistent.", nameof(loadedData));
                 }
 
-                data.Timestamps.Span.Slice(start, count).CopyTo(timestamps.Span.Slice(timestampIndex, count));
-
+                data.Timestamps.Slice(start, count).CopyTo(timestamps.Slice(timestampIndex, count));
                 
                 var numericMemory = new Memory<double?>(new double?[totalTimestampsCount]);
                 var numericParameterNames = data.ParameterNames.Span[ParameterType.Numeric].Span;
@@ -136,15 +131,31 @@ namespace QuixStreams.Streaming.Models
 
         public static TimeseriesBufferData Get(TimeseriesDataRaw rawData)
         {
-            var totalLength = rawData.Timestamps.Length;
-            var buffer = new TimeseriesBufferData();
-            
-            buffer.Timestamps = new Memory<long>(new long[totalLength]);
+            return new TimeseriesBufferData(rawData);
+        }
+    }
 
-            buffer.NumericValues = new Memory<Memory<double?>>(new Memory<double?>[rawData.NumericValues.Count]);
-            buffer.StringValues = new Memory<Memory<string>>(new Memory<string>[rawData.StringValues.Count]);
-            buffer.BinaryValues = new Memory<Memory<byte[]>>(new Memory<byte[]>[rawData.TagValues.Count]);
-            buffer.TagValues = new Memory<Memory<string>>(new Memory<string>[rawData.TagValues.Count]);
+    public struct TimeseriesBufferData
+    {
+        public long Epoch;
+        public Memory<long> Timestamps;
+        public ReadOnlyMemory<Memory<double?>> NumericValues;
+        public ReadOnlyMemory<Memory<string>> StringValues;
+        public ReadOnlyMemory<Memory<byte[]>> BinaryValues;
+        public ReadOnlyMemory<Memory<string>> TagValues;
+        public ReadOnlyMemory<Memory<string>> ParameterNames;
+
+        public TimeseriesBufferData(TimeseriesDataRaw rawData)
+        {
+            Epoch = rawData.Epoch;
+            var totalLength = rawData.Timestamps.Length;
+            
+            Timestamps = new Memory<long>(new long[totalLength]);
+
+            var numericValues = new Memory<Memory<double?>>(new Memory<double?>[rawData.NumericValues.Count]);
+            var stringValues = new Memory<Memory<string>>(new Memory<string>[rawData.StringValues.Count]);
+            var binaryValues = new Memory<Memory<byte[]>>(new Memory<byte[]>[rawData.TagValues.Count]);
+            var tagValues = new Memory<Memory<string>>(new Memory<string>[rawData.TagValues.Count]);
             
             var namesMemory = new Memory<Memory<string>>(new Memory<string>[4]);
             var numericNameMemory = new Memory<string>(new string[rawData.NumericValues.Keys.Count]);
@@ -160,46 +171,37 @@ namespace QuixStreams.Streaming.Models
             var numericIndex = 0;
             foreach (var parameterName in rawData.NumericValues.Keys)
             {
-                buffer.NumericValues.Span[numericIndex] = new Memory<double?>(new double?[totalLength]);
+                numericValues.Span[numericIndex] = new Memory<double?>(new double?[totalLength]);
                 numericNameMemory.Span[numericIndex++] = parameterName;
             }
             
             var stringIndex = 0;
             foreach (var parameterName in rawData.StringValues.Keys)
             {
-                buffer.StringValues.Span[stringIndex] = new Memory<string>(new string[totalLength]);
+                stringValues.Span[stringIndex] = new Memory<string>(new string[totalLength]);
                 stringNameMemory.Span[stringIndex++] = parameterName;
             }
             
             var binaryIndex = 0;
             foreach (var parameterName in rawData.BinaryValues.Keys)
             {
-                buffer.BinaryValues.Span[binaryIndex] = new Memory<byte[]>(new byte[totalLength][]);
+                binaryValues.Span[binaryIndex] = new Memory<byte[]>(new byte[totalLength][]);
                 binaryNameMemory.Span[binaryIndex++] = parameterName;
             }
 
             var tagIndex = 0;
             foreach (var parameterName in rawData.TagValues.Keys)
             {
-                buffer.TagValues.Span[tagIndex] = new Memory<string>(new string[totalLength]);
+                tagValues.Span[tagIndex] = new Memory<string>(new string[totalLength]);
                 tagNameMemory.Span[tagIndex++] = parameterName;
             }
             
-            buffer.ParameterNames = namesMemory;
-
-            return buffer;
+            ParameterNames = namesMemory;
+            NumericValues = numericValues;
+            StringValues = stringValues;
+            BinaryValues = binaryValues;
+            TagValues = tagValues;
         }
-    }
-
-    public struct TimeseriesBufferData
-    {
-        public long Epoch;
-        public Memory<long> Timestamps;
-        public Memory<Memory<double?>> NumericValues;
-        public Memory<Memory<string>> StringValues;
-        public Memory<Memory<byte[]>> BinaryValues;
-        public Memory<Memory<string>> TagValues;
-        public Memory<Memory<string>> ParameterNames;
     }
 
     public static class ParameterType

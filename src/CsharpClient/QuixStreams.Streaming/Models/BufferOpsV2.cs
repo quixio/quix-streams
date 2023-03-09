@@ -1,262 +1,209 @@
-﻿using System;
-using System.Buffers;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Extensions.ObjectPool;
-using QuixStreams.Telemetry.Models;
-
-namespace QuixStreams.Streaming.Models
-{
-    public class BufferOps
-    {
-        private static readonly ObjectPool<TimeseriesBufferDataValue> _parameterListPool =
-            new DefaultObjectPool<TimeseriesBufferDataValue>(new DefaultPooledObjectPolicy<TimeseriesBufferDataValue>());
-
-        public static void AddTimestampToBuffer(ref TimeseriesBufferData buffer, TimeseriesDataRaw rawData,
-            int index)
-        {
-            var timestamp = rawData.Timestamps[index];
-            var epoch = rawData.Epoch;
-            buffer.Timestamps.Span[index] = timestamp;
-            
-            var totalParameters = rawData.NumericValues.Count +
-                                  rawData.BinaryValues.Count +
-                                  rawData.StringValues.Count +
-                                  rawData.TagValues.Count;
-
-            var parameterList = new TimeseriesBufferDataValue[totalParameters];
-
-            var parameterIndex = 0;
-
-
-            foreach (var item in rawData.NumericValues)
-            {
-                var parameter = new TimeseriesBufferDataValue(epoch, item.Key, item.Value[index]);
-                
-                // var parameter = _parameterListPool.Get();
-                // parameter.Set(epoch, item.Key, item.Value[index]);
-                parameterList[parameterIndex++] = parameter;
-            }
-
-            foreach (var item in rawData.StringValues)
-            {
-                var parameter = new TimeseriesBufferDataValue(epoch, item.Key, item.Value[index]);
-                
-                // var parameter = _parameterListPool.Get();
-                // parameter.Set(epoch, item.Key, item.Value[index]);
-                parameterList[parameterIndex++] = parameter;
-            }
-
-            foreach (var item in rawData.BinaryValues)
-            {
-                var parameter = new TimeseriesBufferDataValue(epoch, item.Key, item.Value[index]);
-                
-                // var parameter = _parameterListPool.Get();
-                // parameter.Set(epoch, item.Key, item.Value[index]);
-                parameterList[parameterIndex++] = parameter;
-            }
-
-            foreach (var item in rawData.TagValues)
-            {
-                var parameter = new TimeseriesBufferDataValue(epoch, item.Key, item.Value[index], true);
-                // var parameter = _parameterListPool.Get();
-                // parameter.Set(epoch, item.Key, item.Value[index], true);
-                parameterList[parameterIndex++] = parameter;
-            }
-
-            buffer.Parameters.Span[index] = parameterList;
-        }
-
-      
-
-        public static TimeseriesDataRaw ExtractRawData(
-            List<(int Start, int Count, TimeseriesBufferData Data)> loadedData)
-        {
-            var totalSize = loadedData.Sum(x => x.Count);
-            var globalTimestamps = new Memory<long>(new long[totalSize]);
-
-            var numericValues = new Dictionary<string, double?[]>();
-            var stringValues = new Dictionary<string, string[]>();
-            var binaryValues = new Dictionary<string, byte[][]>();
-            var tagValues = new Dictionary<string, string[]>();
-
-            var offset = 0;
-
-            // foreach (var (start, count, buffer) in loadedData)
-            // {
-            //     buffer.Timestamps.Slice(start, count).CopyTo(globalTimestamps.Slice(offset));
-            //
-            //     // Create dictionaries to store parameter values
-            //     var index = offset;
-            //     offset += count;
-            //     for (var i = start; i < start + count; i++, index++)
-            //     {
-            //         var parameters = buffer.Parameters.Span[i];
-            //         foreach (var parameter in parameters)
-            //         {
-            //             var parameterName = parameter.ParameterName;
-            //
-            //             switch (parameter.ParameterType)
-            //             {
-            //                 case ParameterType.Numeric:
-            //
-            //                     if (!numericValues.TryGetValue(parameterName, out var numerics))
-            //                     {
-            //                         numerics = new double?[totalSize];
-            //                         numericValues[parameterName] = numerics;
-            //                     }
-            //
-            //                     numerics[index] = parameter.NumericValue;
-            //                     break;
-            //                 case ParameterType.String:
-            //
-            //                     if (!stringValues.TryGetValue(parameterName, out var strings))
-            //                     {
-            //                         strings = new string[totalSize];
-            //                         stringValues[parameterName] = strings;
-            //                     }
-            //
-            //                     strings[index] = parameter.StringValue;
-            //                     break;
-            //                 case ParameterType.Binary:
-            //                     if (!binaryValues.TryGetValue(parameterName, out var binaries))
-            //                     {
-            //                         binaries = new byte[totalSize][];
-            //                         binaryValues[parameterName] = binaries;
-            //                     }
-            //
-            //                     binaries[index] = parameter.BinaryValue;
-            //                     break;
-            //                 case ParameterType.Tag:
-            //                     if (!tagValues.TryGetValue(parameterName, out var tags))
-            //                     {
-            //                         tags = new string[totalSize];
-            //                         tagValues[parameterName] = tags;
-            //                     }
-            //
-            //                     tags[index] = parameter.StringValue;
-            //                     break;
-            //             }
-            //         }
-            //     }
-            // }
-
-            return new TimeseriesDataRaw(
-                0,
-                globalTimestamps.ToArray(),
-                numericValues,
-                stringValues,
-                binaryValues,
-                tagValues);
-        }
-
-        public static void Release(List<(int Start, int Count, TimeseriesBufferData Data)> loadedData)
-        {
-            // Task.Factory.StartNew(() =>
-            // {
-                // Parallel.ForEach(loadedData, data =>
-                // {
-                //     for (var i = 0; i < data.Data.Parameters.Length; i++)
-                //     {
-                //         for (var j = 0; j < data.Data.Parameters.Length; j++)
-                //         {
-                //             _parameterListPool.Return(data.Data.Parameters.Span[i][j]);
-                //         }
-                //     }
-                // });
-            // });
-        }
-
-        public static TimeseriesBufferData Get()
-        {
-            return new TimeseriesBufferData();
-        }
-    }
-
-    public struct TimeseriesBufferData
-    {
-        public Memory<long> Timestamps;
-        public Memory<TimeseriesBufferDataValue[]> Parameters;
-        public int TotalParameters;
-    }
-
-    public class TimeseriesBufferDataValue
-    {
-        public long Epoch;
-        public string ParameterName;
-        public ParameterType ParameterType;
-        public double? NumericValue;
-        public string StringValue;
-        public byte[] BinaryValue;
-
-        public TimeseriesBufferDataValue()
-        {
-            
-        }
-        
-        public TimeseriesBufferDataValue(long epoch, string parameterName, string value, bool isTag = false)
-        {
-            Epoch = epoch;
-            ParameterName = parameterName;
-            StringValue = value;
-            NumericValue = null;
-            BinaryValue = null;
-            ParameterType = isTag ? ParameterType.Tag : ParameterType.String;
-        }
-        public TimeseriesBufferDataValue(long epoch, string parameterName, double? value)
-        {
-            Epoch = epoch;
-            ParameterName = parameterName;
-            StringValue = null;
-            NumericValue = value;
-            BinaryValue = null;
-            ParameterType = ParameterType.Numeric;
-        }
-        public TimeseriesBufferDataValue(long epoch, string parameterName, byte[] value)
-        {
-            Epoch = epoch;
-            ParameterName = parameterName;
-            StringValue = null;
-            NumericValue = null;
-            BinaryValue = value;
-            ParameterType = ParameterType.Binary;
-        }
-        public void Set(long epoch, string parameterName, string value, bool isTag = false)
-        {
-            Epoch = epoch;
-            ParameterName = parameterName;
-            StringValue = value;
-            NumericValue = null;
-            BinaryValue = null;
-            ParameterType = isTag ? ParameterType.Tag : ParameterType.String;
-        }
-        public void Set(long epoch, string parameterName, double? value)
-        {
-            Epoch = epoch;
-            ParameterName = parameterName;
-            StringValue = null;
-            NumericValue = value;
-            BinaryValue = null;
-            ParameterType = ParameterType.Numeric;
-        }
-        public void Set(long epoch, string parameterName, byte[] value)
-        {
-            Epoch = epoch;
-            ParameterName = parameterName;
-            StringValue = null;
-            NumericValue = null;
-            BinaryValue = value;
-            ParameterType = ParameterType.Binary;
-        }
-    }
-
-    public enum ParameterType
-    {
-        Numeric,
-        String,
-        Tag,
-        Binary
-    }
-}
+﻿// using System;
+// using System.Collections.Generic;
+// using System.Linq;
+// using QuixStreams.Telemetry.Models;
+//
+// namespace QuixStreams.Streaming.Models
+// {
+//     public class BufferOps
+//     {
+//         public static void AddTimestampToBuffer(TimeseriesBufferData buffer, TimeseriesDataRaw rawData, int index)
+//         {
+//             if (index >= buffer.Timestamps.Length)
+//             {
+//                 throw new ArgumentOutOfRangeException(nameof(index), "Index is out of range.");
+//             }
+//
+//             var nameIndex = 0;
+//             foreach (var values in rawData.NumericValues.Values)
+//             {
+//                 buffer.NumericValues.Span[nameIndex++].Span[index] = values[index];
+//             }
+//
+//             var stringIndex = 0;
+//             foreach (var values in rawData.StringValues.Values)
+//             {
+//                 buffer.StringValues.Span[stringIndex++].Span[index] = values[index];
+//             }
+//
+//             var binaryIndex = 0;
+//             foreach (var values in rawData.BinaryValues.Values)
+//             {
+//                 buffer.BinaryValues.Span[binaryIndex++].Span[index] = values[index];
+//             }
+//
+//             var tagIndex = 0;
+//             foreach (var values in rawData.TagValues.Values)
+//             {
+//                 buffer.TagValues.Span[tagIndex++].Span[index] = values[index];
+//             }
+//
+//
+//             // Add the new timestamp
+//             buffer.Timestamps.Span[index] = rawData.Timestamps[index];
+//         }
+//
+//         public static TimeseriesDataRaw ExtractRawData(
+//             List<(int Start, int Count, TimeseriesBufferData Data)> loadedData)
+//         {
+//             var result = new TimeseriesDataRaw();
+//             var totalTimestampsCount = loadedData.Sum(d => d.Count);
+//
+//             var timestamps = new Memory<long>(new long[totalTimestampsCount]);
+//             var numericValues = new Dictionary<string, double?[]>();
+//             var stringValues = new Dictionary<string, string[]>();
+//             var binaryValues = new Dictionary<string, byte[][]>();
+//             var tagValues = new Dictionary<string, string[]>();
+//
+//             var timestampIndex = 0;
+//             foreach (var (start, count, data) in loadedData)
+//             {
+//                 if (timestampIndex + count > totalTimestampsCount)
+//                 {
+//                     throw new ArgumentException("The loaded data is inconsistent.", nameof(loadedData));
+//                 }
+//
+//                 data.Timestamps.Span.Slice(start, count).CopyTo(timestamps.Span.Slice(timestampIndex, count));
+//
+//                 
+//                 var numericMemory = new Memory<double?>(new double?[totalTimestampsCount]);
+//                 var numericParameterNames = data.ParameterNames.Span[ParameterType.Numeric].Span;
+//                 var totalNumericParameters = numericParameterNames.Length;
+//                 var numericDataValues = data.NumericValues.Span;
+//                 
+//                 for (var i = 0; i < totalNumericParameters; i++)
+//                 {
+//                     var parameterName = numericParameterNames[i];
+//                     numericDataValues[i].Slice(start, count).CopyTo(numericMemory);
+//                     numericValues[parameterName] = numericMemory.ToArray();
+//                 }
+//
+//                 
+//                 var stringMemory = new Memory<string>(new string[totalTimestampsCount]);
+//                 var stringParameterNames = data.ParameterNames.Span[ParameterType.String].Span;
+//                 var totalStringParameters = stringParameterNames.Length;
+//                 var stringDataValues = data.StringValues.Span;
+//                 
+//                 for (var i = 0; i < totalStringParameters; i++)
+//                 {
+//                     var parameterName = stringParameterNames[i];
+//                     stringDataValues[i].Slice(start, count).CopyTo(stringMemory);
+//                     stringValues[parameterName] = stringMemory.ToArray();
+//                 }
+//
+//                 
+//                 var binaryMemory = new Memory<byte[]>(new byte[totalTimestampsCount][]);
+//                 var binaryParameterNames = data.ParameterNames.Span[ParameterType.Binary].Span;
+//                 var totalBinaryParameters = binaryParameterNames.Length;
+//                 var binaryDataValues = data.BinaryValues.Span;
+//                 
+//                 for (var i = 0; i < totalBinaryParameters; i++)
+//                 {
+//                     var parameterName = binaryParameterNames[i];
+//                     binaryDataValues[i].Slice(start, count).CopyTo(binaryMemory);
+//                     binaryValues[parameterName] = binaryMemory.ToArray();
+//                 }
+//                 
+//                 
+//                 var tagMemory = new Memory<string>(new string[totalTimestampsCount]);
+//                 var tagParameterNames = data.ParameterNames.Span[ParameterType.Tag].Span;
+//                 var totalTagParameters = tagParameterNames.Length;
+//                 var tagDataValues = data.TagValues.Span;
+//                 
+//                 for (var i = 0; i < totalTagParameters; i++)
+//                 {
+//                     var parameterName = tagParameterNames[i];
+//                     tagDataValues[i].Slice(start, count).CopyTo(tagMemory);
+//                     tagValues[parameterName] = tagMemory.ToArray();
+//                 }
+//                 
+//                 timestampIndex += count;
+//             }
+//
+//             result.Epoch = loadedData[0].Data.Epoch;
+//             result.Timestamps = timestamps.ToArray();
+//             result.NumericValues = numericValues;
+//             result.StringValues = stringValues;
+//             result.BinaryValues = binaryValues;
+//             result.TagValues = tagValues;
+//
+//             return result;
+//         }
+//
+//         public static TimeseriesBufferData Get(TimeseriesDataRaw rawData)
+//         {
+//             var totalLength = rawData.Timestamps.Length;
+//             var buffer = new TimeseriesBufferData();
+//             
+//             buffer.Timestamps = new Memory<long>(new long[totalLength]);
+//
+//             buffer.NumericValues = new Memory<Memory<double?>>(new Memory<double?>[rawData.NumericValues.Count]);
+//             buffer.StringValues = new Memory<Memory<string>>(new Memory<string>[rawData.StringValues.Count]);
+//             buffer.BinaryValues = new Memory<Memory<byte[]>>(new Memory<byte[]>[rawData.TagValues.Count]);
+//             buffer.TagValues = new Memory<Memory<string>>(new Memory<string>[rawData.TagValues.Count]);
+//             
+//             var namesMemory = new Memory<Memory<string>>(new Memory<string>[4]);
+//             var numericNameMemory = new Memory<string>(new string[rawData.NumericValues.Keys.Count]);
+//             var stringNameMemory = new Memory<string>(new string[rawData.StringValues.Keys.Count]);
+//             var binaryNameMemory = new Memory<string>(new string[rawData.BinaryValues.Keys.Count]);
+//             var tagNameMemory = new Memory<string>(new string[rawData.TagValues.Keys.Count]);
+//             
+//             namesMemory.Span[ParameterType.Numeric] = numericNameMemory;
+//             namesMemory.Span[ParameterType.String] = stringNameMemory;
+//             namesMemory.Span[ParameterType.Binary] = binaryNameMemory;
+//             namesMemory.Span[ParameterType.Tag] = tagNameMemory;
+//
+//             var numericIndex = 0;
+//             foreach (var parameterName in rawData.NumericValues.Keys)
+//             {
+//                 buffer.NumericValues.Span[numericIndex] = new Memory<double?>(new double?[totalLength]);
+//                 numericNameMemory.Span[numericIndex++] = parameterName;
+//             }
+//             
+//             var stringIndex = 0;
+//             foreach (var parameterName in rawData.StringValues.Keys)
+//             {
+//                 buffer.StringValues.Span[stringIndex] = new Memory<string>(new string[totalLength]);
+//                 stringNameMemory.Span[stringIndex++] = parameterName;
+//             }
+//             
+//             var binaryIndex = 0;
+//             foreach (var parameterName in rawData.BinaryValues.Keys)
+//             {
+//                 buffer.BinaryValues.Span[binaryIndex] = new Memory<byte[]>(new byte[totalLength][]);
+//                 binaryNameMemory.Span[binaryIndex++] = parameterName;
+//             }
+//
+//             var tagIndex = 0;
+//             foreach (var parameterName in rawData.TagValues.Keys)
+//             {
+//                 buffer.TagValues.Span[tagIndex] = new Memory<string>(new string[totalLength]);
+//                 tagNameMemory.Span[tagIndex++] = parameterName;
+//             }
+//             
+//             buffer.ParameterNames = namesMemory;
+//
+//             return buffer;
+//         }
+//     }
+//
+//     public struct TimeseriesBufferData
+//     {
+//         public long Epoch;
+//         public Memory<long> Timestamps;
+//         public Memory<Memory<double?>> NumericValues;
+//         public Memory<Memory<string>> StringValues;
+//         public Memory<Memory<byte[]>> BinaryValues;
+//         public Memory<Memory<string>> TagValues;
+//         
+//         public Memory<Memory<string>> ParameterNames;
+//     }
+//
+//     public static class ParameterType
+//     {
+//         public static int Numeric = 0;
+//         public static int String = 1;
+//         public static int Tag = 2;
+//         public static int Binary = 3;
+//     }
+// }
