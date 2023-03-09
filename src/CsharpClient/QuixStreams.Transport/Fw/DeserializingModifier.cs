@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Runtime.Serialization;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using QuixStreams.Transport.Codec;
 using QuixStreams.Transport.Fw.Exceptions;
@@ -16,7 +15,6 @@ namespace QuixStreams.Transport.Fw
     /// </summary>
     public class DeserializingModifier : IConsumer, IProducer
     {
-        
         /// <summary>
         /// The callback that is used when deserialized package is available
         /// </summary>
@@ -30,13 +28,6 @@ namespace QuixStreams.Transport.Fw
         /// <returns>An awaitable <see cref="Task"/></returns>
         /// <exception cref="SerializationException">When deserialization fails due to unknown codec or invalid data for codec</exception>
         public Task Publish(Package package, CancellationToken cancellationToken = default)
-        {
-            //return Task.Factory.StartNew(() => PublishTask(package, cancellationToken), cancellationToken);
-            return PublishTask(package, cancellationToken);
-        }
-
-        
-        private Task PublishTask(Package package, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -61,7 +52,7 @@ namespace QuixStreams.Transport.Fw
             var newPackage = new Package(valueCodec.Type, lazyVal, meta, bytePackage.TransportContext);
             return this.OnNewPackage(newPackage);
         }
-        
+
         /// <summary>
         /// Retrieves the codec from the provided package value
         /// </summary>

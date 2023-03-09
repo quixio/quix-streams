@@ -18,8 +18,22 @@ namespace QuixStreams.Telemetry
         private readonly Dictionary<Type, List<Func<object, Task>>> modelSubscriptions = new Dictionary<Type, List<Func<object, Task>>>();
 
         private readonly Dictionary<Type, Func<object, Task>> interceptors = new Dictionary<Type, Func<object, Task>>();
-       
-        
+
+        // private readonly Channel<StreamPackage> processingChannel = Channel.CreateUnbounded<StreamPackage>();
+
+        // public IOComponentConnection()
+        // {
+        //     Task.Factory.StartNew(async () =>
+        //     {
+        //         while (await processingChannel.Reader.WaitToReadAsync())
+        //         {
+        //             if (processingChannel.Reader.TryRead(out var package))
+        //             {
+        //                 await Process(package);
+        //             }
+        //         }
+        //     });
+        // }
         /// <inheritdoc />
         public IIOComponentConnection Subscribe(Func<StreamPackage, Task> onStreamPackage)
         {
@@ -46,7 +60,15 @@ namespace QuixStreams.Telemetry
         }
 
         /// <inheritdoc />
-        public async Task Send(StreamPackage package)
+        public Task Send(StreamPackage package)
+        {
+            //return processingChannel.Writer.WriteAsync(package).AsTask();
+
+            //return Task.Factory.StartNew(async () => await Process(package));
+            return Process(package);
+        }
+
+        private async Task Process(StreamPackage package)
         {
             // Intercepts
             if (this.interceptors.TryGetValue(package.Type, out var onInterceptHandler))

@@ -1,5 +1,4 @@
-﻿using System;
-using QuixStreams.Transport.Codec;
+﻿using QuixStreams.Transport.Codec;
 
 namespace QuixStreams.Transport.Fw.Codecs
 {
@@ -28,7 +27,7 @@ namespace QuixStreams.Transport.Fw.Codecs
         }
 
         /// <inheritdoc />
-        public override Span<byte> Serialize(string obj)
+        public override byte[] Serialize(string obj)
         {
             return Constants.Utf8NoBOMEncoding.GetBytes(obj);
         }

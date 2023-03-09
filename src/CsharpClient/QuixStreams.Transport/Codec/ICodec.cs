@@ -13,7 +13,7 @@ namespace QuixStreams.Transport.Codec
         /// </summary>
         /// <param name="obj">The object to serialize</param>
         /// <returns>The serialized entry</returns>
-        Span<byte> Serialize(TContent obj);
+        byte[] Serialize(TContent obj);
 
         /// <summary>
         /// Attempts to deserialize the byte array with the codec.
@@ -49,7 +49,7 @@ namespace QuixStreams.Transport.Codec
         /// <param name="obj">The object to serialize</param>
         /// <param name="serialized">The serialized entry</param>
         /// <returns><c>True</c> if successful else <c>false</c></returns>
-        bool TrySerialize(object obj, out Span<byte> serialized);
+        bool TrySerialize(object obj, out byte[] serialized);
 
         /// <summary>
         /// Attempts to deserialize the byte array with the codec.

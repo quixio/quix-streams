@@ -78,7 +78,10 @@ namespace QuixStreams.Transport.Fw.Helpers
         {
             try
             {
-                using (var ms = new MemoryStream())
+
+            using (var ms = new MemoryStream())
+            using (var sw = new StreamWriter(ms, Constants.Utf8NoBOMEncoding))
+            {
                 using (var writer = new BinaryWriter(ms))
                 {
                     byte codecVersion = 1;
@@ -89,12 +92,16 @@ namespace QuixStreams.Transport.Fw.Helpers
 
                     SerializeMetadata(writer, transportPackageValue.MetaData);
 
-                    var value = transportPackageValue.Value;
+                    byte[] value = transportPackageValue.Value;
                     writer.Write(value.Length);
                     writer.Write(value);
+                    
                     writer.Flush();
-                    return ms.ToArray();
                 }
+
+                return ms.ToArray();
+            }
+            
             }
             catch (Exception e)
             {

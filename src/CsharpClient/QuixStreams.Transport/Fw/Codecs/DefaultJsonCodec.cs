@@ -38,7 +38,7 @@ namespace QuixStreams.Transport.Fw.Codecs
         }
 
         /// <inheritdoc />
-        public override Span<byte> Serialize(TContent obj)
+        public override byte[] Serialize(TContent obj)
         {
             using (var stream = new MemoryStream())
             using (var writer = new StreamWriter(stream, Constants.Utf8NoBOMEncoding))
@@ -73,7 +73,7 @@ namespace QuixStreams.Transport.Fw.Codecs
         public CodecId Id => CodecId.WellKnownCodecIds.DefaultJsonCodec;
 
         /// <inheritdoc />
-        public bool TrySerialize(object obj, out Span<byte> serialized)
+        public bool TrySerialize(object obj, out byte[] serialized)
         {
             serialized = null;
             try
