@@ -46,7 +46,6 @@ namespace QuixStreams.Transport.Kafka
                                                           // but should not prove to cause any other issue
 
         
-        private readonly bool checkForKeepAlivePackets;   // Enables the check for keep alive messages from Quix
         private string configId; // Hash to use in logs, so it is easier to detect what is experiencing an issue
 
         /// <summary>
@@ -93,7 +92,6 @@ namespace QuixStreams.Transport.Kafka
             this.consumerTopicConfiguration = consumerTopicConfiguration;
             this.config = consumerConfiguration.ToConsumerConfig();
             this.consumerGroupSet = consumerConfiguration.ConsumerGroupSet;
-            this.checkForKeepAlivePackets = consumerConfiguration.CheckForKeepAlivePackets;
             SetConfigId();
         }
 
@@ -897,12 +895,6 @@ namespace QuixStreams.Transport.Kafka
             var args = KafkaHelper.FromResult(result);
             try
             {
-                if (this.checkForKeepAlivePackets && args.IsKeepAlivePackage())
-                {
-                    this.logger.LogTrace("[{0}] KafkaConsumer: keep alive message read, ignoring.", this.configId);
-                    return;
-                }
-
                 this.logger.LogTrace("[{0}] KafkaConsumer: raising OnNewPackage", this.configId);
                 var task = this.OnNewPackage?.Invoke(args);
                 if (task == null) return;

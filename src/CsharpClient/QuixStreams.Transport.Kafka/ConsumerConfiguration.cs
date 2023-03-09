@@ -56,11 +56,6 @@ namespace QuixStreams.Transport.Kafka
         public bool ConsumerGroupSet { get; }
 
         /// <summary>
-        /// Enable checking for alive messages for consumer
-        /// </summary>
-        public bool CheckForKeepAlivePackets { get; set; } = true;
-
-        /// <summary>
         /// If consumer group is configured, The auto offset reset determines the start offset in the event
         /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.     
         /// 

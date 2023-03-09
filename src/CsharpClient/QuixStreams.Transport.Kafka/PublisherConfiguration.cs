@@ -106,16 +106,6 @@ namespace QuixStreams.Transport.Kafka
         /// default: 10000
         /// </summary>
         public int? BatchNumMessages { get; set; }
-        
-        /// <summary>
-        /// Enable keep alive messages for publisher. Useful to ensure connection isn't idle reaped.
-        /// </summary>
-        public bool KeepConnectionAlive { get; set; } = true;
-
-        /// <summary>
-        /// The keel alive message interval in milliseconds
-        /// </summary>
-        public int KeepConnectionAliveInterval { get; set; } = 60000;
 
         internal ProducerConfig ToProducerConfig()
         {

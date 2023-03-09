@@ -27,9 +27,6 @@ namespace QuixStreams.Transport.Kafka
 
         private long lastFlush = -1;
         private IProducer<byte[], byte[]> producer;
-        private readonly ThreadingTimer timer;
-        private List<TopicPartition> partitionsToKeepAliveWith = new List<TopicPartition>();
-        private readonly Action setupKeepAlive;
         private string configId;
 
         /// <summary>
@@ -39,73 +36,16 @@ namespace QuixStreams.Transport.Kafka
         /// <param name="topicConfiguration">The topic configuration</param>
         public KafkaProducer(PublisherConfiguration publisherConfiguration, ProducerTopicConfiguration topicConfiguration)
         {
-            Action hbAction = null;
             this.config = publisherConfiguration.ToProducerConfig();
             SetConfigId(topicConfiguration);
             if (topicConfiguration.Partition == Partition.Any)
             {
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicConfiguration.Topic, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
-                hbAction = () =>
-                {
-                    this.logger.LogTrace("[{0}] Creating admin client to retrieve metadata for keep alive details", this.configId);
-                    try
-                    {
-                        using (var adminClient = new AdminClientBuilder(this.config).Build())
-                        {
-                            var metadata = adminClient.GetMetadata(topicConfiguration.Topic, TimeSpan.FromSeconds(15));
-                            if (metadata == null)
-                            {
-                                logger.LogError("[{0}] Keep alive could not be set up for topic {1} due to timeout.", this.configId, topicConfiguration.Topic);
-                                return;
-                            }
-
-                            this.logger.LogTrace("[{0}] Retrieved metadata for Topic {1}", this.configId, topicConfiguration.Topic);
-                            var topicMetaData = metadata.Topics.FirstOrDefault(x => x.Topic == topicConfiguration.Topic);
-                            if (topicMetaData == null)
-                            {
-                                logger.LogError("[{0}] Keep alive could not be set up for topic {1} due to missing topic metadata.", this.configId, topicConfiguration.Topic);
-                                return;
-                            }
-
-                            partitionsToKeepAliveWith = topicMetaData.Partitions.GroupBy(y => y.Leader)
-                                .Select(y => y.First())
-                                .Select(y => new TopicPartition(topicConfiguration.Topic, y.PartitionId)).ToList();
-
-                            if (logger.IsEnabled(LogLevel.Debug))
-                            {
-                                foreach (var topicPartition in partitionsToKeepAliveWith)
-                                {
-                                    logger.LogDebug("[{0}] Automatic keep alive enabled for '{1}'.", this.configId, topicPartition);
-                                }
-                            }
-                        }
-
-                        this.logger.LogTrace("[{0}] Finished retrieving metadata for keep alive details", this.configId);
-                    }
-                    catch (KafkaException kafkaException)
-                    {
-                        logger.LogError("[{0}] Keep alive could not be set up for topic {1} due to error: {2}.", this.configId, topicConfiguration.Topic, kafkaException.Message);
-                        return;
-                    }
-
-                    hbAction = () => { }; // because no need to do ever again, really
-                };
             }
             else
             {
                 var topicPartition = new TopicPartition(topicConfiguration.Topic, topicConfiguration.Partition);
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
-                hbAction = () =>
-                {
-                    partitionsToKeepAliveWith.Add(topicPartition);
-                    hbAction = () => { }; // because no need to do ever again, really
-                };
-            }
-
-            if (publisherConfiguration.KeepConnectionAlive && publisherConfiguration.KeepConnectionAliveInterval > 0)
-            {
-                setupKeepAlive = hbAction;
-                this.timer = new ThreadingTimer(SendKeepAlive, publisherConfiguration.KeepConnectionAliveInterval, this.logger);
             }
         }
         
@@ -141,35 +81,6 @@ namespace QuixStreams.Transport.Kafka
                 this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
                     .Build();
-
-                if (setupKeepAlive != null)
-                {
-                    setupKeepAlive();
-                }
-                this.timer?.Start();
-            }
-        }
-
-        private void SendKeepAlive()
-        {
-            void ProduceKeepAlive(byte[] key, byte[] message, Action<DeliveryReport<byte[], byte[]>> deliveryHandler, object state)
-            {
-                var topicPartition = (TopicPartition) state;
-                this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = message }, deliveryHandler);
-            }
-            
-            try
-            {
-                foreach (var topicPartition in partitionsToKeepAliveWith)
-                {
-                    logger.LogTrace("[{0}] Sending keep alive msg to {1}", this.configId, topicPartition);
-                    SendInternal(Constants.KeepAlivePackage, ProduceKeepAlive, state: topicPartition).GetAwaiter().GetResult();
-                    logger.LogTrace("[{0}] Sent keep alive msg to {1}", this.configId, topicPartition);
-                }
-            }
-            catch
-            {
-                logger.LogWarning("[{0}] Failed to send keep alive msg", this.configId);    
             }
         }
 
@@ -195,7 +106,7 @@ namespace QuixStreams.Transport.Kafka
                 return;
             }
             
-            if (ex.Message.Contains("Receive failed: Connection timed out (after "))
+            if (ex.Message.Contains("Receive failed") && ex.Message.Contains("Connection timed out (after "))
             {
                 var match = Constants.ExceptionMsRegex.Match(ex.Message);
                 if (match.Success)
@@ -226,7 +137,6 @@ namespace QuixStreams.Transport.Kafka
 
                 this.producer.Dispose();
                 this.producer = null;
-                this.timer?.Stop();
             }
         }
 
@@ -341,10 +251,6 @@ namespace QuixStreams.Transport.Kafka
         public void Dispose()
         {
             this.Close();
-            if(this.timer != null)
-            {
-                this.timer.Dispose();
-            }
         }
 
         private delegate void ProduceDelegate(byte[] key, byte[] message, Action<DeliveryReport<byte[], byte[]>> deliveryHandler, object state);

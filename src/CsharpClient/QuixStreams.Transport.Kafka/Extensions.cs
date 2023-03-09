@@ -194,13 +194,5 @@ namespace QuixStreams.Transport.Kafka
         {
             package.TransportContext.SetKey(key);
         }
-
-        internal static bool IsKeepAlivePackage(this Package package)
-        {
-            var key = package.GetKey();
-            if (key == null) return false;
-            if (key.Length != Constants.KeepAlivePackageKey.Length) return false;
-            return key.SequenceEqual(Constants.KeepAlivePackageKey);
-        }
     }
 }
