@@ -38,7 +38,7 @@ namespace QuixStreams.Transport.Samples.Samples
             Interlocked.Increment(ref this.consumedCounter);
             // keep in mind value is lazily evaluated, so this is a position where one can decide whether to use it
             var key = e.GetKey();
-            var value = e.Value.Value;
+            var value = e.Value;
             var packageMetaData = e.MetaData;
             var timestamp = e.MetaData.TryGetValue("DateTime", out var dts) ? (DateTime?) DateTime.Parse(dts) : null;
             return Task.CompletedTask;

@@ -147,7 +147,7 @@ namespace QuixStreams.Transport.Fw.Helpers
                     var newValueBytes = reader.ReadAsBytes();
                     valueBytes = newValueBytes;
                 }
-                return new TransportPackageValue(new Lazy<byte[]>(() => valueBytes), new CodecBundle(modelKey, codecId), metaData);
+                return new TransportPackageValue(valueBytes, new CodecBundle(modelKey, codecId), metaData);
             }
         }
         

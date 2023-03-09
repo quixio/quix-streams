@@ -10,7 +10,7 @@ namespace QuixStreams.Telemetry.Models
     public class StreamPackage
     {
         private object value = null;
-        private readonly Lazy<object> lazyValue;
+        private readonly object lazyValue;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamPackage"/>
@@ -50,7 +50,7 @@ namespace QuixStreams.Telemetry.Models
         /// </summary>
         public object Value
         {
-            get => this.value ?? this.lazyValue?.Value;
+            get => this.value ?? this.lazyValue;
             set => this.value = value;
         }
 

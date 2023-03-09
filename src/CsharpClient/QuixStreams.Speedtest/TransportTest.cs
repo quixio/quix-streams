@@ -63,13 +63,13 @@ namespace QuixStreams.Speedtest
             {
                 lastpackageRead = DateTime.UtcNow;
                 var now = DateTime.UtcNow;
-                if (!package.TryConvertTo<byte[]>(out var converted) || converted.Value.Value.Length != 9 || converted.Value.Value[0] != magicMarker)
+                if (!package.TryConvertTo<byte[]>(out var converted) || converted.Value.Length != 9 || converted.Value[0] != magicMarker)
                 {
                     Console.WriteLine("Ignoring package, Partition: " + package.TransportContext[KnownKafkaTransportContextKeys.Partition] + ", OffSet: " +package.TransportContext[KnownKafkaTransportContextKeys.Offset]);
                     return Task.CompletedTask; // not our package 
                 };
 
-                var binaryTime = BitConverter.ToInt64(converted.Value.Value, 1);
+                var binaryTime = BitConverter.ToInt64(converted.Value, 1);
                 var sentAt = DateTime.FromBinary(binaryTime);
                 if (start > sentAt) return Task.CompletedTask; // possible previous run
                 //Console.WriteLine($"Sent: {sentAt:O}");
@@ -103,8 +103,7 @@ namespace QuixStreams.Speedtest
                         bytes[0] = magicMarker; //just a marker
                         var binary = DateTime.UtcNow.ToBinary();
                         Array.Copy(BitConverter.GetBytes(binary), 0, bytes, 1, 8);
-                        var value = new Lazy<byte[]>(bytes);
-                        var msg = new Package<byte[]>(value, null);
+                        var msg = new Package<byte[]>(bytes, null);
                         transportProducer.Publish(msg, ct);
                         Thread.Sleep(100);
                     }

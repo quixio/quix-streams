@@ -42,7 +42,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             task.Wait(2000);
             nonGeneric.Count.Should().Be(1, "No splitting should be done");
             var raisedPackage = nonGeneric[0];
-            raisedPackage.Value.Value.Should().BeEquivalentTo(package.Value.Value);
+            raisedPackage.Value.Should().BeEquivalentTo(package.Value.Value);
             raisedPackage.MetaData.Should().BeEquivalentTo(package.MetaData);
             raisedPackage.TransportContext.Should().BeEquivalentTo(package.TransportContext);
         }
@@ -87,13 +87,13 @@ namespace QuixStreams.Transport.UnitTests.Fw
             for (var index = 0; index < nonGeneric.Count - 1; index++)
             {
                 var raisedPackage = nonGeneric[index];
-                raisedPackage.Value.Value.Should().BeEquivalentTo(returned[index]);
+                raisedPackage.Value.Should().BeEquivalentTo(returned[index]);
                 raisedPackage.MetaData.Should().BeEquivalentTo(MetaData.Empty);
                 raisedPackage.TransportContext.Should().BeEquivalentTo(package.TransportContext);
             }
 
             var lastRaisedPackage = nonGeneric[nonGeneric.Count - 1];
-            lastRaisedPackage.Value.Value.Should().BeEquivalentTo(returned[nonGeneric.Count - 1]);
+            lastRaisedPackage.Value.Should().BeEquivalentTo(returned[nonGeneric.Count - 1]);
             lastRaisedPackage.MetaData.Should().BeEquivalentTo(package.MetaData);
             lastRaisedPackage.TransportContext.Should().BeEquivalentTo(package.TransportContext);
         }
