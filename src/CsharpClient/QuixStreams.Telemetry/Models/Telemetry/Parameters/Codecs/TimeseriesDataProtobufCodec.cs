@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using QuixStreams.Transport.Codec;
@@ -217,18 +218,23 @@ namespace QuixStreams.Telemetry.Models.Codecs
         /// <inheritdoc />
         public override byte[] Serialize(TimeseriesDataRaw obj)
         {
-            using (MemoryStream memStream = new MemoryStream())
+            using (var memStream = new MemoryStream())
             {
                 byte[] ret;
                 var cl = new TimeseriesDataRawProto
                 {
-                    Epoch = obj.Epoch,
+                    Epoch = obj.Epoch
                 };
                 cl.Timestamps.AddRange(obj.Timestamps);
-                SerializeBinaries(obj.BinaryValues, cl.BinaryValues);
-                SerializeStrings(obj.StringValues, cl.StringValues);
-                SerializeStrings(obj.TagValues, cl.TagValues);
-                SerializeNumerics(obj.NumericValues, cl.NumericValues);
+                var actions = new []
+                {
+                    Task.Factory.StartNew(() => SerializeBinaries(obj.BinaryValues, cl.BinaryValues)),
+                    Task.Factory.StartNew(() => SerializeStrings(obj.StringValues, cl.StringValues)),
+                    Task.Factory.StartNew(() => SerializeStrings(obj.TagValues, cl.TagValues)),
+                    Task.Factory.StartNew(() => SerializeNumerics(obj.NumericValues, cl.NumericValues))
+                };
+                Task.WaitAll(actions);
+            
                 cl.WriteTo(memStream);
                 memStream.Flush();
                 ret = memStream.ToArray();
