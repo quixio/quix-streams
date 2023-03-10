@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,6 +23,7 @@ namespace QuixStreams.Transport.Kafka
 
         private readonly object openLock = new object();
         private readonly ILogger logger = Logging.CreateLogger<KafkaProducer>();
+        private IDictionary<string, string> brokerStates = new ConcurrentDictionary<string, string>();
 
         private readonly ProduceDelegate produce;
 
@@ -80,8 +82,20 @@ namespace QuixStreams.Transport.Kafka
 
                 this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
+                    .SetLogHandler(this.StatisticsHandler)
                     .Build();
             }
+        }
+
+        private void StatisticsHandler(IProducer<byte[], byte[]> producer, LogMessage log)
+        {
+            // this.logger.LogWarning("[{0}] {1} {2}", this.configId, log.Level, log.Message);
+            if (KafkaHelper.TryParseBrokerState(log, out var broker, out var state))
+            {
+                brokerStates[broker] = state;
+                this.logger.LogWarning("Broker {0} state changed to {1}", broker, state);
+            }
+            
         }
 
         private void ErrorHandler(IProducer<byte[], byte[]> producer, Error error)
@@ -104,6 +118,14 @@ namespace QuixStreams.Transport.Kafka
                 }
                 this.logger.LogWarning(ex, "[{0}] Disconnected from kafka. Ignore unless occurs frequently in short period of time as client automatically reconnects.", this.configId);
                 return;
+            }
+
+            if (ex.Message.Contains("brokers are down"))
+            {
+                foreach (var brokerState in brokerStates)
+                {
+                    this.logger.LogWarning("Broker {0} state is {1}", brokerState.Key, brokerState.Value);
+                }
             }
             
             if (ex.Message.Contains("Receive failed") && ex.Message.Contains("Connection timed out (after "))
@@ -177,6 +199,7 @@ namespace QuixStreams.Transport.Kafka
             {
                 if (report.Error?.IsError == true)
                 {
+                    this.logger.LogTrace("[{0}] {1} {2}", this.config, report.Error.Code, report.Error.Reason);
                     var wrappedError = new Error(report.Error.Code, $"[{this.configId}] {report.Error.Reason}", report.Error.IsFatal);
                     taskSource.SetException(new ProduceException<byte[], byte[]>(wrappedError, report));
                     return;
