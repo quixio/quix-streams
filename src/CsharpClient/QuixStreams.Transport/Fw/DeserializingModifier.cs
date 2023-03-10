@@ -29,28 +29,31 @@ namespace QuixStreams.Transport.Fw
         /// <exception cref="SerializationException">When deserialization fails due to unknown codec or invalid data for codec</exception>
         public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
-            if (cancellationToken.IsCancellationRequested)
+            return Task.Factory.StartNew(() =>
             {
-                return Task.FromCanceled(cancellationToken);
-            }
-            if (!package.TryConvertTo<byte[]>(out var bytePackage) || this.OnNewPackage == null)
-            {
-                return Task.CompletedTask;
-            }
-            var packageBytes = bytePackage.Value;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return Task.FromCanceled(cancellationToken);
+                }
+                if (!package.TryConvertTo<byte[]>(out var bytePackage) || this.OnNewPackage == null)
+                {
+                    return Task.CompletedTask;
+                }
+                var packageBytes = bytePackage.Value;
 
-            var transportMessageValue = TransportPackageValueCodec.Deserialize(packageBytes);
-            var valueCodec = this.GetCodec(transportMessageValue);
-            var lazyVal = this.DeserializeToObject(valueCodec, transportMessageValue);
+                var transportMessageValue = TransportPackageValueCodec.Deserialize(packageBytes);
+                var valueCodec = this.GetCodec(transportMessageValue);
+                var lazyVal = this.DeserializeToObject(valueCodec, transportMessageValue);
 
-            var meta = transportMessageValue.MetaData;
-            if (bytePackage.MetaData.Count > 0)
-            {
-                meta = new MetaData(bytePackage.MetaData, meta);
-            }
+                var meta = transportMessageValue.MetaData;
+                if (bytePackage.MetaData.Count > 0)
+                {
+                    meta = new MetaData(bytePackage.MetaData, meta);
+                }
 
-            var newPackage = new Package(valueCodec.Type, lazyVal, meta, bytePackage.TransportContext);
-            return this.OnNewPackage(newPackage);
+                var newPackage = new Package(valueCodec.Type, lazyVal, meta, bytePackage.TransportContext);
+                return this.OnNewPackage(newPackage);
+            });
         }
 
         /// <summary>
