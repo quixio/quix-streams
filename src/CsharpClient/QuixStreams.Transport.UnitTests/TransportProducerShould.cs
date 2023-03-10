@@ -18,7 +18,7 @@ namespace QuixStreams.Transport.UnitTests
             var transportProducer = new TransportProducer(passthrough);
 
             var sentValue = TestModel.Create();
-            var sentPackage = new Package<TestModel>(new Lazy<TestModel>(sentValue));
+            var sentPackage = new Package<TestModel>(sentValue);
 
             Action action = () => transportProducer.Publish(sentPackage);
 
@@ -40,7 +40,7 @@ namespace QuixStreams.Transport.UnitTests
             var transportProducer = new TransportProducer(passthrough);
 
             var sentValue = TestModel.Create();
-            var sentPackage = new Package<TestModel>(new Lazy<TestModel>(sentValue));
+            var sentPackage = new Package<TestModel>(sentValue);
 
             // Act
             Action action = () => transportProducer.Publish(sentPackage).Wait(2000);
