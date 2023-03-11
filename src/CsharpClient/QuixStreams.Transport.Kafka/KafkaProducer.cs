@@ -24,6 +24,8 @@ namespace QuixStreams.Transport.Kafka
         private readonly object openLock = new object();
         private readonly ILogger logger = Logging.CreateLogger<KafkaProducer>();
         private IDictionary<string, string> brokerStates = new ConcurrentDictionary<string, string>();
+        private bool checkBrokerStateBeforeSend = false;
+        private bool logOnNextBrokerStateUp = false;
 
         private readonly ProduceDelegate produce;
 
@@ -89,13 +91,14 @@ namespace QuixStreams.Transport.Kafka
 
         private void StatisticsHandler(IProducer<byte[], byte[]> producer, LogMessage log)
         {
-            // this.logger.LogWarning("[{0}] {1} {2}", this.configId, log.Level, log.Message);
             if (KafkaHelper.TryParseBrokerState(log, out var broker, out var state))
             {
+                if (logOnNextBrokerStateUp && state.Equals("up", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    this.logger.LogInformation("[{0}] Broker {1} is now {2}", this.configId, broker, state);
+                } 
                 brokerStates[broker] = state;
-                this.logger.LogWarning("Broker {0} state changed to {1}", broker, state);
             }
-            
         }
 
         private void ErrorHandler(IProducer<byte[], byte[]> producer, Error error)
@@ -122,10 +125,9 @@ namespace QuixStreams.Transport.Kafka
 
             if (ex.Message.Contains("brokers are down"))
             {
-                foreach (var brokerState in brokerStates)
-                {
-                    this.logger.LogWarning("Broker {0} state is {1}", brokerState.Key, brokerState.Value);
-                }
+                checkBrokerStateBeforeSend = true;
+                this.logger.LogDebug("[{0}] {1}, but delaying reporting until next message, in case reconnect happens before.", this.configId, ex.Message); // Excessive error reporting
+                return;
             }
             
             if (ex.Message.Contains("Receive failed") && ex.Message.Contains("Connection timed out (after "))
@@ -199,7 +201,7 @@ namespace QuixStreams.Transport.Kafka
             {
                 if (report.Error?.IsError == true)
                 {
-                    this.logger.LogTrace("[{0}] {1} {2}", this.config, report.Error.Code, report.Error.Reason);
+                    this.logger.LogTrace("[{0}] {1} {2}", this.configId, report.Error.Code, report.Error.Reason);
                     var wrappedError = new Error(report.Error.Code, $"[{this.configId}] {report.Error.Reason}", report.Error.IsFatal);
                     taskSource.SetException(new ProduceException<byte[], byte[]>(wrappedError, report));
                     return;
@@ -213,6 +215,27 @@ namespace QuixStreams.Transport.Kafka
             var tryCount = 0;
             lock (sendLock) // to avoid reordering of packages in case of error
             {
+                if (checkBrokerStateBeforeSend)
+                {
+                    checkBrokerStateBeforeSend = false;
+                    var upBrokerCount = this.brokerStates.Count(y => !y.Value.Equals("up", StringComparison.InvariantCultureIgnoreCase));
+                    if (upBrokerCount == 0)
+                    {
+                        logOnNextBrokerStateUp = true;
+                        this.logger.LogError("[{0}] None of the brokers are currently in state 'up'.", this.configId);
+                        if (this.logger.IsEnabled(LogLevel.Debug))
+                        {
+                            foreach (var brokerState in brokerStates)
+                            {
+                                this.logger.LogDebug("[{0}] Broker {1} has state {2}", this.configId, brokerState.Key, brokerState.Value);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        this.logger.LogDebug("[{0}] {1}/{2} brokers are up (after all being marked down)", this.configId, upBrokerCount, this.brokerStates.Count);
+                    }
+                } 
                 do
                 {
                     try
