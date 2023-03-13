@@ -2,31 +2,37 @@
 
 In this topic you will learn how to use Quix Streams to perform two types of data processing:
 
-1. **One message at a time processing** - Here the message received contains all required data. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically written to the output stream.
-2. **Stateful processing** - This is where you need to keep track of data between messages, such as keeping a running total of a variable. This is more complicated as state needs to be preserved between messages, and potentially between replicas where multiple replicas are deployed. In addition, state needs to be preserved in the event of the failure of a deployment - Quix Streams supports checkpointing as a way to enable this.
+1. **One message at a time processing** - Here the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically written to the output stream.
+2. **Stateful processing** - This is where you need to keep track of data between messages, such as keeping a running total of a variable. This is more complicated as state needs to be preserved between messages, and potentially between replicas, where multiple replicas are deployed. In addition, state may need to be preserved in the event of the failure of a deployment - Quix Streams supports checkpointing as a way to enable this.
 
 The following sections will explore these methods of data processing in more detail.
 
 ## Topics, streams, partitions, replicas, and consumer groups
 
-The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. 
+The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. To allow for horizontal scaling, a topic is typically divided into multiple streams. You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on. This is the idea of [stream context](/sdk/features/streaming-context.md). 
 
+Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always written to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
 
-Stream context: (also add link to stream context topic)
-You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on.
+It is possible to group code for a topic using the idea of a consumer group. When you create the consumer you specify the group as follows:
 
-Quix Streams restricts all messages inside one stream to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
+```python
+topic_consumer = client.get_topic_consumer(os.environ["input"], consumer_group = "empty-transformation")
+```
 
-TBD: add info on replicas and consumer groups Necessary for horizontal scaling.
+This indicates to the broker that you will process the topic with all available replicas.
 
-Horizontal scaling occurs automatically, because when you deploy multiple replicas, a stream is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic.
+Horizontal scaling occurs automatically, because when you deploy multiple replicas, a stream is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream.
+
+!!! note
+
+    If you don't specify a consumer group, then all streams in a topic will be handled by a single replica, even if you have multiple replicas available.
 
 ## Stream data formats
 
-There are two main formats of stream data: event data and time-series data: 
+There are two main formats of stream data: 
 
-1. Event data, which in Quix Streams is represented with the `qx.EventData` class.
-2. Time-series, which in Quix Streams is represented with the `qx.TimeseriesData` class (and two other classes: one for Pandas data frame format, and one for raw Kafka data).
+1. **Event data** - in Quix Streams this is represented with the `qx.EventData` class.
+2. **Time-series** - in Quix Streams this is represented with the `qx.TimeseriesData` class (and two other classes: one for Pandas data frame format, and one for raw Kafka data).
 
 Event data refers to data that is independent, whereas time-series data is a variable that changes over time. An example of event data is a financial transaction. It contains all data for the invoice, with a timestamp (the time of the transaction), but a financial transaction itself is not a variable you'd track over time. The invoice may itself contain time-series data though, such as the customer's account balance. 
 
@@ -34,9 +40,9 @@ Time-series data is a variable that is tracked over time, such as temperature fr
 
 Time-series data has three formats in Quix Streams:
 
-1. Data (`qx.TimeseriesData`)
-2. Pandas Data Frame (`pd.DataFrame`)
-3. DataRaw (`qx.TimeseriesDataRaw`)
+1. Data (represented by the `qx.TimeseriesData` class)
+2. Pandas Data Frame (represented by the `pd.DataFrame` class)
+3. DataRaw (represented by the `qx.TimeseriesDataRaw` class)
 
 In this topic you'll learn about the `TimeseriesData` and `pd.DataFrame` formats.
 
@@ -52,9 +58,7 @@ The `on_stream_received_handler` is typically written to handle a specific data 
 
 !!! note
 
-    This callback is invoked for each stream in a topic. This means you will have multiple instances of this callback running, if there are multiple streams. 
-    
-    If there are multiple replicas, and each replica is handling one stream, then each replica will run an instance of this callback. This has significance for how you are going to handle shared state, which is discussed later in this topic.
+    This callback is invoked for each stream in a topic. This means you will have multiple instances of this callback invoked, if there are multiple streams. 
 
 ## Registering callbacks to handle data formats
 
@@ -102,7 +106,9 @@ df = ts.to_dataframe()
 
 ## "One message at a time" processing
 
-Now that you have learned about stream data formats and callbacks, the following example shows a simple data processor. This processor receives (consumes) data, processes it (transforms), and then publishes generated data (produces) on an output topic. This encapsulates the typical processing pipeline which consists of:
+Now that you have learned about stream data formats and callbacks, the following example shows a simple data processor. 
+
+This processor receives (consumes) data, processes it (transforms), and then publishes generated data (produces) on an output topic. This encapsulates the typical processing pipeline which consists of:
 
 1. Consumer (reads data)
 2. Transformer (processes data)
@@ -147,7 +153,7 @@ Further, if multiple replicas were used here, it would require no changes to you
 
 ## Stateful processing
 
-With stateful processing, complexity is introduced as data now needs to be preserved between messages, streams, and potentially replicas (where multiple replicas are deployed to handle multiple streams). 
+With stateful processing, additional complexity is introduced, as data now needs to be preserved between messages, streams, and potentially replicas (where multiple replicas are deployed to handle multiple streams). 
 
 ## The problem of using global variables to track state
 
@@ -180,15 +186,13 @@ If you were running across multiple replicas, you'd get a running total for each
 
 Let's say there were three streams and two replicas, you'd get the running total of two streams for one replica, and the running total for the third stream in the other replica.
 
-In most practical scenarios you'd want to track a running total per stream (say, g-forces per race car), or perhaps for some variables a running total across all streams. Each of these scenarios is described in the followng sections.
+In most practical scenarios you'd want to track a running total per stream (say, total g-forces per race car), or perhaps for some variables a running total across all streams. Each of these scenarios is described in the followng sections.
 
-## Tracking running totals per-stream
+## Tracking running totals per stream
 
-Running total for a stream. 
+Sometimes you might want to calculate a running total of a variable for a stream. For example, the total g-force a racing car is exposed to. If you use a global variable you'll lose the stream context. All streams will add to the value potentially, and each replica will also have its own instance of the global, further confusing matters.
 
-Problem - if you use a global variable you'll lose stream context. All streams will add to the value potentially, and each replica will also have its own 
-
-Solution - use stream context/dictionary.
+The solution is to use the stream context to preserve a running total for that stream only. To do this you can use the `stream_id` of a stream to identify its data. Consider the following example:
 
 ```python
 ...
@@ -208,13 +212,15 @@ def callback_handler (stream_consumer: qx.StreamConsumer, data: qx.TimeseriesDat
 
 The key point here is that data is tracked per stream context. You keep running totals on a per-stream basis by using the stream ID, `stream_consumer.stream_id` to index a dictionary containing running totals for each stream.
 
+!!! note
+
+    A stream will only ever be processed by one replica.
+
 ## Tracking running totals across multiple streams
 
-Sometimes you want to track a running total across all streams in a topic.
+Sometimes you want to track a running total across all streams in a topic. The problem is that when you scale using replicas, there is no way to share data between all replicas in a consumer group. 
 
-This is not possible as when you scale using replicas, each replica will have its own copy of all variables. 
-
-The solution is to write the running total per stream (with stream ID) to an output topic. You can then have another processor to total values from inbound messages.
+The solution is to write the running total per stream (with stream ID) to an output topic. You can then have another processor in the pipeline to calculate total values from inbound messages.
 
 ```python
 ...
@@ -236,15 +242,41 @@ def callback_handler (stream_consumer: qx.StreamConsumer, data: qx.TimeseriesDat
 
 In this case the running total is published to its own stream in the output topic. The next service in the data processing pipeline would be able to sum all running totals across all streams in the output topic.
 
-## Handling system restarts and crashes using checkpointing
+## Handling system restarts and crashes
 
-TBD
+One other issue you may run into is that variables that are in memory are not persisted across instance restarts, and instance crashes. 
+
+You can persist a variable using the Quix Streams persistence feature:
+
+```python
+my_var = qx.InMemoryStorage(qx.LocalFileStorage())
+...
+topic_consumer.on_stream_received = on_stream_received_handler
+topic_consumer.on_committed = my_var.flush
+...
+```
+
+This ensures that the variable is persisted, as periodically (default is 20 seconds) it is flushed to local file storage.
+
+If the system crashes (or is restarted), Kafka resumes message processing from the last committed message. This facility is built into Kafka.
+
+!!! tip
+
+    For this facility to work you need to enable the State Management feature. You can enable it in the `Deployment` dialog, where you can also specify the size of storage required.
 
 ## Conclusion
 
-TBD
+In this topic you have learned:
+
+* How to perform simple "one message at a time" processing.
+* How to handle the situation where state needs to be preserved, and problems that can arise in naive code.
+* How to persist state, so that your data is preserved in the event of restarts or crashes.
 
 ## Next steps
 
-TBD
+Continue your Quix Streams learning journey by reading the following more in-depth topics:
 
+* [Publishing data](/sdk/publish.md)
+* [Subscribing to data](/sdk/subscribe.md)
+* [Processing data](/sdk/process.md)
+* [State management](/sdk/state-management.md)
