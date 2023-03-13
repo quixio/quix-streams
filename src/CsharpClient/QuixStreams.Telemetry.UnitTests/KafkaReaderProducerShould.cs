@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Quix.TestBase.Extensions;
 using QuixStreams.Telemetry.Common.Test;
 using QuixStreams.Telemetry.Kafka;
@@ -18,15 +22,15 @@ namespace QuixStreams.Telemetry.UnitTests
         }
         
         [Fact]
-        public void KafkaConsumerProducer_AfterSendSeveralStreams_ShouldReadProperStreams()
+        public async Task KafkaConsumerProducer_AfterSendSeveralStreams_ShouldReadProperStreams()
         {
             RegisterTestCodecs();
 
             // ARRANGE
             TestBroker testBroker = new TestBroker();
             var results = new List<(string, Type)>();
-            var resultsModel1 = new List<(string, string)>();
-            var resultsModel2 = new List<(string, string)>();
+            var resultsModel1 = new ConcurrentBag<(string, string)>();
+            var resultsModel2 = new ConcurrentBag<(string, string)>();
 
             TestModel1 testModel1 = new TestModel1() { Id = "model1" };
             TestModel2 testModel2 = new TestModel2() { Id = "model2" };
@@ -66,10 +70,10 @@ namespace QuixStreams.Telemetry.UnitTests
                 .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_3"));
 
             // ACT
-            stream1.Send(testModel1);
-            stream2.Send(testModel1);
-            stream2.Send(testModel2);
-            stream3.Send(testModel2);
+            await stream1.Send(testModel1);
+            await stream2.Send(testModel1);
+            await stream2.Send(testModel2);
+            await stream3.Send(testModel2);
 
             // ASSERT
             Assert.Equal(3, kafkaConsumer.ContextCache.GetAll().Count);
@@ -80,6 +84,7 @@ namespace QuixStreams.Telemetry.UnitTests
             Assert.DoesNotContain(("StreamId_3", typeof(TestModel1)), results);
             Assert.Contains(("StreamId_3", typeof(TestModel2)), results);
 
+            
             // ASSERT MODEL SUBSCRIPTION
             Assert.Equal(2, resultsModel1.Count);
             Assert.Equal(2, resultsModel2.Count);
@@ -90,14 +95,14 @@ namespace QuixStreams.Telemetry.UnitTests
 
             // ACT
             var streamEnd = new StreamEnd();
-            stream1.Send(streamEnd);
+            await stream1.Send(streamEnd);
 
             // ASSERT
             Assert.Equal(2, kafkaConsumer.ContextCache.GetAll().Count);
 
             // ACT - RE-OPEN TEST
             streamStarted = false;
-            stream1.Send(testModel1);
+            await stream1.Send(testModel1);
 
             // ASSERT RE-OPEN TEST
             Assert.True(streamStarted);

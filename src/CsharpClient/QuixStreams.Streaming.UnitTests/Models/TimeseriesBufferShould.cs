@@ -43,13 +43,6 @@ namespace QuixStreams.Streaming.UnitTests.Models
             buffer.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false));
 
             // Assert
-            
-            // TODO: Verify if changes are correct.
-            //receivedData.Count.Should().Be(5);
-            // foreach (var rData in receivedData)
-            // {
-            //     receivedData[0].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[0]}));   
-            // }
             receivedData.Count.Should().Be(1);
             receivedData.First().Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Take(5).ToList()));   
         }

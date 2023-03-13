@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
 using QuixStreams.Transport.Fw;
@@ -54,6 +56,7 @@ namespace QuixStreams.Transport.UnitTests
             // Act
             consumer.OnNewPackage.Invoke(package);
 
+            SpinWait.SpinUntil(() => committed != null);
             // Assert
             committed.Should().NotBeNull();
             committed.State.Should().BeEquivalentTo(new[] {transportContext}); // PassThrough sends back the transport context as state

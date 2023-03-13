@@ -11,7 +11,7 @@ namespace QuixStreams.Transport.IO
         /// <summary>
         /// Initializes a new instance of <see cref="Package{TContent}"/>
         /// </summary>
-        /// <param name="value">The lazy content value</param>
+        /// <param name="value">The content value</param>
         /// <param name="metaData">The content meta data</param>
         /// <param name="transportContext">The extra context relevant for transporting the package</param>
         public Package(TContent value, MetaData metaData = null, TransportContext transportContext = null) :
@@ -42,7 +42,7 @@ namespace QuixStreams.Transport.IO
         /// Initializes a new instance of <see cref="Package"/>
         /// </summary>
         /// <param name="type">The type of the content value</param>
-        /// <param name="value">The lazy content value</param>
+        /// <param name="value">The content value</param>
         /// <param name="metaData">The content meta data</param>
         /// <param name="transportContext">The extra context relevant for transporting the package</param>
         public Package(Type type, object value, MetaData metaData = null, TransportContext transportContext = null)
