@@ -145,7 +145,7 @@ print("Listening to streams. Press CTRL-C to exit.")
 qx.App.run()
 ```
 
-In this example the stream data is inbound in Pandas `DataFrame` [format](https://pandas.pydata.org/docs/reference/frame.html). 
+In this example the stream data is inbound in Pandas `DataFrame` [format](https://pandas.pydata.org/docs/reference/frame.html){target=_blank}. 
 
 Note that all information required to calculate `gForceTotal` is contained in the inbound data frame (the X, Y, and Z components of g-force). This is an example of "one message at a time" processing: no state needs to be preserved between messages. 
 
