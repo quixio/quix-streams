@@ -71,7 +71,7 @@ To create a simple consumer, follow these steps:
 
     # Open the input topic where to consume data from.
     # For testing purposes we remove consumer group and always read from latest data.
-    topic_consumer = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest)
+    topic_consumer = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=qx.AutoOffsetReset.Latest)
 
     # consume streams
     def on_stream_received_handler(stream_received: qx.StreamConsumer):
@@ -111,7 +111,7 @@ The code will wait for published messages and then print information about any m
 
     # Open the input topic where to consume data from.
     # For testing purposes we remove consumer group and always read from latest data.
-    input_topic = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=AutoOffsetReset.Latest) # (3)
+    input_topic = client.get_topic_consumer("quickstart-topic", consumer_group=None, auto_offset_reset=qx.AutoOffsetReset.Latest) # (3)
 
     # consume streams
     def on_stream_received_handler(stream_received: qx.StreamConsumer): # (4)
