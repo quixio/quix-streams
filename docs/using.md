@@ -9,7 +9,7 @@ The following sections will explore these methods of data processing in more det
 
 ## Topics, streams, partitions, replicas, and consumer groups
 
-The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. To allow for horizontal scaling, a topic is typically divided into multiple streams. You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on. This is the idea of [stream context](/sdk/features/streaming-context.md). 
+The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. To allow for horizontal scaling, a topic is typically divided into multiple streams. You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on. This is the idea of [stream context](./features/streaming-context.md). 
 
 Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always written to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
 
@@ -276,7 +276,7 @@ In this topic you have learned:
 
 Continue your Quix Streams learning journey by reading the following more in-depth topics:
 
-* [Publishing data](/sdk/publish.md)
-* [Subscribing to data](/sdk/subscribe.md)
-* [Processing data](/sdk/process.md)
-* [State management](/sdk/state-management.md)
+* [Publishing data](publish.md)
+* [Subscribing to data](subscribe.md)
+* [Processing data](process.md)
+* [State management](state-management.md)
