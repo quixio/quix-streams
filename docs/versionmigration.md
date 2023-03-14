@@ -118,9 +118,9 @@ And the property on streams is also renamed:
     stream.timeseries.…
     ```
 
-### pandas DataFrame changes
+### Pandas DataFrame changes
 
-All pandas DataFrames provided to you by callbacks or methods will expose the timestamp as 'timestamp' instead of 'time'.
+All Pandas DataFrames provided to you by callbacks or methods will expose the timestamp as 'timestamp' instead of 'time'.
 
 In addition `from|to_panda_frame` has been renamed to `from|to_dataframe`:
 
