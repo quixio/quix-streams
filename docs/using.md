@@ -13,15 +13,15 @@ The main structure used for data organization in Quix is the topic. For example,
 
 Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always published to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
 
-It is possible to group code for a topic using the idea of a consumer group. When you create the consumer you specify the group as follows:
+It is possible to organize the code that processes the streams in a topic using the idea of a consumer group. This indicates to the broker that you will process the topic with all available replicas.
+
+Horizontal scaling occurs automatically, because when you deploy multiple replicas, a stream is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream.
+
+When you create the consumer you specify the consumer group as follows:
 
 ```python
 topic_consumer = client.get_topic_consumer(os.environ["input"], consumer_group = "empty-transformation")
 ```
-
-This indicates to the broker that you will process the topic with all available replicas.
-
-Horizontal scaling occurs automatically, because when you deploy multiple replicas, a stream is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream.
 
 !!! note
 
@@ -244,9 +244,9 @@ In this case the running total is published to its own stream in the output topi
 
 ## Handling system restarts and crashes
 
-One other issue you may run into is that variables that are in memory are not persisted across instance restarts, and instance crashes. 
+One issue you may run into is that in-memory data is not persisted across instance restarts, shutdowns, and instance crashes. This can be mitigated by using the Quix Streams `LocalFileStorage` facility. This will ensure that specified variables are persisted on permanent storage, and this data is preserved across restarts, shutdowns, and system crashes.
 
-You can persist a variable using the Quix Streams persistence feature:
+The following example code demonstrates a simple use of `LocalFile Storage`:
 
 ```python
 my_var = qx.InMemoryStorage(qx.LocalFileStorage())
@@ -256,13 +256,13 @@ topic_consumer.on_committed = my_var.flush
 ...
 ```
 
-This ensures that the variable is persisted, as periodically (default is 20 seconds) it is flushed to local file storage.
+This ensures that the variable `my_var` is persisted, as periodically (default is 20 seconds) it is flushed to local file storage.
 
 If the system crashes (or is restarted), Kafka resumes message processing from the last committed message. This facility is built into Kafka.
 
 !!! tip
 
-    For this facility to work you need to enable the State Management feature. You can enable it in the `Deployment` dialog, where you can also specify the size of storage required.
+    For this facility to work in Quix Platform you need to enable the State Management feature. You can enable it in the `Deployment` dialog, where you can also specify the size of storage required. When using Quix Streams with a third-party broker such as Kafka, no configuration is required, and data is stored on the local file system.
 
 ## Conclusion
 
