@@ -25,7 +25,7 @@ topic_consumer = client.get_topic_consumer(os.environ["input"], consumer_group =
 
 !!! note
 
-    If you don't specify a consumer group, then all streams in a topic will be handled by a single replica, even if you have multiple replicas available.
+    If you don't specify a consumer group, then all messages in all streams in a topic will be processed by all replicas in the microservice deployment.
 
 ## Stream data formats
 
