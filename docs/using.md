@@ -2,7 +2,7 @@
 
 In this topic you will learn how to use Quix Streams to perform two types of data processing:
 
-1. **One message at a time processing** - Here the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically written to the output stream.
+1. **One message at a time processing** - Here the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically published to the output stream.
 2. **Stateful processing** - This is where you need to keep track of data between messages, such as keeping a running total of a variable. This is more complicated as state needs to be preserved between messages, and potentially between replicas, where multiple replicas are deployed. In addition, state may need to be preserved in the event of the failure of a deployment - Quix Streams supports checkpointing as a way to enable this.
 
 The following sections will explore these methods of data processing in more detail.
@@ -11,7 +11,7 @@ The following sections will explore these methods of data processing in more det
 
 The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. To allow for horizontal scaling, a topic is typically divided into multiple streams. You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on. This is the idea of [stream context](./features/streaming-context.md). 
 
-Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always written to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
+Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always published to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
 
 It is possible to group code for a topic using the idea of a consumer group. When you create the consumer you specify the group as follows:
 
