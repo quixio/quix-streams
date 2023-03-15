@@ -56,6 +56,12 @@ namespace QuixStreams.Transport.Kafka
         public bool ConsumerGroupSet { get; }
 
         /// <summary>
+        /// Deprecated feature used by producers in 0.5.0 and before.
+        /// Enables checking for keep alive messages and filters them out.
+        /// </summary>
+        public bool CheckForKeepAlivePackets { get; set; } = true;
+
+        /// <summary>
         /// If consumer group is configured, The auto offset reset determines the start offset in the event
         /// there are not yet any committed offsets for the consumer group for the topic/partitions of interest.     
         /// 
@@ -83,13 +89,13 @@ namespace QuixStreams.Transport.Kafka
             {
                 consumerProperties["socket.keepalive.enable"] = "true"; // default to true
             }
-
-            if (!consumerProperties.ContainsKey("connections.max.idle.ms"))
+            /*
+             https://github.com/edenhill/librdkafka/issues/3109 not yet implemented
+            if (!producerProperties.ContainsKey("connections.max.idle.ms"))
             {
-                consumerProperties["connections.max.idle.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
+                producerProperties["connections.max.idle.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
                 // see more at https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
-            }
-            
+            }*/
             if (!consumerProperties.ContainsKey("metadata.max.age.ms"))
             {
                 consumerProperties["metadata.max.age.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)

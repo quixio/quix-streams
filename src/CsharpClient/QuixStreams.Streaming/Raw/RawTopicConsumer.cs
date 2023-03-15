@@ -68,6 +68,9 @@ namespace QuixStreams.Streaming.Raw
                 consConfig.AutoOffsetReset = autoOffset?.ConvertToKafka();
             }
 
+            //disable quix-custom keep alive messages because they can interfere with the received data since we dont have any protocol running this over
+            consConfig.CheckForKeepAlivePackets = false;
+
             var topicConfiguration = new ConsumerTopicConfiguration(topicName);
             this.kafkaConsumer = new KafkaConsumer(consConfig, topicConfiguration);
         }
