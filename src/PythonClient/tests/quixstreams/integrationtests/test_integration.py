@@ -335,6 +335,7 @@ class TestIntegration(unittest.TestCase):
         output_stream.events.add_timestamp_nanoseconds(100)\
             .add_value("event1", "value1")\
             .add_tag("tag1", "tag1val")\
+            .add_tags({"tag2": "tag2val", "tag3": "tag3val"})\
             .publish()
 
         def event_callback():
@@ -939,6 +940,7 @@ class TestIntegration(unittest.TestCase):
             .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8"))) \
             .add_tag("Tag2", "tag two updated") \
             .add_tag("Tag3", "tag three") \
+            .add_tags({"tag4": "tag4val", "tag5": "tag5val"}) \
             .publish()
 
         # Send timeseries data in nanoseconds relative to epoch

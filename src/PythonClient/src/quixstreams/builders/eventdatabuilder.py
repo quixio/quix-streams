@@ -62,18 +62,14 @@ class EventDataBuilder(object):
             Copies the tags from the specified dictionary. Conflicting tags will be overwritten
             :param tags: The tags to add
 
-        :return: EventDataBuilder
+        :return: the builder
         """
-        raise NotImplementedError("TODO")
 
         if tags is None:
             return self
 
-        # TODO
-        prep_tags_dict = System.Collections.Generic.List[System.Collections.Generic.KeyValuePair[str, str]]([])
         for key, val in tags.items():
-            prep_tags_dict.Add(System.Collections.Generic.KeyValuePair[str, str](key, val))
-        self.__wrapped.AddTags(prep_tags_dict)
+            self.add_tag(key, val)  # TODO use the bulk add self._interop.AddTags()
         return self
 
     def publish(self):
