@@ -138,7 +138,7 @@ Any streams sent without a location property will be located under the "Root" le
 
 ## Close a stream
 
-Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you won't be sending any more data to signal consumers the stream is over.
+Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you won't be publishing any more data to signal consumers the stream is over.
 
 However, sometimes a stream can be closed for other reasons, such as if an error occurs in the publisher code, or something unexpected happens.
 
@@ -201,7 +201,7 @@ The following table shows an example:
 
 	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of the table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
-The following code would generate the previous `TimeseriesData` and send it to the stream:
+The following code would generate the previous `TimeseriesData` and publish it to the stream:
 
 === "Python"
     
@@ -247,7 +247,7 @@ The following code would generate the previous `TimeseriesData` and send it to t
     stream.Timeseries.Publish(data);
     ```
 
-Although Quix Streams allows you to send `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would send the same `TimeseriesData` through a buffer:
+Although Quix Streams allows you to publish `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would publish the same `TimeseriesData` through a buffer:
 
 === "Python"
     
@@ -287,7 +287,7 @@ Quix Streams allows you to attach numbers, strings, or binary data to your times
     data.AddTimestamp(DateTime.UtcNow)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")
-        .AddValue("ParameterC", Encoding.ASCII.GetBytes("Hello Quix!")); // Write binary data as a byte array.
+        .AddValue("ParameterC", Encoding.ASCII.GetBytes("Hello Quix!")); // Publish binary data as a byte array.
     ```
 
 ### pandas DataFrame format
@@ -398,7 +398,7 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
         .AddTimestampInMilliseconds(1000)
         .AddValue("ParameterA", 10)
         .AddValue("ParameterB", "hello")
-        .Write();
+        .Publish();
     ```
 
 ### Using a Buffer
@@ -417,7 +417,7 @@ Quix Streams provides you with an optional programmable buffer which you can tai
     stream.Timeseries.Buffer.PacketSize = 100;
     ```
 
-The code above configures the buffer to send a packet when the size of the buffer reaches 100 timestamps.
+The code above configures the buffer to publish a packet when the size of the buffer reaches 100 timestamps.
 
 === "Python"
     Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `publish` method of that built-in `buffer`:
@@ -479,7 +479,7 @@ You can configure multiple conditions to determine when the Buffer has to releas
 
 #### Examples
 
-The following buffer configuration will send data every 100ms or, if no data is buffered in the 1 second timeout period, it will flush and empty the buffer anyway:
+The following buffer configuration will publish data every 100ms or, if no data is buffered in the 1 second timeout period, it will flush and empty the buffer anyway:
 
 === "Python"
     
@@ -613,7 +613,7 @@ Will result in this parameter hierarchy in the parameter selection dialogs.
 
 ## Writing events
 
-`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as json payload where properties can't be converted to individual parameters. EventData can also be better for non-standard changes such as a machine shutting down sending event named ShutDown.
+`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as json payload where properties can't be converted to individual parameters. EventData can also be better for non-standard changes such as a machine shutting down might publish an event named ShutDown.
 
 !!! tip
 
@@ -632,7 +632,7 @@ You should imagine a list of `EventData` instances as a simple table of three co
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-The following code would generate the list of `EventData` shown in the previous example and send it to the stream:
+The following code would generate the list of `EventData` shown in the previous example and publish it to the stream:
 
 === "Python"
     
@@ -917,7 +917,7 @@ This is a minimal code example you can use to publish data to a topic using Quix
     
                 stream.Properties.Name = "Hello World stream";
     
-                Console.WriteLine("Sending values for 30 seconds");
+                Console.WriteLine("Publishing values for 30 seconds");
                 for (var index = 0; index < 3000; index++)
                 {
                     stream.Timeseries.Buffer
@@ -936,11 +936,11 @@ This is a minimal code example you can use to publish data to a topic using Quix
     }
     ```
 
-## Write raw Kafka messages
+## Publish raw Kafka messages
 
 Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it, but you need to use Quix Streams on both producer and consumer sides as of today. We have plans to support most common formats in near future, but custom formats will always need to be handled manually.
 
-For this, we have created a way to [publish](publish.md#write-raw-kafka-messages) and [subscribe](subscribe.md#read-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
+For this, we have created a way to [publish](publish.md#publish-raw-kafka-messages) and [subscribe](subscribe.md#subscribe-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
 
 You can publish messages with or without a key. The following example demonstrates how to publish two messages to Kafka, one message with a key, and one without:
 
