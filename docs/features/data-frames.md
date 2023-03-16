@@ -1,8 +1,8 @@
 # Support for Data Frames
 
-Quix Streams supports [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) for [subscribing](../subscribe#using_data_frames) and [publishing](../produce#using-data-frames) to topics. The library still uses the common [TimeseriesData](../consume.md#timeseriesdata-format) internally, but handles the conversion seamlessly for you.
+Quix Streams supports [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe) for [subscribing](../subscribe.md#pandas-dataframe-format) and [publishing](../publish.md#pandas-dataframe-format) to topics. The library still uses the common [TimeseriesData](../subscribe.md#timeseriesdata-format) internally, but handles the conversion seamlessly for you.
 
-For example, the following [TimeseriesData](../consume.md#timeseriesdata-format):
+For example, the following [TimeseriesData](../subscribe.md#timeseriesdata-format):
 
 | Timestamp | CarId (tag) | Speed | Gear |
 | --------- | ----------- | ----- | ---- |
