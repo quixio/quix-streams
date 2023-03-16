@@ -6,38 +6,45 @@ Our goal is to minimize the occurrence of breaking changes, and if we do need to
 
 ### The library is renamed
 
-For python, the library is renamed to `quixstreams` from `quixstreaming`, while for C# the packages will be available under `QuixStreams.*` rather than `Quix.Sdk.*`. The latter also resulted in namespace changes.
+For Python, the library is renamed to `quixstreams` from `quixstreaming`, while for C# the packages will be available under `QuixStreams.*` rather than `Quix.Sdk.*`. The latter also resulted in namespace changes.
 
 ### Library availability
 
 Previously, the library was not open source and was distributed via our public feed.
 
-For python it was done by using 
+For Python it was done by using:
+
 ```
 pip install quixstreaming --extra-index-url https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/pypi/simple/
 ``` 
-Now it should be installed from the official PyPi feed using
+
+Now it should be installed from the official PyPi feed using:
+
 ```
 pip install quixstreams
 ```
-We currently publish in-dev versions to test pypi, you can try these using
+
+Quix currently publishes in-development versions to test PyPi, you can try these using:
+
 ```
 pip install quixstreams --extra-index-url https://test.pypi.org/simple/
 ```
-Note: The original feed will be maintained for some time, but should be treated as deprecated.
+
+**Note:** The original feed will be maintained for some time, but should be treated as deprecated.
 
 We are currently using our feed for C#, but we're in the process of developing our public NuGet packages, which will be made available shortly.
+
 ```
 https://pkgs.dev.azure.com/quix-analytics/53f7fe95-59fe-4307-b479-2473b96de6d1/_packaging/public/nuget/v3/index.json
 ```
 
 ### StreamingClient renamed to KafkaStreamingClient
 
-We renamed the StreamingClient to be more specific to the technology it works with.
+We renamed the `StreamingClient` to be more specific to the technology it works with.
 
 ### OutputTopic and InputTopic classes renamed to TopicProducer and TopicConsumer
 
-This also brought several other changes to the code, see them below
+This also brought several other changes to the code, see them below:
 
 === "Python before"
 
@@ -68,7 +75,6 @@ The modifications will have the most significant impact on Python code that incl
 - `StreamParametersReader|writer` -> `StreamTimeseriesConsumer|Producer`  (see section below about `Parameters`->`TimeSeries` rename)
 - `StreamEventsReader|Writer` -> `StreamEventsConsumer|Producer`
 - `ParametersBufferReader|Writer` -> `TimeseriesConsumer|Producer` (see section below about `Parameters`->`TimeSeries` rename)
-
 
 ### ParameterData renamed to TimeseriesData
 
@@ -115,7 +121,8 @@ And the property on streams is also renamed:
 ### pandas DataFrame changes
 
 All pandas DataFrames provided to you by callbacks or methods will expose the timestamp as 'timestamp' instead of 'time'.
-In addition `from|to_panda_frame` got renamed to `from|to_dataframe`
+
+In addition `from|to_panda_frame` has been renamed to `from|to_dataframe`:
 
 === "Python before"
 
@@ -176,7 +183,6 @@ In addition `from|to_panda_frame` got renamed to `from|to_dataframe`
 
     raw_topic_producer.publish(…)
     ```
-
 
 ### .StartReading renamed to .Subscribe to be in sync with Producer
 
@@ -342,9 +348,10 @@ Furthermore, in Python, event subscriptions (+=, -=) have been replaced with cal
 
     … the rest of your code
     ```
-### In python topic is now available for the stream
 
-This paired with the event changes (read above), lets you drastically alter your callback setup. The code above can now be expressed us such:
+### In Python topic is now available for the stream
+
+This, paired with the event changes (read above), enables you improve your callback setup. The code above can now be expressed as follows:
 
 ``` python
 … the rest of your code, such as client and consumer/producer creation
@@ -408,14 +415,14 @@ Certain classes now use unmanaged resources, and to prevent memory leaks, we hav
 
 These are:
 
-- EventData: important to be disposed whenever manually created or received in callbacks
-- TimeseriesData: important to be disposed whenever manually created or received in callbacks
-- TimeseriesDataRaw: important to be disposed whenever manually created or received in callbacks
-- StreamPackage: important to be disposed whenever manually created or received in callbacks
-- StreamConsumer: also supports `dispose()` and automatically disposes when stream is closed.
-- StreamProducer: also supports `dispose()` and automatically disposes when stream is closed.
-- TopicConsumer: unless you're frequently subscribing to topics, this is not something you have to be too concerned about.
-- TopicProducer: unless you're frequently subscribing to topics, this is not something you have to be too concerned about.
+- `EventData`: important to be disposed whenever manually created or received in callbacks.
+- `TimeseriesData`: important to be disposed whenever manually created or received in callbacks.
+- `TimeseriesDataRaw`: important to be disposed whenever manually created or received in callbacks.
+- `StreamPackage`: important to be disposed whenever manually created or received in callbacks.
+- `StreamConsumer`: also supports `dispose()` and automatically disposes when stream is closed.
+- `StreamProducer`: also supports `dispose()` and automatically disposes when stream is closed.
+- `TopicConsumer`: unless you're frequently subscribing to topics, this is not something you have to be too concerned about.
+- `TopicProducer`: unless you're frequently subscribing to topics, this is not something you have to be too concerned about.
 
 Example code:
 
