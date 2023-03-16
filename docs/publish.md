@@ -247,7 +247,7 @@ The following code would generate the previous `TimeseriesData` and publish it t
     stream.Timeseries.Publish(data);
     ```
 
-Although Quix Streams allows you to publish `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#buffer) feature to achieve high throughput speeds. The following code would publish the same `TimeseriesData` through a buffer:
+Although Quix Streams allows you to publish `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#using-a-buffer) feature to achieve high throughput speeds. The following code would publish the same `TimeseriesData` through a buffer:
 
 === "Python"
     
@@ -261,7 +261,7 @@ Although Quix Streams allows you to publish `TimeseriesData` to a stream directl
     stream.Timeseries.Buffer.Publish(data);
     ```
 
-Visit the [Buffer](#buffer) section of this documentation to find out more about the built-in buffer feature.
+Visit the [Buffer](#using-a-buffer) section of this documentation to find out more about the built-in buffer feature.
 
 Quix Streams allows you to attach numbers, strings, or binary data to your timestamps. The code below will attach one of each to the same timestamp:
 
