@@ -30,10 +30,7 @@ namespace QuixStreams.Streaming.Raw
 
             this.topicName = topicName;
 
-            var publisherConfiguration = new Transport.Kafka.PublisherConfiguration(brokerAddress, brokerProperties)
-                {
-                    KeepConnectionAlive = false //keepalive packets would interfere with reading raw data since we dont have any protocol defined over the transport layer
-                };
+            var publisherConfiguration = new Transport.Kafka.PublisherConfiguration(brokerAddress, brokerProperties);
             var topicConfiguration = new Transport.Kafka.ProducerTopicConfiguration(this.topicName);
 
             this.kafkaProducer = new Transport.Kafka.KafkaProducer(publisherConfiguration, topicConfiguration);

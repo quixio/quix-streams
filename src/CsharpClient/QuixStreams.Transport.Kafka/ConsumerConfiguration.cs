@@ -56,7 +56,8 @@ namespace QuixStreams.Transport.Kafka
         public bool ConsumerGroupSet { get; }
 
         /// <summary>
-        /// Enable checking for alive messages for consumer
+        /// Deprecated feature used by producers in 0.5.0 and before.
+        /// Enables checking for keep alive messages and filters them out.
         /// </summary>
         public bool CheckForKeepAlivePackets { get; set; } = true;
 
