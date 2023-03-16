@@ -81,7 +81,7 @@ This is how the message broker knows that all the replicas of your process want 
 
 
 === "C\#"
-    Once you have the `TopicConsumer` instance you can start reading streams. For each stream received to the specified topic, `TopicConsumer` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new stream. For example the following code prints the StreamId for each stream received on that Topic:
+    Once you have the `TopicConsumer` instance you can start consuming streams. For each stream received to the specified topic, `TopicConsumer` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new stream. For example the following code prints the StreamId for each stream received on that Topic:
     
     ``` cs
     topicConsumer.OnStreamReceived += (topic, newStream) =>
@@ -115,7 +115,7 @@ The following table shows an example:
 | 6         | 110   | 2    |
 
 === "Python"
-    You can subscribe to time-series data from streams using the `on_data_received` callback of the `StreamConsumer` instance. For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
+    You can subscribe to time-series data from streams using the `on_data_received` callback of the `StreamConsumer` instance. For instance, in the following example we consume and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
     
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
@@ -134,12 +134,12 @@ The following table shows an example:
     ```
 
     !!! note
-        `subscribe()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+        `subscribe()` starts consuming from the topic however, `App.run()` can also be used for this and provides other benefits.
 
         Find out more about [App.run()](app-management.md)
 
 === "C\#"
-    You can subscribe to time-series data from streams using the `OnDataReceived` event of the `StreamConsumer` instance. For instance, in the following example we read and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
+    You can subscribe to time-series data from streams using the `OnDataReceived` event of the `StreamConsumer` instance. For instance, in the following example we consume and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
     
     ``` cs
     topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
@@ -156,7 +156,7 @@ The following table shows an example:
     ```
 
 !!! note
-    `subscribe()` starts reading from the topic however, `App.run()` can also be used for this and provides other benefits.
+    `subscribe()` starts consuming from the topic however, `App.run()` can also be used for this and provides other benefits.
 
     Find out more about [App.run()](app-management.md)
 
@@ -174,7 +174,7 @@ Quix Streams supports numeric, string, and binary value types. You should use th
       - `StringValue`: Returns the string value of the parameter, represented as a `string` type.    
       - `BinaryValue`: Returns the binary value of the parameter, represented as an array of `byte`.
 
-This is a simple example showing how to read `Speed` values of the `TimeseriesData` used in the previous example:
+This is a simple example showing how to consume `Speed` values of the `TimeseriesData` used in the previous example:
 
 === "Python"
     
@@ -207,7 +207,7 @@ Speed - 6: 110
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for reading and writing time-series data. Use the callback `on_dataframe_received` instead of `on_data_received` when reading from a stream:
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for consuming and publishing time-series data. Use the callback `on_dataframe_received` instead of `on_data_received` when consuming from a stream:
 
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer
@@ -232,7 +232,7 @@ def on_stream_received_handler(stream_received: StreamConsumer):
 
 def on_timeseries_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
     with data:
-        # read from input stream
+        # consume from input stream
         df = data.to_dataframe()
         print(df.to_string())
 
@@ -246,7 +246,7 @@ topic_consumer.subscribe()
 
 ### Using a Buffer
 
-Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to read data allows you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
+Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to consume data allows you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
 
 === "Python"
     You can use the `buffer` property embedded in the `timeseries` property of your `stream`, or create a separate instance of that buffer using the `create_buffer` method:
@@ -276,7 +276,7 @@ You can configure a buffer’s input requirements using built-in properties. For
     buffer.TimeSpanInMilliseconds = 100;
     ```
 
-Reading data from that buffer is as simple as using its callback (Python) or events (C#). The buffer uses the same callbacks and events as when reading without buffer. For example, the following code prints the ParameterA value of the first timestamp of each packet released from the buffer:
+Consuming data from that buffer is as simple as using its callback (Python) or events (C#). The buffer uses the same callbacks and events as when consuming without the buffer. For example, the following code prints the ParameterA value of the first timestamp of each packet released from the buffer:
 
 === "Python"
     
@@ -290,7 +290,7 @@ Reading data from that buffer is as simple as using its callback (Python) or eve
             print("ParameterA - " + str(timestamp) + ": " + str(num_value))
     
     buffer.on_data_released = on_data_released_handler
-    # buffer.on_dataframe_released and other callbacks are also available, check reading without buffer for more info
+    # buffer.on_dataframe_released and other callbacks are also available, check consuming without buffer for more info
     ```
 
 === "C\#"
@@ -381,7 +381,7 @@ You should imagine a list of `EventData` instances as a simple table of three co
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-Reading events from a stream is as easy as reading timeseries data. In this case, the library does not use a buffer, but the way we read Event Data from a stream is similar.
+Consuming events from a stream is as easy as consuming timeseries data. In this case, the library does not use a buffer, but the way we consume Event Data from a stream is similar.
 
 === "Python"
     from quixstreams import TopicConsumer, StreamConsumer, EventData
@@ -389,7 +389,7 @@ Reading events from a stream is as easy as reading timeseries data. In this case
     ``` python
     def on_event_data_received_handler(stream: StreamConsumer, data: EventData):
         with data:
-            print("Event read for stream. Event Id: " + data.Id)
+            print("Event consumed for stream. Event Id: " + data.Id)
     
     stream_received.events.on_data_received = on_event_data_received_handler
     ```
@@ -406,10 +406,10 @@ Reading events from a stream is as easy as reading timeseries data. In this case
 output:
 
 ``` console
-Event read for stream. Event Id: failure23
-Event read for stream. Event Id: box-event2
-Event read for stream. Event Id: motor-off
-Event read for stream. Event Id: race-event3
+Event consumed for stream. Event Id: failure23
+Event consumed for stream. Event Id: box-event2
+Event consumed for stream. Event Id: motor-off
+Event consumed for stream. Event Id: race-event3
 ```
 
 ## Committing / checkpointing
@@ -420,7 +420,7 @@ It is important to be aware of the commit concept when working with a broker. Co
 
 	Commits are done at a partition level when you use Kafka as a message broker. Streams that belong to the same partition are committed at the same time using the same position. Quix Streams currently does not expose the option to subscribe to only specific partitions of a topic, but commits will only ever affect partitions that are currently assigned to your client.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You can read more about the Streaming Context feature of the library [here](features/streaming-context.md).
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You can consume more about the Streaming Context feature of the library [here](features/streaming-context.md).
 
 ### Automatic committing
 
@@ -485,7 +485,7 @@ Then, whenever your commit condition fulfils, call:
     topicConsumer.Commit();
     ```
 
-The piece of code above will commit anything – like parameter, event or metadata - read and served to you from the topic you subscribed to up to this point.
+The piece of code above will commit anything – like parameter, event or metadata - consumed and served to you from the topic you subscribed to up to this point.
 
 ### Commit callback
 
@@ -513,14 +513,14 @@ Whenever a commit occurs, an event is raised to let you know. This event is rais
 
 ### Auto offset reset
 
-You can control the offset that data is read from by optionally specifying `AutoOffsetReset` when you open the topic.
+You can control the offset that data is received from by optionally specifying `AutoOffsetReset` when you open the topic.
 
 When setting the `AutoOffsetReset` you can specify one of three options:
 
 | Option   | Description                                                      |
 | -------- | ---------------------------------------------------------------- |
-| Latest   | Read only the latest data as it arrives, dont include older data |
-| Earliest | Read from the beginning, i.e. as much as possible                |
+| Latest   | Receive only the latest data as it arrives, dont include older data |
+| Earliest | Receive from the beginning, i.e. as much as possible                |
 | Error    | Throws exception if no previous offset is found                  |
 
 By default, Latest is used.
@@ -633,7 +633,7 @@ The `StreamEndType` can be one of:
 
 ## Minimal example
 
-This is a minimal code example you can use to read data from a topic using Quix Streams:
+This is a minimal code example you can use to receive data from a topic using Quix Streams:
 
 === "Python"
     
@@ -644,7 +644,7 @@ This is a minimal code example you can use to read data from a topic using Quix 
     
     topic_consumer = client.get_topic_consumer(TOPIC_ID)
     
-    # read streams
+    # Consume streams
     def on_stream_received_handler(stream_received: StreamConsumer):    
         buffer = stream_received.timeseries.create_buffer()
         buffer.on_data_released = on_data_released_handler
@@ -654,7 +654,7 @@ This is a minimal code example you can use to read data from a topic using Quix 
             df = data.to_dataframe()
             print(df.to_string())    
     
-    # Hook up events before initiating read to avoid losing out on any data
+    # Hook up events before subscribing to avoid losing out on any data
     topic_consumer.on_stream_received = on_stream_received_handler
     
     # Hook up to termination signal (for docker image) and CTRL-C
@@ -691,10 +691,10 @@ This is a minimal code example you can use to read data from a topic using Quix 
     
                 using var topicConsumer = client.GetTopicConsumer(TOPIC_ID);
     
-                // Hook up events before initiating read to avoid losing out on any data
+                // Hook up events before subscribing to avoid losing out on any data
                 topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
                 {
-                    Console.WriteLine($"New stream read: {streamConsumer.StreamId}");
+                    Console.WriteLine($"New stream received: {streamConsumer.StreamId}");
     
                     var buffer = streamConsumer.Timeseries.CreateBuffer();
     
@@ -715,11 +715,11 @@ This is a minimal code example you can use to read data from a topic using Quix 
     }
     ```
 
-## Read raw Kafka messages
+## Subscribe raw Kafka messages
 
 Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it, but you need to use Quix Streams on both producer and consumer sides as of today. We have plans to support most common formats in near future, but custom formats will always need to be handled manually.
 
-For this, we have created a way to [publish](publish.md#write-raw-kafka-messages) and [subscribe](subscribe.md#read-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
+For this, we have created a way to [publish](publish.md#publish-raw-kafka-messages) and [subscribe](subscribe.md#subscribe-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
 
 === "Python"
     

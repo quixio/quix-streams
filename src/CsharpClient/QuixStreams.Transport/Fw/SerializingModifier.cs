@@ -22,7 +22,7 @@ namespace QuixStreams.Transport.Fw
         public Func<Package, Task> OnNewPackage { get; set; }
 
         /// <summary>
-        /// Send a package, which the modifier attemptes to serialize. Serialization result is raised via <see cref="OnNewPackage"/>
+        /// Send a package, which the modifier attempts to serialize. Serialization result is raised via <see cref="OnNewPackage"/>
         /// Note: <see cref="SerializationException"/> are raised for unsuccessful serialization when package's lazy value is evaluated.
         /// </summary>
         /// <param name="package">The package to serialize</param>

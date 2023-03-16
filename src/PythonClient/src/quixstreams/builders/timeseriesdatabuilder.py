@@ -79,12 +79,12 @@ class TimeseriesDataBuilder(object):
             self._interop = new
         return self
 
-    def add_tags(self, tags: Dict[str, str]) -> 'EventDataBuilder':
+    def add_tags(self, tags: Dict[str, str]) -> 'TimeseriesDataBuilder':
         """
             Copies the tags from the specified dictionary. Conflicting tags will be overwritten
             :param tags: The tags to add
 
-        :return: EventDataBuilder
+        :return: the builder
         """
 
         if tags is None:

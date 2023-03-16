@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,14 +23,14 @@ namespace QuixStreams.Transport.Kafka
 
         private readonly object openLock = new object();
         private readonly ILogger logger = Logging.CreateLogger<KafkaProducer>();
+        private IDictionary<string, string> brokerStates = new ConcurrentDictionary<string, string>();
+        private bool checkBrokerStateBeforeSend = false;
+        private bool logOnNextBrokerStateUp = false;
 
         private readonly ProduceDelegate produce;
 
         private long lastFlush = -1;
         private IProducer<byte[], byte[]> producer;
-        private readonly ThreadingTimer timer;
-        private List<TopicPartition> partitionsToKeepAliveWith = new List<TopicPartition>();
-        private readonly Action setupKeepAlive;
         private string configId;
 
         /// <summary>
@@ -39,73 +40,16 @@ namespace QuixStreams.Transport.Kafka
         /// <param name="topicConfiguration">The topic configuration</param>
         public KafkaProducer(PublisherConfiguration publisherConfiguration, ProducerTopicConfiguration topicConfiguration)
         {
-            Action hbAction = null;
             this.config = publisherConfiguration.ToProducerConfig();
             SetConfigId(topicConfiguration);
             if (topicConfiguration.Partition == Partition.Any)
             {
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicConfiguration.Topic, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
-                hbAction = () =>
-                {
-                    this.logger.LogTrace("[{0}] Creating admin client to retrieve metadata for keep alive details", this.configId);
-                    try
-                    {
-                        using (var adminClient = new AdminClientBuilder(this.config).Build())
-                        {
-                            var metadata = adminClient.GetMetadata(topicConfiguration.Topic, TimeSpan.FromSeconds(15));
-                            if (metadata == null)
-                            {
-                                logger.LogError("[{0}] Keep alive could not be set up for topic {1} due to timeout.", this.configId, topicConfiguration.Topic);
-                                return;
-                            }
-
-                            this.logger.LogTrace("[{0}] Retrieved metadata for Topic {1}", this.configId, topicConfiguration.Topic);
-                            var topicMetaData = metadata.Topics.FirstOrDefault(x => x.Topic == topicConfiguration.Topic);
-                            if (topicMetaData == null)
-                            {
-                                logger.LogError("[{0}] Keep alive could not be set up for topic {1} due to missing topic metadata.", this.configId, topicConfiguration.Topic);
-                                return;
-                            }
-
-                            partitionsToKeepAliveWith = topicMetaData.Partitions.GroupBy(y => y.Leader)
-                                .Select(y => y.First())
-                                .Select(y => new TopicPartition(topicConfiguration.Topic, y.PartitionId)).ToList();
-
-                            if (logger.IsEnabled(LogLevel.Debug))
-                            {
-                                foreach (var topicPartition in partitionsToKeepAliveWith)
-                                {
-                                    logger.LogDebug("[{0}] Automatic keep alive enabled for '{1}'.", this.configId, topicPartition);
-                                }
-                            }
-                        }
-
-                        this.logger.LogTrace("[{0}] Finished retrieving metadata for keep alive details", this.configId);
-                    }
-                    catch (KafkaException kafkaException)
-                    {
-                        logger.LogError("[{0}] Keep alive could not be set up for topic {1} due to error: {2}.", this.configId, topicConfiguration.Topic, kafkaException.Message);
-                        return;
-                    }
-
-                    hbAction = () => { }; // because no need to do ever again, really
-                };
             }
             else
             {
                 var topicPartition = new TopicPartition(topicConfiguration.Topic, topicConfiguration.Partition);
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
-                hbAction = () =>
-                {
-                    partitionsToKeepAliveWith.Add(topicPartition);
-                    hbAction = () => { }; // because no need to do ever again, really
-                };
-            }
-
-            if (publisherConfiguration.KeepConnectionAlive && publisherConfiguration.KeepConnectionAliveInterval > 0)
-            {
-                setupKeepAlive = hbAction;
-                this.timer = new ThreadingTimer(SendKeepAlive, publisherConfiguration.KeepConnectionAliveInterval, this.logger);
             }
         }
         
@@ -140,36 +84,20 @@ namespace QuixStreams.Transport.Kafka
 
                 this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
+                    .SetLogHandler(this.StatisticsHandler)
                     .Build();
-
-                if (setupKeepAlive != null)
-                {
-                    setupKeepAlive();
-                }
-                this.timer?.Start();
             }
         }
 
-        private void SendKeepAlive()
+        private void StatisticsHandler(IProducer<byte[], byte[]> producer, LogMessage log)
         {
-            void ProduceKeepAlive(byte[] key, byte[] message, Action<DeliveryReport<byte[], byte[]>> deliveryHandler, object state)
+            if (KafkaHelper.TryParseBrokerState(log, out var broker, out var state))
             {
-                var topicPartition = (TopicPartition) state;
-                this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = message }, deliveryHandler);
-            }
-            
-            try
-            {
-                foreach (var topicPartition in partitionsToKeepAliveWith)
+                if (logOnNextBrokerStateUp && state.Equals("up", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    logger.LogTrace("[{0}] Sending keep alive msg to {1}", this.configId, topicPartition);
-                    SendInternal(Constants.KeepAlivePackage, ProduceKeepAlive, state: topicPartition).GetAwaiter().GetResult();
-                    logger.LogTrace("[{0}] Sent keep alive msg to {1}", this.configId, topicPartition);
-                }
-            }
-            catch
-            {
-                logger.LogWarning("[{0}] Failed to send keep alive msg", this.configId);    
+                    this.logger.LogInformation("[{0}] Broker {1} is now {2}", this.configId, broker, state);
+                } 
+                brokerStates[broker] = state;
             }
         }
 
@@ -194,8 +122,15 @@ namespace QuixStreams.Transport.Kafka
                 this.logger.LogWarning(ex, "[{0}] Disconnected from kafka. Ignore unless occurs frequently in short period of time as client automatically reconnects.", this.configId);
                 return;
             }
+
+            if (ex.Message.Contains("brokers are down"))
+            {
+                checkBrokerStateBeforeSend = true;
+                this.logger.LogDebug("[{0}] {1}, but delaying reporting until next message, in case reconnect happens before.", this.configId, ex.Message); // Excessive error reporting
+                return;
+            }
             
-            if (ex.Message.Contains("Receive failed: Connection timed out (after "))
+            if (ex.Message.Contains("Receive failed") && ex.Message.Contains("Connection timed out (after "))
             {
                 var match = Constants.ExceptionMsRegex.Match(ex.Message);
                 if (match.Success)
@@ -226,7 +161,6 @@ namespace QuixStreams.Transport.Kafka
 
                 this.producer.Dispose();
                 this.producer = null;
-                this.timer?.Stop();
             }
         }
 
@@ -267,6 +201,7 @@ namespace QuixStreams.Transport.Kafka
             {
                 if (report.Error?.IsError == true)
                 {
+                    this.logger.LogTrace("[{0}] {1} {2}", this.configId, report.Error.Code, report.Error.Reason);
                     var wrappedError = new Error(report.Error.Code, $"[{this.configId}] {report.Error.Reason}", report.Error.IsFatal);
                     taskSource.SetException(new ProduceException<byte[], byte[]>(wrappedError, report));
                     return;
@@ -280,6 +215,27 @@ namespace QuixStreams.Transport.Kafka
             var tryCount = 0;
             lock (sendLock) // to avoid reordering of packages in case of error
             {
+                if (checkBrokerStateBeforeSend)
+                {
+                    checkBrokerStateBeforeSend = false;
+                    var upBrokerCount = this.brokerStates.Count(y => !y.Value.Equals("up", StringComparison.InvariantCultureIgnoreCase));
+                    if (upBrokerCount == 0)
+                    {
+                        logOnNextBrokerStateUp = true;
+                        this.logger.LogError("[{0}] None of the brokers are currently in state 'up'.", this.configId);
+                        if (this.logger.IsEnabled(LogLevel.Debug))
+                        {
+                            foreach (var brokerState in brokerStates)
+                            {
+                                this.logger.LogDebug("[{0}] Broker {1} has state {2}", this.configId, brokerState.Key, brokerState.Value);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        this.logger.LogDebug("[{0}] {1}/{2} brokers are up (after all being marked down)", this.configId, upBrokerCount, this.brokerStates.Count);
+                    }
+                } 
                 do
                 {
                     try
@@ -341,10 +297,6 @@ namespace QuixStreams.Transport.Kafka
         public void Dispose()
         {
             this.Close();
-            if(this.timer != null)
-            {
-                this.timer.Dispose();
-            }
         }
 
         private delegate void ProduceDelegate(byte[] key, byte[] message, Action<DeliveryReport<byte[], byte[]>> deliveryHandler, object state);

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using QuixStreams.Streaming.Models.StreamConsumer;
+using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
 
 namespace QuixStreams.Streaming.Models.StreamProducer
@@ -119,7 +120,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
             this.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false)); // use merge & clean of Buffer is more efficient
         }
 
-        
+
         /// <summary>
         /// Default tags injected for all parameters values sent by this buffer.
         /// </summary>

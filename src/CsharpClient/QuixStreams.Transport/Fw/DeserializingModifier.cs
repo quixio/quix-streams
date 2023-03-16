@@ -21,7 +21,7 @@ namespace QuixStreams.Transport.Fw
         public Func<Package, Task> OnNewPackage { get; set; }
 
         /// <summary>
-        /// Send a package, which the modifier attemptes to deserialize. Deserialization results is raised via <see cref="OnNewPackage"/>
+        /// Send a package, which the modifier attempts to deserialize. Deserialization results is raised via <see cref="OnNewPackage"/>
         /// </summary>
         /// <param name="package">The package to deserialize</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>

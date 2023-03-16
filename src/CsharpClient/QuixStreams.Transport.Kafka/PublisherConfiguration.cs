@@ -106,16 +106,6 @@ namespace QuixStreams.Transport.Kafka
         /// default: 10000
         /// </summary>
         public int? BatchNumMessages { get; set; }
-        
-        /// <summary>
-        /// Enable keep alive messages for publisher. Useful to ensure connection isn't idle reaped.
-        /// </summary>
-        public bool KeepConnectionAlive { get; set; } = true;
-
-        /// <summary>
-        /// The keel alive message interval in milliseconds
-        /// </summary>
-        public int KeepConnectionAliveInterval { get; set; } = 60000;
 
         internal ProducerConfig ToProducerConfig()
         {
@@ -134,13 +124,11 @@ namespace QuixStreams.Transport.Kafka
                 producerProperties["socket.keepalive.enable"] = "true"; // default to true
             }
             
-            /*
-             https://github.com/edenhill/librdkafka/issues/3109 not yet implemented
             if (!producerProperties.ContainsKey("connections.max.idle.ms"))
             {
                 producerProperties["connections.max.idle.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
                 // see more at https://docs.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations
-            }*/
+            }
             if (!producerProperties.ContainsKey("metadata.max.age.ms"))
             {
                 producerProperties["metadata.max.age.ms"] = "180000"; // Azure closes inbound TCP idle > 240,000 ms, which can result in sending on dead connections (shown as expired batches because of send timeout)
