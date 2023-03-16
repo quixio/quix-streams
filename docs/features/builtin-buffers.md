@@ -4,12 +4,12 @@ If you’re sending data at a high frequency, processing time-series without any
 
 On the other hand, an incorrect buffer strategy can introduce unnecessary latency which may not be acceptable in some use cases.
 
-Quix Streams provides you with a very high performance, low-latency buffer, combined with easy-to-use configurations to [subscribe](../subscribe.md#buffer) and [publish](../publish.md#buffer) to give you freedom in balancing between latency and cost.
+Quix Streams provides you with a very high performance, low-latency buffer, combined with easy-to-use configurations to [subscribe](../subscribe.md#using-a-buffer) and [publish](../publish.md#using-a-buffer) to give you freedom in balancing between latency and cost.
 
 Buffers in the library work at the timestamp level. A buffer accumulates timestamps until a release condition is met. A packet is then published containing those timestamps and values as a [TimeseriesData](../subscribe.md#timeseriesdata-format) package.
 
 ![High level time-series buffering flow](../images/QuixBuffering.png)
 
-The logic is simple in theory but gets more complicated when trying to maintain high performance and easy interface. The buffer can be used to [subscribe](../subscribe.md#buffer) to and [publish](../publish.md#buffer) time-series data.
+The logic is simple in theory but gets more complicated when trying to maintain high performance and easy interface. The buffer can be used to [subscribe](../subscribe.md#using-a-buffer) to and [publish](../publish.md#using-a-buffer) time-series data.
 
 Our buffer implementation uses short memory allocations and minimizes conversions between raw transport packages and [TimeseriesData](../subscribe.md#timeseriesdata-format) format to achieve low CPU and memory consumption with high throughput. We are happy to claim that our implementation has all of these, — simplicity, low resource consumption, and high performance —, therefore you don’t need to implement buffering because it is provided in the library.
