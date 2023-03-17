@@ -7,7 +7,7 @@
 [![Linkedin](https://img.shields.io/badge/LinkedIn-0A66C2.svg?logo=linkedin)](https://www.linkedin.com/company/70925173/)
 [![Events](https://img.shields.io/badge/-Events-blueviolet)](https://quix.io/community#events)
 [![YouTube](https://img.shields.io/badge/YouTube-FF0000.svg?logo=youtube)](https://www.youtube.com/channel/UCrijXvbQg67m9-le28c7rPA)
-[![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/sdk-intro.html)
+[![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/client-library-intro.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
 # What is Quix Streams?
@@ -90,7 +90,7 @@ This library needs to utilize a message broker to send and receive data. Quix us
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
-To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/sdk/quickstart.html) in our official documentation. 
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/client-library/quickstart.html) in our official documentation. 
 
 However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
 
@@ -158,7 +158,7 @@ def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.Dat
 def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
     # subscribe to new DataFrames being received
     # if you aren't familiar with DataFrames there are other callbacks available
-    # refer to the docs here: https://docs.quix.io/sdk/subscribe.html
+    # refer to the docs here: https://docs.quix.io/client-library/subscribe.html
     stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
 
 
@@ -173,7 +173,7 @@ qx.App.run()
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/sdk/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/sdk/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/sdk/introduction.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/client-library/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/client-library/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library/client-library-intro.html).
 
 ## Library features
 
@@ -377,8 +377,7 @@ The library also includes a number of other enhancements that are designed to si
 
 - <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.<br>
 
-For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/sdk/introduction.html).
-
+For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/client-library/client-library-intro.html).
 
 ### What's Next
 
