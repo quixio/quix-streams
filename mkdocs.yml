@@ -17,6 +17,7 @@ markdown_extensions:
 nav:
     - 'Introduction': '../client-library-intro.html'
     - 'Quickstart': 'quickstart.md'
+    - 'Data processing 101': 'using.md'
     - 'Kafka and Quix Streams': 'kafka.md'
     - 'Features overview':
       - 'Streaming context': 'features/streaming-context.md'
@@ -33,7 +34,7 @@ nav:
     - 'Subscribe to data': 'subscribe.md'
     - 'Processing data': 'process.md'
     - 'State management': 'state-management.md'
-    - 'Migrating from older': 'versionmigration.md'
+    - 'Migration guide': 'versionmigration.md'
     # - 'Local environment':
     #   - 'Set up local environment': 'python-setup.md'
     #   - 'Set up docker environment': 'docker-setup.md'
