@@ -1,6 +1,6 @@
 site_name: 'Quix Docs'
 site_description: 'Quix Streams Documentation'
-repo_url: https://github.com/quixai/quix-streams/docs
+repo_url: https://github.com/quixio/quix-streams/docs
 edit_uri: tree/master/docs
 
 theme:
@@ -15,7 +15,7 @@ markdown_extensions:
       alternate_style: true 
 
 nav:
-    - 'Introduction': '../sdk-intro.html'
+    - 'Introduction': '../client-library-intro.html'
     - 'Quickstart': 'quickstart.md'
     - 'Kafka and Quix Streams': 'kafka.md'
     - 'Features overview':
