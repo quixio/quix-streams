@@ -2,7 +2,7 @@
 
 In this topic you will learn how to use Quix Streams to perform two types of data processing:
 
-1. **One message at a time processing** - Here the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically published to the output stream.
+1. **Stateless processing** - Here one message is processed at a time, and the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically published to the output stream. 
 2. **Stateful processing** - This is where you need to keep track of data between messages, such as keeping a running total of a variable. This is more complicated as state needs to be preserved between messages, and potentially between replicas, where multiple replicas are deployed. In addition, state may need to be preserved in the event of the failure of a deployment - Quix Streams supports checkpointing as a way to enable this.
 
 The following sections will explore these methods of data processing in more detail.
@@ -27,6 +27,8 @@ topic_consumer = client.get_topic_consumer(os.environ["input"], consumer_group =
 
     If you don't specify a consumer group, then all messages in all streams in a topic will be processed by all replicas in the microservice deployment.
 
+For further information read about how [Quix Streams works with Kafka](kafka.md).
+
 ## Stream data formats
 
 There are two main formats of stream data: 
@@ -38,7 +40,7 @@ Event data refers to data that is independent, whereas time-series data is a var
 
 Time-series data is a variable that is tracked over time, such as temperature from a sensor, or the g-forces in a racing car.
 
-Time-series data has three formats in Quix Streams:
+Time-series data has three different representations in Quix Streams, to serve different use cases and developers. The underlying data that these three models represent is the same however. The three representations of that data are:
 
 1. Data (represented by the `qx.TimeseriesData` class)
 2. Pandas Data Frame (represented by the `pd.DataFrame` class)
@@ -48,7 +50,7 @@ In this topic you'll learn about the `TimeseriesData` and `pd.DataFrame` formats
 
 ## Registering a callback for stream data
 
-You can register a stream callback that is invoked when data is first received on a stream. 
+When it comes to registering your callbacks, the first step is to register a stream callback that is invoked when data is first received on a stream. 
 
 ```python
 topic_consumer.on_stream_received = on_stream_received_handler
