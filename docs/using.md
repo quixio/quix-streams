@@ -165,7 +165,7 @@ With stateful processing, additional complexity is introduced, as data now needs
 
 There are problems with using global variables in your code to track state. The first is that callbacks are registered per-stream. This means that if you modify a global variable in a callback, it will be modified by all streams. 
 
-For example, consider the following problematic code:
+For example, consider the following **problematic** code:
 
 ```python
 ...
@@ -185,6 +185,9 @@ def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.Dat
     topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(df)
 ...
 ```
+
+!!! warning
+    With the previous example code, all streams modify the global variable.
 
 You might think this would give you the running total for a stream, but because the callback is registered for each stream, you'd actually get all streams modifying the global.
 
