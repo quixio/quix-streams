@@ -25,7 +25,9 @@ When you create the consumer you specify the consumer group as follows:
 topic_consumer = client.get_topic_consumer(os.environ["input"], consumer_group = "empty-transformation")
 ```
 
-!!! note
+Best practice is to make sure the consumer group name matches the name of the service.
+
+!!! warning
 
     If you don't specify a consumer group, then all messages in all streams in a topic will be processed by all replicas in the microservice deployment.
 
@@ -108,9 +110,9 @@ Sometimes you need to convert time-series data into Panda data frames format for
 df = ts.to_dataframe()
 ```
 
-## "One message at a time" processing
+## Stateless processing
 
-Now that you have learned about stream data formats and callbacks, the following example shows a simple data processor. 
+Now that you have learned about stream data formats and callbacks, the following example shows a simple data processor. This will be an example of stateless processing, where messages are processed one at a time, and contain all information required for that processing.
 
 This processor receives (consumes) data, processes it (transforms), and then publishes generated data (produces) on an output topic. This encapsulates the typical processing pipeline which consists of:
 
@@ -151,7 +153,7 @@ qx.App.run()
 
 In this example the stream data is inbound in Pandas `DataFrame` [format](https://pandas.pydata.org/docs/reference/frame.html){target=_blank}. 
 
-Note that all information required to calculate `gForceTotal` is contained in the inbound data frame (the X, Y, and Z components of g-force). This is an example of "one message at a time" processing: no state needs to be preserved between messages. 
+Note that all information required to calculate `gForceTotal` is contained in the inbound data frame (the X, Y, and Z components of g-force). This is an example of stateless, or "one message at a time", processing: no state needs to be preserved between messages. 
 
 Further, if multiple replicas were used here, it would require no changes to your code, as each replica, running its own instance of the callback for the target stream, would simply calculate a value for `gForceTotal` based on the data in the data frame it received.
 
@@ -214,37 +216,14 @@ def callback_handler (stream_consumer: qx.StreamConsumer, data: qx.TimeseriesDat
 ...
 ```
 
+!!! warning
+    With the previous example code, you should note that the running total will not be preserved in the event of system crashes or restarts.
+
 The key point here is that data is tracked per stream context. You keep running totals on a per-stream basis by using the stream ID, `stream_consumer.stream_id` to index a dictionary containing running totals for each stream.
 
 !!! note
 
     A stream will only ever be processed by one replica.
-
-## Tracking running totals across multiple streams
-
-Sometimes you want to track a running total across all streams in a topic. The problem is that when you scale using replicas, there is no way to share data between all replicas in a consumer group. 
-
-The solution is to write the running total per stream (with stream ID) to an output topic. You can then have another processor in the pipeline to calculate total values from inbound messages.
-
-```python
-...
-g_running_total_per_stream = {}
-
-def callback_handler (stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
-
-    if stream_consumer.stream_id not in g_running_total_per_stream:
-        g_running_total_per_stream[stream_consumer.stream_id] = 0
-    
-    ...
-
-    g_running_total_per_stream[stream_consumer.stream_id] += some_value
-    data.add_value("RunningTotal", g_running_total_per_stream[stream_consumer.stream_id])
-
-    topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(data)
-...
-```
-
-In this case the running total is published to its own stream in the output topic. The next service in the data processing pipeline would be able to sum all running totals across all streams in the output topic.
 
 ## Handling system restarts and crashes
 
@@ -268,11 +247,39 @@ If the system crashes (or is restarted), Kafka resumes message processing from t
 
     For this facility to work in Quix Platform you need to enable the State Management feature. You can enable it in the `Deployment` dialog, where you can also specify the size of storage required. When using Quix Streams with a third-party broker such as Kafka, no configuration is required, and data is stored on the local file system.
 
+## Tracking running totals across multiple streams
+
+Sometimes you want to track a running total across all streams in a topic. The problem is that when you scale using replicas, there is no way to share data between all replicas in a consumer group. 
+
+The solution is to write the running total per stream (with stream ID) to an output topic. You can then have another processor in the pipeline to calculate total values from inbound messages.
+
+```python
+...
+g_running_total_per_stream = qx.InMemoryStorage(qx.LocalFileStorage())
+
+def callback_handler (stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
+
+    if stream_consumer.stream_id not in g_running_total_per_stream:
+        g_running_total_per_stream[stream_consumer.stream_id] = 0
+    
+    ...
+
+    g_running_total_per_stream[stream_consumer.stream_id] += some_value
+    data.add_value("RunningTotal", g_running_total_per_stream[stream_consumer.stream_id])
+
+    topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(data)
+...
+```
+
+In this case the running total is published to its own stream in the output topic. The next service in the data processing pipeline would be able to sum all running totals across all streams in the output topic.
+
+Also, in this example, the running total is persisted in file storage, and so is preserved in the event of service restarts and system crashes.
+
 ## Conclusion
 
 In this topic you have learned:
 
-* How to perform simple "one message at a time" processing.
+* How to perform stateless "one message at a time" processing.
 * How to handle the situation where state needs to be preserved, and problems that can arise in naive code.
 * How to persist state, so that your data is preserved in the event of restarts or crashes.
 
