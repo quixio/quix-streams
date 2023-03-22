@@ -232,29 +232,43 @@ The key point here is that data is tracked per stream context. You keep running 
 
 One issue you may run into is that in-memory data is not persisted across instance restarts, shutdowns, and instance crashes. This can be mitigated by using the Quix Streams `LocalFileStorage` facility. This will ensure that specified variables are persisted on permanent storage, and this data is preserved across restarts, shutdowns, and system crashes.
 
-The following example code demonstrates a simple use of `LocalFile Storage`:
+The following example code demonstrates a simple use of `LocalFileStorage` to **persist data across system restarts and crashes**:
 
 ```python
-my_var = qx.InMemoryStorage(qx.LocalFileStorage())
 ...
+g_running_total_per_stream = qx.InMemoryStorage(qx.LocalFileStorage())
+
+def callback_handler (stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
+
+    if stream_consumer.stream_id not in g_running_total_per_stream:
+        g_running_total_per_stream[stream_consumer.stream_id] = 0
+    
+    ...
+
+    g_running_total_per_stream[stream_consumer.stream_id] += some_value
+
+# read streams
+def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+    stream_consumer.timeseries.on_data_received = callback_handler
+
 topic_consumer.on_stream_received = on_stream_received_handler
-topic_consumer.on_committed = my_var.flush
+topic_consumer.on_committed = g_running_total_per_stream.flush
 ...
 ```
 
-This ensures that the variable `my_var` is persisted, as periodically (default is 20 seconds) it is flushed to local file storage.
+This ensures that the variable `g_running_total_per_stream` is persisted, as periodically (default is 20 seconds) it is flushed to local file storage.
 
 If the system crashes (or is restarted), Kafka resumes message processing from the last committed message. This facility is built into Kafka.
 
 !!! tip
 
-    For this facility to work in Quix Platform you need to enable the State Management feature. You can enable it in the `Deployment` dialog, where you can also specify the size of storage required. When using Quix Streams with a third-party broker such as Kafka, no configuration is required, and data is stored on the local file system.
+    For this facility to work in Quix Platform you need to enable the State Management feature. You can enable it in the `Deployment` dialog, where you can also specify the size of storage required. When using Quix Streams with a third-party broker such as Kafka, no configuration is required, and data is automatically stored on the local file system.
 
 ## Tracking running totals across multiple streams
 
 Sometimes you want to track a running total across all streams in a topic. The problem is that when you scale using replicas, there is no way to share data between all replicas in a consumer group. 
 
-The solution is to write the running total per stream (with stream ID) to an output topic. You can then have another processor in the pipeline to calculate total values from inbound messages.
+The solution is to write the running total per stream (with stream ID) to an output topic. You can then have another processor in the pipeline to calculate total values from inbound messages. The following code demonstrates how to do this:
 
 ```python
 ...
