@@ -1,4 +1,4 @@
-# Publishing time-series data
+# Publishing data
 
 Quix Streams allows you to publish data using stream context to your topic. It lets you create new streams, append data to existing streams, organize streams in folders, and add context to the streams.
 
