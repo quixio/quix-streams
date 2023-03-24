@@ -37,8 +37,13 @@ else:
 lib = ctypes.cdll.LoadLibrary(lib_dir + lib_dll)
 InteropUtils.set_lib(lib)
 
-use_python_lib_path = os.environ.get("Quix__PythonLibPath")
+env_debug = os.environ.get("QuixStreams__Debug")
+if env_debug is not None and env_debug == '1':
+    InteropUtils.enable_debug()
+
+use_python_lib_path = os.environ.get("QuixStreams__PythonLibPath")
 if use_python_lib_path is not None:
+    InteropUtils.log_debug(f"QuixStreams__PythonLibPath is set to {use_python_lib_path}")
     libpython_dir = use_python_lib_path
     InteropUtils.set_python_lib_path(libpython_dir)
 else:
@@ -49,11 +54,13 @@ else:
             use_included = True
 
     # option to override
-    use_included_env = os.environ.get("Quix__UseIncludedPython")
+    use_included_env = os.environ.get("QuixStreams__UseIncludedPython")
     if use_included_env is not None:
+        InteropUtils.log_debug(f"QuixStreams__UseIncludedPython is set to '{use_included_env}'")
         use_included = use_included_env == '1'
 
     if use_included:
+        InteropUtils.log_debug(f"Using included python.")
         libpython_dir = os.path.join(os.path.dirname(__file__), "native/libpython")
         InteropUtils.set_python_lib_path(libpython_dir)
 

@@ -19,6 +19,9 @@ class InteropUtils(object):
         interoputils_enabledebug = getattr(lib, "interoputils_enabledebug")
         interoputils_disabledebug = getattr(lib, "interoputils_disabledebug")
         
+        interoputils_log_debug = getattr(lib, "interoputils_log_debug")
+        interoputils_log_debug.argtypes = [c_void_p]
+        
         interoputils_alloc_uptr = getattr(lib, "interoputils_alloc_uptr")
         interoputils_alloc_uptr.argtypes = [ctypes.c_int32]
         interoputils_alloc_uptr.restype = c_void_p
@@ -98,6 +101,22 @@ class InteropUtils(object):
         path_ptr = InteropUtils.utf8_to_ptr(path)
 
         InteropUtils.invoke("interoputils_set_python_lib_path", path_ptr)
+
+    @staticmethod
+    def log_debug(message: str):
+        """
+        Logs debug message if debugging is enabled
+        
+        message: str
+            The message to log
+        """
+        
+        if not InteropUtils.DebugEnabled:
+            return
+        
+        message_ptr = InteropUtils.utf8_to_ptr(message)
+
+        InteropUtils.invoke("interoputils_log_debug", message_ptr)
 
     @staticmethod
     def enable_debug():

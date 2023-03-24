@@ -37,7 +37,6 @@ public class InteropUtils
         }
     });
 
-    [Conditional("DEBUG")]
     public static void LogDebug(string format, params object[] @params)
     {
         if (!DebugMode) return;
@@ -327,6 +326,14 @@ public class InteropUtils
         LogDebug(ex.ToString());
         using var state = pyApi.Value.EnsureGILState();
         pyApi.Value.RaiseException(ex);
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "interoputils_log_debug")]
+    public static void LogDebugInterop(IntPtr messagePtr)
+    {
+        if (messagePtr == IntPtr.Zero) return;
+        var message = InteropUtils.PtrToStringUTF8(messagePtr);
+        InteropUtils.LogDebug(message);
     }
     
     [UnmanagedCallersOnly(EntryPoint = "interoputils_set_python_lib_path")]
