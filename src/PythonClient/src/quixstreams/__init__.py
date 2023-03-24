@@ -4,6 +4,7 @@ __version__ = "local"
 import ctypes
 import os
 import platform
+import sys
 
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 
@@ -36,10 +37,25 @@ else:
 lib = ctypes.cdll.LoadLibrary(lib_dir + lib_dll)
 InteropUtils.set_lib(lib)
 
-if plat.system.upper() == "LINUX":
-    libpython_dir = os.path.join(os.path.dirname(__file__), "native/libpython")
-    print(f"libpython_dir: {libpython_dir}")
+use_python_lib_path = os.environ.get("Quix__PythonLibPath")
+if use_python_lib_path is not None:
+    libpython_dir = use_python_lib_path
     InteropUtils.set_python_lib_path(libpython_dir)
+else:
+    use_included = False
+    if plat.system.upper() == "LINUX":
+        if sys.version_info.major == 3 and sys.version_info.minor == 8:
+            # on linux, 3.8.6 and 3.8.10, available from main distros for ubuntu 20.04 for example are not working as expected
+            use_included = True
+
+    # option to override
+    use_included_env = os.environ.get("Quix__UseIncludedPython")
+    if use_included_env is not None:
+        use_included = use_included_env == '1'
+
+    if use_included:
+        libpython_dir = os.path.join(os.path.dirname(__file__), "native/libpython")
+        InteropUtils.set_python_lib_path(libpython_dir)
 
 from .models import *
 from .quixstreamingclient import QuixStreamingClient

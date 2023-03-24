@@ -138,7 +138,7 @@ internal static class DllLoader
             var fileName = Path.GetFileName(y);
             return fileName.StartsWith(fileStart, StringComparison.InvariantCultureIgnoreCase) &&
                    fileName.EndsWith($".{extension}", StringComparison.InvariantCultureIgnoreCase);
-        }).OrderBy(f => f.Length).First(); // take best match
+        }).MinBy(f => f.Length); // take best match
         if (!string.IsNullOrWhiteSpace(matchingFile))
         {
             pythonLibPath = matchingFile;
