@@ -36,6 +36,11 @@ else:
 lib = ctypes.cdll.LoadLibrary(lib_dir + lib_dll)
 InteropUtils.set_lib(lib)
 
+if plat.system.upper() == "LINUX":
+    libpython_dir = os.path.join(os.path.dirname(__file__), "native/libpython")
+    print(f"libpython_dir: {libpython_dir}")
+    InteropUtils.set_python_lib_path(libpython_dir)
+
 from .models import *
 from .quixstreamingclient import QuixStreamingClient
 from .streamconsumer import StreamConsumer

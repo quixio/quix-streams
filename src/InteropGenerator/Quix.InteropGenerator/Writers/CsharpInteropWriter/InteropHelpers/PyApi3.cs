@@ -21,6 +21,9 @@ internal static class DllLoader
         // According to https://learn.microsoft.com/en-us/dotnet/standard/native-interop/cross-platform
         // and https://learn.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke-source-generation
         // This should also attempt to load the correct library on linux and macos
+        
+        
+        InteropUtils.LogDebug($"{nameof(DllLoader)}: Loading dll {{0}}", libName);
         var dll = NativeLibrary.Load(libName);
         if (dll == IntPtr.Zero) throw new DllNotFoundException($"{libName} could not be loaded");
         return dll;
@@ -32,11 +35,22 @@ internal static class DllLoader
         NativeLibrary.Free(dll);
     }
     
-    public static bool TryGetPythonLibraryPath(string pythonLib, out string pythonLibPath)
+    public static bool TryGetPythonLibraryPath(string pythonLib, string pathHint, out string pythonLibPath)
     {
         var extension = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dll" :
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "so" : "dylib";
         pythonLibPath = null;
+        
+        InteropUtils.LogDebug($"Expected python lib is '{pythonLib}' with extension '{extension}'");
+        
+        // Load from pathHint
+        if (!string.IsNullOrWhiteSpace(pathHint))
+        {
+            return TryGetPythonLibFromFolder(pathHint, pythonLib, extension, out pythonLibPath);
+        }
+
+
+        // Load from Env variables
         var envVariables = Environment.GetEnvironmentVariables().Cast<DictionaryEntry>()
             .ToDictionary(x => (string)x.Key, x => (string)x.Value);
 
@@ -52,6 +66,7 @@ internal static class DllLoader
             }
         }
 
+        // Load from known locations
         var libFolders = new List<string>();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
@@ -177,32 +192,58 @@ public class PyApi3 : IDisposable
     #region library pointers
     private IntPtr baseLibPtr;
     private IntPtr versionedLibPtr;
+    private readonly string pythonPath;
+
     #endregion
     
     public Version Version { get; private set; }
 
-    public PyApi3()
+    public PyApi3(string pythonPath)
     {
+        this.pythonPath = pythonPath;
+        if (!string.IsNullOrWhiteSpace(this.pythonPath))
+        {
+            InteropUtils.LogDebug($"{nameof(PyApi3)}: PythonPath set to {0}", this.pythonPath);
+        }
         LoadBase();
         LoadVersioned();
     }
 
     private void LoadBase()
     {
+        InteropUtils.LogDebug($"{nameof(PyApi3)}: Loading base python lib");
         var libName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? $"python3" : $"libpython3";
-        try
+
+        if (!string.IsNullOrWhiteSpace(this.pythonPath))
         {
-            this.baseLibPtr = DllLoader.LoadDll(libName);
-        }
-        catch (DllNotFoundException)
-        {
-            if (DllLoader.TryGetPythonLibraryPath(libName, out var pythonLibPath))
+            InteropUtils.LogDebug($"{nameof(PyApi3)}: PythonPath not null, attempting to load from there");
+            if (DllLoader.TryGetPythonLibraryPath(libName, this.pythonPath, out var pythonLibPath))
             {
+                InteropUtils.LogDebug($"{nameof(PyApi3)}: Python lib found in PythonPath");
                 this.baseLibPtr = DllLoader.LoadDll(pythonLibPath);
             }
             else
             {
-                throw;
+                InteropUtils.LogDebug($"{nameof(PyApi3)}: Python lib not found in PythonPath");
+            }
+        }
+
+        if (this.baseLibPtr == IntPtr.Zero) // not found in pythonpath
+        {
+            try
+            {
+                this.baseLibPtr = DllLoader.LoadDll(libName);
+            }
+            catch (DllNotFoundException)
+            {
+                if (DllLoader.TryGetPythonLibraryPath(libName, null, out var pythonLibPath))
+                {
+                    this.baseLibPtr = DllLoader.LoadDll(pythonLibPath);
+                }
+                else
+                {
+                    throw;
+                }
             }
         }
 
@@ -227,8 +268,24 @@ public class PyApi3 : IDisposable
 
     private void LoadVersioned()
     {
+        InteropUtils.LogDebug($"{nameof(PyApi3)}: Loading versioned python lib");
         var libName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? $"python3{Version.Minor}" : $"libpython3.{Version.Minor}";
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        
+        if (!string.IsNullOrWhiteSpace(this.pythonPath))
+        {
+            InteropUtils.LogDebug($"{nameof(PyApi3)}: PythonPath not null, attempting to load from there");
+            if (DllLoader.TryGetPythonLibraryPath(libName, this.pythonPath, out var pythonLibPath))
+            {
+                InteropUtils.LogDebug($"{nameof(PyApi3)}: Versioned python lib found in PythonPath");
+                this.versionedLibPtr = DllLoader.LoadDll(pythonLibPath);
+            }
+            else
+            {
+                InteropUtils.LogDebug($"{nameof(PyApi3)}: Versioned python lib found in PythonPath");
+            }
+        }
+
+        if (this.versionedLibPtr == IntPtr.Zero) // not found in pythonpath
         {
             try
             {
@@ -236,7 +293,7 @@ public class PyApi3 : IDisposable
             }
             catch (DllNotFoundException)
             {
-                if (DllLoader.TryGetPythonLibraryPath(libName, out var pythonLibPath))
+                if (DllLoader.TryGetPythonLibraryPath(libName, null, out var pythonLibPath))
                 {
                     this.versionedLibPtr = DllLoader.LoadDll(pythonLibPath);
                 }
@@ -245,10 +302,6 @@ public class PyApi3 : IDisposable
                     throw;
                 }
             }
-        }
-        else
-        {
-            this.versionedLibPtr = baseLibPtr;
         }
 
         LoadVersionedFunctions();

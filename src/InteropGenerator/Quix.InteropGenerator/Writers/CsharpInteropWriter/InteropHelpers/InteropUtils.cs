@@ -21,11 +21,12 @@ public class InteropUtils
     
     public static bool DebugMode = false;
     private static Lazy<StreamWriter> debuglogs = new Lazy<StreamWriter>(() => File.AppendText($"./debuglogs_{(DateTime.Now.ToString("yyyy-MM-dd_HH_mm_ss"))}.txt"));
+    private static string pythonLibPath = null; 
     private static Lazy<PyApi3> pyApi = new Lazy<PyApi3>(() =>
     {
         try
         {
-            var api = new PyApi3();
+            var api = new PyApi3(pythonLibPath);
             return api;
         }
         catch (Exception ex)
@@ -326,6 +327,13 @@ public class InteropUtils
         LogDebug(ex.ToString());
         using var state = pyApi.Value.EnsureGILState();
         pyApi.Value.RaiseException(ex);
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "interoputils_set_python_lib_path")]
+    public static void SetPythonLibPath(IntPtr pythonPath)
+    {
+        pythonLibPath = InteropUtils.PtrToStringUTF8(pythonPath);
+        InteropUtils.LogDebug("Python Lib Path set to {0}", pythonLibPath);
     }
     
     [UnmanagedCallersOnly(EntryPoint = "interoputils_enabledebug")]

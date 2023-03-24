@@ -8,7 +8,7 @@ public class PyApiShould
 {
     private PyApi3 CreatePyApi()
     {
-        var pyApi = new PyApi3();
+        var pyApi = new PyApi3(null);
         return pyApi;
     }
     

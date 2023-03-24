@@ -13,6 +13,9 @@ class InteropUtils(object):
     @staticmethod
     def set_lib(lib):
         InteropUtils.lib = lib
+        interoputils_set_python_lib_path = getattr(lib, "interoputils_set_python_lib_path")
+        interoputils_set_python_lib_path.argtypes = [c_void_p]
+        
         interoputils_enabledebug = getattr(lib, "interoputils_enabledebug")
         interoputils_disabledebug = getattr(lib, "interoputils_disabledebug")
         
@@ -82,6 +85,19 @@ class InteropUtils(object):
         uptr = InteropUtils.allocate_uptr(bytes_len)
         ctypes.memmove(uptr, bytes, bytes_len)
         return uptr
+
+    @staticmethod
+    def set_python_lib_path(path: str):
+        """
+        Sets the python library path hint
+        
+        path: str
+            The path hint for the python shared library
+        """
+        
+        path_ptr = InteropUtils.utf8_to_ptr(path)
+
+        InteropUtils.invoke("interoputils_set_python_lib_path", path_ptr)
 
     @staticmethod
     def enable_debug():
