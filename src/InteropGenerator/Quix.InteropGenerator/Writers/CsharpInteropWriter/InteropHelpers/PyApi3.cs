@@ -203,7 +203,7 @@ public class PyApi3 : IDisposable
         this.pythonPath = pythonPath;
         if (!string.IsNullOrWhiteSpace(this.pythonPath))
         {
-            InteropUtils.LogDebug($"{nameof(PyApi3)}: PythonPath set to {0}", this.pythonPath);
+            InteropUtils.LogDebug($"{nameof(PyApi3)}: PythonPath set to {{0}}", this.pythonPath);
         }
         LoadBase();
         LoadVersioned();
@@ -371,7 +371,7 @@ public class PyApi3 : IDisposable
 
     public unsafe void RaiseException(Exception ex)
     {
-        var exception = ex.ToString();
+        var exception = GetTrimmedExceptionMessage(ex);
         var msgPtr = InteropUtils.Utf8StringToUPtr(exception);
         if (ex is NotImplementedException)
         {
@@ -379,6 +379,24 @@ public class PyApi3 : IDisposable
             return;
         }
         PyErr_SetString(this.exception, msgPtr);
+    }
+
+    private static string GetTrimmedExceptionMessage(Exception ex)
+    {
+        var msg = ex.ToString();
+        var lines = msg.Split(Environment.NewLine);
+        var filtered = lines.Where(line => !line.Contains("at System.Runtime") && !line.Contains("End of stack trace from previous location")).ToList();
+        var dupeFiltered = new List<string>(filtered.Count);
+        string prev = null;
+        foreach (var line in filtered)
+        {
+            if (line == prev) continue;
+            prev = line;
+            dupeFiltered.Add(line);
+        }
+
+        return string.Join(Environment.NewLine, dupeFiltered);
+
     }
     
     public unsafe void RaiseExceptionNoMemory()
