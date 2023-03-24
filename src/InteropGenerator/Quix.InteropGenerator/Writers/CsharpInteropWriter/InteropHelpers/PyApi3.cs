@@ -41,7 +41,7 @@ internal static class DllLoader
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "so" : "dylib";
         pythonLibPath = null;
         
-        InteropUtils.LogDebug($"Expected python lib is '{pythonLib}' with extension '{extension}'");
+        InteropUtils.LogDebug($"{nameof(DllLoader)}: python lib is '{pythonLib}' with extension '{extension}'");
         
         // Load from pathHint
         if (!string.IsNullOrWhiteSpace(pathHint))
@@ -133,12 +133,12 @@ internal static class DllLoader
             return false;
         }
         var files = Directory.GetFiles(folder);
-        var matchingFile = files.FirstOrDefault(y =>
+        var matchingFile = files.Where(y =>
         {
             var fileName = Path.GetFileName(y);
             return fileName.StartsWith(fileStart, StringComparison.InvariantCultureIgnoreCase) &&
                    fileName.EndsWith($".{extension}", StringComparison.InvariantCultureIgnoreCase);
-        });
+        }).OrderBy(f => f.Length).First(); // take best match
         if (!string.IsNullOrWhiteSpace(matchingFile))
         {
             pythonLibPath = matchingFile;
