@@ -7,9 +7,10 @@ from typing import Callable
 
 class InteropException(Exception):
 
-    def __init__(self, exc_type: str, message: str):
+    def __init__(self, exc_type: str, message: str, stacktrace: str):
         self.exc_type = exc_type
         self.message = message
+        self.stacktrace = stacktrace
         super().__init__(self.message)
 
 
@@ -124,12 +125,13 @@ class InteropUtils(object):
             The callback which takes InteropException and returns nothing
         """
 
-        def converter(exc_type_ptr, exc_message_ptr):
+        def converter(exc_type_ptr, exc_message_ptr, stacktrace_ptr):
             exc_type = InteropUtils.ptr_to_utf8(exc_type_ptr)
             exc_message = InteropUtils.ptr_to_utf8(exc_message_ptr)
-            callback(InteropException(exc_type, exc_message))
+            exc_stacktrace = InteropUtils.ptr_to_utf8(exc_message_ptr)
+            callback(InteropException(exc_type, exc_message, exc_stacktrace))
 
-        wrapper = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p)(converter)
+        wrapper = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p)(converter)
         wrapper_addr = ctypes.cast(wrapper, c_void_p)
 
         InteropUtils.invoke("interoputils_set_exception_callback", wrapper_addr)

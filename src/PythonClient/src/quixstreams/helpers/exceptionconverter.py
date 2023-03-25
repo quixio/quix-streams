@@ -7,6 +7,7 @@ class ExceptionConverter:
     @staticmethod
     def raise_from_interop(exception: InteropException):
         if exception.exc_type == "QuixStreams.Streaming.QuixApi.QuixApiException":
-            raise QuixApiException(exception.message) from None  # using from None, as the original exception should be completely discarded
+            # using from None, as the original exception should be completely discarded
+            raise QuixApiException(exception.message) from None
 
         raise  # when not able to do better

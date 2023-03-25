@@ -310,14 +310,14 @@ public class InteropUtils
     {
         LogDebug(ex.ToString());
 
-        exceptionCallback(ex.GetType().FullName, GetTrimmedExceptionMessage(ex));
+        exceptionCallback(ex.GetType().FullName, ex.Message, GetTrimmedStackTrace(ex));
     }
     
-    private static string GetTrimmedExceptionMessage(Exception ex)
+    private static string GetTrimmedStackTrace(Exception ex)
     {
-        var msg = ex.ToString();
+        var msg = ex.StackTrace;
         var lines = msg.Split(Environment.NewLine);
-        var filtered = lines.Where(line => !line.Contains("at System.Runtime") && !line.Contains("End of stack trace from previous location")).ToList();
+        var filtered = lines.Where(line => !line.Contains("at System.Runtime") && !line.Contains("End of stack trace from previous location")).ToList(); // excessive
         var dupeFiltered = new List<string>(filtered.Count);
         string prev = null;
         foreach (var line in filtered)
@@ -327,20 +327,21 @@ public class InteropUtils
             dupeFiltered.Add(line);
         }
 
-        return string.Join(Environment.NewLine, dupeFiltered);
-
+        var filteredMessage = string.Join(Environment.NewLine, dupeFiltered);
+        return filteredMessage;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "interoputils_set_exception_callback")]
-    public static unsafe void SetExceptionCallback(delegate* unmanaged<IntPtr, IntPtr, void> callback)
+    public static unsafe void SetExceptionCallback(delegate* unmanaged<IntPtr, IntPtr, IntPtr, void> callback)
     {
         InteropUtils.LogDebug($"Registering func handler {(IntPtr)callback} for interoputils_set_exception_callback");
-        InteropUtils.exceptionCallback = (string type, string message) =>
+        InteropUtils.exceptionCallback = (string type, string message, string trace) =>
         {
             var typePtr = InteropUtils.Utf8StringToUPtr(type);
             var messagePtr = InteropUtils.Utf8StringToUPtr(message);
+            var tracePtr = InteropUtils.Utf8StringToUPtr(trace);
             InteropUtils.LogDebug($"Invoking handler {(IntPtr)callback} for interoputils_set_exception_callback");
-            callback(typePtr, messagePtr);
+            callback(typePtr, messagePtr, tracePtr);
         };
     }
 
@@ -519,7 +520,7 @@ public class InteropUtils
     }
     
     private static Dictionary<Type, bool> isBlittable = new Dictionary<Type, bool>();
-    private static Action<string, string> exceptionCallback = (s, s1) => { }; // do nothing by default
+    private static Action<string, string, string> exceptionCallback = (type, msg, trace) => { }; // do nothing by default
 
     public static bool IsBlittableType(Type type)
     {
