@@ -1,5 +1,4 @@
 import ctypes
-import threading
 from ctypes import c_void_p
 import os
 import sysconfig
