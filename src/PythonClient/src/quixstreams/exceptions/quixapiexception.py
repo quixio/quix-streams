@@ -1,0 +1,2 @@
+class QuixApiException(Exception):
+    pass

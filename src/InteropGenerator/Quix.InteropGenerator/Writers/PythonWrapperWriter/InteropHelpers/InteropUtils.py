@@ -1,7 +1,17 @@
 import ctypes
+import threading
 from ctypes import c_void_p
 import os
 import sysconfig
+from typing import Callable
+
+
+class InteropException(Exception):
+
+    def __init__(self, exc_type: str, message: str):
+        self.exc_type = exc_type
+        self.message = message
+        super().__init__(self.message)
 
 
 class InteropUtils(object):
@@ -10,18 +20,21 @@ class InteropUtils(object):
     lib = None
     interop_func = None
 
+    __last_exception = None
+    __exception_handler_ref = None
+
     @staticmethod
-    def set_lib(lib):
+    def set_lib(lib, with_debug_enabled=False):
         InteropUtils.lib = lib
-        interoputils_set_python_lib_path = getattr(lib, "interoputils_set_python_lib_path")
-        interoputils_set_python_lib_path.argtypes = [c_void_p]
-        
+
         interoputils_enabledebug = getattr(lib, "interoputils_enabledebug")
         interoputils_disabledebug = getattr(lib, "interoputils_disabledebug")
-        
+        if with_debug_enabled:
+            InteropUtils.enable_debug()
+
         interoputils_log_debug = getattr(lib, "interoputils_log_debug")
         interoputils_log_debug.argtypes = [c_void_p]
-        
+
         interoputils_alloc_uptr = getattr(lib, "interoputils_alloc_uptr")
         interoputils_alloc_uptr.argtypes = [ctypes.c_int32]
         interoputils_alloc_uptr.restype = c_void_p
@@ -39,7 +52,15 @@ class InteropUtils(object):
 
         interoputils_free_uptr = getattr(lib, "interoputils_free_uptr")
         interoputils_free_uptr.argtypes = [c_void_p]
-       
+
+        interoputils_set_exception_callback = getattr(lib, "interoputils_set_exception_callback")
+        interoputils_set_exception_callback.argtypes = [c_void_p]
+
+        def raise_ex(interop_ex: InteropException):
+            InteropUtils.__last_exception = interop_ex
+
+        InteropUtils.set_exception_callback(raise_ex)
+
     @staticmethod
     def get_function(method):
         func = getattr(InteropUtils.lib, method)
@@ -48,7 +69,14 @@ class InteropUtils(object):
     @staticmethod
     def invoke(method, *args):
         func = InteropUtils.get_function(method)
-        return func(*args)
+        res = func(*args)
+        if InteropUtils.__last_exception is None:
+            return res
+
+        ex = InteropUtils.__last_exception
+        InteropUtils.__last_exception = None
+        raise ex
+
 
     @staticmethod
     def ptr_to_utf8(pointer: ctypes.c_char_p) -> str:
@@ -63,12 +91,11 @@ class InteropUtils(object):
             return None
         # TODO this can likely be done eaiser with c_char_p or sth, but it has to be freeable using Marshal.FreeHGlobal
         str_bytes = string.encode('utf-8')
-        uptr = InteropUtils.allocate_uptr(len(str_bytes) + 1) # must be null terminated
+        uptr = InteropUtils.allocate_uptr(len(str_bytes) + 1)  # must be null terminated
         ctypes.memmove(uptr, str_bytes, len(str_bytes))
         null_terminator = ctypes.c_ubyte.from_address(uptr.value + len(str_bytes))
-        null_terminator.value = 0 # allocate_uptr doesn't guarantee memory with all 0, must set manually
+        null_terminator.value = 0  # allocate_uptr doesn't guarantee memory with all 0, must set manually
         return uptr
-
 
     @staticmethod
     def uptr_to_utf8(pointer: c_void_p) -> str:
@@ -90,17 +117,24 @@ class InteropUtils(object):
         return uptr
 
     @staticmethod
-    def set_python_lib_path(path: str):
+    def set_exception_callback(callback: Callable[[InteropException], None]):
         """
-        Sets the python library path hint
+        Sets the exception handler for the library
         
-        path: str
-            The path hint for the python shared library
+        callback: Callable[[InteropException], None]
+            The callback which takes InteropException and returns nothing
         """
-        
-        path_ptr = InteropUtils.utf8_to_ptr(path)
 
-        InteropUtils.invoke("interoputils_set_python_lib_path", path_ptr)
+        def converter(exc_type_ptr, exc_message_ptr):
+            exc_type = InteropUtils.ptr_to_utf8(exc_type_ptr)
+            exc_message = InteropUtils.ptr_to_utf8(exc_message_ptr)
+            callback(InteropException(exc_type, exc_message))
+
+        wrapper = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p)(converter)
+        wrapper_addr = ctypes.cast(wrapper, c_void_p)
+
+        InteropUtils.invoke("interoputils_set_exception_callback", wrapper_addr)
+        InteropUtils.__exception_handler_ref = wrapper_addr  # avoid GC'ing it
 
     @staticmethod
     def log_debug(message: str):
@@ -110,10 +144,10 @@ class InteropUtils(object):
         message: str
             The message to log
         """
-        
+
         if not InteropUtils.DebugEnabled:
             return
-        
+
         message_ptr = InteropUtils.utf8_to_ptr(message)
 
         InteropUtils.invoke("interoputils_log_debug", message_ptr)
@@ -175,7 +209,7 @@ class InteropUtils(object):
         """
 
         return InteropUtils.invoke("interoputils_get_pin_address", hptr)
-        
+
     @staticmethod
     def free_hptr(hptr: c_void_p) -> None:
         """
@@ -203,7 +237,7 @@ class InteropUtils(object):
         """
 
         return InteropUtils.invoke("interoputils_free_uptr", uptr)
-        
+
     @staticmethod
     def allocate_uptr(size: int) -> c_void_p:
         """
@@ -277,9 +311,9 @@ class InteropUtils(object):
         # This is the nullable type to use when C# Marshals it as a struct (rather than a pointer). In this case the flag is stored
         # on the minimum addressable memory size (8 bytes on 64 bit systems, 4 on 32). ctypes should pack it accordingly
 
-        temp_nullable = type("Nullable_struct_"+underlying_ctype.__name__, (ctypes.Structure, ), {
+        temp_nullable = type("Nullable_struct_" + underlying_ctype.__name__, (ctypes.Structure,), {
             '_fields_': [("HasValue", ctypes.c_bool),
-                        ("Value", underlying_ctype)],
+                         ("Value", underlying_ctype)],
             '__init__': null_init
         })
 
@@ -310,12 +344,12 @@ class InteropUtils(object):
         def null_init(self, value):
             self.HasValue = value is not None
             if self.HasValue:
-                self.Value = value                
+                self.Value = value
 
-        temp_nullable = type("Nullable_mem_"+underlying_ctype.__name__, (ctypes.Structure, ), {
+        temp_nullable = type("Nullable_mem_" + underlying_ctype.__name__, (ctypes.Structure,), {
             '_pack_': 1,
             '_fields_': [("HasValue", ctypes.c_bool),
-                        ("Value", underlying_ctype)],
+                         ("Value", underlying_ctype)],
             '__init__': null_init
         })
 

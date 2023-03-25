@@ -4,11 +4,13 @@ from typing import Dict, Union
 
 from .helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from .helpers.enumconverter import EnumConverter as ec
+from .helpers.exceptionconverter import ExceptionConverter
 from .helpers.nativedecorator import nativedecorator
 from .models.autooffsetreset import AutoOffsetReset
 from .models.commitmode import CommitMode
 from .models.commitoptions import CommitOptions
 from .models.netdict import NetDict
+from .native.Python.InteropHelpers.InteropUtils import InteropException
 from .native.Python.QuixStreamsTelemetry.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
 from .native.Python.QuixStreamsStreaming.Models.CommitMode import CommitMode as CommitModeInterop
 from .native.Python.QuixStreamsStreaming.QuixStreamingClient import QuixStreamingClient as qsci
@@ -158,8 +160,11 @@ class QuixStreamingClient(object):
 
             topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
         """
+        try:
+            dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
+        except InteropException as ex:
+            ExceptionConverter.raise_from_interop(ex)
 
-        dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
         return TopicProducer(dotnet_pointer)
 
     def get_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:

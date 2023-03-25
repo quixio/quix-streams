@@ -12,9 +12,6 @@
       <Compile Update="Writers\CsharpInteropWriter\InteropHelpers\InteropUtils.cs">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </Compile>
-      <Compile Update="Writers\CsharpInteropWriter\InteropHelpers\PyApi3.cs">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </Compile>
       <Compile Update="Writers\CsharpInteropWriter\InteropHelpers\ExternalTypes\System\Dictionary.cs">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </Compile>

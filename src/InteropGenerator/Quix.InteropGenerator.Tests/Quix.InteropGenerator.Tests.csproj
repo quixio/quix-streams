@@ -19,4 +19,8 @@
       <ProjectReference Include="..\Quix.InteropGenerator\Quix.InteropGenerator.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Writers\CsharpInteropWriter\InteropHelpers" />
+    </ItemGroup>
+
 </Project>

@@ -44,7 +44,6 @@ elif plat.system.upper() == "DARWIN":
     rec_incl_with_filter(platpath, [r'.*\.dylib$'], 'src/quixstreams')
 elif plat.system.upper() == "LINUX":
     rec_incl_with_filter(platpath, [r'.*\.so$'], 'src/quixstreams')
-    rec_incl_with_filter('src/quixstreams/native/libpython', [r'.*'], 'src/quixstreams')
 else:
     raise Exception("Not supported build platform {}".format(platname))
 
