@@ -1,4 +1,5 @@
 import ctypes
+import threading
 from ctypes import c_void_p
 import os
 import sysconfig
@@ -7,10 +8,10 @@ from typing import Callable
 
 class InteropException(Exception):
 
-    def __init__(self, exc_type: str, message: str, stacktrace: str):
+    def __init__(self, exc_type: str, message: str, exc_stack: str):
         self.exc_type = exc_type
         self.message = message
-        self.stacktrace = stacktrace
+        self.exc_stack = exc_stack
         super().__init__(self.message)
 
 
@@ -21,7 +22,8 @@ class InteropUtils(object):
     interop_func = None
 
     __last_exception = None
-    __exception_handler_ref = None
+    __interop_exception_handler_ref = None
+    __exception_handler = None
 
     @staticmethod
     def set_lib(lib, with_debug_enabled=False):
@@ -56,10 +58,16 @@ class InteropUtils(object):
         interoputils_set_exception_callback = getattr(lib, "interoputils_set_exception_callback")
         interoputils_set_exception_callback.argtypes = [c_void_p]
 
-        def raise_ex(interop_ex: InteropException):
+        def set_exception_to_raise(interop_ex: InteropException):
             InteropUtils.__last_exception = interop_ex
 
-        InteropUtils.set_exception_callback(raise_ex)
+        InteropUtils.__set_exception_callback(set_exception_to_raise)
+
+        def raise_interop_exception(interop_ex: InteropException):
+            raise interop_ex
+
+        InteropUtils.set_exception_callback(raise_interop_exception)
+
 
     @staticmethod
     def get_function(method):
@@ -75,7 +83,7 @@ class InteropUtils(object):
 
         ex = InteropUtils.__last_exception
         InteropUtils.__last_exception = None
-        raise ex
+        InteropUtils.__exception_handler(ex)
 
 
     @staticmethod
@@ -119,23 +127,33 @@ class InteropUtils(object):
     @staticmethod
     def set_exception_callback(callback: Callable[[InteropException], None]):
         """
+        Sets the exception handler for interop exceptions
+
+        callback: Callable[[InteropException], None]
+            The callback which takes InteropException and returns nothing
+        """
+        InteropUtils.__exception_handler = callback
+
+    @staticmethod
+    def __set_exception_callback(callback: Callable[[InteropException], None]):
+        """
         Sets the exception handler for the library
         
         callback: Callable[[InteropException], None]
             The callback which takes InteropException and returns nothing
         """
 
-        def converter(exc_type_ptr, exc_message_ptr, stacktrace_ptr):
+        def converter(exc_type_ptr, exc_message_ptr, exc_stack_ptr):
             exc_type = InteropUtils.ptr_to_utf8(exc_type_ptr)
             exc_message = InteropUtils.ptr_to_utf8(exc_message_ptr)
-            exc_stacktrace = InteropUtils.ptr_to_utf8(exc_message_ptr)
-            callback(InteropException(exc_type, exc_message, exc_stacktrace))
+            exc_stack = InteropUtils.ptr_to_utf8(exc_stack_ptr)
+            callback(InteropException(exc_type, exc_message, exc_stack))
 
         wrapper = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p)(converter)
         wrapper_addr = ctypes.cast(wrapper, c_void_p)
 
         InteropUtils.invoke("interoputils_set_exception_callback", wrapper_addr)
-        InteropUtils.__exception_handler_ref = wrapper_addr  # avoid GC'ing it
+        InteropUtils.__interop_exception_handler_ref = wrapper_addr  # avoid GC'ing it
 
     @staticmethod
     def log_debug(message: str):

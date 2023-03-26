@@ -5,6 +5,7 @@ import ctypes
 import os
 import platform
 
+from .helpers.exceptionconverter import ExceptionConverter
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 
 plat = platform.uname()
@@ -40,6 +41,8 @@ if env_debug is not None and env_debug == '1':
 
 lib = ctypes.cdll.LoadLibrary(lib_dir + lib_dll)
 InteropUtils.set_lib(lib, with_debug_enabled)
+
+InteropUtils.set_exception_callback(ExceptionConverter.raise_from_interop)
 
 from .models import *
 from .quixstreamingclient import QuixStreamingClient
