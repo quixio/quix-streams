@@ -118,11 +118,8 @@ class StreamEventsProducer(object):
             finally:
                 InteropUtils.free_hptr(dotnet_date)  # dotnet will hold a reference to it, we no longer need it
         if isinstance(time, timedelta):
-            try:
-                dotnet_timespan = dtc.timedelta_to_dotnet(time)
-                return EventDataBuilder(self._interop.AddTimestamp2(dotnet_timespan))
-            finally:
-                InteropUtils.free_hptr(dotnet_timespan)  # dotnet will hold a reference to it, we no longer need it
+            dotnet_timespan = dtc.timedelta_to_dotnet(time)
+            return EventDataBuilder(self._interop.AddTimestamp2(dotnet_timespan))
         raise ValueError("'time' must be either datetime or timedelta")
 
     def add_timestamp_milliseconds(self, milliseconds: int) -> EventDataBuilder:

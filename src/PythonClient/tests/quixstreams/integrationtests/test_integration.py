@@ -416,6 +416,59 @@ class TestIntegration(unittest.TestCase):
         # cleanup
         topic_consumer.dispose()
 
+    def test_events_write_via_builder_and_read_using_timedelta(self):
+        # Used to segfault. Because is using builder, difficult to test as only unittest
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        event = threading.Event()  # used to trigger evaluation
+        read_data: qx.EventData = None  # the object we will be testing here
+
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
+        output_stream = None  # The outgoing stream
+
+        def on_stream_received(stream: qx.StreamConsumer):
+            if stream.stream_id == output_stream.stream_id:
+                print("---- Test stream read {} ----".format(stream.stream_id))
+                stream.events.on_data_received = on_event_data_handler
+
+        def on_event_data_handler(stream: qx.StreamConsumer, data: qx.EventData):
+            nonlocal read_data
+            read_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received
+
+        # Act
+        print("---- Start reading ----")
+        topic_consumer.subscribe()
+
+        print("---- Start Writing ----")
+        topic_producer = client.get_topic_producer(topic_name)
+        output_stream = topic_producer.create_stream()
+
+        print("---- Writing event data ----")
+        output_stream.events.add_timestamp(timedelta(seconds=1, milliseconds=555))\
+            .add_value("event1", "value1")\
+            .add_tag("tag1", "tag1val")\
+            .publish()
+
+        # Assert
+        self.waitforresult(event)
+
+        expected = qx.EventData("event1", 1555000000, "value1").add_tag("tag1", "tag1val")
+        print("------ READ ------")
+        print(read_data)
+        print("---- EXPECTED ----")
+        print(expected)
+        self.assert_eventdata_are_equal(expected, read_data)
+        self.assert_eventdata_are_equal(read_data, expected)
+
+        # cleanup
+        topic_consumer.dispose()
+
     def test_events_write_direct_and_read(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
