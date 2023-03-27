@@ -4,6 +4,7 @@ set nointerop=False
 set nopython=False
 set noregen=False
 set configuration=-c release /p:DebugType=None /p:DebugSymbols=false
+set framework=-f net7.0
 
 set argCount=0
 set argArray=
@@ -34,7 +35,7 @@ set csharpfolder=../../../CsharpClient
 set pythonfolder=../../../PythonClient
 set streamingoutpath=%csharpfolder%/QuixStreams.Streaming/bin/Publish/win-x64
 ::echo build streaming
-dotnet publish %csharpfolder%/QuixStreams.Streaming/QuixStreams.Streaming.csproj -c release -o %streamingoutpath%
+dotnet publish %csharpfolder%/QuixStreams.Streaming/QuixStreams.Streaming.csproj %framework% -c release -o %streamingoutpath%
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
 set interopgeneratoroutput=%interopfolder%/Quix.InteropGenerator/bin/Publish/win-x64
