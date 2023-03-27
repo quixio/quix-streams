@@ -230,6 +230,8 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [InlineData(false)]
         public void WriteData_WithFilterConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
         {
+            // when the buffer is disabled it is expected that each frame passed to the buffer is raised as-is.
+            
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
             {
@@ -257,14 +259,6 @@ namespace QuixStreams.Streaming.UnitTests.Models
             Thread.Sleep(1000);
 
             // Assert
-            
-            // TODO: Verify if changes are correct. 
-            // receivedData.Count.Should().Be(3);
-            // receivedData[0].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[0]}));
-            // receivedData[1].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[2]}));
-            // receivedData[2].Should().BeEquivalentTo(new TimeseriesData(new List<TimeseriesDataTimestamp>() {data.Timestamps[4]}));
-            
-            
             receivedData.Count.Should().Be(1);
             receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Where((ds, i) => i % 2 == 0 ).ToList()));
         }
