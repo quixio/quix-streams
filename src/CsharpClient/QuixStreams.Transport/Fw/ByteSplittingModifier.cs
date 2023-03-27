@@ -56,8 +56,7 @@ namespace QuixStreams.Transport.Fw
                 
                 if (lastSegment != null)
                 {
-                    var segmentToReturn = lastSegment; // because lazy gets evaluated later, we need to save reference for this iteration's value
-                    segmentPackage = new Package<byte[]>(segmentToReturn, null, package.TransportContext);
+                    segmentPackage = new Package<byte[]>(lastSegment, null, package.TransportContext);
                     tasks.Add(this.OnNewPackage(segmentPackage));
                 }
 

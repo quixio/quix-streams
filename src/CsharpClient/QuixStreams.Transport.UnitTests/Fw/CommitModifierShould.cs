@@ -46,7 +46,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Act
             for (int i = 0; i < ackEvery * 3; i++)
             {
-                await modifier.Publish(new Package(typeof(object), new Lazy<object>(new object())));
+                await modifier.Publish(new Package(typeof(object), new object()));
             }
             
             // Assert
@@ -79,7 +79,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
 
             // Act
             var start = DateTime.UtcNow;
-            await modifier.Publish(new Package(typeof(object), new Lazy<object>(new object())));
+            await modifier.Publish(new Package(typeof(object), new object()));
             mre.WaitOne(3000);
 
             // Assert
@@ -111,7 +111,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Act
             for (int i = 0; i < 12; i++)
             {
-                await modifier.Publish(new Package(typeof(object), new Lazy<object>(new object())));
+                await modifier.Publish(new Package(typeof(object), new object()));
             }
 
             // Assert

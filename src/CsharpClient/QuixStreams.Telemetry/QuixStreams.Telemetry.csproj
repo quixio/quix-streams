@@ -23,7 +23,6 @@
   <ItemGroup>
     <PackageReference Include="Google.Protobuf" Version="3.17.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="System.Threading.Channels" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>

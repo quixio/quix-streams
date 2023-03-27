@@ -41,7 +41,7 @@ namespace QuixStreams.Transport.Fw
 
             var transportMessageValue = TransportPackageValueCodec.Deserialize(packageBytes);
             var valueCodec = this.GetCodec(transportMessageValue);
-            var lazyVal = this.DeserializeToObject(valueCodec, transportMessageValue);
+            var value = this.DeserializeToObject(valueCodec, transportMessageValue);
 
             var meta = transportMessageValue.MetaData;
             if (bytePackage.MetaData.Count > 0)
@@ -49,7 +49,7 @@ namespace QuixStreams.Transport.Fw
                 meta = new MetaData(bytePackage.MetaData, meta);
             }
 
-            var newPackage = new Package(valueCodec.Type, lazyVal, meta, bytePackage.TransportContext);
+            var newPackage = new Package(valueCodec.Type, value, meta, bytePackage.TransportContext);
             return this.OnNewPackage(newPackage);
         }
 

@@ -15,7 +15,7 @@ namespace QuixStreams.Transport.UnitTests.Helpers
             Package result = null;
             producer.OnNewPackage = async package => result = package;  
             var tProducer = new TransportProducer(producer);
-            tProducer.Publish(new Package<object>(new Lazy<object>(() => value), null, transportContext));
+            tProducer.Publish(new Package<object>(value, null, transportContext));
             return result;
         }
     }

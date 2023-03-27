@@ -23,7 +23,7 @@ namespace QuixStreams.Transport.Fw
 
         /// <summary>
         /// Send a package, which the modifier attempts to serialize. Serialization result is raised via <see cref="OnNewPackage"/>
-        /// Note: <see cref="SerializationException"/> are raised for unsuccessful serialization when package's lazy value is evaluated.
+        /// Note: <see cref="SerializationException"/> are raised for unsuccessful serialization
         /// </summary>
         /// <param name="package">The package to serialize</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>

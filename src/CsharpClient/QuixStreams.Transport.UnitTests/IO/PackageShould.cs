@@ -13,7 +13,7 @@ namespace QuixStreams.Transport.UnitTests.IO
         public void Constructor_WithNullMetaData_ShouldSetEmptyMetaData()
         {
             // Act
-            var package = new Package(typeof(object), new Lazy<object>(new object()), null);
+            var package = new Package(typeof(object), new object(), null);
 
             // Assert
             package.MetaData.Should().NotBeNull();
@@ -24,7 +24,7 @@ namespace QuixStreams.Transport.UnitTests.IO
         public void Constructor_WithNullTransportContext_ShouldSetEmptyTransportContext()
         {
             // Act
-            var package = new Package(typeof(object), new Lazy<object>(new object()), null, null);
+            var package = new Package(typeof(object), new object(), null, null);
 
             // Assert
             package.TransportContext.Should().NotBeNull();
@@ -35,7 +35,7 @@ namespace QuixStreams.Transport.UnitTests.IO
         public void Constructor_ShouldSetTypeToProvided()
         {
             // Act
-            var package = new Package(typeof(PackageShould), new Lazy<object>(() => null));
+            var package = new Package(typeof(PackageShould), null);
 
             // Assert
             package.Type.Should().Be(typeof(PackageShould));
