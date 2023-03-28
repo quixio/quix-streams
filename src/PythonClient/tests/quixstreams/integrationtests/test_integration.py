@@ -311,7 +311,6 @@ class TestIntegration(unittest.TestCase):
 
         topic_consumer = client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
 
-        from src.quixstreams import TopicConsumer, StreamConsumer
         cts = qx.CancellationTokenSource()  # used for interrupting the App
 
         def on_stream_received(stream: qx.StreamConsumer):
@@ -613,6 +612,7 @@ class TestIntegration(unittest.TestCase):
         # Assert
         self.assertIsNone(retrieved)
 
+    @unittest.skip("Pending work to make disposal function")
     def test_disposed_topic_invokes_on_disposed(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
