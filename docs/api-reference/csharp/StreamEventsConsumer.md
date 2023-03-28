@@ -14,10 +14,6 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
 
-| Constructors | |
-| :--- | :--- |
-| [StreamEventsConsumer(ITopicConsumer, IStreamConsumerInternal)](StreamEventsConsumer.StreamEventsConsumer(ITopicConsumer,IStreamConsumerInternal).md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.StreamEventsConsumer(QuixStreams.Streaming.ITopicConsumer, QuixStreams.Streaming.IStreamConsumerInternal)') | Initializes a new instance of [StreamTimeseriesConsumer](StreamTimeseriesConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer') |
-
 | Properties | |
 | :--- | :--- |
 | [Definitions](StreamEventsConsumer.Definitions.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.Definitions') | Gets the latest set of event definitions |

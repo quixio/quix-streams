@@ -5,8 +5,6 @@
 | Classes | |
 | :--- | :--- |
 | [QuixUtils](QuixUtils.md 'QuixStreams.Streaming.Utils.QuixUtils') | Quix extension methods used across the library |
-| [StringExtensions](StringExtensions.md 'QuixStreams.Streaming.Utils.StringExtensions') | |
-| [StringExtensions.LevenshteinDistance](StringExtensions.LevenshteinDistance.md 'QuixStreams.Streaming.Utils.StringExtensions.LevenshteinDistance') | |
 
 | Structs | |
 | :--- | :--- |

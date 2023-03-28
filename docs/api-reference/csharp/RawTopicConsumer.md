@@ -21,7 +21,6 @@ Implements [IRawTopicConsumer](IRawTopicConsumer.md 'QuixStreams.Streaming.Raw.I
 
 | Methods | |
 | :--- | :--- |
-| [InternalErrorHandler(object, Exception)](RawTopicConsumer.InternalErrorHandler(object,Exception).md 'QuixStreams.Streaming.Raw.RawTopicConsumer.InternalErrorHandler(object, System.Exception)') | Internal handler for handing Error event from the kafkaOutput |
 | [Subscribe()](RawTopicConsumer.Subscribe().md 'QuixStreams.Streaming.Raw.RawTopicConsumer.Subscribe()') | Start reading streams.<br/>Use 'OnMessageReceived' event to read messages after executing this method |
 
 | Events | |

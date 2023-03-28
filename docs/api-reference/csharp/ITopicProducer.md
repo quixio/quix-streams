@@ -11,7 +11,6 @@ System.IDisposable
 ```
 
 Derived  
-&#8627; [ITopicProducerInternal](ITopicProducerInternal.md 'QuixStreams.Streaming.ITopicProducerInternal')  
 &#8627; [TopicProducer](TopicProducer.md 'QuixStreams.Streaming.TopicProducer')
 
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')

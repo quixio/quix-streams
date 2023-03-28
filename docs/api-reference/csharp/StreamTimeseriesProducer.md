@@ -14,10 +14,6 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
 
-| Constructors | |
-| :--- | :--- |
-| [StreamTimeseriesProducer(ITopicProducer, IStreamProducerInternal)](StreamTimeseriesProducer.StreamTimeseriesProducer(ITopicProducer,IStreamProducerInternal).md 'QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer.StreamTimeseriesProducer(QuixStreams.Streaming.ITopicProducer, QuixStreams.Streaming.IStreamProducerInternal)') | Initializes a new instance of [StreamTimeseriesProducer](StreamTimeseriesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer') |
-
 | Properties | |
 | :--- | :--- |
 | [Buffer](StreamTimeseriesProducer.Buffer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer.Buffer') | Gets the buffer for writing timeseries data |

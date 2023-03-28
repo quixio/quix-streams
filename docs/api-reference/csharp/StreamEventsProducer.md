@@ -14,10 +14,6 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
 
-| Constructors | |
-| :--- | :--- |
-| [StreamEventsProducer(IStreamProducerInternal)](StreamEventsProducer.StreamEventsProducer(IStreamProducerInternal).md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer.StreamEventsProducer(QuixStreams.Streaming.IStreamProducerInternal)') | Initializes a new instance of [StreamEventsProducer](StreamEventsProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer') |
-
 | Properties | |
 | :--- | :--- |
 | [DefaultLocation](StreamEventsProducer.DefaultLocation.md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer.DefaultLocation') | Default Location of the events. Event definitions added with [AddDefinition(string, string, string)](StreamEventsProducer.AddDefinition(string,string,string).md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer.AddDefinition(string, string, string)') will be inserted at this location.<br/>See [AddLocation(string)](StreamEventsProducer.AddLocation(string).md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer.AddLocation(string)') for adding definitions at a different location without changing default.<br/>Example: "/Group1/SubGroup2" |

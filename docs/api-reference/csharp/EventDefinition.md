@@ -19,7 +19,3 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 | [Level](EventDefinition.Level.md 'QuixStreams.Streaming.Models.EventDefinition.Level') | Gets the level of the event. Defaults to [QuixStreams.Telemetry.Models.EventLevel.Information](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Telemetry.Models.EventLevel.Information 'QuixStreams.Telemetry.Models.EventLevel.Information') |
 | [Location](EventDefinition.Location.md 'QuixStreams.Streaming.Models.EventDefinition.Location') | Gets the location of the event within the Event hierarchy. Example: "/", "car/chassis/suspension". |
 | [Name](EventDefinition.Name.md 'QuixStreams.Streaming.Models.EventDefinition.Name') | Gets the display name of the event |
-
-| Methods | |
-| :--- | :--- |
-| [ConvertToTelemetryDefinition()](EventDefinition.ConvertToTelemetryDefinition().md 'QuixStreams.Streaming.Models.EventDefinition.ConvertToTelemetryDefinition()') | Converts the Event definition to Telemetry layer structure |

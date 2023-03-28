@@ -11,10 +11,6 @@ public interface IStreamProducer :
 System.IDisposable
 ```
 
-Derived  
-&#8627; [IStreamProducerInternal](IStreamProducerInternal.md 'QuixStreams.Streaming.IStreamProducerInternal')  
-&#8627; [StreamProducer](StreamProducer.md 'QuixStreams.Streaming.StreamProducer')
-
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
 
 | Properties | |

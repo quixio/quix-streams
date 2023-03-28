@@ -11,10 +11,6 @@ public class TimeseriesBufferProducer : QuixStreams.Streaming.Models.TimeseriesB
 
 Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.Object 'System.Object') &#129106; [TimeseriesBuffer](TimeseriesBuffer.md 'QuixStreams.Streaming.Models.TimeseriesBuffer') &#129106; TimeseriesBufferProducer
 
-| Constructors | |
-| :--- | :--- |
-| [TimeseriesBufferProducer(ITopicProducer, IStreamProducerInternal, TimeseriesBufferConfiguration)](TimeseriesBufferProducer.TimeseriesBufferProducer(ITopicProducer,IStreamProducerInternal,TimeseriesBufferConfiguration).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.TimeseriesBufferProducer(QuixStreams.Streaming.ITopicProducer, QuixStreams.Streaming.IStreamProducerInternal, QuixStreams.Streaming.Models.TimeseriesBufferConfiguration)') | Initializes a new instance of [TimeseriesBufferProducer](TimeseriesBufferProducer.md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer') |
-
 | Properties | |
 | :--- | :--- |
 | [DefaultTags](TimeseriesBufferProducer.DefaultTags.md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.DefaultTags') | Default tags injected for all parameters values sent by this buffer. |

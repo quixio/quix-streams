@@ -22,7 +22,3 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 | [MinimumValue](ParameterDefinition.MinimumValue.md 'QuixStreams.Streaming.Models.ParameterDefinition.MinimumValue') | Gets the minimum value of the parameter |
 | [Name](ParameterDefinition.Name.md 'QuixStreams.Streaming.Models.ParameterDefinition.Name') | Gets the human friendly display name of the parameter |
 | [Unit](ParameterDefinition.Unit.md 'QuixStreams.Streaming.Models.ParameterDefinition.Unit') | Gets the unit of the parameter |
-
-| Methods | |
-| :--- | :--- |
-| [ConvertToTelemetrysDefinition()](ParameterDefinition.ConvertToTelemetrysDefinition().md 'QuixStreams.Streaming.Models.ParameterDefinition.ConvertToTelemetrysDefinition()') | Converts the Parameter definition to Telemetry layer structure |

@@ -15,10 +15,6 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
 
-| Constructors | |
-| :--- | :--- |
-| [StreamPropertiesProducer(IStreamProducerInternal)](StreamPropertiesProducer.StreamPropertiesProducer(IStreamProducerInternal).md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.StreamPropertiesProducer(QuixStreams.Streaming.IStreamProducerInternal)') | Initializes a new instance of [StreamPropertiesProducer](StreamPropertiesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer') |
-
 | Properties | |
 | :--- | :--- |
 | [FlushInterval](StreamPropertiesProducer.FlushInterval.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.FlushInterval') | Automatic flush interval of the properties metadata into the channel [ in milliseconds ] |
@@ -31,7 +27,6 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | Methods | |
 | :--- | :--- |
 | [AddParent(string)](StreamPropertiesProducer.AddParent(string).md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.AddParent(string)') | Adds a parent stream. |
-| [CheckForHeartbeatFlush()](StreamPropertiesProducer.CheckForHeartbeatFlush().md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.CheckForHeartbeatFlush()') | Metadata of the stream. |
 | [Dispose()](StreamPropertiesProducer.Dispose().md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.Dispose()') | Flushes internal buffers and disposes |
 | [Flush()](StreamPropertiesProducer.Flush().md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.Flush()') | Immediately writes the properties yet to be sent instead of waiting for the flush timer (20ms) |
 | [RemoveParent(string)](StreamPropertiesProducer.RemoveParent(string).md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.RemoveParent(string)') | Removes a parent stream |

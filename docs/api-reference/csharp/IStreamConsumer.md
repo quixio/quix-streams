@@ -10,10 +10,6 @@ Allows to read the stream data received from a topic.
 public interface IStreamConsumer
 ```
 
-Derived  
-&#8627; [IStreamConsumerInternal](IStreamConsumerInternal.md 'QuixStreams.Streaming.IStreamConsumerInternal')  
-&#8627; [StreamConsumer](StreamConsumer.md 'QuixStreams.Streaming.StreamConsumer')
-
 | Properties | |
 | :--- | :--- |
 | [Events](IStreamConsumer.Events.md 'QuixStreams.Streaming.IStreamConsumer.Events') | Gets the consumer for accessing event related information of the stream such as event definitions and values |

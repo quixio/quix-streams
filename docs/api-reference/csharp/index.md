@@ -11,7 +11,5 @@
 | [QuixStreams.Streaming.Models.StreamConsumer](QuixStreams.Streaming.Models.StreamConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer') | |
 | [QuixStreams.Streaming.Models.StreamProducer](QuixStreams.Streaming.Models.StreamProducer.md 'QuixStreams.Streaming.Models.StreamProducer') | |
 | [QuixStreams.Streaming.QuixApi](QuixStreams.Streaming.QuixApi.md 'QuixStreams.Streaming.QuixApi') | |
-| [QuixStreams.Streaming.QuixApi.Portal](QuixStreams.Streaming.QuixApi.Portal.md 'QuixStreams.Streaming.QuixApi.Portal') | |
-| [QuixStreams.Streaming.QuixApi.Portal.Requests](QuixStreams.Streaming.QuixApi.Portal.Requests.md 'QuixStreams.Streaming.QuixApi.Portal.Requests') | |
 | [QuixStreams.Streaming.Raw](QuixStreams.Streaming.Raw.md 'QuixStreams.Streaming.Raw') | |
 | [QuixStreams.Streaming.Utils](QuixStreams.Streaming.Utils.md 'QuixStreams.Streaming.Utils') | |

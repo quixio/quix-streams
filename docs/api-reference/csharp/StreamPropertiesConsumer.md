@@ -15,10 +15,6 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
 
-| Constructors | |
-| :--- | :--- |
-| [StreamPropertiesConsumer(ITopicConsumer, IStreamConsumerInternal)](StreamPropertiesConsumer.StreamPropertiesConsumer(ITopicConsumer,IStreamConsumerInternal).md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.StreamPropertiesConsumer(QuixStreams.Streaming.ITopicConsumer, QuixStreams.Streaming.IStreamConsumerInternal)') | Initializes a new instance of [StreamPropertiesConsumer](StreamPropertiesConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer') |
-
 | Properties | |
 | :--- | :--- |
 | [Location](StreamPropertiesConsumer.Location.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.Location') | Gets the location of the stream |

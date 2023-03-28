@@ -13,15 +13,12 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Constructors | |
 | :--- | :--- |
-| [EventData()](EventData.EventData().md 'QuixStreams.Streaming.Models.EventData.EventData()') | Create a new empty Event Data instance |
-| [EventData(EventDataRaw)](EventData.EventData(EventDataRaw).md 'QuixStreams.Streaming.Models.EventData.EventData(QuixStreams.Telemetry.Models.EventDataRaw)') | Create a new Event Data instance loading data from [QuixStreams.Telemetry.Models.EventDataRaw](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Telemetry.Models.EventDataRaw 'QuixStreams.Telemetry.Models.EventDataRaw') type instance |
 | [EventData(string, DateTime, string)](EventData.EventData(string,DateTime,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, System.DateTime, string)') | Create a new empty Event Data instance |
 | [EventData(string, TimeSpan, string)](EventData.EventData(string,TimeSpan,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, System.TimeSpan, string)') | Create a new empty Event Data instance |
 | [EventData(string, long, string)](EventData.EventData(string,long,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, long, string)') | Create a new empty Event Data instance |
 
 | Properties | |
 | :--- | :--- |
-| [EpochIncluded](EventData.EpochIncluded.md 'QuixStreams.Streaming.Models.EventData.EpochIncluded') | Epoch is included in the Timestamp values |
 | [Id](EventData.Id.md 'QuixStreams.Streaming.Models.EventData.Id') | The globally unique identifier of the event |
 | [Tags](EventData.Tags.md 'QuixStreams.Streaming.Models.EventData.Tags') | Tags on that event. When key is not found, returns null |
 | [Timestamp](EventData.Timestamp.md 'QuixStreams.Streaming.Models.EventData.Timestamp') | Gets the timestamp in [System.DateTime](https://docs.microsoft.com/en-us/dotnet/api/System.DateTime 'System.DateTime') format |

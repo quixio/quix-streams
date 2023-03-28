@@ -27,6 +27,4 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 | [AddTimestamp(TimeSpan)](TimeseriesData.AddTimestamp(TimeSpan).md 'QuixStreams.Streaming.Models.TimeseriesData.AddTimestamp(System.TimeSpan)') | Starts adding a new set of parameter values at the given timestamp. |
 | [AddTimestampMilliseconds(long)](TimeseriesData.AddTimestampMilliseconds(long).md 'QuixStreams.Streaming.Models.TimeseriesData.AddTimestampMilliseconds(long)') | Starts adding a new set of parameter values at the given timestamp. |
 | [AddTimestampNanoseconds(long)](TimeseriesData.AddTimestampNanoseconds(long).md 'QuixStreams.Streaming.Models.TimeseriesData.AddTimestampNanoseconds(long)') | Starts adding a new set of parameter values at the given timestamp. |
-| [AddTimestampNanoseconds(long, bool)](TimeseriesData.AddTimestampNanoseconds(long,bool).md 'QuixStreams.Streaming.Models.TimeseriesData.AddTimestampNanoseconds(long, bool)') | Starts adding a new set of parameter values at the given timestamp. |
-| [CheckRawDataSize(int)](TimeseriesData.CheckRawDataSize(int).md 'QuixStreams.Streaming.Models.TimeseriesData.CheckRawDataSize(int)') | Resize the collection of timestamps according to the needs |
 | [Clone(string[])](TimeseriesData.Clone(string[]).md 'QuixStreams.Streaming.Models.TimeseriesData.Clone(string[])') | Clone the Timeseries Data |
