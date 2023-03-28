@@ -1,0 +1,28 @@
+#### [QuixStreams.Streaming](index.md 'index')
+### [QuixStreams.Streaming.Models.StreamConsumer](QuixStreams.Streaming.Models.StreamConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer')
+
+## StreamEventsConsumer Class
+
+Helper class for read [QuixStreams.Telemetry.Models.EventDefinitions](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Telemetry.Models.EventDefinitions 'QuixStreams.Telemetry.Models.EventDefinitions') and [EventData](EventData.md 'QuixStreams.Streaming.Models.EventData')
+
+```csharp
+public class StreamEventsConsumer :
+System.IDisposable
+```
+
+Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.Object 'System.Object') &#129106; StreamEventsConsumer
+
+Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/System.IDisposable 'System.IDisposable')
+
+| Constructors | |
+| :--- | :--- |
+| [StreamEventsConsumer(ITopicConsumer, IStreamConsumerInternal)](StreamEventsConsumer.StreamEventsConsumer(ITopicConsumer,IStreamConsumerInternal).md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.StreamEventsConsumer(QuixStreams.Streaming.ITopicConsumer, QuixStreams.Streaming.IStreamConsumerInternal)') | Initializes a new instance of [StreamTimeseriesConsumer](StreamTimeseriesConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer') |
+
+| Properties | |
+| :--- | :--- |
+| [Definitions](StreamEventsConsumer.Definitions.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.Definitions') | Gets the latest set of event definitions |
+
+| Events | |
+| :--- | :--- |
+| [OnDataReceived](StreamEventsConsumer.OnDataReceived.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.OnDataReceived') | Raised when an events data package is received for the stream |
+| [OnDefinitionsChanged](StreamEventsConsumer.OnDefinitionsChanged.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.OnDefinitionsChanged') | Raised when the even definitions have changed for the stream.<br/>See [Definitions](StreamEventsConsumer.Definitions.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.Definitions') for the latest set of event definitions |
