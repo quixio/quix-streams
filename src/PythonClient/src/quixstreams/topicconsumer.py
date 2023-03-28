@@ -77,7 +77,7 @@ class TopicConsumer(object):
             def remove_active_stream(stream):
                 if self._active_streams is not None:
                     self._active_streams.remove(stream)
-                    
+
             stream = StreamConsumer(stream_hptr, self, remove_active_stream)
             self._active_streams.append(stream)
             self._on_stream_received(stream)
