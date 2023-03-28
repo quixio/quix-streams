@@ -47,12 +47,12 @@ class TopicConsumer(object):
         self._on_committing_ref = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
-        self._active_streams = None
         self._on_stream_received_dispose()
         self._on_streams_revoked_dispose()
         self._on_revoking_dispose()
         self._on_committing_dispose()
         self._on_committed_dispose()
+        self._active_streams = None
 
     # region on_stream_received
     @property
@@ -74,7 +74,11 @@ class TopicConsumer(object):
     def _on_stream_received_wrapper(self, topic_hptr, stream_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
         try:
-            stream = StreamConsumer(stream_hptr, self, lambda s: self._active_streams.remove(s))
+            def remove_active_stream(stream):
+                if self._active_streams is not None:
+                    self._active_streams.remove(stream)
+                    
+            stream = StreamConsumer(stream_hptr, self, remove_active_stream)
             self._active_streams.append(stream)
             self._on_stream_received(stream)
             InteropUtils.free_hptr(topic_hptr)
