@@ -16,7 +16,7 @@ After building the Quix Streams library, please follow the following steps to ge
     ```
 -  Run the following command from the root directory (or adjust the `-a` and `-o` flags accordingly):
     ```
-    defaultdocumentation -a src/CsharpClient/QuixStreams.Streaming/bin/Release/netstandard2.0/QuixStreams.Streaming.dll -o docs/api-reference/csharp/ --FileNameFactory Name
+    defaultdocumentation -s Public -a src/CsharpClient/QuixStreams.Streaming/bin/Release/netstandard2.0/QuixStreams.Streaming.dll -o docs/api-reference/csharp/ --FileNameFactory Name
     ```
     The above command generates API reference for `QuixStreams.Streaming` library in _docs/api-reference/csharp_ directory
 
