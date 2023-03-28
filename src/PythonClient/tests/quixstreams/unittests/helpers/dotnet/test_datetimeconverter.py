@@ -46,9 +46,9 @@ class DateTimeConverterTests(unittest.TestCase):
         netts_hptr = DateTimeConverter.timedelta_to_dotnet(pyts)
 
         # Assert
-        with (netts := TimeSpan(netts_hptr)):
-            expeced = round(pyts.total_seconds()*1000*1000*10)
-            self.assertEqual(expeced, netts.get_Ticks())
+        netts = TimeSpan(netts_hptr)
+        expeced = round(pyts.total_seconds()*1000*1000*10)
+        self.assertEqual(expeced, netts.get_Ticks())
 
 
     def test_datetime_to_dotnet(self):
