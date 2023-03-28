@@ -2,7 +2,7 @@ import ctypes
 import traceback
 from typing import Callable
 
-from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .rawmessage import RawMessage
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.QuixStreamsStreaming.Raw.RawTopicConsumer import RawTopicConsumer as rtpi

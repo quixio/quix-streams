@@ -158,8 +158,8 @@ class QuixStreamingClient(object):
 
             topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
         """
-
         dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
+
         return TopicProducer(dotnet_pointer)
 
     def get_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:

@@ -21,22 +21,7 @@ public class InteropUtils
     
     public static bool DebugMode = false;
     private static Lazy<StreamWriter> debuglogs = new Lazy<StreamWriter>(() => File.AppendText($"./debuglogs_{(DateTime.Now.ToString("yyyy-MM-dd_HH_mm_ss"))}.txt"));
-    private static Lazy<PyApi3> pyApi = new Lazy<PyApi3>(() =>
-    {
-        try
-        {
-            var api = new PyApi3();
-            return api;
-        }
-        catch (Exception ex)
-        {
-            InteropUtils.LogDebug("Exception in pyApi lazy value factory");
-            InteropUtils.LogDebug(ex.ToString());
-            throw;
-        }
-    });
 
-    [Conditional("DEBUG")]
     public static void LogDebug(string format, params object[] @params)
     {
         if (!DebugMode) return;
@@ -324,9 +309,50 @@ public class InteropUtils
     public static void RaiseException(Exception ex)
     {
         LogDebug(ex.ToString());
-        using var state = pyApi.Value.EnsureGILState();
-        pyApi.Value.RaiseException(ex);
+
+        exceptionCallback(ex.GetType().FullName, ex.Message, GetTrimmedStackTrace(ex));
     }
+    
+    private static string GetTrimmedStackTrace(Exception ex)
+    {
+        var msg = ex.StackTrace;
+        var lines = msg.Split(Environment.NewLine);
+        var filtered = lines.Where(line => !line.Contains("at System.Runtime") && !line.Contains("End of stack trace from previous location")).ToList(); // excessive
+        var dupeFiltered = new List<string>(filtered.Count);
+        string prev = null;
+        foreach (var line in filtered)
+        {
+            if (line == prev) continue;
+            prev = line;
+            dupeFiltered.Add(line);
+        }
+
+        var filteredMessage = string.Join(Environment.NewLine, dupeFiltered);
+        return filteredMessage;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "interoputils_set_exception_callback")]
+    public static unsafe void SetExceptionCallback(delegate* unmanaged<IntPtr, IntPtr, IntPtr, void> callback)
+    {
+        InteropUtils.LogDebug($"Registering func handler {(IntPtr)callback} for interoputils_set_exception_callback");
+        InteropUtils.exceptionCallback = (string type, string message, string trace) =>
+        {
+            var typePtr = InteropUtils.Utf8StringToUPtr(type);
+            var messagePtr = InteropUtils.Utf8StringToUPtr(message);
+            var tracePtr = InteropUtils.Utf8StringToUPtr(trace);
+            InteropUtils.LogDebug($"Invoking handler {(IntPtr)callback} for interoputils_set_exception_callback");
+            callback(typePtr, messagePtr, tracePtr);
+        };
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "interoputils_log_debug")]
+    public static void LogDebugInterop(IntPtr messagePtr)
+    {
+        if (messagePtr == IntPtr.Zero) return;
+        var message = InteropUtils.PtrToStringUTF8(messagePtr);
+        InteropUtils.LogDebug(message);
+    }
+    
     
     [UnmanagedCallersOnly(EntryPoint = "interoputils_enabledebug")]
     public static void EnableDebug()
@@ -494,6 +520,7 @@ public class InteropUtils
     }
     
     private static Dictionary<Type, bool> isBlittable = new Dictionary<Type, bool>();
+    private static Action<string, string, string> exceptionCallback = (type, msg, trace) => { }; // do nothing by default
 
     public static bool IsBlittableType(Type type)
     {

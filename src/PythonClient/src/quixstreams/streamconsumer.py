@@ -18,7 +18,7 @@ from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClos
 @nativedecorator
 class StreamConsumer(object):
     """
-        Handles reading stream from a topic
+        Handles consuming stream from a topic
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p, topic_consumer: 'TopicConsumer', on_close_cb_always: Callable[['StreamConsumer'], None]):

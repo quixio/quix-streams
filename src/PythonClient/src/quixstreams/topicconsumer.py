@@ -11,7 +11,7 @@ from .streamconsumer import StreamConsumer
 @nativedecorator
 class TopicConsumer(object):
     """
-        Interface to operate with the streaming platform for reading or writing
+        Interface to operate with the streaming platform for consuming messages
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
