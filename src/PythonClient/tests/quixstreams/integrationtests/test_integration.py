@@ -63,7 +63,7 @@ class TestIntegration(unittest.TestCase):
 
         client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         with (topic_producer := client.get_topic_producer(topic_name)), (output_stream := topic_producer.create_stream()):
             print("---- Setting stream properties ----")
             output_stream.properties.flush_interval = 7000
@@ -96,10 +96,10 @@ class TestIntegration(unittest.TestCase):
             topic_consumer.on_stream_received = on_stream_received
 
             # Act
-            print("---- Start reading ----")
+            print("---- Subscribe & start consuming ----")
             topic_consumer.subscribe()
 
-            print("---- Start Writing ----")
+            print("---- Start publishing ----")
             with (topic_producer := client.get_topic_producer(topic_name)), (
             output_stream := topic_producer.create_stream()):
 
@@ -162,10 +162,10 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -246,10 +246,10 @@ class TestIntegration(unittest.TestCase):
 
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -327,7 +327,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -389,10 +389,10 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -442,10 +442,10 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -494,10 +494,10 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -545,10 +545,10 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
 
@@ -657,10 +657,10 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
-        print("---- Start Writing ----")
+        print("---- Start publishing ----")
         topic_producer = client.get_topic_producer(topic_name)
         output_stream = topic_producer.create_stream()
         output_stream.close()
@@ -699,7 +699,7 @@ class TestIntegration(unittest.TestCase):
         first_stream = topic_producer.create_stream()
         first_stream.close()
 
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
         # as of now subscribe() returns as soon as connection open request passed to broker library
         # rather than when it is ready to serve messages from broker. In most cases this isn't necessarily an issue
@@ -748,7 +748,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
         print("---- Write first stream ----")
@@ -809,7 +809,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer.on_stream_received = on_stream_received
 
         # Act
-        print("---- Start reading ----")
+        print("---- Subscribe & start consuming ----")
         topic_consumer.subscribe()
 
         print("---- Write first stream ----")
