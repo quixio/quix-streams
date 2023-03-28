@@ -32,7 +32,7 @@ namespace QuixStreams.Transport.Fw.Helpers
                     var datalen = reader.ReadInt32();
                     valueBytes = reader.ReadBytes(datalen);
 
-                    return new TransportPackageValue(new Lazy<byte[]>(() => valueBytes), new CodecBundle(modelKey, codecId),
+                    return new TransportPackageValue( valueBytes, new CodecBundle(modelKey, codecId),
                         metaData);
                 }
             }
@@ -92,7 +92,7 @@ namespace QuixStreams.Transport.Fw.Helpers
 
                     SerializeMetadata(writer, transportPackageValue.MetaData);
 
-                    byte[] value = transportPackageValue.Value.Value;
+                    byte[] value = transportPackageValue.Value;
                     writer.Write(value.Length);
                     writer.Write(value);
                     

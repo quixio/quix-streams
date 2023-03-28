@@ -50,16 +50,15 @@ namespace QuixStreams.Transport.Fw
         /// <param name="package">The package to merge</param>
         /// <param name="cancellationToken">The cancellation token to listen to for aborting process</param>
         /// <returns>An awaitable <see cref="Task"/></returns>
-        public async Task Publish(Package package, CancellationToken cancellationToken = default)
+        public Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                await Task.FromCanceled(cancellationToken); 
-                return;
+                return Task.FromCanceled(cancellationToken);
             }
             if (!package.TryConvertTo<byte[]>(out var bytePackage) || this.OnNewPackage == null)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             var mergedPackageBytes = this.merger.Merge(bytePackage, out var bufferId);
@@ -68,9 +67,13 @@ namespace QuixStreams.Transport.Fw
             {
                 // if we do not have a merged package, then that means that this was not a standalone package, and the 
                 // content of this package was not enough to create a merged package.
-                if (bufferId == null) return; // Means that the package is invalid, due to buffering // missing data constraints
+                if (bufferId == null)
+                {
+                    // Means that the package is invalid, due to buffering // missing data constraints
+                    return Task.CompletedTask;
+                } 
                 TryAddToBuffer(ref bufferId, null, bytePackage.TransportContext);
-                return;
+                return Task.CompletedTask;
             }
 
             // By this point the merged package bytes can't be null, meaning that it was either a package that never had
@@ -86,7 +89,7 @@ namespace QuixStreams.Transport.Fw
             {
                 // buffer id means that this is a merged package
                 this.firstPackageContext.TryGetValue(bufferId, out var transportContext);
-                packageToRaise = new Package<byte[]>(new Lazy<byte[]>(() => mergedPackageBytes), bytePackage.MetaData, transportContext);
+                packageToRaise = new Package<byte[]>(mergedPackageBytes, bytePackage.MetaData, transportContext);
                 
             }
             
@@ -95,8 +98,7 @@ namespace QuixStreams.Transport.Fw
             if (this.bufferCounter == 0)
             {
                 RemoveFromBuffer(bufferId);
-                await this.OnNewPackage(packageToRaise);
-                return;
+                return this.OnNewPackage(packageToRaise);
             }
             
             // Not empty, check if this is next in line
@@ -111,7 +113,7 @@ namespace QuixStreams.Transport.Fw
                 this.pendingPackages.TryUpdate(bufferId, packageToRaise, null);
             }
 
-            await RaiseNextPackageIfReady();
+            return RaiseNextPackageIfReady();
         }
 
         private async Task RaiseNextPackageIfReady()

@@ -86,22 +86,19 @@ namespace QuixStreams.Streaming.Raw
 
             kafkaConsumer.OnNewPackage = async package =>
             {
-                byte[] message = (byte[])package.Value.Value;
+                byte[] message = (byte[])package.Value;
 
-                Lazy < ReadOnlyDictionary<string, string> > meta = new Lazy<ReadOnlyDictionary<string, string>>(() =>
-                   {
-                       Dictionary<string, string> vals = new Dictionary<string, string>();
-                       foreach(var el in package.TransportContext)
-                       {
-                           var value = el.Value;
-                           if (value == null) {
-                               vals[el.Key] = "";
-                           } else {
-                               vals[el.Key] = value.ToString();
-                           }
-                       }
-                       return new ReadOnlyDictionary<string, string>(vals);
-                   });
+               Dictionary<string, string> vals = new Dictionary<string, string>();
+               foreach(var el in package.TransportContext)
+               {
+                   var value = el.Value;
+                   if (value == null) {
+                       vals[el.Key] = "";
+                   } else {
+                       vals[el.Key] = value.ToString();
+                   }
+               }
+               var meta =  new ReadOnlyDictionary<string, string>(vals);
                 this.OnMessageReceived?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
             };
 

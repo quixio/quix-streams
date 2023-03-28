@@ -24,7 +24,7 @@ namespace QuixStreams.Transport.Kafka
                 return Task.CompletedTask;
             };
 
-            serializingModifier.Send(new Package<string>(new Lazy<string>(() => "")));
+            serializingModifier.Send(new Package<string>(""));
             
             Debug.Assert(KeepAlivePackage != null);
             

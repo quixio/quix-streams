@@ -17,7 +17,7 @@ namespace QuixStreams.Telemetry
         private readonly Dictionary<Type, List<Func<object, Task>>> modelSubscriptions = new Dictionary<Type, List<Func<object, Task>>>();
 
         private readonly Dictionary<Type, Func<object, Task>> interceptors = new Dictionary<Type, Func<object, Task>>();
-
+        
         /// <inheritdoc />
         public IIOComponentConnection Subscribe(Func<StreamPackage, Task> onStreamPackage)
         {
@@ -44,7 +44,12 @@ namespace QuixStreams.Telemetry
         }
 
         /// <inheritdoc />
-        public async Task Send(StreamPackage package)
+        public Task Send(StreamPackage package)
+        {
+            return Process(package);
+        }
+
+        private async Task Process(StreamPackage package)
         {
             // Intercepts
             if (this.interceptors.TryGetValue(package.Type, out var onInterceptHandler))
@@ -77,7 +82,6 @@ namespace QuixStreams.Telemetry
                 if (task != null) await task;
             }
         }
-
         /// <inheritdoc />
         public Task Send<TModel>(TModel model)
         {
