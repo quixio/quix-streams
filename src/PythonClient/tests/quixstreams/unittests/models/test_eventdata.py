@@ -1,6 +1,8 @@
 import unittest
 from datetime import datetime
 
+from src.quixstreams.helpers import TimeConverter
+
 from src.quixstreams import EventData, App
 
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
@@ -24,22 +26,22 @@ class EventDataTests(unittest.TestCase):
         # Act
         event_data = EventData("abcde", 123)
         # Assert
-        self.assertEqual(event_data.timestamp_nanoseconds, 123)
+        self.assertEqual(123, event_data.timestamp_nanoseconds)
 
     def test_constructor_with_time_as_nanoseconds_string(self):
         # Act
         event_data = EventData("abcde", "123")
         # Assert
-        self.assertEqual(event_data.timestamp_nanoseconds, 123)
+        self.assertEqual(123, event_data.timestamp_nanoseconds)
 
     def test_constructor_with_time_as_datetime_datetime(self):
         # Act
         event_data = EventData("abcde", datetime(2010, 1, 1))
         # Assert
-        self.assertEqual(event_data.timestamp_nanoseconds, 1262304000000000000)
+        self.assertEqual(1262304000000000000-TimeConverter.offset_from_utc, event_data.timestamp_nanoseconds)
 
     def test_constructor_with_time_as_datetime_string(self):
         # Act
         event_data = EventData("abcde", str(datetime(2010, 1, 1)))
         # Assert
-        self.assertEqual(event_data.timestamp_nanoseconds, 1262304000000000000)
+        self.assertEqual(1262304000000000000-TimeConverter.offset_from_utc, event_data.timestamp_nanoseconds)
