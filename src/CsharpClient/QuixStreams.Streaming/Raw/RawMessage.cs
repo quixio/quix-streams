@@ -9,15 +9,12 @@ namespace QuixStreams.Streaming.Raw
     /// </summary>
     public class RawMessage
     {
-        private static Lazy<ReadOnlyDictionary<string, string>> GetEmptyMetadata = 
-                new Lazy<ReadOnlyDictionary<string, string>>(() => 
-                    new ReadOnlyDictionary<string, string>(new Dictionary<string, string>())
-                );
+        private static ReadOnlyDictionary<string, string> GetEmptyMetadata = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>());
 
         internal RawMessage(
             byte[] key,
             byte[] value,
-            Lazy<ReadOnlyDictionary<string,string>> metadata)
+            ReadOnlyDictionary<string, string> metadata)
         {
             this.Key = key;
             this.Value = value;
@@ -54,14 +51,14 @@ namespace QuixStreams.Streaming.Raw
         /// </summary>
         public byte[] Value;
 
-        private Lazy<ReadOnlyDictionary<string, string>> getMetadata;
+        private ReadOnlyDictionary<string, string> getMetadata;
 
         /// <summary>
         /// The broker specific optional metadata
         /// </summary>
         public ReadOnlyDictionary<string, string> Metadata {
             get {
-                return this.getMetadata.Value;
+                return this.getMetadata;
             } 
         }
     }

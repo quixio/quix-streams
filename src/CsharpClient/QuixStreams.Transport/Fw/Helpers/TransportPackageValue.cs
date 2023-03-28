@@ -15,7 +15,7 @@ namespace QuixStreams.Transport.Fw.Helpers
         /// <param name="packageValue">The value to de/serialize </param>
         /// <param name="codecBundle">The codec details to use for de/serialization</param>
         /// <param name="metaData">The metadata that belongs to the value</param>
-        public TransportPackageValue(Lazy<byte[]> packageValue, CodecBundle codecBundle, MetaData metaData = null)
+        public TransportPackageValue(byte[] packageValue, CodecBundle codecBundle, MetaData metaData = null)
         {
             this.Value = packageValue;
             this.CodecBundle = codecBundle;
@@ -25,7 +25,7 @@ namespace QuixStreams.Transport.Fw.Helpers
         /// <summary>
         /// The value to de/serialize
         /// </summary>
-        public Lazy<byte[]> Value { get; }
+        public byte[] Value { get; }
 
         /// <summary>
         /// The codec details to use for de/serialization

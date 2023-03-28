@@ -48,7 +48,7 @@ namespace QuixStreams.Transport.Fw
             // So basically I always send the last one I enumerated, not the current one
             byte[] lastSegment = null;
             Package<byte[]> segmentPackage;
-            var value = bytePackage.Value.Value;
+            var value = bytePackage.Value;
             var segmentCount = 0;
             foreach (var segment in this.splitter.Split(value))
             {
@@ -56,8 +56,7 @@ namespace QuixStreams.Transport.Fw
                 
                 if (lastSegment != null)
                 {
-                    var segmentToReturn = lastSegment; // because lazy gets evaluated later, we need to save reference for this iteration's value
-                    segmentPackage = new Package<byte[]>(new Lazy<byte[]>(() => segmentToReturn), null, package.TransportContext);
+                    segmentPackage = new Package<byte[]>(lastSegment, null, package.TransportContext);
                     tasks.Add(this.OnNewPackage(segmentPackage));
                 }
 
@@ -82,7 +81,7 @@ namespace QuixStreams.Transport.Fw
 
             if (lastSegment == null) return Task.CompletedTask; // this is probably never a case, but better safe
 
-            segmentPackage = new Package<byte[]>(new Lazy<byte[]>(() => lastSegment), package.MetaData, package.TransportContext);
+            segmentPackage = new Package<byte[]>(lastSegment, package.MetaData, package.TransportContext);
             tasks.Add(this.OnNewPackage(segmentPackage));
 
             var taskSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);

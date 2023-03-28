@@ -53,8 +53,7 @@ namespace QuixStreams.Transport.Samples.Samples
                 var bytes = new byte[this.MessageSizeInBytes];
                 random.NextBytes(bytes);
                 var currentCounter = counter;
-                var value = new Lazy<byte[]>(bytes);
-                var msg = new Package<byte[]>(value, null);
+                var msg = new Package<byte[]>(bytes, null);
                 msg.SetKey(Encoding.UTF8.GetBytes($"CustomSize {currentCounter}"));
 
                 var sendTask = producer.Publish(msg, ct);

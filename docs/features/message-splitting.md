@@ -10,4 +10,4 @@ This feature gives you currently 255 times the broker message size limit, indepe
 
 !!! warning
 
-While this feature is undeniably useful, effort should be made to stay within your broker's limit to avoid complex commit limitations and increased memory footprint in the consumer. If you consistently have huge messages, should consider uploading to external storage and only sending a reference using the broker.
+    While this feature is undeniably useful, effort should be made to stay within your broker's limit to avoid complex commit limitations and increased memory footprint in the consumer. If you consistently have huge messages, should consider uploading to external storage and only sending a reference using the broker.

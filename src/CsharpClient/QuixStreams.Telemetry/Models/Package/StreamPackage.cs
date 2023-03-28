@@ -9,8 +9,6 @@ namespace QuixStreams.Telemetry.Models
     /// </summary>
     public class StreamPackage
     {
-        private object value = null;
-        private readonly Lazy<object> lazyValue;
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamPackage"/>
@@ -19,7 +17,7 @@ namespace QuixStreams.Telemetry.Models
         internal StreamPackage(Package transportPackage)
         {
             this.Type = transportPackage.Type;
-            this.lazyValue = transportPackage.Value;
+            this.Value = transportPackage.Value;
             this.TransportContext = transportPackage.TransportContext;
         }
 
@@ -31,7 +29,7 @@ namespace QuixStreams.Telemetry.Models
         public StreamPackage(Type type, object value)
         {
             this.Type = type;
-            this.value = value;
+            this.Value = value;
             this.TransportContext = new TransportContext();
         }
 
@@ -48,11 +46,7 @@ namespace QuixStreams.Telemetry.Models
         /// <summary>
         /// Content value of the package
         /// </summary>
-        public object Value
-        {
-            get => this.value ?? this.lazyValue?.Value;
-            set => this.value = value;
-        }
+        public object Value { get; set; }
 
         /// <summary>
         /// Serialize the package into Json

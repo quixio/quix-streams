@@ -173,7 +173,7 @@ qx.App.run()
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/client-library/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/client-library/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library/client-library-intro.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/client-library/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/client-library/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library-intro.html).
 
 ## Library features
 
@@ -377,7 +377,7 @@ The library also includes a number of other enhancements that are designed to si
 
 - <b>Horizontal scaling</b>: Quix Streams handles horizontal scaling using the streaming context feature. You can scale the processing services, from one replica to many and back to one, and the library ensures that the data load is always shared between your replicas reliably.<br>
 
-For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/client-library/client-library-intro.html).
+For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/client-library-intro.html).
 
 ### What's Next
 

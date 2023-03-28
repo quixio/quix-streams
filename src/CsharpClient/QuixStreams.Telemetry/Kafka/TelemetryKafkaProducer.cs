@@ -58,7 +58,7 @@ namespace QuixStreams.Telemetry.Kafka
             {
                 var transportPackage = new QuixStreams.Transport.IO.Package(
                     package.Type,
-                    new Lazy<object>(() => package.Value)
+                    package.Value
                 );
 
                 if (transportProducer == null)

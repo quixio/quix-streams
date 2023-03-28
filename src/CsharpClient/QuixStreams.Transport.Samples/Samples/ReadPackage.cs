@@ -39,7 +39,7 @@ namespace QuixStreams.Transport.Samples.Samples
             Interlocked.Increment(ref this.consumedCounter);
             var key = mPackage.GetKey();
             // keep in mind value is lazily evaluated, so this is a position where one can decide whether to use it
-            var value = mPackage.Value.Value;
+            var value = mPackage.Value;
             var packageMetaData = mPackage.MetaData;
             var timestamp = mPackage.MetaData.TryGetValue("DateTime", out var dts) ? (DateTime?) DateTime.Parse(dts) : null;
             return Task.CompletedTask;
