@@ -10,19 +10,15 @@ class DateTimeConverter:
     @staticmethod
     def datetime_to_python(hptr: ctypes.c_void_p) -> datetime.datetime:
         """
-        Converts dotnet pointer to DateTime and frees the pointer
+        Converts dotnet pointer to DateTime and frees the pointer.
 
-        Parameters
-        ----------
+        Args:
+            hptr: c_void_p
+                Handler Pointer to .Net type DateTime
 
-        hptr: c_void_p
-            Handler Pointer to .Net type DateTime
-
-        Returns
-        -------
-
-        datetime.datetime:
-            Python type datetime
+        Returns:
+            datetime.datetime:
+                Python type datetime
         """
         if hptr is None:
             return None
@@ -40,17 +36,13 @@ class DateTimeConverter:
     @staticmethod
     def datetime_to_dotnet(value: datetime.datetime) -> ctypes.c_void_p:
         """
-        Parameters
-        ----------
+        Args:
+            value: datetime.datetime
+                Python type datetime
 
-        value: datetime.datetime
-            Python type datetime
-
-        Returns
-        -------
-
-        ctypes.c_void_p:
-            Handler Pointer to .Net type DateTime
+        Returns:
+            ctypes.c_void_p:
+                Handler Pointer to .Net type DateTime
         """
         if value is None:
             return None
@@ -62,19 +54,15 @@ class DateTimeConverter:
     @staticmethod
     def timespan_to_python(uptr: ctypes.c_void_p) -> datetime.timedelta:
         """
-        Converts dotnet pointer to Timespan as binary and frees the pointer
+        Converts dotnet pointer to Timespan as binary and frees the pointer.
 
-        Parameters
-        ----------
+        Args:
+            uptr: c_void_p
+                Pointer to .Net type TimeSpan
 
-        uptr: c_void_p
-            Pointer to .Net type TimeSpan
-
-        Returns
-        -------
-
-        datetime.timedelta:
-            Python type timedelta
+        Returns:
+            datetime.timedelta:
+                Python type timedelta
         """
         if uptr is None:
             return None
@@ -92,17 +80,13 @@ class DateTimeConverter:
     @staticmethod
     def timedelta_to_dotnet(value: datetime.timedelta) -> ctypes.c_void_p:
         """
-        Parameters
-        ----------
+        Args:
+            value: datetime.timedelta
+                Python type timedelta
 
-        value: datetime.timedelta
-            Python type timedelta
-
-        Returns
-        -------
-
-        ctypes.c_void_p:
-            Pointer to unmanaged memory containing TimeSpan
+        Returns:
+            ctypes.c_void_p:
+                Pointer to unmanaged memory containing TimeSpan
         """
 
         if value is None:

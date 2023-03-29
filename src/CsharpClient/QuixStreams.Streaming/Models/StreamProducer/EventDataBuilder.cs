@@ -74,7 +74,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Writes the events
+        /// Publish the events
         /// </summary>
         public void Publish()
         {

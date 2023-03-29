@@ -11,7 +11,7 @@ using QuixStreams.Telemetry.Models.Utility;
 namespace QuixStreams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// Helper class for writing <see cref="EventDefinitions"/> and <see cref="EventData"/>
+    /// Helper class for producing <see cref="EventDefinitions"/> and <see cref="EventData"/>
     /// </summary>
     public class StreamEventsProducer : IDisposable
     {
@@ -31,7 +31,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Initializes a new instance of <see cref="StreamEventsProducer"/>
         /// </summary>
-        /// <param name="streamProducer">Stream writer owner</param>
+        /// <param name="streamProducer">The Stream producer which owns this stream events producer</param>
         internal StreamEventsProducer(IStreamProducerInternal streamProducer)
         {
             this.streamProducer = streamProducer;
@@ -44,7 +44,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Default Tags injected to all Event Values sent by the writer.
+        /// Default Tags injected to all Event Values sent by the producer.
         /// </summary>
         public Dictionary<string, string> DefaultTags { get; set; } = new Dictionary<string, string>();
 
@@ -70,7 +70,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Default Epoch used for Timestamp event values. Datetime added on top of all the Timestamps.
+        /// Default epoch used for Timestamp event values. Datetime added on top of all the Timestamps.
         /// </summary>
         public DateTime Epoch
         {
@@ -149,7 +149,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Adds new Event definition, to define properties like Name or Level, among others.
+        /// Add new Event definition to define properties like Name or Level, among others.
         /// </summary>
         /// <param name="eventId">Event Id. This must match the event id you use to Event values</param>
         /// <param name="name">Human friendly display name of the event</param>
@@ -171,7 +171,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Adds a new Location in the event groups hierarchy.
         /// </summary>
-        /// <param name="location"></param>
+        /// <param name="location">The group location</param>
         public EventDefinitionBuilder AddLocation(string location)
         {
             if (isDisposed)
@@ -234,9 +234,9 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Write event into the stream
+        /// Publish an event into the stream.
         /// </summary>
-        /// <param name="data">Event data to write</param>
+        /// <param name="data">Event to publish</param>
         public void Publish(EventData data)
         {
             if (isDisposed)
@@ -262,9 +262,9 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Write events into the stream
+        /// Publish events into the stream.
         /// </summary>
-        /// <param name="events">Events to write</param>
+        /// <param name="events">Events to publish</param>
         public void Publish(ICollection<EventData> events)
         {
             if (isDisposed)

@@ -6,7 +6,7 @@
     public class SecurityOptions
     {
         /// <summary>
-        /// The Sasl mechanism to use
+        /// The SASL mechanism to use
         /// </summary>
         public SaslMechanism? SaslMechanism { get; set; }
         
@@ -48,7 +48,7 @@
         /// <param name="sslCertificates">The folder/file that contains the certificate authority certificate(s) to validate the ssl connection. Example: "./certificates/ca.cert"</param>
         /// <param name="username">The username for the SASL authentication</param>
         /// <param name="password">The password for the SASL authentication</param>
-        /// <param name="saslMechanism">The SASL mechanism to use</param>
+        /// <param name="saslMechanism">The SASL mechanism to use. Defaulting to ScramSha256 for backward compatibility</param>
         public SecurityOptions(string sslCertificates, string username, string password, SaslMechanism saslMechanism = Configuration.SaslMechanism.ScramSha256)
         {
             this.SslCertificates = sslCertificates;

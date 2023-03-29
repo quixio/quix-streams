@@ -60,7 +60,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Add new Event definition, to define properties like Name or Level, among others.
         /// </summary>
-        /// <param name="eventId">Event Id. This must match the event id you use to Event values</param>
+        /// <param name="eventId">Event id. This must match the event id you use to Event values</param>
         /// <param name="name">Human friendly display name of the event</param>
         /// <param name="description">Description of the event</param>
         /// <returns>Event definition builder to define the event properties</returns>

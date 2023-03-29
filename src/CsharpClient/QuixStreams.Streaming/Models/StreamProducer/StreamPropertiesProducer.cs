@@ -9,8 +9,8 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// Properties and Metadata of the stream.
-    /// All the changes of these properties will be streamed and persisted to the platform.
+    /// Represents properties and metadata of the stream.
+    /// All changes to these properties are automatically populated to this class.
     /// </summary>
     public class StreamPropertiesProducer : IDisposable
     {
@@ -131,7 +131,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Date Time of recording of the stream. Commonly set to Datetime.UtcNow.
+        /// Date Time of stream recording. Commonly set to Datetime.UtcNow.
         /// </summary>
         public DateTime? TimeOfRecording
         {
@@ -145,10 +145,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 this.PushWrite();
             }
         }
-
-        /// <summary>
-        /// Metadata of the stream.
-        /// </summary>
+        
         private void CheckForHeartbeatFlush()
         {
             long curms = DateTimeOffset.Now.ToUnixTimeMilliseconds();

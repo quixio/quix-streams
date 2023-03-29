@@ -8,16 +8,13 @@ from ..native.Python.QuixStreamsStreaming.Models.StreamProducer.TimeseriesDataBu
 
 @nativedecorator
 class TimeseriesDataBuilder(object):
-    """
-        Builder for creating timeseries data packages for StreamPropertiesProducer
-    """
+    """Builder for managing TimeseriesDataTimestamp instances on TimeseriesBufferProducer."""
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of TimeseriesDataBuilder.
+        Initializes a new instance of TimeseriesDataBuilder.
 
-            Parameters:
-
+        Args:
             net_pointer: Pointer to an instance of a .net TimeseriesDataBuilder.
         """
 
@@ -32,10 +29,14 @@ class TimeseriesDataBuilder(object):
 
     def add_value(self, parameter_id: str, value: Union[str, float, int, bytes, bytearray]) -> 'TimeseriesDataBuilder':
         """
-        Adds new parameter value at the time the builder is created for
-        :param parameter_id: The id of the parameter to set the value for
-        :param value: the value as string or float
-        :return: The builder
+        Adds new parameter value at the time the builder is created for.
+
+        Args:
+            parameter_id: The id of the parameter to set the value for.
+            value: The value of type string, float, int, bytes, or bytearray.
+
+        Returns:
+            The builder.
         """
 
         val_type = type(value)
@@ -68,11 +69,16 @@ class TimeseriesDataBuilder(object):
 
     def add_tag(self, tag_id: str, value: str) -> 'TimeseriesDataBuilder':
         """
-        Adds tag value for the values. If
-        :param tag_id: The id of the tag
-        :param value: The value of the tag
-        :return: The builder
+        Adds a tag to the values.
+
+        Args:
+            tag_id: The id of the tag.
+            value: The value of the tag.
+
+        Returns:
+            The builder.
         """
+
         new = tsdbi(self._interop.AddTag(tag_id, value))
         if new != self._interop:
             self._interop.dispose_ptr__()
@@ -81,10 +87,13 @@ class TimeseriesDataBuilder(object):
 
     def add_tags(self, tags: Dict[str, str]) -> 'TimeseriesDataBuilder':
         """
-            Copies the tags from the specified dictionary. Conflicting tags will be overwritten
-            :param tags: The tags to add
+        Copies the tags from the specified dictionary. Conflicting tags will be overwritten.
 
-        :return: the builder
+        Args:
+            tags: The tags to add.
+
+        Returns:
+            The builder.
         """
 
         if tags is None:
@@ -95,9 +104,7 @@ class TimeseriesDataBuilder(object):
         return self
 
     def publish(self):
-        """
-        Publishes the values to the StreamTimeseriesProducer buffer. See StreamTimeseriesProducer buffer settings for more information when the values are sent to the broker
-        """
+        """Publish the values."""
 
         self._interop.Publish()
 

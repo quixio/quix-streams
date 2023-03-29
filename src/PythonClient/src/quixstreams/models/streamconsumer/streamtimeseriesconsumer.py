@@ -24,13 +24,12 @@ class StreamTimeseriesConsumer(object):
 
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamTimeseriesConsumer.
-            NOTE: Do not initialize this class manually, use StreamConsumer.parameters to access an instance of it
+        Initializes a new instance of StreamTimeseriesConsumer.
+        NOTE: Do not initialize this class manually. Use StreamConsumer.parameters to access an instance of it.
 
-            Parameters:
-
-            stream_consumer: The stream the buffer is created for
-            net_pointer (.net object): Pointer to an instance of a .net StreamTimeseriesConsumer
+        Parameters:
+            stream_consumer: The Stream consumer which owns this stream event consumer.
+            net_pointer (.net object): Pointer to an instance of a .net StreamTimeseriesConsumer.
         """
         if net_pointer is None:
             raise Exception("StreamTimeseriesConsumer is none")
@@ -40,18 +39,18 @@ class StreamTimeseriesConsumer(object):
 
         self._stream_consumer = stream_consumer
 
-        # define events and their ref holder
+        # Define events and their reference holders.
         self._on_data_received = None
-        self._on_data_received_ref = None  # keeping reference to avoid GC
+        self._on_data_received_ref = None  # Keeping reference to avoid GC.
 
         self._on_raw_received = None
-        self._on_raw_received_ref = None  # keeping reference to avoid GC
+        self._on_raw_received_ref = None  # Keeping reference to avoid GC.
 
         self._on_dataframe_received = None
-        self._on_dataframe_received_ref = None  # keeping reference to avoid GC
+        self._on_dataframe_received_ref = None  # Keeping reference to avoid GC.
 
         self._on_definitions_changed = None
-        self._on_definitions_changed_ref = None  # keeping reference to avoid GC
+        self._on_definitions_changed_ref = None  # Keeping reference to avoid GC.
 
     def _finalizerfunc(self):
         [buffer.dispose() for buffer in self._buffers]
@@ -64,21 +63,31 @@ class StreamTimeseriesConsumer(object):
     @property
     def on_data_received(self) -> Callable[['StreamConsumer', TimeseriesData], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
+        Gets the handler for when data is received (without buffering).
+        This handler does not use Buffers, and data will be raised as they arrive without any processing.
+
+        Returns:
+            Callable[['StreamConsumer', TimeseriesData]: The function that handles the data received.
+                The first parameter is the stream that receives the data, and the second is the data in TimeseriesData format.
         """
         return self._on_data_received
 
     @on_data_received.setter
     def on_data_received(self, value: Callable[['StreamConsumer', TimeseriesData], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesData format.
+        Sets the handler for when data is received (without buffering).
+        This handler does not use Buffers, and data will be raised as they arrive without any processing.
+
+        Args:
+            value: Callable[['StreamConsumer', TimeseriesData]: The function that handles the data received.
+                The first parameter is the stream that receives the data, and the second is the data in TimeseriesData format.
         """
         self._on_data_received = value
         if self._on_data_received_ref is None:
             self._on_data_received_ref = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
 
     def _on_data_received_wrapper(self, stream_hptr, args_hptr):
-        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have.
         try:
             with (args := TimeseriesDataReadEventArgs(args_hptr)):
                 self._on_data_received(self._stream_consumer, TimeseriesData(args.get_Data()))
@@ -97,21 +106,31 @@ class StreamTimeseriesConsumer(object):
     @property
     def on_raw_received(self) -> Callable[['StreamConsumer', TimeseriesDataRaw], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the data is received for, second is the data in TimeseriesDataRaw format.
+        Gets the handler for when data is received (without buffering) in raw transport format.
+        This handler does not use Buffers, and data will be raised as they arrive without any processing.
+
+        Returns:
+            Callable[['StreamConsumer', TimeseriesDataRaw]: The function that handles the data received.
+                The first parameter is the stream that receives the data, and the second is the data in TimeseriesDataRaw format.
         """
         return self._on_raw_received
 
     @on_raw_received.setter
     def on_raw_received(self, value: Callable[['StreamConsumer', TimeseriesDataRaw], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
+        Sets the handler for when data is received (without buffering) in raw transport format.
+        This handler does not use Buffers, and data will be raised as they arrive without any processing.
+
+        Args:
+            value: Callable[['StreamConsumer', TimeseriesDataRaw]: The function that handles the data received.
+                The first parameter is the stream that receives the data, and the second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_received = value
         if self._on_raw_received_ref is None:
             self._on_raw_received_ref = self._interop.add_OnRawReceived(self._on_raw_received_wrapper)
 
     def _on_raw_received_wrapper(self, stream_hptr, args_hptr):
-        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have.
         try:
             with (args := TimeseriesDataRawReadEventArgs(args_hptr)):
                 self._on_raw_received(self._stream_consumer, TimeseriesDataRaw(args.get_Data()))
@@ -130,14 +149,24 @@ class StreamTimeseriesConsumer(object):
     @property
     def on_dataframe_received(self) -> Callable[['StreamConsumer', pandas.DataFrame], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in pandas DataFrame format.
+        Gets the handler for when data is received (without buffering) in pandas DataFrame format.
+        This handler does not use Buffers, and data will be raised as they arrive without any processing.
+
+        Returns:
+            Callable[['StreamConsumer', pandas.DataFrame]: The function that handles the data received.
+                The first parameter is the stream that receives the data, and the second is the data in pandas DataFrame format.
         """
         return self._on_dataframe_received
 
     @on_dataframe_received.setter
     def on_dataframe_received(self, value: Callable[['StreamConsumer', pandas.DataFrame], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for, second is the data in pandas DataFrame format.
+        Sets the handler for when data is received (without buffering) in pandas DataFrame format.
+        This handler does not use Buffers, and data will be raised as they arrive without any processing.
+
+        Args:
+            value: Callable[['StreamConsumer', pandas.DataFrame]: The function that handles the data received.
+                The first parameter is the stream that receives the data, and the second is the data in pandas DataFrame format.
         """
         self._on_dataframe_received = value
         if self._on_dataframe_received_ref is None:
@@ -163,24 +192,34 @@ class StreamTimeseriesConsumer(object):
     # endregion on_dataframe_receive
 
     # region on_definitions_changed
+
     @property
     def on_definitions_changed(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
+        Gets the handler for when the parameter definitions have changed for the stream.
+
+        Returns:
+            Callable[['StreamConsumer']: The function that handles the parameter definitions change.
+                The first parameter is the stream for which the parameter definitions changed.
         """
         return self._on_definitions_changed
 
     @on_definitions_changed.setter
     def on_definitions_changed(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when the stream definitions change. First parameter is the stream the parameter definitions changed for.
+        Sets the handler for when the parameter definitions have changed for the stream.
+
+        Args:
+            value: Callable[['StreamConsumer']: The function that handles the parameter definitions change.
+                The first parameter is the stream for which the parameter definitions changed.
         """
         self._on_definitions_changed = value
         if self._on_definitions_changed_ref is None:
-            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(self._on_definitions_changed_wrapper)
+            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(
+                self._on_definitions_changed_wrapper)
 
     def _on_definitions_changed_wrapper(self, stream_hptr, args_hptr):
-        # To avoid unnecessary overhead and complication, we're using the stream instance we already have
+        # To avoid unnecessary overhead and complication, we're using the stream instance we already have.
         try:
             with (args := ParameterDefinitionsChangedEventArgs(args_hptr)):
                 self._on_definitions_changed(self._stream_consumer)
@@ -197,7 +236,7 @@ class StreamTimeseriesConsumer(object):
 
     @property
     def definitions(self) -> List[ParameterDefinition]:
-        """ Gets the latest set of parameter definitions """
+        """Gets the latest set of parameter definitions."""
 
         try:
             defs_hptr = self._interop.get_Definitions()
@@ -208,14 +247,18 @@ class StreamTimeseriesConsumer(object):
         finally:
             InteropUtils.free_hptr(defs_hptr)
 
-    def create_buffer(self, *parameter_filter: str, buffer_configuration: TimeseriesBufferConfiguration = None) -> TimeseriesBufferConsumer:
+    def create_buffer(self, *parameter_filter: str,
+                      buffer_configuration: TimeseriesBufferConfiguration = None) -> TimeseriesBufferConsumer:
         """
-        Creates a new buffer for reading data according to the provided parameter_filter and buffer_configuration
-        :param parameter_filter: 0 or more parameter identifier to filter as a whitelist. If provided, only these
-            parameters will be available through this buffer
-        :param buffer_configuration: an optional TimeseriesBufferConfiguration.
+        Creates a new buffer for reading data according to the provided parameter_filter and buffer_configuration.
 
-        :returns: a TimeseriesBufferConsumer which will raise new data read via .on_data_released event
+        Args:
+            parameter_filter: Zero or more parameter identifiers to filter as a whitelist. If provided, only these
+                              parameters will be available through this buffer.
+            buffer_configuration: An optional TimeseriesBufferConfiguration.
+
+        Returns:
+            TimeseriesBufferConsumer: An consumer that will raise new data read via the on_data_received event.
         """
 
         actual_filters_uptr = None
@@ -240,4 +283,10 @@ class StreamTimeseriesConsumer(object):
         return buffer
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the .NET pointer for the StreamTimeseriesConsumer instance.
+
+        Returns:
+            ctypes.c_void_p: .NET pointer for the StreamTimeseriesConsumer instance.
+        """
         return self._interop.get_interop_ptr__()

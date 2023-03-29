@@ -101,7 +101,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Add new parameter definition to the <see cref="StreamPropertiesProducer"/>. Configure it with the builder methods.
+        /// Add new parameter definition to the <see cref="StreamTimeseriesProducer"/>. Configure it with the builder methods.
         /// </summary>
         /// <param name="parameterId">The id of the parameter. Must match the parameter id used to send data.</param>
         /// <param name="name">The human friendly display name of the parameter</param>

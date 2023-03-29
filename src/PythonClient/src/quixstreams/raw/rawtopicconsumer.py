@@ -13,7 +13,7 @@ class RawTopicConsumer(object):
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-        Initializes a new instance of StreamConsumer.
+        Initializes a new instance of RawTopicConsumer.
         NOTE: Do not initialize this class manually, use StreamingClient.on_stream_received to read streams
 
         :param net_pointer: Pointer to an instance of a .net RawTopicConsumer
