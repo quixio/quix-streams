@@ -2,7 +2,7 @@
 
 In the following documentation you will learn how to use Quix Streams to perform two types of data processing:
 
-1. **Stateless processing** - Here one message is processed at a time, and the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically published to the output stream. 
+1. **Stateless processing** - Here one message is processed at a time, and the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate new information, which is then published to the output stream. 
 2. **Stateful processing** - This is where you need to keep track of data between messages, such as keeping a running total of a variable. This is more complicated as state needs to be preserved between messages, and potentially between replicas, where multiple replicas are deployed. In addition, state may need to be preserved in the event of the failure of a deployment - Quix Streams supports checkpointing as a way to enable this.
 
 The following sections will explore these methods of data processing in more detail.
