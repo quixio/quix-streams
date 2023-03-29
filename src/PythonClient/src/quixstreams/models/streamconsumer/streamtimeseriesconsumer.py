@@ -21,11 +21,14 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesDataR
 
 @nativedecorator
 class StreamTimeseriesConsumer(object):
+    """
+    Consumer for streams, which raises TimeseriesData and ParameterDefinitions related messages
+    """
 
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """
         Initializes a new instance of StreamTimeseriesConsumer.
-        NOTE: Do not initialize this class manually. Use StreamConsumer.parameters to access an instance of it.
+        NOTE: Do not initialize this class manually. Use StreamConsumer.timeseries to access an instance of it.
 
         Parameters:
             stream_consumer: The Stream consumer which owns this stream event consumer.

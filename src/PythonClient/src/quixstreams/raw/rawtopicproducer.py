@@ -8,22 +8,25 @@ from ..native.Python.QuixStreamsStreaming.Raw.RawTopicProducer import RawTopicPr
 
 @nativedecorator
 class RawTopicProducer(object):
+    """
+    Class to produce raw messages into a Topic (capable to write non-quixstreams messages)
+    """
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of RawTopicProducer
+        Initializes a new instance of the RawTopicProducer class.
 
-            Parameters:
-
-            net_pointer (c_void_p): Pointer to an instance of a .net RawTopicProducer
+        Args:
+            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET RawTopicProducer object.
         """
         self._interop = rtpi(net_pointer)
 
     def publish(self, message: Union[RawMessage, bytes, bytearray]):
         """
-        Publish the packet to the output topic.
+        Publishes the given message to the associated output topic.
 
-        params:
-        (message): either bytes, bytearray or instance of RawMessage
+        Args:
+            message (Union[RawMessage, bytes, bytearray]): The message to be published, which can be either
+                a RawMessage instance, bytes, or a bytearray.
         """
         if not isinstance(message, RawMessage):
             message = RawMessage(message)

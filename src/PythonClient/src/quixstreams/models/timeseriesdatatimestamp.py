@@ -14,16 +14,15 @@ from ..native.Python.QuixStreamsStreaming.Models.TimeseriesDataTimestamp import 
 @nativedecorator
 class TimeseriesDataTimestamp:
     """
-    Represents a single point in time with parameter values and tags attached to that time
+    Represents a single point in time with parameter values and tags attached to that time.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of TimeseriesDataTimestamp.
+        Initializes a new instance of TimeseriesDataTimestamp.
 
-            Parameters:
-
-            net_pointer: Pointer to an instance of a .net TimeseriesDataTimestamp.
+        Args:
+            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net TimeseriesDataTimestamp.
         """
         if net_pointer is None:
             raise Exception("TimeseriesDataTimestamp constructor should not be invoked without a .net pointer")
@@ -64,9 +63,10 @@ class TimeseriesDataTimestamp:
     @property
     def parameters(self) -> Dict[str, ParameterValue]:
         """
-        Parameter values for the timestamp. When a key is not found, returns empty ParameterValue
-        The dictionary key is the parameter id
-        The dictionary value is the value (ParameterValue)
+        Gets the parameter values for the timestamp as a dictionary. If a key is not found, returns an empty ParameterValue.
+
+        Returns:
+            Dict[str, ParameterValue]: A dictionary with parameter id as key and ParameterValue as value.
         """
 
         if self._parameters is None:
@@ -87,9 +87,10 @@ class TimeseriesDataTimestamp:
     @property
     def tags(self) -> Dict[str, str]:
         """
-        Tags for the timestamp.
-        The dictionary key is the tag id
-        The dictionary value is the tag value
+        Gets the tags for the timestamp as a dictionary.
+
+        Returns:
+            Dict[str, str]: A dictionary with tag id as key and tag value as value.
         """
 
         if self._tags is None:
@@ -107,33 +108,56 @@ class TimeseriesDataTimestamp:
 
     @property
     def timestamp_nanoseconds(self) -> int:
-        """Gets timestamp in nanoseconds"""
+        """
+        Gets the timestamp in nanoseconds.
+
+        Returns:
+            int: The timestamp in nanoseconds.
+        """
 
         return self._interop.get_TimestampNanoseconds()
 
     @property
     def timestamp_milliseconds(self) -> int:
-        """Gets timestamp in milliseconds"""
+        """
+        Gets the timestamp in milliseconds.
+
+        Returns:
+            int: The timestamp in milliseconds.
+        """
 
         return self._interop.get_TimestampMilliseconds()
 
     @property
     def timestamp(self) -> datetime:
-        """Gets the timestamp in datetime format"""
+        """
+        Gets the timestamp in datetime format.
+
+        Returns:
+            datetime: The timestamp in datetime format.
+        """
         return dtc.datetime_to_python(self._interop.get_Timestamp())
 
     @property
     def timestamp_as_time_span(self) -> timedelta:
-        """Gets the timestamp in timespan format"""
+        """
+        Gets the timestamp in timespan format.
+
+        Returns:
+            timedelta: The timestamp in timespan format.
+        """
         return dtc.timespan_to_python(self._interop.get_TimestampAsTimeSpan())
 
     def add_value(self, parameter_id: str, value: Union[float, str, int, bytearray, bytes]) -> 'TimeseriesDataTimestamp':
         """
-            Adds a new value for the parameter
-            :param parameter_id: The parameter to add the value for
-            :param value: the value to add. Can be float or string
+        Adds a new value for the specified parameter.
 
-        :return: TimeseriesDataTimestamp
+        Args:
+            parameter_id (str): The parameter id to add the value for.
+            value (Union[float, str, int, bytearray, bytes]): The value to add. Can be float, string, int, bytearray, or bytes.
+
+        Returns:
+            TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
         """
 
         if type(value) is int:
@@ -164,11 +188,15 @@ class TimeseriesDataTimestamp:
 
     def remove_value(self, parameter_id: str) -> 'TimeseriesDataTimestamp':
         """
-            Removes the value for the parameter
-            :param parameter_id: The parameter to remove the value for
+        Removes the value for the specified parameter.
 
-        :return: TimeseriesDataTimestamp
+        Args:
+            parameter_id (str): The parameter id to remove the value for.
+
+        Returns:
+            TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
         """
+
         new = tsdti(self._interop.RemoveValue(parameter_id))
         if new != self._interop:
             self._interop.dispose_ptr__()
@@ -179,11 +207,14 @@ class TimeseriesDataTimestamp:
 
     def add_tag(self, tag_id: str, tag_value: str) -> 'TimeseriesDataTimestamp':
         """
-            Adds a tag to the values
-            :param tag_id: The id of the tag to the set the value for
-            :param tag_value: the value to set
+        Adds a tag to the timestamp.
 
-        :return: TimeseriesDataTimestamp
+        Args:
+            tag_id (str): The id of the tag to add.
+            tag_value (str): The value of the tag to add.
+
+        Returns:
+            TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
         """
         tags = self.tags  # force evaluation of the local cache
         tags[tag_id] = tag_value
@@ -195,11 +226,13 @@ class TimeseriesDataTimestamp:
 
     def remove_tag(self, tag_id: str) -> 'TimeseriesDataTimestamp':
         """
-            Removes a tag from the values
-            :param tag_id: The id of the tag to remove
+        Removes a tag from the timestamp.
+        Args:
+            tag_id (str): The id of the tag to remove.
 
-        :return: TimeseriesDataTimestamp
-        """
+        Returns:
+            TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
+    """
         tags = self.tags  # force evaluation of the local cache
         tags.pop(tag_id)
         new = tsdti(self._interop.RemoveTag(tag_id))
@@ -210,10 +243,13 @@ class TimeseriesDataTimestamp:
 
     def add_tags(self, tags: Dict[str, str]) -> 'TimeseriesDataTimestamp':
         """
-            Copies the tags from the specified dictionary. Conflicting tags will be overwritten
-            :param tags: The tags to add
+        Copies the tags from the specified dictionary. Conflicting tags will be overwritten.
 
-        :return: TimeseriesDataTimestamp
+        Args:
+            tags (Dict[str, str]): The dictionary of tags to add, with tag id as key and tag value as value.
+
+        Returns:
+            TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
         """
 
         if tags is None:
@@ -225,4 +261,10 @@ class TimeseriesDataTimestamp:
         return self
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the .net pointer of the TimeseriesDataTimestamp instance.
+
+        Returns:
+            ctypes.c_void_p: The .net pointer of the TimeseriesDataTimestamp instance.
+        """
         return self._interop.get_interop_ptr__()

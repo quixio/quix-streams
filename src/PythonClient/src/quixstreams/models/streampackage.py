@@ -11,17 +11,18 @@ from ..native.Python.SystemPrivateCoreLib.System.Type import Type as NetType
 @nativedecorator
 class StreamPackage(object):
     """
-        Default model implementation for non-typed message packages of the Process layer. It holds a value and its type.
+        Default model implementation for non-typed message packages of the Telemetry layer. It holds a value and its type.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamPackage.
+        Initializes a new instance of StreamPackage.
 
-            NOTE: Do not initialize this class manually. Will be initialized by StreamConsumer.on_package_received
-            Parameters:
+        Note:
+            Do not initialize this class manually. Will be initialized by StreamConsumer.on_package_received.
 
-            net_pointer: Pointer to an instance of a .net StreamPackage.
+        Args:
+            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net StreamPackage.
         """
 
         self._interop = spi(net_pointer)
@@ -55,15 +56,24 @@ class StreamPackage(object):
 
     @property
     def transport_context(self) -> Dict[str, str]:
-        """Get the additional metadata for the stream"""
+        """Context holder for package when transporting through the pipeline."""
         return {}
         raise NotImplemented("TODO")
 
     def to_json(self) -> str:
         """
-            Serialize the package into Json
+        Serialize the package into JSON.
+
+        Returns:
+            str: The serialized JSON string of the package.
         """
         return self._interop.ToJson()
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the associated .net object pointer.
+
+        Returns:
+            ctypes.c_void_p: The .net object pointer.
+        """
         return self._interop.get_interop_ptr__()

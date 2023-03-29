@@ -19,14 +19,15 @@ from ..native.Python.QuixStreamsStreaming.Models.TimeseriesData import Timeserie
 @nativedecorator
 class TimeseriesData(object):
     """
-    Describes timeseries data for multiple timestamps
+    Describes timeseries data for multiple timestamps.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
-            Initializes a new instance of TimeseriesData.
+        Initializes a new instance of TimeseriesData.
 
-            :param net_pointer: Pointer to an instance of a .net TimeseriesData.
+        Args:
+            net_pointer (ctypes.c_void_p, optional): Pointer to an instance of a .net TimeseriesData.
         """
 
         if net_pointer is None:
@@ -93,23 +94,29 @@ class TimeseriesData(object):
 
     def clone(self, parameter_filter: [str] = None):
         """
-            Initializes a new instance of timeseries data with parameters matching the filter if one is provided
+        Initializes a new instance of timeseries data with parameters matching the filter if one is provided.
 
-            Parameters:
+        Args:
+            parameter_filter (list[str], optional): The parameter filter. If one is provided, only parameters
+                                                   present in the list will be cloned.
 
-            :param parameter_filter: The parameter filter. If one is provided, only parameters present in the list will be cloned
+        Returns:
+            TimeseriesData: A new instance of TimeseriesData with filtered parameters.
         """
         new_net_instance = tsdi.Constructor2(self.get_net_pointer(), parameter_filter)
         return TimeseriesData(new_net_instance)
 
     def add_timestamp(self, time: Union[datetime, timedelta]) -> TimeseriesDataTimestamp:
         """
-        Start adding a new set parameters and their tags at the specified time
-        :param time: The time to use for adding new event values.
-                     | datetime: The datetime to use for adding new event values. Epoch will never be added to this
-                     | timedelta: The time since the default epoch to add the event values at
+        Start adding a new set of parameters and their tags at the specified time.
 
-        :return: TimeseriesDataTimestamp
+        Args:
+            time (Union[datetime, timedelta]): The time to use for adding new event values.
+                                               | datetime: The datetime to use for adding new event values. Epoch will never be added to this
+                                               | timedelta: The time since the default epoch to add the event values at
+
+        Returns:
+            TimeseriesDataTimestamp: A new TimeseriesDataTimestamp instance.
         """
         if time is None:
             raise ValueError("'time' must not be None")
@@ -126,25 +133,33 @@ class TimeseriesData(object):
 
     def add_timestamp_milliseconds(self, milliseconds: int) -> TimeseriesDataTimestamp:
         """
-        Start adding a new set parameters and their tags at the specified time
-        :param milliseconds: The time in milliseconds since the default epoch to add the event values at
-        :return: TimeseriesDataTimestamp
+        Start adding a new set of parameters and their tags at the specified time.
+
+        Args:
+            milliseconds (int): The time in milliseconds since the default epoch to add the event values at.
+
+        Returns:
+            TimeseriesDataTimestamp: A new TimeseriesDataTimestamp instance.
         """
 
         return self._add_to_timestamps(TimeseriesDataTimestamp(self._interop.AddTimestampMilliseconds(milliseconds)))
 
     def add_timestamp_nanoseconds(self, nanoseconds: int) -> TimeseriesDataTimestamp:
         """
-        Start adding a new set parameters and their tags at the specified time
-        :param nanoseconds: The time in nanoseconds since the default epoch to add the event values at
-        :return: TimeseriesDataTimestamp
+        Start adding a new set of parameters and their tags at the specified time.
+
+        Args:
+            nanoseconds (int): The time in nanoseconds since the default epoch to add the event values at.
+
+        Returns:
+            TimeseriesDataTimestamp: A new TimeseriesDataTimestamp instance.
         """
 
         return self._add_to_timestamps(TimeseriesDataTimestamp(self._interop.AddTimestampNanoseconds(nanoseconds)))
 
     def _add_to_timestamps(self, pdts):
         """
-        Additional timestamps to keep track of if the timestamps were already initialized
+        Additional timestamps to keep track of if the timestamps were already initialized.
         """
 
         self.timestamps.append(pdts)
@@ -153,7 +168,10 @@ class TimeseriesData(object):
     @property
     def timestamps(self) -> List[TimeseriesDataTimestamp]:
         """
-            Gets the data as rows of TimeseriesDataTimestamp
+        Gets the data as rows of TimeseriesDataTimestamp.
+
+        Returns:
+            List[TimeseriesDataTimestamp]: A list of TimeseriesDataTimestamp instances.
         """
 
         return self._timestamps
@@ -175,7 +193,10 @@ class TimeseriesData(object):
     @timestamps.setter
     def timestamps(self, timestamp_list: List[TimeseriesDataTimestamp]) -> None:
         """
-            Sets the data as rows of TimeseriesDataTimestamp
+        Sets the data as rows of TimeseriesDataTimestamp.
+
+        Args:
+            timestamp_list (List[TimeseriesDataTimestamp]): A list of TimeseriesDataTimestamp instances to set.
         """
 
         raise NotImplemented("To be implemented in upcoming versions")
@@ -188,9 +209,10 @@ class TimeseriesData(object):
 
     def to_dataframe(self) -> pd.DataFrame:
         """
-        Converts TimeseriesData to pandas DataFrame
+        Converts TimeseriesData to pandas DataFrame.
 
-        :return: Converted pandas DataFrame
+        Returns:
+            pd.DataFrame: Converted pandas DataFrame.
         """
 
         def _build_headers(pdts):
@@ -265,11 +287,14 @@ class TimeseriesData(object):
     @staticmethod
     def from_panda_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesData':
         """
-        Converts pandas DataFrame to TimeseriesData
+        Converts pandas DataFrame to TimeseriesData.
 
-        :param data_frame: The pandas DataFrame to convert to TimeseriesData
-        :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
-        :return: Converted TimeseriesData
+        Args:
+            data_frame (pd.DataFrame): The pandas DataFrame to convert to TimeseriesData.
+            epoch (int, optional): The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
+
+        Returns:
+            TimeseriesData: Converted TimeseriesData instance.
         """
 
         if data_frame is None:
@@ -361,4 +386,10 @@ class TimeseriesData(object):
         return parameter_data
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the .net pointer of the current instance.
+
+        Returns:
+            ctypes.c_void_p: The .net pointer of the current instance
+        """
         return self._interop.get_interop_ptr__()

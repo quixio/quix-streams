@@ -14,6 +14,9 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamEventsCon
 
 @nativedecorator
 class StreamEventsConsumer(object):
+    """
+    Consumer for streams, which raises EventData and EventDefinitions related messages
+    """
 
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """

@@ -7,27 +7,19 @@ from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as a
 from ..native.Python.QuixStreamsState.StateValue import StateValue as svi
 from ..native.Python.QuixStreamsState.StateValue_StateType import StateType as StateTypeInterop
 
-"""
-Boxed value wrapping the supported types
-"""
-
 
 class StateValue(object):
+    """
+    A wrapper class for values that can be stored inside the storage.
+    """
 
     def __init__(self, value: any):
         """
-        Initialize the boxed value inside the store
+        Initializes the wrapped value inside the store.
 
-        Parameter
-            value one of the types:
-                StateValue
-                str
-                int
-                float
-                bool
-                bytes
-                bytearray
-                object (via pickle)
+        Args:
+            value (any): The value to be wrapped, which can be one of the following types:
+                StateValue, str, int, float, bool, bytes, bytearray, or object (via pickle).
         """
 
         self._interop = None
@@ -89,16 +81,28 @@ class StateValue(object):
     @property
     def type(self):
         """
-            Get the state type
+        Retrieves the type of the wrapped value.
+
+        Returns:
+            StateType: The type of the wrapped value.
         """
         return self._type
 
     @property
     def value(self):
         """
-            Get wrapped value
+        Retrieves the wrapped value.
+
+        Returns:
+            any: The wrapped value.
         """
         return self._value
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Retrieves the .NET pointer of the wrapped value.
+
+        Returns:
+            ctypes.c_void_p: The .NET pointer of the wrapped value.
+        """
         return self._interop.get_interop_ptr__()

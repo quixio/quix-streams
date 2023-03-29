@@ -23,10 +23,12 @@ class TimeseriesDataRaw(object):
 
     def __init__(self, net_pointer: ctypes.c_void_p = None):
         """
-            Initializes a new instance of TimeseriesDataRaw.
+        Initializes a new instance of TimeseriesDataRaw.
 
-            :param net_pointer: Pointer to an instance of a .net TimeseriesDataRaw.
+        Args:
+            net_pointer (ctypes.c_void_p, optional): Pointer to an instance of a .net TimeseriesDataRaw. Defaults to None.
         """
+
 
         if net_pointer is None:
             self._interop = tsdri(tsdri.Constructor())
@@ -82,10 +84,12 @@ class TimeseriesDataRaw(object):
 
     def to_dataframe(self) -> pd.DataFrame:
         """
-        Converts TimeseriesDataRaw to pandas DataFrame
+        Converts TimeseriesDataRaw to pandas DataFrame.
 
-        :return: Converted pandas DataFrame
+        Returns:
+            pd.DataFrame: Converted pandas DataFrame.
         """
+
 
         if len(self.timestamps) == 0:
             return pd.DataFrame()
@@ -133,11 +137,14 @@ class TimeseriesDataRaw(object):
     @staticmethod
     def from_dataframe(data_frame: pd.DataFrame, epoch: int = 0) -> 'TimeseriesDataRaw':
         """
-        Converts from pandas DataFrame to TimeseriesDataRaw
+        Converts from pandas DataFrame to TimeseriesDataRaw.
 
-        :param data_frame: The pandas DataFrame to convert to TimeseriesData
-        :param epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0
-        :return: Converted TimeseriesData
+        Args:
+            data_frame (pd.DataFrame): The pandas DataFrame to convert to TimeseriesData.
+            epoch (int, optional): The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
+
+        Returns:
+            TimeseriesDataRaw: Converted TimeseriesData.
         """
 
         if data_frame is None:
@@ -277,16 +284,16 @@ class TimeseriesDataRaw(object):
             tag_values: Dict[str, List[str]]
     ):
         """
-            Sets the values of the timeseries data from the provided dictionaries
+        Sets the values of the timeseries data from the provided dictionaries.
+        Dictionary values are matched by index to the provided timestamps.
 
-            Dictionary values are matched by index to the provided timestamps
-
-            :param epoch: The time from which all timestamps are measured from
-            :param timestamps: The timestamps of values in nanoseconds since epoch as an array
-            :param numeric_values: the numeric values where the dictionary key is the parameter name and the value is the array of values
-            :param string_values: the string values where the dictionary key is the parameter name and the value is the array of values
-            :param binary_values: the binary values where the dictionary key is the parameter name and the value is the array of values
-            :param tag_values: the tag values where the dictionary key is the parameter name and the value is the array of values
+        Args:
+            epoch (int): The time from which all timestamps are measured from.
+            timestamps (List[int]): The timestamps of values in nanoseconds since epoch as an array.
+            numeric_values (Dict[str, List[float]]): The numeric values where the dictionary key is the parameter name and the value is the array of values.
+            string_values (Dict[str, List[str]]): The string values where the dictionary key is the parameter name and the value is the array of values.
+            binary_values (Dict[str, List[bytes]]): The binary values where the dictionary key is the parameter name and the value is the array of values.
+            tag_values (Dict[str, List[str]]): The tag values where the dictionary key is the parameter name and the value is the array of values.
         """
 
         # set epoch
@@ -320,8 +327,10 @@ class TimeseriesDataRaw(object):
     @property
     def epoch(self) -> int:
         """
-            The unix epoch from, which all other timestamps in this model are measured from in nanoseconds.
-            0 = UNIX epoch (01/01/1970)
+        The Unix epoch from which all other timestamps in this model are measured, in nanoseconds.
+
+        Returns:
+            int: The Unix epoch (01/01/1970) in nanoseconds.
         """
 
         return self._interop.get_Epoch()
@@ -329,8 +338,11 @@ class TimeseriesDataRaw(object):
     @property
     def timestamps(self) -> [int]:
         """
-            The timestamps of values in nanoseconds since epoch.
-            Timestamps are matched by index to numeric_values, string_values, binary_values and tag_values
+        The timestamps of values in nanoseconds since the epoch.
+        Timestamps are matched by index to numeric_values, string_values, binary_values, and tag_values.
+
+        Returns:
+            List[int]: A list of timestamps in nanoseconds since the epoch.
         """
 
         # Convert time values
@@ -343,9 +355,12 @@ class TimeseriesDataRaw(object):
     @property
     def numeric_values(self) -> Dict[str, List[Optional[float]]]:
         """
-            The numeric values for parameters.
-            The key is the parameter Id the values belong to
-            The value is the numerical values of the parameter. Values are matched by index to timestamps.
+        The numeric values for parameters.
+        The key is the parameter ID the values belong to. The value is the numerical values of the parameter.
+        Values are matched by index to timestamps.
+
+        Returns:
+            Dict[str, List[Optional[float]]]: A dictionary mapping parameter IDs to lists of numerical values.
         """
 
         # Convert numeric values
@@ -358,9 +373,12 @@ class TimeseriesDataRaw(object):
     @property
     def string_values(self) -> Dict[str, List[str]]:
         """
-            The string values for parameters.
-            The key is the parameter Id the values belong to
-            The value is the string values of the parameter. Values are matched by index to timestamps.
+        The string values for parameters.
+        The key is the parameter ID the values belong to. The value is the string values of the parameter.
+        Values are matched by index to timestamps.
+
+        Returns:
+            Dict[str, List[str]]: A dictionary mapping parameter IDs to lists of string values
         """
 
         # Convert string values
@@ -373,9 +391,12 @@ class TimeseriesDataRaw(object):
     @property
     def binary_values(self) -> Dict[str, List[bytes]]:
         """
-            The binary values for parameters.
-            The key is the parameter Id the values belong to
-            The value is the binary values of the parameter. Values are matched by index to timestamps
+        The binary values for parameters.
+        The key is the parameter ID the values belong to. The value is the string values of the parameter.
+        Values are matched by index to timestamps.
+
+        Returns:
+            Dict[str, List[bytes]]: A dictionary mapping parameter IDs to lists of bytes values
         """
 
         # Convert binary values
@@ -388,9 +409,12 @@ class TimeseriesDataRaw(object):
     @property
     def tag_values(self) -> Dict[str, List[str]]:
         """
-            The tag values for parameters.
-            The key is the parameter Id the values belong to
-            The value is the tag values of the parameter. Values are matched by index to timestamps
+        The tag values for parameters.
+        The key is the parameter ID the values belong to. The value is the tag values of the parameter.
+        Values are matched by index to timestamps.
+
+        Returns:
+            Dict[str, List[str]]: A dictionary mapping parameter IDs to lists of string values
         """
 
         # Convert tag values
@@ -401,6 +425,9 @@ class TimeseriesDataRaw(object):
         return self._tag_values
 
     def convert_to_timeseriesdata(self) -> TimeseriesData:
+        """
+        Converts TimeseriesDataRaw to TimeseriesData
+        """
         ptr = tsdi.Constructor2(self.get_net_pointer())
         return TimeseriesData(ptr)
 

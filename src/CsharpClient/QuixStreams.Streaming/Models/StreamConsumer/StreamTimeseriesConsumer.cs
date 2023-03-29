@@ -6,7 +6,7 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models.StreamConsumer
 {
     /// <summary>
-    /// Helper class for reader <see cref="ParameterDefinitions"/> and <see cref="TimeseriesData"/>
+    /// Consumer for streams, which raises <see cref="TimeseriesData"/> and <see cref="ParameterDefinitions"/> related messages
     /// </summary>
     public class StreamTimeseriesConsumer : IDisposable
     {

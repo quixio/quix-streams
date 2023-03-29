@@ -6,7 +6,7 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models.StreamConsumer
 {
     /// <summary>
-    /// Helper class for read <see cref="EventDefinitions"/> and <see cref="EventData"/>
+    /// Consumer for streams, which raises <see cref="EventData"/> and <see cref="EventDefinitions"/> related messages
     /// </summary>
     public class StreamEventsConsumer : IDisposable
     {
