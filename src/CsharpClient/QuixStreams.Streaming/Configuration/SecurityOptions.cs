@@ -1,27 +1,27 @@
 ﻿namespace QuixStreams.Streaming.Configuration
 {
     /// <summary>
-    /// Kafka security option for configuring SSL encryption with SASL authentication
+    /// A class representing security options for configuring SSL encryption with SASL authentication in Kafka.
     /// </summary>
     public class SecurityOptions
     {
         /// <summary>
-        /// The SASL mechanism to use
+        /// The SASL mechanism to use. Defaults to ScramSha256
         /// </summary>
         public SaslMechanism? SaslMechanism { get; set; }
         
         /// <summary>
-        /// SASL username.
+        /// The username for SASL authentication.
         /// </summary>
         public string Username { get; set; }
         
         /// <summary>
-        /// SASL password
+        /// The password for SASL authentication
         /// </summary>
         public string Password { get; set; }
 
         /// <summary>
-        /// Folder/file that contains the certificate authority certificate(s) to validate the ssl connection.
+        /// The path to the folder or file containing the certificate authority certificate(s) to validate the ssl connection.
         /// </summary>
         public string SslCertificates { get; set; }
 
