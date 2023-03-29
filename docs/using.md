@@ -1,6 +1,6 @@
 # Using Quix Streams
 
-In this topic you will learn how to use Quix Streams to perform two types of data processing:
+In the following documentation you will learn how to use Quix Streams to perform two types of data processing:
 
 1. **Stateless processing** - Here one message is processed at a time, and the message received contains all required data for processing. No state needs to be preserved between messages, or between replicas. The data from the message is used to calculate a new value, which is then typically published to the output stream. 
 2. **Stateful processing** - This is where you need to keep track of data between messages, such as keeping a running total of a variable. This is more complicated as state needs to be preserved between messages, and potentially between replicas, where multiple replicas are deployed. In addition, state may need to be preserved in the event of the failure of a deployment - Quix Streams supports checkpointing as a way to enable this.
@@ -15,9 +15,7 @@ In some use cases you may want to aggregate data beyond the stream context of a 
 
 Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always published to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
 
-It is possible to organize the code that processes the streams in a topic using the idea of a consumer group. This indicates to the broker that you will process the topic with all available replicas.
-
-Horizontal scaling occurs automatically, because when you deploy multiple replicas, a stream is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream.
+It is possible to organize the code that processes the streams in a topic using the idea of a consumer group. This indicates to the broker that you will process the topic with all available replicas in the consumer group, sharing the processing of all streams in the topic. Horizontal scaling occurs automatically, because when you deploy multiple replicas in a consumer group, a stream (or group of streams) is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream. If you don't specify a consumer group in your code, then all streams in a topic will be processed by all replicas.
 
 When you create the consumer you specify the consumer group as follows:
 
@@ -294,7 +292,7 @@ Also, in this example, the running total is persisted in file storage, and so is
 
 ## Conclusion
 
-In this topic you have learned:
+In this documentation you have learned:
 
 * How to perform stateless "one message at a time" processing.
 * How to handle the situation where state needs to be preserved, and problems that can arise in naive code.
@@ -302,7 +300,7 @@ In this topic you have learned:
 
 ## Next steps
 
-Continue your Quix Streams learning journey by reading the following more in-depth topics:
+Continue your Quix Streams learning journey by reading the following more in-depth documentation:
 
 * [Publishing data](publish.md)
 * [Subscribing to data](subscribe.md)
