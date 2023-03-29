@@ -114,6 +114,7 @@ class TestIntegration(unittest.TestCase):
                 output_stream.timeseries.buffer.add_timestamp(datetime.utcnow()).add_value("test", 1)
                 output_stream.timeseries.flush()
                 output_stream.properties.flush()
+                output_time_of_recording = output_stream.properties.time_of_recording
                 output_stream.close()
                 print("Closed")
 
@@ -130,7 +131,7 @@ class TestIntegration(unittest.TestCase):
                 self.assertIn("testParentId1", incoming_stream.properties.parents)
                 self.assertIn("testParentId2", incoming_stream.properties.parents)
                 self.assertIsNotNone(incoming_stream.properties.time_of_recording)
-                self.assertEqual(incoming_stream.properties.time_of_recording, output_stream.properties.time_of_recording)
+                self.assertEqual(incoming_stream.properties.time_of_recording, output_time_of_recording)
 
 # endregion
 
