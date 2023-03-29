@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -21,13 +22,19 @@ public class InteropUtils
     
     public static bool DebugMode = false;
     private static Lazy<StreamWriter> debuglogs = new Lazy<StreamWriter>(() => File.AppendText($"./debuglogs_{(DateTime.Now.ToString("yyyy-MM-dd_HH_mm_ss"))}.txt"));
+    private static object debugLogsLock = new object();
 
     public static void LogDebug(string format, params object[] @params)
     {
         if (!DebugMode) return;
-        //Console.WriteLine(format, @params);
-        debuglogs.Value.WriteLine(string.Format(format, @params));
-        debuglogs.Value.Flush();
+        // Due to importance of having every line available for debugging, the performance impact is acceptable here
+        // in order to not have potential for incorrect log write
+        lock (debugLogsLock)
+        {
+            debuglogs.Value.WriteLine(string.Format(format, @params));
+
+            debuglogs.Value.Flush();
+        }
     }
     
     /// <summary>
