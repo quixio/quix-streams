@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
+using QuixStreams.Streaming.Raw;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
@@ -15,13 +16,13 @@ using Xunit.Abstractions;
 namespace QuixStreams.Streaming.IntegrationTests
 {
     [Collection("Kafka Container Collection")]
-    public class StreamingClientIntegrationTests
+    public class KafkaStreamingClientIntegrationTests
     {
         private readonly ITestOutputHelper output;
         private readonly KafkaStreamingClient client;
         private int MaxTestRetry = 3;
 
-        public StreamingClientIntegrationTests(ITestOutputHelper output, KafkaDockerTestFixture kafkaDockerTestFixture)
+        public KafkaStreamingClientIntegrationTests(ITestOutputHelper output, KafkaDockerTestFixture kafkaDockerTestFixture)
         {
             this.output = output;
             QuixStreams.Logging.Factory = output.CreateLoggerFactory();
@@ -49,10 +50,15 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public void StreamReadAndWrite()
         {
+            var topic = nameof(StreamReadAndWrite);
             RunTest(() =>
             {
-                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.GetTopicProducer("integration-tests");
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                var topicProducer = client.GetTopicProducer(topic);
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -67,6 +73,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 {
                     if (e.StreamId != streamId)
                     {
+                        this.output.WriteLine("Ignoring stream {0}", e.StreamId);
                         return;
                     }
 
@@ -80,11 +87,14 @@ namespace QuixStreams.Streaming.IntegrationTests
                     e.OnStreamClosed += (s2, e2) => streamEnded = true;
                 };
 
+                this.output.WriteLine("Subscribing");
                 topicConsumer.Subscribe();
+                this.output.WriteLine("Subscribed");
 
                 using (var stream = topicProducer.CreateStream())
                 {
                     streamId = stream.StreamId;
+                    this.output.WriteLine("First stream id is {0}", streamId);
 
                     stream.Properties.Name = "Volvo car telemetry";
                     stream.Properties.Location = "Car telemetry/Vehicles/Volvo";
@@ -92,8 +102,10 @@ namespace QuixStreams.Streaming.IntegrationTests
                     stream.Properties.Metadata["test_key"] = "test_value";
                     stream.Properties.TimeOfRecording = new DateTime(2018, 01, 01);
                     stream.Properties.Flush();
+                    this.output.WriteLine("Flushing stream properties");
 
                     SpinWait.SpinUntil(() => streamStarted, 20000);
+                    Assert.True(streamStarted, "The stream failed to start");
                     SpinWait.SpinUntil(() => streamProperties != null, 2000);
 
                     Assert.True(streamStarted, "Stream is not started on reader.");
@@ -146,22 +158,27 @@ namespace QuixStreams.Streaming.IntegrationTests
 
 
                     (stream as IStreamProducerInternal).Publish(expectedParameterDefinitions);
+                    this.output.WriteLine("Flushing parameter definitions");
 
                     SpinWait.SpinUntil(() => parameterDefinitionsChanged, 2000);
 
                     Assert.True(parameterDefinitionsChanged, "Parameter definitions event not reached reader.");
 
                     (stream as IStreamProducerInternal).Publish(expectedEventDefinitions);
+                    this.output.WriteLine("Flushing event definitions");
 
                     SpinWait.SpinUntil(() => eventDefinitionsChanged, 2000);
 
                     Assert.True(eventDefinitionsChanged, "Event definitions event not reached reader.");
 
+                    this.output.WriteLine("Generating timeseries data raw");
                     var expectedData = new List<TimeseriesDataRaw>();
                     expectedData.Add(GenerateTimeseriesData(0));
                     expectedData.Add(GenerateTimeseriesData(10));
+                    
 
                     (stream as IStreamProducerInternal).Publish(expectedData);
+                    this.output.WriteLine("Publishing timeseries data raw");
 
                     SpinWait.SpinUntil(() => data.Count == 2, 5000);
 
@@ -218,10 +235,15 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public void StreamReadAndWriteBuilders()
         {
+            var topic = nameof(StreamReadAndWriteBuilders);
             RunTest(() =>
             {
-                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.GetTopicProducer("integration-tests");
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                var topicProducer = client.GetTopicProducer(topic);
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -436,10 +458,15 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public void StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected()
         {
+            var topic = nameof(StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected);
             RunTest(() =>
             {
-                var topicConsumer = client.GetTopicConsumer("integration-tests", "quix.tests-sdk-tests");
-                var topicProducer = client.GetTopicProducer("integration-tests");
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                var topicProducer = client.GetTopicProducer(topic);
 
                 IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
                 IList<EventDataRaw> events = new List<EventDataRaw>();
@@ -451,6 +478,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 {
                     if (e.StreamId != streamId)
                     {
+                        this.output.WriteLine("Ignoring stream {0}", e.StreamId);
                         return;
                     }
 
@@ -459,20 +487,26 @@ namespace QuixStreams.Streaming.IntegrationTests
                     e.OnStreamClosed += (s2, e2) => streamEnded = true;
                 };
 
+                this.output.WriteLine("Subscribing");
                 topicConsumer.Subscribe();
+                this.output.WriteLine("Subscribed");
 
                 using (var stream = topicProducer.CreateStream())
                 {
                     streamId = stream.StreamId;
+                    this.output.WriteLine("First stream id is {0}", streamId);
 
                     stream.Timeseries.Buffer.AddTimestampNanoseconds(100)
                         .AddValue("p0", 1)
                         .AddValue("p1", 2)
                         .AddValue("p2", 3)
                         .Publish();
+                    
+                    this.output.WriteLine("Published data for {0}, waiting for stream to start", streamId);
 
                     SpinWait.SpinUntil(() => streamStarted, 20000);
-                    Assert.True(streamStarted, "Stream is not started on reader.");
+                    Assert.True(streamStarted, "First stream is not started on reader.");
+                    this.output.WriteLine("First stream started");
 
                     SpinWait.SpinUntil(() => data.Count == 1, 2000);
 
@@ -484,7 +518,7 @@ namespace QuixStreams.Streaming.IntegrationTests
 
                     SpinWait.SpinUntil(() => streamEnded, 2000);
 
-                    Assert.True(streamEnded, "Stream end event not reached reader.");
+                    Assert.True(streamEnded, "First stream did not close in time.");
 
                     streamStarted = false;
 
@@ -500,7 +534,7 @@ namespace QuixStreams.Streaming.IntegrationTests
 
                     SpinWait.SpinUntil(() => streamStarted, 2000);
 
-                    Assert.True(streamStarted, "Stream is not started on reader.");
+                    Assert.True(streamStarted, "Second stream is not started on reader.");
                 }
 
                 topicConsumer.Dispose();
@@ -510,9 +544,10 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public void StreamGetOrCreateStream_ShouldNotThrowException()
         {
+            var topic = nameof(StreamGetOrCreateStream_ShouldNotThrowException);
             RunTest(() =>
             {
-                var topicProducer = client.GetTopicProducer("integration-tests");
+                var topicProducer = client.GetTopicProducer(topic);
                 var result = Parallel.For(0, 1000, parallelOptions: new ParallelOptions()
                 {
                     MaxDegreeOfParallelism = 20
@@ -528,12 +563,16 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public void ReadingAStreamWithSameConsumerGroup_ShouldGetRevokedOnOne()
         {
+            var topic = nameof(StreamReadAndWriteBuilders);
             RunTest(() =>
             {
-                var topicProducer = client.GetTopicProducer("integration-tests");
-
-                var testGroup = "quix.tests-" + Guid.NewGuid().GetHashCode().ToString("X");
-                var topicConsumer1 = client.GetTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var consumerGroup = "doesntmatteraslongassame";
+                var topicConsumer1 = client.GetTopicConsumer(topic, consumerGroup, autoOffset: AutoOffsetReset.Earliest);
+                var topicProducer = client.GetTopicProducer(topic);
 
                 var expectedStreamCount = 1;
                 long streamsRevoked = 0;
@@ -585,7 +624,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 for (var index = 0; index <= 5; index++)
                 {
                     if (streamsReceived2 > 0) break;
-                    var topicConsumer2 = client.GetTopicConsumer("integration-tests", testGroup, autoOffset: AutoOffsetReset.Latest);
+                    var topicConsumer2 = client.GetTopicConsumer(topic, consumerGroup, autoOffset: AutoOffsetReset.Latest);
                     topicConsumer2.OnStreamReceived += (sender, sr) => { Interlocked.Increment(ref streamsReceived2); };
                     topicConsumer2.Subscribe();
                 }
@@ -595,6 +634,39 @@ namespace QuixStreams.Streaming.IntegrationTests
                 SpinWait.SpinUntil(() => streamsRevoked > 0, TimeSpan.FromSeconds(10000));
                 streamsRevoked.Should().BeGreaterThan(0);
             });
+        }
+
+        /// <summary>
+        /// Helper method, because the underlying topic might not always exist.
+        /// Our integration tests are set up using a broker which automatically creates a topic, but it can take some
+        /// seconds
+        /// </summary>
+        /// <param name="client"></param>
+        /// <param name="topic"></param>
+        private void EnsureTopic(KafkaStreamingClient client, string topic)
+        {
+            var mre = new ManualResetEvent(false);
+            using var rawProducer = client.GetRawTopicProducer(topic);
+            using var rawConsumer = client.GetRawTopicConsumer(topic, "EnsureTopic");
+            rawConsumer.OnMessageReceived += (s, message) =>
+            {
+                this.output.WriteLine("Topic verification message received");
+                mre.Set();
+            };
+            rawConsumer.Subscribe();
+            var loop = true;
+            var task = Task.Run(() =>
+            {
+                while (loop)
+                {
+                    rawProducer.Publish(new RawMessage(new byte[0]));
+                    Thread.Sleep(100);
+                }
+            });
+            mre.WaitOne();
+            loop = false;
+            task.GetAwaiter().GetResult();
+            this.output.WriteLine("Topic verified");
         }
 
         private async Task RunTest(Func<Task> test)
