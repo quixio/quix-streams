@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Transport.Kafka;
 
@@ -11,6 +13,7 @@ namespace QuixStreams.Streaming.Raw
     /// </summary>
     public class RawTopicConsumer: IRawTopicConsumer, IDisposable
     {
+        private readonly string topicName;
         private KafkaConsumer kafkaConsumer;
         private bool connectionStarted = false;
 
@@ -58,6 +61,7 @@ namespace QuixStreams.Streaming.Raw
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
         public RawTopicConsumer(string brokerAddress, string topicName, string consumerGroup, Dictionary<string, string> brokerProperties = null, AutoOffsetReset? autoOffset = null)
         {
+            this.topicName = topicName;
             brokerProperties ??= new Dictionary<string, string>();
             if (!brokerProperties.ContainsKey("fetch.message.max.bytes")) brokerProperties["fetch.message.max.bytes"] = "20480";
 
@@ -78,28 +82,34 @@ namespace QuixStreams.Streaming.Raw
         /// <inheritdoc />
         public void Subscribe()
         {
-            if(connectionStarted)
+            if (connectionStarted)
             {
-                //throw exception for double starting
-                throw new InvalidOperationException("Cannot call Subscribe twice");
+                var logger = Logging.CreateLogger<RawTopicConsumer>();
+                logger.LogWarning("Attempted to subscribe to topic {0} more than once.", this.topicName);
+                return;
             }
 
-            kafkaConsumer.OnNewPackage = async package =>
+            kafkaConsumer.OnNewPackage = package =>
             {
                 byte[] message = (byte[])package.Value;
 
-               Dictionary<string, string> vals = new Dictionary<string, string>();
-               foreach(var el in package.TransportContext)
-               {
-                   var value = el.Value;
-                   if (value == null) {
-                       vals[el.Key] = "";
-                   } else {
-                       vals[el.Key] = value.ToString();
-                   }
-               }
-               var meta =  new ReadOnlyDictionary<string, string>(vals);
+                Dictionary<string, string> vals = new Dictionary<string, string>();
+                foreach (var el in package.TransportContext)
+                {
+                    var value = el.Value;
+                    if (value == null)
+                    {
+                        vals[el.Key] = "";
+                    }
+                    else
+                    {
+                        vals[el.Key] = value.ToString();
+                    }
+                }
+
+                var meta = new ReadOnlyDictionary<string, string>(vals);
                 this.OnMessageReceived?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
+                return Task.CompletedTask;
             };
 
             kafkaConsumer.Open();

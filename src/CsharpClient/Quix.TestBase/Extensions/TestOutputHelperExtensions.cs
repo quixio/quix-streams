@@ -45,6 +45,11 @@ namespace Quix.TestBase.Extensions
             try
             {
                 this.helper.WriteLine($"{DateTime.UtcNow:G} - {logLevel} - {this.classDisplayName} {formatter(state, exception)}");
+                if (exception != null)
+                {
+                    if (exception.Message != null) this.helper.WriteLine(exception.Message);
+                    if (exception.StackTrace != null) this.helper.WriteLine(exception.StackTrace);
+                }
             }
             catch (System.InvalidOperationException)
             {
@@ -84,6 +89,11 @@ namespace Quix.TestBase.Extensions
             try
             {
                 this.helper.WriteLine($"{DateTime.UtcNow:G} - {logLevel} - {this.categoryName} {formatter(state, exception)}");
+                if (exception != null)
+                {
+                    if (exception.Message != null) this.helper.WriteLine(exception.Message);
+                    if (exception.StackTrace != null) this.helper.WriteLine(exception.StackTrace);
+                }
             }
             catch (System.InvalidOperationException)
             {

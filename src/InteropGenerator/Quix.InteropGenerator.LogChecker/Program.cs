@@ -54,12 +54,26 @@ public class Program
         }
 
         var evaluator = new Evaluator();
+        bool warnAgain = false;
         await foreach (var parsed in new LogParser().ParseFile(path))
         {
-            evaluator.Add(parsed);
+            try
+            {
+                evaluator.Add(parsed);
+            }
+            catch (Exception ex)
+            {
+                warnAgain = true;
+                Console.WriteLine($"Line {parsed.LineNumber} failed to parse. Evaluating so far.\n{ex}");
+                break;
+            }
         }
 
         evaluator.Evaluate();
+        if (warnAgain)
+        {
+            Console.WriteLine($"Line(s) failed to parse. Partial eval only, check above.");
+        }
 
         return 0;
     }

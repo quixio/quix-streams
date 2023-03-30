@@ -12,7 +12,7 @@ class InteropException(Exception):
         self.exc_type = exc_type
         self.message = message
         self.exc_stack = exc_stack
-        super().__init__(self.message)
+        super().__init__(self.message + "\n" + exc_stack)
 
 
 class InteropUtils(object):

@@ -21,6 +21,11 @@ public class LogParser
         while (!sr.EndOfStream)
         {
             var line = await sr.ReadLineAsync();
+            if (line.Contains('\0'))
+            {
+                line = line.Replace("\0", "");
+                Console.WriteLine($"Line {lineNumber} has '\\0' char in it, expect problems");
+            }
             foreach (var parserPair in parsers)
             {
                 if (parserPair.Value(line))

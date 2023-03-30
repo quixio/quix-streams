@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
@@ -12,6 +13,7 @@ namespace QuixStreams.Streaming.Models
     /// </summary>
     public class TimeseriesData
     {
+        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => Logging.CreateLogger<TimeseriesData>());
         internal QuixStreams.Telemetry.Models.TimeseriesDataRaw rawData;
         internal Dictionary<string, Parameter> parameterList;
         internal List<int> timestampsList;
@@ -124,17 +126,33 @@ namespace QuixStreams.Streaming.Models
 
             foreach (var kv in this.rawData.NumericValues)
             {
-                list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                list[kv.Key] = new Parameter(kv.Key, kv.Value);
             }
 
             foreach (var kv in this.rawData.StringValues)
             {
-                list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                try
+                {
+                    list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                }
+                catch (ArgumentException)
+                {
+                    var existing = list[kv.Key];
+                    logger.Value.LogWarning("{0} supports only one parameter type per parameter id. '{1}' is already present as {2}. Ignoring the value for {3}.", nameof(TimeseriesData), kv.Key, existing.ValueType, ParameterValueType.String);
+                }
             }
 
             foreach (var kv in this.rawData.BinaryValues)
             {
-                list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                try
+                {
+                    list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                }
+                catch (ArgumentException)
+                {
+                    var existing = list[kv.Key];
+                    logger.Value.LogWarning("{0} supports only one parameter type per parameter id. '{1}' is already present as {2}. Ignoring the value for {3}.", nameof(TimeseriesData), kv.Key, existing.ValueType, ParameterValueType.String);
+                }
             }
 
             return list;
@@ -577,25 +595,31 @@ namespace QuixStreams.Streaming.Models
         public Parameter(string parameterId)
         {
             this.ParameterId = parameterId;
+            this.ValueType = ParameterValueType.Empty;
         }
 
         public Parameter(string parameterId, double?[] numericValues)
         {
             this.ParameterId = parameterId;
             this.NumericValues = numericValues;
+            this.ValueType = numericValues == null ? ParameterValueType.Empty : ParameterValueType.Numeric;
         }
 
         public Parameter(string parameterId, string[] stringValues)
         {
             this.ParameterId = parameterId;
             this.StringValues = stringValues;
+            this.ValueType = stringValues == null ? ParameterValueType.Empty : ParameterValueType.String;
         }
 
         public Parameter(string parameterId, byte[][] binaryValues)
         {
             this.ParameterId = parameterId;
             this.BinaryValues = binaryValues;
+            this.ValueType = binaryValues == null ? ParameterValueType.Empty : ParameterValueType.Binary;
         }
+
+        public readonly ParameterValueType ValueType;
 
         public readonly string ParameterId;
 

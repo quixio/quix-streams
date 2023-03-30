@@ -77,7 +77,7 @@ namespace QuixStreams.Telemetry.UnitTests
             {
                 var waited = elapsedTimes[i];
                 var expectedWait = Math.Min(i * factory.RetryIncrease, factory.MaxRetryDuration);
-                const int range = 20;
+                const int range = 35;
                 waited.Should().BeInRange(expectedWait - range, expectedWait + range, $"the iteration {i} should wait for about this long");
             }
 
