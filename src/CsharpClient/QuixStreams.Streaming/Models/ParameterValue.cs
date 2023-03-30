@@ -26,7 +26,19 @@ namespace QuixStreams.Streaming.Models
         /// <summary>
         /// Gets the type of value, which is numeric, string or binary if set, else empty
         /// </summary>
-        public readonly ParameterValueType Type => this.parameter.ValueType;
+        public readonly ParameterValueType Type
+        {
+            get
+            {
+                
+                // TODO: It is left as is, because if referencing this.parameter.ValueType, exceptions are happening during certain iterations
+                // Uncertain why this is the case
+                if (this.parameter.NumericValues != null) return ParameterValueType.Numeric;
+                else if (this.parameter.StringValues != null) return ParameterValueType.String;
+                else if (this.parameter.BinaryValues != null) return ParameterValueType.Binary;
+                else return ParameterValueType.Empty;
+            }
+        }
 
         /// <summary>
         /// The numeric value of the parameter.
