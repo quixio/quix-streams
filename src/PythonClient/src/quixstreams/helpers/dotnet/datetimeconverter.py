@@ -56,7 +56,7 @@ class DateTimeConverter:
             return None
 
         ms = int((value.microsecond - value.microsecond % 1000) / 1000)
-        result_hptr = dti.Constructor12(value.year, value.month, value.day, value.hour, value.minute, value.second, ms, value.microsecond % 1000)
+        result_hptr = dti.Constructor14(value.year, value.month, value.day, value.hour, value.minute, value.second, ms, value.microsecond % 1000)
         return result_hptr
 
     @staticmethod
