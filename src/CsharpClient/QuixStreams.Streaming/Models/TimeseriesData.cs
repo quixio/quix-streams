@@ -609,14 +609,14 @@ namespace QuixStreams.Streaming.Models
         {
             this.ParameterId = parameterId;
             this.StringValues = stringValues;
-            this.ValueType = stringValues == null ? ParameterValueType.Empty : ParameterValueType.Numeric;
+            this.ValueType = stringValues == null ? ParameterValueType.Empty : ParameterValueType.String;
         }
 
         public Parameter(string parameterId, byte[][] binaryValues)
         {
             this.ParameterId = parameterId;
             this.BinaryValues = binaryValues;
-            this.ValueType = binaryValues == null ? ParameterValueType.Empty : ParameterValueType.Numeric;
+            this.ValueType = binaryValues == null ? ParameterValueType.Empty : ParameterValueType.Binary;
         }
 
         public readonly ParameterValueType ValueType;
