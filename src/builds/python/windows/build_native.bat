@@ -4,7 +4,7 @@ set nointerop=False
 set nopython=False
 set noregen=False
 set configuration=-c release /p:DebugType=None /p:DebugSymbols=false
-set framework=-f net7.0
+set framework=-f net8.0
 
 set argCount=0
 set argArray=

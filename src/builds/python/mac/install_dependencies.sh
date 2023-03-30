@@ -12,7 +12,7 @@ if [[ $? != 0 ]]; then
     if [ $(arch) == "i386" ]; then
         ./dotnet-install.sh --channel 7.0.1xx
     else
-        ./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx
+        ./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx # TODO: need to update version code here 
     fi
 	echo "export DOTNET_ROOT=$HOME/.dotnet" >> ~/.zshrc
 	echo "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools" >> ~/.zshrc

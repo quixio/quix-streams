@@ -38,7 +38,7 @@ csharpfolder=../../../CsharpClient
 pythonfolder=../../../PythonClient
 streamingoutpath=$csharpfolder/QuixStreams.Streaming/bin/Publish/mac
 echo build streaming
-dotnet publish $csharpfolder/QuixStreams.Streaming/QuixStreams.Streaming.csproj -f net7.0 -c debug -o $streamingoutpath
+dotnet publish $csharpfolder/QuixStreams.Streaming/QuixStreams.Streaming.csproj -f net8.0 -c debug -o $streamingoutpath
 if [[ $? != 0 ]]; then
 	echo "Failed dotnet build QuixStreams.Streaming.csproj"
 	exit 2
