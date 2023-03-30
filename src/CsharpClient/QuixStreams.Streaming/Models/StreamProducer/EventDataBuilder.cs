@@ -16,7 +16,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Initializes a new instance of <see cref="EventDataBuilder"/>
         /// </summary>
-        /// <param name="streamEventsProducer">Events writer owner</param>
+        /// <param name="streamEventsProducer">Events producer owner</param>
         /// <param name="timestampNanoseconds">Timestamp assigned to the Events created by the builder</param>
         public EventDataBuilder(StreamEventsProducer streamEventsProducer, long timestampNanoseconds)
         {

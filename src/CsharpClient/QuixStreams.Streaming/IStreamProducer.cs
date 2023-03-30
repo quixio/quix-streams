@@ -10,7 +10,7 @@ namespace QuixStreams.Streaming
     public interface IStreamProducer : IDisposable
     {
         /// <summary>
-        /// Stream Id of the new stream created by the writer
+        /// Stream Id of the new stream created by the producer
         /// </summary>
         string StreamId { get; }
 
@@ -41,7 +41,7 @@ namespace QuixStreams.Streaming
         void Close(QuixStreams.Telemetry.Models.StreamEndType streamState = QuixStreams.Telemetry.Models.StreamEndType.Closed);
         
         /// <summary>
-        /// Event raised when an exception occurred during the writing processes
+        /// Event raised when an exception occurred during the publishing processes
         /// </summary>
         event EventHandler<Exception> OnWriteException;
     }

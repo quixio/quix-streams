@@ -17,7 +17,7 @@ from ..native.Python.QuixStreamsStreaming.Models.TimeseriesBuffer import Timeser
 @nativedecorator
 class TimeseriesBuffer(object):
     """
-    Represents a class used to read from the stream in a buffered manner.
+    Represents a class used to consume from the stream in a buffered manner.
     When none of the buffer conditions are configured, the buffer does not buffer at all.
     """
 

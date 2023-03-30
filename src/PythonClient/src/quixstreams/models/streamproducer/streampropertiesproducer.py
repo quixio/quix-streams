@@ -141,6 +141,6 @@ class StreamPropertiesProducer(object):
 
     def flush(self):
         """
-        Immediately writes the properties yet to be sent instead of waiting for the flush timer (20ms).
+        Immediately publishes the properties yet to be sent instead of waiting for the flush timer (20ms).
         """
         self._interop.Flush()

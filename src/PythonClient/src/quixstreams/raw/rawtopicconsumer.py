@@ -11,7 +11,7 @@ from ..native.Python.QuixStreamsStreaming.Raw.RawTopicConsumer import RawTopicCo
 @nativedecorator
 class RawTopicConsumer(object):
     """
-    Topic class to read incoming raw messages (capable to read non-quixstreams messages).
+    Topic class to consume incoming raw messages (capable to consuming non-quixstreams messages).
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
@@ -19,7 +19,7 @@ class RawTopicConsumer(object):
        Initializes a new instance of RawTopicConsumer.
 
        Note:
-           Do not initialize this class manually, use KafkaStreamingClient.get_raw_topic_consumer to read streams.
+           Do not initialize this class manually, use KafkaStreamingClient.get_raw_topic_consumer.
 
        Args:
            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net RawTopicConsumer.

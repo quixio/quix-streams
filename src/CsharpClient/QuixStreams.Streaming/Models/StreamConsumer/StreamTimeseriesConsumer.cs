@@ -41,7 +41,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// </summary>
         /// <param name="bufferConfiguration">An optional TimeseriesBufferConfiguration</param>
         /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only these. If provided, only these parameters will be available through this buffer</param>
-        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise new data read via the OnDataReceived event</returns>
+        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise new data consumed via the OnDataReceived event</returns>
         public TimeseriesBufferConsumer CreateBuffer(TimeseriesBufferConfiguration bufferConfiguration = null, params string[] parametersFilter)
         {
             var buffer = new TimeseriesBufferConsumer(this.topicConsumer, this.streamConsumer, bufferConfiguration, parametersFilter);
@@ -54,7 +54,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// Creates a new buffer for reading data
         /// </summary>
         /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only these If provided, only these parameters will be available through this buffer</param>
-        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise new data read via the OnDataReceived event</returns>
+        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise new data consumed via the OnDataReceived event</returns>
         public TimeseriesBufferConsumer CreateBuffer(params string[] parametersFilter)
         {
             var buffer = new TimeseriesBufferConsumer(this.topicConsumer, this.streamConsumer, null, parametersFilter);

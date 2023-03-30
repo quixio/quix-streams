@@ -170,7 +170,7 @@ class QuixStreamingClient(object):
 
     def get_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
         """
-        Gets an output topic capable of sending outgoing streams.
+        Gets a topic producer capable of producing outgoing streams.
 
         Args:
             topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
@@ -184,7 +184,7 @@ class QuixStreamingClient(object):
 
     def get_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
-        Gets an input topic for reading raw data from the stream.
+        Gets a topic consumer for consuming raw data from the stream.
 
         Args:
             topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
@@ -204,7 +204,7 @@ class QuixStreamingClient(object):
 
     def get_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
         """
-        Gets an input topic for writing raw data to the stream.
+        Gets a topic producer for producing raw data to the stream.
 
         Args:
             topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.

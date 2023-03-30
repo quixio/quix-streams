@@ -253,7 +253,7 @@ class StreamTimeseriesConsumer(object):
     def create_buffer(self, *parameter_filter: str,
                       buffer_configuration: TimeseriesBufferConfiguration = None) -> TimeseriesBufferConsumer:
         """
-        Creates a new buffer for reading data according to the provided parameter_filter and buffer_configuration.
+        Creates a new buffer for consuming data according to the provided parameter_filter and buffer_configuration.
 
         Args:
             parameter_filter: Zero or more parameter identifiers to filter as a whitelist. If provided, only these
@@ -261,7 +261,7 @@ class StreamTimeseriesConsumer(object):
             buffer_configuration: An optional TimeseriesBufferConfiguration.
 
         Returns:
-            TimeseriesBufferConsumer: An consumer that will raise new data read via the on_data_received event.
+            TimeseriesBufferConsumer: An consumer that will raise new data consumed via the on_data_received event.
         """
 
         actual_filters_uptr = None

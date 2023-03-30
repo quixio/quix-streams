@@ -10,7 +10,7 @@ from ..native.Python.QuixStreamsStreaming.Raw.RawMessage import RawMessage as rm
 @nativedecorator
 class RawMessage(object):
     """
-    The message read from topic without any transformation.
+    The message consumed from topic without any transformation.
     """
 
     def __init__(self, data: Union[ctypes.c_void_p, bytes, bytearray]):

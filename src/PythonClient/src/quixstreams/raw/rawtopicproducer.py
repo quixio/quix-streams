@@ -9,7 +9,7 @@ from ..native.Python.QuixStreamsStreaming.Raw.RawTopicProducer import RawTopicPr
 @nativedecorator
 class RawTopicProducer(object):
     """
-    Class to produce raw messages into a Topic (capable to write non-quixstreams messages)
+    Class to produce raw messages into a Topic (capable of producing non-quixstreams messages)
     """
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
@@ -22,7 +22,7 @@ class RawTopicProducer(object):
 
     def publish(self, message: Union[RawMessage, bytes, bytearray]):
         """
-        Publishes the given message to the associated output topic.
+        Publishes the given message to the associated topic producer.
 
         Args:
             message (Union[RawMessage, bytes, bytearray]): The message to be published, which can be either

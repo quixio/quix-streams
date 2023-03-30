@@ -160,4 +160,4 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             with data:
                 self._interop.Publish(data.get_net_pointer())
             return
-        raise Exception("Write for the given type " + str(type(packet)) + " is not supported")
+        raise Exception("Publish for the given type " + str(type(packet)) + " is not supported")

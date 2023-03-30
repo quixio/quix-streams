@@ -1,7 +1,7 @@
 ﻿namespace QuixStreams.Streaming.Models.StreamConsumer
 {
     /// <summary>
-    /// Represents a class for reading data from a stream in a buffered manner.
+    /// Represents a class for consuming data from a stream in a buffered manner.
     /// </summary>
     public class TimeseriesBufferConsumer: TimeseriesBuffer
     {

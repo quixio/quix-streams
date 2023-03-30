@@ -1,7 +1,7 @@
 ﻿namespace QuixStreams.Streaming
 {
     /// <summary>
-    /// Interface for Output topic internal methods
+    /// Interface for Topic producer internal methods
     /// </summary>
     internal interface ITopicProducerInternal : ITopicProducer
     {

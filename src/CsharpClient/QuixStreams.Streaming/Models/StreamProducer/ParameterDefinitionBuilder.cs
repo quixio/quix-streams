@@ -14,7 +14,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Initializes a new instance of <see cref="ParameterDefinitionBuilder"/>
         /// </summary>
-        /// <param name="streamTimeseriesProducer">Parameters writer owner</param>
+        /// <param name="streamTimeseriesProducer">Parameters producer owner</param>
         /// <param name="location">Location selected for the Parameter definition builder</param>
         /// <param name="definition">Parameter definition instance managed by the builder</param>
         public ParameterDefinitionBuilder(StreamTimeseriesProducer streamTimeseriesProducer, string location, QuixStreams.Telemetry.Models.ParameterDefinition definition = null)

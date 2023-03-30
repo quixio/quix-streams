@@ -6,7 +6,7 @@ using QuixStreams.Transport.Kafka;
 namespace QuixStreams.Streaming.Raw
 {
     /// <summary>
-    /// Class to produce raw messages into a Topic (capable to write non-quixstreams messages)
+    /// Class to produce raw messages into a Topic (capable to producing non-quixstreams messages)
     /// </summary>
     public class RawTopicProducer: IRawTopicProducer
     {

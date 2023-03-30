@@ -169,10 +169,10 @@ class StreamConsumer(object):
     @property
     def stream_id(self) -> str:
         """
-        Get the ID of the stream being read.
+        Get the ID of the stream being consumed.
 
         Returns:
-            str: The ID of the stream being read.
+            str: The ID of the stream being consumed.
         """
         if self._streamId is None:
             self._streamId = self._interop.get_StreamId()

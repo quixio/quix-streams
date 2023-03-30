@@ -34,7 +34,7 @@ class StreamEventsProducer(object):
 
     def flush(self):
         """
-        Immediately writes the event definitions from the buffer without waiting for buffer condition to fulfill
+        Immediately publishes the event definitions from the buffer without waiting for buffer condition to fulfill
         (200ms timeout). NOTE: Verify 200ms timeout value.
         """
         self._interop.Flush()

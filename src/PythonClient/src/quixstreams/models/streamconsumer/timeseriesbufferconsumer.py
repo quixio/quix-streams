@@ -6,7 +6,7 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.TimeseriesBuffe
 
 class TimeseriesBufferConsumer(TimeseriesBuffer):
     """
-    Represents a class for reading data from a stream in a buffered manner.
+    Represents a class for consuming data from a stream in a buffered manner.
     """
 
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p = None):
