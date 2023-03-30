@@ -25,7 +25,7 @@ class TimeseriesBuffer(object):
         """
         Initializes a new instance of TimeseriesBuffer.
 
-        NOTE: Do not initialize this class manually, use XXX to create it.
+        NOTE: Do not initialize this class manually, use StreamProducer.timeseries.buffer to create it.
 
         Args:
             stream: The stream the buffer is created for.
