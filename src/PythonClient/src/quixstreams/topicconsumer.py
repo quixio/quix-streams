@@ -11,17 +11,17 @@ from .streamconsumer import StreamConsumer
 @nativedecorator
 class TopicConsumer(object):
     """
-        Interface to operate with the streaming platform for reading or writing
+    XXX.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamingClient.
-            NOTE: Do not initialize this class manually, use StreamingClient.create_input to create it
+        Initializes a new instance of TopicConsumer.
 
-            Parameters:
+        NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_consumer to create it.
 
-            net_pointer (.net pointer): The .net pointer to TopicConsumer instance
+        Args:
+            net_pointer (ctypes.c_void_p): The .net pointer to TopicConsumer instance.
         """
         if net_pointer is None:
             raise Exception("TopicConsumer is None")
@@ -58,14 +58,20 @@ class TopicConsumer(object):
     @property
     def on_stream_received(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when a stream is received for the topic. First parameter is the stream.
+        Gets the event handler for when a stream is received for the topic.
+
+        Returns:
+            Callable[[StreamConsumer], None]: The event handler for when a stream is received for the topic. The first parameter is the StreamConsumer instance that was received.
         """
         return self._on_stream_received
 
     @on_stream_received.setter
     def on_stream_received(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when a stream is received for the topic. First parameter is the stream.
+        Sets the event handler for when a stream is received for the topic.
+
+        Args:
+            value (Callable[[StreamConsumer], None]): The new event handler for when a stream is received for the topic. The first parameter is the StreamConsumer instance that was received.
         """
         self._on_stream_received = value
         if self._on_stream_received_ref is None:
@@ -92,15 +98,22 @@ class TopicConsumer(object):
     @property
     def on_streams_revoked(self) -> Callable[['TopicConsumer', List['StreamConsumer']], None]:
         """
-        Gets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the streams revoked.
+        Gets the event handler for when streams are revoked for the topic.
+
+        Returns:
+            Callable[[TopicConsumer, List[StreamConsumer]], None]: The event handler for when streams are revoked for the topic. The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
         """
         return self._on_streams_revoked
 
     @on_streams_revoked.setter
     def on_streams_revoked(self, value: Callable[['TopicConsumer', List['StreamConsumer']], None]) -> None:
         """
-        Sets the handler for when a stream is received for the topic. First parameter is the topic the stream is received for, second is the streams revoked.
+        Sets the event handler for when streams are revoked for the topic.
+
+        Args:
+            value (Callable[[TopicConsumer, List[StreamConsumer]], None]): The new event handler for when streams are revoked for the topic. The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
         """
+
         self._on_streams_revoked = value
         if self._on_streams_revoked_ref is None:
             self._on_streams_revoked_ref = self._interop.add_OnStreamsRevoked(self._on_streams_revoked_wrapper)
@@ -128,14 +141,20 @@ class TopicConsumer(object):
     @property
     def on_revoking(self) -> Callable[['TopicConsumer'], None]:
         """
-        Gets the handler for when topic is revoking. First parameter is the topic the revocation is happening for.
+        Gets the event handler for when the topic is being revoked.
+
+        Returns:
+            Callable[[TopicConsumer], None]: The event handler for when the topic is being revoked. The first parameter is the TopicConsumer instance for which the revocation is happening.
         """
         return self._on_revoking
 
     @on_revoking.setter
     def on_revoking(self, value: Callable[['TopicConsumer'], None]) -> None:
         """
-        Sets the handler for when topic is revoking. First parameter is the topic the revocation is happening for.
+        Sets the event handler for when the topic is being revoked.
+
+        Args:
+            value (Callable[[TopicConsumer], None]): The new event handler for when the topic is being revoked. The first parameter is the TopicConsumer instance for which the revocation is happening.
         """
         self._on_revoking = value
         if self._on_revoking_ref is None:
@@ -161,14 +180,20 @@ class TopicConsumer(object):
     @property
     def on_committed(self) -> Callable[['TopicConsumer'], None]:
         """
-        Gets the handler for when the topic finished committing data read up to this point. First parameter is the topic the commit happened for.
+        Gets the event handler for when the topic finishes committing consumed data up to this point.
+
+        Returns:
+            Callable[[TopicConsumer], None]: The event handler for when the topic finishes committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit happened.
         """
         return self._on_committed
 
     @on_committed.setter
     def on_committed(self, value: Callable[['TopicConsumer'], None]) -> None:
         """
-        Sets the handler for when the topic finished committing data read up to this point. First parameter is the topic the commit happened for.
+        Sets the event handler for when the topic finishes committing consumed data up to this point.
+
+        Args:
+            value (Callable[[TopicConsumer], None]): The new event handler for when the topic finishes committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit happened.
         """
         self._on_committed = value
         if self._on_committed_ref is None:
@@ -194,14 +219,20 @@ class TopicConsumer(object):
     @property
     def on_committing(self) -> Callable[['TopicConsumer'], None]:
         """
-        Gets the handler for when the topic beginning to commit data read up to this point. First parameter is the topic the commit is happening for.
+        Gets the event handler for when the topic begins committing consumed data up to this point.
+
+        Returns:
+            Callable[[TopicConsumer], None]: The event handler for when the topic begins committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit is happening.
         """
         return self._on_committing
 
     @on_committing.setter
     def on_committing(self, value: Callable[['TopicConsumer'], None]) -> None:
         """
-        Sets the handler for when the topic beginning to commit data read up to this point. First parameter is the topic the commit is happening for.
+        Sets the event handler for when the topic begins committing consumed data up to this point.
+
+        Args:
+            value (Callable[[TopicConsumer], None]): The new event handler for when the topic begins committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit is happening.
         """
         self._on_committing = value
         if self._on_committing_ref is None:
@@ -225,16 +256,22 @@ class TopicConsumer(object):
 
     def subscribe(self):
         """
-           Subscribes to streams in the topic
-           Use 'on_stream_received' event to read incoming streams
+        Subscribes to streams in the topic.
+        Use 'on_stream_received' event to consume incoming streams.
         """
         self._interop.Subscribe()
 
     def commit(self):
         """
-           Commit packages read up until now
+        Commit packages consumed up until now
         """
         self._interop.Commit()
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Retrieves the .net pointer to TopicConsumer instance.
+
+        Returns:
+            ctypes.c_void_p: The .net pointer to TopicConsumer instance.
+        """
         return self._interop.get_interop_ptr__()

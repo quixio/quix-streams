@@ -81,7 +81,7 @@ class StateValue(object):
     @property
     def type(self):
         """
-        Retrieves the type of the wrapped value.
+        Gets the type of the wrapped value.
 
         Returns:
             StateType: The type of the wrapped value.
@@ -91,7 +91,7 @@ class StateValue(object):
     @property
     def value(self):
         """
-        Retrieves the wrapped value.
+        Gets the wrapped value.
 
         Returns:
             any: The wrapped value.
@@ -100,7 +100,7 @@ class StateValue(object):
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         """
-        Retrieves the .NET pointer of the wrapped value.
+        Gets the .NET pointer of the wrapped value.
 
         Returns:
             ctypes.c_void_p: The .NET pointer of the wrapped value.

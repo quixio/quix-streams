@@ -25,7 +25,7 @@ class TimeseriesBuffer(object):
         """
         Initializes a new instance of TimeseriesBuffer.
 
-        NOTE: Do not initialize this class manually, use StreamingClient.create_output to create it.
+        NOTE: Do not initialize this class manually, use XXX to create it.
 
         Args:
             stream: The stream the buffer is created for.

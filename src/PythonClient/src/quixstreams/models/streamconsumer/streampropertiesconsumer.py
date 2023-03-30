@@ -52,7 +52,10 @@ class StreamPropertiesConsumer(object):
     @property
     def on_changed(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when the stream properties change. First parameter is the stream it is invoked for.
+        Gets the handler for when the stream properties change.
+
+        Returns:
+            Callable[[StreamConsumer], None]: The event handler for stream property changes. The first parameter is the StreamConsumer instance for which the change is invoked.
         """
         return self._on_changed
 

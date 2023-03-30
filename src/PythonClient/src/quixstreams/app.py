@@ -9,26 +9,47 @@ from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationTokenSourc
 
 class CancellationTokenSource:
     """
-        Signals to a System.Threading.CancellationToken that it should be canceled.
+    Represents a token source that can signal a cancellation System.Threading.CancellationToken
     """
 
     def __init__(self):
         """
-            Creates a new instance of CancellationTokenSource\
+        Initializes a new instance of the CancellationTokenSource class.
         """
         self._interop = ctsi(ctsi.Constructor())
 
     def is_cancellation_requested(self):
+        """
+        Checks if a cancellation has been requested.
+
+        Returns:
+            bool: True if the cancellation has been requested, False otherwise.
+        """
         return self._interop.get_IsCancellationRequested()
 
-    def cancel(self):
+    def cancel(self) -> 'CancellationToken':
+        """
+        Signals a cancellation to the CancellationToken.
+        """
         self._interop.Cancel()
 
     @property
-    def token(self):
+    def token(self) -> 'CancellationToken':
+        """
+        Gets the associated CancellationToken.
+
+        Returns:
+            CancellationToken: The CancellationToken associated with this CancellationTokenSource.
+        """
         return CancellationToken(self._interop.get_Token())
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the interop pointer of the CancellationTokenSource object.
+
+        Returns:
+            ctypes.c_void_p: The interop pointer of the CancellationTokenSource object.
+        """
         return self._interop.get_interop_ptr__()
 
 
@@ -48,19 +69,19 @@ class CancellationToken:
         return self._interop.get_interop_ptr__()
 
 
-class App():
+class App:
     """
-        Helper class to handle default streaming behaviors and handle automatic resource cleanup on shutdown
+    Provides utilities to handle default streaming behaviors and automatic resource cleanup on shutdown.
     """
 
     @staticmethod
     def run(cancellation_token: CancellationToken = None, before_shutdown: Callable[[], None] = None):
         """
-            Helper method to handle default streaming behaviors and handle automatic resource cleanup on shutdown
-            It also ensures input topics defined at the time of invocation are opened for read.
+        Runs the application, managing streaming behaviors and automatic resource cleanup on shutdown.
 
-            :param cancellation_token: An optional cancellation token to abort the application run with
-            :param before_shutdown: An optional function to call before shutting down
+        Args:
+            cancellation_token (CancellationToken, optional): An optional CancellationToken to abort the application run with.
+            before_shutdown (Callable[[], None], optional): An optional function to call before shutting down the application.
         """
 
         def wrapper():

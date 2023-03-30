@@ -26,11 +26,10 @@ class TokenValidationConfiguration(object):
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of TokenValidationConfiguration
+        Initializes a new instance of TokenValidationConfiguration.
 
-            Parameters:
-
-            net_pointer (c_void_p): Pointer to an instance of a .net TokenValidationConfiguration
+        Args:
+            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET TokenValidationConfiguration.
         """
         if net_pointer is None:
             raise Exception("Native pointer must not be null")
@@ -40,21 +39,30 @@ class TokenValidationConfiguration(object):
     @property
     def enabled(self) -> bool:
         """
-            Gets whether token validation and warnings are enabled. Defaults to true.
+        Gets whether token validation and warnings are enabled. Defaults to true.
+
+        Returns:
+            bool: True if token validation and warnings are enabled, False otherwise.
         """
         return self._interop.get_Enabled()
 
     @enabled.setter
     def enabled(self, value: bool):
         """
-            Sets whether token validation and warnings are enabled. Defaults to true.
+        Sets whether token validation and warnings are enabled. Defaults to true.
+
+        Args:
+            value (bool): True to enable token validation and warnings, False to disable.
         """
         self._interop.set_Enabled(value)
 
     @property
     def warning_before_expiry(self) -> Union[timedelta, None]:
         """
-            Gets whether if the token expires within this period, a warning will be displayed. Defaults to 2 days. Set to None to disable the check
+        Gets the period within which, if the token expires, a warning will be displayed. Defaults to 2 days. Set to None to disable the check.
+
+        Returns:
+            Union[timedelta, None]: The period within which a warning will be displayed if the token expires or None if the check is disabled.
         """
 
         ptr = self._interop.get_WarningBeforeExpiry()
@@ -64,7 +72,10 @@ class TokenValidationConfiguration(object):
     @warning_before_expiry.setter
     def warning_before_expiry(self, value: Union[timedelta, None]):
         """
-            Sets whether if the token expires within this period, a warning will be displayed. Defaults to 2 days. Set to None to disable the check
+        Sets the period within which, if the token expires, a warning will be displayed. Defaults to 2 days. Set to None to disable the check.
+
+        Args:
+            value (Union[timedelta, None]): The new period within which a warning will be displayed if the token expires or None to disable the check.
         """
 
         ptr = dtc.timedelta_to_dotnet(value)
@@ -74,40 +85,48 @@ class TokenValidationConfiguration(object):
     @property
     def warn_about_pat_token(self) -> bool:
         """
-            Gets whether to warn if the provided token is not PAT token. Defaults to true.
+        Gets whether to warn if the provided token is not a PAT token. Defaults to true.
+
+        Returns:
+            bool: True if the warning is enabled, False otherwise.
         """
         return self._interop.get_WarnAboutNonPatToken()
-        return self.__wrapped.WarnAboutNonPatToken
 
     @warn_about_pat_token.setter
     def warn_about_pat_token(self, value: bool):
         """
-            Sets whether to warn if the provided token is not PAT token. Defaults to true.
+        Sets whether to warn if the provided token is not a PAT token. Defaults to true.
+
+        Args:
+            value (bool): True to enable the warning, False to disable.
         """
         return self._interop.set_WarnAboutNonPatToken(value)
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the associated .NET object pointer.
+
+        Returns:
+            ctypes.c_void_p: The .NET pointer
+        """
         return self._pointer
 
 
 class QuixStreamingClient(object):
     """
-        Class that is capable of creating input and output topics for reading and writing
+    Streaming client for Kafka configured automatically using Environment Variables and Quix platform endpoints.
+    Use this Client when you use this library together with Quix platform.
     """
 
     def __init__(self, token: str = None, auto_create_topics: bool = True, properties: Dict[str, str] = None, debug: bool = False):
         """
-            Creates a new instance of quixstreamsClient that is capable of creating input and output topics for reading and writing
+        Initializes a new instance of the QuixStreamingClient capable of creating topic consumers and producers.
 
-            Parameters:
-
-            token (string): The token to use when talking to Quix. When not provided, Quix__Sdk__Token environment variable will be used
-
-            auto_create_topics (string): Whether topics should be auto created if they don't exist yet. Optional, defaults to true
-
-            properties: Optional extra properties for broker configuration
-
-            debug (string): Whether debugging should enabled
+        Args:
+            token (str, optional): The token to use when talking to Quix. If not provided, the Quix__Sdk__Token environment variable will be used. Defaults to None.
+            auto_create_topics (bool, optional): Whether topics should be auto-created if they don't exist yet. Defaults to True.
+            properties (Dict[str, str], optional): Additional broker properties. Defaults to None.
+            debug (bool, optional): Whether debugging should be enabled. Defaults to False.
         """
 
         net_properties_hptr = None
@@ -122,17 +141,16 @@ class QuixStreamingClient(object):
     def get_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
                               auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
-            Opens an input topic capable of reading incoming streams
+        Opens a topic consumer capable of subscribing to receive incoming streams.
 
-            Parameters:
+        Args:
+            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
+            consumer_group (str, optional): The consumer group ID to use for consuming messages. If None, the consumer group is not used, and only consuming new messages. Defaults to None.
+            commit_settings (Union[CommitOptions, CommitMode], optional): The settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
+            auto_offset_reset (AutoOffsetReset, optional): The offset to use when there is no saved offset for the consumer group. Defaults to AutoOffsetReset.Latest.
 
-            topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
-
-            consumer_group (string): The consumer group id to use for consuming messages
-
-            commit_settings (CommitOptions, CommitMode): the settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
-
-            auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to latest
+        Returns:
+            TopicConsumer: An instance of TopicConsumer for the specified topic.
         """
         net_offset_reset = AutoOffsetResetInterop.Latest
         if auto_offset_reset is not None:
@@ -152,11 +170,13 @@ class QuixStreamingClient(object):
 
     def get_topic_producer(self, topic_id_or_name: str) -> TopicProducer:
         """
-            Opens an output topic capable of sending outgoing streams
+        Gets an output topic capable of sending outgoing streams.
 
-            Parameters:
+        Args:
+            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
 
-            topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
+        Returns:
+            TopicProducer: An instance of TopicProducer for the specified topic.
         """
 
         dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
@@ -164,12 +184,15 @@ class QuixStreamingClient(object):
 
     def get_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
-            Opens an input topic for reading raw data from the stream
+        Gets an input topic for reading raw data from the stream.
 
-            Parameters:
+        Args:
+            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
+            consumer_group (str, optional): The consumer group ID to use for consuming messages. Defaults to None.
+            auto_offset_reset (Union[AutoOffsetReset, None], optional): The offset to use when there is no saved offset for the consumer group. Defaults to None.
 
-            topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
-            consumer_group (string): Consumer group ( optional )
+        Returns:
+            RawTopicConsumer: An instance of RawTopicConsumer for the specified topic.
         """
 
         net_offset_reset = AutoOffsetResetInterop.Latest
@@ -181,19 +204,25 @@ class QuixStreamingClient(object):
 
     def get_raw_topic_producer(self, topic_id_or_name: str) -> RawTopicProducer:
         """
-            Opens an input topic for writing raw data to the stream
+        Gets an input topic for writing raw data to the stream.
 
-            Parameters:
+        Args:
+            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
 
-            topic_id_or_name (string): Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
+        Returns:
+            RawTopicProducer: An instance of RawTopicProducer for the specified topic.
         """
+
         dotnet_pointer = self._interop.GetRawTopicProducer(topic_id_or_name)
         return RawTopicProducer(dotnet_pointer)
 
     @property
     def token_validation_config(self) -> TokenValidationConfiguration:
         """
-            Gets the configuration for token validation.
+        Gets the configuration for token validation.
+
+        Returns:
+            TokenValidationConfiguration: The current token validation configuration.
         """
 
         return TokenValidationConfiguration(self._interop.get_TokenValidationConfig())
@@ -201,7 +230,10 @@ class QuixStreamingClient(object):
     @token_validation_config.setter
     def token_validation_config(self, value: TokenValidationConfiguration):
         """
-            Sets the configuration for token validation.
+        Sets the configuration for token validation.
+
+        Args:
+            value (TokenValidationConfiguration): The new token validation configuration.
         """
         raise NotImplementedError("TODO")
         if value is None:
@@ -212,7 +244,10 @@ class QuixStreamingClient(object):
     @property
     def api_url(self) -> str:
         """
-            Gets the base API uri. Defaults to https://portal-api.platform.quix.ai, or environment variable Quix__Portal__Api if available.
+        Gets the base API URI. Defaults to https://portal-api.platform.quix.ai, or environment variable Quix__Portal__Api if available.
+
+        Returns:
+            str: The current base API URI.
         """
 
         uri = ui(self._interop.get_ApiUrl())
@@ -221,14 +256,20 @@ class QuixStreamingClient(object):
     @api_url.setter
     def api_url(self, value: str):
         """
-            Sets the base API uri. Defaults to https://portal-api.platform.quix.ai, or environment variable Quix__Portal__Api if available.
+        Sets the base API URI. Defaults to https://portal-api.platform.quix.ai, or environment variable Quix__Portal__Api if available.
+
+        Args:
+            value (str): The new base API URI.
         """
         self._interop.set_ApiUrl(ui.Constructor(value))
 
     @property
     def cache_period(self) -> timedelta:
         """
-            Gets the period for which some API responses will be cached to avoid excessive amount of calls. Defaults to 1 minute.
+        Gets the period for which some API responses will be cached to avoid an excessive amount of calls. Defaults to 1 minute.
+
+        Returns:
+            timedelta: The current cache period.
         """
 
         ptr = self._interop.get_CachePeriod()
@@ -238,11 +279,20 @@ class QuixStreamingClient(object):
     @cache_period.setter
     def cache_period(self, value: timedelta):
         """
-            Sets the period for which some API responses will be cached to avoid excessive amount of calls. Defaults to 1 minute.
+        Sets the period for which some API responses will be cached to avoid an excessive amount of calls. Defaults to 1 minute.
+
+        Args:
+            value (timedelta): The new cache period.
         """
         ptr = dtc.timedelta_to_dotnet(value)
 
         self._interop.set_CachePeriod(ptr)
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the associated .NET object pointer.
+
+        Returns:
+            ctypes.c_void_p: The .NET pointer
+        """
         return self._interop.get_interop_ptr__()

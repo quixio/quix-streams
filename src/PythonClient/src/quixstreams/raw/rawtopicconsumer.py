@@ -19,7 +19,7 @@ class RawTopicConsumer(object):
        Initializes a new instance of RawTopicConsumer.
 
        Note:
-           Do not initialize this class manually, use StreamingClient.on_stream_received to read streams.
+           Do not initialize this class manually, use KafkaStreamingClient.get_raw_topic_consumer to read streams.
 
        Args:
            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net RawTopicConsumer.
@@ -44,10 +44,10 @@ class RawTopicConsumer(object):
     @property
     def on_message_received(self) -> Callable[['RawTopicConsumer', RawMessage], None]:
         """
-        Gets the handler for when a topic receives a message. The first parameter is the topic the message is received for, the second is the RawMessage.
+        Gets the handler for when a topic receives a message.
 
         Returns:
-            Callable[['RawTopicConsumer', RawMessage], None]: The handler for when a topic receives a message.
+            Callable[[RawTopicConsumer, RawMessage], None]: The event handler for when a topic receives a message. The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
 
         return self._on_message_received
@@ -55,10 +55,10 @@ class RawTopicConsumer(object):
     @on_message_received.setter
     def on_message_received(self, value: Callable[['RawTopicConsumer', RawMessage], None]) -> None:
         """
-        Sets the handler for when a topic receives a message. The first parameter is the topic the message is received for, the second is the RawMessage.
+        Sets the handler for when a topic receives a message.
 
         Args:
-            value (Callable[['RawTopicConsumer', RawMessage], None]): The new handler for when a topic receives a message.
+            value (Callable[[RawTopicConsumer, RawMessage], None]): The new event handler for when a topic receives a message. The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
         self._on_message_received = value
         if self._on_message_received_ref is None:
@@ -83,20 +83,20 @@ class RawTopicConsumer(object):
     @property
     def on_error_occurred(self) -> Callable[['RawTopicConsumer', BaseException], None]:
         """
-        Gets the handler for when a stream experiences an exception during the asynchronous write process. The first parameter is the topic the error is received for, the second is the exception.
+        Gets the handler for when a stream experiences an exception during the asynchronous write process.
 
         Returns:
-            Callable[['RawTopicConsumer', BaseException], None]: The handler for when a stream experiences an exception during the asynchronous write process.
+            Callable[[RawTopicConsumer, BaseException], None]: The event handler for when a stream experiences an exception during the asynchronous write process. The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         return self._on_error_occurred
 
     @on_error_occurred.setter
     def on_error_occurred(self, value: Callable[['RawTopicConsumer', BaseException], None]) -> None:
         """
-        Sets the handler for when a stream experiences an exception during the asynchronous write process. The first parameter is the topic the error is received for, the second is the exception.
+        Sets the handler for when a stream experiences an exception during the asynchronous write process.
 
         Args:
-            value (Callable[['RawTopicConsumer', BaseException], None]): The new handler for when a stream experiences an exception during the asynchronous write process.
+            value (Callable[[RawTopicConsumer, BaseException], None]): The new handler for when a stream experiences an exception during the asynchronous write process. The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         self._on_error_occurred = value
         if self._on_error_occurred_ref is None:

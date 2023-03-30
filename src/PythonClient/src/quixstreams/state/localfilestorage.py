@@ -22,7 +22,7 @@ class LocalFileStorage(object):
 
     def get(self, key: str) -> any:
         """
-        Retrieves the value at the specified key.
+        Gets the value at the specified key.
 
         Args:
             key (str): The key to retrieve the value for.

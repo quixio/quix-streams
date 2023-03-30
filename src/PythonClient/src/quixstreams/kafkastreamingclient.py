@@ -17,22 +17,18 @@ from .topicproducer import TopicProducer
 @nativedecorator
 class KafkaStreamingClient(object):
     """
-        Class that is capable of creating input and output topics for reading and writing
+    A Kafka streaming client capable of creating topic consumer and producers.
     """
 
     def __init__(self, broker_address: str, security_options: SecurityOptions = None, properties: Dict[str, str] = None, debug: bool = False):
         """
-            Creates a new instance of KafkaStreamingClient that is capable of creating input and output topics for reading and writing
+        Initializes a new instance of the KafkaStreamingClient.
 
-            Parameters:
-
-            brokerAddress (string): Address of Kafka cluster
-
-            security_options (string): Optional security options
-
-            properties: Optional extra properties for broker configuration
-
-            debug (string): Whether debugging should be enabled
+        Args:
+            broker_address (str): The address of the Kafka cluster.
+            security_options (SecurityOptions, optional): Optional security options for the Kafka client.
+            properties (Dict[str, str], optional): Optional extra properties for broker configuration.
+            debug (bool, optional): Whether debugging should be enabled. Defaults to False.
         """
 
         secu_opts_hptr = None
@@ -51,17 +47,16 @@ class KafkaStreamingClient(object):
     def get_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
                               auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:
         """
-            Opens an input topic capable of reading incoming streams
+        Gets a topic consumer capable of subscribing to receive incoming streams.
 
-            Parameters:
+        Args:
+            topic (str): The name of the topic.
+            consumer_group (str, optional): The consumer group ID to use for consuming messages. Defaults to None.
+            commit_settings (Union[CommitOptions, CommitMode], optional): The settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
+            auto_offset_reset (AutoOffsetReset, optional): The offset to use when there is no saved offset for the consumer group. Defaults to AutoOffsetReset.Latest.
 
-            topic (string): Name of the topic
-
-            consumer_group (string): The consumer group id to use for consuming messages
-
-            commit_settings (CommitOptions, CommitMode): the settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
-
-            auto_offset_reset (AutoOffsetReset): The offset to use when there is no saved offset for the consumer group. Defaults to latest
+        Returns:
+            TopicConsumer: An instance of TopicConsumer for the specified topic.
         """
 
         net_offset_reset = AutoOffsetResetInterop.Latest
@@ -82,23 +77,28 @@ class KafkaStreamingClient(object):
 
     def get_topic_producer(self, topic: str) -> TopicProducer:
         """
-            Opens an output topic capable of sending outgoing streams
+        Gets a topic producer capable of publishing stream messages.
 
-            Parameters:
+        Args:
+            topic (str): The name of the topic.
 
-            topic (string): Name of the topic
+        Returns:
+            TopicProducer: An instance of TopicProducer for the specified topic.
         """
         hptr = self._interop.GetTopicProducer(topic)
         return TopicProducer(hptr)
 
     def get_raw_topic_consumer(self, topic: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:
         """
-            Opens an input topic for reading raw data from the stream
+        Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages.
 
-            Parameters:
+        Args:
+            topic (str): The name of the topic.
+            consumer_group (str, optional): The consumer group ID to use for consuming messages. Defaults to None.
+            auto_offset_reset (Union[AutoOffsetReset, None], optional): The offset to use when there is no saved offset for the consumer group. Defaults to None.
 
-            topic (string): Name of the topic
-            consumer_group (string): Consumer group ( optional )
+        Returns:
+            RawTopicConsumer: An instance of RawTopicConsumer for the specified topic.
         """
 
         py_offset_reset = AutoOffsetReset.Earliest
@@ -110,11 +110,13 @@ class KafkaStreamingClient(object):
 
     def get_raw_topic_producer(self, topic: str) -> RawTopicProducer:
         """
-           Opens an input topic for writing raw data to the stream
+        Gets a topic producer capable of publishing non-quixstreams messages.
 
-           Parameters:
+        Args:
+            topic (str): The name of the topic.
 
-           topic (string): Name of the topic
+        Returns:
+            RawTopicProducer: An instance of RawTopicProducer for the specified topic.
         """
         raw_topic_hptr = self._interop.GetRawTopicProducer(topic)
         return RawTopicProducer(raw_topic_hptr)

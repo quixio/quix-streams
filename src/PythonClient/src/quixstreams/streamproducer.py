@@ -17,17 +17,18 @@ from .native.Python.QuixStreamsStreaming.IStreamProducer import IStreamProducer 
 @nativedecorator
 class StreamProducer(object):
     """
-        Handles writing stream to a topic
+    Handles producing stream messages to a topic.
     """
 
     def __init__(self, topic_producer: 'TopicProducer', net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamProducer.
-            NOTE: Do not initialize this class manually, use StreamingClient.create_stream to write streams
+        Initializes a new instance of StreamProducer.
 
-            Parameters:
-            topic_producer: The topic producer the stream producer publishes to
-            net_object (.net object): The .net object representing a StreamProducer
+        NOTE: Do not initialize this class manually, use XXX to produce streams
+
+        Args:
+            topic_producer (TopicProducer): The topic producer the stream producer publishes to.
+            net_pointer (ctypes.c_void_p): The .net object representing a StreamProducer.
         """
 
         if net_pointer is None:
@@ -57,7 +58,10 @@ class StreamProducer(object):
     @property
     def topic(self) -> 'TopicProducer':
         """
-        Gets the topic the stream is writing to
+        Gets the topic the stream is producing to.
+
+        Returns:
+            TopicProducer: The topic the stream is producing to.
         """
         return self._topic
 
@@ -67,6 +71,9 @@ class StreamProducer(object):
         """
         Gets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the stream
          is received for, second is the exception.
+
+        Returns:
+            Callable[['StreamProducer', BaseException], None]: The handler for exceptions during the asynchronous write process.
         """
         return self._on_write_exception
 
@@ -75,6 +82,9 @@ class StreamProducer(object):
         """
         Sets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the stream
          is received for, second is the exception.
+
+        Args:
+            value (Callable[['StreamProducer', BaseException], None]): The handler for exceptions during the asynchronous write process.
         """
         self._on_write_exception = value
         if self._on_write_exception_ref is None:
@@ -99,12 +109,22 @@ class StreamProducer(object):
 
     @property
     def stream_id(self) -> str:
-        """Gets the unique id the stream being written"""
+        """
+        Gets the unique id of the stream being produced.
+
+        Returns:
+            str: The unique id of the stream being produced.
+        """
         return self._stream_id
 
     @property
     def epoch(self) -> datetime:
-        """Gets the default Epoch used for Parameters and Events"""
+        """
+        Gets the default Epoch used for Timeseries and Events.
+
+        Returns:
+            datetime: The default Epoch used for Timeseries and Events.
+        """
 
         ptr = self._interop.get_Epoch()
         value = dtc.datetime_to_python(ptr)
@@ -112,13 +132,23 @@ class StreamProducer(object):
 
     @epoch.setter
     def epoch(self, value: datetime):
-        """Set the default Epoch used for Parameters and Events"""
+        """
+        Set the default Epoch used for Timeseries and Events.
+
+        Args:
+            value (datetime): The default Epoch value to set.
+        """
         dotnet_value = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(dotnet_value)
 
     @property
     def properties(self) -> StreamPropertiesProducer:
-        """Properties of the stream. The changes will automatically be sent after a slight delay"""
+        """
+        Gets the properties of the stream. The changes will automatically be sent after a slight delay.
+
+        Returns:
+            StreamPropertiesProducer: The properties of the stream.
+        """
         if self._streamPropertiesProducer is None:
             self._streamPropertiesProducer = StreamPropertiesProducer(self._interop.get_Properties())
         return self._streamPropertiesProducer
@@ -126,7 +156,10 @@ class StreamProducer(object):
     @property
     def timeseries(self) -> StreamTimeseriesProducer:
         """
-        Gets the producer for publishing timeseries related information of the stream such as parameter definitions and values
+        Gets the producer for publishing timeseries related information of the stream such as parameter definitions and values.
+
+        Returns:
+            StreamTimeseriesProducer: The producer for publishing timeseries related information of the stream.
         """
 
         if self._streamTimeseriesProducer is None:
@@ -136,7 +169,10 @@ class StreamProducer(object):
     @property
     def events(self) -> StreamEventsProducer:
         """
-        Gets the producer for publishing event related information of the stream such as event definitions and values
+        Gets the producer for publishing event related information of the stream such as event definitions and values.
+
+        Returns:
+            StreamEventsProducer: The producer for publishing event related information of the stream.
         """
         if self._streamEventsProducer is None:
             self._streamEventsProducer = StreamEventsProducer(self._interop.get_Events())
@@ -144,7 +180,10 @@ class StreamProducer(object):
 
     def close(self, end_type: StreamEndType = StreamEndType.Closed):
         """
-            Close the stream and flush the pending data to stream
+        Closes the stream and flushes the pending data to stream.
+
+        Args:
+            end_type (StreamEndType, optional): The type of stream end. Defaults to StreamEndType.Closed.
         """
 
         dotnet_end_type = ec.enum_to_another(end_type, StreamEndTypeInterop)
