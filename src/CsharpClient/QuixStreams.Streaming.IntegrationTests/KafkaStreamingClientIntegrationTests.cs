@@ -636,39 +636,6 @@ namespace QuixStreams.Streaming.IntegrationTests
             });
         }
 
-        /// <summary>
-        /// Helper method, because the underlying topic might not always exist.
-        /// Our integration tests are set up using a broker which automatically creates a topic, but it can take some
-        /// seconds
-        /// </summary>
-        /// <param name="client"></param>
-        /// <param name="topic"></param>
-        private void EnsureTopic(KafkaStreamingClient client, string topic)
-        {
-            var mre = new ManualResetEvent(false);
-            using var rawProducer = client.GetRawTopicProducer(topic);
-            using var rawConsumer = client.GetRawTopicConsumer(topic, "EnsureTopic");
-            rawConsumer.OnMessageReceived += (s, message) =>
-            {
-                this.output.WriteLine("Topic verification message received");
-                mre.Set();
-            };
-            rawConsumer.Subscribe();
-            var loop = true;
-            var task = Task.Run(() =>
-            {
-                while (loop)
-                {
-                    rawProducer.Publish(new RawMessage(new byte[0]));
-                    Thread.Sleep(100);
-                }
-            });
-            mre.WaitOne();
-            loop = false;
-            task.GetAwaiter().GetResult();
-            this.output.WriteLine("Topic verified");
-        }
-
         private async Task RunTest(Func<Task> test)
         {
             var count = 0;
