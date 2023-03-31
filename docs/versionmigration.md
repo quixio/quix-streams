@@ -465,3 +465,32 @@ def on_event_data_handler(stream: StreamConsumer, data: EventData):
 
 … the rest of your code
 ```
+
+### NumPy types no longer handled transparently
+
+Certain code may generate run-time errors such as:
+
+```
+Invalid type <class 'numpy.float64'> passed as parameter value
+```
+
+NumPy types such as `numpy.int64` and `numpy.float64` are no longer handled transparently. 
+
+Where this occurs, the solution is to cast the type appropriately. For example, review the following example code snippet:
+
+```python
+.add_value('num_docks_available', df_i_agg.loc[0, 'num_docks_available']) \
+```
+
+This might generate the run-time error:
+
+```
+Invalid type <class 'numpy.int64'> passed as parameter value
+```
+
+Casting to `int` will prevent the run-time error: 
+
+```python
+.add_value('num_docks_available', int(df_i_agg.loc[0, 'num_docks_available'])) \
+```
+
