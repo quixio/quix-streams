@@ -9,7 +9,7 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models
 {
     /// <summary>
-    /// Represents a class used to consume from the stream in a buffered manner.
+    /// Represents a class used to consume and produce stream messages in a buffered manner.
     /// </summary>
     public class TimeseriesBuffer: IDisposable
     {

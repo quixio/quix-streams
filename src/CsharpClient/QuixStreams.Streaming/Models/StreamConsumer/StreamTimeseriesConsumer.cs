@@ -40,8 +40,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// Creates a new buffer for reading data
         /// </summary>
         /// <param name="bufferConfiguration">An optional TimeseriesBufferConfiguration</param>
-        /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only these. If provided, only these parameters will be available through this buffer</param>
-        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise new data consumed via the OnDataReceived event</returns>
+        /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only those parameters will be available through this buffer</param>
+        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise OnDataReceived event when new data is consumed</returns>
         public TimeseriesBufferConsumer CreateBuffer(TimeseriesBufferConfiguration bufferConfiguration = null, params string[] parametersFilter)
         {
             var buffer = new TimeseriesBufferConsumer(this.topicConsumer, this.streamConsumer, bufferConfiguration, parametersFilter);
@@ -53,8 +53,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// <summary>
         /// Creates a new buffer for reading data
         /// </summary>
-        /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only these If provided, only these parameters will be available through this buffer</param>
-        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise new data consumed via the OnDataReceived event</returns>
+        /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only those parameters will be available through this buffer</param>
+        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise OnDataReceived event when new data is consumed</returns>
         public TimeseriesBufferConsumer CreateBuffer(params string[] parametersFilter)
         {
             var buffer = new TimeseriesBufferConsumer(this.topicConsumer, this.streamConsumer, null, parametersFilter);

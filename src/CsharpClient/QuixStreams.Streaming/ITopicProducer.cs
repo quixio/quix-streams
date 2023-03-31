@@ -31,7 +31,7 @@ namespace QuixStreams.Streaming
         /// Retrieves a stream that was previously created by this instance, if the stream is not closed, otherwise creates a new stream. 
         /// </summary>
         /// <param name="streamId">The Id of the stream you want to get or create</param>
-        /// <param name="onStreamCreated">Callback executed when a new Stream is created in the Topic consumer because it doesn't exist.</param>
+        /// <param name="onStreamCreated">Callback executed when a new Stream is created in the topic producer because it doesn't exist.</param>
         /// <returns>Stream producer to allow the stream to push data to the platform.</returns>
         IStreamProducer GetOrCreateStream(string streamId, Action<IStreamProducer> onStreamCreated = null);
         

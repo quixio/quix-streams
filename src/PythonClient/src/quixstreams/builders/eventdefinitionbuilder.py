@@ -57,7 +57,7 @@ class EventDefinitionBuilder(object):
         """Add new Event definition, to define properties like Name or Level, among others.
 
         Args:
-            event_id: Event id. This must match the event id you use to Event values.
+            event_id: Event id. This must match the event id you use to publish event values.
             name: Human friendly display name of the event.
             description: Description of the event.
 

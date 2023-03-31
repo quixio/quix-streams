@@ -11,7 +11,7 @@ from ..native.Python.QuixStreamsStreaming.Models.TimeseriesBufferConfiguration i
 class TimeseriesBufferConfiguration(object):
     """
     Describes the configuration for timeseries buffers
-    When none of the buffer conditions are configured, the buffer immediately invokes the on_data_released.
+    When buffer conditions are not configured, it acts a pass-through, raising each message as arrives.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p = None):

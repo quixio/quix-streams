@@ -256,7 +256,7 @@ class StreamTimeseriesConsumer(object):
         Creates a new buffer for consuming data according to the provided parameter_filter and buffer_configuration.
 
         Args:
-            parameter_filter: Zero or more parameter identifiers to filter as a whitelist. If provided, only these
+            parameter_filter: Zero or more parameter identifiers to filter as a whitelist. If provided, only those
                               parameters will be available through this buffer.
             buffer_configuration: An optional TimeseriesBufferConfiguration.
 

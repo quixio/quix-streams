@@ -6,7 +6,7 @@
     public class SecurityOptions
     {
         /// <summary>
-        /// The SASL mechanism to use. Defaults to ScramSha256
+        /// The SASL mechanism to use.
         /// </summary>
         public SaslMechanism? SaslMechanism { get; set; }
         

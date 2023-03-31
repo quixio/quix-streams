@@ -31,7 +31,7 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Initializes a new instance of <see cref="TelemetryKafkaProducer"/>
         /// </summary>
-        /// <param name="producer">The input to produce the stream packages into. This is something you should share between multiple instances of this class to avoid re-initializing them.</param>
+        /// <param name="producer">A stream package producer. Share this among multiple instances of this class to prevent re-initialization.</param>
         /// <param name="byteSplitter">The byte splitter to use. </param>
         /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
         public TelemetryKafkaProducer(QuixStreams.Transport.IO.IProducer producer, IByteSplitter byteSplitter, string streamId = null)
