@@ -6,9 +6,9 @@ import shutil
 import fileinput
 from typing import List
 
-version = "0.5.1.0"
-informal_version = "0.5.1.0"
-nuget_version = "0.5.1.0"
+version = "0.5.2.0"
+informal_version = "0.5.2.0-dev1"
+nuget_version = "0.5.2.0-dev1"
 
 
 def updatecsproj(projfilepath):
