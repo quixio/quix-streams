@@ -88,7 +88,7 @@ def main():
     csharpfolder = "../../../CsharpClient"
     pythonfolder = "../../../PythonClient"
     streamingoutpath = f"{csharpfolder}/QuixStreams.Streaming/bin/Publish/{dotnetruntime}"
-    framework = "-f net8.0"
+    framework = "-f net7.0"
 
     build_streaming_project(csharpfolder, framework, streamingoutpath)
 
