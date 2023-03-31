@@ -51,11 +51,13 @@ def install_dotnet(version, channel):
 
 # Check for .NET SDK
 arch = os.uname().machine
-if arch == 'i386':  # intel
+if arch == 'i386':  # intel 
     if not check_installed_program_version('dotnet', r'^7\.\d+\.\d+'):
+        print(f"Installing dotnet for intel chip ({arch})")
         install_dotnet('7.0.1xx', '7.0.1xx')
 else:  # apple silicon
     if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
+        print(f"Installing dotnet for apple silicon ({arch})")
         install_dotnet('8.0.100-alpha.1.23055.13', '8.0.1xx')
 
 
