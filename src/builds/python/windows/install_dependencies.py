@@ -29,6 +29,6 @@ def check_installed_program_version(program, version_pattern):
         return False
 
 # Check for .NET 8 SDK
-if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
-    print('.NET 8 SDK not found or incorrect version. Please install the correct .NET 8 SDK version.')
+if not check_installed_program_version('dotnet', r'^7\.\d+\.\d+'):
+    print('.NET 7 SDK not found or incorrect version. Please install the correct .NET 7 SDK version.')
     sys.exit(1)
