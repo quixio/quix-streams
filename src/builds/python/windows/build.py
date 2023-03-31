@@ -19,6 +19,11 @@ except subprocess.CalledProcessError as e:
 import platform
 if platform.uname().system == "Windows":
     import winsound
-    winsound.Beep(440, 250)  # 440 Hz for 250 milliseconds
+    try:
+        winsound.Beep(440, 250)  # 440 Hz for 250 milliseconds
+    except:
+        pass # ignore failure
 else:
     print('\a')
+
+print("Build done")
