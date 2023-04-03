@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using FluentAssertions;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using QuixStreams.State.Storage;
 using QuixStreams.State.Storage.FileStorage;
+using Xunit;
 
 namespace QuixStreams.State.UnitTests
 {
@@ -18,40 +18,40 @@ namespace QuixStreams.State.UnitTests
             var value = Environment.GetEnvironmentVariable("stuff");
             await storage.SetAsync(key, inp);
             var ret = await storage.GetLongAsync(key);
-            Assert.AreEqual(inp, ret);
+            ret.Should().Be(inp);
         }
 
         protected async Task testBool(BaseFileStorage storage, string key, bool inp)
         {
             await storage.SetAsync(key, inp);
             var ret = await storage.GetBoolAsync(key);
-            Assert.AreEqual(inp, ret);
+            ret.Should().Be(inp);
         }
 
         protected async Task testString(BaseFileStorage storage, string key, string inp)
         {
             await storage.SetAsync(key, inp);
             var ret = await storage.GetStringAsync(key);
-            Assert.AreEqual(inp, ret);
+            ret.Should().Be(inp);
         }
         protected async Task testBinary(BaseFileStorage storage, string key, byte[] inp)
         {
             await storage.SetAsync(key, inp);
             var ret = await storage.GetBinaryAsync(key);
-            Assert.AreEqual(ret.Length, inp.Length);
+            ret.Length.Should().Be(inp.Length);
             for (var i = 0; i < ret.Length; i++)
             {
-                Assert.AreEqual(ret[i], inp[i]);
+                ret[i].Should().Be(inp[i]);
             }
         }
         protected async Task testDouble(BaseFileStorage storage, string key, double inp)
         {
             await storage.SetAsync(key, inp);
             var ret = await storage.GetDoubleAsync(key);
-            Assert.AreEqual(inp, ret);
+            inp.Should().Be(ret);
         }
         
-        [TestMethod]
+        [Fact]
         public async Task BaseCRUD_WithShorterContentThanBefore_ShouldNotThrowMalformedException()
         {
             // arrange
@@ -64,7 +64,7 @@ namespace QuixStreams.State.UnitTests
             action.Should().NotThrow<FormatException>();
         }
 
-        [TestMethod]
+        [Fact]
         public async Task TestWriteAsyncSerial()
         {
             var storage = this.GetStorage();
@@ -76,7 +76,7 @@ namespace QuixStreams.State.UnitTests
             await testBinary(storage, "VAL5", new byte[] { 1, 2, 62, 41, 5, 7, 1, 2, 9, 87, 56 });
         }
 
-        [TestMethod]
+        [Fact]
         public void TestWriteAsyncParallel()
         {
             var storage = this.GetStorage();
@@ -90,13 +90,13 @@ namespace QuixStreams.State.UnitTests
             });
         }
 
-        [DataTestMethod]
-        [DataRow(0)]
-        [DataRow(1)]
-        [DataRow(10)]
-        [DataRow(500)]
-        [DataRow(1024)]
-        [DataRow(10 * 1024)]
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(10)]
+        [InlineData(500)]
+        [InlineData(1024)]
+        [InlineData(10 * 1024)]
         public async Task TestWriteAsyncLongBinary(int len)
         {
             var storage = this.GetStorage();
@@ -111,7 +111,7 @@ namespace QuixStreams.State.UnitTests
             await testBinary(storage, $"VALBIN_{len}", data);
         }
 
-        [TestMethod]
+        [Fact]
         public async Task TestDeleteKey()
         {
             var storage = this.GetStorage();
@@ -120,31 +120,31 @@ namespace QuixStreams.State.UnitTests
             await storage.SetAsync("VAL2", true);
             await storage.SetAsync("VAL3", "data");
 
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 3);
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL2"));
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL3"));
+            (await storage.GetAllKeysAsync()).Length.Should().Be(3);
+            (await storage.ContainsKeyAsync("VAL1")).Should().BeTrue();
+            (await storage.ContainsKeyAsync("VAL2")).Should().BeTrue();
+            (await storage.ContainsKeyAsync("VAL3")).Should().BeTrue();
 
             await storage.RemoveAsync("VAL2");
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 2);
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
-            Assert.IsFalse(await storage.ContainsKeyAsync("VAL2"));
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL3"));
+            (await storage.GetAllKeysAsync()).Length.Should().Be(2);
+            (await storage.ContainsKeyAsync("VAL1")).Should().BeTrue();
+            (await storage.ContainsKeyAsync("VAL2")).Should().BeFalse();
+            (await storage.ContainsKeyAsync("VAL3")).Should().BeTrue();
 
             await storage.RemoveAsync("VAL3");
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 1);
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
-            Assert.IsFalse(await storage.ContainsKeyAsync("VAL2"));
-            Assert.IsFalse(await storage.ContainsKeyAsync("VAL3"));
+            (await storage.GetAllKeysAsync()).Length.Should().Be(1);
+            (await storage.ContainsKeyAsync("VAL1")).Should().BeTrue();
+            (await storage.ContainsKeyAsync("VAL2")).Should().BeFalse();
+            (await storage.ContainsKeyAsync("VAL3")).Should().BeFalse();
 
             await storage.SetAsync("VAL3", "data2");
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 2);
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL1"));
-            Assert.IsFalse(await storage.ContainsKeyAsync("VAL2"));
-            Assert.IsTrue(await storage.ContainsKeyAsync("VAL3"));
+            (await storage.GetAllKeysAsync()).Length.Should().Be(2);
+            (await storage.ContainsKeyAsync("VAL1")).Should().BeTrue();
+            (await storage.ContainsKeyAsync("VAL2")).Should().BeFalse();
+            (await storage.ContainsKeyAsync("VAL3")).Should().BeTrue();
         }
 
-        [TestMethod]
+        [Fact]
         public void TestDeleteKeySync()
         {
             var storage = this.GetStorage();
@@ -153,31 +153,31 @@ namespace QuixStreams.State.UnitTests
             storage.Set("VAL2", true);
             storage.Set("VAL3", "data");
 
-            Assert.AreEqual((storage.GetAllKeys()).Length, 3);
-            Assert.IsTrue(storage.ContainsKey("VAL1"));
-            Assert.IsTrue(storage.ContainsKey("VAL2"));
-            Assert.IsTrue(storage.ContainsKey("VAL3"));
+            (storage.GetAllKeys()).Length.Should().Be(3);
+            (storage.ContainsKey("VAL1")).Should().BeTrue();
+            (storage.ContainsKey("VAL2")).Should().BeTrue();
+            (storage.ContainsKey("VAL3")).Should().BeTrue();
 
             storage.Remove("VAL2");
-            Assert.AreEqual((storage.GetAllKeys()).Length, 2);
-            Assert.IsTrue(storage.ContainsKey("VAL1"));
-            Assert.IsFalse(storage.ContainsKey("VAL2"));
-            Assert.IsTrue(storage.ContainsKey("VAL3"));
+            (storage.GetAllKeys()).Length.Should().Be(2);
+            (storage.ContainsKey("VAL1")).Should().BeTrue();
+            (storage.ContainsKey("VAL2")).Should().BeFalse();
+            (storage.ContainsKey("VAL3")).Should().BeTrue();
 
             storage.Remove("VAL3");
-            Assert.AreEqual((storage.GetAllKeys()).Length, 1);
-            Assert.IsTrue(storage.ContainsKey("VAL1"));
-            Assert.IsFalse(storage.ContainsKey("VAL2"));
-            Assert.IsFalse(storage.ContainsKey("VAL3"));
+            (storage.GetAllKeys()).Length.Should().Be(1);
+            (storage.ContainsKey("VAL1")).Should().BeTrue();
+            (storage.ContainsKey("VAL2")).Should().BeFalse();
+            (storage.ContainsKey("VAL3")).Should().BeFalse();
 
             storage.Set("VAL3", "data2");
-            Assert.AreEqual((storage.GetAllKeys()).Length, 2);
-            Assert.IsTrue(storage.ContainsKey("VAL1"));
-            Assert.IsFalse(storage.ContainsKey("VAL2"));
-            Assert.IsTrue(storage.ContainsKey("VAL3"));
+            (storage.GetAllKeys()).Length.Should().Be(2);
+            (storage.ContainsKey("VAL1")).Should().BeTrue();
+            (storage.ContainsKey("VAL2")).Should().BeFalse();
+            (storage.ContainsKey("VAL3")).Should().BeTrue();
         }
 
-        [TestMethod]
+        [Fact]
         public async Task TestClearStorage()
         {
             var storage = this.GetStorage();
@@ -186,10 +186,10 @@ namespace QuixStreams.State.UnitTests
             await storage.SetAsync("VAL2", true);
             await storage.SetAsync("VAL3", "data");
 
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 3);
+            (await storage.GetAllKeysAsync()).Length.Should().Be(3);
 
             await storage.ClearAsync();
-            Assert.AreEqual((await storage.GetAllKeysAsync()).Length, 0);
+            (await storage.GetAllKeysAsync()).Length.Should().Be(0);
         }
 
     }
