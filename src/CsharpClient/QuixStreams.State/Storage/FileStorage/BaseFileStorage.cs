@@ -198,6 +198,12 @@ namespace QuixStreams.State.Storage.FileStorage
             }
         }
 
+        /// <inheritdoc/>
+        public async Task<int> Count()
+        {
+            return (await GetAllKeysAsync()).Length;
+        }
+
         /// <summary>
         /// Get all keys in the storage ( used internally )
         /// This function is written in the asynchronous manner
