@@ -18,7 +18,7 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.TimeseriesBuffe
 @nativedecorator
 class TimeseriesBufferProducer(TimeseriesBuffer):
     """
-    A class for writing time-series data to a StreamProducer in a buffered manner.
+    A class for producing timeseries data to a StreamProducer in a buffered manner.
     """
 
     def __init__(self, stream_producer, net_pointer: ctypes.c_void_p):
@@ -119,7 +119,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
 
     def publish(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
         """
-        Publish the provided time-series packet to the buffer.
+        Publish the provided timeseries packet to the buffer.
 
         Args:
             packet (Union[TimeseriesData, pd.DataFrame]): The packet containing TimeseriesData or panda DataFrame

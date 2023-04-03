@@ -7,7 +7,7 @@ using QuixStreams.Telemetry.Models.Utility;
 namespace QuixStreams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// A class for producing time-series data to an <see cref="IStreamProducer"/> in a buffered manner.
+    /// A class for producing timeseries data to an <see cref="IStreamProducer"/> in a buffered manner.
     /// </summary>
     public class TimeseriesBufferProducer: TimeseriesBuffer
     {
@@ -93,7 +93,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
 
         /// <summary>
-        /// Publish the provided time-series data to the buffer.
+        /// Publish the provided timeseries data to the buffer.
         /// </summary>
         /// <param name="data">Data to publish</param>
         public void Publish(TimeseriesData data)

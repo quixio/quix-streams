@@ -16,17 +16,17 @@ namespace QuixStreams.Streaming
         string StreamId { get; }
 
         /// <summary>
-        /// Gets the consumer for accessing the properties and metadata of the stream
+        /// Gets the consumer for accessing the properties and metadata of the stream.
         /// </summary>
         StreamPropertiesConsumer Properties { get; }
 
         /// <summary>
-        /// Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values 
+        /// Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values.
         /// </summary>
         StreamTimeseriesConsumer Timeseries { get; }
 
         /// <summary>
-        /// Gets the consumer for accessing event related information of the stream such as event definitions and values 
+        /// Gets the consumer for accessing event related information of the stream such as event definitions and values.
         /// </summary>
         StreamEventsConsumer Events { get; }
 

@@ -181,7 +181,7 @@ class StreamConsumer(object):
     @property
     def properties(self) -> StreamPropertiesConsumer:
         """
-        Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values.
+        Gets the consumer for accessing the properties and metadata of the stream.
 
         Returns:
             StreamPropertiesConsumer: The stream properties consumer instance.

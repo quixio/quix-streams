@@ -67,7 +67,7 @@ class StreamEventsProducer(object):
 
     @property
     def epoch(self) -> datetime:
-        """Gets the default epoch used for Timestamp event values."""
+        """Gets the default epoch used for event values."""
 
         ptr = self._interop.get_Epoch()
         value = dtc.datetime_to_python(ptr)

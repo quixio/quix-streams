@@ -234,7 +234,7 @@ class TimeseriesBuffer(object):
         """
         Gets the custom trigger function, which is invoked after adding a new timestamp to the buffer.
 
-        If the custom trigger function returns True, the `TimeseriesBuffer.on_data_received`
+        If the custom trigger function returns True, the `TimeseriesBuffer.on_data_released`
         is invoked with the entire buffer content. By default, this feature is disabled (None).
 
         Returns:
@@ -247,7 +247,7 @@ class TimeseriesBuffer(object):
         """
         Sets the custom trigger function, which is invoked after adding a new timestamp to the buffer.
 
-        If the custom trigger function returns True, the `TimeseriesBuffer.on_data_received`
+        If the custom trigger function returns True, the `TimeseriesBuffer.on_data_released`
         is invoked with the entire buffer content. By default, this feature is disabled (None).
 
         Args:

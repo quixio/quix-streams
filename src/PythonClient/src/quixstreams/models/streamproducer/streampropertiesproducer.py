@@ -14,7 +14,7 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.StreamPropertie
 class StreamPropertiesProducer(object):
     """
     Represents properties and metadata of the stream.
-    All changes to these properties are automatically populated to this class.
+    All changes to these properties are automatically published to the underlying stream.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):

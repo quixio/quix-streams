@@ -67,7 +67,6 @@ class StreamTimeseriesConsumer(object):
     def on_data_received(self) -> Callable[['StreamConsumer', TimeseriesData], None]:
         """
         Gets the handler for when data is received (without buffering).
-        This handler does not use Buffers, and data will be raised as they arrive without any processing.
 
         Returns:
             Callable[['StreamConsumer', TimeseriesData]: The function that handles the data received.
@@ -79,7 +78,6 @@ class StreamTimeseriesConsumer(object):
     def on_data_received(self, value: Callable[['StreamConsumer', TimeseriesData], None]) -> None:
         """
         Sets the handler for when data is received (without buffering).
-        This handler does not use Buffers, and data will be raised as they arrive without any processing.
 
         Args:
             value: Callable[['StreamConsumer', TimeseriesData]: The function that handles the data received.
@@ -110,7 +108,6 @@ class StreamTimeseriesConsumer(object):
     def on_raw_received(self) -> Callable[['StreamConsumer', TimeseriesDataRaw], None]:
         """
         Gets the handler for when data is received (without buffering) in raw transport format.
-        This handler does not use Buffers, and data will be raised as they arrive without any processing.
 
         Returns:
             Callable[['StreamConsumer', TimeseriesDataRaw]: The function that handles the data received.
@@ -122,7 +119,6 @@ class StreamTimeseriesConsumer(object):
     def on_raw_received(self, value: Callable[['StreamConsumer', TimeseriesDataRaw], None]) -> None:
         """
         Sets the handler for when data is received (without buffering) in raw transport format.
-        This handler does not use Buffers, and data will be raised as they arrive without any processing.
 
         Args:
             value: Callable[['StreamConsumer', TimeseriesDataRaw]: The function that handles the data received.
@@ -153,7 +149,6 @@ class StreamTimeseriesConsumer(object):
     def on_dataframe_received(self) -> Callable[['StreamConsumer', pandas.DataFrame], None]:
         """
         Gets the handler for when data is received (without buffering) in pandas DataFrame format.
-        This handler does not use Buffers, and data will be raised as they arrive without any processing.
 
         Returns:
             Callable[['StreamConsumer', pandas.DataFrame]: The function that handles the data received.
@@ -165,7 +160,6 @@ class StreamTimeseriesConsumer(object):
     def on_dataframe_received(self, value: Callable[['StreamConsumer', pandas.DataFrame], None]) -> None:
         """
         Sets the handler for when data is received (without buffering) in pandas DataFrame format.
-        This handler does not use Buffers, and data will be raised as they arrive without any processing.
 
         Args:
             value: Callable[['StreamConsumer', pandas.DataFrame]: The function that handles the data received.
@@ -261,7 +255,7 @@ class StreamTimeseriesConsumer(object):
             buffer_configuration: An optional TimeseriesBufferConfiguration.
 
         Returns:
-            TimeseriesBufferConsumer: An consumer that will raise new data consumed via the on_data_received event.
+            TimeseriesBufferConsumer: An consumer that will raise new data consumed via the on_data_released event.
         """
 
         actual_filters_uptr = None

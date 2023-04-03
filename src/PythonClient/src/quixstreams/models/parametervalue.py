@@ -123,7 +123,7 @@ class ParameterValue(object):
 
     @property
     def type(self) -> ParameterValueType:
-        """Gets the type of value, which is numeric, string if set, or empty."""
+        """Gets the type of value, which is numeric, string, binary if set, otherwise empty"""
 
         return self._type
 
