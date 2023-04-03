@@ -28,7 +28,7 @@ def check_installed_program_version(program, version_pattern):
     except subprocess.CalledProcessError:
         return False
 
-# Check for .NET 8 SDK
+# Check for .NET 7 SDK
 if not check_installed_program_version('dotnet', r'^7\.\d+\.\d+'):
     print('.NET 7 SDK not found or incorrect version. Please install the correct .NET 7 SDK version.')
     sys.exit(1)
