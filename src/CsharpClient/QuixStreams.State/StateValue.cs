@@ -12,6 +12,7 @@ namespace QuixStreams.State
         private readonly bool boolValue;
         private readonly long longValue;
         private readonly double doubleValue;
+        private readonly Func<object> lazyValue;
 
         /// <summary>
         /// Type of State value
@@ -53,6 +54,11 @@ namespace QuixStreams.State
         /// Get the type of the State value
         /// </summary>
         public StateType Type { get; protected set; }
+        
+        /// <summary>
+        /// Whether the value is lazy.
+        /// </summary>
+        public bool Lazy { get; protected set; }
 
         /// <summary>
         /// Initializes a new instance of <see cref="StateValue"/>
@@ -105,6 +111,17 @@ namespace QuixStreams.State
             this.stringValue = value;
             this.Type = StateType.String;
         }
+        
+        /// <summary>
+        /// Initializes a new instance of <see cref="StateValue"/>
+        /// </summary>
+        /// <param name="value">Lazy string value</param>
+        public StateValue(Func<string> value)
+        {
+            this.lazyValue = new Func<object>(value);
+            this.Lazy = true;
+            this.Type = StateType.String;
+        }
 
         /// <summary>
         /// Initializes a new instance of <see cref="StateValue"/>
@@ -155,6 +172,8 @@ namespace QuixStreams.State
                 {
                     throw new InvalidCastException("value is not string type");
                 }
+
+                if (this.Lazy) return (string)this.lazyValue(); 
                 return this.stringValue;
             }
         }

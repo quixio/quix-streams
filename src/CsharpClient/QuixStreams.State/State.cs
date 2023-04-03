@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using QuixStreams.State.Storage;
 
@@ -24,6 +25,11 @@ namespace QuixStreams.State
         /// Represents the in-memory state holding the key-value pairs.
         /// </summary>
         private readonly IDictionary<string, StateValue> inMemoryState = new Dictionary<string, StateValue>();
+        
+        /// <summary>
+        /// Represents the in-memory state holding the key-value pairs of last persisted lazy values
+        /// </summary>
+        private readonly IDictionary<string, int> lastLazyHash = new Dictionary<string, int>();
         
         /// <summary>
         /// Represents the changes made to the in-memory state, tracking additions, updates, and removals.
@@ -155,6 +161,18 @@ namespace QuixStreams.State
             {
                 if (changeType.Value == ChangeType.Removed) tasks.Add(this.storage.RemoveAsync(changeType.Key));
                 else tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+            }
+
+            // must check lazy values that can change without explicit update to it
+            var changeKeys = this.changes.Keys.ToArray();
+            foreach (var lazyVal in inMemoryState.Where(y=> y.Value.Lazy).Where(y=> changeKeys.Contains(y.Key)))
+            {
+                if (lazyVal.Value.Type != StateValue.StateType.String) throw new NotImplementedException("Lazy type other than string is not supported");
+                var lazyStringVal = lazyVal.Value.StringValue;
+                var hash = lazyStringVal.GetHashCode();
+                if (this.lastLazyHash.TryGetValue(lazyVal.Key, out var lastHash) && lastHash == hash) continue; // same as previously, avoid sending to storage
+                this.lastLazyHash[lazyVal.Key] = hash;
+                tasks.Add(this.storage.SetAsync(lazyVal.Key, lazyStringVal));
             }
             this.changes.Clear();
             Task.WaitAll(tasks.ToArray());

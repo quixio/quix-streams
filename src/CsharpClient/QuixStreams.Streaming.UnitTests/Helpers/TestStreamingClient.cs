@@ -20,11 +20,6 @@ namespace QuixStreams.Streaming.UnitTests
 
         public ITopicConsumer GetTopicConsumer()
         {
-            return GetTopiConsumer();
-        }
-
-        public ITopicConsumer GetTopiConsumer()
-        {
             this.telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(this.testBroker);
 
             var topicConsumer = new TopicConsumer(this.telemetryKafkaConsumer);
