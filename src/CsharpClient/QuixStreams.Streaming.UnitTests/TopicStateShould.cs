@@ -389,6 +389,54 @@ namespace QuixStreams.Streaming.UnitTests
             // Assert
             topicState2.Count.Should().Be(0);
         }
+        
+        [Fact]
+        public void ComplexModifications_ShouldHaveExpectedValues()
+        {
+            // Arrange
+            var topicState = new TopicState<string>("TestTopic", GetConsistentStorageName(), null);
+            
+            // Act 1
+            topicState.Add("Key1", "Value1"); // will keep as is, before clear
+            topicState.Add("Key2", "Value2"); // will remove, before clear
+            topicState.Add("Key3", "Value3"); // will override, before clear
+            topicState["key4"] = "Value4"; // leave as is
+            topicState.Remove("Key2");
+            topicState["key3"] = "Value3b";
+            topicState.Clear();
+            topicState.Add("Key5", "Value5"); // will keep as is
+            topicState.Add("Key6", "Value6"); // will remove
+            topicState.Add("Key7", "Value7"); // will override
+            topicState["key8"] = "Value8"; // leave as is
+            topicState.Remove("Key5");
+            topicState["key6"] = "Value6b";
+            
+            // Assert 1
+            topicState.Count.Should().Be(3);
+            topicState["Key6"].Should().Be("Value6b");
+            topicState["Key7"].Should().Be("Value7");
+            topicState["Key8"].Should().Be("Value8");
+            
+            // Act 2
+            topicState.Flush();
+            topicState["Key8"] = "Value8";
+            topicState.Flush();
+            
+            // Assert 2
+            topicState.Count.Should().Be(3);
+            topicState["Key6"].Should().Be("Value6b");
+            topicState["Key7"].Should().Be("Value7");
+            topicState["Key8"].Should().Be("Value8");
+
+            // Act 3
+            var topicState2 = new TopicState<string>("TestTopic", GetConsistentStorageName(), null);
+
+            // Assert 3
+            topicState.Count.Should().Be(3);
+            topicState["Key6"].Should().Be("Value6b");
+            topicState["Key7"].Should().Be("Value7");
+            topicState["Key8"].Should().Be("Value8");
+        }
 
         public class CustomClass : IEquatable<CustomClass>
         {
