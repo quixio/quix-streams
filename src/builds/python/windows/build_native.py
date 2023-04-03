@@ -6,9 +6,9 @@ import platform
 
 def parse_arguments(args):
     options = {
-        'no-interop': False, # when set to true, does not copy the generated interop layer to native python folder. useful for when testing existing manual modifications without spending time on rebuilding.
-        'no-python': False, # when set to true, does not copy the generated python wrapper to native python folder. useful when doing manual modifications to test fixes
-        'no-regen': False, # when set to true, leave the interop results as they are. Useful when making manual modifications to either c# or python side to test fixes.
+        'no-interop': False, # When set to true, does not copy the generated interop layer to native python folder. Useful for when testing existing manual modifications without spending time on rebuilding.
+        'no-python': False, # When set to true, does not copy the generated python wrapper to native python folder. Useful when doing manual modifications to test fixes
+        'no-regen': False, # When set to true, leave the interop results as they are. Useful when making manual modifications to either c# or python side to test fixes.
         'configuration': "-c release /p:DebugType=None /p:DebugSymbols=false",
     }
 
