@@ -60,5 +60,8 @@ namespace QuixStreams.State.Storage
         {
             return Task.FromResult(this.inMemoryState.Count);
         }
+
+        /// <inheritdoc/>
+        public bool IsCaseSensitive => true;
     }
 }

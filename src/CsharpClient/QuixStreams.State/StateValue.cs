@@ -12,7 +12,6 @@ namespace QuixStreams.State
         private readonly bool boolValue;
         private readonly long longValue;
         private readonly double doubleValue;
-        private readonly Func<object> lazyValue;
 
         /// <summary>
         /// Type of State value
@@ -54,11 +53,6 @@ namespace QuixStreams.State
         /// Get the type of the State value
         /// </summary>
         public StateType Type { get; protected set; }
-        
-        /// <summary>
-        /// Whether the value is lazy.
-        /// </summary>
-        public bool Lazy { get; protected set; }
 
         /// <summary>
         /// Initializes a new instance of <see cref="StateValue"/>
@@ -111,17 +105,6 @@ namespace QuixStreams.State
             this.stringValue = value;
             this.Type = StateType.String;
         }
-        
-        /// <summary>
-        /// Initializes a new instance of <see cref="StateValue"/>
-        /// </summary>
-        /// <param name="value">Lazy string value</param>
-        public StateValue(Func<string> value)
-        {
-            this.lazyValue = new Func<object>(value);
-            this.Lazy = true;
-            this.Type = StateType.String;
-        }
 
         /// <summary>
         /// Initializes a new instance of <see cref="StateValue"/>
@@ -172,8 +155,6 @@ namespace QuixStreams.State
                 {
                     throw new InvalidCastException("value is not string type");
                 }
-
-                if (this.Lazy) return (string)this.lazyValue(); 
                 return this.stringValue;
             }
         }
@@ -187,7 +168,7 @@ namespace QuixStreams.State
             {
                 if (Type != StateType.Bool)
                 {
-                    throw new InvalidCastException("value is not long type");
+                    throw new InvalidCastException("value is not boolean type");
                 }
                 return this.boolValue;
             }
@@ -205,6 +186,27 @@ namespace QuixStreams.State
                     throw new InvalidCastException("value is not binary type");
                 }
                 return this.byteValue;
+            }
+        }
+
+        public override int GetHashCode()
+        {
+            switch (Type)
+            {
+                case StateType.Binary:
+                    return this.BinaryValue.GetHashCode();
+                case StateType.Long:
+                    return this.LongValue.GetHashCode();
+                case StateType.Bool:
+                    return this.BoolValue.GetHashCode();
+                case StateType.Double:
+                    return this.DoubleValue.GetHashCode();
+                case StateType.String:
+                    return this.StringValue.GetHashCode();
+                case StateType.Object:
+                    return this.BinaryValue.GetHashCode();
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using QuixStreams.State.Storage;
 
@@ -29,12 +28,17 @@ namespace QuixStreams.State
         /// <summary>
         /// Represents the in-memory state holding the key-value pairs of last persisted lazy values
         /// </summary>
-        private readonly IDictionary<string, int> lastLazyHash = new Dictionary<string, int>();
+        private readonly IDictionary<string, int> lastFlushHash = new Dictionary<string, int>();
         
         /// <summary>
         /// Represents the changes made to the in-memory state, tracking additions, updates, and removals.
         /// </summary>
         private readonly IDictionary<string, ChangeType> changes = new Dictionary<string, ChangeType>();
+
+        /// <summary>
+        /// Returns whether the cache keys are case sensitive
+        /// </summary>
+        public bool IsCaseSensitive => this.storage.IsCaseSensitive; 
 
         /// <summary>
         /// Initializes a new instance of the <see cref="State"/> class using the specified storage.
@@ -82,6 +86,7 @@ namespace QuixStreams.State
         /// <param name="value">The value of the element to add.</param>
         public void Add(string key, StateValue value)
         {
+            if (!this.IsCaseSensitive) key = key.ToLower();
             inMemoryState.Add(key, value);
             this.changes[key] = ChangeType.AddedOrUpdated;
         }
@@ -93,6 +98,7 @@ namespace QuixStreams.State
         /// <returns>true if the in-memory state contains an element with the key; otherwise, false.</returns>
         public bool ContainsKey(string key)
         {
+            if (!this.IsCaseSensitive) key = key.ToLower();
             return inMemoryState.ContainsKey(key);
         }
 
@@ -103,6 +109,7 @@ namespace QuixStreams.State
         /// <returns>true if the element is successfully removed; otherwise, false.</returns>
         public bool Remove(string key)
         {
+            if (!this.IsCaseSensitive) key = key.ToLower();
             var success = inMemoryState.Remove(key);
             if (success) this.changes[key] = ChangeType.Removed;
             return success;
@@ -116,6 +123,7 @@ namespace QuixStreams.State
         /// <returns>true if the in-memory state contains an element with the specified key; otherwise, false.</returns>
         public bool TryGetValue(string key, out StateValue value)
         {
+            if (!this.IsCaseSensitive) key = key.ToLower();
             return inMemoryState.TryGetValue(key, out value);
         }
 
@@ -126,9 +134,14 @@ namespace QuixStreams.State
         /// <returns>The element with the specified key.</returns>
         public StateValue this[string key]
         {
-            get => this.inMemoryState[key];
+            get
+            {
+                if (!this.IsCaseSensitive) key = key.ToLower();
+                return this.inMemoryState[key];
+            }
             set
             {
+                if (!this.IsCaseSensitive) key = key.ToLower();
                 if (value == null) this.changes[key] = ChangeType.Removed;
                 else this.changes[key] = ChangeType.AddedOrUpdated;
                 this.inMemoryState[key] = value;
@@ -159,21 +172,20 @@ namespace QuixStreams.State
             var tasks = new List<Task>();
             foreach (var changeType in changes)
             {
-                if (changeType.Value == ChangeType.Removed) tasks.Add(this.storage.RemoveAsync(changeType.Key));
-                else tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+                if (changeType.Value == ChangeType.Removed)
+                {
+                    this.lastFlushHash.Remove(changeType.Key);
+                    tasks.Add(this.storage.RemoveAsync(changeType.Key));
+                }
+                else
+                {
+                    var hash = inMemoryState[changeType.Key].GetHashCode();
+                    if (lastFlushHash.TryGetValue(changeType.Key, out var existingHash) && existingHash == hash) continue;
+                    this.lastFlushHash[changeType.Key] = hash;
+                    tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+                }
             }
-
-            // must check lazy values that can change without explicit update to it
-            var changeKeys = this.changes.Keys.ToArray();
-            foreach (var lazyVal in inMemoryState.Where(y=> y.Value.Lazy).Where(y=> changeKeys.Contains(y.Key)))
-            {
-                if (lazyVal.Value.Type != StateValue.StateType.String) throw new NotImplementedException("Lazy type other than string is not supported");
-                var lazyStringVal = lazyVal.Value.StringValue;
-                var hash = lazyStringVal.GetHashCode();
-                if (this.lastLazyHash.TryGetValue(lazyVal.Key, out var lastHash) && lastHash == hash) continue; // same as previously, avoid sending to storage
-                this.lastLazyHash[lazyVal.Key] = hash;
-                tasks.Add(this.storage.SetAsync(lazyVal.Key, lazyStringVal));
-            }
+            
             this.changes.Clear();
             Task.WaitAll(tasks.ToArray());
         }

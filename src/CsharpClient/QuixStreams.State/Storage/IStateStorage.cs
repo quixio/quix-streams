@@ -55,5 +55,10 @@ namespace QuixStreams.State.Storage
         /// </summary>
         /// <returns></returns>
         public Task<int> Count();
+        
+        /// <summary>
+        /// Returns whether the storage is case sensitive
+        /// </summary>
+        public bool IsCaseSensitive { get; }
     }
 }
