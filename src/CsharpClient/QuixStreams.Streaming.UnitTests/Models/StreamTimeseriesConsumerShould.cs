@@ -1,14 +1,63 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
 using QuixStreams.Telemetry.Models;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace QuixStreams.Streaming.UnitTests.Models
 {
-    public class StreamParametersConsumerShould
+    public class StreamTimeseriesConsumerShould
     {
+        private readonly ITestOutputHelper testOutputHelper;
+
+        public StreamTimeseriesConsumerShould(ITestOutputHelper testOutputHelper)
+        {
+            this.testOutputHelper = testOutputHelper;
+        }
+
+        [Fact]
+        public async Task AsyncIterate_ShouldIterateUntilClose()
+        {
+            const int NumberTimestampsTest = 1000;
+            
+            var streamConsumer = Substitute.For<IStreamConsumerInternal>();
+            var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
+            var timeseriesConsumer = new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
+
+            var task = Task.Run(() =>
+            {
+                //Act
+                for (var i = 1; i <= NumberTimestampsTest; i++)
+                {
+                    var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
+                    timeseriesData.AddTimestampNanoseconds(100 * i)
+                        .AddValue($"test_numeric_param{i}", i)
+                        .AddValue($"test_string_param{i}", $"{i}")
+                        .AddTag($"tag{i}", $"{i}");
+                    
+                    Thread.Sleep(10);
+
+                    streamConsumer.OnTimeseriesData += Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer, timeseriesData.ConvertToTimeseriesDataRaw());
+                }
+                
+                Thread.Sleep(10000);
+                streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer, new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
+            });
+
+            var counter = 0;
+            await foreach (var row in timeseriesConsumer)
+            {
+                counter++;
+                if (counter % 50 == 0) testOutputHelper.WriteLine($"Counter: {counter}");
+            }
+
+            await task;
+            counter.Should().Be(NumberTimestampsTest);
+        }
 
         [Fact]
         public void Receive_TimeseriesData_ShouldRaiseExpectedOnReceivedEvents()
@@ -19,9 +68,9 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
             var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
-            var parametersReader = new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
+            var timeseriesConsumer = new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
-            var buffer = parametersReader.CreateBuffer();
+            var buffer = timeseriesConsumer.CreateBuffer();
             buffer.OnDataReleased += (sender, args) =>
             {
                 receivedData.Add(args.Data);
@@ -60,7 +109,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         {
             // Arrange
             var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-            var parametersReader = new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
+            var timeseriesConsumer = new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
             var parameterDefinitions = new ParameterDefinitions
             {
@@ -200,8 +249,8 @@ namespace QuixStreams.Streaming.UnitTests.Models
             streamConsumer.OnParameterDefinitionsChanged += Raise.Event<Action<IStreamConsumer, ParameterDefinitions>>(streamConsumer, parameterDefinitions);
 
             // Assert
-            parametersReader.Definitions.Count.Should().Be(7);
-            parametersReader.Definitions.Should().BeEquivalentTo(expectedDefinitions);
+            timeseriesConsumer.Definitions.Count.Should().Be(7);
+            timeseriesConsumer.Definitions.Should().BeEquivalentTo(expectedDefinitions);
         }
 
     }
