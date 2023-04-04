@@ -69,22 +69,22 @@ class StreamProducer(object):
     @property
     def on_write_exception(self) -> Callable[['StreamProducer', BaseException], None]:
         """
-        Gets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the stream
-         is received for, second is the exception.
+        Gets the handler for when a stream experiences exception during the asynchronous write process.
 
         Returns:
             Callable[['StreamProducer', BaseException], None]: The handler for exceptions during the asynchronous write process.
+                The first parameter is the stream is received for, second is the exception.
         """
         return self._on_write_exception
 
     @on_write_exception.setter
     def on_write_exception(self, value: Callable[['StreamProducer', BaseException], None]) -> None:
         """
-        Sets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the stream
-         is received for, second is the exception.
+        Sets the handler for when a stream experiences exception during the asynchronous write process.
 
         Args:
             value (Callable[['StreamProducer', BaseException], None]): The handler for exceptions during the asynchronous write process.
+                The first parameter is the stream is received for, second is the exception.
         """
         self._on_write_exception = value
         if self._on_write_exception_ref is None:

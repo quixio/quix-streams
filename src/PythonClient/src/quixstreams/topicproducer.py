@@ -40,7 +40,8 @@ class TopicProducer(object):
         Gets the handler for when the topic is disposed.
 
         Returns:
-            Callable[[TopicProducer], None]: The event handler for topic disposal. The first parameter is the TopicProducer instance that got disposed.
+            Callable[[TopicProducer], None]: The event handler for topic disposal.
+                The first parameter is the TopicProducer instance that got disposed.
         """
         return self._on_disposed
 
@@ -50,7 +51,8 @@ class TopicProducer(object):
         Sets the handler for when the topic is disposed.
 
         Args:
-            value (Callable[[TopicProducer], None]): The event handler for topic disposal. The first parameter is the TopicProducer instance that got disposed.
+            value (Callable[[TopicProducer], None]): The event handler for topic disposal.
+                The first parameter is the TopicProducer instance that got disposed.
         """
         self._on_disposed = value
         if self._on_disposed_ref is None:

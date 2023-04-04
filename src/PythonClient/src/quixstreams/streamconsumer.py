@@ -90,7 +90,8 @@ class StreamConsumer(object):
        Gets the handler for when the stream closes.
 
        Returns:
-           Callable[['StreamConsumer', 'StreamEndType'], None]: The callback function to be executed when the stream closes. The first parameter is the stream that closes, and the second is the close type.
+            Callable[['StreamConsumer', 'StreamEndType'], None]: The callback function to be executed when the stream closes.
+                The first parameter is the stream that closes, and the second is the close type.
        """
         return self._on_stream_closed
 
@@ -100,7 +101,8 @@ class StreamConsumer(object):
         Sets the handler for when the stream closes.
 
         Args:
-            value (Callable[['StreamConsumer', 'StreamEndType'], None]): The new callback function to be executed when the stream closes. The first parameter is the stream that closes, and the second is the close type.
+            value (Callable[['StreamConsumer', 'StreamEndType'], None]): The new callback function to be executed when the stream closes.
+                The first parameter is the stream that closes, and the second is the close type.
         """
         self._on_stream_closed = value
         if self._on_stream_closed_ref is None:
@@ -132,7 +134,8 @@ class StreamConsumer(object):
         Gets the handler for when the stream receives a package of any type.
 
         Returns:
-            Callable[['StreamConsumer', any], None]: The callback function to be executed when the stream receives a package. The first parameter is the stream that receives the package, and the second is the package itself.
+            Callable[['StreamConsumer', any], None]: The callback function to be executed when the stream receives a package.
+                The first parameter is the stream that receives the package, and the second is the package itself.
         """
         return self._on_package_received
 
@@ -142,7 +145,8 @@ class StreamConsumer(object):
         Sets the handler for when the stream receives a package of any type.
 
         Args:
-            value (Callable[['StreamConsumer', any], None]): The new callback function to be executed when the stream receives a package. The first parameter is the stream that receives the package, and the second is the package itself.
+            value (Callable[['StreamConsumer', any], None]): The new callback function to be executed when the stream receives a package.
+                The first parameter is the stream that receives the package, and the second is the package itself.
         """
         # TODO
         raise Exception("StreamConsumer.on_package_received is not yet fully implemented")

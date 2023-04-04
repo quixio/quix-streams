@@ -61,7 +61,8 @@ class TopicConsumer(object):
         Gets the event handler for when a stream is received for the topic.
 
         Returns:
-            Callable[[StreamConsumer], None]: The event handler for when a stream is received for the topic. The first parameter is the StreamConsumer instance that was received.
+            Callable[[StreamConsumer], None]: The event handler for when a stream is received for the topic.
+                The first parameter is the StreamConsumer instance that was received.
         """
         return self._on_stream_received
 
@@ -71,7 +72,8 @@ class TopicConsumer(object):
         Sets the event handler for when a stream is received for the topic.
 
         Args:
-            value (Callable[[StreamConsumer], None]): The new event handler for when a stream is received for the topic. The first parameter is the StreamConsumer instance that was received.
+            value (Callable[[StreamConsumer], None]): The new event handler for when a stream is received for the topic.
+                The first parameter is the StreamConsumer instance that was received.
         """
         self._on_stream_received = value
         if self._on_stream_received_ref is None:
@@ -101,7 +103,8 @@ class TopicConsumer(object):
         Gets the event handler for when streams are revoked for the topic.
 
         Returns:
-            Callable[[TopicConsumer, List[StreamConsumer]], None]: The event handler for when streams are revoked for the topic. The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
+            Callable[[TopicConsumer, List[StreamConsumer]], None]: The event handler for when streams are revoked for the topic.
+                The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
         """
         return self._on_streams_revoked
 
@@ -111,7 +114,8 @@ class TopicConsumer(object):
         Sets the event handler for when streams are revoked for the topic.
 
         Args:
-            value (Callable[[TopicConsumer, List[StreamConsumer]], None]): The new event handler for when streams are revoked for the topic. The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
+            value (Callable[[TopicConsumer, List[StreamConsumer]], None]): The new event handler for when streams are revoked for the topic.
+                The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
         """
 
         self._on_streams_revoked = value
@@ -144,7 +148,8 @@ class TopicConsumer(object):
         Gets the event handler for when the topic is being revoked.
 
         Returns:
-            Callable[[TopicConsumer], None]: The event handler for when the topic is being revoked. The first parameter is the TopicConsumer instance for which the revocation is happening.
+            Callable[[TopicConsumer], None]: The event handler for when the topic is being revoked.
+                The first parameter is the TopicConsumer instance for which the revocation is happening.
         """
         return self._on_revoking
 
@@ -154,7 +159,8 @@ class TopicConsumer(object):
         Sets the event handler for when the topic is being revoked.
 
         Args:
-            value (Callable[[TopicConsumer], None]): The new event handler for when the topic is being revoked. The first parameter is the TopicConsumer instance for which the revocation is happening.
+            value (Callable[[TopicConsumer], None]): The new event handler for when the topic is being revoked.
+                The first parameter is the TopicConsumer instance for which the revocation is happening.
         """
         self._on_revoking = value
         if self._on_revoking_ref is None:
@@ -183,7 +189,8 @@ class TopicConsumer(object):
         Gets the event handler for when the topic finishes committing consumed data up to this point.
 
         Returns:
-            Callable[[TopicConsumer], None]: The event handler for when the topic finishes committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit happened.
+            Callable[[TopicConsumer], None]: The event handler for when the topic finishes committing consumed data up to this point.
+                The first parameter is the TopicConsumer instance for which the commit happened.
         """
         return self._on_committed
 
@@ -193,7 +200,8 @@ class TopicConsumer(object):
         Sets the event handler for when the topic finishes committing consumed data up to this point.
 
         Args:
-            value (Callable[[TopicConsumer], None]): The new event handler for when the topic finishes committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit happened.
+            value (Callable[[TopicConsumer], None]): The new event handler for when the topic finishes committing consumed data up to this point.
+                The first parameter is the TopicConsumer instance for which the commit happened.
         """
         self._on_committed = value
         if self._on_committed_ref is None:
@@ -222,7 +230,8 @@ class TopicConsumer(object):
         Gets the event handler for when the topic begins committing consumed data up to this point.
 
         Returns:
-            Callable[[TopicConsumer], None]: The event handler for when the topic begins committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit is happening.
+            Callable[[TopicConsumer], None]: The event handler for when the topic begins committing consumed data up to this point.
+                The first parameter is the TopicConsumer instance for which the commit is happening.
         """
         return self._on_committing
 
@@ -232,7 +241,8 @@ class TopicConsumer(object):
         Sets the event handler for when the topic begins committing consumed data up to this point.
 
         Args:
-            value (Callable[[TopicConsumer], None]): The new event handler for when the topic begins committing consumed data up to this point. The first parameter is the TopicConsumer instance for which the commit is happening.
+            value (Callable[[TopicConsumer], None]): The new event handler for when the topic begins committing consumed data up to this point.
+                The first parameter is the TopicConsumer instance for which the commit is happening.
         """
         self._on_committing = value
         if self._on_committing_ref is None:

@@ -74,11 +74,11 @@ class TimeseriesBuffer(object):
     @property
     def on_data_released(self) -> Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]:
         """
-        Gets the handler for when the stream receives data. First parameter is the stream the data is received for,
-        second is the data in TimeseriesData format.
+        Gets the handler for when the stream receives data.
 
         Returns:
             Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]: The event handler.
+                The first parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
 
         return self._on_data_released
@@ -86,11 +86,11 @@ class TimeseriesBuffer(object):
     @on_data_released.setter
     def on_data_released(self, value: Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]) -> None:
         """
-        Sets the handler for when the stream receives data. First parameter is the stream the data is received for,
-        second is the data in TimeseriesData format.
+        Sets the handler for when the stream receives data.
 
         Args:
             value (Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]): The event handler.
+                The first parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         self._on_data_released = value
         if self._on_data_released_ref is None:
@@ -117,22 +117,22 @@ class TimeseriesBuffer(object):
     @property
     def on_raw_released(self) -> Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]:
         """
-        Gets the handler for when the stream receives raw data. First parameter is the stream the data is received for,
-        second is the data in TimeseriesDataRaw format.
+        Gets the handler for when the stream receives raw data.
 
         Returns:
             Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]: The event handler.
+                The first parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         return self._on_raw_released
 
     @on_raw_released.setter
     def on_raw_released(self, value: Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]) -> None:
         """
-        Sets the handler for when the stream receives raw data. First parameter is the stream the data is received for,
-        second is the data in TimeseriesDataRaw format.
+        Sets the handler for when the stream receives raw data.
 
         Args:
             value (Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]): The event handler.
+                The first parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_released = value
         if self._on_raw_released_ref is None:
@@ -158,22 +158,22 @@ class TimeseriesBuffer(object):
     @property
     def on_dataframe_released(self) -> Callable[[Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]:
         """
-        Gets the handler for when the stream receives data as a pandas DataFrame. First parameter is the stream the data
-        is received for, second is the data in pandas.DataFrame format.
+        Gets the handler for when the stream receives data as a pandas DataFrame.
 
         Returns:
             Callable[[Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]: The event handler.
+                The first parameter is the stream the data is received for, second is the data in pandas.DataFrame format.
         """
         return self._on_dataframe_released
 
     @on_dataframe_released.setter
     def on_dataframe_released(self, value: Callable[[Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]) -> None:
         """
-        Sets the handler for when the stream receives data as a pandas DataFrame. First parameter is the stream the data
-        is received for, second is the data in pandas.DataFrame format.
+        Sets the handler for when the stream receives data as a pandas DataFrame.
 
         Args:
             value (Callable[[Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]): The event handler.
+                The first parameter is the stream the data is received for, second is the data in pandas.DataFrame format.
         """
         self._on_dataframe_released = value
         if self._on_dataframe_released_ref is None:

@@ -55,7 +55,8 @@ class StreamPropertiesConsumer(object):
         Gets the handler for when the stream properties change.
 
         Returns:
-            Callable[[StreamConsumer], None]: The event handler for stream property changes. The first parameter is the StreamConsumer instance for which the change is invoked.
+            Callable[[StreamConsumer], None]: The event handler for stream property changes.
+                The first parameter is the StreamConsumer instance for which the change is invoked.
         """
         return self._on_changed
 
@@ -65,7 +66,7 @@ class StreamPropertiesConsumer(object):
         Sets the handler for when the stream properties change.
 
         Args:
-            value (Callable[['StreamConsumer']): First parameter is the stream it is invoked for.
+            value (Callable[['StreamConsumer']): The first parameter is the stream it is invoked for.
         """
         self._on_changed = value
         if self._on_changed_ref is None:

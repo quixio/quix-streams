@@ -52,7 +52,7 @@ class StreamEventsConsumer(object):
 
         Returns:
             Callable[['StreamConsumer', EventData]]:
-                First parameter is the stream the event is received for. The second is the event.
+                The first parameter is the stream the event is received for. The second is the event.
         """
         return self._on_data_received
 
@@ -63,7 +63,7 @@ class StreamEventsConsumer(object):
 
         Args:
             value: Callable[['StreamConsumer', EventData]]:
-                First parameter is the stream the event is received for. The second is the event.
+                The first parameter is the stream the event is received for. The second is the event.
         """
         self._on_data_received = value
         if self._on_data_received_ref is None:
@@ -94,7 +94,7 @@ class StreamEventsConsumer(object):
 
         Returns:
             Callable[['StreamConsumer']]:
-                First parameter is the stream the event definitions changed for.
+                The first parameter is the stream the event definitions changed for.
         """
         return self._on_definitions_changed
 
@@ -105,7 +105,7 @@ class StreamEventsConsumer(object):
 
         Args:
             value: Callable[['StreamConsumer']]:
-                First parameter is the stream the event definitions changed for.
+                The first parameter is the stream the event definitions changed for.
         """
         self._on_definitions_changed = value
         if self._on_definitions_changed_ref is None:

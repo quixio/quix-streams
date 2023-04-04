@@ -47,7 +47,8 @@ class RawTopicConsumer(object):
         Gets the handler for when a topic receives a message.
 
         Returns:
-            Callable[[RawTopicConsumer, RawMessage], None]: The event handler for when a topic receives a message. The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
+            Callable[[RawTopicConsumer, RawMessage], None]: The event handler for when a topic receives a message.
+                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
 
         return self._on_message_received
@@ -58,7 +59,8 @@ class RawTopicConsumer(object):
         Sets the handler for when a topic receives a message.
 
         Args:
-            value (Callable[[RawTopicConsumer, RawMessage], None]): The new event handler for when a topic receives a message. The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
+            value (Callable[[RawTopicConsumer, RawMessage], None]): The new event handler for when a topic receives a message.
+                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
         self._on_message_received = value
         if self._on_message_received_ref is None:
@@ -86,7 +88,8 @@ class RawTopicConsumer(object):
         Gets the handler for when a stream experiences an exception during the asynchronous write process.
 
         Returns:
-            Callable[[RawTopicConsumer, BaseException], None]: The event handler for when a stream experiences an exception during the asynchronous write process. The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
+            Callable[[RawTopicConsumer, BaseException], None]: The event handler for when a stream experiences an exception during the asynchronous write process.
+                The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         return self._on_error_occurred
 
@@ -96,7 +99,8 @@ class RawTopicConsumer(object):
         Sets the handler for when a stream experiences an exception during the asynchronous write process.
 
         Args:
-            value (Callable[[RawTopicConsumer, BaseException], None]): The new handler for when a stream experiences an exception during the asynchronous write process. The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
+            value (Callable[[RawTopicConsumer, BaseException], None]): The new handler for when a stream experiences an exception during the asynchronous write process.
+                The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         self._on_error_occurred = value
         if self._on_error_occurred_ref is None:
