@@ -160,6 +160,11 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.streamConsumer.OnTimeseriesData -= OnTimeseriesDataRawEventHandler;
         }
 
+        /// <summary>
+        /// Creates and returns an asynchronous enumerator for processing timeseries data.
+        /// </summary>
+        /// <param name="cancellationToken">An optional CancellationToken to cancel the operation.</param>
+        /// <returns>An async iterator of TimeseriesDataTimestamp in the stream.</returns>
         public IAsyncEnumerator<TimeseriesDataTimestamp> GetAsyncEnumerator(CancellationToken cancellationToken = new CancellationToken())
         {
             var enumerator = new StreamTimeseriesConsumerAsyncDataEnumerator(this, this.streamConsumer, cancellationToken);
@@ -174,9 +179,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
     internal class StreamTimeseriesConsumerAsyncDataEnumerator : IAsyncEnumerator<TimeseriesDataTimestamp>
     {
         // Semaphores to synchronize the consumption of data and manage concurrency
-        private readonly SemaphoreSlim semaphore;
-
-        private readonly SemaphoreSlim semaphore2;
+        private readonly SemaphoreSlim dataAvailableSemaphore;
+        private readonly SemaphoreSlim dataProcessedSemaphore;
 
         // CancellationTokenSource to handle cancellation of the enumerator
         private readonly CancellationTokenSource cts;
@@ -202,8 +206,14 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         internal StreamTimeseriesConsumerAsyncDataEnumerator(StreamTimeseriesConsumer timeseriesConsumer,
             IStreamConsumerInternal streamConsumer, CancellationToken cancellationToken = default)
         {
-            this.semaphore = new SemaphoreSlim(0, 1); // Blocked
-            this.semaphore2 = new SemaphoreSlim(0, 1); // Blocked
+            // Initialize the semaphore to signal when data is available for consumption.
+            // Initial state is blocked (0), with a maximum count of 1.
+            this.dataAvailableSemaphore = new SemaphoreSlim(0, 1);
+
+            // Initialize the semaphore to signal when the data has been processed.
+            // Initial state is blocked (0), with a maximum count of 1.
+            this.dataProcessedSemaphore = new SemaphoreSlim(0, 1);
+            
             this.cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             this.timeseriesConsumer = timeseriesConsumer;
@@ -226,8 +236,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         private void ConsumerOnOnDataReceived(object sender, TimeseriesDataReadEventArgs args)
         {
             dataIterator = args.Data.Timestamps.GetEnumerator();
-            semaphore.Release();
-            semaphore2.Wait(cts.Token); // Wait for it to be processed
+            dataAvailableSemaphore.Release();
+            dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
         }
 
         /// <summary>
@@ -240,8 +250,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.timeseriesConsumer.OnDataReceived -= ConsumerOnOnDataReceived;
             this.streamConsumer.OnStreamClosed -= StreamClosedHandler;
             cts.Cancel();
-            this.semaphore.Dispose();
-            this.semaphore2.Dispose();
+            this.dataAvailableSemaphore.Dispose();
+            this.dataProcessedSemaphore.Dispose();
         }
 
         /// <summary>
@@ -256,17 +266,23 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
         /// <summary>
         /// Asynchronously moves to the next element in the timeseries data iterator.
+        /// This method will continue attempting to move to the next element until the stream is closed,
+        /// the enumerator is disposed, or data is available.
         /// </summary>
+        /// <returns>A ValueTask representing whether the enumerator successfully moved to the next element.</returns>
         public async ValueTask<bool> MoveNextAsync()
         {
             if (this.cts.IsCancellationRequested) return false;
-            while (true) // Infinite loop which only breaks out if stream closes, enumerator disposed or we have data
+            
+            // Enter an infinite loop to keep trying to move to the next data element.
+            while (true)
             {
+                // If the dataIterator is not initialized, wait for data to become available.
                 if (dataIterator == null)
                 {
                     try
                     {
-                        await semaphore.WaitAsync(cts.Token);
+                        await dataAvailableSemaphore.WaitAsync(cts.Token);
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -277,15 +293,16 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
                     Debug.Assert(dataIterator != null, "dataIterator is null");
                 }
-
+                
                 if (dataIterator.MoveNext())
                 {
                     this.Current = dataIterator.Current;
                     return true;
                 }
 
+                // If there are no more elements, release the dataProcessedSemaphore.
                 dataIterator = null;
-                semaphore2.Release();
+                dataProcessedSemaphore.Release();
             }
         }
 
