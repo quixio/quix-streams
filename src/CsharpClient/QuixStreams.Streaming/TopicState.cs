@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using QuixStreams.State;
 using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
@@ -15,6 +15,11 @@ namespace QuixStreams.Streaming
     /// <typeparam name="T">The type of values stored in the TopicState.</typeparam>
     public class TopicState<T> : IDictionary<string, T>
     {
+        /// <summary>
+        /// The logger for the class
+        /// </summary>
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<TopicState<T>>();
+        
         /// <summary>
         /// Returns whether the type is passed by reference
         /// </summary>
@@ -63,7 +68,17 @@ namespace QuixStreams.Streaming
         /// <summary>
         /// Returns whether the cache keys are case sensitive
         /// </summary>
-        private bool IsCaseSensitive => this.state.IsCaseSensitive; 
+        private bool IsCaseSensitive => this.state.IsCaseSensitive;
+
+        /// <summary>
+        /// Raised immediately before a flush operation is performed.
+        /// </summary>
+        public event EventHandler OnFlushing;
+        
+        /// <summary>
+        /// Raised immediately after a flush operation is completed.
+        /// </summary>
+        public event EventHandler OnFlushed;
 
         /// <summary>
         /// Initializes a new instance of the TopicState class.
@@ -296,8 +311,12 @@ namespace QuixStreams.Streaming
         /// </summary>
         public void Flush()
         {
+            logger.LogTrace("Flushing state '{0}'", this.name);
+            OnFlushing?.Invoke(this, EventArgs.Empty);
+            
             if (this.clearBeforeFlush)
             {
+                logger.LogTrace("Clearing state '{0}' before flush as clear was requested", this.name);
                 this.state.Clear();
                 this.clearBeforeFlush = false;
             }
@@ -311,6 +330,7 @@ namespace QuixStreams.Streaming
                     // For any change that has a value of "Removed", remove the corresponding key from the internal state
                     if (changeType.Value == ChangeType.Removed)
                     {
+                        logger.LogTrace("Removing key '{0}' state '{1}' as part of flush", changeType.Key, this.name);
                         this.state.Remove(changeType.Key);
                     }
                 }
@@ -321,6 +341,7 @@ namespace QuixStreams.Streaming
                     // Update the internal state by applying a state value converter to each value and storing the result in the state with the same key
                     // this is necessary because reference types might have changed without this instance knowing
                     this.state[pair.Key] = stateValueConverter(pair.Value);
+                    logger.LogTrace("Updating key '{0}' state '{1}' as part of flush", pair.Key, this.name);
                 }
             }
             else
@@ -332,19 +353,24 @@ namespace QuixStreams.Streaming
                     if (changeType.Value == ChangeType.Removed)
                     {
                         this.state.Remove(changeType.Key);
+                        logger.LogTrace("Removing key '{0}' state '{1}' as part of flush", changeType.Key, this.name);
                     }
                     else
                     {
                         // For any change that is not "Removed", look up the corresponding value in the in-memory cache
                         // Apply the state value converter to the value and store the result in the internal state with the same key
                         this.state[changeType.Key] = stateValueConverter(inMemoryCache[changeType.Key]);
+                        logger.LogTrace("Updating key '{0}' state '{1}' as part of flush", changeType.Key, this.name);
                     }
                 }
             }
             
             this.changes.Clear();
 
+            logger.LogTrace("Flushing underlying state for '{0}' as part of flush", this.name);
             this.state.Flush();
+            logger.LogTrace("Flushed underlying state for '{0}' as part of flush", this.name);
+            OnFlushed?.Invoke(this, EventArgs.Empty);
         }
         
         
