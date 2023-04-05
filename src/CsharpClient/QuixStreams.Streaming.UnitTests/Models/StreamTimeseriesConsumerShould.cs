@@ -22,41 +22,56 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Fact]
         public async Task AsyncIterate_ShouldIterateUntilClose()
         {
-            const int NumberTimestampsTest = 1000;
-            
-            var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-            var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
-            var timeseriesConsumer = new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(new TestStreamingClient().GetTopicConsumer(), streamConsumer);
-
-            var task = Task.Run(() =>
+            var iteration = 0;
+            var totalIteration = 10;
+            while (iteration < totalIteration)
             {
-                //Act
-                for (var i = 1; i <= NumberTimestampsTest; i++)
+                iteration++;
+                const int NumberTimestampsTest = 10000;
+
+                var streamConsumer = Substitute.For<IStreamConsumerInternal>();
+                var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
+                var timeseriesConsumer =
+                    new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
+                        new TestStreamingClient().GetTopicConsumer(), streamConsumer);
+
+                var task = Task.Run(() =>
                 {
-                    var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
-                    timeseriesData.AddTimestampNanoseconds(100 * i)
-                        .AddValue($"test_numeric_param{i}", i)
-                        .AddValue($"test_string_param{i}", $"{i}")
-                        .AddTag($"tag{i}", $"{i}");
-                    
-                    Thread.Sleep(10);
+                    //Act
+                    for (var i = 1; i <= NumberTimestampsTest; i++)
+                    {
+                        var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
+                        timeseriesData.AddTimestampNanoseconds(100 * i)
+                            .AddValue($"test_numeric_param{i}", i)
+                            .AddValue($"test_string_param{i}", $"{i}")
+                            .AddTag($"tag{i}", $"{i}");
 
-                    streamConsumer.OnTimeseriesData += Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer, timeseriesData.ConvertToTimeseriesDataRaw());
+                        streamConsumer.OnTimeseriesData +=
+                            Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer,
+                                timeseriesData.ConvertToTimeseriesDataRaw());
+                    }
+
+                    streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer,
+                        new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
+                });
+
+                var counter = 0;
+                try
+                {
+                    await foreach (var row in timeseriesConsumer)
+                    {
+                        counter++;
+                        if (counter % 50 == 0) testOutputHelper.WriteLine($"Counter: {counter}");
+                    }
                 }
-                
-                Thread.Sleep(10000);
-                streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer, new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
-            });
+                catch (Exception ex)
+                {
+                    throw;
+                }
 
-            var counter = 0;
-            await foreach (var row in timeseriesConsumer)
-            {
-                counter++;
-                if (counter % 50 == 0) testOutputHelper.WriteLine($"Counter: {counter}");
+                await task;
+                counter.Should().Be(NumberTimestampsTest, $"iteration {iteration} should also be {NumberTimestampsTest}");
             }
-
-            await task;
-            counter.Should().Be(NumberTimestampsTest);
         }
 
         [Fact]

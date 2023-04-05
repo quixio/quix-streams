@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using QuixStreams.Telemetry.Models;
 
@@ -179,14 +179,17 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
     internal class StreamTimeseriesConsumerAsyncDataEnumerator : IAsyncEnumerator<TimeseriesDataTimestamp>
     {
         // Semaphores to synchronize the consumption of data and manage concurrency
-        private readonly SemaphoreSlim dataAvailableSemaphore;
         private readonly SemaphoreSlim dataProcessedSemaphore;
 
         // CancellationTokenSource to handle cancellation of the enumerator
         private readonly CancellationTokenSource cts;
 
+        // The current data
+        private TimeseriesData data;
         // The current data iterator
         private IEnumerator<TimeseriesDataTimestamp> dataIterator = null;
+        // The data channel used to communicate between threads
+        private readonly Channel<TimeseriesData> dataChannel = Channel.CreateBounded<TimeseriesData>(1);
 
         // Reference to the associated StreamTimeseriesConsumer
         private readonly StreamTimeseriesConsumer timeseriesConsumer;
@@ -197,6 +200,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         // Reference to the associated IStreamConsumerInternal
         private readonly IStreamConsumerInternal streamConsumer;
 
+        private static long instanceCounter = 0;
+
         /// <summary>
         /// Initializes a new instance of the StreamTimeseriesConsumerAsyncDataEnumerator class.
         /// </summary>
@@ -206,10 +211,6 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         internal StreamTimeseriesConsumerAsyncDataEnumerator(StreamTimeseriesConsumer timeseriesConsumer,
             IStreamConsumerInternal streamConsumer, CancellationToken cancellationToken = default)
         {
-            // Initialize the semaphore to signal when data is available for consumption.
-            // Initial state is blocked (0), with a maximum count of 1.
-            this.dataAvailableSemaphore = new SemaphoreSlim(0, 1);
-
             // Initialize the semaphore to signal when the data has been processed.
             // Initial state is blocked (0), with a maximum count of 1.
             this.dataProcessedSemaphore = new SemaphoreSlim(0, 1);
@@ -220,6 +221,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             timeseriesConsumer.OnDataReceived += ConsumerOnOnDataReceived;
             this.streamConsumer = streamConsumer;
             streamConsumer.OnStreamClosed += StreamClosedHandler;
+            Interlocked.Increment(ref instanceCounter);
         }
 
         /// <summary>
@@ -235,9 +237,21 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// </summary>
         private void ConsumerOnOnDataReceived(object sender, TimeseriesDataReadEventArgs args)
         {
-            dataIterator = args.Data.Timestamps.GetEnumerator();
-            dataAvailableSemaphore.Release();
-            dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
+            if (args.Data == null) return;
+            if (args.Data.Timestamps.Count == 0) return;
+
+            try
+            {
+                dataChannel.Writer.TryWrite(args.Data);
+            }
+            catch (ChannelClosedException)
+            {
+                // Handle the channel being closed
+                return;
+            }
+
+            this.dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
+
         }
 
         /// <summary>
@@ -250,8 +264,9 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.timeseriesConsumer.OnDataReceived -= ConsumerOnOnDataReceived;
             this.streamConsumer.OnStreamClosed -= StreamClosedHandler;
             cts.Cancel();
-            this.dataAvailableSemaphore.Dispose();
+            this.dataChannel.Writer.Complete();
             this.dataProcessedSemaphore.Dispose();
+            Interlocked.Decrement(ref instanceCounter);
         }
 
         /// <summary>
@@ -273,16 +288,20 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         public async ValueTask<bool> MoveNextAsync()
         {
             if (this.cts.IsCancellationRequested) return false;
+
+            var iteration = 0;
             
             // Enter an infinite loop to keep trying to move to the next data element.
             while (true)
             {
+                iteration++;
                 // If the dataIterator is not initialized, wait for data to become available.
-                if (dataIterator == null)
+                if (this.dataIterator == null)
                 {
                     try
                     {
-                        await dataAvailableSemaphore.WaitAsync(cts.Token);
+                        this.data = await this.dataChannel.Reader.ReadAsync(cts.Token);
+                        this.dataIterator = this.data.Timestamps.GetEnumerator();
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -301,8 +320,9 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
                 }
 
                 // If there are no more elements, release the dataProcessedSemaphore.
-                dataIterator = null;
-                dataProcessedSemaphore.Release();
+                this.dataIterator = null;
+                this.data = null;
+                this.dataProcessedSemaphore.Release();
             }
         }
 
