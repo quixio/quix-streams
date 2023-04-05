@@ -244,6 +244,33 @@ topic_consumer.subscribe()
 
 	The conversions from [TimeseriesData](#timeseriesdata-format) to pandas DataFrame have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use the `on_dataframe_received` callback provided by the library, which is optimized to do as few conversions as possible.
 
+### Raw data format
+
+In addition to the `TimeseriesData` and pandas `DataFrame` formats, there is also the `TimeseriesDataRaw` format. You can use the `on_raw_received` event to handle this data format, as demonstrated in the following code:
+
+=== "Python"
+
+    ``` python
+    from quixstreams import TopicConsumer, StreamConsumer, TimeseriesDataRaw
+
+    def on_stream_received_handler(stream_received: StreamConsumer):
+        stream_received.timeseries.on_raw_received = on_timeseries_raw_received_handler
+
+    def on_timeseries_raw_received_handler(stream: StreamConsumer, data: TimeseriesDataRaw):
+        with data:
+            # consume from input stream
+            print(data)
+
+    topic_consumer.on_stream_received = on_stream_received_handler
+    topic_consumer.subscribe()
+    ```
+
+=== "C\#"
+
+    ``` cs
+
+    ```
+
 ### Using a Buffer
 
 Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to consume data allows you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
@@ -303,6 +330,8 @@ Consuming data from that buffer is as simple as using its callback (Python) or e
         Console.WriteLine($"ParameterA - {timestamp}: {numValue}");
     };
     ```
+
+Other calbacks are available in addition to `on_data_released` (for `TimeseriesData`), including `on_dataframe_released` (for pandas `DataFrame`) and `on_raw_released` (for `TimeseriesDataRaw`). You use the callback appropriate to your stream data format. 
 
 You can configure multiple conditions to determine when the buffer has to release data, if any of these conditions become true, the buffer will release a new packet of data and that data is cleared from the buffer:
 
@@ -412,6 +441,65 @@ Event consumed for stream. Event Id: motor-off
 Event consumed for stream. Event Id: race-event3
 ```
 
+## Responding to changes in stream properties
+
+If the properties of a stream are changed, the consumer can detect this and handle it using the `on_changed` method.
+
+You can write the handler:
+
+=== "Python"
+
+    ``` python
+    def on_stream_properties_changed_handler(stream_consumer: qx.StreamConsumer):
+        print('stream properties changed for stream: ', stream_consumer.properties.name)
+    ```
+
+=== "C\#"
+
+    ``` cs
+
+    ```
+
+Then register the properties change handler:
+
+=== "Python"
+
+    ``` python
+    def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+        stream_consumer.events.on_data_received = on_event_data_received_handler
+        stream_consumer.properties.on_changed = on_stream_properties_changed_handler
+    ```
+
+=== "C\#"
+
+    ``` cs
+
+    ```
+
+You can keep a copy of the properties if you need to find out which properties had changed.
+
+## Responding to changes in parameter definitions
+
+It is possible to handle changes in [parameter definitions](./publish.md#parameter-definitions). Parameter definitions are metadata attached to data in a stream. The `on_definitions_changed` event is linked to an appropriate event handler, as shown in the following example code:
+
+=== "Python"
+
+    ``` python
+    def on_definitions_changed_handler(stream_consumer: qx.StreamConsumer):
+        # handle change in definitions
+
+
+    def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+        stream_consumer.events.on_data_received = on_event_data_received_handler
+        stream_consumer.events.on_definitions_changed = on_definitions_changed_handler
+    ```
+
+=== "C\#"
+
+    ``` cs
+
+    ```
+
 ## Committing / checkpointing
 
 It is important to be aware of the commit concept when working with a broker. Committing allows you to mark how far data has been processed, also known as creating a [checkpoint](kafka.md#checkpointing). In the event of a restart or rebalance, the client only processes messages from the last committed position. Commits are done for each consumer group, so if you have several consumer groups in use, they do not affect each another when committing.
@@ -487,10 +575,10 @@ Then, whenever your commit condition fulfils, call:
 
 The piece of code above will commit anything – like parameter, event or metadata - consumed and served to you from the topic you subscribed to up to this point.
 
-### Commit callback
+### Committed and committing events
 
 === "Python"
-Whenever a commit occurs, a callback is raised to let you know. This callback is invoked for both manual and automatic commits. You can set the callback using the following code:
+Whenever a commit completes, a callback is raised that can be connected to a handler. This callback is invoked for both manual and automatic commits. You can set the callback using the following code:
     
     ``` python
     from quixstreams import TopicConsumer
@@ -502,7 +590,7 @@ Whenever a commit occurs, a callback is raised to let you know. This callback is
     ```
 
 === "C\#"
-Whenever a commit occurs, an event is raised to let you know. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
+Whenever a commit completes, an event is raised that can be connected to a handler. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
     
     ``` cs
     topicConsumer.OnCommitted += (sender, args) =>
@@ -510,6 +598,8 @@ Whenever a commit occurs, an event is raised to let you know. This event is rais
         //... your code …
     };
     ```
+
+While the `on_committed` event is triggered once the data has been committed, there is also the `on_committing` event which is triggered at the beginning of the commit cycle, should you need to carry out other tasks before the data is committed.
 
 ### Auto offset reset
 
