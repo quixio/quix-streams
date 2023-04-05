@@ -144,7 +144,7 @@ class TimeseriesDataRaw(object):
             epoch (int, optional): The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
 
         Returns:
-            TimeseriesDataRaw: Converted TimeseriesData.
+            TimeseriesDataRaw: Converted TimeseriesDataRaw.
         """
 
         if data_frame is None:

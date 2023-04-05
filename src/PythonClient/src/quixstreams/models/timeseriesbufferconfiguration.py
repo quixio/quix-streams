@@ -57,7 +57,7 @@ class TimeseriesBufferConfiguration(object):
         """
         Gets the maximum packet size in terms of values for the buffer.
 
-        When the buffer reaches this number of values, the on_data_released event is invoked and the buffer is cleared.
+        When the buffer reaches this number of values, a callback method, such as on_data_released, is invoked and the buffer is cleared.
         If not set, defaults to None (disabled).
 
         Returns:
@@ -70,7 +70,7 @@ class TimeseriesBufferConfiguration(object):
         """
         Sets the maximum packet size in terms of values for the buffer.
 
-        When the buffer reaches this number of values, the on_data_released event is invoked and the buffer is cleared.
+        When the buffer reaches this number of values, a callback method, such as on_data_released, is invoked and the buffer is cleared.
         If not set, defaults to None (disabled).
 
         Args:
@@ -84,8 +84,8 @@ class TimeseriesBufferConfiguration(object):
         """
         Gets the maximum time difference between timestamps in the buffer, in nanoseconds.
 
-        When the difference between the earliest and latest buffered timestamp exceeds this value, the on_data_released
-        event is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
+        When the difference between the earliest and latest buffered timestamp exceeds this value, a callback
+        method, such as on_data_released, is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
 
         Returns:
             Optional[int]: The maximum time span in nanoseconds or None if disabled.
@@ -97,8 +97,8 @@ class TimeseriesBufferConfiguration(object):
         """
         Sets the maximum time difference between timestamps in the buffer, in nanoseconds.
 
-        When the difference between the earliest and latest buffered timestamp exceeds this value, the on_data_released
-        event is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
+        When the difference between the earliest and latest buffered timestamp exceeds this value, a callback method,
+        such as on_data_released, is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
 
         Args:
             value (Optional[int]): The maximum time span in nanoseconds or None to disable.
@@ -110,8 +110,8 @@ class TimeseriesBufferConfiguration(object):
         """
         Gets the maximum time difference between timestamps in the buffer, in milliseconds.
 
-        When the difference between the earliest and latest buffered timestamp exceeds this value, the on_data_released
-        event is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
+        When the difference between the earliest and latest buffered timestamp exceeds this value, a callback method,
+        such as on_data_released, is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
 
         Note: This is a millisecond converter on top of time_span_in_nanoseconds. They both work with the same underlying value.
 
@@ -125,8 +125,8 @@ class TimeseriesBufferConfiguration(object):
         """
         Sets the maximum time difference between timestamps in the buffer, in milliseconds.
 
-        When the difference between the earliest and latest buffered timestamp exceeds this value, the on_data_released
-        event is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
+        When the difference between the earliest and latest buffered timestamp exceeds this value, a callback method,
+        such as on_data_released, is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
 
         Args:
             value (Optional[int]): The maximum time span in nanoseconds or None to disable.
@@ -137,9 +137,9 @@ class TimeseriesBufferConfiguration(object):
     @property
     def buffer_timeout(self) -> Optional[int]:
         """
-        Gets the maximum duration for which the buffer will be held before triggering the on_data_released event.
+        Gets the maximum duration for which the buffer will be held before releasing the events through callbacks, such as on_data_released.
 
-        The on_data_released event is triggered when the configured value has elapsed or other buffer conditions are met.
+        A callback will be invoked once the configured value has elapsed or other buffer conditions are met.
         If not set, defaults to None (disabled).
 
         Returns:
@@ -150,9 +150,9 @@ class TimeseriesBufferConfiguration(object):
     @buffer_timeout.setter
     def buffer_timeout(self, value: Optional[int]):
         """
-        Sets the maximum duration for which the buffer will be held before triggering the on_data_released event.
+        Sets the maximum duration for which the buffer will be held before releasing the events through callbacks, such as on_data_released.
 
-        The on_data_released event is triggered when the configured value has elapsed or other buffer conditions are met.
+        A callback will be invoked once the configured value has elapsed or other buffer conditions are met.
         If not set, defaults to None (disabled).
 
         Args:
@@ -165,7 +165,7 @@ class TimeseriesBufferConfiguration(object):
         """
         Gets the custom function that is called before adding a timestamp to the buffer.
 
-        If the function returns True, the TimeseriesBuffer.on_data_released event is invoked before adding the timestamp to
+        If the function returns True, the buffer releases content and triggers relevant callbacks before adding the timestamp to
         the buffer. If not set, defaults to None (disabled).
 
         Returns:
@@ -178,7 +178,7 @@ class TimeseriesBufferConfiguration(object):
         """
         Sets the custom function that is called before adding a timestamp to the buffer.
 
-        If the function returns True, the TimeseriesBuffer.on_data_released event is invoked before adding the timestamp
+        If the function returns True, the buffer releases content and triggers relevant callbacks before adding the timestamp
         to the buffer. If not set, defaults to None (disabled).
 
         Args:
@@ -235,7 +235,7 @@ class TimeseriesBufferConfiguration(object):
         """
         Gets the custom function that is called after adding a new timestamp to the buffer.
 
-        If the function returns True, the TimeseriesBuffer.on_data_released event is invoked with the entire buffer content.
+        If the function returns True, the buffer releases content and triggers relevant callbacks.
         If not set, defaults to None (disabled).
 
         Returns:
@@ -248,7 +248,7 @@ class TimeseriesBufferConfiguration(object):
         """
         Sets the custom function that is called after adding a new timestamp to the buffer.
 
-        If the function returns True, the TimeseriesBuffer.on_data_released event is invoked with the entire buffer content.
+        If the function returns True, the buffer releases content and triggers relevant callbacks.
         If not set, defaults to None (disabled).
 
         Args:

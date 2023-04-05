@@ -94,10 +94,10 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
                 return TimeseriesDataBuilder(self._interop.AddTimestamp(netdate_hptr))
             finally:
                 InteropUtils.free_hptr(netdate_hptr)  # dotnet will hold a reference to it, we no longer need it
-            if isinstance(time, timedelta):
-                nettimespan_uptr = dtc.timedelta_to_dotnet(time)
-                return TimeseriesDataBuilder(self._interop.AddTimestamp2(nettimespan_uptr))
-            raise ValueError("'time' must be either datetime or timedelta")
+        if isinstance(time, timedelta):
+            nettimespan_uptr = dtc.timedelta_to_dotnet(time)
+            return TimeseriesDataBuilder(self._interop.AddTimestamp2(nettimespan_uptr))
+        raise ValueError("'time' must be either datetime or timedelta")
 
     def add_timestamp_nanoseconds(self, nanoseconds: int) -> TimeseriesDataBuilder:
         """
