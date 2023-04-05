@@ -314,7 +314,7 @@ class TimeseriesData(object):
                     "panda data frame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
             time_label = possible_time_vals.columns[0]
 
-        def get_value_as_type(val_type, val, type_conv=None) -> []:
+        def get_value_as_type(val_type, val, type_conv=None) -> List:
             if not isinstance(val, val_type) and type_conv is not None:
                 new_val = type_conv(val)
                 return new_val

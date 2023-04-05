@@ -1,5 +1,6 @@
 import ctypes
 import pickle
+from typing import Any
 
 from .statetype import StateType
 from ..helpers.enumconverter import EnumConverter as ec
@@ -13,7 +14,7 @@ class StateValue(object):
     A wrapper class for values that can be stored inside the storage.
     """
 
-    def __init__(self, value: any):
+    def __init__(self, value: Any):
         """
         Initializes the wrapped value inside the store.
 
@@ -94,7 +95,7 @@ class StateValue(object):
         Gets the wrapped value.
 
         Returns:
-            any: The wrapped value.
+            The wrapped value.
         """
         return self._value
 

@@ -1,5 +1,5 @@
 import ctypes
-from typing import Dict
+from typing import Any, Dict
 
 from .. import TimeseriesDataRaw
 from ..helpers.nativedecorator import nativedecorator
@@ -30,7 +30,7 @@ class StreamPackage(object):
             self.type = nettype.get_FullName()
             """Type of the content value"""
 
-            self.value: any = None
+            self.value: Any = None
             """Content value of the package"""
 
             val_hptr = self._interop.get_Value()
