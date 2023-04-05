@@ -67,7 +67,7 @@ class StreamEventsProducer(object):
 
     @property
     def epoch(self) -> datetime:
-        """Gets the default epoch used for event values."""
+        """The unix epoch from, which all other timestamps in this model are measured from in nanoseconds."""
 
         ptr = self._interop.get_Epoch()
         value = dtc.datetime_to_python(ptr)
@@ -75,7 +75,7 @@ class StreamEventsProducer(object):
 
     @epoch.setter
     def epoch(self, value: datetime):
-        """Sets the default epoch used for Timestamp event values. Datetime added on top of all the Timestamps."""
+        """Sets the default epoch used for event values."""
         dotnet_value = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(dotnet_value)
 

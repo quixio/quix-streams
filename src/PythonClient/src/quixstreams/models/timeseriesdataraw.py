@@ -392,8 +392,8 @@ class TimeseriesDataRaw(object):
     def binary_values(self) -> Dict[str, List[bytes]]:
         """
         The binary values for parameters.
-        The key is the parameter ID the values belong to. The value is the string values of the parameter.
-        Values are matched by index to timestamps.
+        The key is the parameter ID the values belong to.
+        The value is the binary values of the parameter. Values are matched by index to timestamps.
 
         Returns:
             Dict[str, List[bytes]]: A dictionary mapping parameter IDs to lists of bytes values

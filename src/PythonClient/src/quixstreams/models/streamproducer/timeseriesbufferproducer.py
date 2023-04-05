@@ -125,7 +125,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             packet (Union[TimeseriesData, pd.DataFrame]): The packet containing TimeseriesData or panda DataFrame
                 - packet type panda.DataFrame:
                     * Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
-                    * Note 2: Tags should be prefixed by TAG__ or they will be treated as parameters
+                    * Note 2: Tags should be prefixed by TAG__ or they will be treated as timeseries parameters
 
         Examples:
             Send a panda data frame:
