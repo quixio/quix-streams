@@ -18,12 +18,12 @@ namespace QuixStreams.Streaming.UnitTests.Models
         {
             this.testOutputHelper = testOutputHelper;
         }
-
+        
         [Fact]
-        public async Task AsyncIterate_ShouldIterateUntilClose()
+        public async Task DataReceived_ShouldIterateUntilClose()
         {
             var iteration = 0;
-            var totalIteration = 10;
+            var totalIteration = 100;
             while (iteration < totalIteration)
             {
                 iteration++;
@@ -35,39 +35,165 @@ namespace QuixStreams.Streaming.UnitTests.Models
                     new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
                         new TestStreamingClient().GetTopicConsumer(), streamConsumer);
 
+                
+                long counter = 0;
+                long asdf = 0;
+
+                timeseriesConsumer.OnDataReceived += (streamConsumer, a) =>
+                {
+                    foreach (var ts in a.Data.Timestamps)
+                    {
+                        asdf += ts.TimestampMilliseconds;
+                        Interlocked.Increment(ref counter);
+                    }
+                };
+                
+                //Act
+                for (var i = 1; i <= NumberTimestampsTest; i++)
+                {
+                    var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
+                    timeseriesData.AddTimestampNanoseconds(100 * i)
+                        .AddValue($"test_numeric_param{i}", i)
+                        .AddValue($"test_string_param{i}", $"{i}")
+                        .AddTag($"tag{i}", $"{i}");
+
+                    streamConsumer.OnTimeseriesData +=
+                        Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer,
+                            timeseriesData.ConvertToTimeseriesDataRaw());
+                    if (i % 50 == 0) testOutputHelper.WriteLine($"I/Counter: {i}/{counter}");
+                }
+                testOutputHelper.WriteLine($"Counter: {counter}");
+
+                streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer,
+                    new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
+
+                counter.Should().Be(NumberTimestampsTest, $"iteration {iteration} should also be {NumberTimestampsTest}");
+            }
+        }
+        
+        [Fact]
+        public async Task AsyncIterate_ShouldIterateUntilClose()
+        {
+            var iteration = 0;
+            var totalIteration = 100;
+            while (iteration < totalIteration)
+            {
+                iteration++;
+                const int NumberTimestampsTest = 10000;
+
+                var streamConsumer = Substitute.For<IStreamConsumerInternal>();
+                var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
+                var timeseriesConsumer =
+                    new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
+                        new TestStreamingClient().GetTopicConsumer(), streamConsumer);
+
+                
+                long counter = 0;
+                var mre = new ManualResetEventSlim(false);
+                var task = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var enumerator = timeseriesConsumer.GetAsyncEnumerator();
+                        mre.Set();
+                        this.testOutputHelper.WriteLine("SET");
+                        while (await enumerator.MoveNextAsync())
+                        {
+                            Interlocked.Increment(ref counter);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        throw;
+                    }
+                });
+                
+                //Act
+                this.testOutputHelper.WriteLine("READY");
+                mre.Wait();
+                this.testOutputHelper.WriteLine("GO");
+                for (var i = 1; i <= NumberTimestampsTest; i++)
+                {
+                    var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
+                    timeseriesData.AddTimestampNanoseconds(100 * i)
+                        .AddValue($"test_numeric_param{i}", i)
+                        .AddValue($"test_string_param{i}", $"{i}")
+                        .AddTag($"tag{i}", $"{i}");
+
+                    streamConsumer.OnTimeseriesData +=
+                        Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer,
+                            timeseriesData.ConvertToTimeseriesDataRaw());
+                    if (i % 50 == 0) testOutputHelper.WriteLine($"I/Counter: {i}/{counter}");
+                }
+                testOutputHelper.WriteLine($"Counter: {counter}");
+
+                streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer,
+                    new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
+
+                await task;
+                counter.Should().Be(NumberTimestampsTest, $"iteration {iteration} should also be {NumberTimestampsTest}");
+            }
+        }
+
+        [Fact]
+        public async Task SyncIterate_ShouldIterateUntilClose()
+        {
+            var iteration = 0;
+            var totalIteration = 100;
+            while (iteration < totalIteration)
+            {
+                iteration++;
+                const int NumberTimestampsTest = 10000;
+
+                var streamConsumer = Substitute.For<IStreamConsumerInternal>();
+                var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
+                var timeseriesConsumer =
+                    new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
+                        new TestStreamingClient().GetTopicConsumer(), streamConsumer);
+
+                
+                long counter = 0;
+                var mre = new ManualResetEventSlim(false);
                 var task = Task.Run(() =>
                 {
-                    //Act
-                    for (var i = 1; i <= NumberTimestampsTest; i++)
+                    try
                     {
-                        var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
-                        timeseriesData.AddTimestampNanoseconds(100 * i)
-                            .AddValue($"test_numeric_param{i}", i)
-                            .AddValue($"test_string_param{i}", $"{i}")
-                            .AddTag($"tag{i}", $"{i}");
-
-                        streamConsumer.OnTimeseriesData +=
-                            Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer,
-                                timeseriesData.ConvertToTimeseriesDataRaw());
+                        using var enumerator = timeseriesConsumer.GetEnumerator();
+                        mre.Set();
+                        this.testOutputHelper.WriteLine("SET");
+                        while (enumerator.MoveNext())
+                        {
+                            Interlocked.Increment(ref counter);
+                        }
                     }
-
-                    streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer,
-                        new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
+                    catch (Exception ex)
+                    {
+                        throw;
+                    }
                 });
+                
+                //Act
+                this.testOutputHelper.WriteLine("READY");
+                mre.Wait();
+                this.testOutputHelper.WriteLine("GO");
+                for (var i = 1; i <= NumberTimestampsTest; i++)
+                {
+                    var timeseriesData = new QuixStreams.Streaming.Models.TimeseriesData();
+                    timeseriesData.AddTimestampNanoseconds(100 * i)
+                        .AddValue($"test_numeric_param{i}", i)
+                        .AddValue($"test_string_param{i}", $"{i}")
+                        .AddTag($"tag{i}", $"{i}");
 
-                var counter = 0;
-                try
-                {
-                    await foreach (var row in timeseriesConsumer)
-                    {
-                        counter++;
-                        if (counter % 50 == 0) testOutputHelper.WriteLine($"Counter: {counter}");
-                    }
+                    streamConsumer.OnTimeseriesData +=
+                        Raise.Event<Action<IStreamConsumer, TimeseriesDataRaw>>(streamConsumer,
+                            timeseriesData.ConvertToTimeseriesDataRaw());
+                    
+                    if (i % 50 == 0) testOutputHelper.WriteLine($"I/Counter: {i}/{counter}");
                 }
-                catch (Exception ex)
-                {
-                    throw;
-                }
+                testOutputHelper.WriteLine($"Counter: {counter}");
+
+                streamConsumer.OnStreamClosed += Raise.Event<EventHandler<StreamClosedEventArgs>>(streamConsumer,
+                    new StreamClosedEventArgs(null, streamConsumer, StreamEndType.Aborted));
 
                 await task;
                 counter.Should().Be(NumberTimestampsTest, $"iteration {iteration} should also be {NumberTimestampsTest}");
