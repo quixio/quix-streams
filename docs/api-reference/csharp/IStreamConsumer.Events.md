@@ -3,7 +3,7 @@
 
 ## IStreamConsumer.Events Property
 
-Gets the consumer for accessing event related information of the stream such as event definitions and values
+Gets the consumer for accessing event related information of the stream such as event definitions and values.
 
 ```csharp
 QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer Events { get; }

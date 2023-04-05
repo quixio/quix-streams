@@ -3,7 +3,7 @@
 
 ## RawTopicProducer Class
 
-Class to write raw messages into a Topic (capable to write non-quixstreams messages)
+Class to produce raw messages into a Topic (capable to producing non-quixstreams messages)
 
 ```csharp
 public class RawTopicProducer :

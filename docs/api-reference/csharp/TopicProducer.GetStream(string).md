@@ -20,4 +20,4 @@ Implements [GetStream(string)](ITopicProducer.GetStream(string).md 'QuixStreams.
 
 #### Returns
 [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer')  
-Stream writer to allow the stream to push data to the platform or null if not found.
+Stream producer to allow the stream to push data to the platform or null if not found.

@@ -3,7 +3,7 @@
 
 ## KafkaStreamingClient.GetTopicProducer(string) Method
 
-Open an topic producer capable of publishing non-quixstreams messages
+Gets a topic producer capable of publishing stream messages.
 
 ```csharp
 public QuixStreams.Streaming.ITopicProducer GetTopicProducer(string topic);

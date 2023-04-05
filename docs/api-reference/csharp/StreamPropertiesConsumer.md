@@ -3,8 +3,8 @@
 
 ## StreamPropertiesConsumer Class
 
-Properties and Metadata of the stream.  
-All the changes of these properties are populated to this class automatically
+Represents properties and metadata of the stream.  
+All changes to these properties are automatically populated to this class.
 
 ```csharp
 public class StreamPropertiesConsumer :
@@ -20,9 +20,9 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | [Location](StreamPropertiesConsumer.Location.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.Location') | Gets the location of the stream |
 | [Metadata](StreamPropertiesConsumer.Metadata.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.Metadata') | Gets the metadata of the stream |
 | [Name](StreamPropertiesConsumer.Name.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.Name') | Gets the name of the stream |
-| [Parents](StreamPropertiesConsumer.Parents.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.Parents') | List of Stream Ids of the Parent streams |
+| [Parents](StreamPropertiesConsumer.Parents.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.Parents') | Gets the list of Stream IDs for the parent streams |
 | [TimeOfRecording](StreamPropertiesConsumer.TimeOfRecording.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.TimeOfRecording') | Gets the datetime of the recording |
 
 | Events | |
 | :--- | :--- |
-| [OnChanged](StreamPropertiesConsumer.OnChanged.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.OnChanged') | Raised when the stream properties have changed |
+| [OnChanged](StreamPropertiesConsumer.OnChanged.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamPropertiesConsumer.OnChanged') | Raised when the stream properties change |

@@ -14,7 +14,7 @@ public EventDefinitionBuilder(QuixStreams.Streaming.Models.StreamProducer.Stream
 
 `streamEventsProducer` [StreamEventsProducer](StreamEventsProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer')
 
-Events writer owner
+Events producer owner
 
 <a name='QuixStreams.Streaming.Models.StreamProducer.EventDefinitionBuilder.EventDefinitionBuilder(QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer,string,QuixStreams.Telemetry.Models.EventDefinition).location'></a>
 

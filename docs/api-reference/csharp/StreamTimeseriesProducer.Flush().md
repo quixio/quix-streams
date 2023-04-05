@@ -3,7 +3,7 @@
 
 ## StreamTimeseriesProducer.Flush() Method
 
-Immediately writes the timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either
+Immediately publish timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either
 
 ```csharp
 public void Flush();

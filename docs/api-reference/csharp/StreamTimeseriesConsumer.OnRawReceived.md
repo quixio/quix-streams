@@ -4,7 +4,7 @@
 ## StreamTimeseriesConsumer.OnRawReceived Event
 
 Event raised when data is received (without buffering) in raw transport format  
-This event does not use Buffers and data will be raised as they arrive without any processing.
+This event does not use Buffers, and data will be raised as they arrive without any processing.
 
 ```csharp
 public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReceived;

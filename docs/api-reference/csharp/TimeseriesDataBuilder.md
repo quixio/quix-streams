@@ -22,4 +22,4 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 | [AddValue(string, byte[])](TimeseriesDataBuilder.AddValue(string,byte[]).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesDataBuilder.AddValue(string, byte[])') | Adds new parameter value at the time the builder is created for |
 | [AddValue(string, double)](TimeseriesDataBuilder.AddValue(string,double).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesDataBuilder.AddValue(string, double)') | Adds new parameter value at the time the builder is created for |
 | [AddValue(string, string)](TimeseriesDataBuilder.AddValue(string,string).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesDataBuilder.AddValue(string, string)') | Adds new parameter value at the time the builder is created for |
-| [Publish()](TimeseriesDataBuilder.Publish().md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesDataBuilder.Publish()') | Write the values |
+| [Publish()](TimeseriesDataBuilder.Publish().md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesDataBuilder.Publish()') | Publish the values |

@@ -14,5 +14,7 @@ public QuixStreams.Streaming.Models.StreamProducer.EventDefinitionBuilder AddLoc
 
 `location` [System.String](https://docs.microsoft.com/en-us/dotnet/api/System.String 'System.String')
 
+The group location
+
 #### Returns
 [EventDefinitionBuilder](EventDefinitionBuilder.md 'QuixStreams.Streaming.Models.StreamProducer.EventDefinitionBuilder')

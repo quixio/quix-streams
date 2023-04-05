@@ -3,7 +3,7 @@
 
 ## ITopicProducer Interface
 
-Interface to write outgoing streams
+Interface to produce outgoing streams
 
 ```csharp
 public interface ITopicProducer :
@@ -17,8 +17,8 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 
 | Methods | |
 | :--- | :--- |
-| [CreateStream()](ITopicProducer.CreateStream().md 'QuixStreams.Streaming.ITopicProducer.CreateStream()') | Creates a new stream and returns the related stream writer to operate it. |
-| [CreateStream(string)](ITopicProducer.CreateStream(string).md 'QuixStreams.Streaming.ITopicProducer.CreateStream(string)') | Creates a new stream and returns the related stream writer to operate it. |
+| [CreateStream()](ITopicProducer.CreateStream().md 'QuixStreams.Streaming.ITopicProducer.CreateStream()') | Creates a new stream and returns the related stream producer to operate it. |
+| [CreateStream(string)](ITopicProducer.CreateStream(string).md 'QuixStreams.Streaming.ITopicProducer.CreateStream(string)') | Creates a new stream and returns the related stream producer to operate it. |
 | [GetOrCreateStream(string, Action&lt;IStreamProducer&gt;)](ITopicProducer.GetOrCreateStream(string,Action_IStreamProducer_).md 'QuixStreams.Streaming.ITopicProducer.GetOrCreateStream(string, System.Action<QuixStreams.Streaming.IStreamProducer>)') | Retrieves a stream that was previously created by this instance, if the stream is not closed, otherwise creates a new stream. |
 | [GetStream(string)](ITopicProducer.GetStream(string).md 'QuixStreams.Streaming.ITopicProducer.GetStream(string)') | Retrieves a stream that was previously created by this instance, if the stream is not closed. |
 

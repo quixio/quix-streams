@@ -13,14 +13,14 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Constructors | |
 | :--- | :--- |
+| [EventData(string, long, string)](EventData.EventData(string,long,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, long, string)') | Create a new empty Event Data instance |
 | [EventData(string, DateTime, string)](EventData.EventData(string,DateTime,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, System.DateTime, string)') | Create a new empty Event Data instance |
 | [EventData(string, TimeSpan, string)](EventData.EventData(string,TimeSpan,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, System.TimeSpan, string)') | Create a new empty Event Data instance |
-| [EventData(string, long, string)](EventData.EventData(string,long,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, long, string)') | Create a new empty Event Data instance |
 
 | Properties | |
 | :--- | :--- |
 | [Id](EventData.Id.md 'QuixStreams.Streaming.Models.EventData.Id') | The globally unique identifier of the event |
-| [Tags](EventData.Tags.md 'QuixStreams.Streaming.Models.EventData.Tags') | Tags on that event. When key is not found, returns null |
+| [Tags](EventData.Tags.md 'QuixStreams.Streaming.Models.EventData.Tags') | Tags for the timestamp. If key is not found return null |
 | [Timestamp](EventData.Timestamp.md 'QuixStreams.Streaming.Models.EventData.Timestamp') | Gets the timestamp in [System.DateTime](https://docs.microsoft.com/en-us/dotnet/api/System.DateTime 'System.DateTime') format |
 | [TimestampAsTimeSpan](EventData.TimestampAsTimeSpan.md 'QuixStreams.Streaming.Models.EventData.TimestampAsTimeSpan') | Gets the timestamp in [System.TimeSpan](https://docs.microsoft.com/en-us/dotnet/api/System.TimeSpan 'System.TimeSpan') format |
 | [TimestampMilliseconds](EventData.TimestampMilliseconds.md 'QuixStreams.Streaming.Models.EventData.TimestampMilliseconds') | Gets the timestamp in milliseconds |

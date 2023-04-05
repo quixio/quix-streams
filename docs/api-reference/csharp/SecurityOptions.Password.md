@@ -3,7 +3,7 @@
 
 ## SecurityOptions.Password Property
 
-SASL password
+The password for SASL authentication
 
 ```csharp
 public string Password { get; set; }

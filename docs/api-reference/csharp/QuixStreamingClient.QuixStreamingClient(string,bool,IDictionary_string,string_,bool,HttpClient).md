@@ -32,7 +32,7 @@ Additional broker properties
 
 `debug` [System.Boolean](https://docs.microsoft.com/en-us/dotnet/api/System.Boolean 'System.Boolean')
 
-Whether debugging should enabled
+Whether debugging should be enabled
 
 <a name='QuixStreams.Streaming.QuixStreamingClient.QuixStreamingClient(string,bool,System.Collections.Generic.IDictionary_string,string_,bool,System.Net.Http.HttpClient).httpClient'></a>
 

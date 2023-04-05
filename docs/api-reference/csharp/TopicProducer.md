@@ -3,7 +3,7 @@
 
 ## TopicProducer Class
 
-Implementation of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') to write outgoing streams
+Implementation of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') to produce outgoing streams
 
 ```csharp
 public class TopicProducer :
@@ -22,8 +22,8 @@ Implements [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProdu
 
 | Methods | |
 | :--- | :--- |
-| [CreateStream()](TopicProducer.CreateStream().md 'QuixStreams.Streaming.TopicProducer.CreateStream()') | Creates a new stream and returns the related stream writer to operate it. |
-| [CreateStream(string)](TopicProducer.CreateStream(string).md 'QuixStreams.Streaming.TopicProducer.CreateStream(string)') | Creates a new stream and returns the related stream writer to operate it. |
+| [CreateStream()](TopicProducer.CreateStream().md 'QuixStreams.Streaming.TopicProducer.CreateStream()') | Creates a new stream and returns the related stream producer to operate it. |
+| [CreateStream(string)](TopicProducer.CreateStream(string).md 'QuixStreams.Streaming.TopicProducer.CreateStream(string)') | Creates a new stream and returns the related stream producer to operate it. |
 | [GetOrCreateStream(string, Action&lt;IStreamProducer&gt;)](TopicProducer.GetOrCreateStream(string,Action_IStreamProducer_).md 'QuixStreams.Streaming.TopicProducer.GetOrCreateStream(string, System.Action<QuixStreams.Streaming.IStreamProducer>)') | Retrieves a stream that was previously created by this instance, if the stream is not closed, otherwise creates a new stream. |
 | [GetStream(string)](TopicProducer.GetStream(string).md 'QuixStreams.Streaming.TopicProducer.GetStream(string)') | Retrieves a stream that was previously created by this instance, if the stream is not closed. |
 | [RemoveStream(string)](TopicProducer.RemoveStream(string).md 'QuixStreams.Streaming.TopicProducer.RemoveStream(string)') | Removes a stream from the internal list of streams |

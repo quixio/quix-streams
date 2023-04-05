@@ -14,7 +14,7 @@ public EventDataBuilder(QuixStreams.Streaming.Models.StreamProducer.StreamEvents
 
 `streamEventsProducer` [StreamEventsProducer](StreamEventsProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer')
 
-Events writer owner
+Events producer owner
 
 <a name='QuixStreams.Streaming.Models.StreamProducer.EventDataBuilder.EventDataBuilder(QuixStreams.Streaming.Models.StreamProducer.StreamEventsProducer,long).timestampNanoseconds'></a>
 

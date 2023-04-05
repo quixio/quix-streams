@@ -14,7 +14,7 @@ public ParameterDefinitionBuilder(QuixStreams.Streaming.Models.StreamProducer.St
 
 `streamTimeseriesProducer` [StreamTimeseriesProducer](StreamTimeseriesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer')
 
-Parameters writer owner
+Parameters producer owner
 
 <a name='QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder.ParameterDefinitionBuilder(QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer,string,QuixStreams.Telemetry.Models.ParameterDefinition).location'></a>
 

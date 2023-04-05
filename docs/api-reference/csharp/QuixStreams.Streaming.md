@@ -4,14 +4,14 @@
 
 | Classes | |
 | :--- | :--- |
-| [App](App.md 'QuixStreams.Streaming.App') | Helper class to handle default streaming behaviors and handle automatic resource cleanup on shutdown |
-| [KafkaStreamingClient](KafkaStreamingClient.md 'QuixStreams.Streaming.KafkaStreamingClient') | Streaming client for kafka |
+| [App](App.md 'QuixStreams.Streaming.App') | Provides utilities to handle default streaming behaviors and automatic resource cleanup on shutdown. |
+| [KafkaStreamingClient](KafkaStreamingClient.md 'QuixStreams.Streaming.KafkaStreamingClient') | A Kafka streaming client capable of creating topic consumer and producers. |
 | [KafkaStreamingClientExtensions](KafkaStreamingClientExtensions.md 'QuixStreams.Streaming.KafkaStreamingClientExtensions') | Extensions for Streaming Client class |
 | [QuixStreamingClient](QuixStreamingClient.md 'QuixStreams.Streaming.QuixStreamingClient') | Streaming client for Kafka configured automatically using Environment Variables and Quix platform endpoints.<br/>Use this Client when you use this library together with Quix platform. |
 | [QuixStreamingClient.TokenValidationConfiguration](QuixStreamingClient.TokenValidationConfiguration.md 'QuixStreams.Streaming.QuixStreamingClient.TokenValidationConfiguration') | Token Validation configuration |
 | [QuixStreamingClientExtensions](QuixStreamingClientExtensions.md 'QuixStreams.Streaming.QuixStreamingClientExtensions') | Quix Streaming Client extensions |
-| [TopicConsumer](TopicConsumer.md 'QuixStreams.Streaming.TopicConsumer') | Implementation of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer') to read incoming streams |
-| [TopicProducer](TopicProducer.md 'QuixStreams.Streaming.TopicProducer') | Implementation of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') to write outgoing streams |
+| [TopicConsumer](TopicConsumer.md 'QuixStreams.Streaming.TopicConsumer') | Implementation of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer') to consume incoming streams |
+| [TopicProducer](TopicProducer.md 'QuixStreams.Streaming.TopicProducer') | Implementation of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') to produce outgoing streams |
 
 | Structs | |
 | :--- | :--- |
@@ -22,4 +22,4 @@
 | [IStreamConsumer](IStreamConsumer.md 'QuixStreams.Streaming.IStreamConsumer') | Stream reader interface. Stands for a new stream read from the platform.<br/>Allows to read the stream data received from a topic. |
 | [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer') | Stands for a new stream that we want to send to the platform.<br/>It provides you helper properties to stream data the platform like parameter values, events, definitions and all the information you can persist to the platform. |
 | [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer') | Interface to subscribe to incoming streams |
-| [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') | Interface to write outgoing streams |
+| [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') | Interface to produce outgoing streams |

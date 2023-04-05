@@ -18,4 +18,4 @@ The Id of the stream
 
 #### Returns
 [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer')  
-Stream writer to allow the stream to push data to the platform or null if not found.
+Stream producer to allow the stream to push data to the platform or null if not found.

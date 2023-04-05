@@ -3,7 +3,7 @@
 
 ## StreamEventsProducer.DefaultTags Property
 
-Default Tags injected to all Event Values sent by the writer.
+Default Tags injected to all Event Values sent by the producer.
 
 ```csharp
 public System.Collections.Generic.Dictionary<string,string> DefaultTags { get; set; }
