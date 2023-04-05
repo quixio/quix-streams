@@ -69,7 +69,7 @@ class StreamTimeseriesConsumer(object):
         Gets the handler for when data is received (without buffering).
 
         Returns:
-            Callable[['StreamConsumer', TimeseriesData]: The function that handles the data received.
+            Callable[['StreamConsumer', TimeseriesData], None]: The function that handles the data received.
                 The first parameter is the stream that receives the data, and the second is the data in TimeseriesData format.
         """
         return self._on_data_received
@@ -110,7 +110,7 @@ class StreamTimeseriesConsumer(object):
         Gets the handler for when data is received (without buffering) in raw transport format.
 
         Returns:
-            Callable[['StreamConsumer', TimeseriesDataRaw]: The function that handles the data received.
+            Callable[['StreamConsumer', TimeseriesDataRaw], None]: The function that handles the data received.
                 The first parameter is the stream that receives the data, and the second is the data in TimeseriesDataRaw format.
         """
         return self._on_raw_received
@@ -151,7 +151,7 @@ class StreamTimeseriesConsumer(object):
         Gets the handler for when data is received (without buffering) in pandas DataFrame format.
 
         Returns:
-            Callable[['StreamConsumer', pandas.DataFrame]: The function that handles the data received.
+            Callable[['StreamConsumer', pandas.DataFrame], None]: The function that handles the data received.
                 The first parameter is the stream that receives the data, and the second is the data in pandas DataFrame format.
         """
         return self._on_dataframe_received
@@ -196,7 +196,7 @@ class StreamTimeseriesConsumer(object):
         Gets the handler for when the parameter definitions have changed for the stream.
 
         Returns:
-            Callable[['StreamConsumer']: The function that handles the parameter definitions change.
+            Callable[['StreamConsumer'], None]: The function that handles the parameter definitions change.
                 The first parameter is the stream for which the parameter definitions changed.
         """
         return self._on_definitions_changed

@@ -51,7 +51,7 @@ class StreamEventsConsumer(object):
         Gets the handler for when an events data package is received for the stream.
 
         Returns:
-            Callable[['StreamConsumer', EventData]]:
+            Callable[['StreamConsumer', EventData], None]:
                 The first parameter is the stream the event is received for. The second is the event.
         """
         return self._on_data_received
@@ -92,7 +92,7 @@ class StreamEventsConsumer(object):
         Gets the handler for event definitions have changed for the stream.
 
         Returns:
-            Callable[['StreamConsumer']]:
+            Callable[['StreamConsumer'], None]:
                 The first parameter is the stream the event definitions changed for.
         """
         return self._on_definitions_changed
