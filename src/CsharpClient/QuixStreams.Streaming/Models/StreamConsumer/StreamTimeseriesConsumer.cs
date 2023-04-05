@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using QuixStreams.Telemetry.Models;
 
@@ -267,13 +266,10 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         public bool MoveNext()
         {
             if (this.cts.IsCancellationRequested) return false;
-
-            var iteration = 0;
             
             // Enter an infinite loop to keep trying to move to the next data element.
             while (true)
             {
-                iteration++;
                 // If the dataIterator is not initialized, wait for data to become available.
                 if (this.dataIterator == null)
                 {
@@ -290,15 +286,15 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
                     if (this.cts.IsCancellationRequested) return false; // Could be disposed
 
 
-                    Debug.Assert(data != null, "dataIterator is null");
+                    Debug.Assert(this.data != null, "data is null");
                     this.dataIterator = this.data.Timestamps.GetEnumerator();
 
 
                 }
                 
-                if (dataIterator.MoveNext())
+                if (this.dataIterator.MoveNext())
                 {
-                    this.Current = dataIterator.Current;
+                    this.Current = this.dataIterator.Current;
                     return true;
                 }
 
@@ -335,6 +331,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
     /// </summary>
     internal class StreamTimeseriesConsumerAsyncDataEnumerator : IAsyncEnumerator<TimeseriesDataTimestamp>
     {
+        // Semaphores to synchronize the production of data and manage concurrency
+        private readonly SemaphoreSlim dataAvailableSemaphore;
         // Semaphores to synchronize the consumption of data and manage concurrency
         private readonly SemaphoreSlim dataProcessedSemaphore;
 
@@ -345,8 +343,6 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         private TimeseriesData data;
         // The current data iterator
         private IEnumerator<TimeseriesDataTimestamp> dataIterator = null;
-        // The data channel used to communicate between threads
-        private readonly Channel<TimeseriesData> dataChannel = Channel.CreateBounded<TimeseriesData>(1);
 
         // Reference to the associated StreamTimeseriesConsumer
         private readonly StreamTimeseriesConsumer timeseriesConsumer;
@@ -356,8 +352,6 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
         // Reference to the associated IStreamConsumerInternal
         private readonly IStreamConsumerInternal streamConsumer;
-
-        private static long instanceCounter = 0;
 
         /// <summary>
         /// Initializes a new instance of the StreamTimeseriesConsumerAsyncDataEnumerator class.
@@ -372,13 +366,16 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             // Initial state is blocked (0), with a maximum count of 1.
             this.dataProcessedSemaphore = new SemaphoreSlim(0, 1);
             
+            // Initialize the semaphore to signal when the data has arrived.
+            // Initial state is blocked (0), with a maximum count of 1.
+            this.dataAvailableSemaphore = new SemaphoreSlim(0, 1);
+            
             this.cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             this.timeseriesConsumer = timeseriesConsumer;
             timeseriesConsumer.OnDataReceived += ConsumerOnOnDataReceived;
             this.streamConsumer = streamConsumer;
             streamConsumer.OnStreamClosed += StreamClosedHandler;
-            Interlocked.Increment(ref instanceCounter);
         }
 
         /// <summary>
@@ -397,16 +394,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             if (args.Data == null) return;
             if (args.Data.Timestamps.Count == 0) return;
 
-            try
-            {
-                dataChannel.Writer.TryWrite(args.Data);
-            }
-            catch (ChannelClosedException)
-            {
-                // Handle the channel being closed
-                return;
-            }
-
+            this.data = args.Data;
+            this.dataAvailableSemaphore.Release();
             this.dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
 
         }
@@ -421,9 +410,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.timeseriesConsumer.OnDataReceived -= ConsumerOnOnDataReceived;
             this.streamConsumer.OnStreamClosed -= StreamClosedHandler;
             cts.Cancel();
-            this.dataChannel.Writer.Complete();
+            this.dataAvailableSemaphore.Dispose();
             this.dataProcessedSemaphore.Dispose();
-            Interlocked.Decrement(ref instanceCounter);
         }
 
         /// <summary>
@@ -445,20 +433,16 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         public async ValueTask<bool> MoveNextAsync()
         {
             if (this.cts.IsCancellationRequested) return false;
-
-            var iteration = 0;
             
             // Enter an infinite loop to keep trying to move to the next data element.
             while (true)
             {
-                iteration++;
                 // If the dataIterator is not initialized, wait for data to become available.
                 if (this.dataIterator == null)
                 {
                     try
                     {
-                        this.data = await this.dataChannel.Reader.ReadAsync(cts.Token);
-                        this.dataIterator = this.data.Timestamps.GetEnumerator();
+                        await this.dataAvailableSemaphore.WaitAsync(cts.Token);
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -467,12 +451,14 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
                     if (this.cts.IsCancellationRequested) return false; // Could be disposed
 
-                    Debug.Assert(dataIterator != null, "dataIterator is null");
+                    Debug.Assert(this.data != null, "data is null");
+                    this.dataIterator = this.data.Timestamps.GetEnumerator();
+                    
                 }
                 
-                if (dataIterator.MoveNext())
+                if (this.dataIterator.MoveNext())
                 {
-                    this.Current = dataIterator.Current;
+                    this.Current = this.dataIterator.Current;
                     return true;
                 }
 

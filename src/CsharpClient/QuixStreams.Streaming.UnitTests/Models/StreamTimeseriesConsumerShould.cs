@@ -30,7 +30,6 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 const int NumberTimestampsTest = 10000;
 
                 var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-                var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
                 var timeseriesConsumer =
                     new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
                         new TestStreamingClient().GetTopicConsumer(), streamConsumer);
@@ -82,7 +81,6 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 const int NumberTimestampsTest = 10000;
 
                 var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-                var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
                 var timeseriesConsumer =
                     new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
                         new TestStreamingClient().GetTopicConsumer(), streamConsumer);
@@ -146,7 +144,6 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 const int NumberTimestampsTest = 10000;
 
                 var streamConsumer = Substitute.For<IStreamConsumerInternal>();
-                var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
                 var timeseriesConsumer =
                     new QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer(
                         new TestStreamingClient().GetTopicConsumer(), streamConsumer);
