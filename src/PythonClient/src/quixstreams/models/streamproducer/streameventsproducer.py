@@ -35,13 +35,13 @@ class StreamEventsProducer(object):
     def flush(self):
         """
         Immediately publishes the event definitions from the buffer without waiting for buffer condition to fulfill
-        (200ms timeout). NOTE: Verify 200ms timeout value.
+        (200ms timeout). TODO: Verify 200ms timeout value.
         """
         self._interop.Flush()
 
     @property
     def default_tags(self) -> Dict[str, str]:
-        """Default Tags injected to all Event Values sent by the producer."""
+        """Gets default tags injected to all event values sent by the producer."""
         dic_hptr = self._interop.get_DefaultTags()
         return InteropUtils.invoke_and_free(dic_hptr, lambda x: di.ReadStringStrings(di.ReadAnyHPtrToUPtr(x)), default={})
 
