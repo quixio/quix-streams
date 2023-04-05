@@ -1,4 +1,5 @@
 import time
+from typing import List
 import unittest
 import threading
 import pandas as pd
@@ -1783,7 +1784,7 @@ class TestIntegration(unittest.TestCase):
         topic_consumer = client.get_raw_topic_consumer(topic_name, consumer_group=consumer_group)
         topic_producer = client.get_raw_topic_producer(topic_name)
 
-        received_messages: [qx.RawMessage] = []
+        received_messages: List[qx.RawMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 

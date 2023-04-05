@@ -1,3 +1,4 @@
+from typing import Any
 from .statevalue import StateValue
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.QuixStreamsState.Storage.FileStorage.LocalFileStorage.LocalFileStorage import LocalFileStorage as lfsi
@@ -20,7 +21,7 @@ class LocalFileStorage(object):
         """
         self._pointer = lfsi.Constructor(storage_directory, auto_create_dir)
 
-    def get(self, key: str) -> any:
+    def get(self, key: str) -> Any:
         """
         Gets the value at the specified key.
 
@@ -28,12 +29,12 @@ class LocalFileStorage(object):
             key: The key to retrieve the value for.
 
         Returns:
-            any: The value at the specified key, which can be one of the following types:
+            Any: The value at the specified key, which can be one of the following types:
                 str, int, float, bool, bytes, bytearray, or object (via pickle).
         """
         return StateValue(se.Get(self._pointer, key)).value
 
-    def set(self, key: str, value: any):
+    def set(self, key: str, value: Any):
         """
         Sets the value at the specified key.
 

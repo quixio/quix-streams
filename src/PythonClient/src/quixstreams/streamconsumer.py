@@ -1,7 +1,7 @@
 import ctypes
 import sys
 import traceback
-from typing import Callable
+from typing import Any, Callable
 
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
@@ -129,18 +129,18 @@ class StreamConsumer(object):
 
     # region on_package_received
     @property
-    def on_package_received(self) -> Callable[['StreamConsumer', any], None]:
+    def on_package_received(self) -> Callable[['StreamConsumer', Any], None]:
         """
         Gets the handler for when the stream receives a package of any type.
 
         Returns:
-            Callable[['StreamConsumer', any], None]: The callback function to be executed when the stream receives a package.
+            Callable[['StreamConsumer', Any], None]: The callback function to be executed when the stream receives a package.
                 The first parameter is the stream that receives the package, and the second is the package itself.
         """
         return self._on_package_received
 
     @on_package_received.setter
-    def on_package_received(self, value: Callable[['StreamConsumer', any], None]) -> None:
+    def on_package_received(self, value: Callable[['StreamConsumer', Any], None]) -> None:
         """
         Sets the handler for when the stream receives a package of any type.
 
