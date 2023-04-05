@@ -14,6 +14,10 @@ After building the Quix Streams library, please follow the following steps to ge
     ```
     rm -r docs/api-reference/csharp/*
     ```
+- Build QuixStreams.Streaming project
+    ```
+    dotnet build src/CsharpClient/QuixStreams.Streaming -c Release -f netstandard2.0
+    ```
 -  Run the following command from the root directory (or adjust the `-a` and `-o` flags accordingly):
     ```
     defaultdocumentation -s Public -a src/CsharpClient/QuixStreams.Streaming/bin/Release/netstandard2.0/QuixStreams.Streaming.dll -o docs/api-reference/csharp/ --FileNameFactory Name
