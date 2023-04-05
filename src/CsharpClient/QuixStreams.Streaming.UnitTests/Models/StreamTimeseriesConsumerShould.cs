@@ -27,6 +27,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             while (iteration < totalIteration)
             {
                 iteration++;
+                testOutputHelper.WriteLine($"Iteration: {iteration}");
                 const int NumberTimestampsTest = 10000;
 
                 var streamConsumer = Substitute.For<IStreamConsumerInternal>();
@@ -78,6 +79,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             while (iteration < totalIteration)
             {
                 iteration++;
+                testOutputHelper.WriteLine($"Iteration: {iteration}");
                 const int NumberTimestampsTest = 10000;
 
                 var streamConsumer = Substitute.For<IStreamConsumerInternal>();
@@ -102,6 +104,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
                     }
                     catch (Exception ex)
                     {
+                        this.testOutputHelper.WriteLine(ex.Message);
                         throw;
                     }
                 });
@@ -141,6 +144,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             while (iteration < totalIteration)
             {
                 iteration++;
+                testOutputHelper.WriteLine($"Iteration: {iteration}");
                 const int NumberTimestampsTest = 10000;
 
                 var streamConsumer = Substitute.For<IStreamConsumerInternal>();
@@ -165,6 +169,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
                     }
                     catch (Exception ex)
                     {
+                        this.testOutputHelper.WriteLine(ex.Message);
                         throw;
                     }
                 });

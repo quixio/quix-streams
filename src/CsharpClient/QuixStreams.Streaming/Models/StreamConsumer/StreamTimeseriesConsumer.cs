@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using QuixStreams.Telemetry.Models;
@@ -396,8 +397,14 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
             this.data = args.Data;
             this.dataAvailableSemaphore.Release();
-            this.dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
-
+            try
+            {
+                this.dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
+            }
+            catch
+            {
+                // ignored
+            }
         }
 
         /// <summary>
@@ -410,8 +417,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.timeseriesConsumer.OnDataReceived -= ConsumerOnOnDataReceived;
             this.streamConsumer.OnStreamClosed -= StreamClosedHandler;
             cts.Cancel();
-            this.dataAvailableSemaphore.Dispose();
             this.dataProcessedSemaphore.Dispose();
+            //this.dataAvailableSemaphore.Dispose(); // disposing this semaphore causes problems, so lets GC deal with it
         }
 
         /// <summary>
@@ -444,9 +451,9 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
                     {
                         await this.dataAvailableSemaphore.WaitAsync(cts.Token);
                     }
-                    catch (OperationCanceledException ex)
+                    catch
                     {
-                        return false; // Throw exception?
+                        return false;
                     }
 
                     if (this.cts.IsCancellationRequested) return false; // Could be disposed
