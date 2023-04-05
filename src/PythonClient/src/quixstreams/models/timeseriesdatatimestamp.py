@@ -22,7 +22,7 @@ class TimeseriesDataTimestamp:
         Initializes a new instance of TimeseriesDataTimestamp.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net TimeseriesDataTimestamp.
+            net_pointer: Pointer to an instance of a .net TimeseriesDataTimestamp.
         """
         if net_pointer is None:
             raise Exception("TimeseriesDataTimestamp constructor should not be invoked without a .net pointer")
@@ -153,8 +153,8 @@ class TimeseriesDataTimestamp:
         Adds a new value for the specified parameter.
 
         Args:
-            parameter_id (str): The parameter id to add the value for.
-            value (Union[float, str, int, bytearray, bytes]): The value to add. Can be float, string, int, bytearray, or bytes.
+            parameter_id: The parameter id to add the value for.
+            value: The value to add. Can be float, string, int, bytearray, or bytes.
 
         Returns:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
@@ -191,7 +191,7 @@ class TimeseriesDataTimestamp:
         Removes the value for the specified parameter.
 
         Args:
-            parameter_id (str): The parameter id to remove the value for.
+            parameter_id: The parameter id to remove the value for.
 
         Returns:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
@@ -210,8 +210,8 @@ class TimeseriesDataTimestamp:
         Adds a tag to the timestamp.
 
         Args:
-            tag_id (str): The id of the tag to add.
-            tag_value (str): The value of the tag to add.
+            tag_id: The id of the tag to add.
+            tag_value: The value of the tag to add.
 
         Returns:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
@@ -228,7 +228,7 @@ class TimeseriesDataTimestamp:
         """
         Removes a tag from the timestamp.
         Args:
-            tag_id (str): The id of the tag to remove.
+            tag_id: The id of the tag to remove.
 
         Returns:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
@@ -246,7 +246,7 @@ class TimeseriesDataTimestamp:
         Copies the tags from the specified dictionary. Conflicting tags will be overwritten.
 
         Args:
-            tags (Dict[str, str]): The dictionary of tags to add, with tag id as key and tag value as value.
+            tags: The dictionary of tags to add, with tag id as key and tag value as value.
 
         Returns:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.

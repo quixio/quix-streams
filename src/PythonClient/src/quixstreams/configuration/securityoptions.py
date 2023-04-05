@@ -14,12 +14,12 @@ class SecurityOptions(object):
         Initializes a new instance of SecurityOptions configured for SSL encryption with SASL authentication.
 
         Args:
-            ssl_certificates (str): The path to the folder or file containing the certificate authority
+            ssl_certificates: The path to the folder or file containing the certificate authority
                 certificate(s) used to validate the SSL connection.
                 Example: "./certificates/ca.cert"
-            username (str): The username for SASL authentication.
-            password (str): The password for SASL authentication.
-            sasl_mechanism (SaslMechanism, optional): The SASL mechanism to use. Defaults to ScramSha256.
+            username: The username for SASL authentication.
+            password: The password for SASL authentication.
+            sasl_mechanism: The SASL mechanism to use. Defaults to ScramSha256.
         """
 
         sasl = SaslMechanismInterop.ScramSha256

@@ -32,7 +32,7 @@ class TimeConverter:
         Converts a datetime object to UNIX timestamp in nanoseconds.
 
         Args:
-            value (datetime): The datetime object to be converted.
+            value: The datetime object to be converted.
 
         Returns:
             int: The UNIX timestamp in nanoseconds.
@@ -53,7 +53,7 @@ class TimeConverter:
         Converts a timedelta object to nanoseconds.
 
         Args:
-            value (timedelta): The timedelta object to be converted.
+            value: The timedelta object to be converted.
 
         Returns:
             int: The duration in nanoseconds.
@@ -68,7 +68,7 @@ class TimeConverter:
         Converts a duration in nanoseconds to a timedelta object.
 
         Args:
-            value (int): The duration in nanoseconds.
+            value: The duration in nanoseconds.
 
         Returns:
             timedelta: The corresponding timedelta object.
@@ -83,7 +83,7 @@ class TimeConverter:
         Converts a UNIX timestamp in nanoseconds to a datetime object.
 
         Args:
-            value (int): The UNIX timestamp in nanoseconds.
+            value: The UNIX timestamp in nanoseconds.
 
         Returns:
             datetime: The corresponding datetime object.
@@ -97,7 +97,7 @@ class TimeConverter:
         Converts a string representation of a timestamp to a UNIX timestamp in nanoseconds.
 
         Args:
-            value (str): The string representation of a timestamp.
+            value: The string representation of a timestamp.
 
         Returns:
             int: The corresponding UNIX timestamp in nanoseconds.

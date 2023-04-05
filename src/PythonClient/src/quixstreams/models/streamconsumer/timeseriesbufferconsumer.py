@@ -18,7 +18,7 @@ class TimeseriesBufferConsumer(TimeseriesBuffer):
 
         Args:
             stream_consumer: The Stream consumer which owns this timeseries buffer consumer.
-            net_pointer (ctypes.c_void_p, optional): Pointer to an instance of a .net TimeseriesBufferConsumer.
+            net_pointer: Pointer to an instance of a .net TimeseriesBufferConsumer.
                 Defaults to None.
 
         Raises:

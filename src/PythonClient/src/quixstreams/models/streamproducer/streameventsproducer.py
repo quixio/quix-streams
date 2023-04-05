@@ -24,7 +24,7 @@ class StreamEventsProducer(object):
         Initializes a new instance of StreamEventsProducer.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET StreamEventsProducer.
+            net_pointer: Pointer to an instance of a .NET StreamEventsProducer.
         """
 
         if net_pointer is None:
@@ -61,7 +61,7 @@ class StreamEventsProducer(object):
         See add_location for adding definitions at a different location without changing default.
 
         Args:
-            value (str): Location string, e.g., "/Group1/SubGroup2".
+            value: Location string, e.g., "/Group1/SubGroup2".
         """
         self._interop.set_DefaultLocation(value)
 
@@ -84,9 +84,9 @@ class StreamEventsProducer(object):
         Publish an event into the stream.
 
         Args:
-            data (Union[EventData, pd.DataFrame]): EventData object or a pandas dataframe.
-            columns (str): Column names if the dataframe has different columns from 'id', 'timestamp', and 'value'.
-                       For instance, if 'id' is in the column 'event_id', id='event_id' must be passed as an argument.
+            data: EventData object or a pandas dataframe.
+            columns: Column names if the dataframe has different columns from 'id', 'timestamp', and 'value'.
+                For instance, if 'id' is in the column 'event_id', id='event_id' must be passed as an argument.
 
         Raises:
             TypeError: If the data argument is neither an EventData nor pandas dataframe.
@@ -108,9 +108,9 @@ class StreamEventsProducer(object):
         Start adding a new set of event values at the given timestamp.
 
         Args:
-            time (Union[datetime, timedelta]): The time to use for adding new event values.
-                                               * datetime: The datetime to use for adding new event values. NOTE, epoch is not used.
-                                               * timedelta: The time since the default epoch to add the event values at
+            time: The time to use for adding new event values.
+                * datetime: The datetime to use for adding new event values. NOTE, epoch is not used.
+                * timedelta: The time since the default epoch to add the event values at
 
         Returns:
             EventDataBuilder: Event data builder to add event values at the provided time.
@@ -133,7 +133,7 @@ class StreamEventsProducer(object):
         Start adding a new set of event values at the given timestamp.
 
         Args:
-            milliseconds (int): The time in milliseconds since the default epoch to add the event values at.
+            milliseconds: The time in milliseconds since the default epoch to add the event values at.
 
         Returns:
             EventDataBuilder: Event data builder to add event values at the provided time.
@@ -145,7 +145,7 @@ class StreamEventsProducer(object):
         Start adding a new set of event values at the given timestamp.
 
         Args:
-            nanoseconds (int): The time in nanoseconds since the default epoch to add the event values at.
+            nanoseconds: The time in nanoseconds since the default epoch to add the event values at.
 
         Returns:
             EventDataBuilder: Event data builder to add event values at the provided time.
@@ -157,9 +157,9 @@ class StreamEventsProducer(object):
         Add new Event definition to define properties like Name or Level, among others.
 
         Args:
-            event_id (str): The id of the event. Must match the event id used to send data.
-            name (str, optional): The human-friendly display name of the event.
-            description (str, optional): The description of the event.
+            event_id: The id of the event. Must match the event id used to send data.
+            name: The human-friendly display name of the event.
+            description: The description of the event.
 
         Returns:
             EventDefinitionBuilder: EventDefinitionBuilder to define properties of the event or add additional events.
@@ -171,7 +171,7 @@ class StreamEventsProducer(object):
         Add a new location in the events groups hierarchy.
 
         Args:
-            location (str): The group location.
+            location: The group location.
 
         Returns:
             EventDefinitionBuilder: EventDefinitionBuilder to define the events under the specified location.

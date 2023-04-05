@@ -22,7 +22,7 @@ class RawTopicConsumer(object):
            Do not initialize this class manually, use KafkaStreamingClient.get_raw_topic_consumer.
 
        Args:
-           net_pointer (ctypes.c_void_p): Pointer to an instance of a .net RawTopicConsumer.
+           net_pointer: Pointer to an instance of a .net RawTopicConsumer.
        """
 
         if net_pointer is None:
@@ -59,7 +59,7 @@ class RawTopicConsumer(object):
         Sets the handler for when a topic receives a message.
 
         Args:
-            value (Callable[[RawTopicConsumer, RawMessage], None]): The new event handler for when a topic receives a message.
+            value: The new event handler for when a topic receives a message.
                 The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
         self._on_message_received = value
@@ -99,7 +99,7 @@ class RawTopicConsumer(object):
         Sets the handler for when a stream experiences an exception during the asynchronous write process.
 
         Args:
-            value (Callable[[RawTopicConsumer, BaseException], None]): The new handler for when a stream experiences an exception during the asynchronous write process.
+            value: The new handler for when a stream experiences an exception during the asynchronous write process.
                 The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         self._on_error_occurred = value

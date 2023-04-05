@@ -21,7 +21,7 @@ class TopicConsumer(object):
         NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_consumer to create it.
 
         Args:
-            net_pointer (ctypes.c_void_p): The .net pointer to TopicConsumer instance.
+            net_pointer: The .net pointer to TopicConsumer instance.
         """
         if net_pointer is None:
             raise Exception("TopicConsumer is None")
@@ -72,7 +72,7 @@ class TopicConsumer(object):
         Sets the event handler for when a stream is received for the topic.
 
         Args:
-            value (Callable[[StreamConsumer], None]): The new event handler for when a stream is received for the topic.
+            value: The new event handler for when a stream is received for the topic.
                 The first parameter is the StreamConsumer instance that was received.
         """
         self._on_stream_received = value
@@ -118,7 +118,7 @@ class TopicConsumer(object):
         Sets the event handler for when streams are revoked for the topic.
 
         Args:
-            value (Callable[[TopicConsumer, List[StreamConsumer]], None]): The new event handler for when streams are revoked for the topic.
+            value: The new event handler for when streams are revoked for the topic.
                 The first parameter is the TopicConsumer instance for which the streams were revoked, and the second parameter is a list of StreamConsumer instances that were revoked.
         """
 
@@ -163,7 +163,7 @@ class TopicConsumer(object):
         Sets the event handler for when the topic is being revoked.
 
         Args:
-            value (Callable[[TopicConsumer], None]): The new event handler for when the topic is being revoked.
+            value: The new event handler for when the topic is being revoked.
                 The first parameter is the TopicConsumer instance for which the revocation is happening.
         """
         self._on_revoking = value
@@ -204,7 +204,7 @@ class TopicConsumer(object):
         Sets the event handler for when the topic finishes committing consumed data up to this point.
 
         Args:
-            value (Callable[[TopicConsumer], None]): The new event handler for when the topic finishes committing consumed data up to this point.
+            value: The new event handler for when the topic finishes committing consumed data up to this point.
                 The first parameter is the TopicConsumer instance for which the commit happened.
         """
         self._on_committed = value
@@ -245,7 +245,7 @@ class TopicConsumer(object):
         Sets the event handler for when the topic begins committing consumed data up to this point.
 
         Args:
-            value (Callable[[TopicConsumer], None]): The new event handler for when the topic begins committing consumed data up to this point.
+            value: The new event handler for when the topic begins committing consumed data up to this point.
                 The first parameter is the TopicConsumer instance for which the commit is happening.
         """
         self._on_committing = value

@@ -66,7 +66,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         Set the default epoch used for parameter values. Datetime added on top of all the Timestamps.
 
         Args:
-            value (datetime): The default epoch to set for parameter values
+            value: The default epoch to set for parameter values
         """
         hptr = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(hptr)
@@ -76,7 +76,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         Start adding a new set of parameter values at the given timestamp.
 
         Args:
-            time (Union[datetime, timedelta]): The time to use for adding new parameter values.
+            time: The time to use for adding new parameter values.
                 - datetime: The datetime to use for adding new parameter values. NOTE, epoch is not used
                 - timedelta: The time since the default epoch to add the parameter values at
 
@@ -104,7 +104,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         Start adding a new set of parameter values at the given timestamp.
 
         Args:
-            nanoseconds (int): The time in nanoseconds since the default epoch to add the parameter values at
+            nanoseconds: The time in nanoseconds since the default epoch to add the parameter values at
 
         Returns:
             TimeseriesDataBuilder: A TimeseriesDataBuilder instance for adding parameter values
@@ -122,7 +122,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         Publish the provided timeseries packet to the buffer.
 
         Args:
-            packet (Union[TimeseriesData, pd.DataFrame]): The packet containing TimeseriesData or panda DataFrame
+            packet: The packet containing TimeseriesData or panda DataFrame
                 - packet type panda.DataFrame:
                     * Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
                     * Note 2: Tags should be prefixed by TAG__ or they will be treated as timeseries parameters

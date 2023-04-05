@@ -16,7 +16,7 @@ class RawTopicProducer(object):
         Initializes a new instance of the RawTopicProducer class.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET RawTopicProducer object.
+            net_pointer: Pointer to an instance of a .NET RawTopicProducer object.
         """
         self._interop = rtpi(net_pointer)
 
@@ -25,7 +25,7 @@ class RawTopicProducer(object):
         Publishes the given message to the associated topic producer.
 
         Args:
-            message (Union[RawMessage, bytes, bytearray]): The message to be published, which can be either
+            message: The message to be published, which can be either
                 a RawMessage instance, bytes, or a bytearray.
         """
         if not isinstance(message, RawMessage):

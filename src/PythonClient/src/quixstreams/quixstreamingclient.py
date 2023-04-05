@@ -29,7 +29,7 @@ class TokenValidationConfiguration(object):
         Initializes a new instance of TokenValidationConfiguration.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET TokenValidationConfiguration.
+            net_pointer: Pointer to an instance of a .NET TokenValidationConfiguration.
         """
         if net_pointer is None:
             raise Exception("Native pointer must not be null")
@@ -52,7 +52,7 @@ class TokenValidationConfiguration(object):
         Sets whether token validation and warnings are enabled. Defaults to true.
 
         Args:
-            value (bool): True to enable token validation and warnings, False to disable.
+            value: True to enable token validation and warnings, False to disable.
         """
         self._interop.set_Enabled(value)
 
@@ -75,7 +75,7 @@ class TokenValidationConfiguration(object):
         Sets the period within which, if the token expires, a warning will be displayed. Defaults to 2 days. Set to None to disable the check.
 
         Args:
-            value (Union[timedelta, None]): The new period within which a warning will be displayed if the token expires or None to disable the check.
+            value: The new period within which a warning will be displayed if the token expires or None to disable the check.
         """
 
         ptr = dtc.timedelta_to_dotnet(value)
@@ -98,7 +98,7 @@ class TokenValidationConfiguration(object):
         Sets whether to warn if the provided token is not a PAT token. Defaults to true.
 
         Args:
-            value (bool): True to enable the warning, False to disable.
+            value: True to enable the warning, False to disable.
         """
         return self._interop.set_WarnAboutNonPatToken(value)
 
@@ -123,10 +123,10 @@ class QuixStreamingClient(object):
         Initializes a new instance of the QuixStreamingClient capable of creating topic consumers and producers.
 
         Args:
-            token (str, optional): The token to use when talking to Quix. If not provided, the Quix__Sdk__Token environment variable will be used. Defaults to None.
-            auto_create_topics (bool, optional): Whether topics should be auto-created if they don't exist yet. Defaults to True.
-            properties (Dict[str, str], optional): Additional broker properties. Defaults to None.
-            debug (bool, optional): Whether debugging should be enabled. Defaults to False.
+            token: The token to use when talking to Quix. If not provided, the Quix__Sdk__Token environment variable will be used. Defaults to None.
+            auto_create_topics: Whether topics should be auto-created if they don't exist yet. Defaults to True.
+            properties: Additional broker properties. Defaults to None.
+            debug: Whether debugging should be enabled. Defaults to False.
         """
 
         net_properties_hptr = None
@@ -144,10 +144,10 @@ class QuixStreamingClient(object):
         Opens a topic consumer capable of subscribing to receive incoming streams.
 
         Args:
-            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
-            consumer_group (str, optional): The consumer group ID to use for consuming messages. If None, the consumer group is not used, and only consuming new messages. Defaults to None.
-            commit_settings (Union[CommitOptions, CommitMode], optional): The settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
-            auto_offset_reset (AutoOffsetReset, optional): The offset to use when there is no saved offset for the consumer group. Defaults to AutoOffsetReset.Latest.
+            topic_id_or_name: ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
+            consumer_group: The consumer group ID to use for consuming messages. If None, the consumer group is not used, and only consuming new messages. Defaults to None.
+            commit_settings: The settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
+            auto_offset_reset: The offset to use when there is no saved offset for the consumer group. Defaults to AutoOffsetReset.Latest.
 
         Returns:
             TopicConsumer: An instance of TopicConsumer for the specified topic.
@@ -173,7 +173,7 @@ class QuixStreamingClient(object):
         Gets a topic producer capable of producing outgoing streams.
 
         Args:
-            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
+            topic_id_or_name: ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
 
         Returns:
             TopicProducer: An instance of TopicProducer for the specified topic.
@@ -187,9 +187,9 @@ class QuixStreamingClient(object):
         Gets a topic consumer for consuming raw data from the stream.
 
         Args:
-            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
-            consumer_group (str, optional): The consumer group ID to use for consuming messages. Defaults to None.
-            auto_offset_reset (Union[AutoOffsetReset, None], optional): The offset to use when there is no saved offset for the consumer group. Defaults to None.
+            topic_id_or_name: ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
+            consumer_group: The consumer group ID to use for consuming messages. Defaults to None.
+            auto_offset_reset: The offset to use when there is no saved offset for the consumer group. Defaults to None.
 
         Returns:
             RawTopicConsumer: An instance of RawTopicConsumer for the specified topic.
@@ -207,7 +207,7 @@ class QuixStreamingClient(object):
         Gets a topic producer for producing raw data to the stream.
 
         Args:
-            topic_id_or_name (str): ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
+            topic_id_or_name: ID or name of the topic. If name is provided, the workspace will be derived from the environment variable or token, in that order.
 
         Returns:
             RawTopicProducer: An instance of RawTopicProducer for the specified topic.
@@ -233,7 +233,7 @@ class QuixStreamingClient(object):
         Sets the configuration for token validation.
 
         Args:
-            value (TokenValidationConfiguration): The new token validation configuration.
+            value: The new token validation configuration.
         """
         raise NotImplementedError("TODO")
         if value is None:
@@ -259,7 +259,7 @@ class QuixStreamingClient(object):
         Sets the base API URI. Defaults to https://portal-api.platform.quix.ai, or environment variable Quix__Portal__Api if available.
 
         Args:
-            value (str): The new base API URI.
+            value: The new base API URI.
         """
         self._interop.set_ApiUrl(ui.Constructor(value))
 
@@ -282,7 +282,7 @@ class QuixStreamingClient(object):
         Sets the period for which some API responses will be cached to avoid an excessive amount of calls. Defaults to 1 minute.
 
         Args:
-            value (timedelta): The new cache period.
+            value: The new cache period.
         """
         ptr = dtc.timedelta_to_dotnet(value)
 

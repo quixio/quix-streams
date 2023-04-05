@@ -22,7 +22,7 @@ class StreamTimeseriesProducer(object):
 
         Args:
             stream_producer: The Stream producer which owns this stream timeseries producer.
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net StreamTimeseriesProducer.
+            net_pointer: Pointer to an instance of a .net StreamTimeseriesProducer.
         """
 
         if net_pointer is None:
@@ -46,9 +46,9 @@ class StreamTimeseriesProducer(object):
         Add new parameter definition to the StreamTimeseriesProducer. Configure it with the builder methods.
 
         Args:
-            parameter_id (str): The id of the parameter. Must match the parameter id used to send data.
-            name (str, optional): The human friendly display name of the parameter.
-            description (str, optional): The description of the parameter.
+            parameter_id: The id of the parameter. Must match the parameter id used to send data.
+            name: The human friendly display name of the parameter.
+            description: The description of the parameter.
 
         Returns:
             ParameterDefinitionBuilder: Builder to define the parameter properties.
@@ -59,7 +59,7 @@ class StreamTimeseriesProducer(object):
         Add a new location in the parameters groups hierarchy.
 
         Args:
-            location (str): The group location.
+            location: The group location.
 
         Returns:
             ParameterDefinitionBuilder: Builder to define the parameters under the specified location.
@@ -82,7 +82,7 @@ class StreamTimeseriesProducer(object):
         See add_location for adding definitions at a different location without changing default.
 
         Args:
-            value (str): The new default location of the parameters, e.g., "/Group1/SubGroup2".
+            value: The new default location of the parameters, e.g., "/Group1/SubGroup2".
         """
 
     @property
@@ -99,7 +99,7 @@ class StreamTimeseriesProducer(object):
         Publish the given packet to the stream without any buffering.
 
         Args:
-            packet (Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]): The packet containing TimeseriesData, TimeseriesDataRaw, or pandas DataFrame.
+            packet: The packet containing TimeseriesData, TimeseriesDataRaw, or pandas DataFrame.
 
         Note:
             - Pandas DataFrame should contain 'time' label, else the first integer label will be taken as time.

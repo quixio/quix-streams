@@ -24,7 +24,7 @@ class ParameterValue(object):
         Initializes a new instance of ParameterValue.
 
         Args:
-            net_pointer (ctypes.c_void_p): The .net object pointer representing ParameterValue.
+            net_pointer: The .net object pointer representing ParameterValue.
         """
 
         if net_pointer is None:
@@ -60,7 +60,7 @@ class ParameterValue(object):
         Sets the numeric value of the parameter and updates the type to numeric.
 
         Args:
-            value (float): The numeric value to set.
+            value: The numeric value to set.
         """
 
         if self._type != ParameterValueType.Numeric:
@@ -84,7 +84,7 @@ class ParameterValue(object):
         Sets the string value of the parameter and updates the type to string.
 
         Args:
-            value (str): The string value to set.
+            value: The string value to set.
         """
 
         if self._type != ParameterValueType.String:
@@ -107,7 +107,7 @@ class ParameterValue(object):
         Sets the binary value of the parameter and updates the type to binary.
 
         Args:
-            value (Union[bytearray, bytes]): The binary value to set.
+            value: The binary value to set.
         """
 
         if self._type != ParameterValueType.Binary:

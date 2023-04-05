@@ -19,7 +19,7 @@ class TimeseriesBufferConfiguration(object):
         Initializes a new instance of TimeseriesBufferConfiguration.
 
         Args:
-            net_pointer (ctypes.c_void_p, optional): Can be ignored, here for internal purposes .net object: The .net object representing a TimeseriesBufferConfiguration. Defaults to None.
+            net_pointer: Can be ignored, here for internal purposes .net object: The .net object representing a TimeseriesBufferConfiguration. Defaults to None.
         """
         if net_pointer is None:
             self._interop = tsbci(tsbci.Constructor())
@@ -74,7 +74,7 @@ class TimeseriesBufferConfiguration(object):
         If not set, defaults to None (disabled).
 
         Args:
-            value (Optional[int]): The maximum packet size in values or None to disable.
+            value: The maximum packet size in values or None to disable.
         """
 
         self._interop.set_PacketSize(value)
@@ -101,7 +101,7 @@ class TimeseriesBufferConfiguration(object):
         such as on_data_released, is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
 
         Args:
-            value (Optional[int]): The maximum time span in nanoseconds or None to disable.
+            value: The maximum time span in nanoseconds or None to disable.
         """
         self._interop.set_TimeSpanInNanoseconds(value)
 
@@ -129,7 +129,7 @@ class TimeseriesBufferConfiguration(object):
         such as on_data_released, is invoked and the data is cleared from the buffer. If not set, defaults to None (disabled).
 
         Args:
-            value (Optional[int]): The maximum time span in nanoseconds or None to disable.
+            value: The maximum time span in nanoseconds or None to disable.
         """
 
         self._interop.set_TimeSpanInMilliseconds(value)
@@ -156,7 +156,7 @@ class TimeseriesBufferConfiguration(object):
         If not set, defaults to None (disabled).
 
         Args:
-            value (Optional[int]): The maximum buffer timeout in milliseconds or None to disable.
+            value: The maximum buffer timeout in milliseconds or None to disable.
         """
         self._interop.set_BufferTimeout(value)
 
@@ -182,7 +182,7 @@ class TimeseriesBufferConfiguration(object):
         to the buffer. If not set, defaults to None (disabled).
 
         Args:
-            value (Callable[[TimeseriesDataTimestamp], bool]): The custom function or None to disable.
+            value: The custom function or None to disable.
         """
         self._custom_trigger_before_enqueue = value
         if value is None:
@@ -217,7 +217,7 @@ class TimeseriesBufferConfiguration(object):
         (disabled).
 
         Args:
-            value (Callable[[TimeseriesDataTimestamp], bool]): The custom filter function or None to disable.
+            value: The custom filter function or None to disable.
         """
         self._filter = value
         if value is None:
@@ -252,7 +252,7 @@ class TimeseriesBufferConfiguration(object):
         If not set, defaults to None (disabled).
 
         Args:
-            value (Callable[[TimeseriesData], bool]): The custom trigger function or None to disable.
+            value: The custom trigger function or None to disable.
         """
         self._custom_trigger = value
         if value is None:

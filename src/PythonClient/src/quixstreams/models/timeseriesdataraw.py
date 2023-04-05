@@ -26,7 +26,7 @@ class TimeseriesDataRaw(object):
         Initializes a new instance of TimeseriesDataRaw.
 
         Args:
-            net_pointer (ctypes.c_void_p, optional): Pointer to an instance of a .net TimeseriesDataRaw. Defaults to None.
+            net_pointer: Pointer to an instance of a .net TimeseriesDataRaw. Defaults to None.
         """
 
 
@@ -140,8 +140,8 @@ class TimeseriesDataRaw(object):
         Converts from pandas DataFrame to TimeseriesDataRaw.
 
         Args:
-            data_frame (pd.DataFrame): The pandas DataFrame to convert to TimeseriesData.
-            epoch (int, optional): The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
+            data_frame: The pandas DataFrame to convert to TimeseriesData.
+            epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
 
         Returns:
             TimeseriesDataRaw: Converted TimeseriesDataRaw.
@@ -164,7 +164,7 @@ class TimeseriesDataRaw(object):
                     "pandas DataFrame does not contain a suitable time column. Make sure to label the column 'time' or 'timestamp', else first integer column will be picked up as time")
             time_label = possible_time_vals.columns[0]
 
-        def get_value_as_type(val_type, val, type_conv=None) -> []:
+        def get_value_as_type(val_type, val, type_conv=None) -> List:
             if not isinstance(val, val_type) and type_conv is not None:
                 new_val = type_conv(val)
                 return new_val
@@ -277,7 +277,7 @@ class TimeseriesDataRaw(object):
     def set_values(
             self,
             epoch: int,
-            timestamps: [int],
+            timestamps: List[int],
             numeric_values: Dict[str, List[float]],
             string_values: Dict[str, List[str]],
             binary_values: Dict[str, List[bytes]],
@@ -288,12 +288,12 @@ class TimeseriesDataRaw(object):
         Dictionary values are matched by index to the provided timestamps.
 
         Args:
-            epoch (int): The time from which all timestamps are measured from.
-            timestamps (List[int]): The timestamps of values in nanoseconds since epoch as an array.
-            numeric_values (Dict[str, List[float]]): The numeric values where the dictionary key is the parameter name and the value is the array of values.
-            string_values (Dict[str, List[str]]): The string values where the dictionary key is the parameter name and the value is the array of values.
-            binary_values (Dict[str, List[bytes]]): The binary values where the dictionary key is the parameter name and the value is the array of values.
-            tag_values (Dict[str, List[str]]): The tag values where the dictionary key is the parameter name and the value is the array of values.
+            epoch: The time from which all timestamps are measured from.
+            timestamps: The timestamps of values in nanoseconds since epoch as an array.
+            numeric_values: The numeric values where the dictionary key is the parameter name and the value is the array of values.
+            string_values: The string values where the dictionary key is the parameter name and the value is the array of values.
+            binary_values: The binary values where the dictionary key is the parameter name and the value is the array of values.
+            tag_values: The tag values where the dictionary key is the parameter name and the value is the array of values.
         """
 
         # set epoch
@@ -336,7 +336,7 @@ class TimeseriesDataRaw(object):
         return self._interop.get_Epoch()
 
     @property
-    def timestamps(self) -> [int]:
+    def timestamps(self) -> List[int]:
         """
         The timestamps of values in nanoseconds since the epoch.
         Timestamps are matched by index to numeric_values, string_values, binary_values, and tag_values.

@@ -25,10 +25,10 @@ class KafkaStreamingClient(object):
         Initializes a new instance of the KafkaStreamingClient.
 
         Args:
-            broker_address (str): The address of the Kafka cluster.
-            security_options (SecurityOptions, optional): Optional security options for the Kafka client.
-            properties (Dict[str, str], optional): Optional extra properties for broker configuration.
-            debug (bool, optional): Whether debugging should be enabled. Defaults to False.
+            broker_address: The address of the Kafka cluster.
+            security_options: Optional security options for the Kafka client.
+            properties: Optional extra properties for broker configuration.
+            debug: Whether debugging should be enabled. Defaults to False.
         """
 
         secu_opts_hptr = None
@@ -50,10 +50,10 @@ class KafkaStreamingClient(object):
         Gets a topic consumer capable of subscribing to receive incoming streams.
 
         Args:
-            topic (str): The name of the topic.
-            consumer_group (str, optional): The consumer group ID to use for consuming messages. Defaults to None.
-            commit_settings (Union[CommitOptions, CommitMode], optional): The settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
-            auto_offset_reset (AutoOffsetReset, optional): The offset to use when there is no saved offset for the consumer group. Defaults to AutoOffsetReset.Latest.
+            topic: The name of the topic.
+            consumer_group: The consumer group ID to use for consuming messages. Defaults to None.
+            commit_settings: The settings to use for committing. If not provided, defaults to committing every 5000 messages or 5 seconds, whichever is sooner.
+            auto_offset_reset: The offset to use when there is no saved offset for the consumer group. Defaults to AutoOffsetReset.Latest.
 
         Returns:
             TopicConsumer: An instance of TopicConsumer for the specified topic.
@@ -80,7 +80,7 @@ class KafkaStreamingClient(object):
         Gets a topic producer capable of publishing stream messages.
 
         Args:
-            topic (str): The name of the topic.
+            topic: The name of the topic.
 
         Returns:
             TopicProducer: An instance of TopicProducer for the specified topic.
@@ -93,9 +93,9 @@ class KafkaStreamingClient(object):
         Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages.
 
         Args:
-            topic (str): The name of the topic.
-            consumer_group (str, optional): The consumer group ID to use for consuming messages. Defaults to None.
-            auto_offset_reset (Union[AutoOffsetReset, None], optional): The offset to use when there is no saved offset for the consumer group. Defaults to None.
+            topic: The name of the topic.
+            consumer_group: The consumer group ID to use for consuming messages. Defaults to None.
+            auto_offset_reset: The offset to use when there is no saved offset for the consumer group. Defaults to None.
 
         Returns:
             RawTopicConsumer: An instance of RawTopicConsumer for the specified topic.
@@ -113,7 +113,7 @@ class KafkaStreamingClient(object):
         Gets a topic producer capable of publishing non-quixstreams messages.
 
         Args:
-            topic (str): The name of the topic.
+            topic: The name of the topic.
 
         Returns:
             RawTopicProducer: An instance of RawTopicProducer for the specified topic.

@@ -18,7 +18,7 @@ class RawMessage(object):
         Initializes a new instance of RawMessage.
 
         Args:
-            data (Union[ctypes.c_void_p, bytes, bytearray]): The raw data to be stored in the message. Must be one of ctypes_c.void_p, bytes, or bytearray.
+            data: The raw data to be stored in the message. Must be one of ctypes_c.void_p, bytes, or bytearray.
         """
 
         if isinstance(data, ctypes.c_void_p):
@@ -58,7 +58,7 @@ class RawMessage(object):
         Sets the message key.
 
         Args:
-            value (Union[bytearray, bytes]): The key to set for the message.
+            value: The key to set for the message.
         """
         key_uptr = Array.WriteBytes(value)
         self._interop.set_Key(key_uptr)
@@ -82,7 +82,7 @@ class RawMessage(object):
         Sets the message value (bytes content of the message).
 
         Args:
-            value (Union[bytearray, bytes]): The value to set for the message.
+            value: The value to set for the message.
         """
         self._value = None  # in case it is read back, will be set again
         data_uptr = Array.WriteBytes(value)

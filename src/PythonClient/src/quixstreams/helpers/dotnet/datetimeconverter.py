@@ -13,8 +13,7 @@ class DateTimeConverter:
         Converts dotnet pointer to DateTime and frees the pointer.
 
         Args:
-            hptr: c_void_p
-                Handler Pointer to .Net type DateTime
+            hptr: Handler Pointer to .Net type DateTime
 
         Returns:
             datetime.datetime:
@@ -37,8 +36,7 @@ class DateTimeConverter:
     def datetime_to_dotnet(value: datetime.datetime) -> ctypes.c_void_p:
         """
         Args:
-            value: datetime.datetime
-                Python type datetime
+            value: Python type datetime
 
         Returns:
             ctypes.c_void_p:
@@ -57,8 +55,7 @@ class DateTimeConverter:
         Converts dotnet pointer to Timespan as binary and frees the pointer.
 
         Args:
-            uptr: c_void_p
-                Pointer to .Net type TimeSpan
+            uptr: Pointer to .Net type TimeSpan
 
         Returns:
             datetime.timedelta:
@@ -81,8 +78,7 @@ class DateTimeConverter:
     def timedelta_to_dotnet(value: datetime.timedelta) -> ctypes.c_void_p:
         """
         Args:
-            value: datetime.timedelta
-                Python type timedelta
+            value: Python type timedelta
 
         Returns:
             ctypes.c_void_p:

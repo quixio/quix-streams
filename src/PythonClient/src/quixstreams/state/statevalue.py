@@ -18,7 +18,7 @@ class StateValue(object):
         Initializes the wrapped value inside the store.
 
         Args:
-            value (any): The value to be wrapped, which can be one of the following types:
+            value: The value to be wrapped, which can be one of the following types:
                 StateValue, str, int, float, bool, bytes, bytearray, or object (via pickle).
         """
 

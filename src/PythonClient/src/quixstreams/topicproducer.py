@@ -21,7 +21,7 @@ class TopicProducer(object):
         NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_producer to create it.
 
         Args:
-            net_pointer (ctypes.c_void_p): The .net object representing a StreamingClient.
+            net_pointer: The .net object representing a StreamingClient.
         """
 
         self._interop = tpi(net_pointer)
@@ -51,7 +51,7 @@ class TopicProducer(object):
         Sets the handler for when the topic is disposed.
 
         Args:
-            value (Callable[[TopicProducer], None]): The event handler for topic disposal.
+            value: The event handler for topic disposal.
                 The first parameter is the TopicProducer instance that got disposed.
         """
         self._on_disposed = value
@@ -79,7 +79,7 @@ class TopicProducer(object):
         Create a new stream and returns the related StreamProducer to operate it.
 
         Args:
-            stream_id (str, optional): Provide if you wish to overwrite the generated stream id. Useful if you wish
+            stream_id: Provide if you wish to overwrite the generated stream id. Useful if you wish
             to always stream a certain source into the same stream.
 
         Returns:
@@ -94,7 +94,7 @@ class TopicProducer(object):
         Retrieves a stream that was previously created by this instance, if the stream is not closed.
 
         Args:
-            stream_id (str): The id of the stream.
+            stream_id: The id of the stream.
 
         Returns:
             StreamProducer: The retrieved StreamProducer instance or None if not found.
@@ -112,8 +112,8 @@ class TopicProducer(object):
         Retrieves a stream that was previously created by this instance if the stream is not closed, otherwise creates a new stream.
 
         Args:
-            stream_id (str): The id of the stream you want to get or create.
-            on_stream_created (Callable[[StreamProducer], None], optional): A callback function that takes a StreamProducer as a parameter.
+            stream_id: The id of the stream you want to get or create.
+            on_stream_created: A callback function that takes a StreamProducer as a parameter.
 
         Returns:
             StreamProducer: The retrieved or created StreamProducer instance.

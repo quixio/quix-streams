@@ -29,7 +29,7 @@ class TimeseriesBuffer(object):
 
         Args:
             stream: The stream the buffer is created for.
-            net_pointer (ctypes.c_void_p): Pointer to a .net TimeseriesBuffer object.
+            net_pointer: Pointer to a .net TimeseriesBuffer object.
         """
         if net_pointer is None:
             raise Exception("TimeseriesBuffer is none")
@@ -89,8 +89,7 @@ class TimeseriesBuffer(object):
         Sets the handler for when the stream receives data.
 
         Args:
-            value (Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesData], None]): The event handler.
-                The first parameter is the stream the data is received for, second is the data in TimeseriesData format.
+            value: The event handler. The first parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         self._on_data_released = value
         if self._on_data_released_ref is None:
@@ -131,8 +130,7 @@ class TimeseriesBuffer(object):
         Sets the handler for when the stream receives raw data.
 
         Args:
-            value (Callable[[Union['StreamConsumer', 'StreamProducer'], TimeseriesDataRaw], None]): The event handler.
-                The first parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
+            value: The event handler. The first parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_released = value
         if self._on_raw_released_ref is None:
@@ -172,8 +170,7 @@ class TimeseriesBuffer(object):
         Sets the handler for when the stream receives data as a pandas DataFrame.
 
         Args:
-            value (Callable[[Union['StreamConsumer', 'StreamProducer'], pandas.DataFrame], None]): The event handler.
-                The first parameter is the stream the data is received for, second is the data in pandas.DataFrame format.
+            value: The event handler. The first parameter is the stream the data is received for, second is the data in pandas.DataFrame format.
         """
         self._on_dataframe_released = value
         if self._on_dataframe_released_ref is None:
@@ -216,7 +213,7 @@ class TimeseriesBuffer(object):
         otherwise not. By default, this feature is disabled (None).
 
         Args:
-            value (Callable[[TimeseriesDataTimestamp], bool]): Custom filter function.
+            value: Custom filter function.
         """
         self._filter = value
         if value is None:
@@ -251,7 +248,7 @@ class TimeseriesBuffer(object):
         By default, this feature is disabled (None).
 
         Args:
-            value (Callable[[TimeseriesData], bool]): Custom trigger function.
+            value: Custom trigger function.
 
         """
         self._custom_trigger = value
@@ -289,7 +286,7 @@ class TimeseriesBuffer(object):
         is disabled (None).
 
         Args:
-            value (Optional[int]): Maximum packet size for the buffer.
+            value: Maximum packet size for the buffer.
         """
 
         self._interop_pb.set_PacketSize(value)
@@ -320,7 +317,7 @@ class TimeseriesBuffer(object):
         from the buffer. By default, this feature is disabled (None).
 
         Args:
-            value (Optional[int]): Maximum time between timestamps in nanoseconds.
+            value: Maximum time between timestamps in nanoseconds.
 
         """
 
@@ -357,7 +354,7 @@ class TimeseriesBuffer(object):
             work with the same underlying value. Defaults to None (disabled).
 
             Args:
-                value (Optional[int]): The maximum time difference between timestamps in milliseconds, or None to disable.
+                value: The maximum time difference between timestamps in milliseconds, or None to disable.
         """
         self._interop_pb.set_TimeSpanInMilliseconds(value)
 
@@ -381,7 +378,7 @@ class TimeseriesBuffer(object):
         Defaults to None (disabled).
 
         Args:
-            value (Optional[int]): The maximum duration in milliseconds before invoking a callback method, or None to disable.
+            value: The maximum duration in milliseconds before invoking a callback method, or None to disable.
         """
 
         self._interop_pb.set_BufferTimeout(value)

@@ -22,7 +22,7 @@ class StreamPackage(object):
             Do not initialize this class manually. Will be initialized by StreamConsumer.on_package_received.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net StreamPackage.
+            net_pointer: Pointer to an instance of a .net StreamPackage.
         """
 
         self._interop = spi(net_pointer)

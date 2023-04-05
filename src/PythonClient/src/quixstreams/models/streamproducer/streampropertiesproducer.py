@@ -22,7 +22,7 @@ class StreamPropertiesProducer(object):
         Initializes a new instance of StreamPropertiesProducer.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .net StreamPropertiesProducer.
+            net_pointer: Pointer to an instance of a .net StreamPropertiesProducer.
         """
 
         if net_pointer is None:
@@ -46,7 +46,7 @@ class StreamPropertiesProducer(object):
         Sets the human friendly name of the stream.
 
         Args:
-            value (str): The new human friendly name of the stream.
+            value: The new human friendly name of the stream.
         """
         self._interop.set_Name(value)
 
@@ -66,7 +66,7 @@ class StreamPropertiesProducer(object):
         Sets the location of the stream in the data catalogue.
 
         Args:
-            value (str): The new location of the stream in the data catalogue.
+            value: The new location of the stream in the data catalogue.
         """
         self._interop.set_Location(value)
 
@@ -111,7 +111,7 @@ class StreamPropertiesProducer(object):
         Sets the time of the stream recording.
 
         Args:
-            value (datetime): The new time of the stream recording.
+            value: The new time of the stream recording.
         """
         hptr = dtc.datetime_to_dotnet(value)
         try:
@@ -135,7 +135,7 @@ class StreamPropertiesProducer(object):
         Sets the automatic flush interval of the properties metadata into the channel (in milliseconds).
 
         Args:
-            value (int): The new flush interval in milliseconds.
+            value: The new flush interval in milliseconds.
         """
         self._interop.set_FlushInterval(value)
 

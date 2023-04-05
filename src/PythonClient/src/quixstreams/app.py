@@ -81,8 +81,8 @@ class App:
         Runs the application, managing streaming behaviors and automatic resource cleanup on shutdown.
 
         Args:
-            cancellation_token (CancellationToken, optional): An optional CancellationToken to abort the application run with.
-            before_shutdown (Callable[[], None], optional): An optional function to call before shutting down the application.
+            cancellation_token: An optional CancellationToken to abort the application run with.
+            before_shutdown: An optional function to call before shutting down the application.
         """
 
         def wrapper():

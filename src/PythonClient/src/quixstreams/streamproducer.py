@@ -24,11 +24,11 @@ class StreamProducer(object):
         """
         Initializes a new instance of StreamProducer.
 
-        NOTE: Do not initialize this class manually, use XXX to produce streams
+        NOTE: Do not initialize this class manually, use TopicProducer.get_or_create_stream or create_stream
 
         Args:
-            topic_producer (TopicProducer): The topic producer the stream producer publishes to.
-            net_pointer (ctypes.c_void_p): The .net object representing a StreamProducer.
+            topic_producer: The topic producer the stream producer publishes to.
+            net_pointer: The .net object representing a StreamProducer.
         """
 
         if net_pointer is None:
@@ -84,7 +84,7 @@ class StreamProducer(object):
         Sets the handler for when a stream experiences exception during the asynchronous write process.
 
         Args:
-            value (Callable[['StreamProducer', BaseException], None]): The handler for exceptions during the asynchronous write process.
+            value: The handler for exceptions during the asynchronous write process.
                 The first parameter is the stream is received for, second is the exception.
         """
         self._on_write_exception = value
@@ -137,7 +137,7 @@ class StreamProducer(object):
         Set the default Epoch used for Timeseries and Events.
 
         Args:
-            value (datetime): The default Epoch value to set.
+            value: The default Epoch value to set.
         """
         dotnet_value = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(dotnet_value)
@@ -184,7 +184,7 @@ class StreamProducer(object):
         Closes the stream and flushes the pending data to stream.
 
         Args:
-            end_type (StreamEndType, optional): The type of stream end. Defaults to StreamEndType.Closed.
+            end_type: The type of stream end. Defaults to StreamEndType.Closed.
         """
 
         dotnet_end_type = ec.enum_to_another(end_type, StreamEndTypeInterop)

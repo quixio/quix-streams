@@ -21,10 +21,10 @@ class EventData(object):
         Initializes a new instance of EventData.
 
         Args:
-            event_id (str, optional): The unique id of the event the value belongs to.
-            time (Union[int, str, datetime, pd.Timestamp], optional): The time at which the event has occurred in nanoseconds since epoch or as a datetime.
-            value (str, optional): The value of the event.
-            net_pointer (ctypes.c_void_p, optional): Pointer to an instance of a .net EventData.
+            event_id: The unique id of the event the value belongs to.
+            time: The time at which the event has occurred in nanoseconds since epoch or as a datetime.
+            value: The value of the event.
+            net_pointer: Pointer to an instance of a .net EventData.
         """
         if net_pointer is None:
             if event_id is None:
@@ -123,8 +123,8 @@ class EventData(object):
         """Adds a tag to the event.
 
         Args:
-            tag_id (str): The id of the tag.
-            tag_value (str): The value to set.
+            tag_id: The id of the tag.
+            tag_value: The value to set.
 
         Returns:
             EventData: The updated EventData object.
@@ -137,7 +137,7 @@ class EventData(object):
         """Adds tags from the specified dictionary. Conflicting tags will be overwritten.
 
         Args:
-            tags (Dict[str, str]): The tags to add.
+            tags: The tags to add.
 
         Returns:
             EventData: The updated EventData object.
@@ -153,7 +153,7 @@ class EventData(object):
         """Removes a tag from the event.
 
         Args:
-            tag_id (str): The id of the tag to remove.
+            tag_id: The id of the tag to remove.
 
         Returns:
             EventData: The updated EventData object.

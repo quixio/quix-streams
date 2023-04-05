@@ -25,8 +25,8 @@ class StreamPropertiesConsumer(object):
         NOTE: Do not initialize this class manually, use StreamConsumer.properties to access an instance of it.
 
         Args:
-            stream_consumer (StreamConsumer): The Stream consumer that owns this stream event consumer.
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET StreamPropertiesConsumer.
+            stream_consumer: The Stream consumer that owns this stream event consumer.
+            net_pointer: Pointer to an instance of a .NET StreamPropertiesConsumer.
         """
         if net_pointer is None:
             raise Exception("StreamPropertiesConsumer is None")
@@ -66,7 +66,7 @@ class StreamPropertiesConsumer(object):
         Sets the handler for when the stream properties change.
 
         Args:
-            value (Callable[['StreamConsumer']): The first parameter is the stream it is invoked for.
+            value: The first parameter is the stream it is invoked for.
         """
         self._on_changed = value
         if self._on_changed_ref is None:

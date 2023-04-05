@@ -1,7 +1,7 @@
 import ctypes
 import math
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 from typing import Union
 
 import pandas as pd
@@ -27,7 +27,7 @@ class TimeseriesData(object):
         Initializes a new instance of TimeseriesData.
 
         Args:
-            net_pointer (ctypes.c_void_p, optional): Pointer to an instance of a .net TimeseriesData.
+            net_pointer: Pointer to an instance of a .net TimeseriesData.
         """
 
         if net_pointer is None:
@@ -92,12 +92,12 @@ class TimeseriesData(object):
                 text += "\r\n        " + str(param_id) + ": ???"
         return text
 
-    def clone(self, parameter_filter: [str] = None):
+    def clone(self, parameter_filter: Optional[List[str]] = None):
         """
         Initializes a new instance of timeseries data with parameters matching the filter if one is provided.
 
         Args:
-            parameter_filter (list[str], optional): The parameter filter. If one is provided, only parameters
+            parameter_filter: The parameter filter. If one is provided, only parameters
                                                    present in the list will be cloned.
 
         Returns:
@@ -111,7 +111,7 @@ class TimeseriesData(object):
         Start adding a new set of parameters and their tags at the specified time.
 
         Args:
-            time (Union[datetime, timedelta]): The time to use for adding new event values.
+            time: The time to use for adding new event values.
                                                | datetime: The datetime to use for adding new event values. Epoch will never be added to this
                                                | timedelta: The time since the default epoch to add the event values at
 
@@ -136,7 +136,7 @@ class TimeseriesData(object):
         Start adding a new set of parameters and their tags at the specified time.
 
         Args:
-            milliseconds (int): The time in milliseconds since the default epoch to add the event values at.
+            milliseconds: The time in milliseconds since the default epoch to add the event values at.
 
         Returns:
             TimeseriesDataTimestamp: A new TimeseriesDataTimestamp instance.
@@ -149,7 +149,7 @@ class TimeseriesData(object):
         Start adding a new set of parameters and their tags at the specified time.
 
         Args:
-            nanoseconds (int): The time in nanoseconds since the default epoch to add the event values at.
+            nanoseconds: The time in nanoseconds since the default epoch to add the event values at.
 
         Returns:
             TimeseriesDataTimestamp: A new TimeseriesDataTimestamp instance.
@@ -196,7 +196,7 @@ class TimeseriesData(object):
         Sets the data as rows of TimeseriesDataTimestamp.
 
         Args:
-            timestamp_list (List[TimeseriesDataTimestamp]): A list of TimeseriesDataTimestamp instances to set.
+            timestamp_list: A list of TimeseriesDataTimestamp instances to set.
         """
 
         raise NotImplemented("To be implemented in upcoming versions")
@@ -290,8 +290,8 @@ class TimeseriesData(object):
         Converts pandas DataFrame to TimeseriesData.
 
         Args:
-            data_frame (pd.DataFrame): The pandas DataFrame to convert to TimeseriesData.
-            epoch (int, optional): The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
+            data_frame: The pandas DataFrame to convert to TimeseriesData.
+            epoch: The epoch to add to each time value when converting to TimeseriesData. Defaults to 0.
 
         Returns:
             TimeseriesData: Converted TimeseriesData instance.

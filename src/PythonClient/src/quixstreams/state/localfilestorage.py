@@ -15,8 +15,8 @@ class LocalFileStorage(object):
         Initializes the LocalFileStorage instance.
 
         Args:
-            storage_directory (str, optional): The path to the storage directory.
-            auto_create_dir (bool, optional): If True, automatically creates the storage directory if it doesn't exist.
+            storage_directory: The path to the storage directory.
+            auto_create_dir: If True, automatically creates the storage directory if it doesn't exist.
         """
         self._pointer = lfsi.Constructor(storage_directory, auto_create_dir)
 
@@ -25,7 +25,7 @@ class LocalFileStorage(object):
         Gets the value at the specified key.
 
         Args:
-            key (str): The key to retrieve the value for.
+            key: The key to retrieve the value for.
 
         Returns:
             any: The value at the specified key, which can be one of the following types:
@@ -38,8 +38,8 @@ class LocalFileStorage(object):
         Sets the value at the specified key.
 
         Args:
-            key (str): The key to set the value for.
-            value (any): The value to be set, which can be one of the following types:
+            key: The key to set the value for.
+            value: The value to be set, which can be one of the following types:
                 StateValue, str, int, float, bool, bytes, bytearray, or object (via pickle).
         """
 
@@ -50,7 +50,7 @@ class LocalFileStorage(object):
         Checks if the storage contains the specified key.
 
         Args:
-            key (str): The key to check for.
+            key: The key to check for.
 
         Returns:
             bool: True if the storage contains the key, False otherwise.
@@ -72,7 +72,7 @@ class LocalFileStorage(object):
         Removes the specified key from the storage.
 
         Args:
-            key (str): The key to be removed.
+            key: The key to be removed.
         """
         se.Remove(self._pointer, key)
 

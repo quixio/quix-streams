@@ -80,7 +80,7 @@ class StreamTimeseriesConsumer(object):
         Sets the handler for when data is received (without buffering).
 
         Args:
-            value: Callable[['StreamConsumer', TimeseriesData]: The function that handles the data received.
+            value: The function that handles the data received.
                 The first parameter is the stream that receives the data, and the second is the data in TimeseriesData format.
         """
         self._on_data_received = value
@@ -121,7 +121,7 @@ class StreamTimeseriesConsumer(object):
         Sets the handler for when data is received (without buffering) in raw transport format.
 
         Args:
-            value: Callable[['StreamConsumer', TimeseriesDataRaw]: The function that handles the data received.
+            value: The function that handles the data received.
                 The first parameter is the stream that receives the data, and the second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_received = value
@@ -162,7 +162,7 @@ class StreamTimeseriesConsumer(object):
         Sets the handler for when data is received (without buffering) in pandas DataFrame format.
 
         Args:
-            value: Callable[['StreamConsumer', pandas.DataFrame]: The function that handles the data received.
+            value: The function that handles the data received.
                 The first parameter is the stream that receives the data, and the second is the data in pandas DataFrame format.
         """
         self._on_dataframe_received = value
@@ -207,7 +207,7 @@ class StreamTimeseriesConsumer(object):
         Sets the handler for when the parameter definitions have changed for the stream.
 
         Args:
-            value: Callable[['StreamConsumer']: The function that handles the parameter definitions change.
+            value: The function that handles the parameter definitions change.
                 The first parameter is the stream for which the parameter definitions changed.
         """
         self._on_definitions_changed = value

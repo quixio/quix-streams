@@ -25,12 +25,12 @@ class StreamConsumer(object):
         """
         Initializes a new instance of StreamConsumer.
 
-        NOTE: Do not initialize this class manually, use XXX to consume streams.
+        NOTE: Do not initialize this class manually, TopicProducer automatically creates this when a new stream is received.
 
         Args:
-            net_pointer (ctypes.c_void_p): Pointer to an instance of a .NET StreamConsumer.
-            topic_consumer (TopicConsumer): The topic consumer which owns the stream consumer.
-            on_close_cb_always (Callable[['StreamConsumer'], None]): The callback function to be executed when the stream is closed.
+            net_pointer: Pointer to an instance of a .NET StreamConsumer.
+            topic_consumer: The topic consumer which owns the stream consumer.
+            on_close_cb_always: The callback function to be executed when the stream is closed.
         """
         self._interop = sci(net_pointer)
         self._topic = topic_consumer
@@ -101,7 +101,7 @@ class StreamConsumer(object):
         Sets the handler for when the stream closes.
 
         Args:
-            value (Callable[['StreamConsumer', 'StreamEndType'], None]): The new callback function to be executed when the stream closes.
+            value: The new callback function to be executed when the stream closes.
                 The first parameter is the stream that closes, and the second is the close type.
         """
         self._on_stream_closed = value
@@ -145,7 +145,7 @@ class StreamConsumer(object):
         Sets the handler for when the stream receives a package of any type.
 
         Args:
-            value (Callable[['StreamConsumer', any], None]): The new callback function to be executed when the stream receives a package.
+            value: The new callback function to be executed when the stream receives a package.
                 The first parameter is the stream that receives the package, and the second is the package itself.
         """
         # TODO
