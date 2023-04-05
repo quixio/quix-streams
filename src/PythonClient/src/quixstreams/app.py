@@ -1,5 +1,6 @@
 import ctypes
 import traceback
+import signal
 from typing import Callable
 
 from .native.Python.QuixStreamsStreaming.App import App as ai
@@ -90,6 +91,14 @@ class App:
                     before_shutdown()
                 except:
                     traceback.print_exc()
+
+        # do nothing when the keyboard interrupt happens.
+        # without this, the callback function invoked from interop would check for exceptions before anything else
+        # resulting in a KeyboardInterrupt before any try/catch can be done. Given we're already handling this inside
+        # the interop, there is no need to throw an exception that is impossible to handle anyway
+        def keyboard_interrupt_handler(signal, frame):
+            pass
+        signal.signal(signal.SIGINT, keyboard_interrupt_handler)
 
         try:
             if cancellation_token is not None:

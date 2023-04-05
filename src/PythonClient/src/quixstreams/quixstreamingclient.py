@@ -178,8 +178,8 @@ class QuixStreamingClient(object):
         Returns:
             TopicProducer: An instance of TopicProducer for the specified topic.
         """
-
         dotnet_pointer = self._interop.GetTopicProducer(topic_id_or_name)
+
         return TopicProducer(dotnet_pointer)
 
     def get_raw_topic_consumer(self, topic_id_or_name: str, consumer_group: str = None, auto_offset_reset: Union[AutoOffsetReset, None] = None) -> RawTopicConsumer:

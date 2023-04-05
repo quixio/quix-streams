@@ -14,9 +14,15 @@ class TimeConverter:
     _epochTzInfo = _epoch.tzinfo
     _microsecond = timedelta(microseconds=1)
 
+    offset_from_utc = 0
+    """
+    The local time ahead of utc by this amount of nanoseconds 
+    """
+
     _localTZInfo = None
     try:
         _localTZInfo = datetime.now().astimezone().tzinfo
+        offset_from_utc = (_epoch - datetime(1970, 1, 1, tzinfo=_localTZInfo)) / _microsecond * 1000
     except:
         logging.warning("Timezone can't be determined, treating as UTC", exc_info=sys.exc_info())
 

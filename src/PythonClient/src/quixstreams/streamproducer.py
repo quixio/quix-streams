@@ -17,7 +17,7 @@ from .native.Python.QuixStreamsStreaming.IStreamProducer import IStreamProducer 
 @nativedecorator
 class StreamProducer(object):
     """
-    Handles producing stream messages to a topic.
+    Handles publishing stream to a topic
     """
 
     def __init__(self, topic_producer: 'TopicProducer', net_pointer: ctypes.c_void_p):
@@ -62,6 +62,7 @@ class StreamProducer(object):
 
         Returns:
             TopicProducer: The topic the stream is producing to.
+
         """
         return self._topic
 

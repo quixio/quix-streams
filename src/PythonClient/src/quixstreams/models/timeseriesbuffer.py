@@ -4,7 +4,7 @@ from typing import Optional, Callable, Union
 
 import pandas
 
-from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..helpers.nativedecorator import nativedecorator
 from ..models.timeseriesdata import TimeseriesData
 from ..models.timeseriesdataraw import TimeseriesDataRaw

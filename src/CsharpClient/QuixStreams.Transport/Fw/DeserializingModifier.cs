@@ -37,11 +37,11 @@ namespace QuixStreams.Transport.Fw
             {
                 return Task.CompletedTask;
             }
-            var packageBytes = bytePackage.Value.Value;
+            var packageBytes = bytePackage.Value;
 
             var transportMessageValue = TransportPackageValueCodec.Deserialize(packageBytes);
             var valueCodec = this.GetCodec(transportMessageValue);
-            var lazyVal = new Lazy<object>(() => this.DeserializeToObject(valueCodec, transportMessageValue));
+            var value = this.DeserializeToObject(valueCodec, transportMessageValue);
 
             var meta = transportMessageValue.MetaData;
             if (bytePackage.MetaData.Count > 0)
@@ -49,7 +49,7 @@ namespace QuixStreams.Transport.Fw
                 meta = new MetaData(bytePackage.MetaData, meta);
             }
 
-            var newPackage = new Package(valueCodec.Type, lazyVal, meta, bytePackage.TransportContext);
+            var newPackage = new Package(valueCodec.Type, value, meta, bytePackage.TransportContext);
             return this.OnNewPackage(newPackage);
         }
 
@@ -81,7 +81,7 @@ namespace QuixStreams.Transport.Fw
         private object DeserializeToObject(ICodec codec, TransportPackageValue transportPackageValue)
         {
             // Is there a specific codec for it?
-            if (!codec.TryDeserialize(transportPackageValue.Value.Value, out var obj))
+            if (!codec.TryDeserialize(transportPackageValue.Value, out var obj))
             {
                 throw new SerializationException($"Failed to deserialize '{transportPackageValue.CodecBundle.ModelKey}' with codec '{codec.Id}'");
             }

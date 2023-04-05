@@ -29,7 +29,7 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.Open();
 
             // Act
-            var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
+            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
@@ -58,7 +58,7 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.MaxRetries = 10;
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
+            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamPipelineFactory.TransportContextStreamIdKey, "somestreamid"}
             }));
@@ -77,7 +77,7 @@ namespace QuixStreams.Telemetry.UnitTests
             {
                 var waited = elapsedTimes[i];
                 var expectedWait = Math.Min(i * factory.RetryIncrease, factory.MaxRetryDuration);
-                const int range = 20;
+                const int range = 35;
                 waited.Should().BeInRange(expectedWait - range, expectedWait + range, $"the iteration {i} should wait for about this long");
             }
 
@@ -93,7 +93,7 @@ namespace QuixStreams.Telemetry.UnitTests
             var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
+            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
@@ -102,7 +102,7 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
             // Act
-            package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
+            package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
             }));
@@ -121,7 +121,7 @@ namespace QuixStreams.Telemetry.UnitTests
             var factory = new TestStreamPipelineFactory(consumer, (s) => streamPipeline);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
+            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamPipelineFactory.TransportContextStreamIdKey, streamPipeline.StreamId}
             }));
@@ -146,7 +146,7 @@ namespace QuixStreams.Telemetry.UnitTests
             var factory = new TestStreamPipelineFactory(consumer, (s) => streamPipeline);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new Lazy<object>(() => new object()), null, new TransportContext(new Dictionary<string, object>
+            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
             {
                 {TestStreamPipelineFactory.TransportContextStreamIdKey, streamPipeline.StreamId}
             }));

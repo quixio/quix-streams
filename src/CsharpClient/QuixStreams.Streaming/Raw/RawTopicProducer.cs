@@ -40,9 +40,7 @@ namespace QuixStreams.Streaming.Raw
         /// <inheritdoc />
         public void Publish(RawMessage message)
         {
-            var data = new Package<byte[]>(
-                              new Lazy<byte[]>(() => message.Value)
-                        );
+            var data = new Package<byte[]>(message.Value);
             data.SetKey(message.Key);
             kafkaProducer.Publish(data);
         }

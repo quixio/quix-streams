@@ -20,7 +20,7 @@ namespace QuixStreams.Transport.Fw
         {
             bufferId = null;
             if (bytePackage == null) return null;
-            var packageBytes = bytePackage.Value.Value;
+            var packageBytes = bytePackage.Value;
             bytePackage.TransportContext.TryGetTypedValue<string>(KnownTransportContextKeys.MessageGroupKey, out var key);
             return byteMerger.Merge(packageBytes, key, out bufferId);
         }

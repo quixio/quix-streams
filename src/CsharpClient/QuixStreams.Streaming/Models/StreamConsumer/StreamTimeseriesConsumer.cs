@@ -138,6 +138,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
 
         private void OnTimeseriesDataEventHandler(IStreamConsumer streamConsumer, QuixStreams.Telemetry.Models.TimeseriesDataRaw timeseriesDataRaw)
         {
+            if (this.OnDataReceived == null) return;
             var tsdata = new TimeseriesData(timeseriesDataRaw, null, false, false);
             this.OnDataReceived?.Invoke(streamConsumer, new TimeseriesDataReadEventArgs(this.topicConsumer, streamConsumer, tsdata));
         }

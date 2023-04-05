@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
 using QuixStreams.Telemetry.Models;
@@ -81,7 +82,7 @@ namespace QuixStreams.Streaming.UnitTests
                 stream.Properties.AddParent("1234");
                 stream.Properties.Metadata["test_key"] = "test_value";
                 stream.Properties.Flush();
-
+                SpinWait.SpinUntil(() => streamStarted == 1);
                 streamStarted.Should().Be(1);
                 streamProperties.Should().NotBeNull();
                 streamProperties.Location.Should().Be("Car telemetry/Vehicles/Volvo");
@@ -117,6 +118,7 @@ namespace QuixStreams.Streaming.UnitTests
 
                 (stream as IStreamProducerInternal).Publish(expectedParametersProperties);
 
+                SpinWait.SpinUntil(() => parametersPropertiesChanged);
                 Assert.True(parametersPropertiesChanged, "Parameter properties event not reached reader.");
 
                 var expectedData = new List<TimeseriesDataRaw>();

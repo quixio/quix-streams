@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 
+from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropException
 from src.quixstreams import QuixStreamingClient
 
 
@@ -13,8 +14,8 @@ class StreamingClientTests(unittest.TestCase):
         # Act
         try:
             sc = QuixStreamingClient()
-        except Exception as e:
-            self.assertEqual(e.Message, 'Token must be given as an argument or set in Quix__Sdk__Token environment variable.')
+        except InteropException as e:
+            self.assertEqual(e.message, 'Token must be given as an argument or set in Quix__Sdk__Token environment variable.')
             return
 
         raise Exception("This shouldn't be hit")
@@ -83,9 +84,9 @@ class StreamingClientTests(unittest.TestCase):
         try:
             sc.get_topic_consumer('sometest')
         # Assert
-        except Exception as ex:
+        except InteropException as ex:
             # point here is it can fail inside c#, but not python
-            self.assertEqual(ex.Message, "An error occurred while sending the request.")
+            self.assertEqual(ex.message, "No such host is known. (test.quix.ai:443)")
 
     def test_cache_period_getset(self):
         # Act

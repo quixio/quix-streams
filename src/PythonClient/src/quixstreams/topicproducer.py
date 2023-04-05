@@ -11,7 +11,7 @@ from .streamproducer import StreamProducer
 @nativedecorator
 class TopicProducer(object):
     """
-    XXX.
+    Interface to operate with the streaming platform for publishing messages
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):

@@ -22,8 +22,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             random.NextBytes(bytes);
             var metaData = new MetaData(new Dictionary<string, string> {{"Test", "123"}});
             var transportContext = new TransportContext(new Dictionary<string, object> {{"test", 123}});
-            var value = new Lazy<byte[]>(bytes);
-            var package = new Package<byte[]>(value, metaData, transportContext);
+            var package = new Package<byte[]>(bytes, metaData, transportContext);
             var merger = Substitute.For<IByteMerger>();
             merger.Merge(Arg.Any<byte[]>(), Arg.Any<string>(), out Arg.Any<string>()).ReturnsForAnyArgs(bytes);
             var modifier = new ByteMergingModifier(merger);
@@ -45,7 +44,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             sw.Elapsed.TotalMilliseconds.Should().BeLessThan(50); // I'm giving Task Library 50 ms to get its act together and call what it needs to. Usually takes ~1-2ms
             task.IsCompleted.Should().BeTrue();
             nonGeneric.Should().NotBeNull();
-            ((byte[])nonGeneric.Value.Value).Should().BeEquivalentTo(package.Value.Value);
+            ((byte[])nonGeneric.Value).Should().BeEquivalentTo(package.Value);
             nonGeneric.MetaData.Should().BeEquivalentTo(package.MetaData);
             nonGeneric.TransportContext.Should().BeEquivalentTo(package.TransportContext);
         }
@@ -64,22 +63,22 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Arrange
             var merger = Substitute.For<IByteMerger>();
             // P1_s1
-            var p1s1 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {1}));
+            var p1s1 = new Package<byte[]>(new byte[] {1});
             p1s1.TransportContext["Package"] = 1;
-            merger.Merge(p1s1.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            merger.Merge(p1s1.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
                 return (byte[]) null;
             });
             // P1_s2
-            var p1s2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {2}));
+            var p1s2 = new Package<byte[]>(new byte[] {2});
             p1s2.TransportContext["Package"] = 2;
             // p1_merged
-            var p1merged = new Package<byte[]>(new Lazy<byte[]>(new byte[] {3}));
-            merger.Merge(p1s2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p1merged = new Package<byte[]>(new byte[] {3});
+            merger.Merge(p1s2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
-                return p1merged.Value.Value;
+                return p1merged.Value;
             });
             
             var modifier = new ByteMergingModifier(merger);
@@ -110,51 +109,51 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Arrange
             var merger = Substitute.For<IByteMerger>();
             // P1_s1
-            var p1s1 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {1}));
-            merger.Merge(p1s1.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p1s1 = new Package<byte[]>(new byte[] {1});
+            merger.Merge(p1s1.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
                 return (byte[]) null;
             });
             // P1_s2
-            var p1s2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {2}));
+            var p1s2 = new Package<byte[]>(new byte[] {2});
             // p1_merged
-            var p1merged = new Package<byte[]>(new Lazy<byte[]>(new byte[] {3}));
-            merger.Merge(p1s2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p1merged = new Package<byte[]>(new byte[] {3});
+            merger.Merge(p1s2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
-                return p1merged.Value.Value;
+                return p1merged.Value;
             });
             // P2_s1
-            var p2s1 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {4}));
-            merger.Merge(p2s1.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p2s1 = new Package<byte[]>(new byte[] {4});
+            merger.Merge(p2s1.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p2";
                 return (byte[]) null;
             });
             // P2_s2
-            var p2s2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {5}));
+            var p2s2 = new Package<byte[]>(new byte[] {5});
             // p2_merged
-            var p2merged = new Package<byte[]>(new Lazy<byte[]>(new byte[] {6}));
-            merger.Merge(p2s2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p2merged = new Package<byte[]>(new byte[] {6});
+            merger.Merge(p2s2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p2";
-                return p2merged.Value.Value;
+                return p2merged.Value;
             });
             // P3
-            var p3 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {7}));
-            merger.Merge(p3.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p3 = new Package<byte[]>(new byte[] {7});
+            merger.Merge(p3.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = null;
-                return p3.Value.Value;
+                return p3.Value;
             });
 
 
             var expectedOrder = new List<byte[]>()
             {
-                p1merged.Value.Value,
-                p2merged.Value.Value,
-                p3.Value.Value
+                p1merged.Value,
+                p2merged.Value,
+                p3.Value
             };
             
             var modifier = new ByteMergingModifier(merger);
@@ -179,7 +178,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             packagesReceived.Count().Should().Be(3); // the last segment arrived for the package wrapping the normal package, so both the normal and the merged release
 
             // Assert
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
         }
         
@@ -193,24 +192,24 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Arrange
             var merger = Substitute.For<IByteMerger>();
             // P1_s1
-            var p1s1 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {1}));
-            merger.Merge(p1s1.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p1s1 = new Package<byte[]>(new byte[] {1});
+            merger.Merge(p1s1.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
                 return (byte[]) null;
             });
             // P2
-            var p2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {4}));
-            merger.Merge(p2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p2 = new Package<byte[]>(new byte[] {4});
+            merger.Merge(p2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = null;
-                return p2.Value.Value;
+                return p2.Value;
             });
 
 
             var expectedOrder = new List<byte[]>()
             {
-                p2.Value.Value,
+                p2.Value,
             };
             
             var modifier = new ByteMergingModifier(merger);
@@ -232,7 +231,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Assert
             tasks.All(x=> x.IsCompleted).Should().BeTrue();
             packagesReceived.Count().Should().Be(1);
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
         }
         
@@ -246,24 +245,24 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Arrange
             var merger = Substitute.For<IByteMerger>();
             // P1_s1
-            var p1s1 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {1}));
-            merger.Merge(p1s1.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p1s1 = new Package<byte[]>(new byte[] {1});
+            merger.Merge(p1s1.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
                 return (byte[]) null;
             });
             // P2
-            var p2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {4}));
-            merger.Merge(p2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            var p2 = new Package<byte[]>(new byte[] {4});
+            merger.Merge(p2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = null;
-                return p2.Value.Value;
+                return p2.Value;
             });
 
 
             var expectedOrder = new List<byte[]>()
             {
-                p2.Value.Value,
+                p2.Value,
             };
             
             var modifier = new ByteMergingModifier(merger);
@@ -285,7 +284,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Assert
             tasks.All(x=> x.IsCompleted).Should().BeTrue();
             packagesReceived.Count().Should().Be(1);
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
         }
 
@@ -298,8 +297,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             random.NextBytes(bytes);
             var metaData = new MetaData(new Dictionary<string, string> { { "Test", "123" } });
             var transportContext = new TransportContext(new Dictionary<string, object> { { "test", 123 } });
-            var value = new Lazy<byte[]>(bytes);
-            var package = new Package<byte[]>(value, metaData, transportContext);
+            var package = new Package<byte[]>(bytes, metaData, transportContext);
             var merger = Substitute.For<IByteMerger>();
             merger.Merge(Arg.Any<byte[]>(), Arg.Any<string>(), out Arg.Any<string>()).ReturnsForAnyArgs((byte[])null);
             var modifier = new ByteMergingModifier(merger);
@@ -333,53 +331,53 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Arrange
             var merger = Substitute.For<IByteMerger>();
             // P1_s1
-            var p1s1 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {1}), transportContext: new TransportContext(new Dictionary<string, object>()
+            var p1s1 = new Package<byte[]>(new byte[] {1}, transportContext: new TransportContext(new Dictionary<string, object>()
             {
                 {"Package", "1"},
                 {"Segment", "1"}
             }));
-            merger.Merge(p1s1.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            merger.Merge(p1s1.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
                 return (byte[]) null;
             });
             // P2
-            var p2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {1}), transportContext: new TransportContext(new Dictionary<string, object>()
+            var p2 = new Package<byte[]>(new byte[] {1}, transportContext: new TransportContext(new Dictionary<string, object>()
             {
                 {"Package", "2"}
             }));
-            merger.Merge(p2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            merger.Merge(p2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = null;
-                return p2.Value.Value;
+                return p2.Value;
             });
             // P1_s2
-            var p1s2 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {3}), transportContext: new TransportContext(new Dictionary<string, object>()
+            var p1s2 = new Package<byte[]>(new byte[] {3}, transportContext: new TransportContext(new Dictionary<string, object>()
             {
                 {"Package", "1"},
                 {"Segment", "2"}
             }));
-            merger.Merge(p1s2.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            merger.Merge(p1s2.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = "p1";
                 return (byte[]) null;
             });
             // P3
-            var p3 = new Package<byte[]>(new Lazy<byte[]>(new byte[] {4}), transportContext: new TransportContext(new Dictionary<string, object>()
+            var p3 = new Package<byte[]>(new byte[] {4}, transportContext: new TransportContext(new Dictionary<string, object>()
             {
                 {"Package", "3"},
             }));
-            merger.Merge(p3.Value.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
+            merger.Merge(p3.Value, Arg.Any<string>(), out Arg.Any<string>()).Returns(x=>
             {
                 x[2] = null;
-                return p3.Value.Value;
+                return p3.Value;
             });
 
 
             var expectedOrder = new List<byte[]>()
             {
-                p2.Value.Value,
-                p3.Value.Value,
+                p2.Value,
+                p3.Value,
             };
             
             var modifier = new ByteMergingModifier(merger);
@@ -405,7 +403,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // Assert
             tasks.All(x=> x.IsCompleted).Should().BeTrue();
             packagesReceived.Count().Should().Be(2);
-            var actualOrder = packagesReceived.Select(x => x.Value.Value).ToList();
+            var actualOrder = packagesReceived.Select(x => x.Value).ToList();
             actualOrder.Should().BeEquivalentTo(expectedOrder, o => o.WithStrictOrdering());
             merger.Received(1).Purge("p1");
             merger.Received(1).Purge(Arg.Any<string>()); // the non-fragments shouldn't get purged - and cause exceptions in merger -

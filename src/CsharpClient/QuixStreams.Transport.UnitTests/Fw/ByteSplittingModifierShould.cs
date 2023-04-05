@@ -22,8 +22,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             random.NextBytes(bytes);
             var metaData = new MetaData(new Dictionary<string, string> { { "Test", "123" } });
             var transportContext = new TransportContext(new Dictionary<string, object> { { "test", 123 } });
-            var value = new Lazy<byte[]>(bytes);
-            var package = new Package<byte[]>(value, metaData, transportContext);
+            var package = new Package<byte[]>(bytes, metaData, transportContext);
             var splitter = Substitute.For<IByteSplitter>();
             splitter.Split(Arg.Any<byte[]>()).ReturnsForAnyArgs(new[] { bytes });
             var modifier = new ByteSplittingModifier(splitter);
@@ -42,7 +41,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             task.Wait(2000);
             nonGeneric.Count.Should().Be(1, "No splitting should be done");
             var raisedPackage = nonGeneric[0];
-            raisedPackage.Value.Value.Should().BeEquivalentTo(package.Value.Value);
+            raisedPackage.Value.Should().BeEquivalentTo(package.Value);
             raisedPackage.MetaData.Should().BeEquivalentTo(package.MetaData);
             raisedPackage.TransportContext.Should().BeEquivalentTo(package.TransportContext);
         }
@@ -56,8 +55,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             random.NextBytes(bytes);
             var metaData = new MetaData(new Dictionary<string, string> { { "Test", "123" } });
             var transportContext = new TransportContext(new Dictionary<string, object> { { "test", 123 } });
-            var value = new Lazy<byte[]>(bytes);
-            var package = new Package<byte[]>(value, metaData, transportContext);
+            var package = new Package<byte[]>(bytes, metaData, transportContext);
             var splitter = Substitute.For<IByteSplitter>();
             var returned = new List<byte[]>();
             const int splitCount = 5;
@@ -87,13 +85,13 @@ namespace QuixStreams.Transport.UnitTests.Fw
             for (var index = 0; index < nonGeneric.Count - 1; index++)
             {
                 var raisedPackage = nonGeneric[index];
-                raisedPackage.Value.Value.Should().BeEquivalentTo(returned[index]);
+                raisedPackage.Value.Should().BeEquivalentTo(returned[index]);
                 raisedPackage.MetaData.Should().BeEquivalentTo(MetaData.Empty);
                 raisedPackage.TransportContext.Should().BeEquivalentTo(package.TransportContext);
             }
 
             var lastRaisedPackage = nonGeneric[nonGeneric.Count - 1];
-            lastRaisedPackage.Value.Value.Should().BeEquivalentTo(returned[nonGeneric.Count - 1]);
+            lastRaisedPackage.Value.Should().BeEquivalentTo(returned[nonGeneric.Count - 1]);
             lastRaisedPackage.MetaData.Should().BeEquivalentTo(package.MetaData);
             lastRaisedPackage.TransportContext.Should().BeEquivalentTo(package.TransportContext);
         }
@@ -107,8 +105,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             var random = new Random();
             var bytes = new byte[500];
             random.NextBytes(bytes);
-            var value = new Lazy<byte[]>(bytes);
-            var package = new Package<byte[]>(value);
+            var package = new Package<byte[]>(bytes);
             var splitter = Substitute.For<IByteSplitter>();
             var returned = new List<byte[]>();
             for (var i = 0; i < packageCount; i++)
