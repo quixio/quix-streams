@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferProducer Class
 
-Class used to write time-series to [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer') in a buffered manner
+A class for producing timeseries data to an [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer') in a buffered manner.
 
 ```csharp
 public class TimeseriesBufferProducer : QuixStreams.Streaming.Models.TimeseriesBuffer
@@ -18,10 +18,10 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Methods | |
 | :--- | :--- |
-| [AddTimestamp(DateTime)](TimeseriesBufferProducer.AddTimestamp(DateTime).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.AddTimestamp(System.DateTime)') | Starts adding a new set of parameter values at the given timestamp.<br/>Note, [Epoch](TimeseriesBufferProducer.Epoch.md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Epoch') is not used when invoking with [System.DateTime](https://docs.microsoft.com/en-us/dotnet/api/System.DateTime 'System.DateTime') |
+| [AddTimestamp(DateTime)](TimeseriesBufferProducer.AddTimestamp(DateTime).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.AddTimestamp(System.DateTime)') | Starts adding a new set of parameter values at the given timestamp.<br/>Note, [Epoch](TimeseriesBufferProducer.Epoch.md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Epoch') is not used when invoking with a [System.DateTime](https://docs.microsoft.com/en-us/dotnet/api/System.DateTime 'System.DateTime') |
 | [AddTimestamp(TimeSpan)](TimeseriesBufferProducer.AddTimestamp(TimeSpan).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.AddTimestamp(System.TimeSpan)') | Starts adding a new set of parameter values at the given timestamp. |
 | [AddTimestampMilliseconds(long)](TimeseriesBufferProducer.AddTimestampMilliseconds(long).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.AddTimestampMilliseconds(long)') | Starts adding a new set of parameter values at the given timestamp. |
 | [AddTimestampNanoseconds(long)](TimeseriesBufferProducer.AddTimestampNanoseconds(long).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.AddTimestampNanoseconds(long)') | Starts adding a new set of parameter values at the given timestamp. |
-| [Dispose()](TimeseriesBufferProducer.Dispose().md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Dispose()') | Flushes internal buffers and disposes |
-| [Flush()](TimeseriesBufferProducer.Flush().md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Flush()') | Immediately writes the data from the buffer without waiting for buffer condition to fulfill |
-| [Publish(TimeseriesData)](TimeseriesBufferProducer.Publish(TimeseriesData).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Publish(QuixStreams.Streaming.Models.TimeseriesData)') | Write timeseries data to the buffer |
+| [Dispose()](TimeseriesBufferProducer.Dispose().md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Dispose()') | Flushes the internal buffers and disposes the object. |
+| [Flush()](TimeseriesBufferProducer.Flush().md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Flush()') | Immediately publishes the data from the buffer without waiting for the buffer condition to be fulfilled. |
+| [Publish(TimeseriesData)](TimeseriesBufferProducer.Publish(TimeseriesData).md 'QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer.Publish(QuixStreams.Streaming.Models.TimeseriesData)') | Publish the provided timeseries data to the buffer. |

@@ -3,7 +3,7 @@
 
 ## QuixStreamingClient.GetRawTopicProducer(string) Method
 
-Open an topic consumer capable of subscribing to receive non-quixstreams incoming messages
+Gets a topic producer capable of publishing non-quixstreams messages.
 
 ```csharp
 public QuixStreams.Streaming.Raw.IRawTopicProducer GetRawTopicProducer(string topicIdOrName);

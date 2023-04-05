@@ -3,7 +3,7 @@
 
 ## StreamPropertiesProducer.TimeOfRecording Property
 
-Date Time of recording of the stream. Commonly set to Datetime.UtcNow.
+Date Time of stream recording. Commonly set to Datetime.UtcNow.
 
 ```csharp
 public System.Nullable<System.DateTime> TimeOfRecording { get; set; }

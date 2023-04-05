@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferConfiguration Class
 
-Describes the configuration for parameter buffers
+Describes the configuration for timeseries buffers
 
 ```csharp
 public class TimeseriesBufferConfiguration

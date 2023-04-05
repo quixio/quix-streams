@@ -14,7 +14,7 @@ public QuixStreams.Streaming.Models.StreamProducer.EventDefinitionBuilder AddDef
 
 `eventId` [System.String](https://docs.microsoft.com/en-us/dotnet/api/System.String 'System.String')
 
-Event Id. This must match the event id you use to Event values
+Event id. This must match the event id you use to Event values
 
 <a name='QuixStreams.Streaming.Models.StreamProducer.EventDefinitionBuilder.AddDefinition(string,string,string).name'></a>
 

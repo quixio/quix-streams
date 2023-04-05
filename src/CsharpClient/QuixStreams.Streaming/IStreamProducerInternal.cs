@@ -35,7 +35,7 @@ namespace QuixStreams.Streaming
         void Publish(List<QuixStreams.Telemetry.Models.TimeseriesDataRaw> data);
 
         /// <summary>
-        /// Write the optional Parameter definition properties describing the hierarchical grouping of parameters
+        /// Publish the optional Parameter definition properties describing the hierarchical grouping of parameters
         /// Please note, new calls will not result in merged set with previous calls. New calls supersede previously sent values.
         /// </summary>
         void Publish(QuixStreams.Telemetry.Models.ParameterDefinitions definitions);
@@ -53,7 +53,7 @@ namespace QuixStreams.Streaming
         void Publish(ICollection<QuixStreams.Telemetry.Models.EventDataRaw> events);
 
         /// <summary>
-        /// Write the optional Event definition properties describing the hierarchical grouping of events
+        /// Publish the optional Event definition properties describing the hierarchical grouping of events
         /// Please note, new calls will not result in merged set with previous calls. New calls supersede previously sent values.
         /// </summary>
         void Publish(QuixStreams.Telemetry.Models.EventDefinitions definitions);

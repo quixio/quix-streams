@@ -10,14 +10,20 @@ from ..native.Python.QuixStreamsStreaming.Raw.RawTopicConsumer import RawTopicCo
 
 @nativedecorator
 class RawTopicConsumer(object):
+    """
+    Topic class to consume incoming raw messages (capable to consuming non-quixstreams messages).
+    """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-        Initializes a new instance of StreamConsumer.
-        NOTE: Do not initialize this class manually, use StreamingClient.on_stream_received to read streams
+       Initializes a new instance of RawTopicConsumer.
 
-        :param net_pointer: Pointer to an instance of a .net RawTopicConsumer
-        """
+       Note:
+           Do not initialize this class manually, use KafkaStreamingClient.get_raw_topic_consumer.
+
+       Args:
+           net_pointer: Pointer to an instance of a .net RawTopicConsumer.
+       """
 
         if net_pointer is None:
             raise Exception("RawTopicConsumer is none")
@@ -38,14 +44,23 @@ class RawTopicConsumer(object):
     @property
     def on_message_received(self) -> Callable[['RawTopicConsumer', RawMessage], None]:
         """
-        Gets the handler for when topic receives message. First parameter is the topic the message is received for, second is the RawMessage.
+        Gets the handler for when a topic receives a message.
+
+        Returns:
+            Callable[[RawTopicConsumer, RawMessage], None]: The event handler for when a topic receives a message.
+                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
+
         return self._on_message_received
 
     @on_message_received.setter
     def on_message_received(self, value: Callable[['RawTopicConsumer', RawMessage], None]) -> None:
         """
-        Sets the handler for when topic receives message. First parameter is the topic the message is received for, second is the RawMessage.
+        Sets the handler for when a topic receives a message.
+
+        Args:
+            value: The new event handler for when a topic receives a message.
+                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
         self._on_message_received = value
         if self._on_message_received_ref is None:
@@ -70,16 +85,22 @@ class RawTopicConsumer(object):
     @property
     def on_error_occurred(self) -> Callable[['RawTopicConsumer', BaseException], None]:
         """
-        Gets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the topic
-         the error is received for, second is the exception.
+        Gets the handler for when a stream experiences an exception during the asynchronous write process.
+
+        Returns:
+            Callable[[RawTopicConsumer, BaseException], None]: The event handler for when a stream experiences an exception during the asynchronous write process.
+                The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         return self._on_error_occurred
 
     @on_error_occurred.setter
     def on_error_occurred(self, value: Callable[['RawTopicConsumer', BaseException], None]) -> None:
         """
-        Sets the handler for when a stream experiences exception during the asynchronous write process. First parameter is the topic
-         the error is received for, second is the exception.
+        Sets the handler for when a stream experiences an exception during the asynchronous write process.
+
+        Args:
+            value: The new handler for when a stream experiences an exception during the asynchronous write process.
+                The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         self._on_error_occurred = value
         if self._on_error_occurred_ref is None:
@@ -104,6 +125,6 @@ class RawTopicConsumer(object):
 
     def subscribe(self):
         """
-        Starts subscribing to the streams
+        Starts subscribing to the streams.
         """
         self._interop.Subscribe()

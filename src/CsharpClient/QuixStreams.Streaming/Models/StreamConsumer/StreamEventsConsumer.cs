@@ -6,7 +6,7 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models.StreamConsumer
 {
     /// <summary>
-    /// Helper class for read <see cref="EventDefinitions"/> and <see cref="EventData"/>
+    /// Consumer for streams, which raises <see cref="EventData"/> and <see cref="EventDefinitions"/> related messages
     /// </summary>
     public class StreamEventsConsumer : IDisposable
     {
@@ -16,8 +16,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// <summary>
         /// Initializes a new instance of <see cref="StreamTimeseriesConsumer"/>
         /// </summary>
-        /// <param name="topicConsumer">The topic the stream to what this reader belongs to</param>
-        /// <param name="streamConsumer">Stream reader owner</param>
+        /// <param name="topicConsumer">The topic consumer which owns the stream consumer</param>
+        /// <param name="streamConsumer">The Stream consumer which owns this stream event consumer</param>
         internal StreamEventsConsumer(ITopicConsumer topicConsumer, IStreamConsumerInternal streamConsumer)
         {
             this.topicConsumer = topicConsumer;
@@ -26,7 +26,6 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.streamConsumer.OnEventDefinitionsChanged += OnEventDefinitionsChangedHandler;
 
             this.streamConsumer.OnEventData += OnEventDataHandler;
-
         }
 
         private void OnEventDataHandler(IStreamConsumer sender, QuixStreams.Telemetry.Models.EventDataRaw eventDataRaw)
@@ -49,7 +48,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         public event EventHandler<EventDataReadEventArgs> OnDataReceived;
 
         /// <summary>
-        /// Raised when the even definitions have changed for the stream.
+        /// Raised when the event definitions have changed for the stream.
         /// See <see cref="Definitions"/> for the latest set of event definitions
         /// </summary>
         public event EventHandler<EventDefinitionsChangedEventArgs> OnDefinitionsChanged;

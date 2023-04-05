@@ -3,7 +3,7 @@
 
 ## TopicProducer.CreateStream() Method
 
-Creates a new stream and returns the related stream writer to operate it.
+Creates a new stream and returns the related stream producer to operate it.
 
 ```csharp
 public QuixStreams.Streaming.IStreamProducer CreateStream();
@@ -13,4 +13,4 @@ Implements [CreateStream()](ITopicProducer.CreateStream().md 'QuixStreams.Stream
 
 #### Returns
 [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer')  
-Stream writer to allow the stream to push data to the platform
+Stream producer to allow the stream to push data to the platform

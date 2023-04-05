@@ -1,5 +1,6 @@
 import ctypes
 import pickle
+from typing import Any
 
 from .statetype import StateType
 from ..helpers.enumconverter import EnumConverter as ec
@@ -7,27 +8,19 @@ from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as a
 from ..native.Python.QuixStreamsState.StateValue import StateValue as svi
 from ..native.Python.QuixStreamsState.StateValue_StateType import StateType as StateTypeInterop
 
-"""
-Boxed value wrapping the supported types
-"""
-
 
 class StateValue(object):
+    """
+    A wrapper class for values that can be stored inside the storage.
+    """
 
-    def __init__(self, value: any):
+    def __init__(self, value: Any):
         """
-        Initialize the boxed value inside the store
+        Initializes the wrapped value inside the store.
 
-        Parameter
-            value one of the types:
-                StateValue
-                str
-                int
-                float
-                bool
-                bytes
-                bytearray
-                object (via pickle)
+        Args:
+            value: The value to be wrapped, which can be one of the following types:
+                StateValue, str, int, float, bool, bytes, bytearray, or object (via pickle).
         """
 
         self._interop = None
@@ -89,16 +82,28 @@ class StateValue(object):
     @property
     def type(self):
         """
-            Get the state type
+        Gets the type of the wrapped value.
+
+        Returns:
+            StateType: The type of the wrapped value.
         """
         return self._type
 
     @property
     def value(self):
         """
-            Get wrapped value
+        Gets the wrapped value.
+
+        Returns:
+            The wrapped value.
         """
         return self._value
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the .NET pointer of the wrapped value.
+
+        Returns:
+            ctypes.c_void_p: The .NET pointer of the wrapped value.
+        """
         return self._interop.get_interop_ptr__()

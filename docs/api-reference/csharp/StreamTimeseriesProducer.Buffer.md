@@ -3,7 +3,7 @@
 
 ## StreamTimeseriesProducer.Buffer Property
 
-Gets the buffer for writing timeseries data
+Gets the buffer for producing timeseries data
 
 ```csharp
 public QuixStreams.Streaming.Models.StreamProducer.TimeseriesBufferProducer Buffer { get; }

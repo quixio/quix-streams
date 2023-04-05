@@ -17,7 +17,7 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Methods | |
 | :--- | :--- |
-| [AddDefinition(string, string, string)](ParameterDefinitionBuilder.AddDefinition(string,string,string).md 'QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder.AddDefinition(string, string, string)') | Add new parameter definition to the [StreamPropertiesProducer](StreamPropertiesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer'). Configure it with the builder methods. |
+| [AddDefinition(string, string, string)](ParameterDefinitionBuilder.AddDefinition(string,string,string).md 'QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder.AddDefinition(string, string, string)') | Add new parameter definition to the [StreamTimeseriesProducer](StreamTimeseriesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer'). Configure it with the builder methods. |
 | [SetCustomProperties(string)](ParameterDefinitionBuilder.SetCustomProperties(string).md 'QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder.SetCustomProperties(string)') | Set the custom properties of the parameter |
 | [SetFormat(string)](ParameterDefinitionBuilder.SetFormat(string).md 'QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder.SetFormat(string)') | Set the format of the parameter |
 | [SetRange(double, double)](ParameterDefinitionBuilder.SetRange(double,double).md 'QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder.SetRange(double, double)') | Set the minimum and maximum range of the parameter |

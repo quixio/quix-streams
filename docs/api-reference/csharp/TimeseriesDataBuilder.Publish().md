@@ -3,7 +3,7 @@
 
 ## TimeseriesDataBuilder.Publish() Method
 
-Write the values
+Publish the values
 
 ```csharp
 public void Publish();

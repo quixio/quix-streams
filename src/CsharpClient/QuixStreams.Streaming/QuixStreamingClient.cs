@@ -71,7 +71,7 @@ namespace QuixStreams.Streaming
         /// <param name="token">The token to use when talking to Quix. When not provided, Quix__Sdk__Token environment variable will be used</param>
         /// <param name="autoCreateTopics">Whether topics should be auto created if they don't exist yet</param>
         /// <param name="properties">Additional broker properties</param>
-        /// <param name="debug">Whether debugging should enabled</param>
+        /// <param name="debug">Whether debugging should be enabled</param>
         /// <param name="httpClient">The http client to use</param>
         public QuixStreamingClient(string token = null, bool autoCreateTopics = true, IDictionary<string, string> properties = null, bool debug = false, HttpClient httpClient = null)
         {
@@ -109,7 +109,7 @@ namespace QuixStreams.Streaming
         }
 
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive incoming streams
+        /// Gets a topic consumer capable of subscribing to receive incoming streams.
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
@@ -127,7 +127,7 @@ namespace QuixStreams.Streaming
         }
 
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive non-quixstreams incoming messages 
+        /// Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages. 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
@@ -144,7 +144,7 @@ namespace QuixStreams.Streaming
         }
 
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive non-quixstreams incoming messages 
+        /// Gets a topic producer capable of publishing non-quixstreams messages. 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
@@ -158,7 +158,7 @@ namespace QuixStreams.Streaming
         }
         
         /// <summary>
-        /// Gets a topic producer to publish stream messages 
+        /// Gets a topic producer capable of publishing stream messages.
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>

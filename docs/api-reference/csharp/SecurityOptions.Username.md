@@ -3,7 +3,7 @@
 
 ## SecurityOptions.Username Property
 
-SASL username.
+The username for SASL authentication.
 
 ```csharp
 public string Username { get; set; }

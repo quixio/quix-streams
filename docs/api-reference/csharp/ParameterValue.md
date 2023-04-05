@@ -9,13 +9,16 @@ Represents a single parameter value of either numeric, string or binary type
 public readonly struct ParameterValue
 ```
 
+| Fields | |
+| :--- | :--- |
+| [Type](ParameterValue.Type.md 'QuixStreams.Streaming.Models.ParameterValue.Type') | Gets the type of value, which is numeric, string or binary if set, else empty |
+
 | Properties | |
 | :--- | :--- |
 | [BinaryValue](ParameterValue.BinaryValue.md 'QuixStreams.Streaming.Models.ParameterValue.BinaryValue') | The binary value of the parameter |
 | [NumericValue](ParameterValue.NumericValue.md 'QuixStreams.Streaming.Models.ParameterValue.NumericValue') | The numeric value of the parameter. |
 | [ParameterId](ParameterValue.ParameterId.md 'QuixStreams.Streaming.Models.ParameterValue.ParameterId') | Gets the Parameter Id of the parameter |
 | [StringValue](ParameterValue.StringValue.md 'QuixStreams.Streaming.Models.ParameterValue.StringValue') | The string value of the parameter |
-| [Type](ParameterValue.Type.md 'QuixStreams.Streaming.Models.ParameterValue.Type') | Gets the type of value, which is numeric, string or binary if set, else empty |
 | [Value](ParameterValue.Value.md 'QuixStreams.Streaming.Models.ParameterValue.Value') | Gets the underlying value |
 
 | Operators | |

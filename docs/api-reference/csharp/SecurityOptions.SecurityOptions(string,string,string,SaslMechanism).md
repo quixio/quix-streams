@@ -14,7 +14,7 @@ public SecurityOptions(string sslCertificates, string username, string password,
 
 `sslCertificates` [System.String](https://docs.microsoft.com/en-us/dotnet/api/System.String 'System.String')
 
-The folder/file that contains the certificate authority certificate(s) to validate the ssl connection. Example: "./certificates/ca.cert"
+The path to the folder or file containing the certificate authority certificate(s) to validate the ssl connection. Example: "./certificates/ca.cert"
 
 <a name='QuixStreams.Streaming.Configuration.SecurityOptions.SecurityOptions(string,string,string,QuixStreams.Streaming.Configuration.SaslMechanism).username'></a>
 
@@ -32,4 +32,4 @@ The password for the SASL authentication
 
 `saslMechanism` [SaslMechanism](SaslMechanism.md 'QuixStreams.Streaming.Configuration.SaslMechanism')
 
-The SASL mechanism to use
+The SASL mechanism to use. Defaulting to ScramSha256

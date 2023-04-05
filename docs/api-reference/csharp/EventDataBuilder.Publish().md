@@ -3,7 +3,7 @@
 
 ## EventDataBuilder.Publish() Method
 
-Writes the events
+Publish the events
 
 ```csharp
 public void Publish();

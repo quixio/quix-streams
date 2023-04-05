@@ -5,7 +5,7 @@ from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 
 class NetReadOnlyList(object):
     """
-        Experimental. Acts as a proxy between a .net collection and a python list. Useful if .net collection is observable and reacts to changes
+    Experimental. Acts as a proxy between a .net collection and a python list. Useful if .net collection is observable and reacts to changes
     """
 
     @staticmethod
@@ -78,7 +78,7 @@ class NetReadOnlyList(object):
 
 class NetList(NetReadOnlyList):
     """
-        Experimental. Acts as a proxy between a .net collection and a python list. Useful if .net collection is observable and reacts to changes
+    Experimental. Acts as a proxy between a .net collection and a python list. Useful if .net collection is observable and reacts to changes
     """
 
     def __init__(self, net_pointer, converter_to_python=None, converter_from_python=None):
@@ -87,7 +87,7 @@ class NetList(NetReadOnlyList):
     @staticmethod
     def constructor_for_string(net_pointer=None):
         """
-            Creates an empty dotnet list for strings  if no pointer provided, else wraps in NetDict with string converters
+        Creates an empty dotnet list for strings  if no pointer provided, else wraps in NetDict with string converters
         """
 
         if net_pointer is None:

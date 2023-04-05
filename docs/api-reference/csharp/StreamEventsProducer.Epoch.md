@@ -3,7 +3,7 @@
 
 ## StreamEventsProducer.Epoch Property
 
-Default Epoch used for Timestamp event values. Datetime added on top of all the Timestamps.
+Default epoch used for Timestamp event values. Datetime added on top of all the Timestamps.
 
 ```csharp
 public System.DateTime Epoch { get; set; }

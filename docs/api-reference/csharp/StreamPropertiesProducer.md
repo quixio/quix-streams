@@ -3,8 +3,8 @@
 
 ## StreamPropertiesProducer Class
 
-Properties and Metadata of the stream.  
-All the changes of these properties will be streamed and persisted to the platform.
+Represents properties and metadata of the stream.  
+All changes to these properties are automatically published to the underlying stream.
 
 ```csharp
 public class StreamPropertiesProducer :
@@ -22,7 +22,7 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | [Metadata](StreamPropertiesProducer.Metadata.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.Metadata') | Metadata of the stream. |
 | [Name](StreamPropertiesProducer.Name.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.Name') | Name of the stream. |
 | [Parents](StreamPropertiesProducer.Parents.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.Parents') | List of Stream Ids of the Parent streams |
-| [TimeOfRecording](StreamPropertiesProducer.TimeOfRecording.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.TimeOfRecording') | Date Time of recording of the stream. Commonly set to Datetime.UtcNow. |
+| [TimeOfRecording](StreamPropertiesProducer.TimeOfRecording.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer.TimeOfRecording') | Date Time of stream recording. Commonly set to Datetime.UtcNow. |
 
 | Methods | |
 | :--- | :--- |

@@ -12,7 +12,7 @@ using QuixStreams.Streaming.Raw;
 namespace QuixStreams.Streaming
 {
     /// <summary>
-    /// Helper class to handle default streaming behaviors and handle automatic resource cleanup on shutdown
+    /// Provides utilities to handle default streaming behaviors and automatic resource cleanup on shutdown.
     /// </summary>
     public static class App
     {

@@ -6,7 +6,7 @@ using QuixStreams.Transport.Kafka;
 namespace QuixStreams.Streaming
 {
     /// <summary>
-    /// Implementation of <see cref="ITopicProducer"/> to write outgoing streams
+    /// Implementation of <see cref="ITopicProducer"/> to produce outgoing streams
     /// </summary>
     public class TopicProducer : ITopicProducerInternal
     {
@@ -43,7 +43,7 @@ namespace QuixStreams.Streaming
 
             if (!this.streams.TryAdd(streamProducer.StreamId, new Lazy<IStreamProducer>(() => streamProducer)))
             {
-                throw new Exception($"A stream with id '{streamProducer.StreamId}' already exists in the managed list of streams of the Output topic.");
+                throw new Exception($"A stream with id '{streamProducer.StreamId}' already exists in the managed list of streams of the Topic producer.");
             }
 
             return streamProducer;
@@ -54,7 +54,7 @@ namespace QuixStreams.Streaming
         {
             var stream = this.streams.AddOrUpdate(streamId, 
                 (id) => new Lazy<IStreamProducer>(() => new StreamProducer(this, createKafkaProducer, streamId)),
-                (id, s) => throw new Exception($"A stream with id '{streamId}' already exists in the managed list of streams of the Output topic."));
+                (id, s) => throw new Exception($"A stream with id '{streamId}' already exists in the managed list of streams of the Topic producer."));
 
             return stream.Value;
         }

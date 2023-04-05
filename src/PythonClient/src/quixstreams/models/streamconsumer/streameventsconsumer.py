@@ -14,16 +14,18 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamConsumer.StreamEventsCon
 
 @nativedecorator
 class StreamEventsConsumer(object):
+    """
+    Consumer for streams, which raises EventData and EventDefinitions related messages
+    """
 
     def __init__(self, stream_consumer, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of StreamEventsConsumer.
-            NOTE: Do not initialize this class manually, use StreamConsumer.events to access an instance of it
+        Initializes a new instance of StreamEventsConsumer.
+        NOTE: Do not initialize this class manually, use StreamConsumer.events to access an instance of it
 
-            Parameters:
-
-            stream_consumer: The stream the buffer is created for
-            net_pointer (.net object): Pointer to an instance of a .net StreamEventsConsumer
+        Args:
+            stream_consumer: The Stream consumer which owns this stream event consumer
+            net_pointer: Pointer to an instance of a .net StreamEventsConsumer
         """
         if net_pointer is None:
             raise Exception("StreamEventsConsumer is none")
@@ -46,14 +48,21 @@ class StreamEventsConsumer(object):
     @property
     def on_data_received(self) -> Callable[['StreamConsumer', EventData], None]:
         """
-        Gets the handler for when the stream receives event. First parameter is the stream the event is received for, second is the event.
+        Gets the handler for when an events data package is received for the stream.
+
+        Returns:
+            Callable[['StreamConsumer', EventData], None]:
+                The first parameter is the stream the event is received for. The second is the event.
         """
         return self._on_data_received
 
     @on_data_received.setter
     def on_data_received(self, value: Callable[['StreamConsumer', EventData], None]) -> None:
         """
-        Sets the handler for when the stream receives event. First parameter is the stream the event is received for, second is the event.
+        Sets the handler for when an events data package is received for the stream.
+
+        Args:
+            value: The first parameter is the stream the event is received for. The second is the event.
         """
         self._on_data_received = value
         if self._on_data_received_ref is None:
@@ -80,18 +89,26 @@ class StreamEventsConsumer(object):
     @property
     def on_definitions_changed(self) -> Callable[['StreamConsumer'], None]:
         """
-        Gets the handler for when the stream definitions change. First parameter is the stream the event definitions changed for.
+        Gets the handler for event definitions have changed for the stream.
+
+        Returns:
+            Callable[['StreamConsumer'], None]:
+                The first parameter is the stream the event definitions changed for.
         """
         return self._on_definitions_changed
 
     @on_definitions_changed.setter
     def on_definitions_changed(self, value: Callable[['StreamConsumer'], None]) -> None:
         """
-        Sets the handler for when the stream definitions change. First parameter is the stream the event definitions changed for.
+        Sets the handler for event definitions have changed for the stream.
+
+        Args:
+            value: The first parameter is the stream the event definitions changed for.
         """
         self._on_definitions_changed = value
         if self._on_definitions_changed_ref is None:
-            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(self._on_definitions_changed_wrapper)
+            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(
+                self._on_definitions_changed_wrapper)
 
     def _on_definitions_changed_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -111,7 +128,7 @@ class StreamEventsConsumer(object):
 
     @property
     def definitions(self) -> List[EventDefinition]:
-        """ Gets the latest set of event definitions """
+        """Gets the latest set of event definitions."""
 
         try:
             defs = self._interop.get_Definitions()

@@ -9,7 +9,7 @@ using QuixStreams.Telemetry.Models.Utility;
 namespace QuixStreams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// Helper class for writing <see cref="ParameterDefinition"/> and <see cref="TimeseriesData"/>
+    /// Helper class for producing <see cref="ParameterDefinition"/> and <see cref="TimeseriesData"/>
     /// </summary>
     public class StreamTimeseriesProducer : IDisposable
     {
@@ -28,8 +28,8 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Initializes a new instance of <see cref="StreamTimeseriesProducer"/>
         /// </summary>
-        /// <param name="topicProducer">The topic producer to publish to with</param>
-        /// <param name="streamProducer">Stream writer owner</param>
+        /// <param name="topicProducer">The topic producer which owns the stream producer</param>
+        /// <param name="streamProducer">The Stream producer which owns this stream timeseries producer</param>
         internal StreamTimeseriesProducer(ITopicProducer topicProducer, IStreamProducerInternal streamProducer)
         {
             this.streamProducer = streamProducer;
@@ -45,14 +45,14 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Gets the buffer for writing timeseries data
+        /// Gets the buffer for producing timeseries data
         /// </summary>
         public TimeseriesBufferProducer Buffer { get;  }
 
         /// <summary>
-        /// Write data to stream without using Buffer
+        /// Publish data to stream without any buffering
         /// </summary>
-        /// <param name="data">Timeseries data to write</param>
+        /// <param name="data">Timeseries data to publish</param>
         public void Publish(TimeseriesData data)
         {
             if (isDisposed)
@@ -75,9 +75,9 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Write data timeseries data raw directly to stream
+        /// Publish data in TimeseriesDataRaw format without any buffering
         /// </summary>
-        /// <param name="data">Timeseries data to write</param>
+        /// <param name="data">Timeseries data to publish</param>
         public void Publish(QuixStreams.Telemetry.Models.TimeseriesDataRaw data)
         {
             if (isDisposed)
@@ -89,7 +89,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
             if (epochDiff == 0)
             {
-                // No epoch modification needed >> directly write to the stream
+                // No epoch modification needed >> directly publish to the stream
                 this.streamProducer.Publish(data);
                 return;
             }
@@ -208,7 +208,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Immediately writes the timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either
+        /// Immediately publish timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either
         /// </summary>
         public void Flush()
         {

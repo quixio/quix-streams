@@ -3,7 +3,7 @@
 
 ## StreamEventsConsumer Class
 
-Helper class for read [QuixStreams.Telemetry.Models.EventDefinitions](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Telemetry.Models.EventDefinitions 'QuixStreams.Telemetry.Models.EventDefinitions') and [EventData](EventData.md 'QuixStreams.Streaming.Models.EventData')
+Consumer for streams, which raises [EventData](EventData.md 'QuixStreams.Streaming.Models.EventData') and [QuixStreams.Telemetry.Models.EventDefinitions](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Telemetry.Models.EventDefinitions 'QuixStreams.Telemetry.Models.EventDefinitions') related messages
 
 ```csharp
 public class StreamEventsConsumer :
@@ -21,4 +21,4 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | Events | |
 | :--- | :--- |
 | [OnDataReceived](StreamEventsConsumer.OnDataReceived.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.OnDataReceived') | Raised when an events data package is received for the stream |
-| [OnDefinitionsChanged](StreamEventsConsumer.OnDefinitionsChanged.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.OnDefinitionsChanged') | Raised when the even definitions have changed for the stream.<br/>See [Definitions](StreamEventsConsumer.Definitions.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.Definitions') for the latest set of event definitions |
+| [OnDefinitionsChanged](StreamEventsConsumer.OnDefinitionsChanged.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.OnDefinitionsChanged') | Raised when the event definitions have changed for the stream.<br/>See [Definitions](StreamEventsConsumer.Definitions.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.Definitions') for the latest set of event definitions |

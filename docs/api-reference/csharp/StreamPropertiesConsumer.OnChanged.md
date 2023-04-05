@@ -3,7 +3,7 @@
 
 ## StreamPropertiesConsumer.OnChanged Event
 
-Raised when the stream properties have changed
+Raised when the stream properties change
 
 ```csharp
 public event EventHandler<StreamPropertiesChangedEventArgs> OnChanged;

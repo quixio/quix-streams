@@ -6,7 +6,7 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models.StreamConsumer
 {
     /// <summary>
-    /// Helper class for reader <see cref="ParameterDefinitions"/> and <see cref="TimeseriesData"/>
+    /// Consumer for streams, which raises <see cref="TimeseriesData"/> and <see cref="ParameterDefinitions"/> related messages
     /// </summary>
     public class StreamTimeseriesConsumer : IDisposable
     {
@@ -16,8 +16,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// <summary>
         /// Initializes a new instance of <see cref="StreamTimeseriesConsumer"/>
         /// </summary>
-        /// <param name="topicConsumer">The topic the stream to what this reader belongs to</param>
-        /// <param name="streamConsumer">Stream reader owner</param>
+        /// <param name="topicConsumer">The topic consumer which owns the stream consumer</param>
+        /// <param name="streamConsumer">The Stream consumer which owns this stream event consumer</param>
         internal StreamTimeseriesConsumer(ITopicConsumer topicConsumer, IStreamConsumerInternal streamConsumer)
         {
             this.topicConsumer = topicConsumer;
@@ -37,11 +37,11 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         }
 
         /// <summary>
-        /// Create a new Parameters buffer for reading data
+        /// Creates a new buffer for reading data
         /// </summary>
-        /// <param name="bufferConfiguration">Configuration of the buffer</param>
-        /// <param name="parametersFilter">List of parameters to filter</param>
-        /// <returns>Parameters reading buffer</returns>
+        /// <param name="bufferConfiguration">An optional TimeseriesBufferConfiguration</param>
+        /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only those parameters will be available through this buffer</param>
+        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise OnDataReceived event when new data is consumed</returns>
         public TimeseriesBufferConsumer CreateBuffer(TimeseriesBufferConfiguration bufferConfiguration = null, params string[] parametersFilter)
         {
             var buffer = new TimeseriesBufferConsumer(this.topicConsumer, this.streamConsumer, bufferConfiguration, parametersFilter);
@@ -51,10 +51,10 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         }
 
         /// <summary>
-        /// Create a new Parameters buffer for reading data
+        /// Creates a new buffer for reading data
         /// </summary>
-        /// <param name="parametersFilter">List of parameters to filter</param>
-        /// <returns>Parameters reading buffer</returns>
+        /// <param name="parametersFilter">Zero or more parameter identifiers to filter as a whitelist. If provided, only those parameters will be available through this buffer</param>
+        /// <returns><see cref="TimeseriesBufferConsumer"/> which will raise OnDataReceived event when new data is consumed</returns>
         public TimeseriesBufferConsumer CreateBuffer(params string[] parametersFilter)
         {
             var buffer = new TimeseriesBufferConsumer(this.topicConsumer, this.streamConsumer, null, parametersFilter);
@@ -70,19 +70,19 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         public event EventHandler<ParameterDefinitionsChangedEventArgs> OnDefinitionsChanged;
 
         /// <summary>
-        /// Event raised when data is available to read (without buffering)
-        /// This event does not use Buffers and data will be raised as they arrive without any processing.
+        /// Event raised when data is received (without buffering)
+        /// This event does not use Buffers, and data will be raised as they arrive without any processing.
         /// </summary>
         public event EventHandler<TimeseriesDataReadEventArgs> OnDataReceived;
 
         /// <summary>
         /// Event raised when data is received (without buffering) in raw transport format
-        /// This event does not use Buffers and data will be raised as they arrive without any processing.
+        /// This event does not use Buffers, and data will be raised as they arrive without any processing.
         /// </summary>
         public event EventHandler<TimeseriesDataRawReadEventArgs> OnRawReceived;
 
         /// <summary>
-        /// Gets the latest set of event definitions
+        /// Gets the latest set of parameter definitions
         /// </summary>
         public List<ParameterDefinition> Definitions { get; private set; } = new List<ParameterDefinition>();
 

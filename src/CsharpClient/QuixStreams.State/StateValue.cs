@@ -3,7 +3,7 @@
 namespace QuixStreams.State
 {
     /// <summary>
-    /// The boxing value for all options which can be stored inside the storage
+    /// A wrapper class for values that can be stored inside the storage.
     /// </summary>
     public class StateValue : IEquatable<StateValue>
     {

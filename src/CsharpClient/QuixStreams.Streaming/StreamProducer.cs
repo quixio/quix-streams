@@ -14,7 +14,7 @@ using QuixStreams.Telemetry.Models.Utility;
 namespace QuixStreams.Streaming
 {
     /// <summary>
-    /// Stream writer interface. Stands for a new stream that we want to send to the platform.
+    /// Stream producer interface. Stands for a new stream that we want to send to the platform.
     /// It provides you helper properties to stream data like parameter values, events, definitions and all the information you can persist to the platform.
     /// </summary>
     internal class StreamProducer: StreamPipeline, IStreamProducerInternal
@@ -43,8 +43,8 @@ namespace QuixStreams.Streaming
             :base(streamId)
         {
             // Modifiers
-            var writer = createKafkaProducer(StreamId);
-            writer.OnWriteException += (s, e) =>
+            var producer = createKafkaProducer(StreamId);
+            producer.OnWriteException += (s, e) =>
             {
                 if (this.OnWriteException == null)
                 {
@@ -55,9 +55,9 @@ namespace QuixStreams.Streaming
                     this.OnWriteException.Invoke(this, e);
                 }
             };
-            this.AddComponent(writer);
+            this.AddComponent(producer);
 
-            // Managed writers
+            // Managed producers
             this.streamPropertiesProducer = new StreamPropertiesProducer(this);
             this.streamTimeseriesProducer = new StreamTimeseriesProducer(topicProducer, this);
             this.streamEventsProducer = new StreamEventsProducer(this);
@@ -229,10 +229,10 @@ namespace QuixStreams.Streaming
             {
                 CheckIfClosed();
 
-                // Remove the stream from managed list of streams of the Output topic
+                // Remove the stream from managed list of streams of the Topic producer
                 this.topicProducer.RemoveStream(this.StreamId);
 
-                // Flush pending managed writers
+                // Flush pending managed producers
                 this.streamPropertiesProducer.Dispose();
                 this.streamTimeseriesProducer.Dispose();
                 this.streamEventsProducer.Dispose();

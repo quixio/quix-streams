@@ -3,7 +3,7 @@
 
 ## SecurityOptions Class
 
-Kafka security option for configuring SSL encryption with SASL authentication
+A class representing security options for configuring SSL encryption with SASL authentication in Kafka.
 
 ```csharp
 public class SecurityOptions
@@ -18,9 +18,9 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Properties | |
 | :--- | :--- |
-| [Password](SecurityOptions.Password.md 'QuixStreams.Streaming.Configuration.SecurityOptions.Password') | SASL password |
-| [SaslMechanism](SecurityOptions.SaslMechanism.md 'QuixStreams.Streaming.Configuration.SecurityOptions.SaslMechanism') | The Sasl mechanism to use |
-| [SslCertificates](SecurityOptions.SslCertificates.md 'QuixStreams.Streaming.Configuration.SecurityOptions.SslCertificates') | Folder/file that contains the certificate authority certificate(s) to validate the ssl connection. |
+| [Password](SecurityOptions.Password.md 'QuixStreams.Streaming.Configuration.SecurityOptions.Password') | The password for SASL authentication |
+| [SaslMechanism](SecurityOptions.SaslMechanism.md 'QuixStreams.Streaming.Configuration.SecurityOptions.SaslMechanism') | The SASL mechanism to use. |
+| [SslCertificates](SecurityOptions.SslCertificates.md 'QuixStreams.Streaming.Configuration.SecurityOptions.SslCertificates') | The path to the folder or file containing the certificate authority certificate(s) to validate the ssl connection. |
+| [Username](SecurityOptions.Username.md 'QuixStreams.Streaming.Configuration.SecurityOptions.Username') | The username for SASL authentication. |
 | [UseSasl](SecurityOptions.UseSasl.md 'QuixStreams.Streaming.Configuration.SecurityOptions.UseSasl') | Use authentication |
 | [UseSsl](SecurityOptions.UseSsl.md 'QuixStreams.Streaming.Configuration.SecurityOptions.UseSsl') | Use SSL |
-| [Username](SecurityOptions.Username.md 'QuixStreams.Streaming.Configuration.SecurityOptions.Username') | SASL username. |

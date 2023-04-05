@@ -1,7 +1,7 @@
 import ctypes
 import sys
 import traceback
-from typing import Callable
+from typing import Any, Callable
 
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
@@ -18,15 +18,19 @@ from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClos
 @nativedecorator
 class StreamConsumer(object):
     """
-        Handles consuming stream from a topic
+    Handles consuming stream from a topic.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p, topic_consumer: 'TopicConsumer', on_close_cb_always: Callable[['StreamConsumer'], None]):
         """
         Initializes a new instance of StreamConsumer.
-        NOTE: Do not initialize this class manually, use StreamingClient.on_stream_received to read streams
-        topic_consumer: The topic consumer the stream consumer is created by
-        :param net_pointer: Pointer to an instance of a .net StreamConsumer
+
+        NOTE: Do not initialize this class manually, TopicProducer automatically creates this when a new stream is received.
+
+        Args:
+            net_pointer: Pointer to an instance of a .NET StreamConsumer.
+            topic_consumer: The topic consumer which owns the stream consumer.
+            on_close_cb_always: The callback function to be executed when the stream is closed.
         """
         self._interop = sci(net_pointer)
         self._topic = topic_consumer
@@ -72,7 +76,10 @@ class StreamConsumer(object):
     @property
     def topic(self) -> 'TopicConsumer':
         """
-        Gets the topic the stream was raised for
+        Gets the topic the stream was raised for.
+
+        Returns:
+            TopicConsumer: The topic consumer instance associated with the stream.
         """
         return self._topic
 
@@ -80,14 +87,22 @@ class StreamConsumer(object):
     @property
     def on_stream_closed(self) -> Callable[['StreamConsumer', 'StreamEndType'], None]:
         """
-        Gets the handler for when the stream closes. First parameter is the stream which closes, second is the close type.
-        """
+       Gets the handler for when the stream closes.
+
+       Returns:
+            Callable[['StreamConsumer', 'StreamEndType'], None]: The callback function to be executed when the stream closes.
+                The first parameter is the stream that closes, and the second is the close type.
+       """
         return self._on_stream_closed
 
     @on_stream_closed.setter
     def on_stream_closed(self, value: Callable[['StreamConsumer', 'StreamEndType'], None]) -> None:
         """
-        Sets the handler for when the stream closes. First parameter is the stream which closes, second is the close type.
+        Sets the handler for when the stream closes.
+
+        Args:
+            value: The new callback function to be executed when the stream closes.
+                The first parameter is the stream that closes, and the second is the close type.
         """
         self._on_stream_closed = value
         if self._on_stream_closed_ref is None:
@@ -114,16 +129,24 @@ class StreamConsumer(object):
 
     # region on_package_received
     @property
-    def on_package_received(self) -> Callable[['StreamConsumer', any], None]:
+    def on_package_received(self) -> Callable[['StreamConsumer', Any], None]:
         """
-        Gets the handler for when the stream receives a package of any type. First parameter is the stream which receives it, second is the package.
+        Gets the handler for when the stream receives a package of any type.
+
+        Returns:
+            Callable[['StreamConsumer', Any], None]: The callback function to be executed when the stream receives a package.
+                The first parameter is the stream that receives the package, and the second is the package itself.
         """
         return self._on_package_received
 
     @on_package_received.setter
-    def on_package_received(self, value: Callable[['StreamConsumer', any], None]) -> None:
+    def on_package_received(self, value: Callable[['StreamConsumer', Any], None]) -> None:
         """
-        Sets the handler for when the stream receives a package of any type. First parameter is the stream which receives it, second is the package.
+        Sets the handler for when the stream receives a package of any type.
+
+        Args:
+            value: The new callback function to be executed when the stream receives a package.
+                The first parameter is the stream that receives the package, and the second is the package itself.
         """
         # TODO
         raise Exception("StreamConsumer.on_package_received is not yet fully implemented")
@@ -149,8 +172,12 @@ class StreamConsumer(object):
 
     @property
     def stream_id(self) -> str:
-        """Get the id of the stream being read"""
+        """
+        Get the ID of the stream being consumed.
 
+        Returns:
+            str: The ID of the stream being consumed.
+        """
         if self._streamId is None:
             self._streamId = self._interop.get_StreamId()
         return self._streamId
@@ -158,7 +185,10 @@ class StreamConsumer(object):
     @property
     def properties(self) -> StreamPropertiesConsumer:
         """
-        Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values
+        Gets the consumer for accessing the properties and metadata of the stream.
+
+        Returns:
+            StreamPropertiesConsumer: The stream properties consumer instance.
         """
         if self._streamPropertiesConsumer is None:
             self._streamPropertiesConsumer = StreamPropertiesConsumer(self, self._interop.get_Properties())
@@ -167,7 +197,10 @@ class StreamConsumer(object):
     @property
     def events(self) -> StreamEventsConsumer:
         """
-        Gets the consumer for accessing event related information of the stream such as event definitions and values
+        Gets the consumer for accessing event related information of the stream such as event definitions and values.
+
+        Returns:
+            StreamEventsConsumer: The stream events consumer instance.
         """
         if self._streamEventsConsumer is None:
             self._streamEventsConsumer = StreamEventsConsumer(self, self._interop.get_Events())
@@ -176,11 +209,20 @@ class StreamConsumer(object):
     @property
     def timeseries(self) -> StreamTimeseriesConsumer:
         """
-        Gets the reader for accessing parameter related information of the stream such as definitions and parameter values
+        Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values.
+
+        Returns:
+            StreamTimeseriesConsumer: The stream timeseries consumer instance.
         """
         if self._streamTimeseriesConsumer is None:
             self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
         return self._streamTimeseriesConsumer
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """
+        Gets the associated .NET object pointer.
+
+        Returns:
+            ctypes.c_void_p: The .NET pointer
+        """
         return self._interop.get_interop_ptr__()

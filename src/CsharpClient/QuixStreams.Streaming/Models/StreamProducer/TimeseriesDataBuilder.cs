@@ -76,7 +76,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Adds tags to the values.
         /// </summary>
-        /// <param name="tags">Tags.</param>
+        /// <param name="tags">Tags to add.</param>
         public TimeseriesDataBuilder AddTags(IEnumerable<KeyValuePair<string, string>> tags)
         {
             this.timestamp.AddTags(tags);
@@ -85,7 +85,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Write the values
+        /// Publish the values
         /// </summary>
         public void Publish()
         {

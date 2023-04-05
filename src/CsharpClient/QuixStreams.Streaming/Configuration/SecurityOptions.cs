@@ -1,27 +1,27 @@
 ﻿namespace QuixStreams.Streaming.Configuration
 {
     /// <summary>
-    /// Kafka security option for configuring SSL encryption with SASL authentication
+    /// A class representing security options for configuring SSL encryption with SASL authentication in Kafka.
     /// </summary>
     public class SecurityOptions
     {
         /// <summary>
-        /// The Sasl mechanism to use
+        /// The SASL mechanism to use.
         /// </summary>
         public SaslMechanism? SaslMechanism { get; set; }
         
         /// <summary>
-        /// SASL username.
+        /// The username for SASL authentication.
         /// </summary>
         public string Username { get; set; }
         
         /// <summary>
-        /// SASL password
+        /// The password for SASL authentication
         /// </summary>
         public string Password { get; set; }
 
         /// <summary>
-        /// Folder/file that contains the certificate authority certificate(s) to validate the ssl connection.
+        /// The path to the folder or file containing the certificate authority certificate(s) to validate the ssl connection.
         /// </summary>
         public string SslCertificates { get; set; }
 
@@ -45,10 +45,10 @@
         /// <summary>
         /// Initializes a new instance of <see cref="SecurityOptions"/> that is configured for SSL encryption with SASL authentication
         /// </summary>
-        /// <param name="sslCertificates">The folder/file that contains the certificate authority certificate(s) to validate the ssl connection. Example: "./certificates/ca.cert"</param>
+        /// <param name="sslCertificates">The path to the folder or file containing the certificate authority certificate(s) to validate the ssl connection. Example: "./certificates/ca.cert"</param>
         /// <param name="username">The username for the SASL authentication</param>
         /// <param name="password">The password for the SASL authentication</param>
-        /// <param name="saslMechanism">The SASL mechanism to use</param>
+        /// <param name="saslMechanism">The SASL mechanism to use. Defaulting to ScramSha256</param>
         public SecurityOptions(string sslCertificates, string username, string password, SaslMechanism saslMechanism = Configuration.SaslMechanism.ScramSha256)
         {
             this.SslCertificates = sslCertificates;

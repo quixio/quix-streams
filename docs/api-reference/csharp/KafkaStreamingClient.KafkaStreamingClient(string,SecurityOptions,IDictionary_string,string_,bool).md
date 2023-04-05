@@ -3,7 +3,7 @@
 
 ## KafkaStreamingClient(string, SecurityOptions, IDictionary<string,string>, bool) Constructor
 
-Initializes a new instance of [KafkaStreamingClient](KafkaStreamingClient.md 'QuixStreams.Streaming.KafkaStreamingClient') that is capable of creating topic consumer and producers
+Initializes a new instance of [KafkaStreamingClient](KafkaStreamingClient.md 'QuixStreams.Streaming.KafkaStreamingClient')
 
 ```csharp
 public KafkaStreamingClient(string brokerAddress, QuixStreams.Streaming.Configuration.SecurityOptions securityOptions=null, System.Collections.Generic.IDictionary<string,string> properties=null, bool debug=false);

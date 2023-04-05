@@ -3,7 +3,7 @@
 
 ## StreamPropertiesConsumer.Parents Property
 
-List of Stream Ids of the Parent streams
+Gets the list of Stream IDs for the parent streams
 
 ```csharp
 public System.Collections.Generic.List<string> Parents { get; set; }

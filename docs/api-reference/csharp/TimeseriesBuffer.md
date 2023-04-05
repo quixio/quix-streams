@@ -3,7 +3,7 @@
 
 ## TimeseriesBuffer Class
 
-Class used to read from the stream in a buffered manner
+Represents a class used to consume and produce stream messages in a buffered manner.
 
 ```csharp
 public class TimeseriesBuffer :
