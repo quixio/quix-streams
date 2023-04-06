@@ -3,7 +3,7 @@
 
 ## QuixStreamingClient.GetTopicProducer(string) Method
 
-Gets a topic producer to publish stream messages
+Gets a topic producer capable of publishing stream messages.
 
 ```csharp
 public QuixStreams.Streaming.ITopicProducer GetTopicProducer(string topicIdOrName);

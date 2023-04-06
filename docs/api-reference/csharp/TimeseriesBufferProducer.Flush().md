@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferProducer.Flush() Method
 
-Immediately writes the data from the buffer without waiting for buffer condition to fulfill
+Immediately publishes the data from the buffer without waiting for the buffer condition to be fulfilled.
 
 ```csharp
 public void Flush();

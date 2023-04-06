@@ -18,7 +18,7 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | [Epoch](IStreamProducer.Epoch.md 'QuixStreams.Streaming.IStreamProducer.Epoch') | Default Epoch used for Parameters and Events |
 | [Events](IStreamProducer.Events.md 'QuixStreams.Streaming.IStreamProducer.Events') | Gets the producer for publishing event related information of the stream such as event definitions and values |
 | [Properties](IStreamProducer.Properties.md 'QuixStreams.Streaming.IStreamProducer.Properties') | Properties of the stream. The changes will automatically be sent after a slight delay |
-| [StreamId](IStreamProducer.StreamId.md 'QuixStreams.Streaming.IStreamProducer.StreamId') | Stream Id of the new stream created by the writer |
+| [StreamId](IStreamProducer.StreamId.md 'QuixStreams.Streaming.IStreamProducer.StreamId') | Stream Id of the new stream created by the producer |
 | [Timeseries](IStreamProducer.Timeseries.md 'QuixStreams.Streaming.IStreamProducer.Timeseries') | Gets the producer for publishing timeseries related information of the stream such as parameter definitions and values |
 
 | Methods | |
@@ -27,4 +27,4 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 
 | Events | |
 | :--- | :--- |
-| [OnWriteException](IStreamProducer.OnWriteException.md 'QuixStreams.Streaming.IStreamProducer.OnWriteException') | Event raised when an exception occurred during the writing processes |
+| [OnWriteException](IStreamProducer.OnWriteException.md 'QuixStreams.Streaming.IStreamProducer.OnWriteException') | Event raised when an exception occurred during the publishing processes |

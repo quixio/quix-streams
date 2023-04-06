@@ -18,18 +18,20 @@ from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.TimeseriesBuffe
 @nativedecorator
 class TimeseriesBufferProducer(TimeseriesBuffer):
     """
-        Class used to write to StreamProducer in a buffered manner
+    A class for producing timeseries data to a StreamProducer in a buffered manner.
     """
 
     def __init__(self, stream_producer, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of TimeseriesBufferProducer.
-            NOTE: Do not initialize this class manually, use StreamTimeseriesProducer.buffer to access an instance of it
+        Initializes a new instance of TimeseriesBufferProducer.
+        NOTE: Do not initialize this class manually, use StreamTimeseriesProducer.buffer to access an instance of it
 
-            Parameters:
-
-            stream_producer: The stream the buffer is created for
+        Args:
+            stream_producer: The Stream producer which owns this timeseries buffer producer
             net_pointer: Pointer to an instance of a .net TimeseriesBufferProducer
+
+        Raises:
+            Exception: If TimeseriesBufferProducer is None
         """
         if net_pointer is None:
             raise Exception("TimeseriesBufferProducer is none")
@@ -39,29 +41,50 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
 
     @property
     def default_tags(self) -> Dict[str, str]:
-        """Get default tags injected to all Parameters Values sent by the writer."""
+        """
+        Get default tags injected for all parameters values sent by this buffer.
+
+        Returns:
+            Dict[str, str]: A dictionary containing the default tags
+        """
         ptr = self._interop.get_DefaultTags()
         return NetDict.constructor_for_string_string(ptr)
 
     @property
     def epoch(self) -> datetime:
-        """Get the default epoch used for parameter values"""
+        """
+        Get the default epoch used for parameter values.
+
+        Returns:
+            datetime: The default epoch used for parameter values
+        """
         return dtc.datetime_to_python(self._interop.get_Epoch())
 
     @epoch.setter
     def epoch(self, value: datetime):
-        """Set the default epoch used for parameter values"""
+        """
+        Set the default epoch used for parameter values. Datetime added on top of all the Timestamps.
+
+        Args:
+            value: The default epoch to set for parameter values
+        """
         hptr = dtc.datetime_to_dotnet(value)
         self._interop.set_Epoch(hptr)
 
     def add_timestamp(self, time: Union[datetime, timedelta]) -> TimeseriesDataBuilder:
         """
         Start adding a new set of parameter values at the given timestamp.
-        :param time: The time to use for adding new parameter values.
-                     | datetime: The datetime to use for adding new parameter values. NOTE, epoch is not used
-                     | timedelta: The time since the default epoch to add the parameter values at
 
-        :return: TimeseriesDataBuilder
+        Args:
+            time: The time to use for adding new parameter values.
+                - datetime: The datetime to use for adding new parameter values. NOTE, epoch is not used
+                - timedelta: The time since the default epoch to add the parameter values at
+
+        Returns:
+            TimeseriesDataBuilder: A TimeseriesDataBuilder instance for adding parameter values
+
+        Raises:
+            ValueError: If 'time' is None or not an instance of datetime or timedelta
         """
         if time is None:
             raise ValueError("'time' must not be None")
@@ -79,50 +102,55 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
     def add_timestamp_nanoseconds(self, nanoseconds: int) -> TimeseriesDataBuilder:
         """
         Start adding a new set of parameter values at the given timestamp.
-        :param nanoseconds: The time in nanoseconds since the default epoch to add the parameter values at
-        :return: TimeseriesDataBuilder
+
+        Args:
+            nanoseconds: The time in nanoseconds since the default epoch to add the parameter values at
+
+        Returns:
+            TimeseriesDataBuilder: A TimeseriesDataBuilder instance for adding parameter values
         """
         return TimeseriesDataBuilder(self._interop.AddTimestampNanoseconds(nanoseconds))
 
     def flush(self):
-        """Immediately writes the data from the buffer without waiting for buffer condition to fulfill"""
+        """
+        Immediately publishes the data from the buffer without waiting for the buffer condition to be fulfilled.
+        """
         self._interop.Flush()
 
     def publish(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
         """
-            Publishes the given packet to the stream without any buffering.
+        Publish the provided timeseries packet to the buffer.
 
-            :param packet: The packet containing TimeseriesData or panda DataFrame
+        Args:
+            packet: The packet containing TimeseriesData or panda DataFrame
+                - packet type panda.DataFrame:
+                    * Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
+                    * Note 2: Tags should be prefixed by TAG__ or they will be treated as timeseries parameters
 
-            packet type panda.DataFrame
-                Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
+        Examples:
+            Send a panda data frame:
+                pdf = panda.DataFrame({'time': [1, 5],
+                'panda_param': [123.2, 5]})
 
-                Note 2: Tags should be prefixed by TAG__ or they will be treated as parameters
+                instance.publish(pdf)
 
-                Examples
-                -------
-                Send a panda data frame
-                     pdf = panda.DataFrame({'time': [1, 5],
-                     'panda_param': [123.2, 5]})
+            Send a panda data frame with multiple values:
+                pdf = panda.DataFrame({'time': [1, 5, 10],
+                'panda_param': [123.2, None, 12],
+                'panda_param2': ["val1", "val2", None]})
 
-                     instance.publish(pdf)
+                instance.publish(pdf)
 
-                Send a panda data frame with multiple values
-                     pdf = panda.DataFrame({'time': [1, 5, 10],
-                     'panda_param': [123.2, None, 12],
-                     'panda_param2': ["val1", "val2", None])
+            Send a panda data frame with tags:
+                pdf = panda.DataFrame({'time': [1, 5, 10],
+                'panda_param': [123.2, 5, 12],,
+                'TAG__Tag1': ["v1", 2, None],
+                'TAG__Tag2': [1, None, 3]})
 
-                     instance.publish(pdf)
+                instance.publish(pdf)
 
-                Send a panda data frame with tags
-                     pdf = panda.DataFrame({'time': [1, 5, 10],
-                     'panda_param': [123.2, 5, 12],,
-                     'TAG__Tag1': ["v1", 2, None],
-                     'TAG__Tag2': [1, None, 3]})
-
-                     instance.publish(pdf)
-
-            for other type examples see the specific type
+        Raises:
+            Exception: If the packet type is not supported
         """
         if isinstance(packet, TimeseriesData):
             self._interop.Publish(packet.get_net_pointer())
@@ -132,4 +160,4 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             with data:
                 self._interop.Publish(data.get_net_pointer())
             return
-        raise Exception("Write for the given type " + str(type(packet)) + " is not supported")
+        raise Exception("Publish for the given type " + str(type(packet)) + " is not supported")

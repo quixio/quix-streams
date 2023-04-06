@@ -3,7 +3,7 @@
 
 ## ParameterDefinitionBuilder.AddDefinition(string, string, string) Method
 
-Add new parameter definition to the [StreamPropertiesProducer](StreamPropertiesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamPropertiesProducer'). Configure it with the builder methods.
+Add new parameter definition to the [StreamTimeseriesProducer](StreamTimeseriesProducer.md 'QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer'). Configure it with the builder methods.
 
 ```csharp
 public QuixStreams.Streaming.Models.StreamProducer.ParameterDefinitionBuilder AddDefinition(string parameterId, string name=null, string description=null);

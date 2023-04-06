@@ -3,7 +3,7 @@
 
 ## StreamTimeseriesConsumer.Definitions Property
 
-Gets the latest set of event definitions
+Gets the latest set of parameter definitions
 
 ```csharp
 public System.Collections.Generic.List<QuixStreams.Streaming.Models.ParameterDefinition> Definitions { get; set; }

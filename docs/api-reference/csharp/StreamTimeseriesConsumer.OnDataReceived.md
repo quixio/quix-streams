@@ -3,8 +3,8 @@
 
 ## StreamTimeseriesConsumer.OnDataReceived Event
 
-Event raised when data is available to read (without buffering)  
-This event does not use Buffers and data will be raised as they arrive without any processing.
+Event raised when data is received (without buffering)  
+This event does not use Buffers, and data will be raised as they arrive without any processing.
 
 ```csharp
 public event EventHandler<TimeseriesDataReadEventArgs> OnDataReceived;

@@ -3,7 +3,7 @@
 
 ## StreamEventsConsumer.OnDefinitionsChanged Event
 
-Raised when the even definitions have changed for the stream.  
+Raised when the event definitions have changed for the stream.  
 See [Definitions](StreamEventsConsumer.Definitions.md 'QuixStreams.Streaming.Models.StreamConsumer.StreamEventsConsumer.Definitions') for the latest set of event definitions
 
 ```csharp

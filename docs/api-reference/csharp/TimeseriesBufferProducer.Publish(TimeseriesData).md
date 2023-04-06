@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferProducer.Publish(TimeseriesData) Method
 
-Write timeseries data to the buffer
+Publish the provided timeseries data to the buffer.
 
 ```csharp
 public void Publish(QuixStreams.Streaming.Models.TimeseriesData data);
@@ -14,4 +14,4 @@ public void Publish(QuixStreams.Streaming.Models.TimeseriesData data);
 
 `data` [TimeseriesData](TimeseriesData.md 'QuixStreams.Streaming.Models.TimeseriesData')
 
-Data to write
+Data to publish

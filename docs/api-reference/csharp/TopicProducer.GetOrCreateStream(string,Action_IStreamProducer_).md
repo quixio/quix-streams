@@ -20,10 +20,10 @@ The Id of the stream you want to get or create
 
 `onStreamCreated` [System.Action&lt;](https://docs.microsoft.com/en-us/dotnet/api/System.Action-1 'System.Action`1')[IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer')[&gt;](https://docs.microsoft.com/en-us/dotnet/api/System.Action-1 'System.Action`1')
 
-Callback executed when a new Stream is created in the Output topic because it doesn't exist.
+Callback executed when a new Stream is created in the topic producer because it doesn't exist.
 
 Implements [GetOrCreateStream(string, Action&lt;IStreamProducer&gt;)](ITopicProducer.GetOrCreateStream(string,Action_IStreamProducer_).md 'QuixStreams.Streaming.ITopicProducer.GetOrCreateStream(string, System.Action<QuixStreams.Streaming.IStreamProducer>)')
 
 #### Returns
 [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer')  
-Stream writer to allow the stream to push data to the platform.
+Stream producer to allow the stream to push data to the platform.

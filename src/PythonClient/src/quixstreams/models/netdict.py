@@ -9,7 +9,7 @@ from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 
 class ReadOnlyNetDict(object):
     """
-        Experimental. Acts as a proxy between a .net dictionary and a python dict. Useful if .net dictionary is observable and reacts to changes
+    Experimental. Acts as a proxy between a .net dictionary and a python dict. Useful if .net dictionary is observable and reacts to changes
     """
 
     @staticmethod
@@ -146,7 +146,7 @@ class NetDict(ReadOnlyNetDict):
     @staticmethod
     def constructor_for_string_string(net_pointer=None):
         """
-            Creates an empty dotnet list for strings if no pointer provided, else wraps in NetDict with string converters
+        Creates an empty dotnet list for strings if no pointer provided, else wraps in NetDict with string converters
         """
         if net_pointer is None:
             net_pointer = di.ConstructorForStringString()

@@ -3,7 +3,7 @@
 
 ## ITopicProducer.CreateStream(string) Method
 
-Creates a new stream and returns the related stream writer to operate it.
+Creates a new stream and returns the related stream producer to operate it.
 
 ```csharp
 QuixStreams.Streaming.IStreamProducer CreateStream(string streamId);
@@ -18,4 +18,4 @@ Stream Id of the created stream
 
 #### Returns
 [IStreamProducer](IStreamProducer.md 'QuixStreams.Streaming.IStreamProducer')  
-Stream writer to allow the stream to push data to the platform
+Stream producer to allow the stream to push data to the platform

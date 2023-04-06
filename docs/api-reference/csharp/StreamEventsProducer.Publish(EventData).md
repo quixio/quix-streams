@@ -3,7 +3,7 @@
 
 ## StreamEventsProducer.Publish(EventData) Method
 
-Write event into the stream
+Publish an event into the stream.
 
 ```csharp
 public void Publish(QuixStreams.Streaming.Models.EventData data);
@@ -14,4 +14,4 @@ public void Publish(QuixStreams.Streaming.Models.EventData data);
 
 `data` [EventData](EventData.md 'QuixStreams.Streaming.Models.EventData')
 
-Event data to write
+Event to publish

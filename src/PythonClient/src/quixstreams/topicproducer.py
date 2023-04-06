@@ -11,17 +11,17 @@ from .streamproducer import StreamProducer
 @nativedecorator
 class TopicProducer(object):
     """
-        Interface to operate with the streaming platform for publishing messages
+    Interface to operate with the streaming platform for publishing messages
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of TopicProducer.
-            NOTE: Do not initialize this class manually, use StreamingClient.create_output to create it
+        Initializes a new instance of TopicProducer.
 
-            Parameters:
+        NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_producer to create it.
 
-            net_object (.net object): The .net object representing a StreamingClient
+        Args:
+            net_pointer: The .net object representing a StreamingClient.
         """
 
         self._interop = tpi(net_pointer)
@@ -37,14 +37,22 @@ class TopicProducer(object):
     @property
     def on_disposed(self) -> Callable[['TopicProducer'], None]:
         """
-        Gets the handler for when the topic is disposed. First parameter is the topic which got disposed.
+        Gets the handler for when the topic is disposed.
+
+        Returns:
+            Callable[[TopicProducer], None]: The event handler for topic disposal.
+                The first parameter is the TopicProducer instance that got disposed.
         """
         return self._on_disposed
 
     @on_disposed.setter
     def on_disposed(self, value: Callable[['TopicProducer'], None]) -> None:
         """
-        Sets the handler for when the topic is disposed. First parameter is the topic which got disposed.
+        Sets the handler for when the topic is disposed.
+
+        Args:
+            value: The event handler for topic disposal.
+                The first parameter is the TopicProducer instance that got disposed.
         """
         self._on_disposed = value
         if self._on_disposed_ref is None:
@@ -68,25 +76,29 @@ class TopicProducer(object):
 
     def create_stream(self, stream_id: str = None) -> StreamProducer:
         """
-           Create new stream and returns the related stream writer to operate it.
+        Create a new stream and returns the related StreamProducer to operate it.
 
-           Parameters:
+        Args:
+            stream_id: Provide if you wish to overwrite the generated stream id. Useful if you wish
+            to always stream a certain source into the same stream.
 
-           stream_id (string): Optional, provide if you wish to overwrite the generated stream id. Useful if you wish
-           to always stream a certain source into the same stream
-       """
+        Returns:
+            StreamProducer: The created StreamProducer instance.
+        """
         if stream_id is None:
             return StreamProducer(self, self._interop.CreateStream())
         return StreamProducer(self, self._interop.CreateStream2(stream_id))
 
     def get_stream(self, stream_id: str) -> StreamProducer:
         """
-           Retrieves a stream that was previously created by this instance, if the stream is not closed.
+        Retrieves a stream that was previously created by this instance, if the stream is not closed.
 
-           Parameters:
+        Args:
+            stream_id: The id of the stream.
 
-           stream_id (string): The id of the stream
-       """
+        Returns:
+            StreamProducer: The retrieved StreamProducer instance or None if not found.
+        """
         if stream_id is None:
             return None
         result_hptr = self._interop.GetStream(stream_id)
@@ -97,13 +109,15 @@ class TopicProducer(object):
 
     def get_or_create_stream(self, stream_id: str, on_stream_created: Callable[[StreamProducer], None] = None) -> StreamProducer:
         """
-           Retrieves a stream that was previously created by this instance, if the stream is not closed, otherwise creates a new stream.
+        Retrieves a stream that was previously created by this instance if the stream is not closed, otherwise creates a new stream.
 
-           Parameters:
+        Args:
+            stream_id: The id of the stream you want to get or create.
+            on_stream_created: A callback function that takes a StreamProducer as a parameter.
 
-           stream_id (string): The Id of the stream you want to get or create
-           on_stream_created (Callable[[StreamProducer], None]): A void callback taking StreamProducer
-       """
+        Returns:
+            StreamProducer: The retrieved or created StreamProducer instance.
+        """
 
         if stream_id is None:
             return None

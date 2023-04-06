@@ -7,7 +7,7 @@ using QuixStreams.Telemetry.Models.Utility;
 namespace QuixStreams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// Class used to write time-series to <see cref="IStreamProducer"/> in a buffered manner
+    /// A class for producing timeseries data to an <see cref="IStreamProducer"/> in a buffered manner.
     /// </summary>
     public class TimeseriesBufferProducer: TimeseriesBuffer
     {
@@ -19,8 +19,8 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Initializes a new instance of <see cref="TimeseriesBufferProducer"/>
         /// </summary>
-        /// <param name="topicProducer">The topic producer to publish with</param>
-        /// <param name="streamProducer">Stream writer owner</param>
+        /// <param name="topicProducer">The topic producer which owns the stream producer</param>
+        /// <param name="streamProducer">The Stream producer which owns this timeseries buffer producer</param>
         /// <param name="bufferConfiguration">Configuration of the buffer</param>
         internal TimeseriesBufferProducer(ITopicProducer topicProducer, IStreamProducerInternal streamProducer, TimeseriesBufferConfiguration bufferConfiguration)
             : base(bufferConfiguration, null, true, true)
@@ -53,7 +53,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
         /// <summary>
         /// Starts adding a new set of parameter values at the given timestamp.
-        /// Note, <see cref="Epoch"/> is not used when invoking with <see cref="DateTime"/>
+        /// Note, <see cref="Epoch"/> is not used when invoking with a <see cref="DateTime"/>
         /// </summary>
         /// <param name="dateTime">The datetime to use for adding new parameter values</param>
         /// <returns>Timeseries data builder to add parameter values at the provided time</returns>
@@ -93,9 +93,9 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
 
         /// <summary>
-        /// Write timeseries data to the buffer
+        /// Publish the provided timeseries data to the buffer.
         /// </summary>
-        /// <param name="data">Data to write</param>
+        /// <param name="data">Data to publish</param>
         public void Publish(TimeseriesData data)
         {
             for(var index = 0; index < data.Timestamps.Count; index++)
@@ -127,7 +127,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         public Dictionary<string, string> DefaultTags { get; set; } = new Dictionary<string, string>();
 
         /// <summary>
-        /// Immediately writes the data from the buffer without waiting for buffer condition to fulfill
+        /// Immediately publishes the data from the buffer without waiting for the buffer condition to be fulfilled.
         /// </summary>
         public void Flush()
         {
@@ -145,7 +145,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Flushes internal buffers and disposes
+        /// Flushes the internal buffers and disposes the object.
         /// </summary>
         public override void Dispose()
         {

@@ -20,4 +20,4 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 | [AddTag(string, string)](EventDataBuilder.AddTag(string,string).md 'QuixStreams.Streaming.Models.StreamProducer.EventDataBuilder.AddTag(string, string)') | Adds a tag to the event values |
 | [AddTags(IEnumerable&lt;KeyValuePair&lt;string,string&gt;&gt;)](EventDataBuilder.AddTags(IEnumerable_KeyValuePair_string,string__).md 'QuixStreams.Streaming.Models.StreamProducer.EventDataBuilder.AddTags(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string,string>>)') | Adds tags to the event values. |
 | [AddValue(string, string)](EventDataBuilder.AddValue(string,string).md 'QuixStreams.Streaming.Models.StreamProducer.EventDataBuilder.AddValue(string, string)') | Adds new event value at the time the builder is created for |
-| [Publish()](EventDataBuilder.Publish().md 'QuixStreams.Streaming.Models.StreamProducer.EventDataBuilder.Publish()') | Writes the events |
+| [Publish()](EventDataBuilder.Publish().md 'QuixStreams.Streaming.Models.StreamProducer.EventDataBuilder.Publish()') | Publish the events |

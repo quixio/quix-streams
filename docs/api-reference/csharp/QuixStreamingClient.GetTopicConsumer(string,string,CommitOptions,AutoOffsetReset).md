@@ -3,7 +3,7 @@
 
 ## QuixStreamingClient.GetTopicConsumer(string, string, CommitOptions, AutoOffsetReset) Method
 
-Open an topic consumer capable of subscribing to receive incoming streams
+Gets a topic consumer capable of subscribing to receive incoming streams.
 
 ```csharp
 public QuixStreams.Streaming.ITopicConsumer GetTopicConsumer(string topicIdOrName, string consumerGroup=null, QuixStreams.Transport.Fw.CommitOptions options=null, QuixStreams.Telemetry.Kafka.AutoOffsetReset autoOffset=QuixStreams.Telemetry.Kafka.AutoOffsetReset.Latest);

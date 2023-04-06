@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferConsumer Class
 
-Class used to read from the stream in a buffered manner
+Represents a class for consuming data from a stream in a buffered manner.
 
 ```csharp
 public class TimeseriesBufferConsumer : QuixStreams.Streaming.Models.TimeseriesBuffer
@@ -13,4 +13,4 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Methods | |
 | :--- | :--- |
-| [Dispose()](TimeseriesBufferConsumer.Dispose().md 'QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer.Dispose()') | Dispose the buffer. It releases data out before the actual disposal. |
+| [Dispose()](TimeseriesBufferConsumer.Dispose().md 'QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer.Dispose()') | Disposes the resources used by the [TimeseriesBufferConsumer](TimeseriesBufferConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer') instance. |

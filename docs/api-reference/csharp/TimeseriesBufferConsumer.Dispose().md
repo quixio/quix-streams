@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferConsumer.Dispose() Method
 
-Dispose the buffer. It releases data out before the actual disposal.
+Disposes the resources used by the [TimeseriesBufferConsumer](TimeseriesBufferConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer') instance.
 
 ```csharp
 public override void Dispose();

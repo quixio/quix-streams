@@ -3,7 +3,7 @@
 
 ## StreamEventsProducer.Publish(ICollection<EventData>) Method
 
-Write events into the stream
+Publish events into the stream.
 
 ```csharp
 public void Publish(System.Collections.Generic.ICollection<QuixStreams.Streaming.Models.EventData> events);
@@ -14,4 +14,4 @@ public void Publish(System.Collections.Generic.ICollection<QuixStreams.Streaming
 
 `events` [System.Collections.Generic.ICollection&lt;](https://docs.microsoft.com/en-us/dotnet/api/System.Collections.Generic.ICollection-1 'System.Collections.Generic.ICollection`1')[EventData](EventData.md 'QuixStreams.Streaming.Models.EventData')[&gt;](https://docs.microsoft.com/en-us/dotnet/api/System.Collections.Generic.ICollection-1 'System.Collections.Generic.ICollection`1')
 
-Events to write
+Events to publish

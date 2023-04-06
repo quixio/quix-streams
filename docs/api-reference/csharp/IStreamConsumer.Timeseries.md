@@ -3,7 +3,7 @@
 
 ## IStreamConsumer.Timeseries Property
 
-Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values
+Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values.
 
 ```csharp
 QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer Timeseries { get; }

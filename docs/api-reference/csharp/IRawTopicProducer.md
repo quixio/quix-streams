@@ -3,7 +3,7 @@
 
 ## IRawTopicProducer Interface
 
-Interface to publish raw messages into a topic (capable to write non-quixstreams messages)
+Interface to publish raw messages into a topic (capable to producing non-quixstreams messages)
 
 ```csharp
 public interface IRawTopicProducer :

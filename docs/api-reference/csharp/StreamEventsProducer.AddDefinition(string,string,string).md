@@ -3,7 +3,7 @@
 
 ## StreamEventsProducer.AddDefinition(string, string, string) Method
 
-Adds new Event definition, to define properties like Name or Level, among others.
+Add new Event definition to define properties like Name or Level, among others.
 
 ```csharp
 public QuixStreams.Streaming.Models.StreamProducer.EventDefinitionBuilder AddDefinition(string eventId, string name=null, string description=null);

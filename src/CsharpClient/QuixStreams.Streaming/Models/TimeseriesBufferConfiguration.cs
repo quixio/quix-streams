@@ -3,7 +3,7 @@
 namespace QuixStreams.Streaming.Models
 {
     /// <summary>
-    /// Describes the configuration for parameter buffers
+    /// Describes the configuration for timeseries buffers
     /// </summary>
     public class TimeseriesBufferConfiguration
     {

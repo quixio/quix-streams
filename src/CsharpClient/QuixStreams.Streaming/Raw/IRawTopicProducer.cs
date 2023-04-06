@@ -3,7 +3,7 @@
 namespace QuixStreams.Streaming.Raw
 {
     /// <summary>
-    /// Interface to publish raw messages into a topic (capable to write non-quixstreams messages)
+    /// Interface to publish raw messages into a topic (capable to producing non-quixstreams messages)
     /// </summary>
     public interface IRawTopicProducer : IDisposable
     {

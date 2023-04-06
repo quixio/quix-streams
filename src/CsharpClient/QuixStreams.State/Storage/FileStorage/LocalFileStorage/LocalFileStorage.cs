@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 namespace QuixStreams.State.Storage.FileStorage.LocalFileStorage
 {
     /// <summary>
-    /// The directory storage containing the file storage for the single process access purposes
-    /// The locking is implemented via the in-memory mutex
+    /// A directory storage containing the file storage for single process access purposes.
+    /// Locking is implemented via in-memory mutex.
     /// </summary>
     public sealed class LocalFileStorage : BaseFileStorage
     {

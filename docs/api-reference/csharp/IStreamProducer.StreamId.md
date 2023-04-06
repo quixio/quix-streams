@@ -3,7 +3,7 @@
 
 ## IStreamProducer.StreamId Property
 
-Stream Id of the new stream created by the writer
+Stream Id of the new stream created by the producer
 
 ```csharp
 string StreamId { get; }

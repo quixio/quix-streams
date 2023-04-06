@@ -3,7 +3,7 @@
 
 ## QuixStreamingClient.GetRawTopicConsumer(string, string, Nullable<AutoOffsetReset>) Method
 
-Open an topic consumer capable of subscribing to receive non-quixstreams incoming messages
+Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages.
 
 ```csharp
 public QuixStreams.Streaming.Raw.IRawTopicConsumer GetRawTopicConsumer(string topicIdOrName, string consumerGroup=null, System.Nullable<QuixStreams.Telemetry.Kafka.AutoOffsetReset> autoOffset=null);

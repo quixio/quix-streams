@@ -3,7 +3,7 @@
 
 ## StreamTimeseriesConsumer.CreateBuffer(TimeseriesBufferConfiguration, string[]) Method
 
-Create a new Parameters buffer for reading data
+Creates a new buffer for reading data
 
 ```csharp
 public QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer CreateBuffer(QuixStreams.Streaming.Models.TimeseriesBufferConfiguration bufferConfiguration=null, params string[] parametersFilter);
@@ -14,14 +14,14 @@ public QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer Crea
 
 `bufferConfiguration` [TimeseriesBufferConfiguration](TimeseriesBufferConfiguration.md 'QuixStreams.Streaming.Models.TimeseriesBufferConfiguration')
 
-Configuration of the buffer
+An optional TimeseriesBufferConfiguration
 
 <a name='QuixStreams.Streaming.Models.StreamConsumer.StreamTimeseriesConsumer.CreateBuffer(QuixStreams.Streaming.Models.TimeseriesBufferConfiguration,string[]).parametersFilter'></a>
 
 `parametersFilter` [System.String](https://docs.microsoft.com/en-us/dotnet/api/System.String 'System.String')[[]](https://docs.microsoft.com/en-us/dotnet/api/System.Array 'System.Array')
 
-List of parameters to filter
+Zero or more parameter identifiers to filter as a whitelist. If provided, only those parameters will be available through this buffer
 
 #### Returns
 [TimeseriesBufferConsumer](TimeseriesBufferConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer')  
-Parameters reading buffer
+[TimeseriesBufferConsumer](TimeseriesBufferConsumer.md 'QuixStreams.Streaming.Models.StreamConsumer.TimeseriesBufferConsumer') which will raise OnDataReceived event when new data is consumed

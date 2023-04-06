@@ -3,7 +3,7 @@
 
 ## TopicConsumer Class
 
-Implementation of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer') to read incoming streams
+Implementation of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer') to consume incoming streams
 
 ```csharp
 public class TopicConsumer :

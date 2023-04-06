@@ -12,7 +12,7 @@ using QuixStreams.Transport.Fw;
 namespace QuixStreams.Streaming
 {
     /// <summary>
-    /// Streaming client for kafka
+    /// A Kafka streaming client capable of creating topic consumer and producers.
     /// </summary>
     public class KafkaStreamingClient
     {
@@ -21,7 +21,7 @@ namespace QuixStreams.Streaming
         private readonly Dictionary<string, string> brokerProperties;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="KafkaStreamingClient"/> that is capable of creating topic consumer and producers
+        /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
         /// <param name="brokerAddress">Address of Kafka cluster.</param>
         /// <param name="securityOptions">Optional security options.</param>
@@ -78,7 +78,7 @@ namespace QuixStreams.Streaming
         }
         
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive incoming streams
+        /// Gets a topic consumer capable of subscribing to receive incoming streams.
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
@@ -103,7 +103,7 @@ namespace QuixStreams.Streaming
         }
 
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive non-quixstreams incoming messages 
+        /// Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages. 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
@@ -119,7 +119,7 @@ namespace QuixStreams.Streaming
         }
 
         /// <summary>
-        /// Open an topic consumer capable of subscribing to receive non-quixstreams incoming messages  
+        /// Gets a topic producer capable of publishing non-quixstreams messages.  
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
@@ -132,7 +132,7 @@ namespace QuixStreams.Streaming
         }
         
         /// <summary>
-        /// Open an topic producer capable of publishing non-quixstreams messages 
+        /// Gets a topic producer capable of publishing stream messages. 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>

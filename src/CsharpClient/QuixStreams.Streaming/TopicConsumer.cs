@@ -7,7 +7,7 @@ using QuixStreams.Telemetry.Kafka;
 namespace QuixStreams.Streaming
 {
     /// <summary>
-    /// Implementation of <see cref="ITopicConsumer"/> to read incoming streams
+    /// Implementation of <see cref="ITopicConsumer"/> to consume incoming streams
     /// </summary>
     public class TopicConsumer : ITopicConsumer
     {

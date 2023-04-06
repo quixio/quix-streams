@@ -17,18 +17,16 @@ class ParameterValueType(Enum):
 
 @nativedecorator
 class ParameterValue(object):
-    """
-    Represents a single parameter value of either string or numeric type
-    """
+    """Represents a single parameter value of either numeric, string, or binary type."""
 
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
-            Initializes a new instance of ParameterValue.
+        Initializes a new instance of ParameterValue.
 
-            Parameters:
-
-            net_object (.net object): The .net object representing ParameterValue.
+        Args:
+            net_pointer: The .net object pointer representing ParameterValue.
         """
+
         if net_pointer is None:
             raise Exception("ParameterValue constructor should not be invoked without a .net pointer")
 
@@ -53,12 +51,17 @@ class ParameterValue(object):
 
     @property
     def numeric_value(self) -> float:
-        """Gets the numeric value of the parameter, if the underlying parameter is of numeric type"""
+        """Gets the numeric value of the parameter if the underlying parameter is of numeric type."""
         return self._numeric
 
     @numeric_value.setter
     def numeric_value(self, value: float):
-        """Sets the numeric value of the parameter and updates the type to numeric"""
+        """
+        Sets the numeric value of the parameter and updates the type to numeric.
+
+        Args:
+            value: The numeric value to set.
+        """
 
         if self._type != ParameterValueType.Numeric:
             self._type = ParameterValueType.Numeric
@@ -71,13 +74,18 @@ class ParameterValue(object):
 
     @property
     def string_value(self) -> str:
-        """Gets the string value of the parameter, if the underlying parameter is of string type"""
+        """Gets the string value of the parameter if the underlying parameter is of string type."""
 
         return self._string
 
     @string_value.setter
     def string_value(self, value: str):
-        """Sets the string value of the parameter and updates the type to string"""
+        """
+        Sets the string value of the parameter and updates the type to string.
+
+        Args:
+            value: The string value to set.
+        """
 
         if self._type != ParameterValueType.String:
             self._type = ParameterValueType.String
@@ -90,12 +98,17 @@ class ParameterValue(object):
 
     @property
     def binary_value(self) -> bytes:
-        """Gets the binary value of the parameter, if the underlying parameter is of binary type"""
+        """Gets the binary value of the parameter if the underlying parameter is of binary type."""
         return self._binary
 
     @binary_value.setter
     def binary_value(self, value: Union[bytearray, bytes]):
-        """Sets the binary value of the parameter and updates the type to binary"""
+        """
+        Sets the binary value of the parameter and updates the type to binary.
+
+        Args:
+            value: The binary value to set.
+        """
 
         if self._type != ParameterValueType.Binary:
             self._type = ParameterValueType.Binary
@@ -110,15 +123,17 @@ class ParameterValue(object):
 
     @property
     def type(self) -> ParameterValueType:
-        """Gets the type of value, which is numeric or string if set, else empty"""
+        """Gets the type of value, which is numeric, string, binary if set, otherwise empty"""
 
         return self._type
 
     @property
     def value(self):
-        """Gets the underlying value"""
+        """Gets the underlying value."""
 
         return self._value
 
     def get_net_pointer(self) -> ctypes.c_void_p:
+        """Gets the associated .net object pointer."""
+
         return self._interop.get_interop_ptr__()

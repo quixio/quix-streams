@@ -5,8 +5,8 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models.StreamConsumer
 {
     /// <summary>
-    /// Properties and Metadata of the stream.
-    /// All the changes of these properties are populated to this class automatically
+    /// Represents properties and metadata of the stream.
+    /// All changes to these properties are automatically populated to this class.
     /// </summary>
     public class StreamPropertiesConsumer : IDisposable
     {
@@ -16,8 +16,8 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         /// <summary>
         /// Initializes a new instance of <see cref="StreamPropertiesConsumer"/>
         /// </summary>
-        /// <param name="topicConsumer">The topic the stream to what this reader belongs to</param>
-        /// <param name="streamConsumer">Stream reader owner</param>
+        /// <param name="topicConsumer">The topic consumer which owns the stream consumer</param>
+        /// <param name="streamConsumer">The Stream consumer which owns this stream event consumer</param>
         internal StreamPropertiesConsumer(ITopicConsumer topicConsumer, IStreamConsumerInternal streamConsumer)
         {
             this.topicConsumer = topicConsumer;
@@ -27,7 +27,6 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.Parents = new List<string>();
 
             this.streamConsumer.OnStreamPropertiesChanged += OnStreamPropertiesChangedEventHandler;
-
         }
 
         private void OnStreamPropertiesChangedEventHandler(IStreamConsumer sender, StreamProperties streamProperties)
@@ -42,7 +41,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         }
 
         /// <summary>
-        /// Raised when the stream properties have changed
+        /// Raised when the stream properties change
         /// </summary>
         public event EventHandler<StreamPropertiesChangedEventArgs> OnChanged;
 
@@ -67,7 +66,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
         public Dictionary<string, string> Metadata { get; private set; }
 
         /// <summary>
-        /// List of Stream Ids of the Parent streams
+        /// Gets the list of Stream IDs for the parent streams
         /// </summary>
         public List<string> Parents { get; private set; }
 

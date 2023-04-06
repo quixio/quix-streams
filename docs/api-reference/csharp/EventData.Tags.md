@@ -3,7 +3,7 @@
 
 ## EventData.Tags Property
 
-Tags on that event. When key is not found, returns null
+Tags for the timestamp. If key is not found return null
 
 ```csharp
 public System.Collections.Generic.IDictionary<string,string> Tags { get; set; }

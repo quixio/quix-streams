@@ -3,7 +3,7 @@
 
 ## StreamTimeseriesProducer.Publish(TimeseriesData) Method
 
-Write data to stream without using Buffer
+Publish data to stream without any buffering
 
 ```csharp
 public void Publish(QuixStreams.Streaming.Models.TimeseriesData data);
@@ -14,4 +14,4 @@ public void Publish(QuixStreams.Streaming.Models.TimeseriesData data);
 
 `data` [TimeseriesData](TimeseriesData.md 'QuixStreams.Streaming.Models.TimeseriesData')
 
-Timeseries data to write
+Timeseries data to publish

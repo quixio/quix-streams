@@ -12,7 +12,7 @@ using QuixStreams.Telemetry.Models;
 namespace QuixStreams.Streaming.Models
 {
     /// <summary>
-    /// Class used to read from the stream in a buffered manner
+    /// Represents a class used to consume and produce stream messages in a buffered manner.
     /// </summary>
     public class TimeseriesBuffer: IDisposable
     {
@@ -28,7 +28,7 @@ namespace QuixStreams.Streaming.Models
         private Func<TimeseriesDataTimestamp, bool> filter = null;
         bool bufferingDisabled = true;
 
-        private string[] parametersFilter; // Filtered parameters for reading and writing 
+        private string[] parametersFilter; // Filtered parameters for consuming and producing 
         
         private HashSet<string> parametersFilterSet; // Contains same data as the parametersFilter just in form of HashSet
 

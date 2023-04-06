@@ -3,7 +3,7 @@
 
 ## SecurityOptions.SaslMechanism Property
 
-The Sasl mechanism to use
+The SASL mechanism to use.
 
 ```csharp
 public System.Nullable<QuixStreams.Streaming.Configuration.SaslMechanism> SaslMechanism { get; set; }

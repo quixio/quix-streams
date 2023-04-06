@@ -4,7 +4,7 @@
 
 | Classes | |
 | :--- | :--- |
-| [SecurityOptions](SecurityOptions.md 'QuixStreams.Streaming.Configuration.SecurityOptions') | Kafka security option for configuring SSL encryption with SASL authentication |
+| [SecurityOptions](SecurityOptions.md 'QuixStreams.Streaming.Configuration.SecurityOptions') | A class representing security options for configuring SSL encryption with SASL authentication in Kafka. |
 
 | Enums | |
 | :--- | :--- |

@@ -3,7 +3,7 @@
 
 ## TimeseriesBufferProducer.Dispose() Method
 
-Flushes internal buffers and disposes
+Flushes the internal buffers and disposes the object.
 
 ```csharp
 public override void Dispose();

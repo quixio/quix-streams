@@ -114,7 +114,7 @@ namespace QuixStreams.Streaming.Models
 
 
         /// <summary>
-        /// Tags on that event. When key is not found, returns null
+        /// Tags for the timestamp. If key is not found return null
         /// </summary>
         public IDictionary<string, string> Tags { get; private set; }
 

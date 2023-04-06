@@ -15,7 +15,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Initializes a new instance of <see cref="EventDefinitionBuilder"/>
         /// </summary>
-        /// <param name="streamEventsProducer">Events writer owner</param>
+        /// <param name="streamEventsProducer">Events producer owner</param>
         /// <param name="location">Location selected for the Event definition builder</param>
         /// <param name="properties">Events definition instance managed by the builder</param>
         public EventDefinitionBuilder(StreamEventsProducer streamEventsProducer, string location, QuixStreams.Telemetry.Models.EventDefinition properties = null)
@@ -60,7 +60,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// <summary>
         /// Add new Event definition, to define properties like Name or Level, among others.
         /// </summary>
-        /// <param name="eventId">Event Id. This must match the event id you use to Event values</param>
+        /// <param name="eventId">Event id. This must match the event id you use to Event values</param>
         /// <param name="name">Human friendly display name of the event</param>
         /// <param name="description">Description of the event</param>
         /// <returns>Event definition builder to define the event properties</returns>

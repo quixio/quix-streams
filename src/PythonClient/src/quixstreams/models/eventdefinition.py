@@ -28,12 +28,12 @@ class EventDefinition(object):
             """Gets the human friendly display name of the event"""
 
             self.level: EventLevel = ec.enum_to_another(interop.get_Level(), EventLevel)
-            """Gets the human friendly display name of the event"""
+            """Gets the level of the event"""
 
             self.custom_properties: str = interop.get_CustomProperties()
             """
             Gets the optional field for any custom properties that do not exist on the event.
-            For example this could be a json string, describing the optimal value range of this event
+            For example this could be a json string, describing all possible event values
             """
 
             self.description: str = interop.get_Description()

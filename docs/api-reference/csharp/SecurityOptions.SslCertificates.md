@@ -3,7 +3,7 @@
 
 ## SecurityOptions.SslCertificates Property
 
-Folder/file that contains the certificate authority certificate(s) to validate the ssl connection.
+The path to the folder or file containing the certificate authority certificate(s) to validate the ssl connection.
 
 ```csharp
 public string SslCertificates { get; set; }

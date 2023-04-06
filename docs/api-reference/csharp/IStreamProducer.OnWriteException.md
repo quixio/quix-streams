@@ -3,7 +3,7 @@
 
 ## IStreamProducer.OnWriteException Event
 
-Event raised when an exception occurred during the writing processes
+Event raised when an exception occurred during the publishing processes
 
 ```csharp
 event EventHandler<Exception> OnWriteException;
