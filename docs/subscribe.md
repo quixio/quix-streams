@@ -487,7 +487,7 @@ Then register the properties change handler:
     {
         streamConsumer.Timeseries.OnDataReceived += (sender, args) =>
         {
-            Console.WriteLine($"Data received");
+            Console.WriteLine("Data received");
         };
 
         streamConsumer.Properties.OnChanged += (sender, args) =>
@@ -525,12 +525,12 @@ It is possible to handle changes in [parameter definitions](./publish.md#paramet
     {
         streamConsumer.Events.OnDataReceived += (sender, args) =>
         {
-            Console.WriteLine($"Data received");
+            Console.WriteLine("Data received");
         };
 
         streamConsumer.Events.OnDefinitionsChanged += (sender, args) =>
         {
-            Console.WriteLine($"Definitions changed");
+            Console.WriteLine("Definitions changed");
         };
 
     };
