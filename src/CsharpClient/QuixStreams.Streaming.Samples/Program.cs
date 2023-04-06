@@ -23,13 +23,13 @@ namespace QuixStreams.Streaming.Model.Samples
             
             Logging.UpdateFactory(LogLevel.Debug);
 
-           // ExampleReadWriteMessages(cts.Token);
+           ExampleReadWriteMessages(cts.Token);
            //ExampleReadWriteMessagesV2(cts.Token);
             
            // ExampleReadWriteWithManualCommitMessages(cts.Token);
            // ExampleReadWriteMessagesWithTimeout(cts.Token);
 
-           ExampleReadWriteUsingQuixStreamingClient(cts.Token);
+           //ExampleReadWriteUsingQuixStreamingClient(cts.Token);
         }
 
         private static void ExampleReadWriteWithManualCommitMessages(in CancellationToken ctsToken)
@@ -50,7 +50,7 @@ namespace QuixStreams.Streaming.Model.Samples
             var stream = Guid.NewGuid().ToString();
             new WriteSample().Start(ctsToken, stream);
             var read = new ReadSample();
-            read.Start(stream);
+            /*read.Start(stream);
             try
             {
                 Task.Delay(-1, ctsToken).GetAwaiter().GetResult();
@@ -58,7 +58,9 @@ namespace QuixStreams.Streaming.Model.Samples
             catch
             {
             }
-            read.Stop();
+            read.Stop();*/
+            Thread.Sleep(5000);
+            cts.Cancel();
         }
         
         private static void ExampleReadWriteMessagesV2(in CancellationToken ctsToken)

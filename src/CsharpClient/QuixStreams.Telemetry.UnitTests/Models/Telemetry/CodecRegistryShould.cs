@@ -36,7 +36,7 @@ namespace QuixStreams.Telemetry.UnitTests.Models.Telemetry
         public void Register_ImprovedJsonTimeseriesData_ShouldRegisterAsExpected()
         {
             // Act
-            CodecRegistry.Register(CodecType.ImprovedJson);
+            CodecRegistry.Register(CodecType.HumanReadableSemiJsonWithBetterPerformance);
             
             // Assert
             var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));

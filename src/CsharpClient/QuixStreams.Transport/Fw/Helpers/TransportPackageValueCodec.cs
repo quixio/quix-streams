@@ -39,7 +39,9 @@ namespace QuixStreams.Transport.Fw.Helpers
         public static byte[] Serialize(TransportPackageValue transportPackageValue)
         {
             //we support only the serialization in the binary format
-            return TransportPackageValueCodecBinary.Serialize(transportPackageValue);
+            // TOGGLE HERE BETWEEN JSON AND BINARY
+            // return TransportPackageValueCodecBinary.Serialize(transportPackageValue);
+            return TransportPackageValueCodecJSON.Serialize(transportPackageValue);
         }
     }
 }

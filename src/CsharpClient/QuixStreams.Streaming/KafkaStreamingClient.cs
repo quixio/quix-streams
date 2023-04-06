@@ -20,6 +20,16 @@ namespace QuixStreams.Streaming
         private readonly string brokerAddress;
         private readonly Dictionary<string, string> brokerProperties;
 
+        static KafkaStreamingClient()
+        {
+            CodecRegistry.Register(CodecType.Json);
+            Transport.Fw.Helpers.MYBIGSWITCH("JSON");
+            
+            // OR
+            CodecRegistry.Register(CodecType.Protobuf);
+            Transport.Fw.Helpers.MYBIGSWITCH("BINARY");
+        }
+
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
@@ -73,8 +83,7 @@ namespace QuixStreams.Streaming
             }
 
             if (debug) this.brokerProperties["debug"] = "all";
-
-            CodecRegistry.Register(CodecType.Protobuf);
+            
         }
         
         /// <summary>

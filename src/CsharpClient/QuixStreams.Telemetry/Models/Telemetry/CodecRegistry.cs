@@ -70,7 +70,7 @@ namespace QuixStreams.Telemetry.Models
                         QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());   
                     }
                     break;
-                case CodecType.ImprovedJson:
+                case CodecType.HumanReadableSemiJsonWithBetterPerformance:
                     foreach (var modelKey in modelKeys)
                     {
                         if (typeof(TimeseriesDataRaw) == modelType)

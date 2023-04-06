@@ -15,7 +15,7 @@ namespace QuixStreams.Telemetry.Models
         /// <summary>
         /// Improved Json codecs where the resulting JSON might not be very human friendly, but still in JSON Format
         /// </summary>
-        ImprovedJson,
+        HumanReadableSemiJsonWithBetterPerformance,
         
         /// <summary>
         /// Protocol buffer format
