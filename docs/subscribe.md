@@ -246,7 +246,7 @@ topic_consumer.subscribe()
 
 ### Raw data format
 
-In addition to the `TimeseriesData` and pandas `DataFrame` formats, there is also the `TimeseriesDataRaw` format. You can use the `on_raw_received` event to handle this data format, as demonstrated in the following code:
+In addition to the `TimeseriesData` and pandas `DataFrame` formats (Python only), there is also the raw data format. You can use the `on_raw_received` callback (Python), or `OnRawRceived` event (C#) to handle this data format, as demonstrated in the following code:
 
 === "Python"
 
@@ -267,8 +267,13 @@ In addition to the `TimeseriesData` and pandas `DataFrame` formats, there is als
 
 === "C\#"
 
-    ``` cs
+    In C#, you typically use the raw format when you want to maximize performance: 
 
+    ``` cs
+	receivedStream.Timeseries.OnRawReceived += (sender, args) =>
+	{
+		streamWriter.Timeseries.Publish(args.Data);
+	};
     ```
 
 ### Using a Buffer
@@ -451,13 +456,16 @@ You can write the handler:
 
     ``` python
     def on_stream_properties_changed_handler(stream_consumer: qx.StreamConsumer):
-        print('stream properties changed for stream: ', stream_consumer.properties.name)
+        print('stream properties changed for stream: ', stream_consumer.stream_id)
     ```
 
 === "C\#"
 
     ``` cs
-
+    streamConsumer.Properties.OnChanged += (sender, args) =>
+    {
+        Console.WriteLine($"Properties changed for stream: {streamConsumer.StreamId}");	
+    }
     ```
 
 Then register the properties change handler:
@@ -472,8 +480,24 @@ Then register the properties change handler:
 
 === "C\#"
 
-    ``` cs
+    For C#, locate the properties changed handler inside the `OnStreamReceived` callback, for example:
 
+    ``` cs
+    topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
+    {
+        streamConsumer.Timeseries.OnDataReceived += (sender, args) =>
+        {
+            Console.WriteLine($"Data received");
+        };
+
+        streamConsumer.Properties.OnChanged += (sender, args) =>
+        {
+            Console.WriteLine($"Properties changed for stream: {streamConsumer.StreamId}");	
+        }
+
+    };
+
+    topicConsumer.Subscribe();
     ```
 
 You can keep a copy of the properties if you need to find out which properties had changed.
@@ -497,7 +521,21 @@ It is possible to handle changes in [parameter definitions](./publish.md#paramet
 === "C\#"
 
     ``` cs
+    topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
+    {
+        streamConsumer.Events.OnDataReceived += (sender, args) =>
+        {
+            Console.WriteLine($"Data received");
+        };
 
+        streamConsumer.Events.OnDefinitionsChanged += (sender, args) =>
+        {
+            Console.WriteLine($"Definitions changed");
+        };
+
+    };
+
+    topicConsumer.Subscribe();
     ```
 
 ## Committing / checkpointing
