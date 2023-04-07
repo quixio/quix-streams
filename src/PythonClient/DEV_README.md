@@ -26,7 +26,7 @@ wsl --shutdown
 ```
 
 # Build for windows
-Go to the root of the repo in terminal, `/builds/python/windows`, then execute the relevant `buildx64.sh` or `buildarm64.sh` in a linux shell (wsl in windows)
+Go to the root of the repo in terminal, `/builds/python/windows`, then execute the `build.py` python script
 
 # Build for mac-osx-intel (x86_64)
 Assuming you have a mac available, with nothing installed other than the OS

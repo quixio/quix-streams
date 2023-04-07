@@ -50,16 +50,9 @@ def install_dotnet(version, channel):
 
 
 # Check for .NET SDK
-arch = os.uname().machine
-if arch == 'arm64':  # apple silicon
-    if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
-        print(f"Installing dotnet for apple silicon ({arch})")
-        install_dotnet('8.0.100-alpha.1.23055.13', '8.0.1xx')
-else:  # intel 
-    if not check_installed_program_version('dotnet', r'^7\.\d+\.\d+'):
-        print(f"Installing dotnet for intel chip ({arch})")
-        install_dotnet('7.0.1xx', '7.0.1xx')
-
+if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
+    print(f"Installing dotnet")
+    install_dotnet('8.0.100-preview.2.23157.25', '8.0.1xx')
 
 def install_or_update_brew():
     try:

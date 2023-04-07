@@ -2,8 +2,7 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework Condition="'$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx.11.0-arm64'">net8.0</TargetFramework>
-        <TargetFramework Condition="!('$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx.11.0-arm64')">net8.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
     </PropertyGroup>
