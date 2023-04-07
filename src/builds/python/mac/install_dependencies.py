@@ -29,7 +29,7 @@ def check_installed_program_version(program, version_pattern):
             return True
         else:
             return False
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
 
