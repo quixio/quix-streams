@@ -71,7 +71,7 @@ def copy_python_interop(interopoutput, destPython, nopython):
 
 def collect_and_copy_dylibs(destPlatform):
     
-    searchpaths = ('/usr/local/Cellar', '/opt/homebrew/Cellar', '/usr/local/lib', 'opt/homebrew/opt')
+    searchpaths = ('/usr/local/Cellar', '/opt/homebrew/Cellar', '/usr/local/lib')
 
     def run_cmd(command):
         return subprocess.check_output(command, shell=True, text=True).strip()
@@ -114,7 +114,7 @@ def collect_and_copy_dylibs(destPlatform):
                         print(f"\t\tSearching at {searchpath}")
                         try:
                             search_output = run_cmd(f"find {searchpath} -name {file}")
-                        except: # No such file or directory exception
+                        except subprocess.CalledProcessError: # No such file or directory exception
                             continue
                         if search_output:
                             file_to_inspect = search_output.split('\n')[0]
