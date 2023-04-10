@@ -4,6 +4,7 @@
 #ignore stored data directories from the test runs
 
 builds/**/**/build-result
+builds/**/**/dotnet-install.sh
 
 # Native stuff
 #PythonClient/lib/quixstreaming/native

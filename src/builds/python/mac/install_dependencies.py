@@ -42,6 +42,8 @@ def install_dotnet(version, channel):
     dotnet_install_cmd = ['./dotnet-install.sh', '--version', version, '--channel', channel]
     subprocess.run(dotnet_install_cmd, check=True)
 
+    os.remove('dotnet-install.sh')
+
     with open(os.path.expanduser('~/.zshrc'), 'a') as zshrc:
         zshrc.write("export DOTNET_ROOT=$HOME/.dotnet\n")
         zshrc.write("export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools\n")
