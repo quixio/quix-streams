@@ -22,7 +22,7 @@ class StreamingClientTests(unittest.TestCase):
 
     def test_constructor_with_tokenfromenv(self):
         # Act
-        os.environ["Quix__Sdk__token"] = "mytoken"
+        os.environ["Quix__Sdk__Token"] = "mytoken"
         sc = QuixStreamingClient()
         # Assert by no exception
 
