@@ -86,7 +86,7 @@ class StreamingClientTests(unittest.TestCase):
         # Assert
         except InteropException as ex:
             # point here is it can fail inside c#, but not python
-            self.assertEqual(ex.message, "No such host is known. (test.quix.ai:443)")
+            self.assertEqual(ex.message, "nodename nor servname provided, or not known (test.quix.ai:443)")
 
     def test_cache_period_getset(self):
         # Act
