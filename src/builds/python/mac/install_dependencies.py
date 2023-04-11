@@ -8,7 +8,7 @@ def check_installed_package(package):
     try:
         subprocess.run([sys.executable, '-m', 'pip', 'show', package], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
-    except subprocess.CalledProcessError:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
 
@@ -29,7 +29,7 @@ def check_installed_program_version(program, version_pattern):
             return True
         else:
             return False
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
 
@@ -47,9 +47,7 @@ def install_dotnet(version, channel):
     with open(os.path.expanduser('~/.zshrc'), 'a') as zshrc:
         zshrc.write("export DOTNET_ROOT=$HOME/.dotnet\n")
         zshrc.write("export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools\n")
-
-    subprocess.run(['source', os.path.expanduser('~/.zshrc')], shell=True, check=True)
-
+        subprocess.run(['zsh', '-c', f'source {os.path.expanduser("~/.zshrc")}'], shell=True, check=True)
 
 # Check for .NET SDK
 if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
@@ -59,12 +57,12 @@ if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
 def install_or_update_brew():
     try:
         subprocess.run(['brew', 'update'], check=True)
-    except subprocess.CalledProcessError:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         subprocess.run(['/bin/bash', '-c', "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"], check=True)
         brew_install_loc = '/opt/homebrew/bin' if os.uname().machine == 'arm64' else '/usr/local/bin'
         with open(os.path.expanduser('~/.zshrc'), 'a') as zshrc:
             zshrc.write(f"export PATH={brew_install_loc}:$PATH\n")
-        subprocess.run(['source', os.path.expanduser('~/.zshrc')], shell=True, check=True)
+            subprocess.run(['zsh', '-c', f'source {os.path.expanduser("~/.zshrc")}'], shell=True, check=True)
 
 install_or_update_brew()
 
