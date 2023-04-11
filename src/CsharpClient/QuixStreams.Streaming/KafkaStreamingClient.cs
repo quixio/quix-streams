@@ -8,6 +8,7 @@ using QuixStreams.Telemetry.Configuration;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
+using QuixStreams.Transport.Fw.Models;
 
 namespace QuixStreams.Streaming
 {
@@ -19,25 +20,16 @@ namespace QuixStreams.Streaming
         private readonly ILogger logger = Logging.CreateLogger<KafkaStreamingClient>();
         private readonly string brokerAddress;
         private readonly Dictionary<string, string> brokerProperties;
-
-        static KafkaStreamingClient()
-        {
-            CodecRegistry.Register(CodecType.Json);
-            Transport.Fw.Helpers.MYBIGSWITCH("JSON");
-            
-            // OR
-            CodecRegistry.Register(CodecType.Protobuf);
-            Transport.Fw.Helpers.MYBIGSWITCH("BINARY");
-        }
-
+        
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
         /// <param name="brokerAddress">Address of Kafka cluster.</param>
         /// <param name="securityOptions">Optional security options.</param>
         /// <param name="properties">Additional broker properties</param>
-        /// <param name="debug">Whether debugging should enabled</param>
-        public KafkaStreamingClient(string brokerAddress, SecurityOptions securityOptions = null, IDictionary<string, string> properties = null, bool debug = false)
+        /// <param name="debug">Whether debugging should be enabled</param>
+        /// <param name="codecType">Serialization codec. Defaults to Json</param>
+        public KafkaStreamingClient(string brokerAddress, SecurityOptions securityOptions = null, IDictionary<string, string> properties = null, bool debug = false, CodecType codecType = CodecType.Json)
         {
             this.brokerAddress = brokerAddress;
             if (securityOptions == null)
@@ -84,6 +76,15 @@ namespace QuixStreams.Streaming
 
             if (debug) this.brokerProperties["debug"] = "all";
             
+            CodecRegistry.Register(writingCodec: codecType);
+            if (codecType == CodecType.Protobuf)
+            {
+                SerializingModifier.PackageCodecType = TransportPackageValueCodecType.Binary;
+            }
+            else
+            {
+                SerializingModifier.PackageCodecType = TransportPackageValueCodecType.Json;
+            }
         }
         
         /// <summary>

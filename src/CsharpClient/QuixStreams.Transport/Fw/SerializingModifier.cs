@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using QuixStreams.Transport.Codec;
 using QuixStreams.Transport.Fw.Codecs;
 using QuixStreams.Transport.Fw.Helpers;
+using QuixStreams.Transport.Fw.Models;
 using QuixStreams.Transport.IO;
 using QuixStreams.Transport.Registry;
 
@@ -20,6 +21,11 @@ namespace QuixStreams.Transport.Fw
         /// The callback that is used when serialized package is available
         /// </summary>
         public Func<Package, Task> OnNewPackage { get; set; }
+
+        /// <summary>
+        /// The codec type to use for serializing the <see cref="TransportPackageValue"/>
+        /// </summary>
+        public static TransportPackageValueCodecType PackageCodecType = TransportPackageValueCodecType.Json;
 
         /// <summary>
         /// Send a package, which the modifier attempts to serialize. Serialization result is raised via <see cref="OnNewPackage"/>
@@ -54,7 +60,7 @@ namespace QuixStreams.Transport.Fw
         {
             var value = this.GetSerializedValue(package, codec);
             var transportPackageValue = new TransportPackageValue(value, valueCodecBundle, package.MetaData);
-            var serializedTransportPackageValue = TransportPackageValueCodec.Serialize(transportPackageValue);
+            var serializedTransportPackageValue = TransportPackageValueCodec.Serialize(transportPackageValue, PackageCodecType);
             
             return new Package<byte[]>(serializedTransportPackageValue, null, package.TransportContext);
         }

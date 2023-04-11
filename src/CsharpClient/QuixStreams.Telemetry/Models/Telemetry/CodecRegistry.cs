@@ -15,6 +15,7 @@ namespace QuixStreams.Telemetry.Models
         /// <summary>
         /// Register all the codecs of the library.
         /// For reading processes the incoming codec will be used automatically if it's available in the registered codecs.
+        /// Note: The order of codec registry is important. The last codec registered will be used for writing.
         /// </summary>
         /// <param name="writingCodec">Codec for writing processes</param>
         public static void Register(CodecType writingCodec = CodecType.Json)

@@ -3,7 +3,7 @@ from typing import Dict, Union
 from .configuration import SecurityOptions
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
-from .models import CommitOptions, CommitMode, AutoOffsetReset
+from .models import CommitOptions, CommitMode, AutoOffsetReset, CodecType
 from .models.netdict import NetDict
 from .native.Python.QuixStreamsTelemetry.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
 from .native.Python.QuixStreamsStreaming.KafkaStreamingClient import KafkaStreamingClient as sci
@@ -20,7 +20,7 @@ class KafkaStreamingClient(object):
     A Kafka streaming client capable of creating topic consumer and producers.
     """
 
-    def __init__(self, broker_address: str, security_options: SecurityOptions = None, properties: Dict[str, str] = None, debug: bool = False):
+    def __init__(self, broker_address: str, security_options: SecurityOptions = None, properties: Dict[str, str] = None, debug: bool = False, codec_type: CodecType = CodecType.Json):
         """
         Initializes a new instance of the KafkaStreamingClient.
 
@@ -29,6 +29,7 @@ class KafkaStreamingClient(object):
             security_options: Optional security options for the Kafka client.
             properties: Optional extra properties for broker configuration.
             debug: Whether debugging should be enabled. Defaults to False.
+            codecType: Serialization codec. Defaults to Json.
         """
 
         secu_opts_hptr = None
@@ -42,7 +43,7 @@ class KafkaStreamingClient(object):
                 net_properties[key] = properties[key]
             net_properties_hptr = net_properties.get_net_pointer()
 
-        self._interop = sci(sci.Constructor(broker_address, secu_opts_hptr, properties=net_properties_hptr, debug=debug))
+        self._interop = sci(sci.Constructor(broker_address, secu_opts_hptr, properties=net_properties_hptr, debug=debug, codecType=codec_type))
 
     def get_topic_consumer(self, topic: str, consumer_group: str = None, commit_settings: Union[CommitOptions, CommitMode] = None,
                               auto_offset_reset: AutoOffsetReset = AutoOffsetReset.Latest) -> TopicConsumer:

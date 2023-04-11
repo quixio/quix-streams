@@ -1,4 +1,5 @@
 from .autooffsetreset import AutoOffsetReset
+from .codectype import CodecType
 from .commitmode import CommitMode
 from .commitoptions import CommitOptions
 from .eventdata import EventData
