@@ -24,6 +24,7 @@ using QuixStreams.Streaming.QuixApi.Portal.Requests;
 using QuixStreams.Streaming.Raw;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Kafka;
+using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming
@@ -73,7 +74,8 @@ namespace QuixStreams.Streaming
         /// <param name="properties">Additional broker properties</param>
         /// <param name="debug">Whether debugging should be enabled</param>
         /// <param name="httpClient">The http client to use</param>
-        public QuixStreamingClient(string token = null, bool autoCreateTopics = true, IDictionary<string, string> properties = null, bool debug = false, HttpClient httpClient = null)
+        /// <param name="codecType">Serialization codec. Defaults to Json</param>
+        public QuixStreamingClient(string token = null, bool autoCreateTopics = true, IDictionary<string, string> properties = null, bool debug = false, HttpClient httpClient = null, CodecType codecType = CodecType.Json)
         {
             this.token = token;
             if (string.IsNullOrWhiteSpace(this.token))

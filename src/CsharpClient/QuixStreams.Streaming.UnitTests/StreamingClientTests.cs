@@ -39,7 +39,7 @@ namespace QuixStreams.Streaming.UnitTests
 
         [Theory]
         [InlineData(CodecType.Json)]
-        [InlineData(CodecType.HumanReadableSemiJsonWithBetterPerformance)]
+        [InlineData(CodecType.CompactJsonForBetterPerformance)]
         public void StreamingClient_Writing_ShouldReadExpectedResults(CodecType writerCodec)
         {
             
