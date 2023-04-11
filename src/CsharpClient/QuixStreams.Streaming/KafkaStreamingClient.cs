@@ -4,11 +4,11 @@ using Microsoft.Extensions.Logging;
 using QuixStreams.Streaming.Configuration;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Configuration;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
-using QuixStreams.Transport.Fw.Models;
 
 namespace QuixStreams.Streaming
 {
@@ -21,6 +21,12 @@ namespace QuixStreams.Streaming
         private readonly string brokerAddress;
         private readonly Dictionary<string, string> brokerProperties;
         
+        static KafkaStreamingClient()
+        {
+            // Set the Json codec type as the default
+            CodecSettings.SetGlobalCodecType(CodecType.Json);
+        }
+        
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
@@ -28,8 +34,7 @@ namespace QuixStreams.Streaming
         /// <param name="securityOptions">Optional security options.</param>
         /// <param name="properties">Additional broker properties</param>
         /// <param name="debug">Whether debugging should be enabled</param>
-        /// <param name="codecType">Serialization codec. Defaults to Json</param>
-        public KafkaStreamingClient(string brokerAddress, SecurityOptions securityOptions = null, IDictionary<string, string> properties = null, bool debug = false, CodecType codecType = CodecType.Json)
+        public KafkaStreamingClient(string brokerAddress, SecurityOptions securityOptions = null, IDictionary<string, string> properties = null, bool debug = false)
         {
             this.brokerAddress = brokerAddress;
             if (securityOptions == null)
@@ -75,16 +80,6 @@ namespace QuixStreams.Streaming
             }
 
             if (debug) this.brokerProperties["debug"] = "all";
-            
-            CodecRegistry.Register(writingCodec: codecType);
-            if (codecType == CodecType.Protobuf)
-            {
-                SerializingModifier.PackageCodecType = TransportPackageValueCodecType.Binary;
-            }
-            else
-            {
-                SerializingModifier.PackageCodecType = TransportPackageValueCodecType.Json;
-            }
         }
         
         /// <summary>
