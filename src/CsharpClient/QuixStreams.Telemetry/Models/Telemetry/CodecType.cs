@@ -3,7 +3,7 @@
 namespace QuixStreams.Telemetry.Models
 {
     /// <summary>
-    /// Codecs available for serialization. 
+    /// Codecs available for serialization and deserialization of streams. 
     /// </summary>
     public enum CodecType
     {

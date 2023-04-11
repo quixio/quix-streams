@@ -3,9 +3,9 @@ from enum import Enum
 
 class CodecType(Enum):
     """
-    Codecs available for serialization.
+    Codecs available for serialization and deserialization of streams.
     """
 
     Json = 0
-    HumanReadableSemiJsonWithBetterPerformance = 1
+    CompactJsonForBetterPerformance = 1
     Protobuf = 2

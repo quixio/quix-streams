@@ -74,8 +74,7 @@ namespace QuixStreams.Streaming
         /// <param name="properties">Additional broker properties</param>
         /// <param name="debug">Whether debugging should be enabled</param>
         /// <param name="httpClient">The http client to use</param>
-        /// <param name="codecType">Serialization codec. Defaults to Json</param>
-        public QuixStreamingClient(string token = null, bool autoCreateTopics = true, IDictionary<string, string> properties = null, bool debug = false, HttpClient httpClient = null, CodecType codecType = CodecType.Json)
+        public QuixStreamingClient(string token = null, bool autoCreateTopics = true, IDictionary<string, string> properties = null, bool debug = false, HttpClient httpClient = null)
         {
             this.token = token;
             if (string.IsNullOrWhiteSpace(this.token))

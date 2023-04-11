@@ -1,6 +1,6 @@
-from .native.Python.QuixStreamsStreaming.Utils.CodecSettings import CodecSettings as csi
-from .helpers.enumconverter import EnumConverter as ec
-from .models import CodecType
+from ..native.Python.QuixStreamsStreaming.Utils.CodecSettings import CodecSettings as csi
+from ..helpers.enumconverter import EnumConverter as ec
+from ..models import CodecType
 
 
 class CodecSettings(object):
