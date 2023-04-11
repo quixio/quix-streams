@@ -28,6 +28,7 @@ def check_installed_program_version(program, version_pattern):
         if re.match(version_pattern, version):
             return True
         else:
+            print(f"Warning: Found version {version}, but expected {version_pattern}")
             return False
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
@@ -50,9 +51,15 @@ def install_dotnet(version, channel):
         subprocess.run(['zsh', '-c', f'source {os.path.expanduser("~/.zshrc")}'], shell=True, check=True)
 
 # Check for .NET SDK
-if not check_installed_program_version('dotnet', r'^8\.\d+\.\d+'):
-    print(f"Installing dotnet")
-    install_dotnet('8.0.100-preview.2.23157.25', '8.0.1xx')
+dotnet_major_version = '8'
+expected_version = f'{dotnet_major_version}.0.100-preview.2.23157.25'
+expected_version_channel = f'{dotnet_major_version}.0.1xx'
+exact_version_pattern = rf'^{re.escape(expected_version)}$'
+similar_version_pattern = rf'^{dotnet_major_version}\.\d\.\d+$'
+if not check_installed_program_version('dotnet', exact_version_pattern):
+    if not check_installed_program_version('dotnet', similar_version_pattern):
+        print(f"Installing dotnet")
+        install_dotnet(expected_version, expected_version_channel)
 
 def install_or_update_brew():
     try:
