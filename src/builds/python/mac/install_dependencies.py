@@ -3,6 +3,7 @@ import sys
 import os
 import re
 
+print("Dependency check started")
 
 def check_installed_package(package):
     try:
@@ -17,6 +18,7 @@ def install_package(package):
 
 
 # Check for wheel package
+print("... checking wheel package dependency")
 if not check_installed_package('wheel'):
     install_package('wheel')
 
@@ -33,6 +35,19 @@ def check_installed_program_version(program, version_pattern):
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
+def export_statements(statements):
+    with open(os.path.expanduser('~/.zshrc'), 'r') as zshrc:
+        zshrc_lines = zshrc.readlines()
+
+    # Check if each export statement is already present in the file
+    for statement in statements:
+        if statement not in zshrc_lines:
+            with open(os.path.expanduser('~/.zshrc'), 'a') as zshrc:
+                zshrc.write(statement)
+
+    # exporting to current shell also, without reloading shell. shell reload in cases I tested caused script termination or build hangs
+    for statement in statements:
+        subprocess.run(f'{statement}', shell=True)
 
 def install_dotnet(version, channel):
     curl_cmd = ['curl', '-L', 'https://dot.net/v1/dotnet-install.sh', '-o', 'dotnet-install.sh']
@@ -45,12 +60,15 @@ def install_dotnet(version, channel):
 
     os.remove('dotnet-install.sh')
 
-    with open(os.path.expanduser('~/.zshrc'), 'a') as zshrc:
-        zshrc.write("export DOTNET_ROOT=$HOME/.dotnet\n")
-        zshrc.write("export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools\n")
-        subprocess.run(['zsh', '-c', f'source {os.path.expanduser("~/.zshrc")}'], shell=True, check=True)
+    statements_to_export = [
+        "export DOTNET_ROOT=$HOME/.dotnet\n",
+        "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools\n"
+    ]
+
+    export_statements(statements_to_export)
 
 # Check for .NET SDK
+print("... checking dotnet dependency")
 dotnet_major_version = '8'
 expected_version = f'{dotnet_major_version}.0.100-preview.2.23157.25'
 expected_version_channel = f'{dotnet_major_version}.0.1xx'
@@ -62,6 +80,7 @@ if not check_installed_program_version('dotnet', exact_version_pattern):
         install_dotnet(expected_version, expected_version_channel)
 
 def install_or_update_brew():
+    print("... checking brew dependency")
     try:
         subprocess.run(['brew', 'update'], check=True)
     except (FileNotFoundError, subprocess.CalledProcessError):
@@ -73,4 +92,6 @@ def install_or_update_brew():
 
 install_or_update_brew()
 
+print("... checking librdkafka dependency")
 subprocess.run(['brew', 'install', 'librdkafka'], check=True)
+print("Dependency check finished")
