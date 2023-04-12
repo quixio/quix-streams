@@ -36,13 +36,19 @@ def check_installed_program_version(program, version_pattern):
         return False
 
 def export_statements(statements):
-    with open(os.path.expanduser('~/.zshrc'), 'r') as zshrc:
+    zshrc_file = os.path.expanduser('~/.zshrc')
+
+    if not os.path.exists(zshrc_file):
+        # Create the file if it does not exist
+        open(zshrc_file, 'w').close()
+        
+    with open(zshrc_file, 'r') as zshrc:
         zshrc_lines = zshrc.readlines()
 
     # Check if each export statement is already present in the file
     for statement in statements:
         if statement not in zshrc_lines:
-            with open(os.path.expanduser('~/.zshrc'), 'a') as zshrc:
+            with open(zshrc_file, 'a') as zshrc:
                 zshrc.write(statement)
 
     # exporting to current shell also, without reloading shell. shell reload in cases I tested caused script termination or build hangs
