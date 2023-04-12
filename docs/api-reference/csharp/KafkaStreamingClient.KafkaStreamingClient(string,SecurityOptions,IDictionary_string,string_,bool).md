@@ -32,4 +32,4 @@ Additional broker properties
 
 `debug` [System.Boolean](https://docs.microsoft.com/en-us/dotnet/api/System.Boolean 'System.Boolean')
 
-Whether debugging should enabled
+Whether debugging should be enabled

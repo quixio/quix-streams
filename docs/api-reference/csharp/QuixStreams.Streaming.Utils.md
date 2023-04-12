@@ -4,6 +4,7 @@
 
 | Classes | |
 | :--- | :--- |
+| [CodecSettings](CodecSettings.md 'QuixStreams.Streaming.Utils.CodecSettings') | Global Codec settings for streams. |
 | [QuixUtils](QuixUtils.md 'QuixStreams.Streaming.Utils.QuixUtils') | Quix extension methods used across the library |
 
 | Structs | |
