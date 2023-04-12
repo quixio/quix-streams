@@ -1,25 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework Condition="'$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx.11.0-arm64'">net8.0</TargetFramework>
-        <TargetFramework Condition="!('$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx.11.0-arm64')">net7.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <InvariantGlobalization>true</InvariantGlobalization>
         <PublishAot>true</PublishAot>
     </PropertyGroup>
 
-    <ItemGroup Condition=" '$(RuntimeIdentifier)' == 'win-x64' ">
-        <!-- <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="7.0.0-*" /> Disabled for now as latest might not always work -->
-        <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="7.0.0-rc.1.22409.2" />
-    </ItemGroup>
-    <ItemGroup Condition=" '$(RuntimeIdentifier)' == 'linux-x64' or '$(RuntimeIdentifier)' == 'linux-arm64' ">
-        <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="7.0.0-rc.2.22472.3" />
-    </ItemGroup>
-    <ItemGroup Condition=" '$(RuntimeIdentifier)' == 'osx-x64' ">
-        <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="7.0.0-rc.2.22472.3" />
-    </ItemGroup>
-    <ItemGroup Condition=" '$(RuntimeIdentifier)' == 'osx-arm64' or '$(RuntimeIdentifier)' == 'osx.11.0-arm64' ">
-        <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="8.0.0-alpha.1.23055.3" />
-        <PackageReference Include="runtime.osx-arm64.Microsoft.DotNet.ILCompiler" Version="8.0.0-alpha.1.23055.3" />
+    <ItemGroup>
+        <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="8.0.0-preview.2.23128.3" />
     </ItemGroup>
 </Project>

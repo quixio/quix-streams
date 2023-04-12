@@ -2,12 +2,28 @@
 If you're developing the library and wish to build locally, this readme is for you. Otherwise, check out 
 https://test.pypi.org/project/quixstreams/ for latest ongoing dev versions or https://pypi.org/project/quixstreams/ for latest stable versions.
 
-# Build for manylinux (x86_64 or arm64)
-Go to the root of the repo in terminal, `/builds/python/linux`, then execute the relevant `buildx64.sh` or `buildarm64.sh` in a linux shell (wsl in windows)
+# Make sure you have python
+We tested with minimum of 3.8.6 installed up to 3.11. Latest 3.x is probably fine.
 
-## Frequent issues trying to get it to run on wsl
+# Build from source
+Our builds are done using python, and you will find the builds in ../builds/python. Generally you will find 4 python scripts.
+- one to install dependencies (for windows is is manual step of installing .net SDK)
+- one to build the native code
+- one to build the wheel
+- one to build all
 
-### 1) docker run just quits
+The native build takes several parameters. These can be found in each script, but generally support debugging such as partial build to maintain some manual modifications.
+
+## Windows
+Windows build does not yet have a docker to run it in, therefor you will need a Windows x86_64 machine to build it.
+
+## Linux (x86_64 and arm64)
+These use docker images to build, so as long as you have docker, the build scripts should work. There is no native linux build if youre OS is already that, but feel free to contribute one.
+
+### WSL approach
+If you have windows and having issues, there are some common fixes described below:
+
+#### Docker run just quits
 Based on the resources linked below, you'll have to enable vsyscall=emulate
 https://mail.python.org/pipermail/wheel-builders/2016-December/000239.html
 (WSL) https://github.com/microsoft/WSL/issues/4694
@@ -25,69 +41,9 @@ To restart WSL:
 wsl --shutdown
 ```
 
-# Build for windows
-Go to the root of the repo in terminal, `/builds/python/windows`, then execute the relevant `buildx64.sh` or `buildarm64.sh` in a linux shell (wsl in windows)
 
-# Build for mac-osx-intel (x86_64)
-Assuming you have a mac available, with nothing installed other than the OS
-
-## Install dependencies
-install dotnet
-```
-curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
-chmod +x ./dotnet-install.sh
-./dotnet-install.sh --version latest
-echo "export DOTNET_ROOT=$HOME/.dotnet" >> ~/.zshrc
-echo "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools" >> ~/.zshrc
-source ~/.zshrc
-```
-
-install librdkafka binaries
-```
-brew install librdkafka
-```
-
-## Start build
-Navigate to build_native_linux.sh folder 
-```
-cd WHEREVER_YOUR_ROOT_IS/QuixStreams/PythonClient
-. ./build_native_mac.sh
-. ./build_wheel_mac.sh
-```
-
-## install built wheel directly
-python3 -m pip uninstall quixstreams -y && python3 -m pip install ./dist/quixstreams-0.1.0-py3-none-macosx_10_12_intel.whl --user
-
-# Build for mac-osx (arm/apple silicon - WIP)
-Assuming you have a mac available, with nothing installed other than the OS
-
-## Install dependencies
-install dotnet
-```
-curl -L https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
-chmod +x ./dotnet-install.sh
-./dotnet-install.sh --version 8.0.100-alpha.1.23055.13 --channel 8.0.1xx
-echo "export DOTNET_ROOT=$HOME/.dotnet" >> ~/.zshrc
-echo "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools" >> ~/.zshrc
-source ~/.zshrc
-```
-
-install librdkafka binaries
-```
-brew install librdkafka
-```
-
-## Start build
-Navigate to build_native_linux.sh folder 
-```
-cd WHEREVER_YOUR_ROOT_IS/QuixStreams/PythonClient
-. ./build_native_mac.sh
-. ./build_wheel_mac.sh
-
-```
-
-## install built wheel directly
-python3 -m pip uninstall quixstreams -y && python3 -m pip install ./dist/quixstreams-0.1.0-py3-none-macosx_11_0_arm64.whl --user
+## Mac (Intel and Apple silicon)
+Both Intel and Apple silicons are supported as of 0.5.2, previously only Intel. There is no docker build for this, so your build machine must be mac of the desired architecture.
 
 # Run pypiserver locally to test hosting
 
@@ -133,8 +89,8 @@ docker run -it \
     --platform=linux/amd64 \
     --entrypoint /bin/bash \
     --network=host \
-    --volume /mnt/f/Work/source/QuixStreams/builds/python/linux/build-result:/build-result \
-    --volume /mnt/f/Work/source/QuixStreams/PythonClient/tests/quixstreams/manual:/manual \
+    --volume /YOURSOURCEPATH/QuixStreams/builds/python/linux/build-result:/build-result \
+    --volume /YOURSOURCEPATH/QuixStreams/PythonClient/tests/quixstreams/manual:/manual \
     python:3.11.1-slim-buster
 ```
 

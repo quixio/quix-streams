@@ -1,7 +1,12 @@
 # GitHub Page
-For more info, check https://github.com/quixio/quix-streams
+We are open source! For latest release notes, check https://github.com/quixio/quix-streams/releases
 
-# Requirements to run
+# Supported architectures
 
-x86_64 (amd64) bit windows, amd64/arm64 linux, amd64 mac. Apple silicon (M1+) support coming, can be used using rosetta x64_86 until then. Python distribution must also be 64 bit.
+|  OS     | amd64 (x86_64) | arm64        |
+|---------|----------------|--------------|
+| Windows | Supported      | -            |
+| Linux   | Supported      | Supported    |
+| MAC     | Supported      | From source  |
 
+Mac Apple silicon can be currently built from source or used via rosetta. For more, see https://github.com/quixio/quix-streams/issues/95.

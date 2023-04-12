@@ -60,15 +60,22 @@ public class MethodWriter : BaseWriter
 
     public override async Task WriteContent(Func<string, Task> writeLineAction)
     {
+        var preFunctionWriter = new DelayedWriter(0);
         var writer = new DelayedWriter(0);
         
         writer.WriteEmptyLine();
         var args = WriteFunctionHeader(writer);
-        WriteFunctionBody(writer, args);
+        WriteFunctionBody(writer, args, preFunctionWriter);
+
+        if (!preFunctionWriter.IsEmpty)
+        {
+            await writeLineAction(""); // empty line
+            await preFunctionWriter.Flush(writeLineAction);
+        }
         await writer.Flush(writeLineAction);
     }
 
-    private void WriteFunctionBody(DelayedWriter writer, Dictionary<string, string> argNames)
+    private void WriteFunctionBody(DelayedWriter writer, Dictionary<string, string> argNames, DelayedWriter preFunctionWriter)
     {
         using var iw = new IndentWriter<DelayedWriter>(writer);
         writer.Write($"InteropUtils.LogDebug($\"Invoking entrypoint {this.methodWrittenDetails.EntryPoint}\");");
@@ -91,7 +98,7 @@ public class MethodWriter : BaseWriter
         var instanceArgName = Utils.GetInstanceParameterName(this.methodWrittenDetails.DeclaringType, this.methodBase);
         if (instanceArgName != null)
         {
-            var result = WriteTypeConversion(writer, this.methodBase.DeclaringType, false, instanceArgName);
+            var result = WriteTypeConversion(writer, preFunctionWriter, this.methodBase.DeclaringType, false, instanceArgName);
             paramNames[instanceArgName] = result;
             anyRecast |= instanceArgName != result;
         }
@@ -103,7 +110,7 @@ public class MethodWriter : BaseWriter
                 paramNames[parameterInfo.Name] = parameterInfo.Name + "Out";
                 continue;
             }
-            var result = WriteTypeConversion(writer, parameterInfo.ParameterType, false, parameterInfo.Name);
+            var result = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, false, parameterInfo.Name);
             paramNames[parameterInfo.Name] = result;
             anyRecast |= instanceArgName != result;
 
@@ -286,7 +293,7 @@ public class MethodWriter : BaseWriter
         {
             if (parameterInfo.IsOut)
             {
-                var result = WriteTypeConversion(writer, parameterInfo.ParameterType, true, paramNames[parameterInfo.Name]);
+                var result = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, true, paramNames[parameterInfo.Name]);
                 writer.Write($"Marshal.WriteIntPtr({parameterInfo.Name}, {result});");
             }
         }
@@ -294,7 +301,7 @@ public class MethodWriter : BaseWriter
         
         if (!string.IsNullOrWhiteSpace(resultName))
         {
-            var result = WriteTypeConversion(writer, this.returnType, true, resultName);
+            var result = WriteTypeConversion(writer, preFunctionWriter, this.returnType, true, resultName);
             writer.Write($"return {result};");
         }
     }
@@ -335,11 +342,12 @@ public class MethodWriter : BaseWriter
         writer.Write(sb.ToString());
         return variableName;
     }
-    
+
     /// <summary>
     /// Creates C# code to convert the type between managed and unmanaged
     /// </summary>
     /// <param name="writer"></param>
+    /// <param name="preFunctionWriter">writer to add something before the function that contains this conversion</param>
     /// <param name="typeToConvert"></param>
     /// <param name="toUnmanaged"></param>
     /// <param name="sourceName"></param>
@@ -348,7 +356,7 @@ public class MethodWriter : BaseWriter
     /// <returns>The name of the variable the converted result will be assigned to</returns>
     /// <exception cref="Exception"></exception>
     /// <exception cref="NotSupportedMethodException"></exception>
-    private string WriteTypeConversion(DelayedWriter writer, Type typeToConvert, bool toUnmanaged, string sourceName, string targetName = null, bool createTargetVar = true)
+    private string WriteTypeConversion(DelayedWriter writer, DelayedWriter preFunctionWriter, Type typeToConvert, bool toUnmanaged, string sourceName, string targetName = null, bool createTargetVar = true)
     {
         Type source, target;
         if (toUnmanaged)
@@ -426,7 +434,7 @@ public class MethodWriter : BaseWriter
                 writer.IncrementIndent();
                 writer.Write($"for (var {targetName}Index = 0; {targetName}Index < {targetName}.Length; {targetName}Index++) {{"); // start of for
                 writer.IncrementIndent();
-                var innerBodyConvertResultName = WriteTypeConversion(writer, generic, false, $"{unmanagedArrayName}[{targetName}Index]", $"{targetName}Converted");
+                var innerBodyConvertResultName = WriteTypeConversion(writer, preFunctionWriter, generic, false, $"{unmanagedArrayName}[{targetName}Index]", $"{targetName}Converted");
                 writer.Write($"{targetName}[{targetName}Index] = {innerBodyConvertResultName};");
                 writer.DecrementIndent();
                 writer.Write("}"); // end of for
@@ -526,7 +534,7 @@ public class MethodWriter : BaseWriter
                     var parameterInfo = delegateParameters[index];
                     if (index != 0) invocationSb.Append(", ");
                     var name = $"arg{index}";
-                    var newName = WriteTypeConversion(writer, parameterInfo.ParameterType, false, name);
+                    var newName = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, false, name);
                     appendEmptyLineAfterConversions |= name != newName;
                     invocationSb.Append(newName);
                 }
@@ -538,14 +546,21 @@ public class MethodWriter : BaseWriter
                 writer.Write(invocationSb.ToString());
                 if (hasReturn)
                 {
-                    var newName = WriteTypeConversion(writer, delegateMethodInfo.ReturnType, true, $"{targetName}Result");
+                    var newName = WriteTypeConversion(writer, preFunctionWriter, delegateMethodInfo.ReturnType, true, $"{targetName}Result");
                     writer.Write("return " + newName + ";");
                 }
             }
 
             writer.DecrementIndent();
             writer.Write("}");
-            return $"Marshal.GetFunctionPointerForDelegate({targetName})";
+
+            // With .NET8 this functions is necessary to avoid runtime exception regarding generics with Marshal.GetFunctionPointerForDelegate
+            var delegateName = $"{this.methodWrittenDetails.UniqueMethodName}_{targetName}";
+            preFunctionWriter.Write($"delegate {headerSb.ToString().Replace(targetName, delegateName)};");
+
+            var targetNameDelegate = $"{targetName}Delegate";
+            writer.Write($"{delegateName} {targetNameDelegate} = {targetName};");
+            return $"Marshal.GetFunctionPointerForDelegate({targetNameDelegate})";
         }
 
 
@@ -606,7 +621,7 @@ public class MethodWriter : BaseWriter
                     {
                         if (index != 0) invocationSb.Append(", ");
                         var name = $"arg{index}";
-                        var result = WriteTypeConversion(writer, type, true, name);
+                        var result = WriteTypeConversion(writer, preFunctionWriter, type, true, name);
                         //if (unmanagedType == typeof(IntPtr)) writer.Write($"Console.WriteLine(\"{this.methodWrittenDetails.EntryPoint} invoking with value ptr: \" + {result});"); // helpful for debug
                         //else writer.Write($"Console.WriteLine(\"{this.methodWrittenDetails.EntryPoint} invoking with value: \" + {result});"); // helpful for debug
                         appendEmptyLineAfterConversions |= name != result;
@@ -622,7 +637,7 @@ public class MethodWriter : BaseWriter
                         writer.Write(invocationSb.ToString());
                         if (hasReturn)
                         {
-                            var result = WriteTypeConversion(writer, type, false, "result");
+                            var result = WriteTypeConversion(writer, preFunctionWriter, type, false, "result");
                             writer.Write("return " + result + ";");
                         }
                     }

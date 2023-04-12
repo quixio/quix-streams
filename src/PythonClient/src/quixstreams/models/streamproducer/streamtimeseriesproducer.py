@@ -40,6 +40,7 @@ class StreamTimeseriesProducer(object):
         """
         Immediately publish timeseries data and definitions from the buffer without waiting for buffer condition to fulfill for either.
         """
+        self._interop.Flush()
 
     def add_definition(self, parameter_id: str, name: str = None, description: str = None) -> ParameterDefinitionBuilder:
         """
@@ -53,6 +54,7 @@ class StreamTimeseriesProducer(object):
         Returns:
             ParameterDefinitionBuilder: Builder to define the parameter properties.
         """
+        return ParameterDefinitionBuilder(self._interop.AddDefinition(parameter_id, name, description))
 
     def add_location(self, location: str) -> ParameterDefinitionBuilder:
         """
@@ -64,6 +66,7 @@ class StreamTimeseriesProducer(object):
         Returns:
             ParameterDefinitionBuilder: Builder to define the parameters under the specified location.
         """
+        return ParameterDefinitionBuilder(self._interop.AddLocation(location))
 
     @property
     def default_location(self) -> str:
@@ -74,6 +77,7 @@ class StreamTimeseriesProducer(object):
         Returns:
             str: The default location of the parameters, e.g., "/Group1/SubGroup2".
         """
+        return self._interop.get_DefaultLocation()
 
     @default_location.setter
     def default_location(self, value: str):
@@ -84,6 +88,7 @@ class StreamTimeseriesProducer(object):
         Args:
             value: The new default location of the parameters, e.g., "/Group1/SubGroup2".
         """
+        self._interop.set_DefaultLocation(value)
 
     @property
     def buffer(self) -> TimeseriesBufferProducer:
@@ -93,6 +98,9 @@ class StreamTimeseriesProducer(object):
         Returns:
             TimeseriesBufferProducer: The buffer for producing timeseries data.
         """
+        if self._buffer is None:
+            self._buffer = TimeseriesBufferProducer(self._stream_producer, self._interop.get_Buffer())
+        return self._buffer
 
     def publish(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]) -> None:
         """

@@ -112,7 +112,10 @@ def collect_and_copy_dylibs(destPlatform):
                     found = False
                     for searchpath in searchpaths:
                         print(f"\t\tSearching at {searchpath}")
-                        search_output = run_cmd(f"find {searchpath} -name {file}")
+                        try:
+                            search_output = run_cmd(f"find {searchpath} -name {file}")
+                        except subprocess.CalledProcessError: # No such file or directory exception
+                            continue
                         if search_output:
                             file_to_inspect = search_output.split('\n')[0]
                             found = True
@@ -172,7 +175,7 @@ def main():
     csharpfolder = "../../../CsharpClient"
     pythonfolder = "../../../PythonClient"
     streamingoutpath = f"{csharpfolder}/QuixStreams.Streaming/bin/Publish/{dotnetruntime}"
-    framework = "-f net7.0"
+    framework = "-f net8.0"
 
     build_streaming_project(csharpfolder, framework, streamingoutpath)
 

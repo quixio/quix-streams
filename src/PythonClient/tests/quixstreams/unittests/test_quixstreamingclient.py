@@ -22,7 +22,7 @@ class StreamingClientTests(unittest.TestCase):
 
     def test_constructor_with_tokenfromenv(self):
         # Act
-        os.environ["Quix__Sdk__token"] = "mytoken"
+        os.environ["Quix__Sdk__Token"] = "mytoken"
         sc = QuixStreamingClient()
         # Assert by no exception
 
@@ -86,7 +86,7 @@ class StreamingClientTests(unittest.TestCase):
         # Assert
         except InteropException as ex:
             # point here is it can fail inside c#, but not python
-            self.assertEqual(ex.message, "No such host is known. (test.quix.ai:443)")
+            self.assertEqual(ex.message, "nodename nor servname provided, or not known (test.quix.ai:443)")
 
     def test_cache_period_getset(self):
         # Act

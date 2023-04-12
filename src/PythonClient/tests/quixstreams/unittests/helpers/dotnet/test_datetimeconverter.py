@@ -23,7 +23,7 @@ class DateTimeConverterTests(unittest.TestCase):
 
     def test_datetime_to_python(self):
         # Arrange
-        dotnet_dt_hptr = DateTime.Constructor12(2023, 1, 20, 23, 17, 8, 1, 0)  # precision loss can be an issue, so going for accuracy by adding 0
+        dotnet_dt_hptr = DateTime.Constructor14(2023, 1, 20, 23, 17, 8, 1, 0)  # precision loss can be an issue, so going for accuracy by adding 0
 
         # Act
         pydt = DateTimeConverter.datetime_to_python(dotnet_dt_hptr)
