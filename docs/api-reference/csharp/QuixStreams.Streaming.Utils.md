@@ -9,5 +9,5 @@
 
 | Structs | |
 | :--- | :--- |
-| [TimeseriesDataTimestamps](TimeseriesDataTimestamps.md 'QuixStreams.Streaming.Utils.TimeseriesDataTimestamps') | Enumerable which returns the Timestamps of the current [QuixStreams.Streaming.Utils.TimeseriesDataTimestamps.TimeseriesData](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Streaming.Utils.TimeseriesDataTimestamps.TimeseriesData 'QuixStreams.Streaming.Utils.TimeseriesDataTimestamps.TimeseriesData') |
 | [TimeseriesDataTimestampTags](TimeseriesDataTimestampTags.md 'QuixStreams.Streaming.Utils.TimeseriesDataTimestampTags') | ReadOnlyDictionary which returns the Tags of the current Timestamp |
+| [TimeseriesDataTimestamps](TimeseriesDataTimestamps.md 'QuixStreams.Streaming.Utils.TimeseriesDataTimestamps') | Enumerable which returns the Timestamps of the current [QuixStreams.Streaming.Utils.TimeseriesDataTimestamps.TimeseriesData](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Streaming.Utils.TimeseriesDataTimestamps.TimeseriesData 'QuixStreams.Streaming.Utils.TimeseriesDataTimestamps.TimeseriesData') |

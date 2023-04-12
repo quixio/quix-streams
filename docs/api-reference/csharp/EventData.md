@@ -13,9 +13,9 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Constructors | |
 | :--- | :--- |
-| [EventData(string, long, string)](EventData.EventData(string,long,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, long, string)') | Create a new empty Event Data instance |
 | [EventData(string, DateTime, string)](EventData.EventData(string,DateTime,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, System.DateTime, string)') | Create a new empty Event Data instance |
 | [EventData(string, TimeSpan, string)](EventData.EventData(string,TimeSpan,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, System.TimeSpan, string)') | Create a new empty Event Data instance |
+| [EventData(string, long, string)](EventData.EventData(string,long,string).md 'QuixStreams.Streaming.Models.EventData.EventData(string, long, string)') | Create a new empty Event Data instance |
 
 | Properties | |
 | :--- | :--- |

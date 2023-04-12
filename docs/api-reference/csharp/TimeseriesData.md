@@ -13,9 +13,9 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Constructors | |
 | :--- | :--- |
-| [TimeseriesData(int)](TimeseriesData.TimeseriesData(int).md 'QuixStreams.Streaming.Models.TimeseriesData.TimeseriesData(int)') | Create a new empty Timeseries Data instance to allow create new timestamps and parameters values from scratch |
 | [TimeseriesData(TimeseriesDataRaw, string[], bool, bool)](TimeseriesData.TimeseriesData(TimeseriesDataRaw,string[],bool,bool).md 'QuixStreams.Streaming.Models.TimeseriesData.TimeseriesData(QuixStreams.Telemetry.Models.TimeseriesDataRaw, string[], bool, bool)') | Creates a new instance of [TimeseriesData](TimeseriesData.md 'QuixStreams.Streaming.Models.TimeseriesData') based on a [QuixStreams.Telemetry.Models.TimeseriesDataRaw](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Telemetry.Models.TimeseriesDataRaw 'QuixStreams.Telemetry.Models.TimeseriesDataRaw') instance |
 | [TimeseriesData(List&lt;TimeseriesDataTimestamp&gt;, bool, bool)](TimeseriesData.TimeseriesData(List_TimeseriesDataTimestamp_,bool,bool).md 'QuixStreams.Streaming.Models.TimeseriesData.TimeseriesData(System.Collections.Generic.List<QuixStreams.Streaming.Models.TimeseriesDataTimestamp>, bool, bool)') | Creates a new instance of [TimeseriesData](TimeseriesData.md 'QuixStreams.Streaming.Models.TimeseriesData') with the provided timestamps |
+| [TimeseriesData(int)](TimeseriesData.TimeseriesData(int).md 'QuixStreams.Streaming.Models.TimeseriesData.TimeseriesData(int)') | Create a new empty Timeseries Data instance to allow create new timestamps and parameters values from scratch |
 
 | Properties | |
 | :--- | :--- |

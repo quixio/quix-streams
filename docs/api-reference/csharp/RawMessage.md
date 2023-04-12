@@ -13,8 +13,8 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Constructors | |
 | :--- | :--- |
-| [RawMessage(byte[], byte[])](RawMessage.RawMessage(byte[],byte[]).md 'QuixStreams.Streaming.Raw.RawMessage.RawMessage(byte[], byte[])') | Initializes a new instance of [RawMessage](RawMessage.md 'QuixStreams.Streaming.Raw.RawMessage') |
 | [RawMessage(byte[])](RawMessage.RawMessage(byte[]).md 'QuixStreams.Streaming.Raw.RawMessage.RawMessage(byte[])') | Initializes a new instance of [RawMessage](RawMessage.md 'QuixStreams.Streaming.Raw.RawMessage') without a Key |
+| [RawMessage(byte[], byte[])](RawMessage.RawMessage(byte[],byte[]).md 'QuixStreams.Streaming.Raw.RawMessage.RawMessage(byte[], byte[])') | Initializes a new instance of [RawMessage](RawMessage.md 'QuixStreams.Streaming.Raw.RawMessage') |
 
 | Fields | |
 | :--- | :--- |
