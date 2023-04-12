@@ -132,6 +132,10 @@ from quixstreams import App
 App.run()
 ```
 
+## Dispose events
+
+When a topic is disposed, it is possible to run additional code by linking the `on_disposed` event to an appropriate handler. The `on_disposed` event occurs at the end of the topic disposal process.
+
 ## Keep alive
 
 Unless you add an infinite loop or similar code, a Python code file will run each code statement sequentially until the end of the file, and then exit.  
