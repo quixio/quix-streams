@@ -55,7 +55,7 @@ dotnet_major_version = '8'
 expected_version = f'{dotnet_major_version}.0.100-preview.2.23157.25'
 expected_version_channel = f'{dotnet_major_version}.0.1xx'
 exact_version_pattern = rf'^{re.escape(expected_version)}$'
-similar_version_pattern = rf'^{dotnet_major_version}\.\d\.\d+$'
+similar_version_pattern = rf'^{dotnet_major_version}\.\d+\.\d+$'
 if not check_installed_program_version('dotnet', exact_version_pattern):
     if not check_installed_program_version('dotnet', similar_version_pattern):
         print(f"Installing dotnet")
