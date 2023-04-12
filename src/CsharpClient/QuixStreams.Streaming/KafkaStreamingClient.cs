@@ -7,7 +7,6 @@ using QuixStreams.Streaming.Raw;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Configuration;
 using QuixStreams.Telemetry.Kafka;
-using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming
@@ -23,8 +22,8 @@ namespace QuixStreams.Streaming
         
         static KafkaStreamingClient()
         {
-            // Set the Json codec type as the default
-            CodecSettings.SetGlobalCodecType(CodecType.Json);
+            // this will guarantee that the codec is set to default, without modifying
+            var codec = CodecSettings.CurrentCodec;
         }
         
         /// <summary>

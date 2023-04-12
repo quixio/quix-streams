@@ -9,7 +9,10 @@ from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUti
 from src import quixstreams as qx
 from src.quixstreams.models.parametervalue import ParameterValueType
 qx.logging.Logging.update_factory(qx.logging.LogLevel.Debug)
+
+qx.CodecSettings.set_global_codec_type(codec_type=qx.CodecType.Protobuf)
 client = qx.KafkaStreamingClient('127.0.0.1:9092', None)
+
 commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
