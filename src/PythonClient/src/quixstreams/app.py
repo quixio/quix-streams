@@ -102,6 +102,10 @@ class App:
         try:
             signal.signal(signal.SIGINT, keyboard_interrupt_handler)
         except ValueError as ex:
+            # If this exception happens, it means the signal handling is running on non-main thread.
+            # The end result is that keyboard or shutdown interruption will not work here or in C# interop.
+            # While that is not optimal, it is still better to let the application at least function
+            # and log the exception + warning than completely block it from functioning.
             traceback.print_exc()
             logging.log(logging.WARNING, "Shutdown may not work as expected. See error.")
 
