@@ -49,5 +49,13 @@ namespace QuixStreams.Streaming
         /// Raised when the resource is disposed
         /// </summary>
         public event EventHandler OnDisposed;
+
+        /// <summary>
+        /// Creates a new application state with automatically managed lifecycle for the topic
+        /// </summary>
+        /// <param name="nameOfState">The name of the state</param>
+        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
+        /// <returns>Topic state</returns>
+        TopicState<T> GetState<T>(string nameOfState, Func<string, T> defaultValueFactory = null);
     }
 }

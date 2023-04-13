@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Telemetry;
@@ -14,6 +15,7 @@ namespace QuixStreams.Streaming
         private ILogger logger = Logging.CreateLogger<StreamConsumer>();
         private readonly TelemetryKafkaConsumer telemetryKafkaConsumer;
         private bool isDisposed = false;
+        private Dictionary<string, object> states = new Dictionary<string, object>();
 
         /// <inheritdoc />
         public event EventHandler<IStreamConsumer> OnStreamReceived;
@@ -102,6 +104,43 @@ namespace QuixStreams.Streaming
             if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
             telemetryKafkaConsumer.Start();
         }
+        
+        /// <inheritdoc />
+        public TopicState<T> GetState<T>(string nameOfState, Func<string, T> defaultValueFactory = null)
+        {
+            if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
+            lock (states)
+            {
+                var topic = this.telemetryKafkaConsumer.Topic;
+                if (this.states.TryGetValue(nameOfState, out var existingState))
+                {
+                    if (existingState.GetType().GetGenericArguments().First() != typeof(T))
+                    {
+                        throw new ArgumentException($"State '{nameOfState}' for topic '{topic}' already exists with a different type.");
+                    }
+
+                    return (TopicState<T>)existingState;
+                }
+                var state = new TopicState<T>(topic, nameOfState, defaultValueFactory);
+                this.states.Add(nameOfState, state);
+                this.OnCommitted += (sender, args) =>
+                {
+                    try
+                    {
+                        this.logger.LogTrace("Flushing state '{0}' for topic '{1}'.", nameOfState, topic);
+                        state.Flush();
+                        this.logger.LogDebug("Flushed state '{0}' for topic '{1}'.", nameOfState, topic);
+                    }
+                    catch (Exception ex)
+                    {
+                        this.logger.LogError(ex, "Failed to flush state '{0}' for topic '{1}'.", nameOfState, topic);
+                    }
+
+                };
+                return state;
+            }
+        }
+
 
         /// <inheritdoc />
         public void Dispose()
