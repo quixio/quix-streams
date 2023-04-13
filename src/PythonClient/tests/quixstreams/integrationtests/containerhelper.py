@@ -2,6 +2,7 @@ from typing import Tuple
 import random
 import datetime
 import time
+import os
 
 from testcontainers.core.container import DockerContainer
 
@@ -18,7 +19,11 @@ class ContainerHelper:
         kafka_port = random.randint(16000, 20000)
         broker_list = '{0}:{1}'.format(kafka_address, kafka_port)
 
-        kafka_container = DockerContainer(image='lensesio/fast-data-dev:3.3.1')
+        archname = os.uname().machine
+        if archname == 'arm64':
+            kafka_container = DockerContainer(image='dougdonohoe/fast-data-dev:latest')
+        else:
+            kafka_container = DockerContainer(image='lensesio/fast-data-dev:3.3.1')
         kafka_container = kafka_container.with_env('BROKER_PORT', kafka_port)
         kafka_container = kafka_container.with_bind_ports(kafka_port, kafka_port)
         kafka_container = kafka_container.with_env('ZK_PORT', zookeeper_port)

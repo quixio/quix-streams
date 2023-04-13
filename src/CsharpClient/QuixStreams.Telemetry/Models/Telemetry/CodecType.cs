@@ -3,23 +3,23 @@
 namespace QuixStreams.Telemetry.Models
 {
     /// <summary>
-    /// Codecs available in the library
+    /// Codecs available for serialization and deserialization of streams. 
     /// </summary>
     public enum CodecType
     {
         /// <summary>
         /// Json codecs using <see cref="DefaultJsonCodec"/>
         /// </summary>
-        Json,
+        Json = 0,
         
         /// <summary>
-        /// Improved Json codecs where the resulting JSON might not be very human friendly, but still in JSON Format
+        /// Improved Json codecs where the resulting JSON might not be very human friendly, but is more lightweight.
         /// </summary>
-        ImprovedJson,
+        CompactJsonForBetterPerformance = 1,
         
         /// <summary>
         /// Protocol buffer format
         /// </summary>
-        Protobuf,
+        Protobuf = 2,
     }
 }

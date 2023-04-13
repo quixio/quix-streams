@@ -1,12 +1,14 @@
-﻿using System.Runtime.Serialization;
+﻿using System;
+using System.Runtime.Serialization;
 using QuixStreams.Transport.Codec;
+using QuixStreams.Transport.Fw.Models;
 
 namespace QuixStreams.Transport.Fw.Helpers
 {
     /// <summary>
     /// Codec used to serialize TransportPackageValue
     /// Doesn't inherit from <see cref="ICodec{TContent}"/> because isn't intended for external or generic use
-    /// and the interface slightly compicates the implementation for no benefit
+    /// and the interface slightly complicates the implementation for no benefit
     /// </summary>
     internal static class TransportPackageValueCodec
     {
@@ -19,7 +21,7 @@ namespace QuixStreams.Transport.Fw.Helpers
             if (contentBytes.Length > 0)
             {
                 var protocolId = contentBytes[0];
-                //first character is { >> backward compatibility function
+                // first character is { >> backward compatibility function
                 if (protocolId == PROTOCOL_ID_BYTE)
                 {
                     return TransportPackageValueCodecBinary.Deserialize(contentBytes);
@@ -36,10 +38,13 @@ namespace QuixStreams.Transport.Fw.Helpers
             throw new SerializationException($"Failed to deserialize - the packet does length == 0");
         }
 
-        public static byte[] Serialize(TransportPackageValue transportPackageValue)
+        public static byte[] Serialize(TransportPackageValue transportPackageValue, TransportPackageValueCodecType codecType)
         {
-            //we support only the serialization in the binary format
-            return TransportPackageValueCodecBinary.Serialize(transportPackageValue);
+            return codecType switch {
+                TransportPackageValueCodecType.Json => TransportPackageValueCodecJSON.Serialize(transportPackageValue),
+                TransportPackageValueCodecType.Binary => TransportPackageValueCodecBinary.Serialize(transportPackageValue),
+                _ => throw new NotImplementedException($"Serialization for {codecType} is not implemented")
+            };
         }
     }
 }

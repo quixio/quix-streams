@@ -24,6 +24,7 @@ using QuixStreams.Streaming.QuixApi.Portal.Requests;
 using QuixStreams.Streaming.Raw;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Kafka;
+using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming

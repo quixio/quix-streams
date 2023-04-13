@@ -16,7 +16,7 @@ namespace QuixStreams.PerformanceTest
 
         public void Run(CancellationToken ct)
         {
-            var client = new TestStreamingClient(CodecType.ImprovedJson);
+            var client = new TestStreamingClient(CodecType.CompactJsonForBetterPerformance);
 
             //var topicConsumer = client.GetTopicConsumer();
             var topicProducer = client.GetTopicProducer();

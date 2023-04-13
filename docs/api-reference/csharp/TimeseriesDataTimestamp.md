@@ -22,9 +22,9 @@ public readonly struct TimeseriesDataTimestamp
 | :--- | :--- |
 | [AddTag(string, string)](TimeseriesDataTimestamp.AddTag(string,string).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddTag(string, string)') | Adds a tag to the values |
 | [AddTags(IEnumerable&lt;KeyValuePair&lt;string,string&gt;&gt;)](TimeseriesDataTimestamp.AddTags(IEnumerable_KeyValuePair_string,string__).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddTags(System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string,string>>)') | Copies the tags from the specified dictionary.<br/>Conflicting tags will be overwritten |
+| [AddValue(string, ParameterValue)](TimeseriesDataTimestamp.AddValue(string,ParameterValue).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddValue(string, QuixStreams.Streaming.Models.ParameterValue)') | Adds a new value. |
 | [AddValue(string, byte[])](TimeseriesDataTimestamp.AddValue(string,byte[]).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddValue(string, byte[])') | Adds a new binary value. |
 | [AddValue(string, double)](TimeseriesDataTimestamp.AddValue(string,double).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddValue(string, double)') | Adds a new numeric value. |
-| [AddValue(string, ParameterValue)](TimeseriesDataTimestamp.AddValue(string,ParameterValue).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddValue(string, QuixStreams.Streaming.Models.ParameterValue)') | Adds a new value. |
 | [AddValue(string, string)](TimeseriesDataTimestamp.AddValue(string,string).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.AddValue(string, string)') | Adds a new string value. |
 | [RemoveTag(string)](TimeseriesDataTimestamp.RemoveTag(string).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.RemoveTag(string)') | Removes a tag from the values |
 | [RemoveValue(string)](TimeseriesDataTimestamp.RemoveValue(string).md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp.RemoveValue(string)') | Removes a parameter value. |

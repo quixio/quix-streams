@@ -152,6 +152,58 @@ namespace QuixStreams.Transport.Fw.Helpers
         }
         
 
+        public static byte[] Serialize(TransportPackageValue transportPackageValue)
+        {
+            using (var ms = new MemoryStream())
+            using (var sw = new StreamWriter(ms, Constants.Utf8NoBOMEncoding))
+            {
+                using (var writer = new JsonTextWriter(sw)
+                {
+                    Formatting = Formatting.None // This is extremely important, because this way there is no Byte Order Marker
+                })
+                {
+                    writer.WriteStartObject();
+                    writer.WritePropertyName(CodecIdPropertyName);
+                    writer.WriteValue(transportPackageValue.CodecBundle.CodecId);
+                    writer.WritePropertyName(ModelKeyPropertyName);
+                    writer.WriteValue(transportPackageValue.CodecBundle.ModelKey);
+
+                    if (transportPackageValue.MetaData != null && transportPackageValue.MetaData.Count > 0)
+                    {
+                        writer.WritePropertyName(MetaDataPropertyName);
+                        writer.WriteRawValue(JsonConvert.SerializeObject(transportPackageValue.MetaData));
+                    }
+
+                    writer.WritePropertyName(ValueBytesPropertyName);
+                    writer.Flush();
+                    var startPosition = ms.Position;
+                    var value = transportPackageValue.Value;
+                    if (IsJson(value))
+                    {
+                        var sentData = StringCodec.Instance.Deserialize(value);
+                        writer.WriteRawValue(sentData);
+                    }
+                    else
+                    {
+                        writer.WriteValue(value);
+                    }
+
+                    writer.Flush();
+                    var endPosition = ms.Position;
+
+                    writer.WritePropertyName(ValueBytesStartPropertyName);
+                    writer.WriteValue(startPosition);
+                    writer.WritePropertyName(ValueBytesEndPropertyName);
+                    writer.WriteValue(endPosition);
+
+                    writer.WriteEnd();
+                    writer.Flush();
+                }
+
+                return ms.ToArray();
+            }
+        }
+        
         private static MetaData ParseMetaDataJSON(JsonReader reader)
         {
             var dictionary = new Dictionary<string, string>();

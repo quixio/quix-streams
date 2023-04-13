@@ -3,7 +3,7 @@ from typing import Dict, Union
 from .configuration import SecurityOptions
 from .helpers.enumconverter import EnumConverter as ec
 from .helpers.nativedecorator import nativedecorator
-from .models import CommitOptions, CommitMode, AutoOffsetReset
+from .models import CommitOptions, CommitMode, AutoOffsetReset, CodecType
 from .models.netdict import NetDict
 from .native.Python.QuixStreamsTelemetry.Kafka.AutoOffsetReset import AutoOffsetReset as AutoOffsetResetInterop
 from .native.Python.QuixStreamsStreaming.KafkaStreamingClient import KafkaStreamingClient as sci

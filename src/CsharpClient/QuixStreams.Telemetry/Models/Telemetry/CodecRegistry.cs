@@ -13,20 +13,22 @@ namespace QuixStreams.Telemetry.Models
     public static class CodecRegistry
     {
         /// <summary>
-        /// Register all the codecs of the library.
+        /// Register all the codecs for serialization and deserialization.
         /// For reading processes the incoming codec will be used automatically if it's available in the registered codecs.
+        /// Note: The order of codec registry is important. The last codec registered will be used for writing.
         /// </summary>
-        /// <param name="writingCodec">Codec for writing processes</param>
-        public static void Register(CodecType writingCodec = CodecType.Json)
+        /// <param name="producerCodec">Codec to use by producers</param>
+        public static void Register(CodecType producerCodec = CodecType.Json)
         {
+            // Consumer codecs
             foreach(CodecType codec in Enum.GetValues(typeof(CodecType)))
             {
-                if (codec == writingCodec) continue;
+                if (codec == producerCodec) continue;
                 RegisterCodec(codec);
             }
 
-            // Writing Codec
-            RegisterCodec(writingCodec);
+            // Producer codec
+            RegisterCodec(producerCodec);
         }
 
         private static void RegisterCodec(CodecType codec)
@@ -70,7 +72,7 @@ namespace QuixStreams.Telemetry.Models
                         QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());   
                     }
                     break;
-                case CodecType.ImprovedJson:
+                case CodecType.CompactJsonForBetterPerformance:
                     foreach (var modelKey in modelKeys)
                     {
                         if (typeof(TimeseriesDataRaw) == modelType)

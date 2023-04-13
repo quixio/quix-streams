@@ -4,9 +4,9 @@ using Microsoft.Extensions.Logging;
 using QuixStreams.Streaming.Configuration;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Configuration;
 using QuixStreams.Telemetry.Kafka;
-using QuixStreams.Telemetry.Models;
 using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming
@@ -19,14 +19,20 @@ namespace QuixStreams.Streaming
         private readonly ILogger logger = Logging.CreateLogger<KafkaStreamingClient>();
         private readonly string brokerAddress;
         private readonly Dictionary<string, string> brokerProperties;
-
+        
+        static KafkaStreamingClient()
+        {
+            // this will guarantee that the codec is set to default, without modifying
+            var codec = CodecSettings.CurrentCodec;
+        }
+        
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaStreamingClient"/>
         /// </summary>
         /// <param name="brokerAddress">Address of Kafka cluster.</param>
         /// <param name="securityOptions">Optional security options.</param>
         /// <param name="properties">Additional broker properties</param>
-        /// <param name="debug">Whether debugging should enabled</param>
+        /// <param name="debug">Whether debugging should be enabled</param>
         public KafkaStreamingClient(string brokerAddress, SecurityOptions securityOptions = null, IDictionary<string, string> properties = null, bool debug = false)
         {
             this.brokerAddress = brokerAddress;
@@ -73,8 +79,6 @@ namespace QuixStreams.Streaming
             }
 
             if (debug) this.brokerProperties["debug"] = "all";
-
-            CodecRegistry.Register(CodecType.Protobuf);
         }
         
         /// <summary>

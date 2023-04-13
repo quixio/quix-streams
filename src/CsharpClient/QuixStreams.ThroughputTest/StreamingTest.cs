@@ -25,7 +25,7 @@ namespace QuixStreams.ThroughputTest
             var dequeued = new List<Entry>();
             var readData = new ConcurrentQueue<Entry>();
             
-            CodecRegistry.Register(CodecType.ImprovedJson);
+            CodecRegistry.Register(CodecType.CompactJsonForBetterPerformance);
             
             var client = new KafkaStreamingClient(Configuration.Config.BrokerList, Configuration.Config.Security);
 
