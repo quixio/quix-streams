@@ -1,6 +1,11 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming.Models.StreamConsumer
@@ -8,7 +13,7 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
     /// <summary>
     /// Consumer for streams, which raises <see cref="TimeseriesData"/> and <see cref="ParameterDefinitions"/> related messages
     /// </summary>
-    public class StreamTimeseriesConsumer : IDisposable
+    public class StreamTimeseriesConsumer : IDisposable, IEnumerable<TimeseriesDataTimestamp>, IAsyncEnumerable<TimeseriesDataTimestamp>
     {
         private readonly ITopicConsumer topicConsumer;
         private readonly IStreamConsumerInternal streamConsumer;
@@ -155,6 +160,326 @@ namespace QuixStreams.Streaming.Models.StreamConsumer
             this.streamConsumer.OnTimeseriesData -= OnTimeseriesDataEventHandler;
             this.streamConsumer.OnTimeseriesData -= OnTimeseriesDataRawEventHandler;
         }
+
+        /// <summary>
+        /// Creates and returns a synchronous enumerator for processing timeseries data.
+        /// </summary>
+        /// <returns>An iterator of TimeseriesDataTimestamp in the stream.</returns>
+        public IEnumerator<TimeseriesDataTimestamp> GetEnumerator()
+        {
+            var enumerator = new StreamTimeseriesConsumerDataEnumerator(this, this.streamConsumer);
+            return enumerator;
+        }
+
+        /// <summary>
+        /// Creates and returns a synchronous enumerator for processing timeseries data.
+        /// </summary>
+        /// <returns>An iterator of TimeseriesDataTimestamp in the stream.</returns>
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return this.GetEnumerator();
+        }
+
+        
+        /// <summary>
+        /// Creates and returns an asynchronous enumerator for processing timeseries data.
+        /// </summary>
+        /// <param name="cancellationToken">An optional CancellationToken to cancel the operation.</param>
+        /// <returns>An async iterator of TimeseriesDataTimestamp in the stream.</returns>
+        public IAsyncEnumerator<TimeseriesDataTimestamp> GetAsyncEnumerator(CancellationToken cancellationToken = new CancellationToken())
+        {
+            var enumerator = new StreamTimeseriesConsumerAsyncDataEnumerator(this, this.streamConsumer, cancellationToken);
+            return enumerator;
+        }
+    }
+
+    internal class StreamTimeseriesConsumerDataEnumerator : IEnumerator<TimeseriesDataTimestamp>
+    {
+        private readonly ManualResetEventSlim dataProcessedMre;
+        // Semaphores to synchronize the consumption of data and manage concurrency
+        private readonly ManualResetEventSlim dataArrivedMre;
+
+        // CancellationTokenSource to handle cancellation of the enumerator
+        private readonly CancellationTokenSource cts;
+
+        // The current data
+        private TimeseriesData data;
+        // The current data iterator
+        private IEnumerator<TimeseriesDataTimestamp> dataIterator = null;
+
+        // Reference to the associated StreamTimeseriesConsumer
+        private readonly StreamTimeseriesConsumer timeseriesConsumer;
+
+        // Flag to track whether the enumerator has been disposed
+        private bool disposed = false;
+
+        // Reference to the associated IStreamConsumerInternal
+        private readonly IStreamConsumerInternal streamConsumer;
+
+        private static long instanceCounter = 0;
+        
+        internal StreamTimeseriesConsumerDataEnumerator(StreamTimeseriesConsumer timeseriesConsumer,
+            IStreamConsumerInternal streamConsumer, CancellationToken cancellationToken = default)
+        {
+            // Initialize the semaphore to signal when the data has been processed.
+            // Initial state is blocked (0), with a maximum count of 1.
+            this.dataArrivedMre = new ManualResetEventSlim(false);
+            this.dataProcessedMre = new ManualResetEventSlim(false);
+            
+            this.cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            this.timeseriesConsumer = timeseriesConsumer;
+            timeseriesConsumer.OnDataReceived += ConsumerOnOnDataReceived;
+            this.streamConsumer = streamConsumer;
+            streamConsumer.OnStreamClosed += StreamClosedHandler;
+            Interlocked.Increment(ref instanceCounter);
+        }
+        
+        
+
+        /// <summary>
+        /// Handles the OnStreamClosed event.
+        /// </summary>
+        private void StreamClosedHandler(object sender, StreamClosedEventArgs e)
+        {
+            Dispose();
+        }
+
+        /// <summary>
+        /// Handles the OnDataReceived event.
+        /// </summary>
+        private void ConsumerOnOnDataReceived(object sender, TimeseriesDataReadEventArgs args)
+        {
+            if (args.Data == null) return;
+            if (args.Data.Timestamps.Count == 0) return;
+
+
+            this.data = args.Data;
+
+            this.dataProcessedMre.Reset(); // so we can wait on it
+            this.dataArrivedMre.Set();
+
+
+            this.dataProcessedMre.Wait(cts.Token); // Wait for it to be processed
+
+        }
+        
+        public bool MoveNext()
+        {
+            if (this.cts.IsCancellationRequested) return false;
+            
+            // Enter an infinite loop to keep trying to move to the next data element.
+            while (true)
+            {
+                // If the dataIterator is not initialized, wait for data to become available.
+                if (this.dataIterator == null)
+                {
+                    try
+                    {
+                        this.dataArrivedMre.Wait(cts.Token);
+                        this.dataArrivedMre.Reset(); // so we can wait on it again
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        return false; // Throw exception?
+                    }
+
+                    if (this.cts.IsCancellationRequested) return false; // Could be disposed
+
+
+                    Debug.Assert(this.data != null, "data is null");
+                    this.dataIterator = this.data.Timestamps.GetEnumerator();
+
+
+                }
+                
+                if (this.dataIterator.MoveNext())
+                {
+                    this.Current = this.dataIterator.Current;
+                    return true;
+                }
+
+                // If there are no more elements, release the dataProcessedSemaphore.
+                this.dataIterator = null;
+                this.data = null;
+                this.dataProcessedMre.Set();
+            }
+        }
+
+        public void Reset()
+        {
+            throw new NotImplementedException();
+        }
+
+        public TimeseriesDataTimestamp Current { get; private set; }
+
+        object IEnumerator.Current => Current;
+
+        public void Dispose()
+        {
+            if (this.disposed) return;
+            this.disposed = true;
+            this.timeseriesConsumer.OnDataReceived -= ConsumerOnOnDataReceived;
+            this.streamConsumer.OnStreamClosed -= StreamClosedHandler;
+            cts.Cancel();
+            Interlocked.Decrement(ref instanceCounter);
+        }
+    }
+
+    /// <summary>
+    /// StreamTimeseriesConsumerAsyncDataEnumerator is an internal class that implements
+    /// an asynchronous enumerator for processing timeseries data from a streaming source.
+    /// </summary>
+    internal class StreamTimeseriesConsumerAsyncDataEnumerator : IAsyncEnumerator<TimeseriesDataTimestamp>
+    {
+        // Semaphores to synchronize the production of data and manage concurrency
+        private readonly SemaphoreSlim dataAvailableSemaphore;
+        // Semaphores to synchronize the consumption of data and manage concurrency
+        private readonly SemaphoreSlim dataProcessedSemaphore;
+
+        // CancellationTokenSource to handle cancellation of the enumerator
+        private readonly CancellationTokenSource cts;
+
+        // The current data
+        private TimeseriesData data;
+        // The current data iterator
+        private IEnumerator<TimeseriesDataTimestamp> dataIterator = null;
+
+        // Reference to the associated StreamTimeseriesConsumer
+        private readonly StreamTimeseriesConsumer timeseriesConsumer;
+
+        // Flag to track whether the enumerator has been disposed
+        private bool disposed = false;
+
+        // Reference to the associated IStreamConsumerInternal
+        private readonly IStreamConsumerInternal streamConsumer;
+
+        /// <summary>
+        /// Initializes a new instance of the StreamTimeseriesConsumerAsyncDataEnumerator class.
+        /// </summary>
+        /// <param name="timeseriesConsumer">The associated StreamTimeseriesConsumer.</param>
+        /// <param name="streamConsumer">The associated IStreamConsumerInternal.</param>
+        /// <param name="cancellationToken">An optional CancellationToken to cancel the operation.</param>
+        internal StreamTimeseriesConsumerAsyncDataEnumerator(StreamTimeseriesConsumer timeseriesConsumer,
+            IStreamConsumerInternal streamConsumer, CancellationToken cancellationToken = default)
+        {
+            // Initialize the semaphore to signal when the data has been processed.
+            // Initial state is blocked (0), with a maximum count of 1.
+            this.dataProcessedSemaphore = new SemaphoreSlim(0, 1);
+            
+            // Initialize the semaphore to signal when the data has arrived.
+            // Initial state is blocked (0), with a maximum count of 1.
+            this.dataAvailableSemaphore = new SemaphoreSlim(0, 1);
+            
+            this.cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            this.timeseriesConsumer = timeseriesConsumer;
+            timeseriesConsumer.OnDataReceived += ConsumerOnOnDataReceived;
+            this.streamConsumer = streamConsumer;
+            streamConsumer.OnStreamClosed += StreamClosedHandler;
+        }
+
+        /// <summary>
+        /// Handles the OnStreamClosed event.
+        /// </summary>
+        private void StreamClosedHandler(object sender, StreamClosedEventArgs e)
+        {
+            Dispose();
+        }
+
+        /// <summary>
+        /// Handles the OnDataReceived event.
+        /// </summary>
+        private void ConsumerOnOnDataReceived(object sender, TimeseriesDataReadEventArgs args)
+        {
+            if (args.Data == null) return;
+            if (args.Data.Timestamps.Count == 0) return;
+
+            this.data = args.Data;
+            this.dataAvailableSemaphore.Release();
+            try
+            {
+                this.dataProcessedSemaphore.Wait(cts.Token); // Wait for it to be processed
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        /// <summary>
+        /// Disposes the enumerator and releases associated resources.
+        /// </summary>
+        private void Dispose()
+        {
+            if (this.disposed) return;
+            this.disposed = true;
+            this.timeseriesConsumer.OnDataReceived -= ConsumerOnOnDataReceived;
+            this.streamConsumer.OnStreamClosed -= StreamClosedHandler;
+            cts.Cancel();
+            this.dataProcessedSemaphore.Dispose();
+            //this.dataAvailableSemaphore.Dispose(); // disposing this semaphore causes problems, so lets GC deal with it
+        }
+
+        /// <summary>
+        /// Asynchronously disposes the enumerator and releases associated resources.
+        /// </summary>
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+
+            return new ValueTask(Task.CompletedTask);
+        }
+
+        /// <summary>
+        /// Asynchronously moves to the next element in the timeseries data iterator.
+        /// This method will continue attempting to move to the next element until the stream is closed,
+        /// the enumerator is disposed, or data is available.
+        /// </summary>
+        /// <returns>A ValueTask representing whether the enumerator successfully moved to the next element.</returns>
+        public async ValueTask<bool> MoveNextAsync()
+        {
+            if (this.cts.IsCancellationRequested) return false;
+            
+            // Enter an infinite loop to keep trying to move to the next data element.
+            while (true)
+            {
+                // If the dataIterator is not initialized, wait for data to become available.
+                if (this.dataIterator == null)
+                {
+                    try
+                    {
+                        await this.dataAvailableSemaphore.WaitAsync(cts.Token);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+
+                    if (this.cts.IsCancellationRequested) return false; // Could be disposed
+
+                    Debug.Assert(this.data != null, "data is null");
+                    this.dataIterator = this.data.Timestamps.GetEnumerator();
+                    
+                }
+                
+                if (this.dataIterator.MoveNext())
+                {
+                    this.Current = this.dataIterator.Current;
+                    return true;
+                }
+
+                // If there are no more elements, release the dataProcessedSemaphore.
+                this.dataIterator = null;
+                this.data = null;
+                this.dataProcessedSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// Gets the current TimeseriesDataTimestamp element in the enumerator.
+        /// </summary>
+        public TimeseriesDataTimestamp Current { get; private set; }
     }
 
     public class ParameterDefinitionsChangedEventArgs
