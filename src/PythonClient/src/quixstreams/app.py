@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import traceback
 import signal
 from typing import Callable
@@ -98,7 +99,16 @@ class App:
         # the interop, there is no need to throw an exception that is impossible to handle anyway
         def keyboard_interrupt_handler(signal, frame):
             pass
-        signal.signal(signal.SIGINT, keyboard_interrupt_handler)
+        try:
+            signal.signal(signal.SIGINT, keyboard_interrupt_handler)
+        except ValueError as ex:
+            # If this exception happens, it means the signal handling is running on non-main thread.
+            # The end result is that keyboard or shutdown interruption will not work here or in C# interop.
+            # While that is not optimal, it is still better to let the application at least function
+            # and log the exception + warning than completely block it from functioning.
+            traceback.print_exc()
+            logging.log(logging.WARNING, "Shutdown may not work as expected. See error.")
+
 
         try:
             if cancellation_token is not None:
