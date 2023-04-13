@@ -49,5 +49,16 @@ namespace QuixStreams.State.Storage
         /// </summary>
         /// <returns>Awaitable task</returns>
         public Task ClearAsync();
+
+        /// <summary>
+        /// Returns the number of keys in storage
+        /// </summary>
+        /// <returns></returns>
+        public Task<int> Count();
+        
+        /// <summary>
+        /// Returns whether the storage is case sensitive
+        /// </summary>
+        public bool IsCaseSensitive { get; }
     }
 }

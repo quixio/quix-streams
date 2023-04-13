@@ -168,7 +168,7 @@ namespace QuixStreams.State
             {
                 if (Type != StateType.Bool)
                 {
-                    throw new InvalidCastException("value is not long type");
+                    throw new InvalidCastException("value is not boolean type");
                 }
                 return this.boolValue;
             }
@@ -186,6 +186,27 @@ namespace QuixStreams.State
                     throw new InvalidCastException("value is not binary type");
                 }
                 return this.byteValue;
+            }
+        }
+
+        public override int GetHashCode()
+        {
+            switch (Type)
+            {
+                case StateType.Binary:
+                    return this.BinaryValue.GetHashCode();
+                case StateType.Long:
+                    return this.LongValue.GetHashCode();
+                case StateType.Bool:
+                    return this.BoolValue.GetHashCode();
+                case StateType.Double:
+                    return this.DoubleValue.GetHashCode();
+                case StateType.String:
+                    return this.StringValue.GetHashCode();
+                case StateType.Object:
+                    return this.BinaryValue.GetHashCode();
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 
