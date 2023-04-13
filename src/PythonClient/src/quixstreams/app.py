@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import traceback
 import signal
 from typing import Callable
@@ -98,7 +99,12 @@ class App:
         # the interop, there is no need to throw an exception that is impossible to handle anyway
         def keyboard_interrupt_handler(signal, frame):
             pass
-        signal.signal(signal.SIGINT, keyboard_interrupt_handler)
+        try:
+            signal.signal(signal.SIGINT, keyboard_interrupt_handler)
+        except ValueError as ex:
+            traceback.print_exc()
+            logging.log(logging.WARNING, "Shutdown may not work as expected. See error.")
+
 
         try:
             if cancellation_token is not None:
