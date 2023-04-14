@@ -17,7 +17,20 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
     - uses: actions/checkout@v3
-    # Runs a single command using the runners shell
-    - name: Send greeting
-      run: echo "Hello ${{ github.event.inputs.name }}"
+
+    - name: Install Docker 23.0.0
+      uses: docker/setup-docker@v2.7.0
+      with:
+        docker-version: 23.0.0
+
+    - name: Run buildx64.sh
+      run: |
+        source ./buildx64.sh
+      working-directory: $GITHUB_WORKSPACE/src/builds/python/linux/
+      
+    - name: Publish Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        name: linuxresult-x64
+        path: $GITHUB_WORKSPACE/src/builds/python/linux/build-result
 
