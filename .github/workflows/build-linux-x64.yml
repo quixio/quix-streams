@@ -21,11 +21,11 @@ jobs:
     - name: Run buildx64.sh
       run: |
         source ./buildx64.sh
-      working-directory: $GITHUB_WORKSPACE/src/builds/python/linux/
+      working-directory: /src/builds/python/linux/
       
     - name: Publish Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
         name: linuxresult-x64
-        path: $GITHUB_WORKSPACE/src/builds/python/linux/build-result
+        path: /src/builds/python/linux/build-result
 
