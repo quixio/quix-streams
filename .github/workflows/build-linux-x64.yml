@@ -18,11 +18,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install Docker 23.0.0
-      uses: docker/setup-docker@v2.7.0
-      with:
-        docker-version: 23.0.0
-
     - name: Run buildx64.sh
       run: |
         source ./buildx64.sh
