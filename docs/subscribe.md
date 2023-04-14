@@ -423,7 +423,7 @@ Consuming events from a stream is as easy as consuming timeseries data. In this 
     ``` python
     def on_event_data_received_handler(stream: StreamConsumer, data: EventData):
         with data:
-            print("Event consumed for stream. Event Id: " + data.Id)
+            print("Event consumed for stream. Event Id: " + data.id)
     
     stream_received.events.on_data_received = on_event_data_received_handler
     ```
