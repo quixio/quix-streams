@@ -10,6 +10,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   linux-x64:
+    if: false
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -36,6 +37,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+      
     - name: Run buildarm64.sh
       run: |
         source ./buildarm64.sh
@@ -48,6 +55,7 @@ jobs:
         path: src/builds/python/linux/build-result
 
   win-x64:
+    if: false
     runs-on: windows-latest
 
     steps:
@@ -69,6 +77,7 @@ jobs:
           path: src/builds/python/windows/build-result
 
   mac-x64:
+    if: false
     runs-on: macOS-latest
 
     steps:
