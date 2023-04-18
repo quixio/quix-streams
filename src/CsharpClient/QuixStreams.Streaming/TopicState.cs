@@ -181,7 +181,12 @@ namespace QuixStreams.Streaming
 
         private readonly object stateLock = new object();
         private readonly Dictionary<string, object> states = new Dictionary<string, object>();
+        
+        private readonly object streamStateManagerLock = new object();
+        private readonly Dictionary<string, StreamStateManager> streamStateManagers = new Dictionary<string, StreamStateManager>();
+
         private readonly ILogger<TopicStateManager> logger;
+        private const string BasePath = "state";
         private const string StreamStatePrefix = "__stream_";
 
         /// <summary>
@@ -208,9 +213,48 @@ namespace QuixStreams.Streaming
         private TopicState<T> CreateTopicState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
             // TODO possibly refactor to be able to allow using different storage
-            var fileStorage = new LocalFileStorage($"state{Path.DirectorySeparatorChar}{this.topicName}{Path.DirectorySeparatorChar}{nameOfState}");
+            var fileStorage = new LocalFileStorage($"{BasePath}{Path.DirectorySeparatorChar}{this.topicName}{Path.DirectorySeparatorChar}{nameOfState}");
             var state = new TopicState<T>(fileStorage, defaultValueFactory, Logging.CreatePrefixedFactory($"{this.topicName} - {nameOfState}"));
             return state;
+        }
+
+        /// <summary>
+        /// Returns an enumerable collection of all available stream state ids for the current topic.x  
+        /// </summary>
+        /// <returns>An enumerable collection of string values representing the ids of the stream states.</returns>
+        public IEnumerable<string> GetStreamStates()
+        {
+            // TODO rework this to move work to FileStorage & expose on interface the action to list sub-storages with prefix
+            var topicPath = $"{BasePath}{Path.DirectorySeparatorChar}{this.topicName}";
+            if (!Directory.Exists(topicPath)) yield break;
+            foreach (var dirPath in Directory.EnumerateDirectories(topicPath))
+            {
+                var dirName = Path.GetFileName(dirPath); // this just gets the last segment
+                if (string.IsNullOrWhiteSpace(dirName)) continue;
+                if (dirName.StartsWith(StreamStatePrefix)) yield return dirName.Substring(StreamStatePrefix.Length);
+            }
+        }
+        
+        /// <summary>
+        /// Deletes all stream states for the current topic.
+        /// </summary>
+        /// <returns>The number of stream states that were deleted.</returns>
+        public int DeleteStreamStates()
+        {
+            // TODO rework this to move work to FileStorage & expose on interface the action to delete sub-storages with prefix
+            var topicPath = $"{BasePath}{Path.DirectorySeparatorChar}{this.topicName}";
+            if (!Directory.Exists(topicPath)) return 0;
+            var totalDeleted = 0;
+            foreach (var dirPath in Directory.EnumerateDirectories(topicPath))
+            {
+                var dirName = Path.GetFileName(dirPath);
+                if (string.IsNullOrWhiteSpace(dirName)) continue;
+                if (!dirName.StartsWith(StreamStatePrefix)) continue;
+                totalDeleted++;
+                Directory.Delete(dirPath, true);
+            }
+
+            return totalDeleted;
         }
 
         /// <summary>
@@ -222,7 +266,7 @@ namespace QuixStreams.Streaming
         private IStateStorage CreateStreamStateStorage(string streamId, string nameOfState)
         {
             // TODO possibly refactor to be able to allow using different storage
-            var fileStorage = new LocalFileStorage($"state{Path.DirectorySeparatorChar}{this.topicName}{Path.DirectorySeparatorChar}{StreamStatePrefix}{streamId}{Path.DirectorySeparatorChar}{nameOfState}");
+            var fileStorage = new LocalFileStorage($"{BasePath}{Path.DirectorySeparatorChar}{this.topicName}{Path.DirectorySeparatorChar}{StreamStatePrefix}{streamId}{Path.DirectorySeparatorChar}{nameOfState}");
             return fileStorage;
         }
 
@@ -285,7 +329,14 @@ namespace QuixStreams.Streaming
         /// <returns>The newly created <see cref="StreamStateManager"/> instance.</returns>
         public StreamStateManager GetStreamStateManager(string streamId)
         {
-            return new StreamStateManager(this.topicConsumer, streamId, this.CreateStreamStateStorage, this.loggerFactory, this.topicName + " ");
+            if (this.streamStateManagers.TryGetValue(streamId, out var existing)) return existing;
+            lock (streamStateManagerLock)
+            {
+                if (this.streamStateManagers.TryGetValue(streamId, out existing)) return existing;
+                var manager = new StreamStateManager(this.topicConsumer, streamId, this.CreateStreamStateStorage, this.loggerFactory, this.topicName + " ");
+                this.streamStateManagers[streamId] = manager;
+                return manager;
+            }
         }
     }
 }
