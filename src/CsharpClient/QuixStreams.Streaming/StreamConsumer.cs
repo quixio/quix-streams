@@ -1,6 +1,5 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
-using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
@@ -18,6 +17,8 @@ namespace QuixStreams.Streaming
         private readonly StreamTimeseriesConsumer streamTimeseriesConsumer;
         private readonly StreamEventsConsumer streamEventsConsumer;
         private bool isClosed = false;
+        private volatile StreamStateManager stateManager;
+        private readonly object stateLock = new object();
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamConsumer"/>
@@ -61,9 +62,24 @@ namespace QuixStreams.Streaming
         /// <inheritdoc />
         public event EventHandler<StreamClosedEventArgs> OnStreamClosed;
 
-        public StreamState<T> GetState<T>(string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
+        /// <inheritdoc />
+        public StreamState<T> GetState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory)
         {
-            throw new NotImplementedException();
+            return this.GetStateManager().GetState(nameOfState, defaultValueFactory);
+        }
+
+        /// <inheritdoc />
+        public StreamStateManager GetStateManager()
+        {
+            if (this.stateManager != null) return this.stateManager;
+            lock (stateLock)
+            {
+                if (this.stateManager != null) return this.stateManager;
+
+                this.stateManager = this.topicConsumer.GetStateManager().GetStreamStateManager(this.StreamId);
+            }
+
+            return this.stateManager;
         }
 
 

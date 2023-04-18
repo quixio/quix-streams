@@ -5,7 +5,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
 
-namespace QuixStreams.Streaming.Models
+namespace QuixStreams.Streaming
 {
      /// <summary>
     /// Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
@@ -13,16 +13,6 @@ namespace QuixStreams.Streaming.Models
     /// <typeparam name="T">The type of values stored in the StreamState.</typeparam>
     public class StreamState<T> : IDictionary<string, T>
     {
-        /// <summary>
-        /// The logger for the class
-        /// </summary>
-        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamState<T>>();
-        
-        /// <summary>
-        /// The unique name for this StreamState, which is a combination of the topic name and storage name.
-        /// </summary>
-        private readonly string name;
-        
         /// <summary>
         /// The underlying state storage for this StreamState, responsible for managing the actual key-value pairs.
         /// </summary>
@@ -156,10 +146,8 @@ namespace QuixStreams.Streaming.Models
         /// </summary>
         public void Flush()
         {
-            logger.LogTrace("Flushing state '{0}'", this.name);
             OnFlushing?.Invoke(this, EventArgs.Empty);
             this.state.Flush();
-            logger.LogTrace("Flushed state for '{0}'", this.name);
             OnFlushed?.Invoke(this, EventArgs.Empty);
         }
     }

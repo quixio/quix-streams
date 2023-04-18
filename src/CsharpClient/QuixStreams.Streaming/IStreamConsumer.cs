@@ -49,7 +49,12 @@ namespace QuixStreams.Streaming
         /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
         /// <returns>The stream state for the specified storage name using the provided default value factory.</returns>
         StreamState<T> GetState<T>(string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory);
-
+        
+        /// <summary>
+        /// Gets the manager for the stream states
+        /// </summary>
+        /// <returns>Stream state manager</returns>
+        StreamStateManager GetStateManager();
     }
     
     /// <summary>

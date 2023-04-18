@@ -281,10 +281,9 @@ namespace QuixStreams.Streaming
         /// <summary>
         /// Gets a new instance of the <see cref="StreamStateManager"/> class for the specified <paramref name="streamId"/>.
         /// </summary>
-        /// <typeparam name="T">The type of data stored in the stream.</typeparam>
         /// <param name="streamId">The ID of the stream.</param>
         /// <returns>The newly created <see cref="StreamStateManager"/> instance.</returns>
-        public StreamStateManager GetStreamStateManager<T>(string streamId)
+        public StreamStateManager GetStreamStateManager(string streamId)
         {
             return new StreamStateManager(this.topicConsumer, streamId, this.CreateStreamStateStorage, this.loggerFactory, this.topicName + " ");
         }
