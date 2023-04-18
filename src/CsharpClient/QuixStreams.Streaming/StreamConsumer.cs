@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
@@ -59,6 +60,11 @@ namespace QuixStreams.Streaming
 
         /// <inheritdoc />
         public event EventHandler<StreamClosedEventArgs> OnStreamClosed;
+
+        public StreamState<T> GetState<T>(string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
+        {
+            throw new NotImplementedException();
+        }
 
 
         /// <inheritdoc />

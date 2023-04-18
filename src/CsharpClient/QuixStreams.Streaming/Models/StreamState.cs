@@ -1,28 +1,30 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
-using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
-using QuixStreams.Streaming.Models;
 
-namespace QuixStreams.Streaming
+namespace QuixStreams.Streaming.Models
 {
-    /// <summary>
+     /// <summary>
     /// Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
     /// </summary>
-    /// <typeparam name="T">The type of values stored in the TopicState.</typeparam>
-    public class TopicState<T> : IDictionary<string, T>
+    /// <typeparam name="T">The type of values stored in the StreamState.</typeparam>
+    public class StreamState<T> : IDictionary<string, T>
     {
         /// <summary>
         /// The logger for the class
         /// </summary>
-        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<TopicState<T>>();
-
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamState<T>>();
+        
         /// <summary>
-        /// The underlying state storage for this TopicState, responsible for managing the actual key-value pairs.
+        /// The unique name for this StreamState, which is a combination of the topic name and storage name.
+        /// </summary>
+        private readonly string name;
+        
+        /// <summary>
+        /// The underlying state storage for this StreamState, responsible for managing the actual key-value pairs.
         /// </summary>
         private readonly State.State<T> state;
         /// <summary>
@@ -33,7 +35,7 @@ namespace QuixStreams.Streaming
         /// <summary>
         /// A function that takes a string key and returns a default value of type T when the key is not found in the state storage.
         /// </summary>
-        private readonly TopicStateDefaultValueDelegate<T> defaultValueFactory;
+        private readonly StreamStateDefaultValueDelegate<T> defaultValueFactory;
 
         /// <summary>
         /// Raised immediately before a flush operation is performed.
@@ -46,14 +48,14 @@ namespace QuixStreams.Streaming
         public event EventHandler OnFlushed;
 
         /// <summary>
-        /// Initializes a new instance of the TopicState class.
+        /// Initializes a new instance of the StreamState class.
         /// </summary>
-        /// <param name="storage">The storage to use for the underlying state</param>
+        /// <param name="storage">The storage the stream state is going to use as underlying storage</param>
         /// <param name="defaultValueFactory">A function that takes a string key and returns a default value of type T when the key is not found in the state</param>
-        /// <param name="loggerFactory">The optional logging factory</param>
-        public TopicState(IStateStorage storage, TopicStateDefaultValueDelegate<T> defaultValueFactory, ILoggerFactory loggerFactory = null)
+        /// <param name="loggerFactory">The logger factory to use</param>
+        internal StreamState(IStateStorage storage, StreamStateDefaultValueDelegate<T> defaultValueFactory, ILoggerFactory loggerFactory)
         {
-            this.state = new State.State<T>(storage, Logging.Factory);
+            this.state = new State.State<T>(storage, loggerFactory);
             this.defaultValueFactory = defaultValueFactory ?? (s => throw new KeyNotFoundException("The specified key was not found and there was no default value factory set."));
         }
 
@@ -154,10 +156,10 @@ namespace QuixStreams.Streaming
         /// </summary>
         public void Flush()
         {
-            logger.LogTrace("Flushing state");
+            logger.LogTrace("Flushing state '{0}'", this.name);
             OnFlushing?.Invoke(this, EventArgs.Empty);
             this.state.Flush();
-            logger.LogTrace("Flushed state");
+            logger.LogTrace("Flushed state for '{0}'", this.name);
             OnFlushed?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -168,80 +170,73 @@ namespace QuixStreams.Streaming
     /// <typeparam name="T">The type of the default value.</typeparam>
     /// <param name="key">The name of the key being accessed.</param>
     /// <returns>The default value for the specified key.</returns>
-    public delegate T TopicStateDefaultValueDelegate<out T>(string key);
+    public delegate T StreamStateDefaultValueDelegate<out T>(string key);
     
     /// <summary>
-    /// Manages the states of a topic.
+    /// Manages the states of a stream.
     /// </summary>
-    public class TopicStateManager
+    public class StreamStateManager
     {
         private readonly ITopicConsumer topicConsumer;
-        private readonly string topicName;
         private readonly ILoggerFactory loggerFactory;
+        private readonly string logPrefix;
+        private readonly ILogger logger;
+        private readonly string streamId;
+        private readonly StreamStateStorageFactoryDelegate stateStorageFactory;
 
         private readonly object stateLock = new object();
         private readonly Dictionary<string, object> states = new Dictionary<string, object>();
-        private readonly ILogger<TopicStateManager> logger;
-        private const string StreamStatePrefix = "__stream_";
+
+        internal delegate IStateStorage StreamStateStorageFactoryDelegate(string streamId, string stateName);
 
         /// <summary>
-        /// Initializes a new instance of the TopicStateManager class.
+        /// Initializes a new instance of the <see cref="StreamStateManager"/> class with the specified parameters.
         /// </summary>
-        /// <param name="topicConsumer">The topic consumer this manager is for.</param>
-        /// <param name="topicName">The name of the topic</param>
-        /// <param name="loggerFactory">The logger factory to use</param>
-        internal TopicStateManager(ITopicConsumer topicConsumer, string topicName, ILoggerFactory loggerFactory)
+        /// <param name="topicConsumer">The topic consumer used for committing state changes.</param>
+        /// <param name="streamId">The ID of the stream.</param>
+        /// <param name="stateStorageFactory">The factory delegate used for creating state storage.</param>
+        /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
+        /// <param name="logPrefix">The prefix to be used in log messages.</param>
+        internal StreamStateManager(ITopicConsumer topicConsumer, string streamId, StreamStateStorageFactoryDelegate stateStorageFactory, ILoggerFactory loggerFactory, string logPrefix)
         {
             this.topicConsumer = topicConsumer;
-            this.topicName = topicName;
             this.loggerFactory = loggerFactory;
-            this.logger = this.loggerFactory.CreateLogger<TopicStateManager>();
+            this.logPrefix = $"{logPrefix}{streamId}";
+            this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
+            this.streamId = streamId;
+            this.stateStorageFactory = stateStorageFactory;
         }
-
+        
         /// <summary>
-        /// Creates a new instance of the <see cref="TopicState{T}"/> class with the specified <paramref name="nameOfState"/> and optional <paramref name="defaultValueFactory"/>.
+        /// Creates a new instance of the <see cref="StreamState{T}"/> class with the specified <paramref name="nameOfState"/> and optional <paramref name="defaultValueFactory"/>.
         /// </summary>
-        /// <typeparam name="T">The type of value stored in the <see cref="TopicState{T}"/>.</typeparam>
+        /// <typeparam name="T">The type of data stored in the state.</typeparam>
         /// <param name="nameOfState">The name of the state.</param>
         /// <param name="defaultValueFactory">An optional delegate that returns a default value for the state if it does not exist.</param>
-        /// <returns>The newly created <see cref="TopicState{T}"/> instance.</returns>
-        private TopicState<T> CreateTopicState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
+        /// <returns>The newly created <see cref="StreamState{T}"/> instance.</returns>
+        private StreamState<T> CreateStreamState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
-            // TODO possibly refactor to be able to allow using different storage
-            var fileStorage = new LocalFileStorage($"state{Path.DirectorySeparatorChar}{this.topicName}{Path.DirectorySeparatorChar}{nameOfState}");
-            var state = new TopicState<T>(fileStorage, defaultValueFactory, Logging.CreatePrefixedFactory($"{this.topicName} - {nameOfState}"));
+            var storage = stateStorageFactory(this.streamId, nameOfState);
+            var state = new StreamState<T>(storage, defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {nameOfState}"));
             return state;
         }
-
+        
         /// <summary>
-        /// Creates a new instance of the <see cref="LocalFileStorage"/> class with the specified <paramref name="streamId"/> and <paramref name="nameOfState"/>.
-        /// </summary>
-        /// <param name="streamId">The ID of the stream.</param>
-        /// <param name="nameOfState">The name of the state.</param>
-        /// <returns>The newly created <see cref="LocalFileStorage"/> instance.</returns>
-        private IStateStorage CreateStreamStateStorage(string streamId, string nameOfState)
-        {
-            // TODO possibly refactor to be able to allow using different storage
-            var fileStorage = new LocalFileStorage($"state{Path.DirectorySeparatorChar}{this.topicName}{Path.DirectorySeparatorChar}{StreamStatePrefix}{streamId}{Path.DirectorySeparatorChar}{nameOfState}");
-            return fileStorage;
-        }
-
-        /// <summary>
-        /// Creates a new application state with automatically managed lifecycle for the topic
+        /// Creates a new application state with automatically managed lifecycle for the stream
         /// </summary>
         /// <param name="nameOfState">The name of the state</param>
         /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
-        /// <returns>Topic state</returns>
-        public TopicState<T> GetState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
+        /// <returns>Stream state</returns>
+        public StreamState<T> GetState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
             if (this.states.TryGetValue(nameOfState, out var existingState))
             {
                 if (existingState.GetType().GetGenericArguments().First() != typeof(T))
                 {
-                    throw new ArgumentException($"State '{nameOfState}' for topic '{this.topicName}' already exists with a different type.");
+                    throw new ArgumentException($"{logPrefix}, State '{nameOfState}' already exists with a different type.");
                 }
 
-                return (TopicState<T>)existingState;
+                return (StreamState<T>)existingState;
             }
             
             lock (stateLock)
@@ -250,27 +245,28 @@ namespace QuixStreams.Streaming
                 {
                     if (existingState.GetType().GetGenericArguments().First() != typeof(T))
                     {
-                        throw new ArgumentException($"State '{nameOfState}' for topic '{this.topicName}' already exists with a different type.");
+                        throw new ArgumentException($"{logPrefix}, State '{nameOfState}' already exists with a different type.");
                     }
 
-                    return (TopicState<T>)existingState;
+                    return (StreamState<T>)existingState;
                 }
 
-                var state = CreateTopicState(nameOfState, defaultValueFactory);
+                var state = CreateStreamState(nameOfState, defaultValueFactory);
 
                 this.states.Add(nameOfState, state);
                 if (this.topicConsumer == null) return state;
+                var prefix = $"{logPrefix} - {nameOfState} | ";
                 this.topicConsumer.OnCommitted += (sender, args) =>
                 {
                     try
                     {
-                        this.logger.LogTrace("Flushing state '{0}' for topic '{1}'.", nameOfState, this.topicName);
+                        this.logger.LogTrace($"{prefix} | Flushing state.");
                         state.Flush();
-                        this.logger.LogDebug("Flushed state '{0}' for topic '{1}'.", nameOfState, this.topicName);
+                        this.logger.LogDebug($"{prefix} | Flushed state.");
                     }
                     catch (Exception ex)
                     {
-                        this.logger.LogError(ex, "Failed to flush state '{0}' for topic '{1}'.", nameOfState, this.topicName);
+                        this.logger.LogError(ex, $"{prefix} | Failed to flush state.");
                     }
 
                 };
@@ -278,15 +274,5 @@ namespace QuixStreams.Streaming
             }
         }
         
-        /// <summary>
-        /// Gets a new instance of the <see cref="StreamStateManager"/> class for the specified <paramref name="streamId"/>.
-        /// </summary>
-        /// <typeparam name="T">The type of data stored in the stream.</typeparam>
-        /// <param name="streamId">The ID of the stream.</param>
-        /// <returns>The newly created <see cref="StreamStateManager"/> instance.</returns>
-        public StreamStateManager GetStreamStateManager<T>(string streamId)
-        {
-            return new StreamStateManager(this.topicConsumer, streamId, this.CreateStreamStateStorage, this.loggerFactory, this.topicName + " ");
-        }
     }
 }

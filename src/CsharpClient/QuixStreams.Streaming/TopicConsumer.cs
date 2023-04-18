@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Telemetry;
@@ -15,7 +14,8 @@ namespace QuixStreams.Streaming
         private ILogger logger = Logging.CreateLogger<StreamConsumer>();
         private readonly TelemetryKafkaConsumer telemetryKafkaConsumer;
         private bool isDisposed = false;
-        private Dictionary<string, object> states = new Dictionary<string, object>();
+        private object stateLock = new object();
+        private TopicStateManager stateManager = null;
 
         /// <inheritdoc />
         public event EventHandler<IStreamConsumer> OnStreamReceived;
@@ -106,39 +106,23 @@ namespace QuixStreams.Streaming
         }
         
         /// <inheritdoc />
-        public TopicState<T> GetState<T>(string nameOfState, Func<string, T> defaultValueFactory = null)
+        public TopicState<T> GetState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
-            lock (states)
-            {
-                var topic = this.telemetryKafkaConsumer.Topic;
-                if (this.states.TryGetValue(nameOfState, out var existingState))
-                {
-                    if (existingState.GetType().GetGenericArguments().First() != typeof(T))
-                    {
-                        throw new ArgumentException($"State '{nameOfState}' for topic '{topic}' already exists with a different type.");
-                    }
 
-                    return (TopicState<T>)existingState;
-                }
-                var state = new TopicState<T>(topic, nameOfState, defaultValueFactory);
-                this.states.Add(nameOfState, state);
-                this.OnCommitted += (sender, args) =>
-                {
-                    try
-                    {
-                        this.logger.LogTrace("Flushing state '{0}' for topic '{1}'.", nameOfState, topic);
-                        state.Flush();
-                        this.logger.LogDebug("Flushed state '{0}' for topic '{1}'.", nameOfState, topic);
-                    }
-                    catch (Exception ex)
-                    {
-                        this.logger.LogError(ex, "Failed to flush state '{0}' for topic '{1}'.", nameOfState, topic);
-                    }
+            return GetStateManager().GetState<T>(nameOfState, defaultValueFactory);
+        }
 
-                };
-                return state;
-            }
+        /// <inheritdoc />
+        public TopicStateManager GetStateManager()
+        {
+            if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
+
+            if (this.stateManager != null) return this.stateManager;
+            var topic = this.telemetryKafkaConsumer.Topic;
+
+            this.stateManager = new TopicStateManager(this, topic, Logging.Factory);
+            return this.stateManager;
         }
 
 

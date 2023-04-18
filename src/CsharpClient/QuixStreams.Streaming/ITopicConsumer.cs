@@ -56,6 +56,12 @@ namespace QuixStreams.Streaming
         /// <param name="nameOfState">The name of the state</param>
         /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
         /// <returns>Topic state</returns>
-        TopicState<T> GetState<T>(string nameOfState, Func<string, T> defaultValueFactory = null);
+        TopicState<T> GetState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null);
+
+        /// <summary>
+        /// Gets the manager for the topic states
+        /// </summary>
+        /// <returns>Topic state manager</returns>
+        TopicStateManager GetStateManager();
     }
 }
