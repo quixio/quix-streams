@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 
 namespace Quix.InteropGenerator;
 
 public class Utils
 {
     private static Dictionary<Type, bool> isBlittable = new Dictionary<Type, bool>();
+    private static ILogger logger = Logger.LoggerFactory.CreateLogger<Utils>();
 
     public static bool IsBlittableType(Type type)
     {
@@ -66,6 +68,7 @@ public class Utils
             var constructors = type.GetConstructors().Where(y => y.IsPublic).ToList();
             foreach (var constructor in constructors)
             {
+                if (!IsInteropSupported(constructor)) continue;
                 methodBases.Add(constructor);
             }
         }
@@ -75,22 +78,18 @@ public class Utils
         foreach (var methodInfo in methodInfos)
         {
             // The type will not be inferrable without some magic of replacing the method signature with the type it is getting created for
-            if (methodInfo.IsGenericMethod && methodInfo.DeclaringType.IsAbstract && methodInfo.GetParameters().All(y=> y.ParameterType.IsAbstract))
-            {
-                continue;
-            }
+            if (!IsInteropSupported(methodInfo)) continue;
             methodBases.Add(methodInfo);
         }
 
         return methodBases;
     }
 
-    public static IEnumerable<Type> GetUsedTypes(Type type)
+    public static IEnumerable<Type> GetUsedTypes(Type type, bool includeOriginal = true)
     {
-        yield return type;
-        if (Utils.IsDelegate(type))
+        if (includeOriginal) yield return type;
+        if (Utils.IsMulticastDelegate(type))
         {
-            if (type == typeof(Delegate)) yield break; 
             var mi = Utils.GetMulticastDelegateMethodInfo(type);
             foreach (var param in mi.GetParameters())
             {
@@ -145,7 +144,7 @@ public class Utils
 
     public static MethodInfo GetMulticastDelegateMethodInfo(Type multicastDelegateType)
     {
-        if (multicastDelegateType.BaseType != typeof(MulticastDelegate)) throw new ArgumentException();
+        if (!IsMulticastDelegate(multicastDelegateType)) throw new ArgumentException($"{multicastDelegateType.FullName} is not MultiCastDelegate");
         var invokeMethod = multicastDelegateType.GetMethod("Invoke");
         return invokeMethod;
     }
@@ -167,7 +166,7 @@ public class Utils
         typeof(double)
     };
 
-    private static List<Type> PythonMappableTypes = new List<Type>()
+    private static readonly List<Type> PythonMappableTypes = new List<Type>()
     {
         typeof(string)
     }.Union(UnmanagedTypes).ToList();
@@ -317,12 +316,36 @@ public class Utils
         
         return type;
     }
-
+    /// <summary>
+    /// Determines whether the specified type is a delegate or a subclass of Delegate.
+    /// </summary>
+    /// <param name="type">The Type object to check.</param>
+    /// <returns>true if the type is a delegate or a subclass of Delegate; otherwise, false.</returns>
     public static bool IsDelegate(Type type)
     {
-        
         return typeof(Delegate).IsAssignableFrom(type);
     }
+
+    /// <summary>
+    /// Determines whether the specified type is exactly equal to the Delegate or Action Class
+    /// </summary>
+    /// <param name="type">The Type object to check.</param>
+    /// <returns>true if the type is exactly equal to the Delegate class; otherwise, false.</returns>
+    public static bool IsDelegateType(Type type)
+    {
+        return type == typeof(Delegate) || type == typeof(Action);
+    }
+
+    /// <summary>
+    /// Determines whether the specified type is a subclass of the MulticastDelegate class.
+    /// </summary>
+    /// <param name="type">The Type object to check.</param>
+    /// <returns>true if the type is a subclass of the MulticastDelegate class; otherwise, false.</returns>
+    public static bool IsMulticastDelegate(Type type)
+    {
+        return type.BaseType == typeof(MulticastDelegate);
+    }
+
 
     public static bool IsEnum(Type type)
     {
@@ -352,7 +375,7 @@ public class Utils
             yield break;
         }
         
-        if (Utils.IsDelegate(type))
+        if (Utils.IsMulticastDelegate(type))
         {
             var mi = Utils.GetMulticastDelegateMethodInfo(type);
             foreach (var param in mi.GetParameters())
@@ -381,5 +404,45 @@ public class Utils
                 yield return underlyingType;
             }
         }
+    }
+
+    private static Dictionary<Type, bool> isInteropSupportedType = new Dictionary<Type, bool>();
+
+    public static bool IsInteropSupported(Type type)
+    {
+        if (isInteropSupportedType.TryGetValue(type, out var supported)) return supported;
+        supported = true;
+        if (type.IsGenericParameter)
+        {
+            logger.LogDebug("Type {0} is not supported because it is Generic Parameter", type.ToString());
+            supported = false;
+        }
+        else
+        {
+            var unsupportedType = GetUsedTypes(type, false).FirstOrDefault(y => !IsInteropSupported(y));
+            if (unsupportedType != null)
+            {
+                logger.LogDebug("Type {0} is not supported because it is uses unsupported type {1}", type.ToString(), unsupportedType.ToString());
+                supported = false;
+            }
+        }
+
+
+        isInteropSupportedType[type] = supported;
+        logger.LogTrace("Type {0} is supported", type.ToString());
+        return supported;
+    }
+    
+    public static bool IsInteropSupported(MethodBase methodInfo)
+    {
+        // The type will not be inferrable without some magic of replacing the method signature with the type it is getting created for
+        if (methodInfo.IsGenericMethod && (methodInfo.DeclaringType?.IsAbstract ?? true) && methodInfo.GetParameters().All(y=> y.ParameterType.IsAbstract))
+        {
+            logger.LogDebug("Method {0} is not supported because involved types would not be inferrable (as of now)", methodInfo.ToString());
+            return false;
+        }
+
+        logger.LogTrace("Method {0} is supported", methodInfo.ToString());
+        return true;
     }
 }
