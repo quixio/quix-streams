@@ -15,7 +15,11 @@ In some use cases you may want to aggregate data beyond the stream context of a 
 
 Quix Streams ensures that stream context is preserved, that is, messages inside one stream are always published to the same single partition. This means that inside one stream, a consumer can rely on the order of messages. A partition can contain multiple streams, but a stream is always confined to one partition.
 
-It is possible to organize the code that processes the streams in a topic using the idea of a consumer group. This indicates to the broker that you will process the topic with all available replicas in the consumer group, sharing the processing of all streams in the topic. Horizontal scaling occurs automatically, because when you deploy multiple replicas in a consumer group, a stream (or group of streams) is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream. If you don't specify a consumer group in your code, then all streams in a topic will be processed by all replicas.
+It is possible to organize the code that processes the streams in a topic using the idea of a consumer group. This indicates to the broker that you will process the topic with all available replicas in the consumer group, sharing the processing of all streams in the topic. Horizontal scaling occurs automatically, because when you deploy multiple replicas in a consumer group, a stream (or group of streams) is assigned to a replica. For example, if there are three streams and three replicas, each replica will process a single stream. This is illustrated in the following diagram:
+
+![Consumer group](./images/QuixStreamsConsumerGroup.png)
+
+If you had only one replica, it would need to process all streams in that topic. If you have three streams and two replicas, one replica would process two streams, and the other replica a single stream. If you don't specify a consumer group in your code, then all streams in a topic will be processed by all replicas. 
 
 When you create the consumer you specify the consumer group as follows:
 
