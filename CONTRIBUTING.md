@@ -39,3 +39,10 @@ In general, we follow the ["fork-and-pull" Git workflow](https://github.com/susa
 6. Push changes to your fork.
 7. Open a PR in our repository and follow the PR template so that we can efficiently review the changes.
 
+## Coding standards
+
+To keep the code as consistent as possible, please familiarize yourself with the existing style of the project. If you're contributing to the Python code base, follow the [PEP 8 - Style Guide for Python Code](https://peps.python.org/pep-0008/). If contributing to the C# code base, follow the [Microsoft&reg; C# Coding Conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions).
+
+>  Consistency within a project is more important. Consistency within one module or function is the most important.
+
+Note that the biggest deviation from the Microsoft&reg; standards is that this project does not use `_` to indicate private members. Instead, you should use the format `this.abc`.
