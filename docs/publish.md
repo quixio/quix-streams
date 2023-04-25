@@ -1,10 +1,10 @@
 # Publishing data
 
-Quix Streams allows you to publish data using stream context to your topic. It lets you create new streams, append data to existing streams, organize streams in folders, and add context to the streams.
+Quix Streams enables you use stream context to publish data to your topic. You can create new streams, append data to existing streams, organize streams in folders, and add context to the streams.
 
 ## Connect to Quix
 
-In order to start publishing data to Quix you need an instance of `KafkaStreamingClient`. This is the entry point where you begin publishing to the topics. To create an instance, use the following code:
+In order to start publishing data to Quix you first need an instance of `KafkaStreamingClient` (or `QuixStreamingClient` if using the Quix Platform). To create an instance, use the following code:
 
 === "Python"
 	
@@ -20,11 +20,11 @@ In order to start publishing data to Quix you need an instance of `KafkaStreamin
 	var client = new QuixStreams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
 	```
 
-You can find other ways to connect to your message broker in the [Connect](connect.md) section.
+You can read about other ways to connect to your message broker in the [Connecting to a broker](connect.md) section of this documentation.
 
 ## Create a topic producer
 
-In order to publish data to a topic you need an instance of `TopicProducer`. This instance allow you to publish data and additional context for streams using the provided topic. You can create an instance using the client’s `get_topic_producer` method, passing the `TOPIC` as the parameter.
+To publish data to a topic you need an instance of `TopicProducer`. This instance enables you to publish data and additional context for streams using the provided topic. You can create an instance using the client’s `get_topic_producer` method, passing the `TOPIC` as the parameter.
 
 === "Python"
     
@@ -54,7 +54,7 @@ In order to publish data to a topic you need an instance of `TopicProducer`. Thi
     var stream = topicProducer.CreateStream();
     ```
 
-A stream ID is auto-generated, but you can also pass a `StreamId` to the method to append data to an existing stream. This is also useful when you simply wish to have consistent streamid for to be able to continue the same stream in the future.
+A stream ID is auto-generated, but you can also pass a `StreamId` to the method to append data to an existing stream. This is also useful when you want to have a consistent `StreamId` so you can continue using the same stream in the future.
 
 === "Python"
     
@@ -70,9 +70,9 @@ A stream ID is auto-generated, but you can also pass a `StreamId` to the method 
 
 ### Stream properties
 
-You can add optional context to your streams by adding a name, some metadata or a default location.
+You can add optional context to your streams by adding a name, some metadata, or a default location.
 
-You can add using the `Properties` options of the generated `stream` instance:
+You can add these using the `Properties` options of the generated `stream` instance:
 
 === "Python"
     
@@ -94,7 +94,7 @@ You can add using the `Properties` options of the generated `stream` instance:
 
 ### Stream name
 
-When using Quix SaaS, the stream name is the display name of your stream in the platform. If you specify one, Quix SaaS will use it instead of the Stream Id to represent your stream inside the platform. For example, the following name:
+When using Quix Platform, the stream name is the display name of your stream in the platform. If you specify one, Quix Platform uses it instead of the Stream ID to represent your stream inside the platform. For example, the following name:
 
 === "Python"
     
@@ -114,7 +114,7 @@ Would result in this visualization in the list of streams of your workspace:
 
 ### Stream location
 
-The stream location property defines a default folder for the stream in the folder structure of your Persisted steams.
+The stream location property defines a default folder for the stream in the folder structure of your persisted streams.
 
 For example, the following location:
 
@@ -138,7 +138,7 @@ Any streams sent without a location property will be located under the "Root" le
 
 ## Close a stream
 
-Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you won't be publishing any more data to signal consumers the stream is over.
+Streams can be left open 24/7 if you aren’t sure when the next data will arrive, but they can and should be closed when you know that you won't be publishing any more data to signal to consumers that the stream is over.
 
 However, sometimes a stream can be closed for other reasons, such as if an error occurs in the publisher code, or something unexpected happens.
 
@@ -172,21 +172,23 @@ The `StreamEndType` can be one of the following possible end types:
 
 !!! note
   
-  Terminated state is also used when subscribing to a stream but the `StreamConsumer` is closed before the stream concluded for other reasons. This can happen when closing the `TopicConsumer` for example.
+  The `Terminated` state is also used when subscribing to a stream but the `StreamConsumer` is closed before the stream concluded for other reasons. This can happen when closing the `TopicConsumer` for example.
 
 ## Publishing time-series data
 
-You can now start writing data to your stream. [TimeseriesData](#timeseriesdata-format) is the formal class in Quix Streams which represents a time-series data packet in memory. [TimeseriesData](#timeseriesdata-format) is meant to be used for time-series data coming from sources that generate data at a regular time basis and with a fixed number of Parameters.
+You can now start writing data to your stream. [TimeseriesData](#timeseriesdata-format) is the formal class in Quix Streams which represents a time-series data packet in memory.
+
+[TimeseriesData](#timeseriesdata-format) is for time-series data coming from sources that generate data at regular time intervals, and with a fixed number of Parameters.
 
 !!! tip
 
-	If your data source generates data at irregular time intervals and you don’t have a defined list of regular Parameters, the [EventData](#event-data-format) format is probably a better fit for your time-series data.
+	If your data source generates data at irregular time intervals, and you don’t have a defined list of regular Parameters, the [EventData](#event-data-format) format is a better fit for your data.
 
 ### TimeseriesData format
 
-TimeseriesData is the formal class in Quix Streams which represents a time series data packet in memory. The format consists of a list of Timestamps with their corresponding parameter names and values for each timestamp.
+`TimeseriesData` is the formal class in Quix Streams that represents a time-series data packet in memory. The format consists of a list of timestamps, with their corresponding parameter names and values for each timestamp.
 
-You should imagine a TimeseriesData as a table where the Timestamp is the first column of that table and where the parameters are the columns for the values of that table. 
+You can imagine a `TimeseriesData` as a table where the `Timestamp` is the first column of that table, and where the parameters are the columns for the values of that table. 
 
 The following table shows an example:
 
@@ -199,7 +201,7 @@ The following table shows an example:
 
 !!! tip
 
-	The Timestamp column plus the [Tags](#tags) assigned to it work as the index of the table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
+	The Timestamp column plus the [Tags](#tags) assigned to it function as the index of the table. If you add values for the same Timestamp and Tags combination, only the last Values will be sent to the stream.
 
 The following code would generate the previous `TimeseriesData` and publish it to the stream:
 
@@ -247,7 +249,7 @@ The following code would generate the previous `TimeseriesData` and publish it t
     stream.Timeseries.Publish(data);
     ```
 
-Although Quix Streams allows you to publish `TimeseriesData` to a stream directly, without any buffering, we recommend you use the built-in [Buffer](#using-a-buffer) feature to achieve high throughput speeds. The following code would publish the same `TimeseriesData` through a buffer:
+Although Quix Streams enables you to publish `TimeseriesData` to a stream directly, without any buffering, Quix recommends you use the built-in [Buffer](#using-a-buffer) feature to achieve high throughput. The following code would publish the same `TimeseriesData` through a buffer:
 
 === "Python"
     
@@ -263,7 +265,7 @@ Although Quix Streams allows you to publish `TimeseriesData` to a stream directl
 
 Visit the [Buffer](#using-a-buffer) section of this documentation to find out more about the built-in buffer feature.
 
-Quix Streams allows you to attach numbers, strings, or binary data to your timestamps. The code below will attach one of each to the same timestamp:
+Quix Streams enables you to attach numbers, strings, or binary data to your timestamps. The following code attaches one of each to the same timestamp:
 
 === "Python"
     
@@ -292,14 +294,14 @@ Quix Streams allows you to attach numbers, strings, or binary data to your times
 
 ### pandas DataFrame format
 
-If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for writing time-series data. You just need to use the `publish` methods of the `stream.timeseries` or `stream.timeseries.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
+If you use the Python version of Quix Streams you can use [pandas DataFrame](features/data-frames.md) for writing time-series data. You can use the `publish` methods of the `stream.timeseries` or `stream.timeseries.buffer`, passing the Data Frame instead of a [TimeseriesData](#timeseriesdata-format):
 
 ``` python
 df = data.to_dataframe()
 stream.timeseries.buffer.publish(df)
 ```
 
-Alternatively, you can convert a pandas DataFrame to a [TimeseriesData](#timeseriesdata-format) using the method `from_dataframe`:
+Alternatively, you can convert a pandas `DataFrame` to a [TimeseriesData](#timeseriesdata-format) using the method `from_dataframe`:
 
 ``` python
 with (data := TimeseriesData.from_dataframe(df)):
@@ -308,7 +310,7 @@ with (data := TimeseriesData.from_dataframe(df)):
 
 !!! tip
 
-	The conversions from pandas DataFrame to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use pandas DataFrame methods provided by Quix Streams that are optimized for doing as few conversions as possible.
+	The conversions from pandas `DataFrame` to [TimeseriesData](#timeseriesdata-format) have an intrinsic cost overhead. For high-performance models using pandas `DataFrame`, you should use pandas `DataFrame` methods provided by Quix Streams that are optimized for doing as few conversions as possible.
 
 
 ### Timestamps
@@ -317,7 +319,7 @@ Quix Streams supports common date and time formats for timestamps when adding da
 
 There are several helper functions to add new timestamps to `Buffer`, `TimeseriesData`, and `EventData` instances with several types of date/time formats.
 
-These are all the common helper functions:
+These are the helper functions:
 
 === "Python"
     
@@ -335,9 +337,9 @@ These are all the common helper functions:
 
 #### Epoch
 
-There is a stream property called `Epoch` (set to 0 by default, meaning 00:00:00 on 1 January 1970) that is added to every timestamp (except for datetime formats) when it’s added to the stream. You can use any value you like to act as a base, from which point timestamps will be relative to.
+There is a stream property called `epoch` (set to 0 by default, meaning 00:00:00 on 1 January 1970). This property provides a base value that is added to every timestamp (except for datetime formats) when it’s added to the stream. You can use any value you like to act as a base, from which point timestamps will be relative to the base.
 
-The following code indicates to Quix Streams to set the current date as epoch and add it to each timestamp added to the stream:
+The following code indicates to Quix Streams to set the current date as `epoch` and add it to each timestamp added to the stream:
 
 === "Python"
     
@@ -353,7 +355,7 @@ The following code indicates to Quix Streams to set the current date as epoch an
     stream.Epoch = DateTime.Today;
     ```
 
-Adding data without using Epoch property:
+Adding data without using the `epoch` property:
 
 === "Python"
     
@@ -375,7 +377,7 @@ Adding data without using Epoch property:
         .Publish();
     ```
 
-Or we can add a timestamp 1000ms from the epoch *"Today"*:
+Or you can add a timestamp 1000ms from the epoch `Today`:
 
 === "Python"
     
@@ -403,7 +405,9 @@ Or we can add a timestamp 1000ms from the epoch *"Today"*:
 
 ### Using a Buffer
 
-Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to publish data allows you to achieve better compression and higher throughput. 
+Quix Streams provides you with an optional programmable buffer which you can configure to your needs. Using buffers to publish data enables you to achieve better compression and higher throughput. 
+
+The following code configures the buffer to publish a packet when the size of the buffer reaches 100 timestamps:
 
 === "Python"
     You can use the `buffer` property embedded in the `parameters` property of your `stream`:
@@ -416,8 +420,7 @@ Quix Streams provides you with an optional programmable buffer which you can tai
     ``` cs
     stream.Timeseries.Buffer.PacketSize = 100;
     ```
-
-The code above configures the buffer to publish a packet when the size of the buffer reaches 100 timestamps.
+Once created, you can then write data to that buffer:
 
 === "Python"
     Writing a [TimeseriesData](#timeseriesdata-format) to that buffer is as simple as using the `publish` method of that built-in `buffer`:
@@ -431,7 +434,7 @@ The code above configures the buffer to publish a packet when the size of the bu
     stream.Timeseries.Buffer.Publish(data);
     ```
 
-Quix Streams also allows you to publish data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the buffer.
+Quix Streams also enables you to publish data to the buffer without creating a `TimeseriesData` instance explicitly. To do so, you can use the same helper methods that are supported by the `TimeseriesData` class like `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the buffer.
 
 === "Python"
     
@@ -455,7 +458,7 @@ Quix Streams also allows you to publish data to the buffer without creating a `T
         .Publish();
     ```
 
-You can configure multiple conditions to determine when the Buffer has to release data. If any of these conditions become true, the buffer will release a new packet of data and that data is cleared from the buffer:
+You can configure multiple conditions to determine when the buffer has to release data. If any of these conditions become true, the buffer releases a new packet of data and that data is cleared from the buffer:
 
 === "Python"
     
@@ -495,7 +498,7 @@ The following buffer configuration will publish data every 100ms or, if no data 
     stream.Timeseries.Buffer.BufferTimeout = 1000;
     ```
 
-The following buffer configuration will publish data every 100ms window or if critical data is added to it:
+The following buffer configuration will publish data every 100ms window, or if critical data is added to it:
 
 === "Python"
     
@@ -513,7 +516,7 @@ The following buffer configuration will publish data every 100ms window or if cr
 
 ### Parameter definitions
 
-Quix Streams allows you to define metadata for parameters and events to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, etc. Quix SaaS uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
+Quix Streams enables you to define metadata for parameters and events to describe them. You can define things like human readable names, descriptions, acceptable ranges of values, and so on. Quix Platform uses some of this configuration when visualizing data on the platform, but you can also use them in your own models, bridges, or visualization implementations.
 
 === "Python"  
     We call this parameter metadata `ParameterDefinitions`, and all you need to do is to use the `add_definition` helper function of the `stream.timeseries` property:
@@ -563,7 +566,7 @@ Once you have added a new definition, you can attach some additional properties 
         .SetRange(0, 400);
     ```
 
-The Min and Max range definition sets the Y axis range in the waveform visualisation view in the Quix SaaS. This definition:
+The Min and Max range definition sets the Y axis range in the waveform visualisation view in Quix Platform. This definition:
 
 === "Python"
     
@@ -581,7 +584,7 @@ Will set up this view in Data explorer:
 
 ![Data explorer](images/visualisationdefinition.png)
 
-Adding additional `Definitions` for each parameter allows you to see data with different ranges on the same waveform view:
+Adding `Definitions` for each parameter enables you to see data with different ranges on the same waveform view:
 
 ![ranges](images/visualisationdefinitionrangeexample.png)
 
@@ -611,9 +614,9 @@ For example, setting this parameter location:
 
 Will result in this parameter hierarchy in the parameter selection dialogs.
 
-## Writing events
+## Publishing events
 
-`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as json payload where properties can't be converted to individual parameters. EventData can also be better for non-standard changes such as a machine shutting down might publish an event named ShutDown.
+`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as a JSON payload where properties can't be converted to individual parameters. `EventData` can also be better for non-standard changes, such as when a machine shutting down publishes an event named `ShutDown`.
 
 !!! tip
 
@@ -623,7 +626,7 @@ Will result in this parameter hierarchy in the parameter selection dialogs.
 
 `EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
-You should imagine a list of `EventData` instances as a simple table of three columns where the `Timestamp` is the first column of that table and the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
+You can imagine a list of `EventData` instances as a table of three columns where the `Timestamp` is the first column of that table and the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
 
 | Timestamp | EventId     | EventValue                 |
 | --------- | ----------- | -------------------------- |
@@ -654,7 +657,7 @@ The following code would generate the list of `EventData` shown in the previous 
     stream.Events.Publish(new EventData("race-event3", 6, "Race has finished"));
     ```
 
-Quix Streams lets you publish Events without creating `EventData` instances explicitly. To do so, you can use similar helpers to those present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the stream.
+Quix Streams enables you publish events without creating `EventData` instances explicitly. To do so, you can use similar helpers to those present in [TimeseriesData](#timeseriesdata-format) format such as `add_timestamp`, `add_value` or `add_tag`. Then use the `publish` method to publish that timestamp to the stream.
 
 === "Python"
     
@@ -702,7 +705,7 @@ Quix Streams lets you publish Events without creating `EventData` instances expl
 
 As with parameters, you can attach `Definitions` to each event.
 
-This is the whole list of visualization and metadata options we can attach to a `EventDefinition`:
+This is the list of visualization and metadata options you can attach to a `EventDefinition`:
 
   - `set_level(level: EventLevel)` : Set severity level of the event.
   - `set_custom_properties(custom_properties: str)` : Set the custom properties of the event for your own needs.
@@ -727,7 +730,7 @@ For example, the following code defines a human readable name and a Severity lev
 
 ## Tags
 
-The library allows you to tag data for `TimeseriesData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags allow you to filter and group data with fast queries.
+The library enables you to tag data for `TimeseriesData` and `EventData` packets. Using tags alongside parameters and events helps when indexing persisted data in the database. Tags enable you to filter and group data with fast queries.
 
 Tags work as a part of the primary key inside `TimeseriesData` and `EventData`, in combination with the default Timestamp key. If you add data values with the same Timestamps, but a different combination of Tags, the timestamp will be treated as a separate row.
 
@@ -814,7 +817,7 @@ Will generate the following `TimeseriesData` packet with tagged data:
 
 	Tags have to be chosen carefully as excessive cardinality leads to performance degradation in the database. You should use tags only for identifiers and not cardinal values.
 
-The following example of good tagging practice enables you to query the maximum speed for driver identifier "Peter":
+The following example of **good tagging practice** enables you to query the maximum speed for driver identifier "Peter":
 
 === "Python"
     
@@ -840,7 +843,7 @@ The following example of good tagging practice enables you to query the maximum 
         .Publish();
     ```
 
-The following example of bad tagging practice will lead to excessive cardinality as there will be a large number of different values for the specified tag, Speed:
+The following example of **bad tagging practice** will lead to excessive cardinality as there will be a large number of different values for the specified tag, Speed:
 
 === "Python"
     
@@ -938,9 +941,9 @@ This is a minimal code example you can use to publish data to a topic using Quix
 
 ## Publish raw Kafka messages
 
-Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it, but you need to use Quix Streams on both producer and consumer sides as of today. We have plans to support most common formats in near future, but custom formats will always need to be handled manually.
+Quix Streams uses an internal protocol which is both data and speed optimized, but this requires you to use Quix Streams on both the producer and consumer sides. Custom formats need to be handled manually.
 
-For this, we have created a way to [publish](publish.md#publish-raw-kafka-messages) and [subscribe](subscribe.md#subscribe-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
+For this, Quix Streams provides a way to [publish](publish.md#publish-raw-kafka-messages) and [subscribe](subscribe.md#subscribe-raw-kafka-messages) to the raw, unformatted messages, and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
 
 You can publish messages with or without a key. The following example demonstrates how to publish two messages to Kafka, one message with a key, and one without:
 
@@ -975,6 +978,5 @@ You can publish messages with or without a key. The following example demonstrat
     //Publish value withhout key to kafka
     producer.Publish(new Streaming.Raw.RawMessage(
         data
-    ));
-    
+    )); 
     ```
