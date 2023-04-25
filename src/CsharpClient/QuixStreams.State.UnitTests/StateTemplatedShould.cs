@@ -24,7 +24,7 @@ public class StateTemplatedShould
         [Fact]
         public void Constructor_WithNullStateStorage_ShouldThrowArgumentNullException()
         {
-            Action nullTopicName = () => new State<int>(null);
+            Action nullTopicName = () => new State<int>((IStateStorage)null);
 
             nullTopicName.Should().Throw<ArgumentNullException>().WithMessage("*storage*");
         }

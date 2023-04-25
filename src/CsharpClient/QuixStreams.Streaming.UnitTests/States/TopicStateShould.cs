@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.CompilerServices;
 using FluentAssertions;
-using FluentAssertions.Common;
 using QuixStreams.State.Storage;
+using QuixStreams.Streaming.States;
 using Xunit;
 
-namespace QuixStreams.Streaming.UnitTests
+namespace QuixStreams.Streaming.UnitTests.States
 {
     public class TopicStateShould
     {

@@ -13,6 +13,8 @@ from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixStreamsStreaming.IStreamConsumer import IStreamConsumer as sci
 from .native.Python.QuixStreamsStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
 from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClosedEventArgs
+from .streamstate import StreamState
+from .streamstatemanager import StreamStateManager
 
 
 @nativedecorator
@@ -47,6 +49,8 @@ class StreamConsumer(object):
 
         self._streamId = None
 
+        self._stream_state_manager = None
+
         if on_close_cb_always is not None:
             def _on_close_cb_always_wrapper(sender_hptr, args_hptr):
                 try:
@@ -72,6 +76,7 @@ class StreamConsumer(object):
             self._streamPropertiesConsumer.dispose()
         self._on_stream_closed_dispose()
         self._on_package_received_dispose()
+        self._stream_state_manager.dispose()
 
     @property
     def topic(self) -> 'TopicConsumer':
@@ -217,6 +222,32 @@ class StreamConsumer(object):
         if self._streamTimeseriesConsumer is None:
             self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
         return self._streamTimeseriesConsumer
+
+    def get_state(self, name_of_state: str) -> StreamState:
+        """
+        Creates a new application state with automatically managed lifecycle for the stream
+
+        Args:
+            name_of_state: The name of the state
+
+        Returns:
+            StreamState: The stream state
+        """
+
+        return self.get_state_manager().get_state(name_of_state)
+
+    def get_state_manager(self) -> StreamStateManager:
+        """
+        Gets the manager for the stream states.
+
+        Returns:
+            StreamStateManager: The stream state manager
+        """
+
+        if self._stream_state_manager is None:
+            self._stream_state_manager = StreamStateManager(self._interop.GetStateManager())
+
+        return self._stream_state_manager
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         """

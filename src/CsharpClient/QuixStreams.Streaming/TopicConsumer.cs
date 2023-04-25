@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
 
@@ -124,7 +125,7 @@ namespace QuixStreams.Streaming
                 if (this.stateManager != null) return this.stateManager;
                 var topic = this.telemetryKafkaConsumer.Topic;
 
-                this.stateManager = new TopicStateManager(this, topic, Logging.Factory);
+                this.stateManager = App.GetStateManager().GetTopicStateManager(this, topic);
             }
 
             return this.stateManager;

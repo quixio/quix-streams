@@ -281,6 +281,9 @@ class TopicConsumer(object):
         """
         self._interop.Commit()
 
+    def get_state_manager(self):
+        self._interop.GetStateManager()
+
     def get_net_pointer(self) -> ctypes.c_void_p:
         """
         Retrieves the .net pointer to TopicConsumer instance.

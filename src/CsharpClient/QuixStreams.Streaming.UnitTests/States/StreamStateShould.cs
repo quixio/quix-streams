@@ -2,9 +2,10 @@ using System;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using QuixStreams.State.Storage;
+using QuixStreams.Streaming.States;
 using Xunit;
 
-namespace QuixStreams.Streaming.UnitTests;
+namespace QuixStreams.Streaming.UnitTests.States;
 
 public class StreamStateShould
 {

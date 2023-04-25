@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -46,6 +47,12 @@ namespace QuixStreams.State.Storage.FileStorage.LocalFileStorage
         /// <inheritdoc />
         protected override void AssertKey(string key)
         {
+        }
+
+        /// <inheritdoc />
+        protected override IStateStorage CreateNewStorageInstance(string path)
+        {
+            return new LocalFileStorage(path, true);
         }
 
         /// <inheritdoc />

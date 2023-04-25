@@ -1,6 +1,7 @@
 ﻿using System;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Models.StreamConsumer;
+using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming
@@ -42,19 +43,29 @@ namespace QuixStreams.Streaming
         event EventHandler<StreamClosedEventArgs> OnStreamClosed;
 
         /// <summary>
-        /// Gets the stream state for the specified storage name using the provided default value factory.
-        /// </summary>
-        /// <typeparam name="T">The type of the stream state value.</typeparam>
-        /// <param name="storageName">The name of the storage.</param>
-        /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
-        /// <returns>The stream state for the specified storage name using the provided default value factory.</returns>
-        StreamState<T> GetState<T>(string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory);
-        
-        /// <summary>
         /// Gets the manager for the stream states
         /// </summary>
         /// <returns>Stream state manager</returns>
         StreamStateManager GetStateManager();
+    }
+
+    /// <summary>
+    /// Extensions for IStreamConsumer
+    /// </summary>
+    public static class IStreamConsumerExtensions
+    {
+        /// <summary>
+        /// Gets the stream state for the specified storage name using the provided default value factory.
+        /// </summary>
+        /// <typeparam name="T">The type of the stream state value.</typeparam>
+        /// <param name="streamConsumer">The stream consumer to get the state for</param>
+        /// <param name="storageName">The name of the storage.</param>
+        /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
+        /// <returns>The stream state for the specified storage name using the provided default value factory.</returns>
+        public static StreamState<T> GetState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
+        {
+            return streamConsumer.GetStateManager().GetState(storageName, defaultValueFactory);
+        }
     }
     
     /// <summary>

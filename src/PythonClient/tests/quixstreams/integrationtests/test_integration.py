@@ -4,6 +4,8 @@ import unittest
 import threading
 import pandas as pd
 import numpy as np
+
+from quixstreams.state.statevalue import StateValue
 from src.quixstreams import Logging, LogLevel, AutoOffsetReset
 
 from testcontainers.core.container import DockerContainer
@@ -1841,4 +1843,42 @@ class TestIntegration(unittest.TestCase):
         self.assertIn('KafkaOffset', keys)
         self.assertIn('KafkaDateTime', keys)
         self.assertIn('KafkaMessageSize', keys)
+# endregion
+
+# region stream state tests
+    def test_stream_state_manager(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+
+        event = threading.Event()  # used for assertion
+
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+
+        print("---- Start publishing ----")
+        with (topic_consumer := client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)), (topic_producer := client.get_topic_producer(topic_name)), (output_stream := topic_producer.create_stream()):
+            print("---- Subscribe to streams ----")
+
+            def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+                stream_state = stream_consumer.get_state("rollingsum")
+                stream_state['somevalue'] = StateValue(3)
+                event.set()
+
+            topic_consumer.on_stream_received = on_stream_received_handler
+            topic_consumer.subscribe()
+
+            print("---- Send some data to have a stream ----")
+            output_stream.timeseries.buffer \
+                .add_timestamp_nanoseconds(200) \
+                .add_value("numeric-param", 34) \
+                .publish()
+
+            self.waitforresult(event, 20)
+            print("Closed")
+
+        # Assert
+        print('Should do some asserting here')
+
 # endregion

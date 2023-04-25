@@ -15,6 +15,7 @@ namespace QuixStreams.State.Storage.FileStorage
 
         private static readonly string DefaultDir = Path.Combine(".", "state");
         private static readonly string FileNameSpecialCharacter = "~";
+        private static readonly string SubStoragePrefix = "__sub__";
 
         /// <summary>
         /// Initializes a new instance of <see cref="BaseFileStorage"/>
@@ -208,7 +209,61 @@ namespace QuixStreams.State.Storage.FileStorage
             return (await GetAllKeysAsync()).Length;
         }
 
+        /// <inheritdoc/>
         public bool IsCaseSensitive => false;
+        
+        /// <inheritdoc/>
+        public IStateStorage GetOrCreateSubStorage(string subStorageName)
+        {
+            return CreateNewStorageInstance(GetSubStoragePath(subStorageName));
+        }
+
+        private string GetSubStoragePath(string subStorageName)
+        {
+            var subPath = $"{this.storageDirectory}{Path.DirectorySeparatorChar}{SubStoragePrefix}{subStorageName}";
+            return subPath;
+        }
+
+        /// <summary>
+        /// Creates a new storage instance using the path
+        /// </summary>
+        /// <param name="path">The path to create it at</param>
+        /// <returns>New instance of the Storage</returns>
+        protected abstract IStateStorage CreateNewStorageInstance(string path);
+        
+        /// <inheritdoc/>
+        public bool DeleteSubStorage(string subStorageName)
+        {
+            var subPath = GetSubStoragePath(subStorageName);
+            if (!Directory.Exists(subPath)) return false;
+            Directory.Delete(subPath, true);
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public int DeleteSubStorages()
+        {
+            var deleted = 0;
+            foreach (var subStorage in GetSubStorages())
+            {
+                Directory.Delete(GetSubStoragePath(subStorage), true);
+                deleted++;
+            }
+
+            return deleted;
+        }
+
+        /// <inheritdoc/>
+        public IEnumerable<string> GetSubStorages()
+        {
+            if (!Directory.Exists(this.storageDirectory)) yield break;
+            foreach (var dirPath in Directory.EnumerateDirectories(this.storageDirectory))
+            {
+                var dirName = Path.GetFileName(dirPath); // this just gets the last segment
+                if (string.IsNullOrWhiteSpace(dirName)) continue;
+                if (dirName.StartsWith(SubStoragePrefix)) yield return dirName.Substring(SubStoragePrefix.Length);
+            }
+        }
 
         /// <summary>
         /// Get all keys in the storage ( used internally )

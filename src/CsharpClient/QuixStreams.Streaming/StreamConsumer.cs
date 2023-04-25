@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Streaming.Models.StreamConsumer;
+using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
 

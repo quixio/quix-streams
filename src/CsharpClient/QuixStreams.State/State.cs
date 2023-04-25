@@ -40,6 +40,11 @@ namespace QuixStreams.State
         private readonly IDictionary<string, ChangeType> changes = new Dictionary<string, ChangeType>();
 
         /// <summary>
+        /// The logger for the class
+        /// </summary>
+        private readonly ILogger<State> logger;
+
+        /// <summary>
         /// Returns whether the cache keys are case sensitive
         /// </summary>
         public bool IsCaseSensitive => this.storage.IsCaseSensitive;
@@ -58,9 +63,11 @@ namespace QuixStreams.State
         /// Initializes a new instance of the <see cref="State"/> class using the specified storage.
         /// </summary>
         /// <param name="storage">An instance of <see cref="IStateStorage"/> that represents the storage to persist state changes to.</param>
+        /// <param name="loggerFactory">The logger factory to use</param>
         /// <exception cref="ArgumentNullException">Thrown when the storage parameter is null.</exception>
-        public State(IStateStorage storage)
+        public State(IStateStorage storage, ILoggerFactory loggerFactory = null)
         {
+            this.logger = loggerFactory?.CreateLogger<State>() ?? NullLogger<State>.Instance;
             this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
             var keys = this.storage.GetAllKeys();
             foreach (var key in keys)
@@ -204,6 +211,7 @@ namespace QuixStreams.State
         /// </summary>
         public void Flush()
         {
+            this.logger.LogTrace("Flushing state.");
             OnFlushing?.Invoke(this, EventArgs.Empty);
             
             if (this.clearBeforeFlush)
@@ -233,6 +241,7 @@ namespace QuixStreams.State
             Task.WaitAll(tasks.ToArray());
             
             OnFlushed?.Invoke(this, EventArgs.Empty);
+            this.logger.LogTrace("Flushed state.");
         }
 
         /// <summary>
@@ -316,12 +325,20 @@ namespace QuixStreams.State
         /// <param name="storage">The storage provider to persist state changes to. Must not be null.</param>
         /// <param name="loggerFactory">Optional logger factory to enable logging from within the state object.</param>
         /// <exception cref="ArgumentNullException">Thrown when the storage parameter is null.</exception>
-        public State(IStateStorage storage, ILoggerFactory loggerFactory = null)
+        public State(IStateStorage storage, ILoggerFactory loggerFactory = null) : this(new State(storage, loggerFactory), loggerFactory)
         {
-            this.underlyingState = new State(storage);
+        }
+        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="State"/> class with the specified storage and logger factory.
+        /// </summary>
+        /// <param name="state">The state to persist state changes to. Must not be null.</param>
+        /// <param name="loggerFactory">Optional logger factory to enable logging from within the state object.</param>
+        /// <exception cref="ArgumentNullException">Thrown when the storage parameter is null.</exception>
+        public State(State state, ILoggerFactory loggerFactory = null)
+        {
+            this.underlyingState = state ?? throw new ArgumentNullException(nameof(state));
             this.logger = loggerFactory?.CreateLogger<State<T>>() ?? new NullLogger<State<T>>();
-            
-            
             var type = typeof(T);
             switch (Type.GetTypeCode(type))
             {
@@ -599,6 +616,7 @@ namespace QuixStreams.State
             this.underlyingState.Flush();
             logger.LogTrace("Flushed underlying state as part of flush");
             OnFlushed?.Invoke(this, EventArgs.Empty);
+            this.logger.LogTrace("Flushed state.");
         }
         
         

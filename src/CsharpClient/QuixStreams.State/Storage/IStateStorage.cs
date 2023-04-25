@@ -1,4 +1,6 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace QuixStreams.State.Storage
 {
@@ -60,5 +62,29 @@ namespace QuixStreams.State.Storage
         /// Returns whether the storage is case sensitive
         /// </summary>
         public bool IsCaseSensitive { get; }
+
+        /// <summary>
+        /// Creates or retrieves the existing storage under this in hierarchy.
+        /// </summary>
+        /// <returns>The state storage for the given storage name</returns>
+        public IStateStorage GetOrCreateSubStorage(string subStorageName);
+        
+        /// <summary>
+        /// Deletes a storage under this in hierarchy.
+        /// </summary>
+        /// <returns>Whether the state storage for the given storage name was deleted</returns>
+        public bool DeleteSubStorage(string subStorageName);
+        
+        /// <summary>
+        /// Deletes the storages under this in hierarchy.
+        /// </summary>
+        /// <returns>The number of state storage deleted</returns>
+        public int DeleteSubStorages();
+        
+        /// <summary>
+        /// Gets the storages under this in hierarchy.
+        /// </summary>
+        /// <returns>The enumerable storage names this state contains</returns>
+        public IEnumerable<string> GetSubStorages();
     }
 }
