@@ -57,22 +57,4 @@ namespace QuixStreams.Streaming
         /// <returns>Topic state manager</returns>
         TopicStateManager GetStateManager();
     }
-
-    /// <summary>
-    /// Extensions for ITopicConsumer
-    /// </summary>
-    public static class ITopicConsumerExtensions
-    {
-        /// <summary>
-        /// Creates a new application state with automatically managed lifecycle for the topic
-        /// </summary>
-        /// <param name="topicConsumer">The topic to get the state for</param>
-        /// <param name="nameOfState">The name of the state</param>
-        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
-        /// <returns>Topic state</returns>
-        public static TopicState<T> GetState<T>(this ITopicConsumer topicConsumer, string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
-        {
-            return topicConsumer.GetStateManager().GetState(nameOfState, defaultValueFactory);
-        }
-    }
 }

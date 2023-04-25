@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
 using QuixStreams.Streaming.Models;
-using QuixStreams.Streaming.Raw;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
@@ -656,15 +655,11 @@ namespace QuixStreams.Streaming.IntegrationTests
                 var topicStateManager = topicConsumer.GetStateManager();
                 topicStateManager.DeleteStreamStates();
                 topicStateManager.GetStreamStates().Should().BeEmpty();
-                    
-                var topicRollingSum = topicConsumer.GetState("RollingSum", (sid) => 0d);
-                topicRollingSum.Clear(); // in case persisted is still around, don't let it affect 
 
                 var msgCounter = 0;
                 topicConsumer.OnStreamReceived += (sender, stream) =>
                 {
                     var rollingSum = stream.GetState("RollingSum", (sid) => 0d);
-                    rollingSum.Clear(); // in case persisted is still around, don't let it affect 
 
                     stream.Timeseries.OnDataReceived += (o, args) =>
                     {
@@ -675,10 +670,8 @@ namespace QuixStreams.Streaming.IntegrationTests
                                 if (parameter.Value.Type == ParameterValueType.Numeric)
                                 {
                                     rollingSum[parameter.Key] += parameter.Value.NumericValue ?? 0;
-                                    topicRollingSum[parameter.Key] += parameter.Value.NumericValue ?? 0;
 
                                     this.output.WriteLine($"Rolling sum for {parameter.Key} is {rollingSum[parameter.Key]}");
-                                    this.output.WriteLine($"Topic Rolling sum for {parameter.Key} is {topicRollingSum[parameter.Key]}");
                                 }  
                             }
                         }
@@ -720,12 +713,6 @@ namespace QuixStreams.Streaming.IntegrationTests
 
                 output.WriteLine($"Checking if topic state manager returns the expected stream states");
                 topicStateManager.GetStreamStates().Should().BeEquivalentTo(new List<string>() { "stream1", "stream2" });
-
-                
-                output.WriteLine($"Checking Topic Rolling sum for params");
-                topicRollingSum["param1"].Should().Be(23);
-                topicRollingSum["param2"].Should().Be(20);
-                output.WriteLine($"Checked Topic Rolling sum for params");
                 
                 output.WriteLine($"Checking Stream 1 Rolling sum for params");
                 var streamState = topicStateManager.GetStreamStateManager(streamProducer.StreamId).GetState<double>("RollingSum");

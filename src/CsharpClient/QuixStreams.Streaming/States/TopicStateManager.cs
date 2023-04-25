@@ -54,20 +54,7 @@ namespace QuixStreams.Streaming.States
             this.loggerFactory = loggerFactory;
             this.logger = this.loggerFactory.CreateLogger<TopicStateManager>();
         }
-
-        /// <summary>
-        /// Creates a new instance of the <see cref="TopicState{T}"/> class with the specified <paramref name="nameOfState"/> and optional <paramref name="defaultValueFactory"/>.
-        /// </summary>
-        /// <typeparam name="T">The type of value stored in the <see cref="TopicState{T}"/>.</typeparam>
-        /// <param name="nameOfState">The name of the state.</param>
-        /// <param name="defaultValueFactory">An optional delegate that returns a default value for the state if it does not exist.</param>
-        /// <returns>The newly created <see cref="TopicState{T}"/> instance.</returns>
-        private TopicState<T> CreateTopicState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
-        {
-            var state = new TopicState<T>(this.stateStorage, defaultValueFactory, Logging.CreatePrefixedFactory($"{this.topicName} - {nameOfState}"));
-            return state;
-        }
-
+        
         /// <summary>
         /// Returns an enumerable collection of all available stream states for the current topic. 
         /// </summary>
@@ -97,58 +84,6 @@ namespace QuixStreams.Streaming.States
             if (!this.stateStorage.DeleteSubStorage(streamId)) return false;
             this.streamStateManagers.TryRemove(streamId, out _);
             return true;
-        }
-
-        /// <summary>
-        /// Creates a new application state with automatically managed lifecycle for the topic
-        /// </summary>
-        /// <param name="nameOfState">The name of the state</param>
-        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
-        /// <returns>Topic state</returns>
-        public TopicState<T> GetState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
-        {
-            if (this.states.TryGetValue(nameOfState, out var existingState))
-            {
-                if (existingState.GetType().GetGenericArguments().First() != typeof(T))
-                {
-                    throw new ArgumentException($"State '{nameOfState}' for topic '{this.topicName}' already exists with a different type.");
-                }
-
-                return (TopicState<T>)existingState;
-            }
-            
-            lock (stateLock)
-            {
-                if (this.states.TryGetValue(nameOfState, out existingState))
-                {
-                    if (existingState.GetType().GetGenericArguments().First() != typeof(T))
-                    {
-                        throw new ArgumentException($"State '{nameOfState}' for topic '{this.topicName}' already exists with a different type.");
-                    }
-
-                    return (TopicState<T>)existingState;
-                }
-
-                var state = CreateTopicState(nameOfState, defaultValueFactory);
-
-                this.states.Add(nameOfState, state);
-                if (this.topicConsumer == null) return state;
-                this.topicConsumer.OnCommitted += (sender, args) =>
-                {
-                    try
-                    {
-                        this.logger.LogTrace("Flushing state '{0}' for topic '{1}'.", nameOfState, this.topicName);
-                        state.Flush();
-                        this.logger.LogDebug("Flushed state '{0}' for topic '{1}'.", nameOfState, this.topicName);
-                    }
-                    catch (Exception ex)
-                    {
-                        this.logger.LogError(ex, "Failed to flush state '{0}' for topic '{1}'.", nameOfState, this.topicName);
-                    }
-
-                };
-                return state;
-            }
         }
         
         /// <summary>

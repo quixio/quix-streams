@@ -105,14 +105,6 @@ namespace QuixStreams.Streaming
             if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
             telemetryKafkaConsumer.Start();
         }
-        
-        /// <inheritdoc />
-        public TopicState<T> GetState<T>(string nameOfState, TopicStateDefaultValueDelegate<T> defaultValueFactory = null)
-        {
-            if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
-
-            return GetStateManager().GetState<T>(nameOfState, defaultValueFactory);
-        }
 
         /// <inheritdoc />
         public TopicStateManager GetStateManager()
