@@ -1,10 +1,10 @@
 # Subscribing to data
 
-Quix Streams allows you to subscribe to data in real time from your topics. In this section, we explain more in-depth how to do it using the library.
+Quix Streams enables you to subscribe to the data in your topics in real time. This documentation explains in detail how to do this.
 
 ## Connect to Quix
 
-In order to start subscribing to data from your kafka topics, you need an instance of `KafkaStreamingClient`. This is the entry point where you begin subscribing to the topics. To create an instance, use the following code:
+To subscribe to data from your Kafka topics, you need an instance of `KafkaStreamingClient`. To create an instance, use the following code:
 
 === "Python"
 	
@@ -20,11 +20,11 @@ In order to start subscribing to data from your kafka topics, you need an instan
 	var client = new QuixStreams.Streaming.KafkaStreamingClient("127.0.0.1:9092");
 	```
 
-You can find other ways to connect to your message broker in the [Connect](connect.md) section.
+You can read about other ways to connect to your message broker in the [Connecting to a broker](connect.md) section.
 
 ## Create a topic consumer
 
-Topics are at the center for stream processing operations. In order to subscribe to data in a topic you need an instance of `TopicConsumer`. This instance allow you to receive all the incoming streams on the specified topic. You can create an instance using the client’s `get_topic_consumer` method, passing the `TOPIC` as the parameter.
+Topics are central to stream processing operations. To subscribe to data in a topic you need an instance of `TopicConsumer`. This instance enables you to receive all the incoming streams on the specified topic. You can create an instance using the client’s `get_topic_consumer` method, passing the `TOPIC` as the parameter.
 
 === "Python"
     
@@ -54,7 +54,7 @@ The [Consumer group](kafka.md#consumer-group) is a concept used when you want to
     var topicConsumer = client.GetTopicConsumer("{topic}","{your-consumer-group-id}");
     ```
 
-This is how the message broker knows that all the replicas of your process want to share the load of the incoming streams between replicas. Each replica will receive only a subset of the streams incoming to the Input Topic.
+This indicates to the message broker that all the replicas of your process will share the load of the incoming streams. Each replica only receives a subset of the streams coming into the Input Topic.
 
 !!! warning
 
@@ -63,7 +63,7 @@ This is how the message broker knows that all the replicas of your process want 
 ## Subscribing to streams
 
 === "Python"  
-    Once you have the `TopicConsumer` instance you can start receiving streams. For each stream received from the specified topic, `TopicConsumer` will execute the callback `on_stream_received`. This callback will be invoked every time you receive a new Stream. For example, the following code prints the StreamId for each stream received on that topic:
+    Once you have the `TopicConsumer` instance you can start receiving streams. For each stream received by the specified topic, `TopicConsumer` will execute the callback `on_stream_received`. This callback will be invoked every time you receive a new Stream. For example, the following code prints the `StreamId` for each stream received by that topic:
     
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer
@@ -76,12 +76,11 @@ This is how the message broker knows that all the replicas of your process want 
     ```
 
     !!! note
-        `subscribe()` method indicates to moment to start consuming streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
-        `App.run()` can also be used for this and provides other benefits. Find out more about [App.run()](app-management.md)
+        `subscribe()` method starts consuming streams and data from your topic. You should only do this after you’ve registered callbacks for all the events you want to listen to. `App.run()` can also be used for this and provides other benefits. Find out more about [App.run()](app-management.md).
 
 
 === "C\#"
-    Once you have the `TopicConsumer` instance you can start consuming streams. For each stream received to the specified topic, `TopicConsumer` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new stream. For example the following code prints the StreamId for each stream received on that Topic:
+    Once you have the `TopicConsumer` instance you can start consuming streams. For each stream received by the specified topic, `TopicConsumer` will execute the event `OnStreamReceived`. You can attach a callback to this event to execute code that reacts when you receive a new stream. For example, the following code prints the `StreamId` for each stream received by that Topic:
     
     ``` cs
     topicConsumer.OnStreamReceived += (topic, newStream) =>
@@ -94,16 +93,15 @@ This is how the message broker knows that all the replicas of your process want 
 
     !!! tip
 
-    	The `Subscribe` method indicates to moment to start consuming streams and data from your Topic. This should normally happen after you’ve registered callbacks for all the events you want to listen to.
-        `App.run()` can also be used for this and provides other benefits. Find out more about [App.run()](app-management.md)
+    	The `Subscribe` method starts consuming streams and data from your topic. You should do this after you’ve registered callbacks for all the events you want to listen to. `App.run()` can also be used for this and provides other benefits. Find out more about [App.run()](app-management.md).
 
 ## Subscribing to time-series data
 
 ### TimeseriesData format
 
-TimeseriesData is the formal class in Quix Streams which represents a time series data packet in memory. The format consists of a list of Timestamps with their corresponding parameter names and values for each timestamp.
+`TimeseriesData` is the formal class in Quix Streams that represents a time-series data packet in memory. The format consists of a list of timestamps, with their corresponding parameter names and values for each timestamp.
 
-You should imagine a TimeseriesData as a table where the Timestamp is the first column of that table and where the parameters are the columns for the values of that table. 
+You can imagine a `TimeseriesData` as a table where the `Timestamp` is the first column of that table, and where the parameters are the columns for the values of that table. 
 
 The following table shows an example:
 
@@ -115,7 +113,8 @@ The following table shows an example:
 | 6         | 110   | 2    |
 
 === "Python"
-    You can subscribe to time-series data from streams using the `on_data_received` callback of the `StreamConsumer` instance. For instance, in the following example we consume and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
+
+    You can subscribe to time-series data from streams using the `on_data_received` callback of the `StreamConsumer` instance. In the following example, you consume and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
     
     ``` python
     from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
@@ -133,12 +132,8 @@ The following table shows an example:
     topic_consumer.subscribe()
     ```
 
-    !!! note
-        `subscribe()` starts consuming from the topic however, `App.run()` can also be used for this and provides other benefits.
-
-        Find out more about [App.run()](app-management.md)
-
 === "C\#"
+
     You can subscribe to time-series data from streams using the `OnDataReceived` event of the `StreamConsumer` instance. For instance, in the following example we consume and print the first timestamp and value of the parameter `ParameterA` received in the [TimeseriesData](#timeseriesdata-format) packet:
     
     ``` cs
@@ -156,11 +151,12 @@ The following table shows an example:
     ```
 
 !!! note
+
     `subscribe()` starts consuming from the topic however, `App.run()` can also be used for this and provides other benefits.
 
-    Find out more about [App.run()](app-management.md)
+    Find out more about [App.run()](app-management.md).
 
-Quix Streams supports numeric, string, and binary value types. You should use the proper property depending of the value type of your parameter:
+Quix Streams supports numeric, string, and binary value types. You should use the correct property depending of the value type of your parameter:
 
 === "Python"
     
@@ -196,7 +192,7 @@ This is a simple example showing how to consume `Speed` values of the `Timeserie
     }
     ```
 
-output:
+The output from this code is as follows:
 
 ``` console
 Speed - 1: 120
@@ -222,7 +218,7 @@ topic_consumer.on_stream_received = on_stream_received_handler
 topic_consumer.subscribe()
 ```
     
-Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format) to a pandas DataFrame using the method `to_dataframe`:
+Alternatively, you can always convert a [TimeseriesData](#timeseriesdata-format) to a pandas `DataFrame` using the method `to_dataframe`:
 
 ``` python
 from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
@@ -242,7 +238,7 @@ topic_consumer.subscribe()
 
 !!! tip
 
-	The conversions from [TimeseriesData](#timeseriesdata-format) to pandas DataFrame have an intrinsic cost overhead. For high-performance models using pandas DataFrame, you should use the `on_dataframe_received` callback provided by the library, which is optimized to do as few conversions as possible.
+	The conversions from [TimeseriesData](#timeseriesdata-format) to pandas `DataFrame` have an intrinsic cost overhead. For high-performance models using pandas `DataFrame`, you should use the `on_dataframe_received` callback provided by the library, which is optimized to do as few conversions as possible.
 
 ### Raw data format
 
@@ -278,7 +274,7 @@ In addition to the `TimeseriesData` and pandas `DataFrame` formats (Python only)
 
 ### Using a Buffer
 
-Quix Streams provides you with an optional programmable buffer which you can tailor to your needs. Using buffers to consume data allows you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
+Quix Streams provides you with an optional programmable buffer which you can configure to your needs. Using buffers to consume data enables you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
 
 === "Python"
     You can use the `buffer` property embedded in the `timeseries` property of your `stream`, or create a separate instance of that buffer using the `create_buffer` method:
@@ -308,7 +304,7 @@ You can configure a buffer’s input requirements using built-in properties. For
     buffer.TimeSpanInMilliseconds = 100;
     ```
 
-Consuming data from that buffer is as simple as using its callback (Python) or events (C#). The buffer uses the same callbacks and events as when consuming without the buffer. For example, the following code prints the ParameterA value of the first timestamp of each packet released from the buffer:
+Consuming data from that buffer is achieved by using callbacks (Python) or events (C#). The buffer uses the same callbacks and events as when consuming without the buffer. For example, the following code prints the `ParameterA` value of the first timestamp of each packet released from the buffer:
 
 === "Python"
     
@@ -336,7 +332,7 @@ Consuming data from that buffer is as simple as using its callback (Python) or e
     };
     ```
 
-Other calbacks are available in addition to `on_data_released` (for `TimeseriesData`), including `on_dataframe_released` (for pandas `DataFrame`) and `on_raw_released` (for `TimeseriesDataRaw`). You use the callback appropriate to your stream data format. 
+Other callbacks are available in addition to `on_data_released` (for `TimeseriesData`), including `on_dataframe_released` (for pandas `DataFrame`) and `on_raw_released` (for `TimeseriesDataRaw`). You use the callback appropriate to your stream data format. 
 
 You can configure multiple conditions to determine when the buffer has to release data, if any of these conditions become true, the buffer will release a new packet of data and that data is cleared from the buffer:
 
@@ -362,7 +358,7 @@ You can configure multiple conditions to determine when the buffer has to releas
 
 #### Examples
 
-The following buffer configuration will send data every 100ms or, if no data is buffered in the 1 second timeout period, it will empty the buffer and send the pending data anyway:
+The following buffer configuration sends data every 100ms or, if no data is buffered in the 1 second timeout period, it will empty the buffer and send the pending data anyway:
 
 === "Python"
     
@@ -378,7 +374,7 @@ The following buffer configuration will send data every 100ms or, if no data is 
     stream.Timeseries.Buffer.BufferTimeout = 1000;
     ```
 
-The following buffer configuration will send data every 100ms window or if critical data arrives:
+The following buffer configuration sends data every 100ms window, or if critical data arrives:
 
 === "Python"
     
@@ -396,7 +392,7 @@ The following buffer configuration will send data every 100ms window or if criti
     
 ## Subscribing to events
 
-`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as json payload where properties can't be converted to individual parameters. EventData can also be better for non-standard changes such as a machine shutting down sending event named ShutDown.
+`EventData` is the formal class in Quix Streams which represents an Event data packet in memory. `EventData` is meant to be used when the data is intended to be consumed only as single unit, such as JSON payload where properties can't be converted to individual parameters. `EventData` can also be better for non-standard changes, such as when a machine shutting down publishes an event named `ShutDown`.
 
 !!! tip
 
@@ -406,7 +402,7 @@ The following buffer configuration will send data every 100ms window or if criti
 
 `EventData` consists of a record with a `Timestamp`, an `EventId` and an `EventValue`.
 
-You should imagine a list of `EventData` instances as a simple table of three columns where the `Timestamp` is the first column of that table and the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
+You can imagine a list of `EventData` instances as a table of three columns where the `Timestamp` is the first column of that table and the `EventId` and `EventValue` are the second and third columns, as shown in the following table:
 
 | Timestamp | EventId     | EventValue                 |
 | --------- | ----------- | -------------------------- |
@@ -415,7 +411,7 @@ You should imagine a list of `EventData` instances as a simple table of three co
 | 3         | motor-off   | Motor has stopped          |
 | 6         | race-event3 | Race has finished          |
 
-Consuming events from a stream is as easy as consuming timeseries data. In this case, the library does not use a buffer, but the way we consume Event Data from a stream is similar.
+Consuming events from a stream is similar to consuming timeseries data. In this case, the library does not use a buffer, but the way you consume Event Data from a stream is similar:
 
 === "Python"
     from quixstreams import TopicConsumer, StreamConsumer, EventData
@@ -437,7 +433,7 @@ Consuming events from a stream is as easy as consuming timeseries data. In this 
     };
     ```
 
-output:
+This generates the following output:
 
 ``` console
 Event consumed for stream. Event Id: failure23
@@ -450,7 +446,7 @@ Event consumed for stream. Event Id: race-event3
 
 If the properties of a stream are changed, the consumer can detect this and handle it using the `on_changed` method.
 
-You can write the handler:
+You can write the handler as follows:
 
 === "Python"
 
@@ -500,7 +496,7 @@ Then register the properties change handler:
     topicConsumer.Subscribe();
     ```
 
-You can keep a copy of the properties if you need to find out which properties had changed.
+You can keep a copy of the properties if you need to find out which properties have changed.
 
 ## Responding to changes in parameter definitions
 
@@ -540,19 +536,19 @@ It is possible to handle changes in [parameter definitions](./publish.md#paramet
 
 ## Committing / checkpointing
 
-It is important to be aware of the commit concept when working with a broker. Committing allows you to mark how far data has been processed, also known as creating a [checkpoint](kafka.md#checkpointing). In the event of a restart or rebalance, the client only processes messages from the last committed position. Commits are done for each consumer group, so if you have several consumer groups in use, they do not affect each another when committing.
+It is important to be aware of the commit concept when working with a broker. Committing enables you to mark how far data has been processed, also known as creating a [checkpoint](kafka.md#checkpointing). In the event of a restart or rebalance, the client only processes messages from the last committed position. Commits are completed for each consumer group, so if you have several consumer groups in use, they do not affect each another when committing.
 
 !!! tip
 
 	Commits are done at a partition level when you use Kafka as a message broker. Streams that belong to the same partition are committed at the same time using the same position. Quix Streams currently does not expose the option to subscribe to only specific partitions of a topic, but commits will only ever affect partitions that are currently assigned to your client.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You can consume more about the Streaming Context feature of the library [here](features/streaming-context.md).
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You can learn more about the Streaming Context feature of the library [here](features/streaming-context.md).
 
 ### Automatic committing
 
-By default, Quix Streams automatically commits processed messages at a regular default interval, which is every 5 seconds or 5,000 messages, whichever happens sooner. However this is subject to change.
+By default, Quix Streams automatically commits processed messages at a regular default interval, which is every 5 seconds or 5,000 messages, whichever happens sooner. However, this is subject to change.
 
-If you wish to use different automatic commit intervals, use the following code:
+If you need to use different automatic commit intervals, use the following code:
 
 === "Python"
     
@@ -577,7 +573,7 @@ If you wish to use different automatic commit intervals, use the following code:
     });
     ```
 
-The code above will commit every 100 processed messages or 500 ms, whichever is sooner.
+The code above commits every 100 processed messages or 500 ms, whichever is sooner.
 
 ### Manual committing
 
@@ -597,7 +593,7 @@ Some use cases need manual committing to mark completion of work, for example wh
     client.GetTopicConsumer(topic, consumerGroup, CommitMode.Manual);
     ```
 
-Then, whenever your commit condition fulfils, call:
+Then, whenever your commit condition is fulfilled, call:
 
 === "Python"
     
@@ -611,12 +607,13 @@ Then, whenever your commit condition fulfils, call:
     topicConsumer.Commit();
     ```
 
-The piece of code above will commit anything – like parameter, event or metadata - consumed and served to you from the topic you subscribed to up to this point.
+The previous code commits parameters, events, or metadata that is consumed and served to you from the topic you subscribed to, up to this point.
 
 ### Committed and committing events
 
 === "Python"
-Whenever a commit completes, a callback is raised that can be connected to a handler. This callback is invoked for both manual and automatic commits. You can set the callback using the following code:
+
+    Whenever a commit completes, a callback is raised that can be connected to a handler. This callback is invoked for both manual and automatic commits. You can set the callback using the following code:
     
     ``` python
     from quixstreams import TopicConsumer
@@ -628,7 +625,8 @@ Whenever a commit completes, a callback is raised that can be connected to a han
     ```
 
 === "C\#"
-Whenever a commit completes, an event is raised that can be connected to a handler. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
+
+    Whenever a commit completes, an event is raised that can be connected to a handler. This event is raised for both manual and automatic commits. You can subscribe to this event using the following code:
     
     ``` cs
     topicConsumer.OnCommitted += (sender, args) =>
@@ -648,10 +646,10 @@ When setting the `AutoOffsetReset` you can specify one of three options:
 | Option   | Description                                                      |
 | -------- | ---------------------------------------------------------------- |
 | Latest   | Receive only the latest data as it arrives, dont include older data |
-| Earliest | Receive from the beginning, i.e. as much as possible                |
-| Error    | Throws exception if no previous offset is found                  |
+| Earliest | Receive from the beginning, that is, as much as possible            |
+| Error    | Throws exception if no previous offset is found                     |
 
-By default, Latest is used.
+The default option is `Latest`.
 
 === "Python"
     
@@ -677,11 +675,11 @@ When working with a broker, you have a certain number of topic streams assigned 
 
 	Kafka revokes entire partitions, but Quix Streams makes it easy to determine which streams are affected by providing two events you can listen to.
 
-	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. You mainly don’t even need to worry about it because everything is abstracted within the [Streaming Context](features/streaming-context.md) feature of the library.
+	Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation of Quix Streams. Quix Streams abstracts these details in the [Streaming Context](features/streaming-context.md) feature.
 
 ### Streams revoking
 
-One or more streams are about to be revoked from your client, but you have a limited time frame – according to your broker configuration – to react to this and optionally commit to the broker:
+One or more streams are about to be revoked from your client, but you have a limited time frame, according to your broker configuration, to react to this and optionally commit to the broker:
 
 === "Python"
     
@@ -703,7 +701,7 @@ One or more streams are about to be revoked from your client, but you have a lim
 
 ### Streams revoked
 
-One or more streams are revoked from your client. You can no longer commit to these streams, you can only handle the revocation in your client.
+One or more streams are revoked from your client. You can no longer commit to these streams, you can only handle the revocation in your client:
 
 === "Python"
     
@@ -729,7 +727,8 @@ One or more streams are revoked from your client. You can no longer commit to th
 ## Stream closure
 
 === "Python"
-You can detect stream closure with the `on_stream_closed` callback which has the stream and the StreamEndType to help determine the closure reason if required.
+
+    You can detect stream closure with the `on_stream_closed` callback which has the stream and the `StreamEndType` to help determine the closure reason if required.
     
     ``` python
     def on_stream_closed_handler(stream: StreamConsumer, end_type: StreamEndType):
@@ -739,7 +738,8 @@ You can detect stream closure with the `on_stream_closed` callback which has the
     ```
 
 === "C\#"
-You can detect stream closure with the stream closed event which has the sender and the StreamEndType to help determine the closure reason if required.
+
+    You can detect stream closure with the stream closed event which has the sender and the `StreamEndType` to help determine the closure reason if required.
     
     ``` cs
     topicConsumer.OnStreamReceived += (topic, streamConsumer) =>
@@ -843,11 +843,9 @@ This is a minimal code example you can use to receive data from a topic using Qu
     }
     ```
 
-## Subscribe raw Kafka messages
+## Subscribing to raw Kafka messages
 
-Quix Streams uses an internal protocol which is both data and speed optimized so we do encourage you to use it, but you need to use Quix Streams on both producer and consumer sides as of today. We have plans to support most common formats in near future, but custom formats will always need to be handled manually.
-
-For this, we have created a way to [publish](publish.md#publish-raw-kafka-messages) and [subscribe](subscribe.md#subscribe-raw-kafka-messages) to the raw, unformatted messages and work with them as bytes. This gives you the ability to implement the protocol as needed and convert between formats.
+Quix Streams uses an internal protocol which is both data and speed optimized, but you do need to use the library for both the producer and consumer. Custom formats need to be handled manually. To enable this, the library provides the ability to [publish](publish.md#publish-raw-kafka-messages) and [subscribe](subscribe.md#subscribe-raw-kafka-messages) to the raw, unformatted messages, and to work with them as bytes. This gives you the means to implement the protocol as needed and convert between formats.
 
 === "Python"
     

@@ -1,18 +1,18 @@
 # Horizontal scaling
 
-Quix Streams provides out of box horizontal scaling using [streaming context](streaming-context.md) for automatic partitioning together with the underlying broker technology, such as kafka.
+Quix Streams provides horizontal scaling using [streaming context](streaming-context.md) for automatic partitioning, together with the underlying broker technology, such as Kafka.
 
-Imagine the following example:
+Consider the following example:
 
 ![Horizontal scaling initial state](../images/QuixHorizontalScaling1.png)
 
-Each car produces one stream with its own time-series data, and each stream is processed by a replica of the deployment, labelled "Process". By default the message broker will assign each stream to one replica via the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html).
+Each car produces one stream with its own time-series data, and each stream is processed by a replica of the deployment, labelled "Process". By default, the message broker assigns each stream to one replica via the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html).
 
-When the purple replicas crashes "stream 4" is assigned automatically to the blue replica.
+When the purple replica crashes, "stream 4" is assigned automatically to the blue replica.
 
 ![Purple replica crashes](../images/QuixHorizontalScaling2.png)
 
-This situation will trigger an event on topic consumer in the blue replica indicating that "stream 4" has been received:
+This situation triggers an event on the topic consumer in the blue replica indicating that "stream 4" has been received:
 
 === "Python"
     
@@ -32,13 +32,13 @@ This situation will trigger an event on topic consumer in the blue replica indic
     };
     ```
 
-output on blue replica:
+This would result in the following output on blue replica:
 
 ``` console
 New stream received: stream 4
 ```
 
-When the purple replica has restarted and becomes available again, it signals to the broker and takes control of "stream 4". 
+When the purple replica restarts and becomes available again, it signals to the broker, and takes control of "stream 4":
 
 ![Purple replica has been restarted](../images/QuixHorizontalScaling3.png)
 
@@ -75,26 +75,30 @@ This will trigger two events, one in the blue replica indicating that "stream 4"
     };
     ```
 
-Output on the blue replica:
+Results in the following output on the blue replica:
 
 ``` console
 Stream revoked: stream 4
 ```
 
-Output on the purple replica:
+Results in the following output on the purple replica:
 
 ``` console
 New stream received: stream 4
 ```
 
-The same behavior will happen if we scale the "Process" deployment up or down, increasing or decreasing the number of replicas. Kafka will trigger the rebalancing mechanism internally and this will trigger the same events on Quix Streams. Note that this example assumes perfect conditions, but in reality a rebalance event can shift all streams to different processes. In the library we ensured you only get revocation raised for a stream if it is not assigned back to the same consumer, not while it is rebalancing.
+The same behavior happens if the "Process" deployment is scaled up or down, by increasing or decreasing the number of replicas. Kafka triggers the rebalancing mechanism internally and this triggers the same events on Quix Streams. 
+
+!!! note
+
+    Note that this example assumes ideal conditions, but in reality a rebalance event can shift all streams to different processes. The library ensures you only get revocation raised for a stream if it is not assigned back to the same consumer, not while it is rebalancing.
 
 ## Rebalancing mechanism and partitions
 
 Kafka uses partitions and the [RangeAssignor strategy](https://kafka.apache.org/23/javadoc/org/apache/kafka/clients/consumer/RangeAssignor.html) to decide which consumers receive which messages. 
 
-Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind Quix Streams. You don’t need to worry about them because everything is abstracted within the [Streaming Context](streaming-context.md) feature of the library. The events described above will remain the same, even if Quix Streams uses another message broker technology or another rebalancing mechanism in the future.
+Partitions and the Kafka rebalancing protocol are internal details of the Kafka implementation behind Quix Streams. These are abstracted within the [Streaming Context](streaming-context.md) feature of the library. The events described above remain the same, even if Quix Streams uses another message broker technology, or another rebalancing mechanism in the future.
 
 !!! warning
 
-    Because of how the Kafka rebalancing mechanism works, you should follow one golden rule: you should not have more replicas than the number of partitions the topic you're subscribing to has, as additional replicas will idle.
+    The Kafka rebalancing mechanism is such that, when subscribing to a topic, you should not have more replicas than the number of partitions in the topic, as any additional replicas will remain idle.

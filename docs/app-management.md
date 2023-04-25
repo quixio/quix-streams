@@ -91,7 +91,7 @@ while not event.is_set():
 print('Exiting')
 ```
 
-In this case, when the code runs, it will subscribe to and handle `SIGINT` (an interrupt signal) and `SIGTERM` (a termination signal). If either of these signals is observed, the code will call `signal_handler`, and the `while` loop will terminate allowing the code execution to come to an end.
+In this case, when the code runs, it will subscribe to and handle `SIGINT` (an interrupt signal) and `SIGTERM` (a termination signal). If either of these signals is observed, the code will call `signal_handler`, and the `while` loop will terminate enabling the code execution to come to an end.
 
 `App.run` has this termination signal handling built in. It works on all popular platforms too.
 
@@ -140,7 +140,7 @@ When a topic is disposed, it is possible to run additional code by linking the `
 
 Unless you add an infinite loop or similar code, a Python code file will run each code statement sequentially until the end of the file, and then exit.  
 
-In order to continuously handle data in your Python code, you need to prevent the code from terminating. There are several ways this could be achieved. For example, you could use an infinite `while` loop to allow your code to run continuously. The following code will continuously print "running" until the `end_condition` has been satisfied:
+In order to continuously handle data in your Python code, you need to prevent the code from terminating. There are several ways this could be achieved. For example, you could use an infinite `while` loop to enable your code to run continuously. The following code will continuously print "running" until the `end_condition` has been satisfied:
 
 ```py
 run = True
@@ -224,7 +224,7 @@ def before_shutdown():
 App.run(before_shutdown=before_shutdown)
 ```
 
-In this snippet, `before_shutdown` is called before the app shuts down. That is before the `while` loop inside `App.run` comes to an end. This allows you to close connections, tidy up, and log your last messages before the app terminates.
+In this snippet, `before_shutdown` is called before the app shuts down. That is before the `while` loop inside `App.run` comes to an end. This enables you to close connections, tidy up, and log your last messages before the app terminates.
 
 ## Triggering shutdown from code
 

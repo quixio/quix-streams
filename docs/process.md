@@ -1,61 +1,108 @@
 # Processing data
 
-Quix Streams is specifically designed to make real-time data processing easy. We provide high-performance technology, powered by our experience in F1, in a way that anybody with basic development skills can understand and use it very quickly.
+With Quix Streams, the main operations you need to learn are how to [subscribe](subscribe.md) to topics and how to [publish](publish.md) data.
 
-!!! tip
+The typical pattern for creating a service is to [subscribe](subscribe.md) to data in a topic, process it, and then [publish](publish.md) it to a topic. A series of such services can be connected together into a stream processing pipeline.
 
-	The [Quix Portal](https://portal.platform.quix.ai) offers you easy-to-use, auto-generated examples for reading, writing, and processing data based on our [open source library](https://github.com/quixio/quix-library). These examples work directly with your workspace topics. You can deploy these examples in our serverless environment with just a few clicks. For a quick test of the capabilities of the library, we recommend starting with those auto-generated examples.
+If using Quix Streams with Python, you also have the option of using Pandas data frames, which enables a familiar approach to processing time-series data. You can also process time-series data in other formats, and it is also possible to process event data. 
 
-Other streaming platforms are tied to a narrow set of functions, queries, or syntax to set up a data processor or model. This limited approach is often only suitable for some use cases, and tends to have a steep learning curve. The feature limitations and time investment required form a barrier to entry for inexperienced developers and data scientists alike.
-
-Our approach is simpler and far more powerful than other streaming solutions. So much so that we can’t show you any Quix Streams related functions here because you literally don’t need them if you use Quix Streams.
-
-With Quix Streams, you are not tied to complicated functions, lambdas, maps or query libraries to be able to deploy and process data in real time. You just need to know how to [subscribe](subscribe.md) and [publish](publish.md) data with Quix Streams — that’s it, the rest is up to you and your imagination.
-
-Let’s see some examples of how to subscribe to and publish data using Quix Streams. We just [subscribe](subscribe.md) to data from the message broker, process it, and [publish](publish.md) it back to the message broker.
+The following examples show how to process data in the Pandas data frame format, the format defined by the `TimeseriesData` class, and the event data format:
 
 === "Python - Data Frame"
     
     ``` python
-    from quixstreams import TopicConsumer, StreamConsumer
+    import quixstreams as qx
     using pandas as pd
 
+    client = qx.QuixStreamingClient()
+
+    topic_consumer = client.get_topic_consumer("input-topic")
+    topic_producer = client.get_topic_producer("output-topic")
+
     # Callback triggered for each new data frame
-    def on_dataframe_received_handler(stream: StreamConsumer, df: pd.DataFrame):
+    def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, df: pd.DataFrame):
         output_df = pd.DataFrame()
-        # you can use 'time', 'timestamp', 'datetime' for your own dataframes, but
-        # when you are given a dataframe by this call or data.to_dataframe
-        # 'timestamp' will be used as the column name
         output_df["time"] = df["timestamp"]
         output_df["TAG__LapNumber"] = df["TAG__LapNumber"]
     
-        # If braking force applied is more than 50%, we mark HardBraking with True
+        # If braking force applied is more than 50%, mark HardBraking with True
         output_df["HardBraking"] = df.apply(lambda row: "True" if row.Brake > 0.5 else "False", axis=1)
     
-        stream_producer.timeseries.publish(output_df)  # Send data to the output stream
+        topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries.publish(output_df)  # Send data to the output stream
 
-    stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
+    def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+        stream_consumer.timeseries.on_dataframe_received = on_dataframe_received_handler
+
+    # subscribe to new streams being received
+    topic_consumer.on_stream_received = on_stream_received_handler
+
+    print("Listening to streams. Press CTRL-C to exit.")
+
+    # Handle termination signals and provide a graceful exit
+    qx.App.run()
     ```
 
 === "Python - Plain"
     
     ``` python
-    from quixstreams import TopicConsumer, StreamConsumer, TimeseriesData
+    import quixstreams as qx
 
-    # Callback triggered for each new data frame
-    def on_data_received_handler(stream: StreamConsumer, data: TimeseriesData):
+    client = qx.QuixStreamingClient()
+
+    topic_consumer = client.get_topic_consumer("input-topic")
+    topic_producer = client.get_topic_producer("output-topic")
+
+    # Callback triggered for each new data
+    def on_data_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
         with data:
             for row in data.timestamps:
-                # If braking force applied is more than 50%, we mark HardBraking with True
+                # If braking force applied is more than 50%, mark HardBraking with True
                 hard_braking = row.parameters["Brake"].numeric_value > 0.5
         
-                stream_producer.timeseries \
+                topic_producer.get_or_create_stream(stream_consumer.stream_id).timeseries \
                     .add_timestamp(row.timestamp) \
                     .add_tag("LapNumber", row.tags["LapNumber"]) \
                     .add_value("HardBraking", hard_braking) \
                     .publish()
+ 
+     def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+        stream_consumer.timeseries.on_data_received = on_data_received_handler
 
-    stream_consumer.timeseries.on_data_received = on_dataframe_received_handler
+    # subscribe to new streams being received
+    topic_consumer.on_stream_received = on_stream_received_handler
+
+    print("Listening to streams. Press CTRL-C to exit.")
+
+    # Handle termination signals and provide a graceful exit
+    qx.App.run()
+   ```
+
+=== "Python - Event data"
+
+    ``` python
+    import quixstreams as qx
+
+    client = qx.QuixStreamingClient()
+
+    topic_consumer = client.get_topic_consumer("input-topic")
+    topic_producer = client.get_topic_producer("output-topic")
+
+    # Callback triggered for each new event data
+    def on_event_data_received_handler(stream: qx.StreamConsumer, data: qx.EventData):
+        with data:
+            # process as required and then write out to the output topic
+            topic_producer.get_or_create_stream(stream_consumer.stream_id).events.publish(data)
+
+    def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+        stream_consumer.event.on_data_received = on_event_data_received_handler
+
+    # subscribe to new streams being received
+    topic_consumer.on_stream_received = on_stream_received_handler
+
+    print("Listening to streams. Press CTRL-C to exit.")
+
+    # Handle termination signals and provide a graceful exit
+    qx.App.run()
     ```
 
 === "C\#"
@@ -65,7 +112,7 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     {
         var outputData = new TimeseriesData();
     
-        // We calculate mean value for each second of data to effectively down-sample source topic to 1Hz.
+        // Calculate mean value for each second of data to effectively down-sample source topic to 1Hz.
         outputData.AddTimestamp(args.Data.Timestamps.First().Timestamp)
             .AddValue("ParameterA 10Hz", args.Data.Timestamps.Average(s => s.Parameters["ParameterA"].NumericValue.GetValueOrDefault()))
             .AddValue("ParameterA source frequency", args.Data.Timestamps.Count);
@@ -75,6 +122,8 @@ Let’s see some examples of how to subscribe to and publish data using Quix Str
     };
     ```
 
-So, because you are not tied to any narrow processing architecture, you can use any methods, classes or libraries that you are already familiar with to implement your model or data processor.
+Your code can use any convenient libraries. If working in the Quix Platform, your code can include these libraries by adding them to the `requirements.txt` file for Python, or `nuget.config` for C#.
 
-Check out more samples using our [open source library samples](https://github.com/quixio/quix-library).
+!!! tip
+
+	The [Quix Portal](https://portal.platform.quix.ai/self-sign-up) provides easy-to-use [open source samples](https://github.com/quixio/quix-samples) for reading, writing, and processing data. These samples work directly with your workspace topics. You can configure and deploy these samples in the Quix serverless environment using the Quix Portal UI. While the samples provide ready-made connectors and transforms you can use in your pipeline, you can also explore their code to see how they work, and adapt them to make your own custom connectors and transforms.

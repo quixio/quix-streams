@@ -9,7 +9,7 @@ The following sections will explore these methods of data processing in more det
 
 ## Topics, streams, partitions, replicas, and consumer groups
 
-The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. To allow for horizontal scaling, a topic is typically divided into multiple streams. You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on. This is the idea of [stream context](./features/streaming-context.md). 
+The main structure used for data organization in Quix is the topic. For example, the topic might be `iot-telemetry`. To enable for horizontal scaling, a topic is typically divided into multiple streams. You may have multiple devices, or sources, writing data into a topic, so to ensure scaling and message ordering, each source writes into its own stream. Device 1 would write to stream 1, and device 2 to stream 2 and so on. This is the idea of [stream context](./features/streaming-context.md). 
 
 In some use cases you may want to aggregate data beyond the stream context of a source. This can be done by writing data to new streams in the pipeline, based on a different key. For example, imagine a scenario where invoices are being streamed from stores, and where each stream is based on `StoreId`. Now, let's say you want to calculate totals of a specific item sold across all stores (streams). To do this, you can create a transform that first writes invoices into new streams based on `StockCode`, and then another transform can perform aggregation for each of these `StockCode` streams, in order to calculate how much of each item was sold.
 
@@ -48,7 +48,7 @@ Time-series data has three different representations in Quix Streams, to serve d
 2. Pandas Data Frame (represented by the `pd.DataFrame` class)
 3. DataRaw (represented by the `qx.TimeseriesDataRaw` class)
 
-In this topic you'll learn about the `TimeseriesData` and `pd.DataFrame` formats.
+In the following sections of this documentation you'll learn about these formats.
 
 ## Registering a callback for stream data
 
