@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace QuixStreams.State.Storage
@@ -90,12 +89,12 @@ namespace QuixStreams.State.Storage
         }
 
         /// <inheritdoc/>
-        public int DeleteSubStorages(string regex = null)
+        public int DeleteSubStorages()
         {
             int count = 0;
             lock (this.subStateLock)
             {
-                foreach (var sub in this.GetSubStorages(regex))
+                foreach (var sub in this.GetSubStorages())
                 {
                     this.subStates.Remove(sub);
                     count++;
@@ -106,12 +105,9 @@ namespace QuixStreams.State.Storage
         }
 
         /// <inheritdoc/>
-        public IEnumerable<string> GetSubStorages(string regex = null)
+        public IEnumerable<string> GetSubStorages()
         {
-            var keys = this.subStates.Keys.ToArray();
-            if (regex == null) return keys;
-            var rx = new Regex(regex, RegexOptions.Compiled);
-            return keys.Where(d => rx.IsMatch(d));
+            return this.subStates.Keys.ToArray();
         }
     }
 }

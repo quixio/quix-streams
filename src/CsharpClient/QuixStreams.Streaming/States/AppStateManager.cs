@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
 
@@ -17,9 +17,6 @@ namespace QuixStreams.Streaming.States
 
         private readonly ILogger<AppStateManager> logger;
         private readonly IStateStorage storage;
-
-        private static string TopicPrefix = "_T_";
-        private static string TopicRegexPattern = "^_T_";
 
 
         /// <summary>
@@ -40,7 +37,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>An enumerable collection of string values representing the topic state names.</returns>
         public IEnumerable<string> GetTopicStates()
         {
-            return this.storage.GetSubStorages(TopicRegexPattern).Select(y=> y.Substring(TopicPrefix.Length));
+            return this.storage.GetSubStorages();
         }
         
         /// <summary>
@@ -49,7 +46,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of topic states that were deleted.</returns>
         public int DeleteTopicStates()
         {
-            var count = this.storage.DeleteSubStorages(TopicRegexPattern);
+            var count = this.storage.DeleteSubStorages();
             this.topicStateManagers.Clear();
             return count;
         }
@@ -72,7 +69,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The prefixed topic name</returns>
         private string GetSubStorageName(string topicName)
         {
-            return $"{TopicPrefix}{topicName}";
+            return topicName.Replace(Path.PathSeparator, '_').Replace(Path.DirectorySeparatorChar, '_').Replace(Path.VolumeSeparatorChar, '_').Replace(Path.AltDirectorySeparatorChar, '_');
         }
 
         /// <summary>

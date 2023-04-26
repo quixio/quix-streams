@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
@@ -23,9 +24,6 @@ namespace QuixStreams.Streaming.States
         private readonly ConcurrentDictionary<string, StreamStateManager> streamStateManagers = new ConcurrentDictionary<string, StreamStateManager>();
 
         private readonly ILogger<TopicStateManager> logger;
-        
-        private static string StreamPrefix = "_S_";
-        private static string StreamRegexPattern = "^_S_";
 
         /// <summary>
         /// Initializes a new instance of the TopicStateManager class.
@@ -64,7 +62,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>An enumerable collection of string values representing the stream state names.</returns>
         public IEnumerable<string> GetStreamStates()
         {
-            return this.stateStorage.GetSubStorages(StreamRegexPattern).Select(y=> y.Substring(StreamPrefix.Length));
+            return this.stateStorage.GetSubStorages();
         }
         
         /// <summary>
@@ -73,7 +71,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of stream states that were deleted.</returns>
         public int DeleteStreamStates()
         {
-            var count = this.stateStorage.DeleteSubStorages(StreamRegexPattern);
+            var count = this.stateStorage.DeleteSubStorages();
             this.streamStateManagers.Clear();
             return count;        
         }
@@ -96,7 +94,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The prefixed stream id</returns>
         private string GetSubStorageName(string streamId)
         {
-            return $"{StreamPrefix}{streamId}";
+            return streamId.Replace(Path.PathSeparator, '_').Replace(Path.DirectorySeparatorChar, '_').Replace(Path.VolumeSeparatorChar, '_').Replace(Path.AltDirectorySeparatorChar, '_');
         }
         
         /// <summary>

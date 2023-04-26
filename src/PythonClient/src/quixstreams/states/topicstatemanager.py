@@ -9,7 +9,6 @@ from quixstreams.native.Python.InteropHelpers.ExternalTypes.System.Enumerable im
 
 from streamstatemanager import StreamStateManager
 
-
 @nativedecorator
 class TopicStateManager(object):
     """

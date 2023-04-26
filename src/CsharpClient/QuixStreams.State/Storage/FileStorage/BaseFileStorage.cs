@@ -242,10 +242,10 @@ namespace QuixStreams.State.Storage.FileStorage
         }
 
         /// <inheritdoc/>
-        public int DeleteSubStorages(string regex = null)
+        public int DeleteSubStorages()
         {
             var deleted = 0;
-            foreach (var subStorage in GetSubStorages(regex))
+            foreach (var subStorage in GetSubStorages())
             {
                 Directory.Delete(GetSubStoragePath(subStorage), true);
                 deleted++;
@@ -255,13 +255,11 @@ namespace QuixStreams.State.Storage.FileStorage
         }
 
         /// <inheritdoc/>
-        public IEnumerable<string> GetSubStorages(string regex = null)
+        public IEnumerable<string> GetSubStorages()
         {
             if (!Directory.Exists(this.storageDirectory)) return Array.Empty<string>();
             var dirNames = Directory.EnumerateDirectories(this.storageDirectory).Select(Path.GetFileName);
-            if (regex == null) return dirNames;
-            var rx = new Regex(regex, RegexOptions.Compiled);
-            return dirNames.Where(d => rx.IsMatch(d));
+            return dirNames;
         }
 
         /// <summary>
