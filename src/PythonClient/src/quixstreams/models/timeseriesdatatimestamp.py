@@ -149,13 +149,13 @@ class TimeseriesDataTimestamp:
         """
         return dtc.timespan_to_python(self._interop.get_TimestampAsTimeSpan())
 
-    def add_value(self, parameter_id: str, value: Union[float, str, int, bytearray, bytes]) -> 'TimeseriesDataTimestamp':
+    def add_value(self, parameter_id: str, value: Union[numbers.Number, str, bytearray, bytes]) -> 'TimeseriesDataTimestamp':
         """
         Adds a new value for the specified parameter.
 
         Args:
             parameter_id: The parameter id to add the value for.
-            value: The value to add. Can be float, string, int, bytearray, or bytes.
+            value: The value to add. Can be a number, string, bytearray, or bytes.
 
         Returns:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
@@ -164,7 +164,7 @@ class TimeseriesDataTimestamp:
         if value is None:
             return self
 
-        if issubclass(value, numbers.Number):
+        if issubclass(type(value), numbers.Number):
             value = float(value)
 
         val_type = type(value)

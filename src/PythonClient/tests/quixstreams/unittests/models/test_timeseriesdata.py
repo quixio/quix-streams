@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timezone, timedelta
 
 import pandas
+import numpy as np
 from src.quixstreams.helpers.timeconverter import TimeConverter
 from src.quixstreams import TimeseriesData
 
@@ -27,6 +28,36 @@ class TimeseriesDataTests(unittest.TestCase):
 
         # Act
         self.assertEqual(4, len(timeseries_data.timestamps))
+
+    def test_adding_null_value_is_silently_ignored(self):
+        # Arrange
+        timeseries_data = TimeseriesData()
+        timeseries_data.add_timestamp_nanoseconds(1) \
+            .add_value("param1", 1) \
+            .add_value("param1", None)
+
+        # Act
+        self.assertEqual(1, timeseries_data.timestamps[0].parameters["param1"].value)
+
+    def test_any_number_type_is_converted_to_float(self):
+        # Arrange
+        npy_float64 = np.float64(42.0)
+        npy_int64 = np.int64(42)
+        native_int = 42
+        native_float = 42.0
+
+        timeseries_data = TimeseriesData()
+        timeseries_data.add_timestamp_nanoseconds(1) \
+            .add_value("npy_float64", npy_float64) \
+            .add_value("npy_int64", npy_int64) \
+            .add_value("native_int", native_int) \
+            .add_value("native_float", native_float)
+
+        # Act
+        self.assertEqual(float(42), timeseries_data.timestamps[0].parameters["npy_float64"].value)
+        self.assertEqual(float(42), timeseries_data.timestamps[0].parameters["npy_int64"].value)
+        self.assertEqual(float(42), timeseries_data.timestamps[0].parameters["native_int"].value)
+        self.assertEqual(float(42), timeseries_data.timestamps[0].parameters["native_float"].value)
 
     def test_convert_from_timeseries_data_to_panda_data_frame(self):
         # Arrange
