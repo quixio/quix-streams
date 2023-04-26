@@ -1,8 +1,8 @@
 import ctypes
 import weakref
 
-from .helpers.nativedecorator import nativedecorator
-from .native.Python.QuixStreamsStreaming.StreamStateManager import StreamStateManager as ssmi
+from quixstreams.helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixStreamsStreaming.States.StreamStateManager import StreamStateManager as ssmi
 
 from .streamstate import StreamState
 

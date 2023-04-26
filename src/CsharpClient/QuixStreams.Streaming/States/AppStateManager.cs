@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
 
@@ -16,6 +17,10 @@ namespace QuixStreams.Streaming.States
 
         private readonly ILogger<AppStateManager> logger;
         private readonly IStateStorage storage;
+
+        private static string TopicPrefix = "_T_";
+        private static string TopicRegexPattern = "^_T_";
+
 
         /// <summary>
         /// Initializes a new instance of the AppStateManager class.
@@ -35,7 +40,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>An enumerable collection of string values representing the topic state names.</returns>
         public IEnumerable<string> GetTopicStates()
         {
-            return this.storage.GetSubStorages();
+            return this.storage.GetSubStorages(TopicRegexPattern).Select(y=> y.Substring(TopicPrefix.Length));
         }
         
         /// <summary>
@@ -44,7 +49,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of topic states that were deleted.</returns>
         public int DeleteTopicStates()
         {
-            var count = this.storage.DeleteSubStorages();
+            var count = this.storage.DeleteSubStorages(TopicRegexPattern);
             this.topicStateManagers.Clear();
             return count;
         }
@@ -55,9 +60,19 @@ namespace QuixStreams.Streaming.States
         /// <returns>Whether the topic state was deleted</returns>
         public bool DeleteTopicState(string topicName)
         {
-            if (!this.storage.DeleteSubStorage(topicName)) return false;
+            if (!this.storage.DeleteSubStorage(GetSubStorageName(topicName))) return false;
             this.topicStateManagers.TryRemove(topicName, out _);
             return true;
+        }
+
+        /// <summary>
+        /// Returns the sub storage name with correct prefix
+        /// </summary>
+        /// <param name="topicName">The topic name to prefix</param>
+        /// <returns>The prefixed topic name</returns>
+        private string GetSubStorageName(string topicName)
+        {
+            return $"{TopicPrefix}{topicName}";
         }
 
         /// <summary>
@@ -68,7 +83,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The newly created <see cref="TopicStateManager"/> instance.</returns>
         internal TopicStateManager GetTopicStateManager(ITopicConsumer topicConsumer, string topicName)
         {
-            return this.topicStateManagers.GetOrAdd(topicName, key => new TopicStateManager(topicConsumer, key, this.storage.GetOrCreateSubStorage(key), this.loggerFactory));
+            return this.topicStateManagers.GetOrAdd(topicName, key => new TopicStateManager(topicConsumer, key, this.storage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory));
         }
         
         /// <summary>
@@ -78,7 +93,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The newly created <see cref="TopicStateManager"/> instance.</returns>
         public TopicStateManager GetTopicStateManager(string topicName)
         {
-            return this.topicStateManagers.GetOrAdd(topicName, key => new TopicStateManager(key, this.storage.GetOrCreateSubStorage(key), this.loggerFactory));
+            return this.topicStateManagers.GetOrAdd(topicName, key => new TopicStateManager(key, this.storage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory));
         }
     }
 }

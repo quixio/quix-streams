@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace QuixStreams.State.Storage.FileStorage
@@ -15,7 +17,6 @@ namespace QuixStreams.State.Storage.FileStorage
 
         private static readonly string DefaultDir = Path.Combine(".", "state");
         private static readonly string FileNameSpecialCharacter = "~";
-        private static readonly string SubStoragePrefix = "__sub__";
 
         /// <summary>
         /// Initializes a new instance of <see cref="BaseFileStorage"/>
@@ -220,7 +221,7 @@ namespace QuixStreams.State.Storage.FileStorage
 
         private string GetSubStoragePath(string subStorageName)
         {
-            var subPath = $"{this.storageDirectory}{Path.DirectorySeparatorChar}{SubStoragePrefix}{subStorageName}";
+            var subPath = $"{this.storageDirectory}{Path.DirectorySeparatorChar}{subStorageName}";
             return subPath;
         }
 
@@ -241,10 +242,10 @@ namespace QuixStreams.State.Storage.FileStorage
         }
 
         /// <inheritdoc/>
-        public int DeleteSubStorages()
+        public int DeleteSubStorages(string regex = null)
         {
             var deleted = 0;
-            foreach (var subStorage in GetSubStorages())
+            foreach (var subStorage in GetSubStorages(regex))
             {
                 Directory.Delete(GetSubStoragePath(subStorage), true);
                 deleted++;
@@ -254,15 +255,13 @@ namespace QuixStreams.State.Storage.FileStorage
         }
 
         /// <inheritdoc/>
-        public IEnumerable<string> GetSubStorages()
+        public IEnumerable<string> GetSubStorages(string regex = null)
         {
-            if (!Directory.Exists(this.storageDirectory)) yield break;
-            foreach (var dirPath in Directory.EnumerateDirectories(this.storageDirectory))
-            {
-                var dirName = Path.GetFileName(dirPath); // this just gets the last segment
-                if (string.IsNullOrWhiteSpace(dirName)) continue;
-                if (dirName.StartsWith(SubStoragePrefix)) yield return dirName.Substring(SubStoragePrefix.Length);
-            }
+            if (!Directory.Exists(this.storageDirectory)) return Array.Empty<string>();
+            var dirNames = Directory.EnumerateDirectories(this.storageDirectory).Select(Path.GetFileName);
+            if (regex == null) return dirNames;
+            var rx = new Regex(regex, RegexOptions.Compiled);
+            return dirNames.Where(d => rx.IsMatch(d));
         }
 
         /// <summary>

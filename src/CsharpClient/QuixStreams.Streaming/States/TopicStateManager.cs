@@ -23,6 +23,9 @@ namespace QuixStreams.Streaming.States
         private readonly ConcurrentDictionary<string, StreamStateManager> streamStateManagers = new ConcurrentDictionary<string, StreamStateManager>();
 
         private readonly ILogger<TopicStateManager> logger;
+        
+        private static string StreamPrefix = "_S_";
+        private static string StreamRegexPattern = "^_S_";
 
         /// <summary>
         /// Initializes a new instance of the TopicStateManager class.
@@ -61,7 +64,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>An enumerable collection of string values representing the stream state names.</returns>
         public IEnumerable<string> GetStreamStates()
         {
-            return this.stateStorage.GetSubStorages();
+            return this.stateStorage.GetSubStorages(StreamRegexPattern).Select(y=> y.Substring(StreamPrefix.Length));
         }
         
         /// <summary>
@@ -70,7 +73,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of stream states that were deleted.</returns>
         public int DeleteStreamStates()
         {
-            var count = this.stateStorage.DeleteSubStorages();
+            var count = this.stateStorage.DeleteSubStorages(StreamRegexPattern);
             this.streamStateManagers.Clear();
             return count;        
         }
@@ -81,9 +84,19 @@ namespace QuixStreams.Streaming.States
         /// <returns>Whether the stream state was deleted</returns>
         public bool DeleteStreamState(string streamId)
         {
-            if (!this.stateStorage.DeleteSubStorage(streamId)) return false;
+            if (!this.stateStorage.DeleteSubStorage(GetSubStorageName(streamId))) return false;
             this.streamStateManagers.TryRemove(streamId, out _);
             return true;
+        }
+        
+        /// <summary>
+        /// Returns the sub storage name with correct prefix
+        /// </summary>
+        /// <param name="streamId">The stream id to prefix</param>
+        /// <returns>The prefixed stream id</returns>
+        private string GetSubStorageName(string streamId)
+        {
+            return $"{StreamPrefix}{streamId}";
         }
         
         /// <summary>
@@ -94,7 +107,7 @@ namespace QuixStreams.Streaming.States
         public StreamStateManager GetStreamStateManager(string streamId)
         {
             return this.streamStateManagers.GetOrAdd(streamId, 
-                key => new StreamStateManager(this.topicConsumer, streamId, this.stateStorage.GetOrCreateSubStorage(streamId), this.loggerFactory, this.topicName + " "));
+                key => new StreamStateManager(this.topicConsumer, key, this.stateStorage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory, this.topicName + " "));
         }
     }
 }

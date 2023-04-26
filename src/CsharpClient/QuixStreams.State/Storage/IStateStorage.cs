@@ -74,17 +74,19 @@ namespace QuixStreams.State.Storage
         /// </summary>
         /// <returns>Whether the state storage for the given storage name was deleted</returns>
         public bool DeleteSubStorage(string subStorageName);
-        
+
         /// <summary>
         /// Deletes the storages under this in hierarchy.
         /// </summary>
+        /// <param name="regex">The optional regex to match the sub storage name with</param>
         /// <returns>The number of state storage deleted</returns>
-        public int DeleteSubStorages();
-        
+        public int DeleteSubStorages(string regex = null);
+
         /// <summary>
         /// Gets the storages under this in hierarchy.
         /// </summary>
+        /// <param name="regex">The optional regex to match the sub storage name with</param>
         /// <returns>The enumerable storage names this state contains</returns>
-        public IEnumerable<string> GetSubStorages();
+        public IEnumerable<string> GetSubStorages(string regex = null);
     }
 }

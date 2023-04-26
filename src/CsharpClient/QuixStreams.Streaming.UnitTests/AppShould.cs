@@ -9,20 +9,20 @@ public class AppShould
 {
     
     [Fact]
-    public void GetStatemanager_WithoutSetStateStorage_ShouldNotThrowException()
+    public void GetStateManager_WithoutSetStateStorage_ShouldNotThrowException()
     {
         // Act
         var manager = App.GetStateManager();
     }
     
-    [Fact(Skip = "Until reworked to use non-signleton only one of these tests will pass")]
+    [Fact(Skip = "Until reworked to use non-singleton only one of these tests will pass")]
     public void SetStateStorage_ShouldNotThrowException()
     {
         // Act
         App.SetStateStorage(new InMemoryStateStorage());
     }
     
-    [Fact(Skip = "Until reworked to use non-signleton only one of these tests will pass")]
+    [Fact(Skip = "Until reworked to use non-singleton only one of these tests will pass")]
     public void SetStateStorage_CalledTwice_ShouldThrowException()
     {
         // Arrange

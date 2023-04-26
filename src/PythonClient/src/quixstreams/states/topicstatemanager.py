@@ -2,10 +2,10 @@ import ctypes
 import weakref
 from typing import List
 
-from .helpers.nativedecorator import nativedecorator
-from .native.Python.QuixStreamsStreaming.TopicStateManager import TopicStateManager as tsmi
+from quixstreams.helpers.nativedecorator import nativedecorator
+from ..native.Python.QuixStreamsStreaming.States.TopicStateManager import TopicStateManager as tsmi
 
-from .native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
+from quixstreams.native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 
 from streamstatemanager import StreamStateManager
 

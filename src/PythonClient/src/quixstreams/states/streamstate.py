@@ -2,13 +2,13 @@ import ctypes
 import traceback
 from typing import Callable, List
 
-from .helpers.nativedecorator import nativedecorator
-from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
-from .native.Python.QuixStreamsStreaming.StreamState import StreamState as ssi
+from quixstreams.helpers.nativedecorator import nativedecorator
+from quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+from quixstreams.native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ..native.Python.QuixStreamsStreaming.States.StreamState import StreamState as ssi
 
-from .models.netdict import NetDict
-from .state.statevalue import StateValue
+from quixstreams.models.netdict import NetDict
+from quixstreams.state.statevalue import StateValue
 
 
 @nativedecorator
