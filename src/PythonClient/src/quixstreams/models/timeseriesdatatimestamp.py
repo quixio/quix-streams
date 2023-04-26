@@ -1,4 +1,5 @@
 import ctypes
+import numbers
 from datetime import datetime, timedelta
 from typing import Union, Dict
 
@@ -160,7 +161,10 @@ class TimeseriesDataTimestamp:
             TimeseriesDataTimestamp: The updated TimeseriesDataTimestamp instance.
         """
 
-        if type(value) is int:
+        if value is None:
+            return self
+
+        if issubclass(value, numbers.Number):
             value = float(value)
 
         val_type = type(value)
