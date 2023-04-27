@@ -18,7 +18,7 @@ namespace QuixStreams.Streaming.States
         private readonly State.State state;
         
         /// <summary>
-        /// Returns whether the cache keys are case sensitive
+        /// Returns whether the cache keys are case-sensitive
         /// </summary>
 
         /// <summary>
@@ -148,7 +148,7 @@ namespace QuixStreams.Streaming.States
         /// </summary>
         private readonly State.State<T> state;
         /// <summary>
-        /// Returns whether the cache keys are case sensitive
+        /// Returns whether the cache keys are case-sensitive
         /// </summary>
         private bool IsCaseSensitive => this.state.IsCaseSensitive;
         

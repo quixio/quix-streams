@@ -10,7 +10,7 @@ public class AppStateManagerShould
 {
     private AppStateManager CreateAppStateManager()
     {
-        return new AppStateManager(new InMemoryStateStorage());
+        return new AppStateManager(new InMemoryStorage());
     }
     
     [Fact]

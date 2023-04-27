@@ -12,7 +12,7 @@ public class StreamStateShould
     [Fact]
     public void Constructor_ShouldCreateStreamState()
     {
-        var streamState = new StreamState<int>(new InMemoryStateStorage(), key => -1, NullLoggerFactory.Instance);
+        var streamState = new StreamState<int>(new InMemoryStorage(), key => -1, NullLoggerFactory.Instance);
 
         streamState.Should().NotBeNull();
 
@@ -33,7 +33,7 @@ public class StreamStateShould
     public void ComplexModifications_ShouldHaveExpectedValues()
     {
         // Arrange
-        var storage = new InMemoryStateStorage();
+        var storage = new InMemoryStorage();
         var streamState = new StreamState<string>(storage, null, NullLoggerFactory.Instance);
 
         // Act 1

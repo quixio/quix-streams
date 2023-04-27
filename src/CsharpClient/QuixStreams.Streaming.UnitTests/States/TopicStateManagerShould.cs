@@ -11,7 +11,7 @@ public class TopicStateManagerShould
 {
     private TopicStateManager CreateTopicStateManager()
     {
-        return new TopicStateManager("topic", new InMemoryStateStorage(), NullLoggerFactory.Instance);
+        return new TopicStateManager("topic", new InMemoryStorage(), NullLoggerFactory.Instance);
     }
     
     [Fact]

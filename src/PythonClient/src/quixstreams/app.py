@@ -7,6 +7,8 @@ from typing import Callable
 from .native.Python.QuixStreamsStreaming.App import App as ai
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationToken import CancellationToken as cti
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationTokenSource import CancellationTokenSource as ctsi
+from .states.appstatemanager import AppStateManager
+from .state.istatestorage import IStateStorage
 
 
 class CancellationTokenSource:
@@ -117,3 +119,23 @@ class App:
                 ai.Run(beforeShutdown=wrapper)
         except KeyboardInterrupt:
             pass
+
+    @staticmethod
+    def get_state_manager() -> AppStateManager:
+        """
+        Retrieves the state manager for the application
+
+        Returns:
+            AppStateManager: the app's state manager
+        """
+        return AppStateManager(ai.GetStateManager())
+
+    @staticmethod
+    def set_state_storage(storage: IStateStorage) -> None:
+        """
+        Sets the state storage for the app
+
+        Args:
+            storage: The state storage to use for app's state manager
+        """
+        return ai.SetStateStorage(storage.get_net_pointer())

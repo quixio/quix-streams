@@ -8,7 +8,7 @@ namespace QuixStreams.State.Storage
     /// <summary>
     /// Basic non-thread safe in-memory storage implementing <see cref="IStateStorage"/> interface.
     /// </summary>
-    public class InMemoryStateStorage : IStateStorage
+    public class InMemoryStorage : IStateStorage
     {
         /// <summary>
         /// Represents the in-memory state holding the key-value pairs.
@@ -75,7 +75,7 @@ namespace QuixStreams.State.Storage
             lock (this.subStateLock)
             {
                 if (this.subStates.TryGetValue(subStorageName, out existing)) return existing;
-                var storage = new InMemoryStateStorage();
+                var storage = new InMemoryStorage();
                 this.subStates[subStorageName] = storage;
                 return storage;
             }

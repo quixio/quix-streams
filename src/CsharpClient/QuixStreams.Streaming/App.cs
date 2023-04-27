@@ -227,7 +227,7 @@ namespace QuixStreams.Streaming
         /// <summary>
         /// Sets the state storage for the app
         /// </summary>
-        /// <param name="stateStorage">The state storage to set to</param>
+        /// <param name="stateStorage">The state storage to use for app's state manager</param>
         public static void SetStateStorage(IStateStorage stateStorage)
         {
             if (App.stateManager != null) throw new InvalidOperationException("App state manager may only be set once");

@@ -45,7 +45,7 @@ namespace QuixStreams.State
         private readonly ILogger<State> logger;
 
         /// <summary>
-        /// Returns whether the cache keys are case sensitive
+        /// Returns whether the cache keys are case-sensitive
         /// </summary>
         public bool IsCaseSensitive => this.storage.IsCaseSensitive;
         
@@ -305,7 +305,7 @@ namespace QuixStreams.State
         private readonly IDictionary<string, ChangeType> changes = new Dictionary<string, ChangeType>();
         
         /// <summary>
-        /// Returns whether the cache keys are case sensitive
+        /// Returns whether the cache keys are case-sensitive
         /// </summary>
         public bool IsCaseSensitive => this.underlyingState.IsCaseSensitive;
 

@@ -12,7 +12,7 @@ namespace QuixStreams.State.UnitTests
         public void Constructor_UsingNonEmptyState_ShouldLoadState()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             storage.SetAsync("existing", new StateValue("whatever"));
             var state = new State(storage);
 
@@ -25,7 +25,7 @@ namespace QuixStreams.State.UnitTests
         public void Add_StateValue_ShouldIncreaseCount()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
 
             // Act
@@ -39,7 +39,7 @@ namespace QuixStreams.State.UnitTests
         public void Remove_StateValue_ShouldDecreaseCount()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key", new StateValue("value"));
 
@@ -54,7 +54,7 @@ namespace QuixStreams.State.UnitTests
         public void Clear_State_ShouldRemoveAllItems()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
@@ -70,7 +70,7 @@ namespace QuixStreams.State.UnitTests
         public async Task Flush_State_ShouldPersistChangesToStorage()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
@@ -86,7 +86,7 @@ namespace QuixStreams.State.UnitTests
         public async Task Flush_ClearBeforeFlush_ShouldClearStorage()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
@@ -114,7 +114,7 @@ namespace QuixStreams.State.UnitTests
         public void ContainsKey_KeyExists_ShouldReturnTrue()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key", new StateValue("value"));
 
@@ -129,7 +129,7 @@ namespace QuixStreams.State.UnitTests
         public void ContainsKey_KeyDoesNotExist_ShouldReturnFalse()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
 
             // Act
@@ -143,7 +143,7 @@ namespace QuixStreams.State.UnitTests
         public void TryGetValue_KeyExists_ShouldReturnTrueAndValue()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key", new StateValue("value"));
 
@@ -159,7 +159,7 @@ namespace QuixStreams.State.UnitTests
         public void TryGetValue_KeyDoesNotExist_ShouldReturnFalseAndDefaultValue()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
 
             // Act
@@ -174,7 +174,7 @@ namespace QuixStreams.State.UnitTests
         public void Indexer_GetAndSet_ShouldWorkCorrectly()
         {
             // Arrange
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State(storage);
             state.Add("key", new StateValue("value"));
 

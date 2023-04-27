@@ -2,12 +2,12 @@ import ctypes
 import weakref
 from typing import List
 
-from quixstreams.helpers.nativedecorator import nativedecorator
+from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.QuixStreamsStreaming.States.TopicStateManager import TopicStateManager as tsmi
 
-from quixstreams.native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
+from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 
-from streamstatemanager import StreamStateManager
+from .streamstatemanager import StreamStateManager
 
 @nativedecorator
 class TopicStateManager(object):
@@ -43,7 +43,7 @@ class TopicStateManager(object):
 
     def get_stream_state_manager(self, stream_id: str) -> StreamStateManager:
         """
-        Gets an instance of the StreamStateManager class for the specified stream_id.
+        Gets an instance of the StreamStateManager for the specified stream_id.
 
         Args:
             stream_id: The ID of the stream

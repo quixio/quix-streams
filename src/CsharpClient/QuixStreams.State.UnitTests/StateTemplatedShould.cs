@@ -15,7 +15,7 @@ public class StateTemplatedShould
         [Fact]
         public void Constructor_ShouldCreateState()
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<int>(storage);
 
             state.Should().NotBeNull();
@@ -34,7 +34,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", "TestValue")]
         public void StringConversion_ShouldStoreAndRetrieveCorrectly(string key, string value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<string>(storage);
 
             state[key] = value;
@@ -52,7 +52,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 3.14)]
         public void DoubleConversion_ShouldStoreAndRetrieveCorrectly(string key, double value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<double>(storage);
 
             state[key] = value;
@@ -70,7 +70,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 3.146546597897)]
         public void DecimalConversion_ShouldStoreAndRetrieveCorrectly(string key, decimal value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<decimal>(storage);
 
             state[key] = value;
@@ -88,7 +88,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 42.0f)]
         public void FloatConversion_ShouldStoreAndRetrieveCorrectly(string key, float value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<float>(storage);
 
             state[key] = value;
@@ -107,7 +107,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", false)]
         public void BoolConversion_ShouldStoreAndRetrieveCorrectly(string key, bool value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<bool>(storage);
 
             state[key] = value;
@@ -126,7 +126,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 'A')]
         public void CharConversion_ShouldStoreAndRetrieveCorrectly(string key, char value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<char>(storage);
 
             state[key] = value;
@@ -144,7 +144,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 1234567890123456789L)]
         public void LongConversion_ShouldStoreAndRetrieveCorrectly(string key, long value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<long>(storage);
 
             state[key] = value;
@@ -162,7 +162,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 1234567890123456789UL)]
         public void UlongConversion_ShouldStoreAndRetrieveCorrectly(string key, ulong value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<ulong>(storage);
 
             state[key] = value;
@@ -181,7 +181,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 42)]
         public void IntConversion_ShouldStoreAndRetrieveCorrectly(string key, int value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<int>(storage);
 
             state[key] = value;
@@ -199,7 +199,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", 42u)]
         public void UintConversion_ShouldStoreAndRetrieveCorrectly(string key, uint value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<uint>(storage);
 
             state[key] = value;
@@ -217,7 +217,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", (short)42)]
         public void ShortConversion_ShouldStoreAndRetrieveCorrectly(string key, short value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<short>(storage);
 
             state[key] = value;
@@ -235,7 +235,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", (ushort)42u)]
         public void UshortConversion_ShouldStoreAndRetrieveCorrectly(string key, ushort value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<ushort>(storage);
 
             state[key] = value;
@@ -253,7 +253,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", (byte)42)]
         public void ByteConversion_ShouldStoreAndRetrieveCorrectly(string key, byte value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<byte>(storage);
 
             state[key] = value;
@@ -271,7 +271,7 @@ public class StateTemplatedShould
         [InlineData("TestKey", (sbyte)42u)]
         public void SbyteConversion_ShouldStoreAndRetrieveCorrectly(string key, sbyte value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<sbyte>(storage);
 
             state[key] = value;
@@ -289,7 +289,7 @@ public class StateTemplatedShould
         [MemberData(nameof(GetDateTimeValues))]
         public void DatetimeConversion_ShouldStoreAndRetrieveCorrectly(string key, DateTime value)
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var state = new State<DateTime>(storage);
 
             state[key] = value;
@@ -311,7 +311,7 @@ public class StateTemplatedShould
         [Fact]
         public void CustomClassConversion_ShouldStoreAndRetrieveCorrectly()
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var key = "TestKey";
             var state = new State<CustomClass>(storage);
 
@@ -330,7 +330,7 @@ public class StateTemplatedShould
         [Fact]
         public void ListCustomClassConversion_ShouldStoreAndRetrieveCorrectly()
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var key = "TestKey";
             var state = new State<List<CustomClass>>(storage);
             state.Clear();
@@ -354,7 +354,7 @@ public class StateTemplatedShould
         [Fact]
         public void OperationWithElement_ShouldStoreAndRetrieveCorrectly()
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             var key = "TestKey";
             var state = new State<int>(storage);
 
@@ -369,7 +369,7 @@ public class StateTemplatedShould
         [Fact]
         public void Clear_ShouldRemoveAllValues()
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             // Arrange
             var state = new State<string>(storage);
             state.Add("Key1", "Value1");
@@ -388,7 +388,7 @@ public class StateTemplatedShould
         [Fact]
         public void ComplexModifications_ShouldHaveExpectedValues()
         {
-            var storage = new InMemoryStateStorage();
+            var storage = new InMemoryStorage();
             // Arrange
             var state = new State<string>(storage);
             

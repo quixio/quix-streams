@@ -19,17 +19,17 @@ public class AppShould
     public void SetStateStorage_ShouldNotThrowException()
     {
         // Act
-        App.SetStateStorage(new InMemoryStateStorage());
+        App.SetStateStorage(new InMemoryStorage());
     }
     
     [Fact(Skip = "Until reworked to use non-singleton only one of these tests will pass")]
     public void SetStateStorage_CalledTwice_ShouldThrowException()
     {
         // Arrange
-        App.SetStateStorage(new InMemoryStateStorage());
+        App.SetStateStorage(new InMemoryStorage());
         
         // Act
-        Action action = () => App.SetStateStorage(new InMemoryStateStorage());
+        Action action = () => App.SetStateStorage(new InMemoryStorage());
         
         // Assert
         action.Should().Throw<InvalidOperationException>();

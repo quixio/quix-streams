@@ -11,7 +11,7 @@ public class StreamStateManagerShould
 {
     private StreamStateManager CreateStreamStateManager()
     {
-        return new StreamStateManager("myStream", new InMemoryStateStorage(), NullLoggerFactory.Instance, "TEST - ");
+        return new StreamStateManager("myStream", new InMemoryStorage(), NullLoggerFactory.Instance, "TEST - ");
     }
     
     [Fact]
