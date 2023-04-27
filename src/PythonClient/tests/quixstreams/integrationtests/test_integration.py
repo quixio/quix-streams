@@ -3,6 +3,7 @@ from typing import List
 import unittest
 import threading
 import pandas as pd
+import numpy as np
 from src.quixstreams import Logging, LogLevel, AutoOffsetReset
 
 from testcontainers.core.container import DockerContainer
@@ -908,6 +909,21 @@ class TestIntegration(unittest.TestCase):
 # endregion
 
 # region timeseries data integration tests
+    def test_timeseries_builder_works_with_any_number_type_and_none(self):
+        # Arrange
+        stream = qx.KafkaStreamingClient(TestIntegration.broker_list, None).get_topic_producer("topic").create_stream()
+
+        # Act
+        stream.timeseries.buffer \
+            .add_timestamp_nanoseconds(1) \
+            .add_value("npy_float64", np.float64(42.0)) \
+            .add_value("npy_int64", np.int64(42)) \
+            .add_value("native_int", int(42)) \
+            .add_value("native_float", float(42)) \
+            .add_value("none", None) \
+
+        # Assert that no exception got raised
+
     def test_parameters_write_binary_read_binary_is_of_bytes(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))

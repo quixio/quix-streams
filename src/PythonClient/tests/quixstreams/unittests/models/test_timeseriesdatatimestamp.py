@@ -8,56 +8,68 @@ class TimeseriesDataTimestampTests(unittest.TestCase):
 
     def test_add_double(self):
         # Arrange
-        pd = TimeseriesData()
+        td = TimeseriesData()
 
         # Act
-        pd.add_timestamp_nanoseconds(100) \
+        td.add_timestamp_nanoseconds(100) \
             .add_value("double", 1.232)
 
         # Assert
-        self.assertEqual(1.232, pd.timestamps[0].parameters["double"].numeric_value)
+        self.assertEqual(1.232, td.timestamps[0].parameters["double"].numeric_value)
 
     def test_add_string(self):
         # Arrange
-        pd = TimeseriesData()
+        td = TimeseriesData()
 
         # Act
-        pd.add_timestamp_nanoseconds(100) \
+        td.add_timestamp_nanoseconds(100) \
             .add_value("str", "value")
 
         # Assert
-        asdf = pd.timestamps[0]
+        asdf = td.timestamps[0]
         param = asdf.parameters
-        self.assertEqual(pd.timestamps[0].parameters["str"].string_value, "value")
+        self.assertEqual(td.timestamps[0].parameters["str"].string_value, "value")
 
     def test_add_bytes(self):
         # Arrange
-        pd = TimeseriesData()
+        td = TimeseriesData()
         expected = bytes("some bytes", "utf-8")
 
         # Act
-        pd.add_timestamp_nanoseconds(100) \
+        td.add_timestamp_nanoseconds(100) \
             .add_value("bytes", expected)
 
         # Assert
-        self.assertEqual(expected, pd.timestamps[0].parameters["bytes"].binary_value)
+        self.assertEqual(expected, td.timestamps[0].parameters["bytes"].binary_value)
+
+    def test_add_bytearray(self):
+        # Arrange
+        td = TimeseriesData()
+        expected = bytearray("some bytes", "utf-8")
+
+        # Act
+        td.add_timestamp_nanoseconds(100) \
+            .add_value("bytearray", expected)
+
+        # Assert
+        self.assertEqual(expected, td.timestamps[0].parameters["bytearray"].binary_value)
 
     def test_add_tag(self):
         # Arrange
-        pd = TimeseriesData()
-        pd.add_timestamp_nanoseconds(100)
-        pdts = pd.timestamps[0]
-        pdts.add_tag("a", "b")
+        td = TimeseriesData()
+        td.add_timestamp_nanoseconds(100)
+        tdts = td.timestamps[0]
+        tdts.add_tag("a", "b")
 
         # Act
-        pd.add_timestamp_nanoseconds(200)
-        pdts2 = pd.timestamps[1]
-        pdts.add_tag("b", "c")
-        pdts2.add_tags(pdts.tags)
+        td.add_timestamp_nanoseconds(200)
+        tdts2 = td.timestamps[1]
+        tdts.add_tag("b", "c")
+        tdts2.add_tags(tdts.tags)
 
         # Assert
-        self.assertEqual(pdts2.tags["a"], "b")
-        self.assertEqual(pdts2.tags["b"], "c")
+        self.assertEqual(tdts2.tags["a"], "b")
+        self.assertEqual(tdts2.tags["b"], "c")
 
     def test_add_tags(self):
         # Act
