@@ -1,4 +1,5 @@
 import ctypes
+import numbers
 from typing import Union, Dict
 
 from ..helpers.nativedecorator import nativedecorator
@@ -27,26 +28,25 @@ class TimeseriesDataBuilder(object):
     def __enter__(self):
         self._entered = True
 
-    def add_value(self, parameter_id: str, value: Union[str, float, int, bytes, bytearray]) -> 'TimeseriesDataBuilder':
+    def add_value(self, parameter_id: str,  value: Union[numbers.Number, str, bytearray, bytes]) -> 'TimeseriesDataBuilder':
         """
         Adds new parameter value at the time the builder is created for.
 
         Args:
             parameter_id: The id of the parameter to set the value for.
-            value: The value of type string, float, int, bytes, or bytearray.
+            value: The value to add. Can be a number, string, bytearray, or bytes.
 
         Returns:
             The builder.
         """
 
-        val_type = type(value)
-        if val_type is int:
-            value = float(value)
-            val_type = float
-        elif val_type is bytearray:
-            value = bytes(value)
-            val_type = bytes
+        if value is None:
+            return self
 
+        if issubclass(type(value), numbers.Number):
+            value = float(value)
+
+        val_type = type(value)
         if val_type is float:
             new = tsdbi(self._interop.AddValue(parameter_id, value))
             if new != self._interop:
@@ -57,7 +57,7 @@ class TimeseriesDataBuilder(object):
             if new != self._interop:
                 self._interop.dispose_ptr__()
                 self._interop = new
-        elif val_type is bytes:
+        elif val_type is bytes or val_type is bytearray:
             arr_ptr = Array.WriteBytes(value)
             new = tsdbi(self._interop.AddValue3(parameter_id, arr_ptr))
             if new != self._interop:
