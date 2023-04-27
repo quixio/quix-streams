@@ -272,6 +272,8 @@ In addition to the `TimeseriesData` and pandas `DataFrame` formats (Python only)
 	};
     ```
 
+If you are developing in Python you will typically use either `TimeseriesData` or `DataFrame`. In C# `TimeseriesDataRaw` is mainly used for optimizing performance.
+
 ### Using a Buffer
 
 Quix Streams provides you with an optional programmable buffer which you can configure to your needs. Using buffers to consume data enables you to process data in batches according to your needs. The buffer also helps you to develop models with a high-performance throughput.
