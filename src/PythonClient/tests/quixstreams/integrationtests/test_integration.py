@@ -5,7 +5,7 @@ import threading
 import pandas as pd
 import numpy as np
 
-from quixstreams.state.statevalue import StateValue
+from src.quixstreams.state.statevalue import StateValue
 from src.quixstreams import Logging, LogLevel, AutoOffsetReset
 
 from testcontainers.core.container import DockerContainer

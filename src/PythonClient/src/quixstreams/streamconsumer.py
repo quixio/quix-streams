@@ -13,8 +13,8 @@ from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixStreamsStreaming.IStreamConsumer import IStreamConsumer as sci
 from .native.Python.QuixStreamsStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
 from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClosedEventArgs
-from quixstreams.states.streamstate import StreamState
-from quixstreams.states.streamstatemanager import StreamStateManager
+from .states.streamstate import StreamState
+from .states.streamstatemanager import StreamStateManager
 
 
 @nativedecorator
