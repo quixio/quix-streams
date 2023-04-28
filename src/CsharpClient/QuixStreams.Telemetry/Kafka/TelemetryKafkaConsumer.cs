@@ -230,10 +230,16 @@ namespace QuixStreams.Telemetry.Kafka
             Debug.Assert(ContextCache != null);
             lock (this.ContextCache.Sync)
             {
+                this.logger.LogTrace("Starting manual commit");
                 var all = this.ContextCache.GetAll();
                 var contexts = all.Select(y => y.Value.LastUncommittedTransportContext).Where(y => y != null).ToArray();
-                if (contexts.Length == 0) return; // there is nothing to commit
+                if (contexts.Length == 0)
+                {
+                    this.logger.LogTrace("Finished manual commit (nothing to commit)");
+                    return; // there is nothing to commit
+                }
                 this.transportConsumer.Commit(contexts);
+                this.logger.LogTrace("Finished manual commit");
             }
         }
     }

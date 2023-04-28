@@ -71,6 +71,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of stream states that were deleted.</returns>
         public int DeleteStreamStates()
         {
+            this.logger.LogTrace("Deleting Stream states for topic {0}", topicName);
             var count = this.stateStorage.DeleteSubStorages();
             this.streamStateManagers.Clear();
             return count;        
@@ -82,6 +83,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>Whether the stream state was deleted</returns>
         public bool DeleteStreamState(string streamId)
         {
+            this.logger.LogTrace("Deleting Stream states for {0}", streamId);
             if (!this.stateStorage.DeleteSubStorage(GetSubStorageName(streamId))) return false;
             this.streamStateManagers.TryRemove(streamId, out _);
             return true;
@@ -105,7 +107,13 @@ namespace QuixStreams.Streaming.States
         public StreamStateManager GetStreamStateManager(string streamId)
         {
             return this.streamStateManagers.GetOrAdd(streamId, 
-                key => new StreamStateManager(this.topicConsumer, key, this.stateStorage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory, this.topicName + " "));
+                key =>
+                {
+                    this.logger.LogTrace("Creating Stream state manager for {0}", key);
+                    return new StreamStateManager(this.topicConsumer, key,
+                        this.stateStorage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory,
+                        this.topicName + " ");
+                });
         }
     }
 }

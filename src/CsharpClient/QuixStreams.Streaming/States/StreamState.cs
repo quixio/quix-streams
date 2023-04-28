@@ -10,13 +10,13 @@ namespace QuixStreams.Streaming.States
     /// <summary>
     /// Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
     /// </summary>
-    public class StreamState : IDictionary<string, StateValue>
+    public class StreamState : IDictionary<string, StateValue>, IDictionary
     {
         /// <summary>
         /// The underlying state storage for this StreamState, responsible for managing the actual key-value pairs.
         /// </summary>
         private readonly State.State state;
-        
+
         /// <summary>
         /// Returns whether the cache keys are case-sensitive
         /// </summary>
@@ -42,6 +42,27 @@ namespace QuixStreams.Streaming.States
         }
 
         /// <inheritdoc/>
+        public bool Contains(object key)
+        {
+            return this.ContainsKey((string)key);
+        }
+
+        /// <inheritdoc/>
+        IDictionaryEnumerator IDictionary.GetEnumerator()
+        {
+            return ((IDictionary)this.state).GetEnumerator();
+        }
+
+        /// <inheritdoc/>
+        public void Remove(object key)
+        {
+            this.Remove((string)key);
+        }
+
+        /// <inheritdoc/>
+        public bool IsFixedSize => this.state.IsFixedSize;
+
+        /// <inheritdoc/>
         public IEnumerator<KeyValuePair<string, StateValue>> GetEnumerator()
         {
             return this.state.GetEnumerator();
@@ -60,6 +81,12 @@ namespace QuixStreams.Streaming.States
         }
 
         /// <inheritdoc/>
+        public void Add(object key, object value)
+        {
+            this.Add((string)key, (StateValue)value);
+        }
+
+        /// <inheritdoc cref="IDictionary.Clear" />
         public void Clear()
         {
             this.state.Clear();
@@ -84,11 +111,30 @@ namespace QuixStreams.Streaming.States
         }
 
         /// <inheritdoc/>
+        public void CopyTo(Array array, int index)
+        {
+            this.state.CopyTo(array, index);
+        }
+
+        /// <inheritdoc cref="ICollection.Count" />
         public int Count => this.state.Count;
+
+        /// <inheritdoc />
+        public bool IsSynchronized => this.state.IsSynchronized;
         
-        /// <inheritdoc/>
+        /// <inheritdoc />
+        public object SyncRoot => this.state.SyncRoot;
+
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public bool IsReadOnly => false;
-        
+
+        /// <inheritdoc />
+        public object this[object key]
+        {
+            get => this[(string)key];
+            set => this[(string)key] = (StateValue)value;
+        }
+
         /// <inheritdoc/>
         public void Add(string key, StateValue value)
         {
@@ -122,6 +168,12 @@ namespace QuixStreams.Streaming.States
 
         /// <inheritdoc/>
         public ICollection<string> Keys => this.state.Keys;
+
+        /// <inheritdoc/>
+        ICollection IDictionary.Values => ((IDictionary)this.state).Values;
+
+        /// <inheritdoc/>
+        ICollection IDictionary.Keys => ((IDictionary)this.state).Keys;
 
         /// <inheritdoc/>
         public ICollection<StateValue> Values => this.state.Values;

@@ -194,7 +194,7 @@ public class DictionaryInterop
         }
         catch (Exception ex)
         {
-            InteropUtils.LogDebug("Exception in dictionary_set_value");
+            InteropUtils.LogDebug("Exception in dictionary_get_count");
             InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
             InteropUtils.RaiseException(ex);
             return default;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,7 +13,7 @@ namespace QuixStreams.State
     /// <summary>
     /// Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
     /// </summary>
-    public class State : IDictionary<string, StateValue>
+    public class State : IDictionary<string, StateValue>, IDictionary
     {
         /// <summary>
         /// Represents the storage where the state changes will be persisted.
@@ -43,6 +44,9 @@ namespace QuixStreams.State
         /// The logger for the class
         /// </summary>
         private readonly ILogger<State> logger;
+
+        private ICollection keys;
+        private ICollection values;
 
         /// <summary>
         /// Returns whether the cache keys are case-sensitive
@@ -76,6 +80,23 @@ namespace QuixStreams.State
             }
         }
 
+        public bool Contains(object key)
+        {
+            throw new NotImplementedException();
+        }
+
+        IDictionaryEnumerator IDictionary.GetEnumerator()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Remove(object key)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool IsFixedSize { get; }
+
         /// <summary>
         /// Returns an enumerator that iterates through the in-memory state.
         /// </summary>
@@ -83,6 +104,11 @@ namespace QuixStreams.State
         public IEnumerator<KeyValuePair<string, StateValue>> GetEnumerator()
         {
             return inMemoryState.GetEnumerator();
+        }
+
+        public void Add(object key, object value)
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -122,10 +148,24 @@ namespace QuixStreams.State
         /// <inheritdoc/>
         public bool IsReadOnly => false;
 
+        public object this[object key]
+        {
+            get => throw new NotImplementedException();
+            set => throw new NotImplementedException();
+        }
+
+        public void CopyTo(Array array, int index)
+        {
+            throw new NotImplementedException();
+        }
+
         /// <summary>
         /// Gets the number of key-value pairs contained in the in-memory state.
         /// </summary>
         public int Count => inMemoryState.Count;
+
+        public bool IsSynchronized { get; }
+        public object SyncRoot { get; }
 
         /// <summary>
         /// Adds the specified key and value to the in-memory state and marks the entry for addition or update when flushed.
@@ -200,7 +240,11 @@ namespace QuixStreams.State
         /// Gets an ICollection containing the keys of the in-memory state.
         /// </summary>
         public ICollection<string> Keys => this.inMemoryState.Keys;
-        
+
+        ICollection IDictionary.Values => values;
+
+        ICollection IDictionary.Keys => keys;
+
         /// <summary>
         /// Gets an ICollection containing the values of the in-memory state.
         /// </summary>
@@ -241,7 +285,7 @@ namespace QuixStreams.State
             Task.WaitAll(tasks.ToArray());
             
             OnFlushed?.Invoke(this, EventArgs.Empty);
-            this.logger.LogTrace("Flushed state.");
+            this.logger.LogTrace("Flushed {0} state changes.", tasks.Count());
         }
 
         /// <summary>
@@ -556,7 +600,7 @@ namespace QuixStreams.State
         /// </summary>
         public void Flush()
         {
-            logger.LogTrace("Flushing state");
+            this.logger.LogTrace("Flushing state");
             OnFlushing?.Invoke(this, EventArgs.Empty);
             
             if (this.clearBeforeFlush)

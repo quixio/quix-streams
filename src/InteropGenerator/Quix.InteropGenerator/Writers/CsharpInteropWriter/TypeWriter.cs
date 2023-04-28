@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -263,6 +264,7 @@ public class TypeWriter : BaseWriter
 
     internal string LookupTypeAsText(Type type)
     {
+        Debug.Assert(type != null, "Type is not expected to be null at this point. Incorrect use?");
         if (this.typeAsTextLookup.TryGetValue(type.FullName, out var val)) return val;
         val = GetTypeAsText(type, false);
         if (this.typeAsTextLookup.Any(y=> y.Value == val && y.Key != type.FullName)) val = GetTypeAsText(type, true); // some concurrency possibility

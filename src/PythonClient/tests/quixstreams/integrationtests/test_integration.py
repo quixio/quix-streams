@@ -14,12 +14,16 @@ from tests.quixstreams.unittests.models.test_timeseriesdata import TimeseriesDat
 from src import quixstreams as qx
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 InteropUtils.enable_debug()
-Logging.update_factory(LogLevel.Debug)
+Logging.update_factory(LogLevel.Trace)
 
 from datetime import datetime, timedelta
 import sys
 
 from containerhelper import ContainerHelper
+
+# Use In Memory storage instead of local storage to stop leaving leftover to clean up
+state_inmem_storage = qx.InMemoryStorage()
+qx.App.set_state_storage(state_inmem_storage)
 
 
 class TestIntegration(unittest.TestCase):
@@ -762,7 +766,7 @@ class TestIntegration(unittest.TestCase):
         output_stream.close()
         print(f"---- Write first stream {output_stream.stream_id} ----")
 
-        self.waitforresult(event)
+        self.waitforresult(event, 50)
         event.clear()
         topic_consumer.dispose()
         topic_consumer = client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)  # should continue after first stream, as same consumer group
@@ -1875,7 +1879,10 @@ class TestIntegration(unittest.TestCase):
                 .add_value("numeric-param", 34) \
                 .publish()
 
+            output_stream.timeseries.flush()
             self.waitforresult(event, 20)
+            print("Committing")
+            topic_consumer.commit()
             print("Closed")
 
         # Assert

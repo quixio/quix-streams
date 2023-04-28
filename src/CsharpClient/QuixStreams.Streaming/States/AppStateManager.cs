@@ -46,6 +46,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of topic states that were deleted.</returns>
         public int DeleteTopicStates()
         {
+            this.logger.LogTrace("Deleting topic states");
             var count = this.storage.DeleteSubStorages();
             this.topicStateManagers.Clear();
             return count;
@@ -57,6 +58,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>Whether the topic state was deleted</returns>
         public bool DeleteTopicState(string topicName)
         {
+            this.logger.LogTrace("Deleting topic states for {0}", topicName);
             if (!this.storage.DeleteSubStorage(GetSubStorageName(topicName))) return false;
             this.topicStateManagers.TryRemove(topicName, out _);
             return true;
@@ -80,7 +82,12 @@ namespace QuixStreams.Streaming.States
         /// <returns>The newly created <see cref="TopicStateManager"/> instance.</returns>
         internal TopicStateManager GetTopicStateManager(ITopicConsumer topicConsumer, string topicName)
         {
-            return this.topicStateManagers.GetOrAdd(topicName, key => new TopicStateManager(topicConsumer, key, this.storage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory));
+            return this.topicStateManagers.GetOrAdd(topicName, key =>
+            {
+                this.logger.LogTrace("Creating Topic state manager for {0}", key);
+                return new TopicStateManager(topicConsumer, key,
+                        this.storage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory);
+            });
         }
         
         /// <summary>
@@ -90,7 +97,12 @@ namespace QuixStreams.Streaming.States
         /// <returns>The newly created <see cref="TopicStateManager"/> instance.</returns>
         public TopicStateManager GetTopicStateManager(string topicName)
         {
-            return this.topicStateManagers.GetOrAdd(topicName, key => new TopicStateManager(key, this.storage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory));
+            return this.topicStateManagers.GetOrAdd(topicName, key =>
+            {
+                this.logger.LogTrace("Creating Topic state manager for {0}", key);
+                return new TopicStateManager(key, this.storage.GetOrCreateSubStorage(GetSubStorageName(key)),
+                        this.loggerFactory);
+            });
         }
     }
 }

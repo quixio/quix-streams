@@ -65,6 +65,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The newly created <see cref="StreamState{T}"/> instance.</returns>
         private StreamState<T> CreateStreamState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
+            this.logger.LogTrace("Creating Stream state for {0}", nameOfState);
             var state = new StreamState<T>(this.stateStorage.GetOrCreateSubStorage(nameOfState), defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {nameOfState}"));
             return state;
         }
@@ -76,6 +77,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The newly created <see cref="StreamState"/> instance.</returns>
         private StreamState CreateStreamState(string nameOfState)
         {
+            this.logger.LogTrace("Creating Stream state for {0}", nameOfState);
             var state = new StreamState(this.stateStorage.GetOrCreateSubStorage(nameOfState), new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {nameOfState}"));
             return state;
         }
@@ -95,6 +97,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>The number of states that were deleted.</returns>
         public int DeleteStates()
         {
+            this.logger.LogTrace("Deleting Stream states for {0}", streamId);
             var count = this.stateStorage.DeleteSubStorages();
             this.states.Clear();
             return count;
@@ -106,6 +109,7 @@ namespace QuixStreams.Streaming.States
         /// <returns>Whether the state was deleted</returns>
         public bool DeleteState(string nameOfState)
         {
+            this.logger.LogTrace("Deleting Stream state {0} for {1}", nameOfState, streamId);
             if (!this.stateStorage.DeleteSubStorage(nameOfState)) return false;
             this.states.Remove(nameOfState);
             return true;

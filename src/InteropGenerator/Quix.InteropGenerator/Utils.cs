@@ -26,6 +26,12 @@ public class Utils
            || IsBlittableArray(type)
            || IsBlittableStruct(type)
            || IsBlittableClass(type);
+
+    public static bool HasParameterlessConstructor(Type type) =>
+        type.GetConstructors().FirstOrDefault(y => y.IsConstructor && y.GetParameters().Length == 0) != null;
+    
+    public static bool HasEvents(Type type) => type.GetEvents().Any();
+     
     static bool IsBlittablePrimitive(Type type)
         => type == typeof(byte)
            || type == typeof(sbyte)
@@ -50,11 +56,14 @@ public class Utils
            && !type.IsPrimitive
            && type.IsLayoutSequential
            && type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).All(IsBlittableField);
+
     static bool IsBlittableClass(Type type)
         => !type.IsValueType
            && !type.IsPrimitive
            && type.IsLayoutSequential
-           && type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).All(IsBlittableField);
+           && type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).All(IsBlittableField)
+           && HasParameterlessConstructor(type)
+           && !HasEvents(type); 
     static bool IsBlittableField(FieldInfo field)
         => IsBlittablePrimitive(field.FieldType) 
            || IsBlittableStruct(field.FieldType);
