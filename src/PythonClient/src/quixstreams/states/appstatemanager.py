@@ -53,7 +53,7 @@ class AppStateManager(object):
         if instance is not None:
             return instance
 
-        instance = AppStateManager(self._interop.GetTopicStateManager(topic_name))
+        instance = TopicStateManager(self._interop.GetTopicStateManager(topic_name))
         self._topic_state_cache[topic_name] = instance
         return instance
 

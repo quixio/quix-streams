@@ -1862,12 +1862,12 @@ class TestIntegration(unittest.TestCase):
         consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
 
         print("---- Start publishing ----")
-        with (topic_consumer := client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)), (topic_producer := client.get_topic_producer(topic_name)), (output_stream := topic_producer.create_stream()):
+        with (topic_consumer := client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)), (topic_producer := client.get_topic_producer(topic_name)), (output_stream := topic_producer.create_stream("test-stream")):
             print("---- Subscribe to streams ----")
 
             def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
                 stream_state = stream_consumer.get_state("rollingsum")
-                stream_state['somevalue'] = StateValue(3)
+                stream_state['somevalue'] = StateValue({'key':'value'})
                 event.set()
 
             topic_consumer.on_stream_received = on_stream_received_handler
@@ -1887,5 +1887,10 @@ class TestIntegration(unittest.TestCase):
 
         # Assert
         print('Should do some asserting here')
+        app_state_manager = qx.App.get_state_manager()
+        topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
+        stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
+        state_value: StateValue = stream_state_manager.get_state('rollingsum')['somevalue']
+        self.assertDictEqual({'key':'value'}, state_value.value)
 
 # endregion

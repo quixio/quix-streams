@@ -28,7 +28,7 @@ namespace QuixStreams.State
         /// <summary>
         /// Represents the in-memory state holding the key-value pairs.
         /// </summary>
-        private readonly IDictionary<string, StateValue> inMemoryState = new Dictionary<string, StateValue>();
+        private readonly Dictionary<string, StateValue> inMemoryState = new Dictionary<string, StateValue>();
         
         /// <summary>
         /// Represents the in-memory state holding the key-value pairs of last persisted lazy values
@@ -44,9 +44,6 @@ namespace QuixStreams.State
         /// The logger for the class
         /// </summary>
         private readonly ILogger<State> logger;
-
-        private ICollection keys;
-        private ICollection values;
 
         /// <summary>
         /// Returns whether the cache keys are case-sensitive
@@ -80,22 +77,26 @@ namespace QuixStreams.State
             }
         }
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public bool Contains(object key)
         {
-            throw new NotImplementedException();
+            return this.ContainsKey((string)key);
         }
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         IDictionaryEnumerator IDictionary.GetEnumerator()
         {
-            throw new NotImplementedException();
+            return this.inMemoryState.GetEnumerator();
         }
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public void Remove(object key)
         {
-            throw new NotImplementedException();
+            this.Remove((string)key);
         }
 
-        public bool IsFixedSize { get; }
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        public bool IsFixedSize => false;
 
         /// <summary>
         /// Returns an enumerator that iterates through the in-memory state.
@@ -106,9 +107,10 @@ namespace QuixStreams.State
             return inMemoryState.GetEnumerator();
         }
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public void Add(object key, object value)
         {
-            throw new NotImplementedException();
+            this.Add((string)key, (StateValue)value);
         }
 
         /// <summary>
@@ -136,7 +138,7 @@ namespace QuixStreams.State
         /// <inheritdoc/>
         public void CopyTo(KeyValuePair<string, StateValue>[] array, int arrayIndex)
         {
-            this.inMemoryState.CopyTo(array, arrayIndex);
+            ((IDictionary<string, StateValue>)this.inMemoryState).CopyTo(array, arrayIndex);
         }
 
         /// <inheritdoc/>
@@ -144,16 +146,18 @@ namespace QuixStreams.State
         {
             return this.Contains(item) && this.Remove(item.Key);
         }
-        
-        /// <inheritdoc/>
+
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public bool IsReadOnly => false;
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public object this[object key]
         {
-            get => throw new NotImplementedException();
-            set => throw new NotImplementedException();
+            get => this[(string)key];
+            set => this[(string)key] = (StateValue)value;
         }
 
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public void CopyTo(Array array, int index)
         {
             throw new NotImplementedException();
@@ -164,8 +168,11 @@ namespace QuixStreams.State
         /// </summary>
         public int Count => inMemoryState.Count;
 
-        public bool IsSynchronized { get; }
-        public object SyncRoot { get; }
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        public bool IsSynchronized => ((IDictionary)this.inMemoryState).IsSynchronized;
+        
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        public object SyncRoot => ((IDictionary)this.inMemoryState).SyncRoot;
 
         /// <summary>
         /// Adds the specified key and value to the in-memory state and marks the entry for addition or update when flushed.
@@ -241,9 +248,11 @@ namespace QuixStreams.State
         /// </summary>
         public ICollection<string> Keys => this.inMemoryState.Keys;
 
-        ICollection IDictionary.Values => values;
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        ICollection IDictionary.Values => this.inMemoryState.Values;
 
-        ICollection IDictionary.Keys => keys;
+        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        ICollection IDictionary.Keys => this.inMemoryState.Keys;
 
         /// <summary>
         /// Gets an ICollection containing the values of the in-memory state.
