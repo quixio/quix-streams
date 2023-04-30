@@ -24,6 +24,7 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | Methods | |
 | :--- | :--- |
 | [Close(StreamEndType)](IStreamProducer.Close(StreamEndType).md 'QuixStreams.Streaming.IStreamProducer.Close(QuixStreams.Telemetry.Models.StreamEndType)') | Close the stream and flush the pending data to stream. |
+| [Flush()](IStreamProducer.Flush().md 'QuixStreams.Streaming.IStreamProducer.Flush()') | Flush the pending data to stream. |
 
 | Events | |
 | :--- | :--- |

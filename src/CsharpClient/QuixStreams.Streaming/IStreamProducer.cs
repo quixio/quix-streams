@@ -35,6 +35,11 @@ namespace QuixStreams.Streaming
         StreamEventsProducer Events { get; }
 
         /// <summary>
+        /// Flush the pending data to stream.  
+        /// </summary>
+        void Flush();
+
+        /// <summary>
         /// Close the stream and flush the pending data to stream.
         /// </summary>
         /// <param name="streamState">Stream closing state</param>

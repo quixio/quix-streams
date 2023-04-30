@@ -179,6 +179,12 @@ class StreamProducer(object):
             self._streamEventsProducer = StreamEventsProducer(self._interop.get_Events())
         return self._streamEventsProducer
 
+    def flush(self):
+        """
+        Flushes the pending data to stream.
+        """
+        self._interop.Flush()
+
     def close(self, end_type: StreamEndType = StreamEndType.Closed):
         """
         Closes the stream and flushes the pending data to stream.

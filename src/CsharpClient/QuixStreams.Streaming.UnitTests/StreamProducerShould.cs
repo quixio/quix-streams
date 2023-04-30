@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using FluentAssertions;
 using NSubstitute;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Telemetry.Common.Test;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using Xunit;
+using EventDefinition = QuixStreams.Telemetry.Models.EventDefinition;
+using ParameterDefinition = QuixStreams.Telemetry.Models.ParameterDefinition;
 
 namespace QuixStreams.Streaming.UnitTests.Telemetry
 {
@@ -352,6 +355,37 @@ namespace QuixStreams.Streaming.UnitTests.Telemetry
             // Assert
             interceptedEvents.Count.Should().Be(1);
             interceptedEvents[0].Should().BeEquivalentTo(inputEvents);
+        }
+        
+        [Fact]
+        public void Flush_Valid_ShouldWaitMessagesToBeSent()
+        {
+            // Arrange
+            var client = new TestStreamingClient(publishDelay: TimeSpan.FromMilliseconds(500));
+            var topicConsumer = client.GetTopicConsumer();
+
+            var releasedData = new List<TimeseriesData>();
+            topicConsumer.OnStreamReceived += (_, streamConsumer) =>
+            {
+                var buffer = streamConsumer.Timeseries.CreateBuffer();
+                buffer.OnDataReleased += (_, args) =>
+                {
+                    releasedData.Add(args.Data);
+                };
+            };
+            topicConsumer.Subscribe();
+            
+            var stream = client.GetTopicProducer().CreateStream();
+            stream.Timeseries.Buffer.BufferTimeout = null;
+            
+            // Act
+            stream.Timeseries.Buffer.Publish(
+                new TimeseriesData().AddTimestamp(DateTime.Now).AddValue("p1", 1).TimeseriesData);
+            
+            stream.Flush();
+            
+            // Assert
+            releasedData.Count.Should().Be(1);
         }
     }
 }
