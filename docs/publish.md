@@ -68,7 +68,7 @@ A stream ID is auto-generated, but you can also pass a `StreamId` to the method 
     var stream = topicProducer.CreateStream("existing-stream-id");
     ```
 
-### Stream properties
+## Stream properties
 
 You can add optional context to your streams by adding a name, some metadata, or a default location.
 
@@ -135,6 +135,28 @@ Would result in this hierarchy:
 ![hierarchy](images/LocationProperties.png)
 
 Any streams sent without a location property will be located under the "Root" level by default.
+
+## Stream exception handler
+
+It may be that an exception can occur on writing to a stream. This is handled for you by the default exception handler.
+
+You can create a custom exception handler should you require functionality different to that provided by the default exception handler. The following code demonstrates how to create and register a custom exception handler:
+
+``` python
+topic_producer = client.get_topic_producer(topic_id_or_name = os.environ["output"])
+stream = topic_producer.create_stream()
+
+# custom exception handler
+def my_on_write_exception_handler(stream: qx.StreamProducer, ex: BaseException):
+    # your code here
+    print('Custom exception handler')
+    print('Stream: ', stream.stream_id)
+    print('Exception: ', ex.args[0])
+    return
+
+# register the exception handler
+stream.on_write_exception = my_on_write_exception_handler
+```
 
 ## Close a stream
 
