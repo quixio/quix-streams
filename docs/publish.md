@@ -138,7 +138,7 @@ Any streams sent without a location property will be located under the "Root" le
 
 ## Stream exception handler
 
-It may be that an exception can occur on writing to a stream. This is handled for you by the default exception handler.
+An exception can occur on writing to a stream. This is handled for you by the default exception handler.
 
 You can create a custom exception handler should you require functionality different to that provided by the default exception handler. The following code demonstrates how to create and register a custom exception handler:
 
