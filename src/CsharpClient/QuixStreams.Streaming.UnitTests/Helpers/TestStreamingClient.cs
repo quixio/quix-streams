@@ -11,9 +11,10 @@ namespace QuixStreams.Streaming.UnitTests
         private TelemetryKafkaConsumer telemetryKafkaConsumer;
         private Func<string, TelemetryKafkaProducer> createKafkaProducer;
 
-        public TestStreamingClient(CodecType codec = CodecType.Protobuf)
+
+        public TestStreamingClient(CodecType codec = CodecType.Protobuf, TimeSpan publishDelay = default)
         {
-            this.testBroker = new TestBroker();
+            this.testBroker = new TestBroker(publishDelay: publishDelay);
 
             CodecRegistry.Register(codec);
         }

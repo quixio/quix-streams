@@ -16,11 +16,12 @@ namespace QuixStreams.Telemetry.Common.Test
         /// Initializes a new instance of <see cref="TestBroker"/>
         /// </summary>
         /// <param name="generateExceptions">The test broker generates exceptions when it receives data</param>
-        public TestBroker(bool generateExceptions = false)
+        /// <param name="publishDelay">Delay when publishing to simulate a real broker delay</param>
+        public TestBroker(bool generateExceptions = false, TimeSpan publishDelay = default)
         {
             this.Consumer = new TestBrokerConsumer();
             // Connection between Transport Input and Output simulating a real broker
-            this.Producer = new TestBrokerProducer(Consumer, generateExceptions); 
+            this.Producer = new TestBrokerProducer(Consumer, generateExceptions, publishDelay); 
         }
 
         /// <summary>
@@ -42,16 +43,21 @@ namespace QuixStreams.Telemetry.Common.Test
     {
         private readonly TestBrokerConsumer testConsumer;
         private readonly bool generateExceptions;
+        private readonly TimeSpan publishDelay;
 
-        public TestBrokerProducer(TestBrokerConsumer testConsumer, bool generateExceptions = false)
+        public TestBrokerProducer(TestBrokerConsumer testConsumer, bool generateExceptions = false, TimeSpan publishDelay = default)
         {
             this.testConsumer = testConsumer;
             this.generateExceptions = generateExceptions;
+            this.publishDelay = publishDelay;
         }
 
         public async Task Publish(Package package, CancellationToken cancellationToken = default)
         {
             if (generateExceptions) throw new Exception("Test broker generated exception.");
+            
+            await Task.Delay(this.publishDelay, cancellationToken); // Simulating a real broker delay
+            
             await this.testConsumer.Send(package); // Redirecting to Output all the messages arriving from the Input
         }
     }

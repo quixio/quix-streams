@@ -473,6 +473,7 @@
     * [get\_Properties](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.get_Properties)
     * [get\_Timeseries](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.get_Timeseries)
     * [get\_Events](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.get_Events)
+    * [Flush](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.Flush)
     * [Close](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.Close)
     * [add\_OnWriteException](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.add_OnWriteException)
     * [remove\_OnWriteException](#quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.remove_OnWriteException)
@@ -1701,6 +1702,7 @@
     * [properties](#quixstreams.streamproducer.StreamProducer.properties)
     * [timeseries](#quixstreams.streamproducer.StreamProducer.timeseries)
     * [events](#quixstreams.streamproducer.StreamProducer.events)
+    * [flush](#quixstreams.streamproducer.StreamProducer.flush)
     * [close](#quixstreams.streamproducer.StreamProducer.close)
 * [quixstreams.topicconsumer](#quixstreams.topicconsumer)
   * [TopicConsumer](#quixstreams.topicconsumer.TopicConsumer)
@@ -5895,8 +5897,8 @@ Gets the timestamp in timespan format.
 
 ```python
 def add_value(
-    parameter_id: str, value: Union[float, str, int, bytearray,
-                                    bytes]) -> 'TimeseriesDataTimestamp'
+    parameter_id: str, value: Union[numbers.Number, str, bytearray, bytes]
+) -> 'TimeseriesDataTimestamp'
 ```
 
 Adds a new value for the specified parameter.
@@ -5904,7 +5906,7 @@ Adds a new value for the specified parameter.
 **Arguments**:
 
 - `parameter_id` - The parameter id to add the value for.
-- `value` - The value to add. Can be float, string, int, bytearray, or bytes.
+- `value` - The value to add. Can be a number, string, bytearray, or bytes.
   
 
 **Returns**:
@@ -8411,6 +8413,22 @@ Returns
 
 c_void_p:
     GC Handle Pointer to .Net type StreamEventsProducer
+
+<a id="quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.Flush"></a>
+
+#### Flush
+
+```python
+def Flush() -> None
+```
+
+Parameters
+----------
+
+Returns
+-------
+None:
+    Underlying .Net type is void
 
 <a id="quixstreams.native.Python.QuixStreamsStreaming.IStreamProducer.IStreamProducer.Close"></a>
 
@@ -29757,6 +29775,16 @@ Gets the producer for publishing event related information of the stream such as
 **Returns**:
 
 - `StreamEventsProducer` - The producer for publishing event related information of the stream.
+
+<a id="quixstreams.streamproducer.StreamProducer.flush"></a>
+
+#### flush
+
+```python
+def flush()
+```
+
+Flushes the pending data to stream.
 
 <a id="quixstreams.streamproducer.StreamProducer.close"></a>
 
