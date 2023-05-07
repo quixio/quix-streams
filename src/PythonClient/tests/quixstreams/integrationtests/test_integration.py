@@ -1,9 +1,10 @@
 import time
-from typing import List
+from typing import List, Dict
 import unittest
 import threading
 import pandas as pd
 import numpy as np
+import pytest
 
 from src.quixstreams.state.statevalue import StateValue
 from src.quixstreams import Logging, LogLevel, AutoOffsetReset
@@ -1866,8 +1867,10 @@ class TestIntegration(unittest.TestCase):
             print("---- Subscribe to streams ----")
 
             def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
-                stream_state = stream_consumer.get_state("rollingsum")
-                stream_state['somevalue'] = StateValue({'key':'value'})
+                rolling_sum_state = stream_consumer.get_state("rollingsum", float, lambda key: float(0))
+                rolling_sum_state['somevalue'] = 5
+                object_state = stream_consumer.get_state("objectstate", Dict[str, str], lambda key: {})
+                object_state['somevalue']['key'] = 'value'
                 event.set()
 
             topic_consumer.on_stream_received = on_stream_received_handler
@@ -1880,7 +1883,7 @@ class TestIntegration(unittest.TestCase):
                 .publish()
 
             output_stream.timeseries.flush()
-            self.waitforresult(event, 20)
+            self.waitforresult(event, 10)
             print("Committing")
             topic_consumer.commit()
             print("Closed")
@@ -1890,7 +1893,13 @@ class TestIntegration(unittest.TestCase):
         app_state_manager = qx.App.get_state_manager()
         topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
-        state_value: StateValue = stream_state_manager.get_state('rollingsum')['somevalue']
-        self.assertDictEqual({'key':'value'}, state_value.value)
+        rolling_sum_state_somevalue = stream_state_manager.get_state('rollingsum', float, lambda key: float(0))['somevalue']
+        self.assertEqual(5, rolling_sum_state_somevalue)
+        with pytest.raises(Exception) as e:
+            stream_state_manager.get_state('rollingsum', int)
+        assert str(e.value) == 'State rollingsum already exists with a different type (float), unable to create with int.'
+        object_state_somevalue = stream_state_manager.get_state('objectstate', Dict[str, str], lambda key: {})['somevalue']
+        self.assertDictEqual({'key': 'value'}, object_state_somevalue)
+
 
 # endregion

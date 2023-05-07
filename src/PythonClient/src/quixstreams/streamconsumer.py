@@ -16,6 +16,9 @@ from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClos
 from .states.streamstate import StreamState
 from .states.streamstatemanager import StreamStateManager
 
+from typing import TypeVar
+
+StreamStateType = TypeVar('StreamStateType')
 
 @nativedecorator
 class StreamConsumer(object):
@@ -223,18 +226,22 @@ class StreamConsumer(object):
             self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
         return self._streamTimeseriesConsumer
 
-    def get_state(self, name_of_state: str) -> StreamState:
+    def get_state(self, name_of_state: str, state_type: StreamStateType, default_value_factory: Callable[[str], StreamStateType] = None) -> StreamState[StreamStateType]:
         """
         Creates a new application state with automatically managed lifecycle for the stream
 
         Args:
             name_of_state: The name of the state
+            state_type: The type of the state
+            default_value_factory: The default value factory to create value when the key is not yet present in the state
 
         Returns:
             StreamState: The stream state
         """
+        if state_type is None:
+            raise Exception('state_type must be specified to determine stream state type')
 
-        return self.get_state_manager().get_state(name_of_state)
+        return self.get_state_manager().get_state(name_of_state, state_type, default_value_factory)
 
     def get_state_manager(self) -> StreamStateManager:
         """
