@@ -1889,7 +1889,6 @@ class TestIntegration(unittest.TestCase):
             print("Closed")
 
         # Assert
-        print('Should do some asserting here')
         app_state_manager = qx.App.get_state_manager()
         topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
@@ -1900,6 +1899,74 @@ class TestIntegration(unittest.TestCase):
         assert str(e.value) == 'State rollingsum already exists with a different type (float), unable to create with int.'
         object_state_somevalue = stream_state_manager.get_state('objectstate', Dict[str, str], lambda key: {})['somevalue']
         self.assertDictEqual({'key': 'value'}, object_state_somevalue)
+
+    def test_stream_state_used_from_data_handler(self):
+        # Arrange
+        repeat_count = 50
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+
+        event = threading.Event()  # used for assertion
+
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+
+        print("---- Start publishing ----")
+        actual_values_sum = []
+        with (topic_consumer := client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)), (topic_producer := client.get_topic_producer(topic_name)), (output_stream := topic_producer.create_stream("test-stream")):
+            print("---- Subscribe to streams ----")
+            row_count_received = 0
+
+            def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
+                stream_state = stream_consumer.get_state("app_state", int, lambda x: 0)  # default value for state name.
+
+                for row in data.timestamps:
+                    some_integer = row.parameters["some_integer"].numeric_value
+
+                    stream_state["some_integer_sum"] += some_integer
+
+                    actual_values_sum.append(stream_state["some_integer_sum"])
+
+                    nonlocal row_count_received
+                    row_count_received += 1
+
+                    print(row_count_received)
+                    if row_count_received == repeat_count:
+                        event.set()
+
+            def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+                stream_consumer.timeseries.on_data_received = on_dataframe_received_handler
+
+            topic_consumer.on_stream_received = on_stream_received_handler
+            topic_consumer.subscribe()
+
+            print("---- Send some data to have a stream ----")
+            for i in range(1, repeat_count + 1):
+                output_stream.timeseries.buffer \
+                    .add_timestamp_nanoseconds(i) \
+                    .add_value("some_integer", i) \
+                    .publish()
+
+            output_stream.flush()
+
+            self.waitforresult(event, 10)
+            print("Committing")
+            topic_consumer.commit()
+            print("Closed")
+
+        # Assert
+        app_state_manager = qx.App.get_state_manager()
+        topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
+        stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
+        some_integer_sum = stream_state_manager.get_state('app_state', int)['some_integer_sum']
+        self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum)
+
+        rolling_sum = 0
+        print(actual_values_sum)
+        for i in range(0, repeat_count):
+            rolling_sum += i + 1
+            self.assertEqual(rolling_sum, actual_values_sum[i])
 
 
 # endregion

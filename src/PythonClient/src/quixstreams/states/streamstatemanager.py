@@ -47,7 +47,7 @@ class StreamStateManager(object):
 
         instance: StreamState = self._cache.get(name_of_state)
         if instance is not None:
-            if instance.type is StreamStateType:
+            if instance.type is state_type:
                 return instance
             raise Exception(f'State {name_of_state} already exists with a different type ({instance.type.__name__}), unable to create with {state_type.__name__}.')
 
