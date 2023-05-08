@@ -226,28 +226,8 @@ namespace QuixStreams.Streaming
             this.Properties.Flush();
             this.Timeseries.Flush();
             this.Events.Flush();
-            try
-            {
-                if (lastSendTask != null && !lastSendTask.IsCanceled && !lastSendTask.IsCompleted && !lastSendTask.IsFaulted)
-                {
-                    this.logger.LogTrace("Waiting for last message send for stream {1}.",  this.StreamId);
-                    var sw = Stopwatch.StartNew();
-                    Task.WaitAny(new[] {lastSendTask}, TimeSpan.FromSeconds(10));
-                    sw.Stop();
-                    if (!lastSendTask.IsCanceled && !lastSendTask.IsCompleted && !lastSendTask.IsFaulted)
-                    {
-                        this.logger.LogWarning("Last send did not finish in {0:g} for stream {1}. In future this timeout will be configurable.", sw.Elapsed, this.StreamId);
-                    }
-                    else
-                    {
-                        this.logger.LogTrace("Finished waiting for last message send in {0:g} for stream {1}.", sw.Elapsed, this.StreamId);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                this.logger.LogWarning(ex, "Last send did not finish successfully for stream {1}.", this.StreamId);
-            }
+            
+            this.WaitForLastSendTaskToFinish();
         }        
 
         /// <inheritdoc />
@@ -279,9 +259,35 @@ namespace QuixStreams.Streaming
                 // Close stream
                 base.Close();
                 
-                this.Flush();
+                this.WaitForLastSendTaskToFinish();
                 
                 this.closed = true;
+            }
+        }
+
+        private void WaitForLastSendTaskToFinish()
+        {
+            try
+            {
+                if (lastSendTask != null && !lastSendTask.IsCanceled && !lastSendTask.IsCompleted && !lastSendTask.IsFaulted)
+                {
+                    this.logger.LogTrace("Waiting for last message send for stream {1}.",  this.StreamId);
+                    var sw = Stopwatch.StartNew();
+                    Task.WaitAny(new[] {lastSendTask}, TimeSpan.FromSeconds(10));
+                    sw.Stop();
+                    if (!lastSendTask.IsCanceled && !lastSendTask.IsCompleted && !lastSendTask.IsFaulted)
+                    {
+                        this.logger.LogWarning("Last send did not finish in {0:g} for stream {1}. In future this timeout will be configurable.", sw.Elapsed, this.StreamId);
+                    }
+                    else
+                    {
+                        this.logger.LogTrace("Finished waiting for last message send in {0:g} for stream {1}.", sw.Elapsed, this.StreamId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                this.logger.LogWarning(ex, "Last send did not finish successfully for stream {1}.", this.StreamId);
             }
         }
 
