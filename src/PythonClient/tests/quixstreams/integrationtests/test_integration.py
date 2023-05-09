@@ -13,8 +13,9 @@ from testcontainers.core.container import DockerContainer
 
 from tests.quixstreams.unittests.models.test_timeseriesdata import TimeseriesDataTests
 from src import quixstreams as qx
-from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-InteropUtils.enable_debug()
+from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils, InteropException
+
+#InteropUtils.enable_debug()
 Logging.update_factory(LogLevel.Trace)
 
 from datetime import datetime, timedelta
@@ -1967,6 +1968,106 @@ class TestIntegration(unittest.TestCase):
         for i in range(0, repeat_count):
             rolling_sum += i + 1
             self.assertEqual(rolling_sum, actual_values_sum[i])
+
+    def test_stream_state_committed_from_background_thread(self):
+        # Arrange
+        duration = timedelta(seconds=10)
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        event = threading.Event()  # used to block sending until the consumer actually subscribed
+
+
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+
+        error_occurred = 0
+        row_count_received = 0
+        print("---- Start publishing ----")
+        with (topic_consumer := client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)), (topic_producer := client.get_topic_producer(topic_name)), (output_stream := topic_producer.create_stream("test-stream")):
+            print("---- Subscribe to streams ----")
+
+            def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
+
+                try:
+                    stream_state = stream_consumer.get_state("app_state", int, lambda x: 0)  # default value for state name.
+
+                    for row in data.timestamps:
+                        some_integer = row.parameters["some_integer"].numeric_value
+
+                        stream_state["some_integer_sum"] += some_integer
+
+                        nonlocal row_count_received
+                        row_count_received += 1
+
+                    print(f"Read {row_count_received}")
+                except InteropException as ex:
+                    InteropUtils.log_debug(f'Exception in consumer thread: {ex.message}')
+                    print(f'Exception in consumer thread {ex.message}')
+                    nonlocal error_occurred
+                    error_occurred += 1
+
+            def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+                stream_consumer.timeseries.on_data_received = on_dataframe_received_handler
+                event.set()
+
+            topic_consumer.on_stream_received = on_stream_received_handler
+            topic_consumer.subscribe()
+
+            output_stream.properties.name = "juststartmystream"
+            output_stream.flush()
+            self.waitforresult(event, 10)  # wait for 10 seconds max to get the stream read via consumer
+
+            print("---- Send some data to have a stream ----")
+            end = datetime.utcnow() + duration
+            print(f"Test will end at {end}")
+            def background_committer():
+                while datetime.utcnow() <= end:
+                    try:
+                        topic_consumer.commit()
+                        print(f'Background thread committed')
+                    except InteropException as ex:
+                        nonlocal error_occurred
+                        error_occurred += 1
+                        InteropUtils.log_debug(f'Exception in background thread: {ex.message}')
+                        print(f'Exception in background {error_occurred}')
+                    time.sleep(0.03)
+
+            committer_thread = threading.Thread(target=background_committer)
+            committer_thread.start()
+
+            def background_sender():
+                iteration = 0
+                nonlocal error_occurred
+                while datetime.utcnow() <= end and error_occurred == 0:
+                    iteration += 1
+
+                    output_stream.timeseries.buffer \
+                        .add_timestamp_nanoseconds(iteration) \
+                        .add_value("some_integer", iteration) \
+                        .publish()
+
+                    if iteration % 5 == 0:
+                        output_stream.timeseries.buffer.flush()
+                        time.sleep(0.005)
+                print(f"Sender finished. Error occurred: {error_occurred}")
+
+            sender_thread = threading.Thread(target=background_sender)
+            sender_thread.start()
+
+            sender_thread.join()
+
+
+            output_stream.flush()
+
+            print("Committing")
+            topic_consumer.commit()
+
+
+        # Assert
+        print("Closed")
+        self.assertEqual(0, error_occurred)
+        time.sleep(1)
 
 
 # endregion

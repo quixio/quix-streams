@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Quix.TestBase.Extensions;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Telemetry.Kafka;
@@ -731,6 +732,112 @@ namespace QuixStreams.Streaming.IntegrationTests
                 //topicStateManager.DeleteStreamStates().Should().Be(2);
 
             });
+        }
+        
+        [Fact]
+        public void StreamAndTopicState_CommittedFromAnotherThread_ShouldWorkAsExpected()
+        {
+            var topic = nameof(StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected);
+            // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+            // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+            // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+            // created before our consumer tried to connect.
+            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+            var topicProducer = client.GetTopicProducer(topic);
+
+            var testLength = TimeSpan.FromSeconds(10);
+            // Clean previous run
+            var topicStateManager = topicConsumer.GetStateManager();
+            topicStateManager.DeleteStreamStates();
+            topicStateManager.GetStreamStates().Should().BeEmpty();
+
+            var mre = new ManualResetEvent(false);
+
+            var exceptionOccurred = false;
+
+            var msgCounter = 0;
+            topicConsumer.OnStreamReceived += (sender, stream) =>
+            {
+                mre.Set();
+                stream.Timeseries.OnDataReceived += (o, args) =>
+                {
+                    var rollingSum = stream.GetState("RollingSum", (sid) => 0d);
+
+                    try
+                    {
+                        foreach (var data in args.Data.Timestamps)
+                        {
+                            foreach (var parameter in data.Parameters)
+                            {
+                                if (parameter.Value.Type == ParameterValueType.Numeric)
+                                {
+                                    rollingSum[parameter.Key] += parameter.Value.NumericValue ?? 0;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        exceptionOccurred = true;
+                        this.output.WriteLine($"Exception while consuming{Environment.NewLine}{ex}");
+                    }
+
+                    msgCounter++;
+                };
+            };
+            
+            topicConsumer.Subscribe();
+            
+            var start = DateTime.UtcNow;
+            var streamProducer = topicProducer.GetOrCreateStream("stream1");
+            streamProducer.Properties.Name = "test";
+            streamProducer.Flush();
+
+            if (!mre.WaitOne(TimeSpan.FromSeconds(10))) throw new Exception("Did not receive stream in time");
+
+            var end = DateTime.UtcNow.Add(testLength);
+
+            void BackgroundCommitter()
+            {
+                try
+                {
+                    while (!exceptionOccurred && DateTime.UtcNow < end)
+                    {
+                        topicConsumer.Commit();
+                        Thread.Sleep(3);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    exceptionOccurred = true;
+                    this.output.WriteLine($"Exception while committing{Environment.NewLine}{ex}");
+                }
+            }
+            
+            var iteration = 0;
+            void BackgroundSender()
+            {
+                while (!exceptionOccurred && DateTime.UtcNow < end)
+                {
+                    iteration++;
+                    streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(iteration))
+                        .AddValue("param1", iteration).Publish();
+                    if (iteration % 5 == 0) // to create a bit bigger batches
+                    {
+                        streamProducer.Timeseries.Buffer.Flush();
+                        Thread.Sleep(6); // to avoid completely hammering underlying kafka
+                    } 
+                }
+            }
+
+            var senderTask = Task.Run(BackgroundSender);
+            var committerTask = Task.Run(BackgroundCommitter);
+
+            Task.WaitAll(senderTask, committerTask);
+            
+            streamProducer.Timeseries.Flush();
+            this.output.WriteLine($"Wrote {iteration} iteration");
+            exceptionOccurred.Should().BeFalse();
         }
 
         private async Task RunTest(Func<Task> test)
