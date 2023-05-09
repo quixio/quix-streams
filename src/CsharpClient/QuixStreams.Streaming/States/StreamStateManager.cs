@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
@@ -224,6 +225,7 @@ namespace QuixStreams.Streaming.States
                     if (consumers.All(y => y.StreamId != streamId)) return;
                     this.logger.LogDebug($"{prefix} | Stream revoked, discarding state.");
                     this.topicConsumer.OnCommitted -= CommittedHandler;
+                    state.Reset();
                 };
                 return state;
             }

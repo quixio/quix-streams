@@ -187,6 +187,14 @@ namespace QuixStreams.Streaming.States
             this.state.Flush();
             OnFlushed?.Invoke(this, EventArgs.Empty);
         }
+        
+        /// <summary>
+        /// Reset the state to before in-memory modifications
+        /// </summary>
+        public void Reset()
+        {
+            this.state.Reset();
+        }
     }
     
     /// <summary>
@@ -331,6 +339,14 @@ namespace QuixStreams.Streaming.States
             OnFlushing?.Invoke(this, EventArgs.Empty);
             this.state.Flush();
             OnFlushed?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Reset the state to before in-memory modifications
+        /// </summary>
+        public void Reset()
+        {
+            this.state.Reset();
         }
     }
     

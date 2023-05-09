@@ -433,6 +433,24 @@ public class StateTemplatedShould
             state2["Key7"].Should().Be("Value7");
             state2["Key8"].Should().Be("Value8");
         }
+        
+        [Fact]
+        public void Reset_Modified_ShouldResetToSaved()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new State<string>(storage);
+            state.Add("key", "value");
+            state.Flush();
+
+            // Act
+            state["key"] = "updatedValue";
+            state.Reset();
+
+            // Assert
+            var value = state["key"];
+            value.Should().BeEquivalentTo("value");
+        }
 
         public class CustomClass : IEquatable<CustomClass>
         {

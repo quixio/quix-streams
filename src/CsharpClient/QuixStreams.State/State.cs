@@ -298,6 +298,54 @@ namespace QuixStreams.State
         }
 
         /// <summary>
+        /// Reset the state to before in-memory modifications
+        /// </summary>
+        public void Reset()
+        {
+            if (this.changes.Count == 0)
+            {
+                this.logger.LogTrace("Resetting state not needed, empty");
+                return;
+            }
+            this.logger.LogTrace("Resetting state");
+            // Remove current values
+            foreach (var changeType in this.changes)
+            {
+                this.inMemoryState.Remove(changeType.Key);
+            }
+
+            // Retrieve values from storage
+            var tasks = this.changes.Select(async y =>
+            {
+                try
+                {
+                    var value = await this.storage.GetAsync(y.Key);
+                    return (y.Key, value);
+                }
+                catch
+                {
+                    // was added
+                    return (y.Key, null);
+                }
+            }).ToArray();
+
+            Task.WaitAll(tasks);
+
+            // Assign result to inmemory
+            foreach (var task in tasks)
+            {
+                var (key, value) = task.Result;
+                if (value == null) continue;
+                this.inMemoryState[key] = value;
+            }
+            
+            // Reset changes
+            var count = this.changes.Count;
+            this.changes.Clear();
+            this.logger.LogTrace($"Reset {count} state");
+        }
+
+        /// <summary>
         /// Represents the types of changes made to the state.
         /// </summary>
         private enum ChangeType
@@ -670,6 +718,40 @@ namespace QuixStreams.State
             logger.LogTrace("Flushed underlying state as part of flush");
             OnFlushed?.Invoke(this, EventArgs.Empty);
             this.logger.LogTrace("Flushed state.");
+        }
+        
+        /// <summary>
+        /// Reset the state to before in-memory modifications
+        /// </summary>
+        public void Reset()
+        {
+            if (this.changes.Count == 0)
+            {
+                this.logger.LogTrace("Resetting state not needed, empty");
+                return;
+            }
+            this.logger.LogTrace("Resetting state");
+
+            // Retrieve values from storage
+            foreach (var change in this.changes)
+            {
+                try
+                {
+                    this.inMemoryCache.Remove(change.Key); // Remove current value
+                    var value = this.underlyingState[change.Key];
+                    if (value == null) continue;
+                    this.inMemoryCache[change.Key] = genericConverter(value); // set original value
+                }
+                catch
+                {
+                    // was added, missing key
+                }
+            };
+
+            // Reset changes
+            var count = this.changes.Count;
+            this.changes.Clear();
+            this.logger.LogTrace($"Reset {count} state");
         }
         
         

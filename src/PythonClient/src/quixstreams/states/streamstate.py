@@ -205,6 +205,12 @@ class StreamState(Generic[StreamStateType]):
         """
         self._interop.Flush()
 
+    def reset(self):
+        """
+        Reset the state to before in-memory modifications
+        """
+        self._interop.Reset()
+
     # region dictionary interface
     def __getitem__(self, key: str) -> StreamStateType:
         try:

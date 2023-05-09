@@ -185,5 +185,23 @@ namespace QuixStreams.State.UnitTests
             // Assert
             value.StringValue.Should().BeEquivalentTo("updatedValue");
         }
+        
+        [Fact]
+        public void Reset_Modified_ShouldResetToSaved()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new State(storage);
+            state.Add("key", new StateValue("value"));
+            state.Flush();
+
+            // Act
+            state["key"] = new StateValue("updatedValue");
+            state.Reset();
+
+            // Assert
+            StateValue value = state["key"];
+            value.StringValue.Should().BeEquivalentTo("value");
+        }
     }
 }
