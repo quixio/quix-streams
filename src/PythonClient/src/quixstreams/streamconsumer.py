@@ -226,22 +226,34 @@ class StreamConsumer(object):
             self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
         return self._streamTimeseriesConsumer
 
-    def get_state(self, name_of_state: str, state_type: StreamStateType, default_value_factory: Callable[[str], StreamStateType] = None) -> StreamState[StreamStateType]:
+    def get_state(self, name_of_state: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> StreamState[StreamStateType]:
         """
         Creates a new application state with automatically managed lifecycle for the stream
 
         Args:
             name_of_state: The name of the state
-            state_type: The type of the state
             default_value_factory: The default value factory to create value when the key is not yet present in the state
+            state_type: The type of the state
 
         Returns:
             StreamState: The stream state
-        """
-        if state_type is None:
-            raise Exception('state_type must be specified to determine stream state type')
 
-        return self.get_state_manager().get_state(name_of_state, state_type, default_value_factory)
+         Example:
+            >>> stream_consumer.get_state('some_state')
+            This will return a state where type is 'Any'
+
+            >>> stream_consumer.get_state('some_state', lambda key: return {})
+            this will return a state where type is a generic dictionary, with an empty dictionary as default value when
+            key is not available. The lambda function will be invoked with 'get_state_type_check' key to determine type
+
+            >>> stream_consumer.get_state('some_state', lambda key: return {}, Dict[str, float])
+            this will return a state where type is a specific dictionary type, with default value
+
+            >>> stream_consumer.get_state('some_state', state_type=float)
+            this will return a state where type is a float without default value, resulting in KeyError when not found
+        """
+
+        return self.get_state_manager().get_state(name_of_state, default_value_factory, state_type)
 
     def get_state_manager(self) -> StreamStateManager:
         """
