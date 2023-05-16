@@ -26,16 +26,16 @@ namespace QuixStreams.Transport.Fw.Helpers
                 {
                     return TransportPackageValueCodecBinary.Deserialize(contentBytes);
                 }
-                else if (protocolId == PROTOCOL_ID_JSON)
+
+                if (protocolId == PROTOCOL_ID_JSON)
                 {
                     return TransportPackageValueCodecJSON.Deserialize(contentBytes);
                 }
 
-                throw new SerializationException(
-                    $"Failed to deserialize - the unknown protocol id '{(int) protocolId}'");
+                return TransportPackageValueCodecRaw.Deserialize(contentBytes);
             }
 
-            throw new SerializationException($"Failed to deserialize - the packet does length == 0");
+            throw new SerializationException("Failed to deserialize - the packet has length == 0");
         }
 
         public static byte[] Serialize(TransportPackageValue transportPackageValue, TransportPackageValueCodecType codecType)

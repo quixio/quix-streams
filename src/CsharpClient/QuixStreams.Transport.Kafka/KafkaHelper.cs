@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Confluent.Kafka;
 using QuixStreams.Transport.IO;
@@ -17,14 +16,19 @@ namespace QuixStreams.Transport.Kafka
         {
             var tContext = new TransportContext(new Dictionary<string, object>
             {
-                {KnownTransportContextKeys.MessageGroupKey, consumeResult.Message.Key},
                 {KnownKafkaTransportContextKeys.Topic, consumeResult.Topic},
-                {KnownKafkaTransportContextKeys.Key, consumeResult.Message.Key},
                 {KnownKafkaTransportContextKeys.Partition, consumeResult.Partition.Value},
                 {KnownKafkaTransportContextKeys.Offset, consumeResult.Offset.Value},
                 {KnownKafkaTransportContextKeys.DateTime, consumeResult.Message.Timestamp.UtcDateTime},
                 {KnownKafkaTransportContextKeys.MessageSize, consumeResult.Message.Value.Length}
             });
+
+            if (consumeResult.Message.Key != null) //this is risky and probably better to avoid
+            {
+                tContext.Add(KnownTransportContextKeys.MessageGroupKey, consumeResult.Message.Key); // this is probably a mandatory key
+                tContext.Add(KnownKafkaTransportContextKeys.Key, consumeResult.Message.Key);
+            }
+            
             return new Package<byte[]>(consumeResult.Message.Value, null, tContext);
         }
 

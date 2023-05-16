@@ -13,7 +13,7 @@ namespace QuixStreams.Telemetry
 {
     /// <summary>
     /// The factory detects new streams from the transport layer and creates new <see cref="IStreamPipeline"/>es.
-    /// It also maintains a list of active stream pipelinees and the components associated to them.
+    /// It also maintains a list of active stream pipelines and the components associated to them.
     /// </summary>
     internal abstract class StreamPipelineFactory
     {
@@ -30,6 +30,11 @@ namespace QuixStreams.Telemetry
         public event Action<IStreamPipeline[]> OnStreamsRevoked;
 
         private int maxRetryDuration = 60000;
+
+        /// <summary>
+        /// Stream id to use for non-quix streams
+        /// </summary>
+        private const string RawStreamId = "RAW";
 
         /// <summary>
         /// The maximum length in ms between each retries when the factory throws exception. Defaults to 60000
@@ -199,8 +204,7 @@ namespace QuixStreams.Telemetry
             }
             if (!this.TryGetStreamId(package.TransportContext, out var streamId))
             {
-                this.logger.LogWarning("StreamPipelineFactory: failed to get stream id from message. Malformed package?");
-                return Task.CompletedTask;;
+                streamId = RawStreamId;
             }
 
             StreamContext streamContext;
@@ -217,7 +221,7 @@ namespace QuixStreams.Telemetry
 
                     this.logger.LogTrace("StreamPipelineFactory: package is for a new stream");
                     // Create the new Stream pipeline with the Stream Factory handler
-                    // Stream pipeline class stands for a specific Stream with its own pipeline  and state (if it exists)
+                    // Stream pipeline class stands for a specific Stream with its own pipeline and state (if it exists)
                     var retryCount = 0;
                     do
                     {
@@ -247,9 +251,9 @@ namespace QuixStreams.Telemetry
                             }
                         }
                     } while (true); // the inner breaks/throws will deal with this
-
+                    
                     // Saving Transport metadata for discretionary usings by Stream Components
-                    streamContext.StreamPipeline.SourceMetadata = new Dictionary<string, string>(package.TransportContext.ToDictionary(kv => kv.Key, kv => kv.Value.ToString()));
+                    streamContext.StreamPipeline.SourceMetadata = new Dictionary<string, string>(package.TransportContext.ToDictionary(kv => kv.Key, kv => kv.Value?.ToString()));
 
 
                     // Close the stream pipeline if we received an StreamEnd message
@@ -274,7 +278,7 @@ namespace QuixStreams.Telemetry
         }
 
         /// <summary>
-        /// Close reading subscription from Transport layer and close all the Stream pipelinees managed by the factory
+        /// Close reading subscription from Transport layer and close all the Stream pipelines managed by the factory
         /// </summary>
         public void Close()
         {
