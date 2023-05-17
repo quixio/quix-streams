@@ -38,7 +38,7 @@ namespace QuixStreams.Transport.Fw.Helpers
             }
             catch (Exception ex) when (ex is SerializationException || ex is EndOfStreamException)
             {
-                // It is possible that the message is a non-quix message, so we try to deserialize it as a raw message
+                // It is possible that the message starts with PROTOCOL_ID_BYTE or PROTOCOL_ID_JSON but is actually a non-quix message, so we try to deserialize it as a raw message
                 return TransportPackageValueCodecRaw.Deserialize(contentBytes);
             }
                 
