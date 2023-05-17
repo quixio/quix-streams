@@ -1868,9 +1868,9 @@ class TestIntegration(unittest.TestCase):
             print("---- Subscribe to streams ----")
 
             def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
-                rolling_sum_state = stream_consumer.get_state("rollingsum", lambda key: float(0))
+                rolling_sum_state = stream_consumer.get_dict_state("rollingsum", lambda key: float(0))
                 rolling_sum_state['somevalue'] = 5
-                object_state = stream_consumer.get_state("objectstate", lambda key: {})
+                object_state = stream_consumer.get_dict_state("objectstate", lambda key: {})
                 object_state['somevalue']['key'] = 'value'
                 event.set()
 
@@ -1893,9 +1893,9 @@ class TestIntegration(unittest.TestCase):
         app_state_manager = qx.App.get_state_manager()
         topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
-        rolling_sum_state_somevalue = stream_state_manager.get_state('rollingsum')['somevalue']
+        rolling_sum_state_somevalue = stream_state_manager.get_dict_state('rollingsum')['somevalue']
         self.assertEqual(5, rolling_sum_state_somevalue)
-        object_state_somevalue = stream_state_manager.get_state('objectstate')['somevalue']
+        object_state_somevalue = stream_state_manager.get_dict_state('objectstate')['somevalue']
         self.assertDictEqual({'key': 'value'}, object_state_somevalue)
 
     def test_stream_state_used_from_data_handler(self):
@@ -1917,7 +1917,7 @@ class TestIntegration(unittest.TestCase):
             row_count_received = 0
 
             def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
-                stream_state = stream_consumer.get_state("app_state", lambda x: 0)  # default value for state name.
+                stream_state = stream_consumer.get_dict_state("app_state", lambda x: 0)  # default value for state name.
 
                 for row in data.timestamps:
                     some_integer = row.parameters["some_integer"].numeric_value
@@ -1957,11 +1957,11 @@ class TestIntegration(unittest.TestCase):
         app_state_manager = qx.App.get_state_manager()
         topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
-        some_integer_sum = stream_state_manager.get_state('app_state', state_type=int)['some_integer_sum']
+        some_integer_sum = stream_state_manager.get_dict_state('app_state', state_type=int)['some_integer_sum']
         self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum)
 
         # The following should not raise exception, meant to raise only warning
-        some_integer_sum = stream_state_manager.get_state('app_state', state_type=float)['some_integer_sum']
+        some_integer_sum = stream_state_manager.get_dict_state('app_state', state_type=float)['some_integer_sum']
         self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum)
 
         rolling_sum = 0
@@ -1991,7 +1991,7 @@ class TestIntegration(unittest.TestCase):
             def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
 
                 try:
-                    stream_state = stream_consumer.get_state("app_state", lambda x: 0, int)  # default value for state name.
+                    stream_state = stream_consumer.get_dict_state("app_state", lambda x: 0, int)  # default value for state name.
 
                     for row in data.timestamps:
                         some_integer = row.parameters["some_integer"].numeric_value

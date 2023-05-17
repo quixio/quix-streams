@@ -25,10 +25,10 @@ public class StreamStateManagerShould
         states.Length.Should().Be(0);
         
         // Act
-        manager.GetState("test");
-        manager.GetState("test2");
-        manager.GetState("test2"); // get it twice
-        manager.GetState("test3");
+        manager.GetDictionaryState("test");
+        manager.GetDictionaryState("test2");
+        manager.GetDictionaryState("test2"); // get it twice
+        manager.GetDictionaryState("test3");
         manager.DeleteState("test3");
         
         // Assert
@@ -43,8 +43,8 @@ public class StreamStateManagerShould
         var manager = CreateStreamStateManager();
         
         // Act
-        var testStreamState = manager.GetState("test");
-        var testStreamState2 = manager.GetState("test");
+        var testStreamState = manager.GetDictionaryState("test");
+        var testStreamState2 = manager.GetDictionaryState("test");
         
         // Assert
         testStreamState.Should().NotBeNull();
@@ -59,9 +59,9 @@ public class StreamStateManagerShould
         
         // Act & Assert
         manager.DeleteState("test").Should().BeFalse();
-        var testStreamState = manager.GetState("test");
+        var testStreamState = manager.GetDictionaryState("test");
         manager.DeleteState("test").Should().BeTrue();
-        var testStreamState2 = manager.GetState("test");
+        var testStreamState2 = manager.GetDictionaryState("test");
         
         testStreamState2.Should().NotBeNull();
         testStreamState2.Should().NotBeSameAs(testStreamState);
@@ -72,8 +72,8 @@ public class StreamStateManagerShould
     {
         // Arrange
         var manager = CreateStreamStateManager();
-        var testStreamState = manager.GetState("test");
-        var testStreamState2 = manager.GetState("test2");
+        var testStreamState = manager.GetDictionaryState("test");
+        var testStreamState2 = manager.GetDictionaryState("test2");
         
         // Act 
         var count = manager.DeleteStates();
@@ -81,6 +81,6 @@ public class StreamStateManagerShould
         // Arrange
         count.Should().Be(2);
         manager.GetStates().Should().BeEmpty();
-        manager.GetState("test").Should().NotBeSameAs(testStreamState);
+        manager.GetDictionaryState("test").Should().NotBeSameAs(testStreamState);
     }
 }

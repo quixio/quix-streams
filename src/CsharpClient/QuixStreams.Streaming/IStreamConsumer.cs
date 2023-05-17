@@ -55,16 +55,16 @@ namespace QuixStreams.Streaming
     public static class IStreamConsumerExtensions
     {
         /// <summary>
-        /// Gets the stream state for the specified storage name using the provided default value factory.
+        /// Gets the dictionary type stream state for the specified storage name using the provided default value factory.
         /// </summary>
         /// <typeparam name="T">The type of the stream state value.</typeparam>
         /// <param name="streamConsumer">The stream consumer to get the state for</param>
         /// <param name="storageName">The name of the storage.</param>
         /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
-        /// <returns>The stream state for the specified storage name using the provided default value factory.</returns>
-        public static StreamState<T> GetState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
+        /// <returns>The dictionary stream state for the specified storage name using the provided default value factory.</returns>
+        public static StreamState<T> GetDictionaryState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
         {
-            return streamConsumer.GetStateManager().GetState(storageName, defaultValueFactory);
+            return streamConsumer.GetStateManager().GetDictionaryState(storageName, defaultValueFactory);
         }
     }
     

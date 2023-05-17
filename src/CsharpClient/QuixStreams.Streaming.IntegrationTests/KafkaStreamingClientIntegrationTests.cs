@@ -660,7 +660,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 var msgCounter = 0;
                 topicConsumer.OnStreamReceived += (sender, stream) =>
                 {
-                    var rollingSum = stream.GetState("RollingSum", (sid) => 0d);
+                    var rollingSum = stream.GetDictionaryState("RollingSum", (sid) => 0d);
 
                     stream.Timeseries.OnDataReceived += (o, args) =>
                     {
@@ -719,12 +719,12 @@ namespace QuixStreams.Streaming.IntegrationTests
                 manager.GetStreamStates().Should().BeEquivalentTo(new List<string>() { "stream1", "stream2" });
                 
                 output.WriteLine($"Checking Stream 1 Rolling sum for params");
-                var streamState = manager.GetStreamStateManager(streamProducer.StreamId).GetState<double>("RollingSum");
+                var streamState = manager.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
                 streamState["param1"].Should().Be(14);
                 streamState["param2"].Should().Be(10);
                 output.WriteLine($"Checked Stream 1 Rolling sum for params");
                 output.WriteLine($"Checking Stream 2 Rolling sum for params");
-                var streamState2 = manager.GetStreamStateManager(streamProducer2.StreamId).GetState<double>("RollingSum");
+                var streamState2 = manager.GetStreamStateManager(streamProducer2.StreamId).GetDictionaryState<double>("RollingSum");
                 streamState2["param1"].Should().Be(9);
                 streamState2["param2"].Should().Be(10);
                 output.WriteLine($"Checked Stream 2 Rolling sum for params");
@@ -761,7 +761,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 mre.Set();
                 stream.Timeseries.OnDataReceived += (o, args) =>
                 {
-                    var rollingSum = stream.GetState("RollingSum", (sid) => 0d);
+                    var rollingSum = stream.GetDictionaryState("RollingSum", (sid) => 0d);
 
                     try
                     {

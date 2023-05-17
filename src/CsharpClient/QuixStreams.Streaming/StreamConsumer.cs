@@ -66,7 +66,7 @@ namespace QuixStreams.Streaming
         /// <inheritdoc />
         public StreamState<T> GetState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
         {
-            return this.GetStateManager().GetState(stateName, defaultValueFactory);
+            return this.GetStateManager().GetDictionaryState(stateName, defaultValueFactory);
         }
 
         /// <inheritdoc />

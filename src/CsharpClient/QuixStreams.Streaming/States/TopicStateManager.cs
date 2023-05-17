@@ -78,7 +78,7 @@ namespace QuixStreams.Streaming.States
         }
         
         /// <summary>
-        /// Deletes the stream state with the specified name
+        /// Deletes the stream state with the specified stream id
         /// </summary>
         /// <returns>Whether the stream state was deleted</returns>
         public bool DeleteStreamState(string streamId)

@@ -13,6 +13,7 @@ import inspect
 
 StreamStateType = TypeVar('StreamStateType')
 
+
 @nativedecorator
 class StreamStateManager(object):
     """
@@ -35,9 +36,9 @@ class StreamStateManager(object):
         self._cache = weakref.WeakValueDictionary()
         self._interop = ssmi(net_pointer)
 
-    def get_state(self, state_name: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> StreamState[StreamStateType]:
+    def get_dict_state(self, state_name: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> StreamState[StreamStateType]:
         """
-        Creates a new application state with automatically managed lifecycle for the stream
+        Creates a new application state of dictionary type with automatically managed lifecycle for the stream
 
         Args:
             state_name: The name of the state
@@ -45,17 +46,17 @@ class StreamStateManager(object):
             default_value_factory: The default value factory to create value when the key is not yet present in the state
 
         Example:
-            >>> state_manager.get_state('some_state')
+            >>> state_manager.get_dict_state('some_state')
             This will return a state where type is 'Any'
 
-            >>> state_manager.get_state('some_state', lambda missing_key: return {})
+            >>> state_manager.get_dict_state('some_state', lambda missing_key: return {})
             this will return a state where type is a generic dictionary, with an empty dictionary as default value when
             key is not available. The lambda function will be invoked with 'get_state_type_check' key to determine type
 
-            >>> state_manager.get_state('some_state', lambda missing_key: return {}, Dict[str, float])
+            >>> state_manager.get_dict_state('some_state', lambda missing_key: return {}, Dict[str, float])
             this will return a state where type is a specific dictionary type, with default value
 
-            >>> state_manager.get_state('some_state', state_type=float)
+            >>> state_manager.get_dict_state('some_state', state_type=float)
             this will return a state where type is a float without default value, resulting in KeyError when not found
         """
 
@@ -76,6 +77,6 @@ class StreamStateManager(object):
                 logging.log(logging.WARNING, f'State {state_name} already exists with a different type ({instance.type.__name__}), new type is {state_type.__name__}. Returning original state instance.')
             return instance
 
-        instance = StreamState[StreamStateType](self._interop.GetState(state_name), state_type, default_value_factory)
+        instance = StreamState[StreamStateType](self._interop.GetDictionaryState(state_name), state_type, default_value_factory)
         self._cache[state_name] = instance
         return instance

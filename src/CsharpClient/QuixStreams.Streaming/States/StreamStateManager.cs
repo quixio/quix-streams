@@ -117,11 +117,11 @@ namespace QuixStreams.Streaming.States
         }
         
         /// <summary>
-        /// Creates a new application state with automatically managed lifecycle for the stream
+        /// Creates a new application state of dictionary type with automatically managed lifecycle for the stream
         /// </summary>
         /// <param name="stateName">The name of the state</param>
-        /// <returns>Stream state</returns>
-        public StreamState GetState(string stateName)
+        /// <returns>Dictionary stream state</returns>
+        public StreamState GetDictionaryState(string stateName)
         {
             if (this.states.TryGetValue(stateName, out var existingState))
             {
@@ -169,12 +169,12 @@ namespace QuixStreams.Streaming.States
         }
         
         /// <summary>
-        /// Creates a new application state with automatically managed lifecycle for the stream
+        /// Creates a new application state of dictionary type with automatically managed lifecycle for the stream
         /// </summary>
         /// <param name="stateName">The name of the state</param>
         /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
-        /// <returns>Stream state</returns>
-        public StreamState<T> GetState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        /// <returns>Dictionary stream state</returns>
+        public StreamState<T> GetDictionaryState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
             if (this.states.TryGetValue(stateName, out var existingState))
             {
