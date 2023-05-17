@@ -32,9 +32,9 @@ namespace QuixStreams.Telemetry
         private int maxRetryDuration = 60000;
 
         /// <summary>
-        /// Stream id to use for non-quix streams
+        /// Stream id to use when message key has not been set.
         /// </summary>
-        private const string RawStreamId = "RAW";
+        public const string DefaultStreamId = "DEFAULT";
 
         /// <summary>
         /// The maximum length in ms between each retries when the factory throws exception. Defaults to 60000
@@ -204,7 +204,7 @@ namespace QuixStreams.Telemetry
             }
             if (!this.TryGetStreamId(package.TransportContext, out var streamId))
             {
-                streamId = RawStreamId;
+                streamId = DefaultStreamId;
             }
 
             StreamContext streamContext;

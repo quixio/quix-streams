@@ -32,8 +32,7 @@ namespace QuixStreams.Transport.Fw.Helpers
                     var datalen = reader.ReadInt32();
                     valueBytes = reader.ReadBytes(datalen);
 
-                    return new TransportPackageValue( valueBytes, new CodecBundle(modelKey, codecId),
-                        metaData);
+                    return new TransportPackageValue(valueBytes, new CodecBundle(modelKey, codecId), metaData);
                 }
             }
         }

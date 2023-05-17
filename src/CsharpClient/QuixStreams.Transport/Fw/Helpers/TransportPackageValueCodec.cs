@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.Serialization;
 using QuixStreams.Transport.Codec;
 using QuixStreams.Transport.Fw.Models;
@@ -18,10 +19,13 @@ namespace QuixStreams.Transport.Fw.Helpers
         
         public static TransportPackageValue Deserialize(byte[] contentBytes)
         {
-            if (contentBytes.Length > 0)
+            if (contentBytes.Length == 0)
+                throw new SerializationException("Failed to deserialize - the packet has length == 0");
+            
+            try
             {
-                var protocolId = contentBytes[0];
-                // first character is { >> backward compatibility function
+                var protocolId = contentBytes[0]; // first character is { >> backward compatibility function
+                
                 if (protocolId == PROTOCOL_ID_BYTE)
                 {
                     return TransportPackageValueCodecBinary.Deserialize(contentBytes);
@@ -31,11 +35,14 @@ namespace QuixStreams.Transport.Fw.Helpers
                 {
                     return TransportPackageValueCodecJSON.Deserialize(contentBytes);
                 }
-
+            }
+            catch (Exception ex) when (ex is SerializationException || ex is EndOfStreamException)
+            {
+                // It is possible that the message is a non-quix message, so we try to deserialize it as a raw message
                 return TransportPackageValueCodecRaw.Deserialize(contentBytes);
             }
-
-            throw new SerializationException("Failed to deserialize - the packet has length == 0");
+                
+            return TransportPackageValueCodecRaw.Deserialize(contentBytes);
         }
 
         public static byte[] Serialize(TransportPackageValue transportPackageValue, TransportPackageValueCodecType codecType)

@@ -164,7 +164,7 @@ namespace QuixStreams.Transport.UnitTests.Fw
             // This test checks that DeserializingModifier can handle raw (non-quix) messages
             
             // Arrange
-            string packageMessage = "This is a raw message";
+            string packageMessage = "package message";
             var package = new Package<byte[]>(Encoding.UTF8.GetBytes(packageMessage));
             var deserializingModifier = new DeserializingModifier();
             
