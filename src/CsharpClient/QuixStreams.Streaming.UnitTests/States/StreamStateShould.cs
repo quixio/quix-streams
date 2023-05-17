@@ -12,7 +12,7 @@ public class StreamStateShould
     [Fact]
     public void Constructor_ShouldCreateStreamState()
     {
-        var streamState = new StreamState<int>(new InMemoryStorage(), key => -1, NullLoggerFactory.Instance);
+        var streamState = new StreamState<int>(new InMemoryStorage(), missingStateKey => -1, NullLoggerFactory.Instance);
 
         streamState.Should().NotBeNull();
 
@@ -24,7 +24,7 @@ public class StreamStateShould
     [Fact]
     public void Constructor_WithNullStateStorage_ShouldThrowArgumentNullException()
     {
-        Action nullTopicName = () => new StreamState<int>(null, key => -1, NullLoggerFactory.Instance);
+        Action nullTopicName = () => new StreamState<int>(null, missingStateKey => -1, NullLoggerFactory.Instance);
 
         nullTopicName.Should().Throw<ArgumentNullException>().WithMessage("*storage*");
     }

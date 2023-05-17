@@ -64,9 +64,9 @@ namespace QuixStreams.Streaming
         public event EventHandler<StreamClosedEventArgs> OnStreamClosed;
 
         /// <inheritdoc />
-        public StreamState<T> GetState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory)
+        public StreamState<T> GetState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
         {
-            return this.GetStateManager().GetState(nameOfState, defaultValueFactory);
+            return this.GetStateManager().GetState(stateName, defaultValueFactory);
         }
 
         /// <inheritdoc />

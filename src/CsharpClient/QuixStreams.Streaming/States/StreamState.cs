@@ -18,10 +18,6 @@ namespace QuixStreams.Streaming.States
         private readonly State.State state;
 
         /// <summary>
-        /// Returns whether the cache keys are case-sensitive
-        /// </summary>
-
-        /// <summary>
         /// Raised immediately before a flush operation is performed.
         /// </summary>
         public event EventHandler OnFlushing;
@@ -354,7 +350,7 @@ namespace QuixStreams.Streaming.States
     /// Represents a method that returns the default value for a given key.
     /// </summary>
     /// <typeparam name="T">The type of the default value.</typeparam>
-    /// <param name="key">The name of the key being accessed.</param>
+    /// <param name="missingStateKey">The name of the key being accessed.</param>
     /// <returns>The default value for the specified key.</returns>
-    public delegate T StreamStateDefaultValueDelegate<out T>(string key);
+    public delegate T StreamStateDefaultValueDelegate<out T>(string missingStateKey);
 }

@@ -10,7 +10,7 @@ public static class Logger
 {
     public static ILoggerFactory LoggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(c =>
     {
-        var minimumLogLevel = LogLevel.Trace; // bring it in from config
+        var minimumLogLevel = LogLevel.Trace; // TODO: bring it in from config
         c.ClearProviders();
         c.SetMinimumLevel(minimumLogLevel);
 

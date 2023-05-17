@@ -8,6 +8,7 @@ from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropExc
 from src.quixstreams import QuixStreamingClient
 
 """
+# Uncomment the following to enable debug files
 import src.quixstreams as qx
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
 InteropUtils.enable_debug()

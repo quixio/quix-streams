@@ -58,28 +58,28 @@ namespace QuixStreams.Streaming.States
         }
         
         /// <summary>
-        /// Creates a new instance of the <see cref="StreamState{T}"/> class with the specified <paramref name="nameOfState"/> and optional <paramref name="defaultValueFactory"/>.
+        /// Creates a new instance of the <see cref="StreamState{T}"/> class with the specified <paramref name="stateName"/> and optional <paramref name="defaultValueFactory"/>.
         /// </summary>
         /// <typeparam name="T">The type of data stored in the state.</typeparam>
-        /// <param name="nameOfState">The name of the state.</param>
+        /// <param name="stateName">The name of the state.</param>
         /// <param name="defaultValueFactory">An optional delegate that returns a default value for the state if it does not exist.</param>
         /// <returns>The newly created <see cref="StreamState{T}"/> instance.</returns>
-        private StreamState<T> CreateStreamState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        private StreamState<T> CreateStreamState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
-            this.logger.LogTrace("Creating Stream state for {0}", nameOfState);
-            var state = new StreamState<T>(this.stateStorage.GetOrCreateSubStorage(nameOfState), defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {nameOfState}"));
+            this.logger.LogTrace("Creating Stream state for {0}", stateName);
+            var state = new StreamState<T>(this.stateStorage.GetOrCreateSubStorage(stateName), defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
             return state;
         }
         
         /// <summary>
-        /// Creates a new instance of the <see cref="StreamState"/> class with the specified <paramref name="nameOfState"/>.
+        /// Creates a new instance of the <see cref="StreamState"/> class with the specified <paramref name="stateName"/>.
         /// </summary>
-        /// <param name="nameOfState">The name of the state.</param>
+        /// <param name="stateName">The name of the state.</param>
         /// <returns>The newly created <see cref="StreamState"/> instance.</returns>
-        private StreamState CreateStreamState(string nameOfState)
+        private StreamState CreateStreamState(string stateName)
         {
-            this.logger.LogTrace("Creating Stream state for {0}", nameOfState);
-            var state = new StreamState(this.stateStorage.GetOrCreateSubStorage(nameOfState), new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {nameOfState}"));
+            this.logger.LogTrace("Creating Stream state for {0}", stateName);
+            var state = new StreamState(this.stateStorage.GetOrCreateSubStorage(stateName), new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
             return state;
         }
         
@@ -108,27 +108,27 @@ namespace QuixStreams.Streaming.States
         /// Deletes the state with the specified name
         /// </summary>
         /// <returns>Whether the state was deleted</returns>
-        public bool DeleteState(string nameOfState)
+        public bool DeleteState(string stateName)
         {
-            this.logger.LogTrace("Deleting Stream state {0} for {1}", nameOfState, streamId);
-            if (!this.stateStorage.DeleteSubStorage(nameOfState)) return false;
-            this.states.Remove(nameOfState);
+            this.logger.LogTrace("Deleting Stream state {0} for {1}", stateName, streamId);
+            if (!this.stateStorage.DeleteSubStorage(stateName)) return false;
+            this.states.Remove(stateName);
             return true;
         }
         
         /// <summary>
         /// Creates a new application state with automatically managed lifecycle for the stream
         /// </summary>
-        /// <param name="nameOfState">The name of the state</param>
+        /// <param name="stateName">The name of the state</param>
         /// <returns>Stream state</returns>
-        public StreamState GetState(string nameOfState)
+        public StreamState GetState(string stateName)
         {
-            if (this.states.TryGetValue(nameOfState, out var existingState))
+            if (this.states.TryGetValue(stateName, out var existingState))
             {
                 var generic = existingState.GetType().GetGenericArguments().FirstOrDefault();
                 if (generic != null)
                 {
-                    throw new ArgumentException($"{logPrefix}, State '{nameOfState}' already exists with {generic} type.");
+                    throw new ArgumentException($"{logPrefix}, State '{stateName}' already exists with {generic} type.");
                 }
 
                 return (StreamState)existingState;
@@ -136,22 +136,22 @@ namespace QuixStreams.Streaming.States
             
             lock (stateLock)
             {
-                if (this.states.TryGetValue(nameOfState, out existingState))
+                if (this.states.TryGetValue(stateName, out existingState))
                 {
                     var generic = existingState.GetType().GetGenericArguments().FirstOrDefault();
                     if (generic != null)
                     {
-                        throw new ArgumentException($"{logPrefix}, State '{nameOfState}' already exists with {generic} type.");
+                        throw new ArgumentException($"{logPrefix}, State '{stateName}' already exists with {generic} type.");
                     }
 
                     return (StreamState)existingState;
                 }
 
-                var state = CreateStreamState(nameOfState);
+                var state = CreateStreamState(stateName);
 
-                this.states.Add(nameOfState, state);
+                this.states.Add(stateName, state);
                 if (this.topicConsumer == null) return state;
-                var prefix = $"{logPrefix} - {nameOfState} | ";
+                var prefix = $"{logPrefix} - {stateName} | ";
                 this.topicConsumer.OnCommitted += (sender, args) =>
                 {
                     try
@@ -171,16 +171,16 @@ namespace QuixStreams.Streaming.States
         /// <summary>
         /// Creates a new application state with automatically managed lifecycle for the stream
         /// </summary>
-        /// <param name="nameOfState">The name of the state</param>
+        /// <param name="stateName">The name of the state</param>
         /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
         /// <returns>Stream state</returns>
-        public StreamState<T> GetState<T>(string nameOfState, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        public StreamState<T> GetState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
-            if (this.states.TryGetValue(nameOfState, out var existingState))
+            if (this.states.TryGetValue(stateName, out var existingState))
             {
                 if (existingState.GetType().GetGenericArguments().FirstOrDefault() != typeof(T))
                 {
-                    throw new ArgumentException($"{logPrefix}, State '{nameOfState}' already exists with a different type.");
+                    throw new ArgumentException($"{logPrefix}, State '{stateName}' already exists with a different type.");
                 }
 
                 return (StreamState<T>)existingState;
@@ -188,21 +188,21 @@ namespace QuixStreams.Streaming.States
             
             lock (stateLock)
             {
-                if (this.states.TryGetValue(nameOfState, out existingState))
+                if (this.states.TryGetValue(stateName, out existingState))
                 {
                     if (existingState.GetType().GetGenericArguments().FirstOrDefault() != typeof(T))
                     {
-                        throw new ArgumentException($"{logPrefix}, State '{nameOfState}' already exists with a different type.");
+                        throw new ArgumentException($"{logPrefix}, State '{stateName}' already exists with a different type.");
                     }
 
                     return (StreamState<T>)existingState;
                 }
 
-                var state = CreateStreamState(nameOfState, defaultValueFactory);
+                var state = CreateStreamState(stateName, defaultValueFactory);
 
-                this.states.Add(nameOfState, state);
+                this.states.Add(stateName, state);
                 if (this.topicConsumer == null) return state;
-                var prefix = $"{logPrefix} - {nameOfState} | ";
+                var prefix = $"{logPrefix} - {stateName} | ";
 
                 void CommittedHandler(object sender, EventArgs args)
                 {

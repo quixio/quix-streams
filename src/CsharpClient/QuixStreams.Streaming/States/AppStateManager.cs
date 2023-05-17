@@ -22,7 +22,7 @@ namespace QuixStreams.Streaming.States
         /// <summary>
         /// Initializes a new instance of the AppStateManager class.
         /// </summary>
-        /// <param name="storage"></param>
+        /// <param name="storage">The state storage the use for the application state</param>
         /// <param name="loggerFactory">The logger factory to use</param>
         public AppStateManager(IStateStorage storage, ILoggerFactory loggerFactory = null)
         {
