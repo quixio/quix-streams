@@ -5,11 +5,14 @@
 | Classes | |
 | :--- | :--- |
 | [App](App.md 'QuixStreams.Streaming.App') | Provides utilities to handle default streaming behaviors and automatic resource cleanup on shutdown. |
+| [IStreamConsumerExtensions](IStreamConsumerExtensions.md 'QuixStreams.Streaming.IStreamConsumerExtensions') | Extensions for IStreamConsumer |
 | [KafkaStreamingClient](KafkaStreamingClient.md 'QuixStreams.Streaming.KafkaStreamingClient') | A Kafka streaming client capable of creating topic consumer and producers. |
 | [KafkaStreamingClientExtensions](KafkaStreamingClientExtensions.md 'QuixStreams.Streaming.KafkaStreamingClientExtensions') | Extensions for Streaming Client class |
+| [PackageReceivedEventArgs](PackageReceivedEventArgs.md 'QuixStreams.Streaming.PackageReceivedEventArgs') | Provides data for the PackageReceived event. |
 | [QuixStreamingClient](QuixStreamingClient.md 'QuixStreams.Streaming.QuixStreamingClient') | Streaming client for Kafka configured automatically using Environment Variables and Quix platform endpoints.<br/>Use this Client when you use this library together with Quix platform. |
 | [QuixStreamingClient.TokenValidationConfiguration](QuixStreamingClient.TokenValidationConfiguration.md 'QuixStreams.Streaming.QuixStreamingClient.TokenValidationConfiguration') | Token Validation configuration |
 | [QuixStreamingClientExtensions](QuixStreamingClientExtensions.md 'QuixStreams.Streaming.QuixStreamingClientExtensions') | Quix Streaming Client extensions |
+| [StreamClosedEventArgs](StreamClosedEventArgs.md 'QuixStreams.Streaming.StreamClosedEventArgs') | Provides data for the StreamClosed event. |
 | [TopicConsumer](TopicConsumer.md 'QuixStreams.Streaming.TopicConsumer') | Implementation of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer') to consume incoming streams |
 | [TopicProducer](TopicProducer.md 'QuixStreams.Streaming.TopicProducer') | Implementation of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer') to produce outgoing streams |
 

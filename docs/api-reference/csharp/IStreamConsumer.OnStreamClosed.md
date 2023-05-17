@@ -10,4 +10,4 @@ event EventHandler<StreamClosedEventArgs> OnStreamClosed;
 ```
 
 #### Event Type
-[System.EventHandler&lt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')[QuixStreams.Streaming.StreamClosedEventArgs](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Streaming.StreamClosedEventArgs 'QuixStreams.Streaming.StreamClosedEventArgs')[&gt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')
+[System.EventHandler&lt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')[StreamClosedEventArgs](StreamClosedEventArgs.md 'QuixStreams.Streaming.StreamClosedEventArgs')[&gt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')

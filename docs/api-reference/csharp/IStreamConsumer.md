@@ -17,6 +17,10 @@ public interface IStreamConsumer
 | [StreamId](IStreamConsumer.StreamId.md 'QuixStreams.Streaming.IStreamConsumer.StreamId') | Gets the stream Id of the stream. |
 | [Timeseries](IStreamConsumer.Timeseries.md 'QuixStreams.Streaming.IStreamConsumer.Timeseries') | Gets the consumer for accessing timeseries related information of the stream such as parameter definitions and values. |
 
+| Methods | |
+| :--- | :--- |
+| [GetStateManager()](IStreamConsumer.GetStateManager().md 'QuixStreams.Streaming.IStreamConsumer.GetStateManager()') | Gets the manager for the stream states |
+
 | Events | |
 | :--- | :--- |
 | [OnPackageReceived](IStreamConsumer.OnPackageReceived.md 'QuixStreams.Streaming.IStreamConsumer.OnPackageReceived') | Event raised when a stream package has been received. |
