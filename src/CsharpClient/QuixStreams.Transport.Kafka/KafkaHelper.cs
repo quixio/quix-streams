@@ -23,9 +23,9 @@ namespace QuixStreams.Transport.Kafka
                 {KnownKafkaTransportContextKeys.MessageSize, consumeResult.Message.Value.Length}
             });
 
-            if (consumeResult.Message.Key != null) //this is risky and probably better to avoid
+            if (consumeResult.Message.Key != null)
             {
-                tContext.Add(KnownTransportContextKeys.MessageGroupKey, consumeResult.Message.Key); // this is probably a mandatory key
+                tContext.Add(KnownTransportContextKeys.MessageGroupKey, consumeResult.Message.Key);
                 tContext.Add(KnownKafkaTransportContextKeys.Key, consumeResult.Message.Key);
             }
             

@@ -144,7 +144,7 @@ namespace QuixStreams.Streaming
             this.logger.LogTrace("StreamConsumer: OnRawDataReceived");
             var ev = new EventDataRaw
             {
-                Timestamp = DateTime.UtcNow.ToUnixNanoseconds() ,
+                Timestamp = DateTime.UtcNow.ToUnixNanoseconds(),
                 Id = streamPipeline.StreamId,
                 Tags = new Dictionary<string, string>(),
                 Value = Encoding.UTF8.GetString(bytes)

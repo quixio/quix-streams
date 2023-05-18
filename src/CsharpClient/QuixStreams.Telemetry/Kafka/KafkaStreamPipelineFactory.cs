@@ -23,14 +23,16 @@ namespace QuixStreams.Telemetry.Kafka
         /// <returns>Whether retrieval was successful</returns>
         protected override bool TryGetStreamId(TransportContext transportContext, out string streamId)
         {
-            streamId = null;
+            var key = transportContext.GetKey();
 
-            if (transportContext.GetKey() != null)
+            if (key == null)
             {
-                streamId = Encoding.UTF8.GetString(transportContext.GetKey());    
+                streamId = null;
+                return false;
             }
             
-            if (streamId == null) return false;
+            streamId = Encoding.UTF8.GetString(key);
+
             if (streamId.IndexOfAny(new char[] {'/', '\\'}) > -1)
             {
                 streamId = streamId.Replace("/", "-").Replace("\\", "-");
