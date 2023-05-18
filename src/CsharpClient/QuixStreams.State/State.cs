@@ -31,7 +31,7 @@ namespace QuixStreams.State
         private readonly Dictionary<string, StateValue> inMemoryState = new Dictionary<string, StateValue>();
         
         /// <summary>
-        /// Represents the in-memory state holding the key-value pairs of last persisted lazy values
+        /// Represents the in-memory state holding the key-value pairs of last persisted hash values
         /// </summary>
         private readonly IDictionary<string, int> lastFlushHash = new Dictionary<string, int>();
         
@@ -89,13 +89,13 @@ namespace QuixStreams.State
             return this.inMemoryState.GetEnumerator();
         }
 
-        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        /// <inheritdoc />
         public void Remove(object key)
         {
             this.Remove((string)key);
         }
 
-        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        /// <inheritdoc />
         public bool IsFixedSize => false;
 
         /// <summary>
@@ -107,7 +107,7 @@ namespace QuixStreams.State
             return inMemoryState.GetEnumerator();
         }
 
-        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        /// <inheritdoc />
         public void Add(object key, object value)
         {
             this.Add((string)key, (StateValue)value);
