@@ -16,11 +16,15 @@ namespace QuixStreams.Telemetry
     {
         private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamPipeline>();
         
-
         private readonly CancellationToken cancellationToken;
         private readonly List<StreamComponent> componentsList = new List<StreamComponent>();
         private bool isClosed = false;
         
+        /// <summary>
+        /// Stream id to use when message key has not been set.
+        /// </summary>
+        public const string DefaultStreamId = "DEFAULT";
+
         /// <inheritdoc />
         public event Action OnClosing;
 

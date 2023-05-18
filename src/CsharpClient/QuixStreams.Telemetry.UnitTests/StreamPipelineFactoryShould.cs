@@ -180,7 +180,7 @@ namespace QuixStreams.Telemetry.UnitTests
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
-            factory.ContextCache.GetAll().Keys.First().Should().Be(StreamPipelineFactory.DefaultStreamId);
+            factory.ContextCache.GetAll().Keys.First().Should().Be(StreamPipeline.DefaultStreamId);
         }
 
         class TestStreamPipelineFactory : StreamPipelineFactory

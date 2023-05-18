@@ -7,11 +7,14 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
 using Xunit;
 using Xunit.Abstractions;
+using EventDefinition = QuixStreams.Telemetry.Models.EventDefinition;
+using ParameterDefinition = QuixStreams.Telemetry.Models.ParameterDefinition;
 
 namespace QuixStreams.Streaming.IntegrationTests
 {
@@ -456,6 +459,65 @@ namespace QuixStreams.Streaming.IntegrationTests
         }
 
         [Fact]
+        public void StreamReadAndWriteRaw()
+        {
+            var topic = nameof(StreamReadAndWriteRaw);
+            var messageContent = "lorem ipsum";
+            var messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
+            RunTest(() =>
+            {
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var rawTopicConsumer = client.GetRawTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                var rawTopicProducer = client.GetRawTopicProducer(topic);
+
+                // -- Consuming raw messages with RawTopicConsumer
+                
+                var consumedRawMessages = new List<RawMessage>();
+
+                rawTopicConsumer.OnMessageReceived += (s, rawMessage) =>
+                {
+                    consumedRawMessages.Add(rawMessage);
+                };
+                
+                rawTopicConsumer.Subscribe();
+                
+                rawTopicProducer.Publish(new RawMessage(messageContentInBytes));
+
+                SpinWait.SpinUntil(() => consumedRawMessages.Count >= 1, 10000);
+                Assert.Single(consumedRawMessages);
+                Assert.Single(consumedRawMessages.Where(x => x.Value == messageContentInBytes && x.Key == null));
+                
+                rawTopicConsumer.Dispose();
+                
+                // Consuming raw messages with TopicConsumer
+                
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
+
+                var consumedEvents = new List<EventDataRaw>();
+
+                topicConsumer.OnStreamReceived += (s, e) =>
+                {
+                    (e as IStreamConsumerInternal).OnEventData += (s, eventData) => consumedEvents.Add(eventData);
+                };
+                
+                topicConsumer.Subscribe();
+
+                rawTopicProducer.Publish(new RawMessage(key: null, value: messageContentInBytes));
+                rawTopicProducer.Publish(new RawMessage(key: "some key"u8.ToArray(), value: messageContentInBytes));
+
+                SpinWait.SpinUntil(() => consumedEvents.Count >= 2, 10000);
+                Assert.Equal(2, consumedEvents.Count);
+                Assert.Single(consumedEvents.Where(x => x.Value == messageContent && x.Id == StreamPipeline.DefaultStreamId));
+                Assert.Single(consumedEvents.Where(x => x.Value == messageContent && x.Id == "some key"));
+                
+                topicConsumer.Dispose();
+            });
+        }
+        
+        [Fact]
         public void StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected()
         {
             var topic = nameof(StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected);
@@ -635,7 +697,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 streamsRevoked.Should().BeGreaterThan(0);
             });
         }
-
+        
         private async Task RunTest(Func<Task> test)
         {
             var count = 0;

@@ -26,16 +26,10 @@ namespace QuixStreams.Telemetry
         private Action onClose = () => { };
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         
-        
         public event Action<IStreamPipeline[]> OnStreamsRevoked;
 
         private int maxRetryDuration = 60000;
-
-        /// <summary>
-        /// Stream id to use when message key has not been set.
-        /// </summary>
-        public const string DefaultStreamId = "DEFAULT";
-
+        
         /// <summary>
         /// The maximum length in ms between each retries when the factory throws exception. Defaults to 60000
         /// </summary>
@@ -204,7 +198,7 @@ namespace QuixStreams.Telemetry
             }
             if (!this.TryGetStreamId(package.TransportContext, out var streamId))
             {
-                streamId = DefaultStreamId;
+                streamId = StreamPipeline.DefaultStreamId;
             }
 
             StreamContext streamContext;
