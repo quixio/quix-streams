@@ -19,7 +19,7 @@ namespace QuixStreams.Transport.Kafka
                 {KnownKafkaTransportContextKeys.Topic, consumeResult.Topic},
                 {KnownKafkaTransportContextKeys.Partition, consumeResult.Partition.Value},
                 {KnownKafkaTransportContextKeys.Offset, consumeResult.Offset.Value},
-                {KnownKafkaTransportContextKeys.DateTime, consumeResult.Message.Timestamp.UtcDateTime},
+                {KnownTransportContextKeys.BrokerMessageTime, consumeResult.Message.Timestamp.UtcDateTime},
                 {KnownKafkaTransportContextKeys.MessageSize, consumeResult.Message.Value.Length}
             });
 

@@ -6,6 +6,7 @@ using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
+using QuixStreams.Transport.IO;
 
 namespace QuixStreams.Streaming
 {
@@ -89,7 +90,6 @@ namespace QuixStreams.Streaming
             this.Subscribe<QuixStreams.Telemetry.Models.ParameterDefinitions>(OnParameterDefinitionsReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.EventDataRaw[]>(OnEventDataReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.EventDefinitions>(OnEventDefinitionsReceived);
-            this.Subscribe<byte[]>(OnRawDataReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.StreamEnd>(OnStreamEndReceived);
             this.Subscribe(OnStreamPackageReceived);
 
@@ -101,6 +101,22 @@ namespace QuixStreams.Streaming
 
         private void OnStreamPackageReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamPackage package)
         {
+            if (package.Type == typeof(byte[]))
+            {
+                this.logger.LogTrace("StreamConsumer: OnRawDataReceived");
+                var ev = new EventDataRaw
+                {
+                    Timestamp = ((DateTime)package.TransportContext[KnownTransportContextKeys.BrokerMessageTime]).ToUnixNanoseconds(),
+                    Id = streamPipeline.StreamId,
+                    Tags = new Dictionary<string, string>(),
+                    Value = Encoding.UTF8.GetString((byte[])package.Value)
+                };
+
+                this.OnEventData?.Invoke(this, ev);
+                return;
+            }
+
+
             this.logger.LogTrace("StreamConsumer: OnPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));
         }
@@ -137,20 +153,6 @@ namespace QuixStreams.Streaming
         {
             this.logger.LogTrace("StreamConsumer: OnEventDefinitionsReceived");
             this.OnEventDefinitionsChanged?.Invoke(this, obj);
-        }
-
-        private void OnRawDataReceived(IStreamPipeline streamPipeline, byte[] bytes)
-        {
-            this.logger.LogTrace("StreamConsumer: OnRawDataReceived");
-            var ev = new EventDataRaw
-            {
-                Timestamp = DateTime.UtcNow.ToUnixNanoseconds(),
-                Id = streamPipeline.StreamId,
-                Tags = new Dictionary<string, string>(),
-                Value = Encoding.UTF8.GetString(bytes)
-            };
-            
-            this.OnEventData?.Invoke(this, ev);
         }
         
         private void OnStreamEndReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamEnd obj)

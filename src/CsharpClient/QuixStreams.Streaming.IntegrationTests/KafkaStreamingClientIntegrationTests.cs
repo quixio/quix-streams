@@ -462,10 +462,14 @@ namespace QuixStreams.Streaming.IntegrationTests
         public void StreamReadAndWriteRaw()
         {
             var topic = nameof(StreamReadAndWriteRaw);
-            var messageContent = "lorem ipsum";
-            var messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
+
+            var counter = 0;
             RunTest(() =>
             {
+                counter++;
+                var messageContent = $"lorem ipsum {counter}";
+                var messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
+
                 // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
                 // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
                 // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
@@ -474,49 +478,77 @@ namespace QuixStreams.Streaming.IntegrationTests
                 var rawTopicProducer = client.GetRawTopicProducer(topic);
 
                 // -- Consuming raw messages with RawTopicConsumer
-                
+
                 var consumedRawMessages = new List<RawMessage>();
 
                 rawTopicConsumer.OnMessageReceived += (s, rawMessage) =>
                 {
+                    this.output.WriteLine($"Received message: {Encoding.UTF8.GetString(rawMessage.Value)}");
+                    if (!rawMessage.Value.SequenceEqual(messageContentInBytes))
+                    {
+                        this.output.WriteLine("Ignoring message");
+                        return;
+                    }
                     consumedRawMessages.Add(rawMessage);
                 };
-                
-                rawTopicConsumer.Subscribe();
-                
-                rawTopicProducer.Publish(new RawMessage(messageContentInBytes));
 
+                rawTopicConsumer.Subscribe();
+
+                rawTopicProducer.Publish(new RawMessage(messageContentInBytes));
+                
                 SpinWait.SpinUntil(() => consumedRawMessages.Count >= 1, 10000);
-                Assert.Single(consumedRawMessages);
-                Assert.Single(consumedRawMessages.Where(x => x.Value == messageContentInBytes && x.Key == null));
-                
-                rawTopicConsumer.Dispose();
-                
+                try
+                {
+                    Assert.Single(consumedRawMessages);
+                    Assert.Single(consumedRawMessages.Where(x => x.Key == null));
+                }
+                finally
+                {
+                    // To make sure the consumer disconnects and doesn't fight with next attempt for partition
+                    
+                    rawTopicConsumer.Dispose();
+                }
+
+
                 // Consuming raw messages with TopicConsumer
-                
+
                 var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
 
                 var consumedEvents = new List<EventDataRaw>();
+                
+
+                messageContent = $"lorem ipsum - second - {counter}";
+                messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
 
                 topicConsumer.OnStreamReceived += (s, e) =>
                 {
-                    (e as IStreamConsumerInternal).OnEventData += (s, eventData) => consumedEvents.Add(eventData);
+                    (e as IStreamConsumerInternal).OnEventData += (s, eventData) =>
+                    {
+                        if (!eventData.Value.Equals(messageContent)) return;
+                        consumedEvents.Add(eventData);
+                    };
                 };
-                
+
                 topicConsumer.Subscribe();
 
                 rawTopicProducer.Publish(new RawMessage(key: null, value: messageContentInBytes));
                 rawTopicProducer.Publish(new RawMessage(key: "some key"u8.ToArray(), value: messageContentInBytes));
 
                 SpinWait.SpinUntil(() => consumedEvents.Count >= 2, 10000);
-                Assert.Equal(2, consumedEvents.Count);
-                Assert.Single(consumedEvents.Where(x => x.Value == messageContent && x.Id == StreamPipeline.DefaultStreamId));
-                Assert.Single(consumedEvents.Where(x => x.Value == messageContent && x.Id == "some key"));
-                
-                topicConsumer.Dispose();
+                try
+                {
+                    Assert.Equal(2, consumedEvents.Count);
+                    Assert.Single(consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamId));
+                    Assert.Single(consumedEvents.Where(x => x.Id == "some key"));
+                }
+                finally
+                {
+                    // To make sure the consumer disconnects and doesn't fight with next attempt for partition
+                    topicConsumer.Dispose();   
+                }
             });
         }
-        
+
         [Fact]
         public void StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected()
         {

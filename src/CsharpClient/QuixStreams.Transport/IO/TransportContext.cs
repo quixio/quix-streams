@@ -58,5 +58,11 @@ namespace QuixStreams.Transport.IO
         /// Type is <see cref="string" />
         /// </summary>
         public const string MessageGroupKey = "MessageGroupKey";
+        
+        /// <summary>
+        /// TODO
+        /// Type is <see cref="string" />
+        /// </summary>
+        public const string BrokerMessageTime = "BrokerMessageTime";
     }
 }
