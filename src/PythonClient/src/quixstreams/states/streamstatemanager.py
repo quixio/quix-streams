@@ -1,15 +1,15 @@
 import ctypes
 import logging
-import warnings
 import weakref
 
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.QuixStreamsStreaming.States.StreamStateManager import StreamStateManager as ssmi
+from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
+
 
 from .streamstate import StreamState
 
-from typing import TypeVar, Callable, get_origin, Any
-import inspect
+from typing import TypeVar, Callable, Any, List
 
 StreamStateType = TypeVar('StreamStateType')
 
@@ -80,3 +80,42 @@ class StreamStateManager(object):
         instance = StreamState[StreamStateType](self._interop.GetDictionaryState(state_name), state_type, default_value_factory)
         self._cache[state_name] = instance
         return instance
+
+    def get_states(self) -> List[str]:
+        """
+        Returns an enumerable collection of all available state names for the current stream.
+
+        Returns:
+            List[str]: All available stream state names for this state
+        """
+
+        return ei.ReadStrings(self._interop.GetStates())
+
+
+    def delete_state(self, state_name: str) -> bool:
+        """
+        Deletes the state with the specified name
+
+        Args:
+            state_name: The state to delete
+
+        Returns:
+            bool: Whether the state was deleted<
+        """
+
+        del self._cache[state_name]
+
+        return self._interop.DeleteState(state_name)
+
+    def delete_states(self) -> int:
+        """
+        Deletes all states for the current stream.
+
+        Returns:
+            int: The number of states that were deleted
+        """
+
+        self._cache.clear()
+
+        return self._interop.DeleteStates()
+

@@ -107,6 +107,7 @@ namespace QuixStreams.Streaming.States
         /// <summary>
         /// Deletes the state with the specified name
         /// </summary>
+        /// <param name="stateName">The state to delete</param>
         /// <returns>Whether the state was deleted</returns>
         public bool DeleteState(string stateName)
         {

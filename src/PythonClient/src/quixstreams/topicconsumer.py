@@ -5,6 +5,7 @@ from typing import Callable, List
 from .helpers.nativedecorator import nativedecorator
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixStreamsStreaming.TopicConsumer import TopicConsumer as tci
+from .states.topicstatemanager import TopicStateManager
 from .streamconsumer import StreamConsumer
 
 
@@ -281,7 +282,7 @@ class TopicConsumer(object):
         """
         self._interop.Commit()
 
-    def get_state_manager(self):
+    def get_state_manager(self) -> TopicStateManager:
         self._interop.GetStateManager()
 
     def get_net_pointer(self) -> ctypes.c_void_p:

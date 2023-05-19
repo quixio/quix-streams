@@ -62,7 +62,7 @@ namespace QuixStreams.Streaming
         /// <param name="storageName">The name of the storage.</param>
         /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
         /// <returns>The dictionary stream state for the specified storage name using the provided default value factory.</returns>
-        public static StreamState<T> GetDictionaryState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory)
+        public static StreamState<T> GetDictionaryState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
             return streamConsumer.GetStateManager().GetDictionaryState(storageName, defaultValueFactory);
         }
