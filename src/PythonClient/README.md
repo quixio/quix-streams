@@ -7,6 +7,6 @@ We are open source! For latest release notes, check https://github.com/quixio/qu
 |---------|----------------|--------------|
 | Windows | Supported      | -            |
 | Linux   | Supported      | Supported    |
-| MAC     | Supported      | From source  |
+| MAC     | Supported      | Supported    |
 
-Mac Apple silicon can be currently built from source or used via rosetta. For more, see https://github.com/quixio/quix-streams/issues/95.
+Apple silicon supported since 0.5.4, for previous versions rosetta is required, see https://github.com/quixio/quix-streams/blob/v0.5.3/mac-m1-m2-install.md
