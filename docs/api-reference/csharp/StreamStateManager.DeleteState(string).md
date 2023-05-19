@@ -14,6 +14,8 @@ public bool DeleteState(string stateName);
 
 `stateName` [System.String](https://docs.microsoft.com/en-us/dotnet/api/System.String 'System.String')
 
+The state to delete
+
 #### Returns
 [System.Boolean](https://docs.microsoft.com/en-us/dotnet/api/System.Boolean 'System.Boolean')  
 Whether the state was deleted

@@ -6,7 +6,7 @@
 Gets the dictionary type stream state for the specified storage name using the provided default value factory.
 
 ```csharp
-public static QuixStreams.Streaming.States.StreamState<T> GetDictionaryState<T>(this QuixStreams.Streaming.IStreamConsumer streamConsumer, string storageName, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T> defaultValueFactory);
+public static QuixStreams.Streaming.States.StreamState<T> GetDictionaryState<T>(this QuixStreams.Streaming.IStreamConsumer streamConsumer, string storageName, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T> defaultValueFactory=null);
 ```
 #### Type parameters
 

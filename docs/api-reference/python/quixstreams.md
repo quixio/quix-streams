@@ -340,6 +340,9 @@
   * [StreamStateManager](#quixstreams.states.streamstatemanager.StreamStateManager)
     * [\_\_init\_\_](#quixstreams.states.streamstatemanager.StreamStateManager.__init__)
     * [get\_dict\_state](#quixstreams.states.streamstatemanager.StreamStateManager.get_dict_state)
+    * [get\_states](#quixstreams.states.streamstatemanager.StreamStateManager.get_states)
+    * [delete\_state](#quixstreams.states.streamstatemanager.StreamStateManager.delete_state)
+    * [delete\_states](#quixstreams.states.streamstatemanager.StreamStateManager.delete_states)
 * [quixstreams.states.streamstate](#quixstreams.states.streamstate)
   * [StreamState](#quixstreams.states.streamstate.StreamState)
     * [\_\_init\_\_](#quixstreams.states.streamstate.StreamState.__init__)
@@ -5131,6 +5134,53 @@ Creates a new application state of dictionary type with automatically managed li
   
   >>> state_manager.get_dict_state('some_state', state_type=float)
   this will return a state where type is a float without default value, resulting in KeyError when not found
+
+<a id="quixstreams.states.streamstatemanager.StreamStateManager.get_states"></a>
+
+#### get\_states
+
+```python
+def get_states() -> List[str]
+```
+
+Returns an enumerable collection of all available state names for the current stream.
+
+**Returns**:
+
+- `List[str]` - All available stream state names for this state
+
+<a id="quixstreams.states.streamstatemanager.StreamStateManager.delete_state"></a>
+
+#### delete\_state
+
+```python
+def delete_state(state_name: str) -> bool
+```
+
+Deletes the state with the specified name
+
+**Arguments**:
+
+- `state_name` - The state to delete
+  
+
+**Returns**:
+
+- `bool` - Whether the state was deleted<
+
+<a id="quixstreams.states.streamstatemanager.StreamStateManager.delete_states"></a>
+
+#### delete\_states
+
+```python
+def delete_states() -> int
+```
+
+Deletes all states for the current stream.
+
+**Returns**:
+
+- `int` - The number of states that were deleted
 
 <a id="quixstreams.states.streamstate"></a>
 
