@@ -463,11 +463,11 @@ namespace QuixStreams.Streaming.IntegrationTests
         {
             var topic = nameof(StreamReadAndWriteRaw);
 
-            var counter = 0;
+            var attempt = 0;
             RunTest(() =>
             {
-                counter++;
-                var messageContent = $"lorem ipsum {counter}";
+                attempt++;
+                var messageContent = $"lorem ipsum - raw {attempt}";
                 var messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
 
                 // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
@@ -477,13 +477,13 @@ namespace QuixStreams.Streaming.IntegrationTests
                 var rawTopicConsumer = client.GetRawTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
                 var rawTopicProducer = client.GetRawTopicProducer(topic);
 
-                // -- Consuming raw messages with RawTopicConsumer
+                // ** Consuming messages with Raw topic consumer
 
                 var consumedRawMessages = new List<RawMessage>();
 
                 rawTopicConsumer.OnMessageReceived += (s, rawMessage) =>
                 {
-                    this.output.WriteLine($"Received message: {Encoding.UTF8.GetString(rawMessage.Value)}");
+                    this.output.WriteLine($"Raw consumer received: {Encoding.UTF8.GetString(rawMessage.Value)}");
                     if (!rawMessage.Value.SequenceEqual(messageContentInBytes))
                     {
                         this.output.WriteLine("Ignoring message");
@@ -499,8 +499,8 @@ namespace QuixStreams.Streaming.IntegrationTests
                 SpinWait.SpinUntil(() => consumedRawMessages.Count >= 1, 10000);
                 try
                 {
-                    Assert.Single(consumedRawMessages);
-                    Assert.Single(consumedRawMessages.Where(x => x.Key == null));
+                    consumedRawMessages.Should().ContainSingle();
+                    consumedRawMessages.Where(x => x.Key == null).Should().ContainSingle();
                 }
                 finally
                 {
@@ -510,36 +510,41 @@ namespace QuixStreams.Streaming.IntegrationTests
                 }
 
 
-                // Consuming raw messages with TopicConsumer
+                // ** Consuming messages with Event topic consumer
 
-                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
-
-                var consumedEvents = new List<EventDataRaw>();
-                
-
-                messageContent = $"lorem ipsum - second - {counter}";
+                messageContent = $"lorem ipsum - event {attempt}";
                 messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
+
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                
+                var consumedEvents = new List<EventDataRaw>();
 
                 topicConsumer.OnStreamReceived += (s, e) =>
                 {
                     (e as IStreamConsumerInternal).OnEventData += (s, eventData) =>
                     {
-                        if (!eventData.Value.Equals(messageContent)) return;
+                        this.output.WriteLine($"Event consumer received message: {eventData.Value}");
+                        if (eventData.Value != messageContent)
+                        {
+                            this.output.WriteLine("Ignoring message");
+                            return;
+                        }
+
                         consumedEvents.Add(eventData);
                     };
                 };
 
                 topicConsumer.Subscribe();
 
-                rawTopicProducer.Publish(new RawMessage(key: null, value: messageContentInBytes));
                 rawTopicProducer.Publish(new RawMessage(key: "some key"u8.ToArray(), value: messageContentInBytes));
+                rawTopicProducer.Publish(new RawMessage(key: null, value: messageContentInBytes));
 
                 SpinWait.SpinUntil(() => consumedEvents.Count >= 2, 10000);
                 try
                 {
-                    Assert.Equal(2, consumedEvents.Count);
-                    Assert.Single(consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamId));
-                    Assert.Single(consumedEvents.Where(x => x.Id == "some key"));
+                    consumedEvents.Count.Should().Be(2);
+                    consumedEvents.Where(x => x.Id == "some key").Should().ContainSingle();
+                    consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamId).Should().ContainSingle();
                 }
                 finally
                 {

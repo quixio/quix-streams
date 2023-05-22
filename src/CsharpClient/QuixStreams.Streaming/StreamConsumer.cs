@@ -103,7 +103,7 @@ namespace QuixStreams.Streaming
         {
             if (package.Type == typeof(byte[]))
             {
-                this.logger.LogTrace("StreamConsumer: OnRawDataReceived");
+                this.logger.LogTrace("StreamConsumer: OnStreamPackageReceived - raw message.");
                 var ev = new EventDataRaw
                 {
                     Timestamp = ((DateTime)package.TransportContext[KnownTransportContextKeys.BrokerMessageTime]).ToUnixNanoseconds(),
@@ -117,7 +117,7 @@ namespace QuixStreams.Streaming
             }
 
 
-            this.logger.LogTrace("StreamConsumer: OnPackageReceived");
+            this.logger.LogTrace("StreamConsumer: OnStreamPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));
         }
 
