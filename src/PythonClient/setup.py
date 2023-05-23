@@ -5,7 +5,7 @@ import os.path
 import re
 import fileinput
 
-package_version = "0.5.3"
+package_version = "0.5.4.dev8"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
