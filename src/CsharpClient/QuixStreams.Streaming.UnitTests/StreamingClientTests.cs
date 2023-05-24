@@ -45,7 +45,7 @@ namespace QuixStreams.Streaming.UnitTests
             
             var client = new TestStreamingClient(writerCodec);
             
-            var topicConsumer = client.GetTopiConsumer();
+            var topicConsumer = client.GetTopicConsumer();
             var topicProducer = client.GetTopicProducer();
 
             IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
