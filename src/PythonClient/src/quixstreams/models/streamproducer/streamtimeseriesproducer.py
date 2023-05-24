@@ -6,7 +6,7 @@ import pandas as pd
 from .timeseriesbufferproducer import TimeseriesBufferProducer
 from ...builders import ParameterDefinitionBuilder
 from ...helpers.nativedecorator import nativedecorator
-from ...models import TimeseriesData, TimeseriesDataRaw
+from ...models import TimeseriesData, TimeseriesDataRaw, TimeseriesDataTimestamp
 from ...native.Python.QuixStreamsStreaming.Models.StreamProducer.StreamTimeseriesProducer import StreamTimeseriesProducer as stspi
 
 
@@ -102,12 +102,12 @@ class StreamTimeseriesProducer(object):
             self._buffer = TimeseriesBufferProducer(self._stream_producer, self._interop.get_Buffer())
         return self._buffer
 
-    def publish(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw]) -> None:
+    def publish(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw, TimeseriesDataTimestamp]) -> None:
         """
         Publish the given packet to the stream without any buffering.
 
         Args:
-            packet: The packet containing TimeseriesData, TimeseriesDataRaw, or pandas DataFrame.
+            packet: The packet containing TimeseriesData, TimeseriesDataRaw, TimeseriesDataTimestamp, or pandas DataFrame.
 
         Note:
             - Pandas DataFrame should contain 'time' label, else the first integer label will be taken as time.
@@ -145,5 +145,8 @@ class StreamTimeseriesProducer(object):
             data = TimeseriesDataRaw.from_dataframe(packet)
             with data:
                 self._interop.Publish2(data.get_net_pointer())
+            return
+        if isinstance(packet, TimeseriesDataTimestamp):
+            self._interop.Publish3(packet.get_net_pointer())
             return
         raise Exception("Publish for the given type " + str(type(packet)) + " is not supported")

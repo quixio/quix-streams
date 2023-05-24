@@ -1160,6 +1160,117 @@ class TestIntegration(unittest.TestCase):
         TimeseriesDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
         TimeseriesDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
 
+    def test_timeseriesDataTimestamp_publish_direct_and_consume(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_producer = client.get_topic_producer(topic_name)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group,
+                                                   auto_offset_reset=AutoOffsetReset.Earliest)
+
+        stream = None  # The outgoing stream
+        event = threading.Event()  # used for assertion
+        consumed_data: qx.TimeseriesData = None
+
+        def on_stream_received_handler(stream_received: qx.StreamConsumer):
+            if stream.stream_id == stream_received.stream_id:
+                param_buffer = stream_received.timeseries.create_buffer()
+                param_buffer.on_data_released = on_timeseries_data_handler
+
+        def on_timeseries_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            nonlocal consumed_data
+            consumed_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        stream = topic_producer.create_stream()
+
+        published_data = qx.TimeseriesData().add_timestamp_nanoseconds(10) \
+            .add_value("bufferless_1", 1) \
+            .add_value("bufferless_2", "test") \
+            .add_value("bufferless_3", "test") \
+            .add_value("bufferless_4", bytearray("bufferless_4", "UTF-8")) \
+            .add_value("bufferless_5", bytes(bytearray("bufferless_5", "UTF-8"))) \
+            .remove_value("bufferless_3") \
+            .add_tag("tag1", "tag1val") \
+            .add_tag("tag2", "tag2val") \
+            .remove_tag("tag2")
+
+        stream.timeseries.publish(published_data)
+
+        # Assert
+        self.waitforresult(event)
+        print("------ Written ------")
+        print(published_data)
+        print("------ READ ------")
+        print(consumed_data)
+        topic_consumer.dispose()  # cleanup
+
+        published_data_as_timeseries_data = qx.TimeseriesData().add_timestamp(published_data)
+        self.assertEqual(len(consumed_data.timestamps[0].parameters), 4, "Missing parameter")
+        TimeseriesDataTests.assert_data_are_equal(self, published_data_as_timeseries_data,
+                                                  consumed_data)  # evaluate neither contains more nor less than should
+        TimeseriesDataTests.assert_data_are_equal(self, consumed_data, published_data_as_timeseries_data)  # and is done by checking both ways
+
+    def test_parameters_write_direct_and_read(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_producer = client.get_topic_producer(topic_name)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
+
+        stream = None  # The outgoing stream
+        event = threading.Event()  # used for assertion
+        read_data: qx.TimeseriesData = None
+
+        def on_stream_received_handler(stream_received: qx.StreamConsumer):
+            if stream.stream_id == stream_received.stream_id:
+                param_buffer = stream_received.timeseries.create_buffer()
+                param_buffer.on_data_released = on_parameter_data_handler
+
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            nonlocal read_data
+            read_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        stream = topic_producer.create_stream()
+
+        written_data = qx.TimeseriesData()
+        written_data.add_timestamp_nanoseconds(10) \
+            .add_value("bufferless_1", 1) \
+            .add_value("bufferless_2", "test") \
+            .add_value("bufferless_3", "test") \
+            .add_value("bufferless_4", bytearray("bufferless_4", "UTF-8")) \
+            .add_value("bufferless_5", bytes(bytearray("bufferless_5", "UTF-8"))) \
+            .remove_value("bufferless_3") \
+            .add_tag("tag1", "tag1val") \
+            .add_tag("tag2", "tag2val") \
+            .remove_tag("tag2")
+
+        stream.timeseries.publish(written_data)
+
+        # Assert
+        self.waitforresult(event)
+        print("------ Written ------")
+        print(written_data)
+        print("------ READ ------")
+        print(read_data)
+        topic_consumer.dispose()  # cleanup
+        self.assertEqual(len(read_data.timestamps[0].parameters), 4, "Missing parameter")
+        TimeseriesDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
+
     def test_parameters_write_direct_and_read_all_options(self):
         # Arrange
         print("Starting Integration test {}".format(sys._getframe().f_code.co_name))

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using QuixStreams.Streaming.Utils;
+using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
 
 namespace QuixStreams.Streaming.Models
@@ -221,6 +222,11 @@ namespace QuixStreams.Streaming.Models
             this.TimeseriesData.rawData.TagValues.Remove(tagId);
 
             return this;
+        }
+        
+        internal TimeseriesDataRaw ConvertToTimeseriesDataRaw()
+        {
+            return new TimeseriesData(new List<TimeseriesDataTimestamp>{this}).rawData;
         }
     }
 }

@@ -49,5 +49,35 @@ namespace QuixStreams.Streaming.UnitTests.Models
             tsdts.Tags["test4"].Should().Be("val4");
 
         }
+        
+        [Fact]
+        public void ConvertToTimeseriesDataRaw_ReturnsWithSingleTimestamp()
+        {
+            // Arrange
+            var timeseriesData = new TimeseriesData();
+            timeseriesData.AddTimestampNanoseconds(100)
+                .AddValue("string", "1")
+                .AddTag("1", "tag1");    
+            
+            var timestampToConvert = timeseriesData.AddTimestampNanoseconds(200)
+                .AddValue("string", "2")
+                .AddValue("double", 2)
+                .AddValue("byte", new byte[]{0x02})
+                .AddTag("1", "tag1")
+                .AddTag("2", "tag2");    
+            
+            
+
+            // Act
+            var raw = timestampToConvert.ConvertToTimeseriesDataRaw();
+
+            // Assert
+            raw.Timestamps.Length.Should().Be(1);
+            raw.Timestamps[0].Should().Be(200);
+            raw.StringValues.Count.Should().Be(1);
+            raw.NumericValues.Count.Should().Be(1);
+            raw.BinaryValues.Count.Should().Be(1);
+            raw.TagValues.Count.Should().Be(2);
+        }
     }
 }

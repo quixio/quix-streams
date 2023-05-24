@@ -10,7 +10,7 @@ using Xunit;
 
 namespace QuixStreams.Streaming.UnitTests.Models
 {
-    public class StreamParametersProducerShould
+    public class StreamTimeseriesProducerShould
     {
 
         [Fact]
