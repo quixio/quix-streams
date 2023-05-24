@@ -544,7 +544,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 {
                     consumedEvents.Count.Should().Be(2);
                     consumedEvents.Where(x => x.Id == "some key").Should().ContainSingle();
-                    consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamId).Should().ContainSingle();
+                    consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamIdWhenMissing).Should().ContainSingle();
                 }
                 finally
                 {

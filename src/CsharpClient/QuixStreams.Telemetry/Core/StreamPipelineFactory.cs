@@ -198,7 +198,7 @@ namespace QuixStreams.Telemetry
             }
             if (!this.TryGetStreamId(package.TransportContext, out var streamId))
             {
-                streamId = StreamPipeline.DefaultStreamId;
+                streamId = StreamPipeline.DefaultStreamIdWhenMissing;
             }
 
             StreamContext streamContext;

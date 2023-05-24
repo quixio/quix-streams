@@ -23,7 +23,7 @@ namespace QuixStreams.Telemetry
         /// <summary>
         /// Stream id to use when message key has not been set.
         /// </summary>
-        public const string DefaultStreamId = "DEFAULT";
+        public const string DefaultStreamIdWhenMissing = "NO_STREAM_ID";
 
         /// <inheritdoc />
         public event Action OnClosing;
