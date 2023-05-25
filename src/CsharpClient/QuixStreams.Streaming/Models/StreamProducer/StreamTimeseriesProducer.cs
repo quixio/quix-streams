@@ -113,7 +113,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         }
 
         /// <summary>
-        /// Publish data to stream without any buffering
+        /// Publish single timestamp to stream without any buffering
         /// </summary>
         /// <param name="timestamp">Timeseries timestamp to publish</param>
         public void Publish(TimeseriesDataTimestamp timestamp)

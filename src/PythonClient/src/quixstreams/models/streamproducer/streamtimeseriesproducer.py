@@ -141,12 +141,12 @@ class StreamTimeseriesProducer(object):
         if isinstance(packet, TimeseriesDataRaw):
             self._interop.Publish2(packet.get_net_pointer())
             return
+        if isinstance(packet, TimeseriesDataTimestamp):
+            self._interop.Publish3(packet.get_net_pointer())
+            return
         if isinstance(packet, pd.DataFrame):
             data = TimeseriesDataRaw.from_dataframe(packet)
             with data:
                 self._interop.Publish2(data.get_net_pointer())
-            return
-        if isinstance(packet, TimeseriesDataTimestamp):
-            self._interop.Publish3(packet.get_net_pointer())
             return
         raise Exception("Publish for the given type " + str(type(packet)) + " is not supported")

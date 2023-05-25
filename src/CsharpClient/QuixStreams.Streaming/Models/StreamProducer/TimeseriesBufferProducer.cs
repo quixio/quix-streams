@@ -93,7 +93,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
 
         /// <summary>
-        /// Publish the provided timeseries data to the buffer.
+        /// Publish timeseries data to the buffer.
         /// </summary>
         /// <param name="data">Data to publish</param>
         public void Publish(TimeseriesData data)
@@ -118,6 +118,61 @@ namespace QuixStreams.Streaming.Models.StreamProducer
             }
 
             this.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false)); // use merge & clean of Buffer is more efficient
+        }
+        
+        /// <summary>
+        /// Publish timeseries data raw to the buffer.
+        /// </summary>
+        /// <param name="data">Data to publish</param>
+        public void Publish(TimeseriesDataRaw data)
+        {
+            long epochDifference = this.streamProducer.Epoch.ToUnixNanoseconds();
+
+            if (epochDifference != 0)
+            {
+                for (int i = 0; i < data.Timestamps.Length; i++)
+                {
+                    data.Timestamps[i] += epochDifference;
+                }
+            }
+            
+            foreach (var tag in this.DefaultTags)
+            {
+                if (!data.TagValues.TryGetValue(tag.Key, out var tagValues))
+                {
+                    tagValues = new string[data.Timestamps.Length];
+                    data.TagValues.Add(tag.Key, tagValues);
+                }
+
+                for (int i = 0; i < data.Timestamps.Length; i++)
+                {
+                    tagValues[i] = tag.Value;
+                }
+            }
+            
+            this.WriteChunk(data);
+        }
+        
+        /// <summary>
+        /// Publish single timestamp to the buffer.
+        /// </summary>
+        /// <param name="timestamp">Timeseries timestamp to publish</param>
+        public void Publish(TimeseriesDataTimestamp timestamp)
+        {
+            if (!timestamp.EpochIncluded)
+            {
+                timestamp.TimestampNanoseconds += this.Epoch.ToUnixNanoseconds();
+                timestamp.EpochIncluded = true;
+            }
+
+            foreach (var kv in this.DefaultTags)
+            {
+                if (!timestamp.Tags.ContainsKey(kv.Key))
+                {
+                    timestamp.AddTag(kv.Key, kv.Value);
+                }
+            }
+            this.WriteChunk(timestamp.ConvertToTimeseriesDataRaw());
         }
 
 
