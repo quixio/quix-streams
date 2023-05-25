@@ -16,6 +16,8 @@ public QuixStreams.Streaming.ITopicProducer GetTopicProducer(string topicIdOrNam
 
 Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
 
+Implements [GetTopicProducer(string)](IQuixStreamingClient.GetTopicProducer(string).md 'QuixStreams.Streaming.IQuixStreamingClient.GetTopicProducer(string)')
+
 #### Returns
 [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer')  
-Instance of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')
+Instance of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer')

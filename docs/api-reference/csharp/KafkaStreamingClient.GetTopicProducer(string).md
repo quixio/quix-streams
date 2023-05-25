@@ -16,6 +16,8 @@ public QuixStreams.Streaming.ITopicProducer GetTopicProducer(string topic);
 
 Name of the topic.
 
+Implements [GetTopicProducer(string)](IKafkaStreamingClient.GetTopicProducer(string).md 'QuixStreams.Streaming.IKafkaStreamingClient.GetTopicProducer(string)')
+
 #### Returns
 [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer')  
-Instance of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')
+Instance of [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProducer')
