@@ -2071,12 +2071,12 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(received_messages[2].value, message_raw.value)
 
         keys = received_messages[0].metadata.keys()
-        self.assertIn('MessageGroupKey', keys)
+        self.assertNotIn('MessageGroupKey', keys)  # because key was not set
+        self.assertNotIn('KafkaKey', keys)  # because key was not set
         self.assertIn('KafkaTopic', keys)
-        self.assertIn('KafkaKey', keys)
         self.assertIn('KafkaPartition', keys)
         self.assertIn('KafkaOffset', keys)
-        self.assertIn('KafkaDateTime', keys)
+        self.assertIn('BrokerMessageTime', keys)
         self.assertIn('KafkaMessageSize', keys)
 # endregion
 
