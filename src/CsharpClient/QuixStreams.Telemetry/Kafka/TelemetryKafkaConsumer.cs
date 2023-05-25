@@ -14,6 +14,11 @@ namespace QuixStreams.Telemetry.Kafka
     /// </summary>
     public class TelemetryKafkaConsumer: IDisposable
     {
+        /// <summary>
+        /// The topic the kafka consumer is created for
+        /// </summary>
+        public readonly string Topic = "Unknown";
+        
         private readonly ILogger logger = QuixStreams.Logging.CreateLogger<TelemetryKafkaConsumer>();
         private QuixStreams.Transport.TransportConsumer transportConsumer;
         private bool isDisposed = false;
@@ -60,6 +65,7 @@ namespace QuixStreams.Telemetry.Kafka
         /// <param name="topic">Topic name to read from</param>
         public TelemetryKafkaConsumer(TelemetryKafkaConsumerConfiguration telemetryKafkaConsumerConfiguration, string topic)
         {
+            Topic = topic;
             // Kafka Transport layer -> Transport layer
             var subConfig = telemetryKafkaConsumerConfiguration.ToSubscriberConfiguration();
             var commitOptions = telemetryKafkaConsumerConfiguration.CommitOptions ?? new CommitOptions();
@@ -224,10 +230,16 @@ namespace QuixStreams.Telemetry.Kafka
             Debug.Assert(ContextCache != null);
             lock (this.ContextCache.Sync)
             {
+                this.logger.LogTrace("Starting manual commit");
                 var all = this.ContextCache.GetAll();
                 var contexts = all.Select(y => y.Value.LastUncommittedTransportContext).Where(y => y != null).ToArray();
-                if (contexts.Length == 0) return; // there is nothing to commit
+                if (contexts.Length == 0)
+                {
+                    this.logger.LogTrace("Finished manual commit (nothing to commit)");
+                    return; // there is nothing to commit
+                }
                 this.transportConsumer.Commit(contexts);
+                this.logger.LogTrace("Finished manual commit");
             }
         }
     }

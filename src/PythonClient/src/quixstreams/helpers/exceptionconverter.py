@@ -15,4 +15,7 @@ class ExceptionConverter:
         if exception.exc_type == "System.Exception":
             raise Exception(exception.message + "\n" + exception.exc_stack)
 
+        if exception.exc_type == "System.Collections.Generic.KeyNotFoundException":
+            raise KeyError(exception.message + "\n" + exception.exc_stack)
+
         raise exception  # when not able to do better

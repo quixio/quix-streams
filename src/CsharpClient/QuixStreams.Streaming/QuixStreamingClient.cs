@@ -29,11 +29,47 @@ using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming
 {
+    public interface IQuixStreamingClient
+    {
+        /// <summary>
+        /// Gets a topic consumer capable of subscribing to receive incoming streams.
+        /// </summary>
+        /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
+        /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
+        /// <param name="options">The settings to use for committing</param>
+        /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        ITopicConsumer GetTopicConsumer(string topicIdOrName, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest);
+
+        /// <summary>
+        /// Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages. 
+        /// </summary>
+        /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
+        /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
+        /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
+        IRawTopicConsumer GetRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null);
+
+        /// <summary>
+        /// Gets a topic producer capable of publishing non-quixstreams messages. 
+        /// </summary>
+        /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
+        IRawTopicProducer GetRawTopicProducer(string topicIdOrName);
+
+        /// <summary>
+        /// Gets a topic producer capable of publishing stream messages.
+        /// </summary>
+        /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
+        ITopicProducer GetTopicProducer(string topicIdOrName);
+    }
+
     /// <summary>
     /// Streaming client for Kafka configured automatically using Environment Variables and Quix platform endpoints.
     /// Use this Client when you use this library together with Quix platform.
     /// </summary>
-    public class QuixStreamingClient
+    public class QuixStreamingClient : IQuixStreamingClient
     {
         private readonly ILogger logger = Logging.CreateLogger<QuixStreamingClient>();
         private readonly IDictionary<string, string> brokerProperties;
@@ -133,7 +169,7 @@ namespace QuixStreams.Streaming
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
         public IRawTopicConsumer GetRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
@@ -148,7 +184,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing non-quixstreams messages. 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
         public IRawTopicProducer GetRawTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
@@ -162,7 +198,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing stream messages.
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         public ITopicProducer GetTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
@@ -714,7 +750,7 @@ namespace QuixStreams.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public static ITopicConsumer GetTopicConsumer(this QuixStreamingClient client, string topicId, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
+        public static ITopicConsumer GetTopicConsumer(this IQuixStreamingClient client, string topicId, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
         {
             switch (commitMode)
             {

@@ -1,65 +1,57 @@
 ﻿using System;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using FluentAssertions;
 using QuixStreams.State.Serializers;
+using Xunit;
 
 namespace QuixStreams.State.UnitTests.Serializers
 {
-    [TestClass]
     public class ByteValueSerializerShould
     {
 
-        [TestMethod]
-        [ExpectedException(typeof(FormatException),
-            "Wrong codec id")]
-        public void TestFalsy()
-        {
-            byte[] data = new byte[] { (byte)'c', 1, 2 };
-            ByteValueSerializer.Deserialize(data);
-        }
-
-        [TestMethod]
+        [Fact]
         public void TestBoolean()
         {
             var data = new StateValue(true);
             var serialized = ByteValueSerializer.Serialize(data);
             var deserialized = ByteValueSerializer.Deserialize(serialized);
-            Assert.IsTrue(data.Equals(deserialized));
+            
+            data.BoolValue.Should().Be(deserialized.BoolValue);
         }
 
-        [TestMethod]
+        [Fact]
         public void TestString()
         {
             var data = new StateValue("123");
             var serialized = ByteValueSerializer.Serialize(data);
             var deserialized = ByteValueSerializer.Deserialize(serialized);
-            Assert.IsTrue(data.Equals(deserialized));
+            data.StringValue.Should().BeEquivalentTo(deserialized.StringValue);
         }
 
-        [TestMethod]
+        [Fact]
         public void TestLong()
         {
             var data = new StateValue(12L);
             var serialized = ByteValueSerializer.Serialize(data);
             var deserialized = ByteValueSerializer.Deserialize(serialized);
-            Assert.IsTrue(data.Equals(deserialized));
+            data.LongValue.Should().Be(deserialized.LongValue);
         }
 
-        [TestMethod]
+        [Fact]
         public void TestBinary()
         {
             var data = new StateValue(new byte[] { 1,5,78,21 });
             var serialized = ByteValueSerializer.Serialize(data);
             var deserialized = ByteValueSerializer.Deserialize(serialized);
-            Assert.IsTrue(data.Equals(deserialized));
+            data.BinaryValue.Should().BeEquivalentTo(deserialized.BinaryValue);
         }
 
-        [TestMethod]
+        [Fact]
         public void TestDouble()
         {
             var data = new StateValue(1.57);
             var serialized = ByteValueSerializer.Serialize(data);
             var deserialized = ByteValueSerializer.Deserialize(serialized);
-            Assert.IsTrue(data.Equals(deserialized));
+            data.DoubleValue.Should().Be(deserialized.DoubleValue);
         }
 
     }

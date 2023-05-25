@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace QuixStreams.State.Storage.FileStorage
@@ -88,6 +90,7 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <param name="data">Raw byte[] representation of data</param>
         public async Task SaveRaw(string key, byte[] data)
         {
+            key = key.ToLower();
             // lock on the directory
             using (await this.LockInternalKey("", LockType.Reader))
             {
@@ -113,6 +116,7 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <returns>Raw byte[] representation of data</returns>
         public async Task<byte[]> LoadRaw(string key)
         {
+            key = key.ToLower();
             this.AssertKey(key);
 
             byte[] result;
@@ -143,6 +147,7 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <param name="key">Key of the element</param>
         public async Task RemoveAsync(string key)
         {
+            key = key.ToLower();
             using ( await this.LockInternalKey("", LockType.Writer) )
             {
                 var path = GetFilePath(key);
@@ -161,6 +166,7 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <returns>Whether the storage contains the key</returns>
         public Task<bool> ContainsKeyAsync(string key)
         {
+            key = key.ToLower();
             return Task.FromResult(
                 File.Exists(GetFilePath(key))
             );
@@ -169,10 +175,10 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <summary>
         /// Recursively delete content of directory
         /// </summary>
-        /// <param name="FolderName">Directory path to remove</param>
-        private void clearFolder(string FolderName)
+        /// <param name="folderName">Directory path to remove</param>
+        private void ClearFolder(string folderName)
         {
-            DirectoryInfo dir = new DirectoryInfo(FolderName);
+            DirectoryInfo dir = new DirectoryInfo(folderName);
 
             foreach (FileInfo fi in dir.GetFiles())
             {
@@ -181,7 +187,7 @@ namespace QuixStreams.State.Storage.FileStorage
 
             foreach (DirectoryInfo di in dir.GetDirectories())
             {
-                clearFolder(di.FullName);
+                ClearFolder(di.FullName);
                 di.Delete();
             }
         }
@@ -194,8 +200,66 @@ namespace QuixStreams.State.Storage.FileStorage
         {
             using ( await this.LockInternalKey("", LockType.Writer) )
             {
-                clearFolder(this.storageDirectory);
+                ClearFolder(this.storageDirectory);
             }
+        }
+
+        /// <inheritdoc/>
+        public async Task<int> Count()
+        {
+            return (await GetAllKeysAsync()).Length;
+        }
+
+        /// <inheritdoc/>
+        public bool IsCaseSensitive => false;
+        
+        /// <inheritdoc/>
+        public IStateStorage GetOrCreateSubStorage(string subStorageName)
+        {
+            return CreateNewStorageInstance(GetSubStoragePath(subStorageName));
+        }
+
+        private string GetSubStoragePath(string subStorageName)
+        {
+            var subPath = $"{this.storageDirectory}{Path.DirectorySeparatorChar}{subStorageName}";
+            return subPath;
+        }
+
+        /// <summary>
+        /// Creates a new storage instance using the path
+        /// </summary>
+        /// <param name="path">The path to create it at</param>
+        /// <returns>New instance of the Storage</returns>
+        protected abstract IStateStorage CreateNewStorageInstance(string path);
+        
+        /// <inheritdoc/>
+        public bool DeleteSubStorage(string subStorageName)
+        {
+            var subPath = GetSubStoragePath(subStorageName);
+            if (!Directory.Exists(subPath)) return false;
+            Directory.Delete(subPath, true);
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public int DeleteSubStorages()
+        {
+            var deleted = 0;
+            foreach (var subStorage in GetSubStorages())
+            {
+                Directory.Delete(GetSubStoragePath(subStorage), true);
+                deleted++;
+            }
+
+            return deleted;
+        }
+
+        /// <inheritdoc/>
+        public IEnumerable<string> GetSubStorages()
+        {
+            if (!Directory.Exists(this.storageDirectory)) return Array.Empty<string>();
+            var dirNames = Directory.EnumerateDirectories(this.storageDirectory).Select(Path.GetFileName);
+            return dirNames;
         }
 
         /// <summary>
@@ -211,14 +275,32 @@ namespace QuixStreams.State.Storage.FileStorage
             {
                 string[] fileEntries = Directory.GetFiles(storageDirectory);
                 List<string> result = new List<string>();
-                foreach (string fileName in fileEntries)
+                foreach (string filePath in fileEntries)
                 {
-                    if (Path.GetFileName(fileName).Contains(FileNameSpecialCharacter))
+                    if (Path.GetFileName(filePath).Contains(FileNameSpecialCharacter))
                     {
                         //is internal ( special ) file
                         continue;
                     }
-                    result.Add(GetKeyFromPath(fileName));
+
+                    // Migrate from potentially different cases to lower case only
+                    var key = GetKeyFromPath(filePath);
+                    var lowerKey = key.ToLower();
+                    if (key != lowerKey)
+                    {
+                        var lowerKeyPath = Path.Combine(storageDirectory, lowerKey);
+                        if (File.Exists(lowerKeyPath)) // if the lowercase variant already exists
+                        {
+                            File.Move(filePath, $"{lowerKeyPath}_migrated");
+                        }
+                        else
+                        {
+                            File.Move(filePath, lowerKeyPath);
+                        }
+                    }
+                    
+                    
+                    result.Add(lowerKey);
                 }
 
                 return result.ToArray();

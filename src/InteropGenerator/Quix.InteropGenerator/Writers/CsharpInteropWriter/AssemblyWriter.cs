@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using InteropHelpers.Interop;
 using InteropHelpers.Interop.ExternalTypes.System;
+using Microsoft.Extensions.Logging;
 using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using Quix.InteropGenerator.Writers.Shared;
 
@@ -27,6 +28,7 @@ public class AssemblyWriter
     protected readonly string BasePath;
     protected readonly string ConfigPath;
     protected readonly string UtilsCsProjPath;
+    private static ILogger logger = Logger.LoggerFactory.CreateLogger<AssemblyWriter>();
 
     private const bool IgnoreGenerics = true;
 
@@ -111,20 +113,19 @@ public class AssemblyWriter
             if (Utils.IsEnum(type))
             {
                 this.WrittenDetails.Enums.Add(type);
-                Console.WriteLine("Ignoring enum " + type);
+                logger.LogTrace("Ignoring enum {0} for C# dump, treating as integer and no need for creating interop wrapper for it", type.ToString());
                 continue; // ignore enums, there is not much to do with them
             }
 
             if (IgnoreGenerics && type.IsGenericType)
             {
-                // WIP ...
-                Console.WriteLine("Ignoring Generic " + type);
+                logger.LogWarning("Ignoring generic {0} for C# dump, currently not supported and likely won't be.", type.ToString()); // This should be already filtered out at this point
                 continue;
             }
 
             if (Utils.IsException(type))
             {
-                Console.WriteLine("Ignoring exception " + type);
+                logger.LogDebug("Ignoring exception {0} for C# dump, because it is currently not supported", type.ToString());
                 continue;
             }
 

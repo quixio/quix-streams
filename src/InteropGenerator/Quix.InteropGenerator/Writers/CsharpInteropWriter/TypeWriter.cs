@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using Quix.InteropGenerator.Writers.Shared;
 
@@ -17,6 +19,7 @@ public class TypeWriter : BaseWriter
     private readonly List<Type> allowedTypes;
     private readonly IEnumerable<string> usings;
     private readonly Dictionary<string, string> typeAsTextLookup;
+    private static ILogger logger = Logger.LoggerFactory.CreateLogger<TypeWriter>();
 
     public TypeWriter(Type type, List<string> extraUsings, TypeWrittenDetails typeWrittenDetails, List<Type> allowedTypes)
     {
@@ -89,10 +92,14 @@ public class TypeWriter : BaseWriter
             // Create wrapping methods for fields
             foreach (var fieldInfo in this.Type.GetFields().Where(y => y.IsPublic))
             {
-                var allowedToWrite = this.CheckIfAllowedToWriteField(fieldInfo);
-                if (!allowedToWrite)
+                var disallowedTypes = this.CheckIfAllowedToWriteField(fieldInfo);
+                if (disallowedTypes.Count() != 0)
                 {
-                    Console.WriteLine($"Skipping field {this.Type.Name}.{fieldInfo.FieldType}, because contains type we won't publish");
+                    logger.LogDebug("Skipping field {0}, because contains type we won't publish", $"{this.Type.Name}.{fieldInfo.FieldType}");
+                    foreach (var type in disallowedTypes)
+                    {
+                        logger.LogDebug("\t{0}", type.FullName ?? type.Name);   
+                    }
                     continue;
                 }
 
@@ -124,10 +131,10 @@ public class TypeWriter : BaseWriter
                 var disallowedTypes = this.CheckIfAllowedToWriteMethod(typeMethodBase);
                 if (disallowedTypes.Count != 0)
                 {
-                    Console.WriteLine($"Skipping method {this.Type.Name}.{typeMethodBase.Name}{suffix}, because contains type we won't publish");
+                    logger.LogDebug("Skipping method {0}, because contains type we won't publish", $"{this.Type.Name}.{typeMethodBase.Name}{suffix}");
                     foreach (var type in disallowedTypes)
                     {
-                        Console.WriteLine($"\t{type.FullName}");   
+                        logger.LogDebug("\t{0}", type.FullName ?? type.Name);   
                     }
                     continue;
                 }
@@ -155,7 +162,7 @@ public class TypeWriter : BaseWriter
                 }
                 catch (NotSupportedMethodException e)
                 {
-                    Console.WriteLine(e.EntryPoint + " could not be exported");
+                    logger.LogError(e, "{0} could not be exported", e.EntryPoint);
                 }
             }
             indentedWriter.DecrementIndent();
@@ -235,28 +242,29 @@ public class TypeWriter : BaseWriter
 
     private List<Type> CheckIfAllowedToWriteMethod(MethodBase methodBase)
     {
+        // TODO check if could be merged with Utils.IsInteropSupported
         var typesInUse = Utils.GetUsedTypes(this.Type, methodBase).SelectMany(Utils.GetUnderlyingTypes).Where(y =>
         {
             return !y.IsArray && !Utils.IsDelegate(y); // at this point these delegates are just the generic placeholders 
         }).ToList();
         var disallowedTypes = typesInUse.Where(y => !this.allowedTypes.Contains(y)).ToList(); // could be a simple all or any, but useful for debugging
         var disallowedTypesReFiltered = disallowedTypes.Where(y => this.allowedTypes.All(z => z.AssemblyQualifiedName != y.AssemblyQualifiedName)).ToList(); // this check is separate to see where it makes difference
-        return disallowedTypesReFiltered;
+        return disallowedTypesReFiltered.Distinct().ToList();
     }
     
-    private bool CheckIfAllowedToWriteField(FieldInfo fieldInfo)
+    private List<Type> CheckIfAllowedToWriteField(FieldInfo fieldInfo)
     {
         var typesInUse = Utils.GetUnderlyingTypes(fieldInfo.FieldType).Where(y =>
         {
-            return !y.IsArray &&
-                   !Utils.IsDelegate(y); // at this point these delegates are just the generic placeholders 
+            return !y.IsArray && !Utils.IsDelegate(y); // at this point these delegates are just the generic placeholders 
         }).ToList();
         var disallowedTypes = typesInUse.Where(y => !this.allowedTypes.Contains(y)).ToList(); // could be a simple all or any, but useful for debugging
-        return disallowedTypes.Count == 0;
+        return disallowedTypes.Distinct().ToList();
     }
 
     internal string LookupTypeAsText(Type type)
     {
+        Debug.Assert(type != null, "Type is not expected to be null at this point. Incorrect use?");
         if (this.typeAsTextLookup.TryGetValue(type.FullName, out var val)) return val;
         val = GetTypeAsText(type, false);
         if (this.typeAsTextLookup.Any(y=> y.Value == val && y.Key != type.FullName)) val = GetTypeAsText(type, true); // some concurrency possibility

@@ -6,11 +6,14 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml;
+using Microsoft.Extensions.Logging;
 
 namespace Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 
 public class AssemblyHelpers
 {
+    private static ILogger logger = Logger.LoggerFactory.CreateLogger<AssemblyHelpers>();
+    
     /// <summary>
     /// Returns the additional types referenced by the provided list within the limits in addition to the original types
     /// </summary>
@@ -33,7 +36,7 @@ public class AssemblyHelpers
                 .Select(type => new { Type = type, infos = Utils.GetWrappableMethodInfos(type) })
                 .SelectMany(y => y.infos.SelectMany(x => Utils.GetUsedTypes(y.Type, x)))
                 .Union(previousTypes.SelectMany(y => y.GetFields().Select(z => z.FieldType)))
-                .SelectMany(Utils.GetUnderlyingTypes).Distinct().ToList();
+                .Distinct().SelectMany(Utils.GetUnderlyingTypes).Distinct().ToList();
 
             var newTypes = involvedTypes
                 .Except(additionalTypes).ToList();
@@ -71,7 +74,7 @@ public class AssemblyHelpers
     /// <returns></returns>
     public static List<Type> GetPublicAssemblyTypes(Assembly assembly)
     {
-        return assembly.GetTypes().Where(y => y.IsPublic || y.IsNestedPublic).ToList();
+        return assembly.GetTypes().Where(y => (y.IsPublic || y.IsNestedPublic) && Utils.IsInteropSupported(y)).ToList();
     }
 
     /// <summary>
@@ -343,11 +346,11 @@ public class AssemblyHelpers
                 // check if it is sth we can deal with now
                 if (typeName.EndsWith("[]")) typeName = typeName.Substring(0, typeName.Length - 2);
                 if (typeName.Contains("[]")) {
-                    Console.WriteLine("Ignoring {0} for explicit type include", originalTypeName);
+                    logger.LogInformation("Ignoring {0} for explicit type include, because it contains []", originalTypeName);
                     continue;
                 }
                 if (typeName.Contains('`')) {
-                    Console.WriteLine("Ignoring {0} for explicit type include, not yet supporting generics", originalTypeName);
+                    logger.LogInformation("Ignoring {0} for explicit type include, not yet supporting generics (and likely won't)", originalTypeName);
                     continue;
                 }
 
@@ -356,15 +359,15 @@ public class AssemblyHelpers
                     var type = nodeAssembly.GetType(typeName);
                     if (type.IsGenericType)
                     {
-                        Console.WriteLine("Ignoring {0} for explicit type include, not yet supporting generics", originalTypeName);
+                        logger.LogInformation("Ignoring {0} for explicit type include, not yet supporting generics (and likely won't)", originalTypeName);
                         continue;
                     }
                     extraTypes.Add(type);
-                    Console.WriteLine("Including {0} due to explicit type inclusion", originalTypeName);
+                    logger.LogInformation("Including {0} due to explicit type inclusion", originalTypeName);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("Failed to load type {0}, could not find it in assembly {1}", originalTypeName, assembly.GetName());
+                    logger.LogError("Failed to load type {0}, could not find it in assembly {1}", originalTypeName, assembly.GetName());
                 }
             }
         }

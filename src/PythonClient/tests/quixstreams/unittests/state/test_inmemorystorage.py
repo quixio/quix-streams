@@ -10,7 +10,7 @@ class InMemoryStorageTests(unittest.TestCase):
 
     @staticmethod
     def create_in_memory_storage():
-        return InMemoryStorage(LocalFileStorage("./state-files"))
+        return InMemoryStorage()
 
     def test_setget_float(self):
         # Arrange
@@ -160,8 +160,8 @@ class InMemoryStorageTests(unittest.TestCase):
         keys = storage.get_all_keys()
 
         # Assert
-        self.assertIn("key1", keys)  # gets lower-cased
-        self.assertIn("key2", keys)  # gets lower-cased
+        self.assertIn("Key1", keys)
+        self.assertIn("Key2", keys)
         self.assertEqual(2, len(keys))
 
     def test_clear(self):

@@ -16,6 +16,13 @@ namespace QuixStreams
         // ReSharper disable once FieldCanBeMadeReadOnly.Global
         // ReSharper disable once MemberCanBePrivate.Global
         public static ILoggerFactory Factory = null;
+        
+        /// <summary>
+        /// Creates a logger factory that prefixes log messages with a specified string.
+        /// </summary>
+        /// <param name="prefix">The prefix to be added to the log messages.</param>
+        /// <returns>A new instance of the <see cref="PrefixedLoggerFactory"/> class that prefixes log messages with the specified string.</returns>
+        public static ILoggerFactory CreatePrefixedFactory(string prefix) => new PrefixedLoggerFactory(Factory, prefix);
 
         /// <summary>
         /// Updates the factory with the specified log level.
@@ -92,5 +99,85 @@ namespace QuixStreams
             return Factory.CreateLogger(type);
         }
     }
+
+    /// <summary>
+    /// A logger factory that can be used to prefix log messages with a specified string.
+    /// </summary>
+    public class PrefixedLoggerFactory : ILoggerFactory
+    {
+        private readonly ILoggerFactory innerFactory;
+        private readonly string prefix;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PrefixedLoggerFactory"/> class.
+        /// </summary>
+        /// <param name="innerFactory">The inner logger factory.</param>
+        /// <param name="prefix">The prefix to be added to the log messages.</param>
+        public PrefixedLoggerFactory(ILoggerFactory innerFactory, string prefix)
+        {
+            this.innerFactory = innerFactory;
+            this.prefix = prefix;
+        }
+
+        /// <inheritdoc/>
+        public void AddProvider(ILoggerProvider provider)
+        {
+            innerFactory.AddProvider(provider);
+        }
+
+        /// <inheritdoc/>
+        public ILogger CreateLogger(string categoryName)
+        {
+            ILogger innerLogger = innerFactory.CreateLogger(categoryName);
+            return new PrefixedLogger(innerLogger, prefix);
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            innerFactory.Dispose();
+        }
+
+        /// <summary>
+        /// A logger that prefixes log messages with a specified string.
+        /// </summary>
+        private class PrefixedLogger : ILogger
+        {
+            private readonly ILogger innerLogger;
+            private readonly string _prefix;
+
+            /// <summary>
+            /// Initializes a new instance of the <see cref="PrefixedLogger"/> class.
+            /// </summary>
+            /// <param name="innerLogger">The inner logger.</param>
+            /// <param name="prefix">The prefix to be added to the log messages.</param>
+            public PrefixedLogger(ILogger innerLogger, string prefix)
+            {
+                this.innerLogger = innerLogger;
+                _prefix = prefix;
+            }
+
+            /// <inheritdoc/>
+            public IDisposable BeginScope<TState>(TState state)
+            {
+                return innerLogger.BeginScope(state);
+            }
+
+            /// <inheritdoc/>
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return innerLogger.IsEnabled(logLevel);
+            }
+
+            /// <inheritdoc/>
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+            {
+                var prefixedMessage = $"{_prefix} | {formatter(state, exception)}";
+                innerLogger.Log(logLevel, eventId, state, exception, (s, e) => prefixedMessage);
+            }
+        }
+    }
+
+
 
 }

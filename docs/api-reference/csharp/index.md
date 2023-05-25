@@ -12,4 +12,5 @@
 | [QuixStreams.Streaming.Models.StreamProducer](QuixStreams.Streaming.Models.StreamProducer.md 'QuixStreams.Streaming.Models.StreamProducer') | |
 | [QuixStreams.Streaming.QuixApi](QuixStreams.Streaming.QuixApi.md 'QuixStreams.Streaming.QuixApi') | |
 | [QuixStreams.Streaming.Raw](QuixStreams.Streaming.Raw.md 'QuixStreams.Streaming.Raw') | |
+| [QuixStreams.Streaming.States](QuixStreams.Streaming.States.md 'QuixStreams.Streaming.States') | |
 | [QuixStreams.Streaming.Utils](QuixStreams.Streaming.Utils.md 'QuixStreams.Streaming.Utils') | |

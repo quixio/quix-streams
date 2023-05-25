@@ -3,6 +3,7 @@ using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using QuixStreams.Transport.Codec;
+using QuixStreams.Transport.Fw.Codecs;
 using QuixStreams.Transport.Fw.Exceptions;
 using QuixStreams.Transport.Fw.Helpers;
 using QuixStreams.Transport.IO;
@@ -54,22 +55,17 @@ namespace QuixStreams.Transport.Fw
         }
 
         /// <summary>
-        /// Retrieves the codec from the provided package value
+        /// Retrieves the codec from the provided package value if specified, otherwise returns the default byte codec
         /// </summary>
         /// <param name="transportPackageValue"></param>
-        /// <returns>The codec from the package value</returns>
+        /// <returns>The codec from the package value if specified, otherwise returns the default byte code</returns>
         private ICodec GetCodec(TransportPackageValue transportPackageValue)
         {
             // Is there a specific codec for it?
             var codec = CodecRegistry.RetrieveCodec(transportPackageValue.CodecBundle.ModelKey,
                 transportPackageValue.CodecBundle.CodecId);
 
-            if (codec == null)
-            {
-                throw new MissingCodecException($"Failed to deserialize '{transportPackageValue.CodecBundle.ModelKey}' because there is no codec registered for it.");
-            }
-
-            return codec;
+            return codec ?? ByteCodec.Instance;
         }
 
         /// <summary>

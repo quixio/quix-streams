@@ -6,6 +6,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace InteropHelpers.Interop.ExternalTypes.System;
@@ -194,7 +195,7 @@ public class DictionaryInterop
         }
         catch (Exception ex)
         {
-            InteropUtils.LogDebug("Exception in dictionary_set_value");
+            InteropUtils.LogDebug("Exception in dictionary_get_count");
             InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
             InteropUtils.RaiseException(ex);
             return default;
@@ -204,25 +205,37 @@ public class DictionaryInterop
     [UnmanagedCallersOnly(EntryPoint = "dictionary_set_value")]
     public static void SetValue(IntPtr dictionaryHPtr, IntPtr keyHPtr, IntPtr valHPtr)
     {
+        object value = null;
+        object key = null;
+        Type keyType = null;
+        Type valType = null;
+        Type dictType = null;
         try
         {
             var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
             var targetType = target.GetType();
-            var keyType = targetType.GetGenericArguments()[0];
-            var valType = targetType.GetGenericArguments()[1];
+            dictType = (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+                ? targetType
+                : targetType.GetInterfaces().FirstOrDefault(y => y.IsGenericType && y.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+            if (dictType == null)
+            {
+                throw new InvalidOperationException($"Type {targetType} does not implement dictionary with types nor is a dictionary with types");
+            }
+            keyType = dictType.GetGenericArguments()[0];
+            valType = dictType.GetGenericArguments()[1];
 
-            object value = InteropUtils.PtrToObject(valHPtr, valType);
+            value = InteropUtils.PtrToObject(valHPtr, valType);
 
-            object key = InteropUtils.PtrToObject(keyHPtr, keyType);
+            key = InteropUtils.PtrToObject(keyHPtr, keyType);
 
             target[key] = value;
         }
         catch (Exception ex)
         {
             InteropUtils.LogDebug("Exception in dictionary_set_value");
-            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
-            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}");
-            InteropUtils.LogDebug($"Arg valHPtr (IntPtr) has value: {valHPtr}");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}, converted to dict type {dictType}");
+            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}, type {keyType}, converted {key}");
+            InteropUtils.LogDebug($"Arg valHPtr (IntPtr) has value: {valHPtr}, type {valType}, converted {value}");
             InteropUtils.RaiseException(ex);
         }
     }
@@ -230,24 +243,37 @@ public class DictionaryInterop
     [UnmanagedCallersOnly(EntryPoint = "dictionary_get_value")]
     public static IntPtr GetValue(IntPtr dictionaryHPtr, IntPtr keyHPtr)
     {
+        object value = null;
+        object key = null;
+        Type keyType = null;
+        Type valType = null;
+        Type dictType = null;
         try
         {
             var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
             var targetType = target.GetType();
-            var keyType = targetType.GetGenericArguments()[0];
-            var valType = targetType.GetGenericArguments()[1];
+            dictType = (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+                ? targetType
+                : targetType.GetInterfaces().FirstOrDefault(y => y.IsGenericType && y.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+            if (dictType == null)
+            {
+                throw new InvalidOperationException($"Type {targetType} does not implement dictionary with types nor is a dictionary with types");
+            }
+            keyType = dictType.GetGenericArguments()[0];
+            valType = dictType.GetGenericArguments()[1];
 
-            object key = InteropUtils.PtrToObject(keyHPtr, keyType);
+            key = InteropUtils.PtrToObject(keyHPtr, keyType);
 
-            var value = target[key];
+            value = target[key];
 
             return InteropUtils.ObjectToPtr(value, valType);
         }
         catch (Exception ex)
         {
             InteropUtils.LogDebug("Exception in dictionary_get_value");
-            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}");
-            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}, converted to dict type {dictType}");
+            InteropUtils.LogDebug($"Arg keyHPtr (IntPtr) has value: {keyHPtr}, type {keyType}, converted {key}");
+            InteropUtils.LogDebug($"Value is type {valType}, with value of {value}");
             InteropUtils.RaiseException(ex);
             return default;
         }

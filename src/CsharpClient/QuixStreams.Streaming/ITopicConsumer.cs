@@ -1,4 +1,5 @@
 ﻿using System;
+using QuixStreams.Streaming.States;
 
 namespace QuixStreams.Streaming
 {
@@ -49,5 +50,11 @@ namespace QuixStreams.Streaming
         /// Raised when the resource is disposed
         /// </summary>
         public event EventHandler OnDisposed;
+
+        /// <summary>
+        /// Gets the manager for the topic states
+        /// </summary>
+        /// <returns>Topic state manager</returns>
+        TopicStateManager GetStateManager();
     }
 }

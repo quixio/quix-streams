@@ -27,6 +27,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CommandLine;
+using Microsoft.Extensions.Logging;
 using Quix.InteropGenerator.Writers.CsharpInteropWriter;
 using Quix.InteropGenerator.Writers.CsharpInteropWriter.Helpers;
 using Quix.InteropGenerator.Writers.Shared;
@@ -52,28 +53,29 @@ public class Program
     
     public static async Task<int> Main(string[] args)
     {
+        var logger = Logger.LoggerFactory.CreateLogger("Main");
         var result = Parser.Default.ParseArguments<Options>(args);
         if (result.Errors.Any())
         {
             return 1;
         }
         var options = result.Value;
-        Console.WriteLine($"Relative assembly path: {options.AssemblyPath}");
+        logger.LogInformation("Relative assembly path: {0}",options.AssemblyPath);
         var assemblyPath = Path.GetFullPath(options.AssemblyPath);
-        Console.WriteLine($"Absolute assembly path: {assemblyPath}");
+        logger.LogInformation("Absolute assembly path: {0}", assemblyPath);
         
-        Console.WriteLine($"Relative output path: {options.OutputPathRoot}");
+        logger.LogInformation("Relative output path: {0}", options.OutputPathRoot);
         if (Path.IsPathRooted(options.OutputPathRoot)) throw new Exception("Output path is not relative. In order to avoid catastrophic mistakes, such as deleting your entire mount, use relative.");
         var absoluteOutputPathRoot = Path.GetFullPath(options.OutputPathRoot);
-        Console.WriteLine($"Absolute output path: {absoluteOutputPathRoot}");
+        logger.LogInformation("Absolute output path: {0}", absoluteOutputPathRoot);
         
         
-        Console.WriteLine($"Relative config path: {options.ConfigPathRoot}");
+        logger.LogInformation("Relative config path: {0}", options.ConfigPathRoot);
         if (Path.IsPathRooted(options.ConfigPathRoot)) throw new Exception("Config path is not relative. In order to avoid catastrophic mistakes, such as deleting your entire mount, use relative.");
         var absoluteConfigPathRoot = Path.GetFullPath(options.OutputPathRoot);
-        Console.WriteLine($"Absolute config path: {absoluteConfigPathRoot}");
+        logger.LogInformation("Absolute config path: {0}", absoluteConfigPathRoot);
         
-        Console.WriteLine($"Single Assembly: {options.SingleAssembly}");
+        logger.LogInformation("Single Assembly: {0}", options.SingleAssembly);
         
         var whitelist = new List<string>()
         {
@@ -130,7 +132,7 @@ public class Program
         var typeLookups = await utilsWriter.WriteContent();
 
         // assembly and dependencies
-        var PythonWrapperWriter = new Writers.PythonWrapperWriter.AssemblyWriter(writtenDetails, pythonPath);
-        await PythonWrapperWriter.WriteContent(typeLookups);
+        var pythonWrapperWriter = new Writers.PythonWrapperWriter.AssemblyWriter(writtenDetails, pythonPath);
+        await pythonWrapperWriter.WriteContent(typeLookups);
     }
 }

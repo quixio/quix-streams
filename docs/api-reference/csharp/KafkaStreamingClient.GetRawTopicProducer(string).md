@@ -16,6 +16,8 @@ public QuixStreams.Streaming.Raw.IRawTopicProducer GetRawTopicProducer(string to
 
 Name of the topic.
 
+Implements [GetRawTopicProducer(string)](IKafkaStreamingClient.GetRawTopicProducer(string).md 'QuixStreams.Streaming.IKafkaStreamingClient.GetRawTopicProducer(string)')
+
 #### Returns
 [IRawTopicProducer](IRawTopicProducer.md 'QuixStreams.Streaming.Raw.IRawTopicProducer')  
-Instance of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')
+Instance of [IRawTopicProducer](IRawTopicProducer.md 'QuixStreams.Streaming.Raw.IRawTopicProducer')
