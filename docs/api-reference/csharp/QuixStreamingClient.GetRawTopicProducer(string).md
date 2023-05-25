@@ -16,6 +16,8 @@ public QuixStreams.Streaming.Raw.IRawTopicProducer GetRawTopicProducer(string to
 
 Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order
 
+Implements [GetRawTopicProducer(string)](IQuixStreamingClient.GetRawTopicProducer(string).md 'QuixStreams.Streaming.IQuixStreamingClient.GetRawTopicProducer(string)')
+
 #### Returns
 [IRawTopicProducer](IRawTopicProducer.md 'QuixStreams.Streaming.Raw.IRawTopicProducer')  
-Instance of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')
+Instance of [IRawTopicProducer](IRawTopicProducer.md 'QuixStreams.Streaming.Raw.IRawTopicProducer')

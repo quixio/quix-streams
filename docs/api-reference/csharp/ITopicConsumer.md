@@ -18,6 +18,7 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | Methods | |
 | :--- | :--- |
 | [Commit()](ITopicConsumer.Commit().md 'QuixStreams.Streaming.ITopicConsumer.Commit()') | Commit packages read up until now |
+| [GetStateManager()](ITopicConsumer.GetStateManager().md 'QuixStreams.Streaming.ITopicConsumer.GetStateManager()') | Gets the manager for the topic states |
 | [Subscribe()](ITopicConsumer.Subscribe().md 'QuixStreams.Streaming.ITopicConsumer.Subscribe()') | Start subscribing to streams.<br/>Use 'OnStreamReceived' event to read stream after executing this method |
 
 | Events | |

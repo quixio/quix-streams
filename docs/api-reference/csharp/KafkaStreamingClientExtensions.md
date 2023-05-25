@@ -13,4 +13,4 @@ Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.O
 
 | Methods | |
 | :--- | :--- |
-| [GetTopicConsumer(this KafkaStreamingClient, string, string, CommitMode, AutoOffsetReset)](KafkaStreamingClientExtensions.GetTopicConsumer(thisKafkaStreamingClient,string,string,CommitMode,AutoOffsetReset).md 'QuixStreams.Streaming.KafkaStreamingClientExtensions.GetTopicConsumer(this QuixStreams.Streaming.KafkaStreamingClient, string, string, QuixStreams.Streaming.Models.CommitMode, QuixStreams.Telemetry.Kafka.AutoOffsetReset)') | Open an topic consumer capable of subscribing to receive incoming streams |
+| [GetTopicConsumer(this IKafkaStreamingClient, string, string, CommitMode, AutoOffsetReset)](KafkaStreamingClientExtensions.GetTopicConsumer(thisIKafkaStreamingClient,string,string,CommitMode,AutoOffsetReset).md 'QuixStreams.Streaming.KafkaStreamingClientExtensions.GetTopicConsumer(this QuixStreams.Streaming.IKafkaStreamingClient, string, string, QuixStreams.Streaming.Models.CommitMode, QuixStreams.Telemetry.Kafka.AutoOffsetReset)') | Open an topic consumer capable of subscribing to receive incoming streams |

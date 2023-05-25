@@ -1,4 +1,5 @@
 import ctypes
+import numbers
 import pickle
 from typing import Any
 
@@ -63,6 +64,9 @@ class StateValue(object):
                 self._type = StateType.Long
             elif isinstance(value, float):
                 self._interop = svi(svi.Constructor6(value))
+                self._type = StateType.Double
+            elif issubclass(value_type, numbers.Number):
+                self._interop = svi(svi.Constructor6(float(value)))
                 self._type = StateType.Double
             elif isinstance(value, bool):
                 self._interop = svi(svi.Constructor(value))

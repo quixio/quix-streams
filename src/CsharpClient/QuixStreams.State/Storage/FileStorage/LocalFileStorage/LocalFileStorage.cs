@@ -49,6 +49,12 @@ namespace QuixStreams.State.Storage.FileStorage.LocalFileStorage
         }
 
         /// <inheritdoc />
+        protected override IStateStorage CreateNewStorageInstance(string path)
+        {
+            return new LocalFileStorage(path, true);
+        }
+
+        /// <inheritdoc />
         protected override async Task<IDisposable> LockInternalKey(string key = "", LockType type = LockType.Writer)
         {
             var id = Interlocked.Increment(ref this.cnt);

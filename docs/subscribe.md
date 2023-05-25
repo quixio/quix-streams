@@ -854,7 +854,7 @@ Quix Streams uses an internal protocol which is both data and speed optimized, b
     ``` python
     from quixstreams import RawTopicConsumer, RawMessage
 
-    raw_consumer = client.create_raw_topic_consumer(TOPIC_ID)
+    raw_consumer = client.get_raw_topic_consumer(TOPIC_ID)
     
     def on_message_received_handler(topic: RawTopicConsumer, msg: RawMessage):
         #bytearray containing bytes received from kafka

@@ -13,7 +13,12 @@ from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixStreamsStreaming.IStreamConsumer import IStreamConsumer as sci
 from .native.Python.QuixStreamsStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
 from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClosedEventArgs
+from .states.streamstate import StreamState
+from .states.streamstatemanager import StreamStateManager
 
+from typing import TypeVar
+
+StreamStateType = TypeVar('StreamStateType')
 
 @nativedecorator
 class StreamConsumer(object):
@@ -47,6 +52,8 @@ class StreamConsumer(object):
 
         self._streamId = None
 
+        self._stream_state_manager = None
+
         if on_close_cb_always is not None:
             def _on_close_cb_always_wrapper(sender_hptr, args_hptr):
                 try:
@@ -72,6 +79,7 @@ class StreamConsumer(object):
             self._streamPropertiesConsumer.dispose()
         self._on_stream_closed_dispose()
         self._on_package_received_dispose()
+        self._stream_state_manager.dispose()
 
     @property
     def topic(self) -> 'TopicConsumer':
@@ -217,6 +225,48 @@ class StreamConsumer(object):
         if self._streamTimeseriesConsumer is None:
             self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
         return self._streamTimeseriesConsumer
+
+    def get_dict_state(self, state_name: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> StreamState[StreamStateType]:
+        """
+        Creates a new application state of dictionary type with automatically managed lifecycle for the stream
+
+        Args:
+            state_name: The name of the state
+            default_value_factory: The default value factory to create value when the key is not yet present in the state
+            state_type: The type of the state
+
+        Returns:
+            StreamState: The stream state
+
+         Example:
+            >>> stream_consumer.get_dict_state('some_state')
+            This will return a state where type is 'Any'
+
+            >>> stream_consumer.get_dict_state('some_state', lambda missing_key: return {})
+            this will return a state where type is a generic dictionary, with an empty dictionary as default value when
+            key is not available. The lambda function will be invoked with 'get_state_type_check' key to determine type
+
+            >>> stream_consumer.get_dict_state('some_state', lambda missing_key: return {}, Dict[str, float])
+            this will return a state where type is a specific dictionary type, with default value
+
+            >>> stream_consumer.get_dict_state('some_state', state_type=float)
+            this will return a state where type is a float without default value, resulting in KeyError when not found
+        """
+
+        return self.get_state_manager().get_dict_state(state_name, default_value_factory, state_type)
+
+    def get_state_manager(self) -> StreamStateManager:
+        """
+        Gets the manager for the stream states.
+
+        Returns:
+            StreamStateManager: The stream state manager
+        """
+
+        if self._stream_state_manager is None:
+            self._stream_state_manager = StreamStateManager(self._interop.GetStateManager())
+
+        return self._stream_state_manager
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         """

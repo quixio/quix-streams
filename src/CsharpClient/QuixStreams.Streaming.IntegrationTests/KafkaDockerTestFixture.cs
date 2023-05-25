@@ -29,7 +29,7 @@ namespace QuixStreams.Streaming.IntegrationTests
             try
             {
                 var builder = new Builder().UseContainer();
-            
+                
                 if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
                 {
                     builder = builder.UseImage("dougdonohoe/fast-data-dev:latest");
@@ -38,21 +38,21 @@ namespace QuixStreams.Streaming.IntegrationTests
                 {
                     builder = builder.UseImage("lensesio/fast-data-dev:3.3.1");
                 }
-            
+                
                 builder.ExposePort(ZookeeperPort, ZookeeperPort)
-                    .ExposePort(KafkaPort, KafkaPort)
-                    .WithEnvironment(
-                        $"BROKER_PORT={KafkaPort}", 
-                        $"ZK_PORT={ZookeeperPort}",
-                        $"ADV_HOST={host}",
-                        "REST_PORT=0",
-                        "WEB_PORT=0",
-                        "CONNECT_PORT=0",
-                        "REGISTRY_PORT=0",
-                        "RUNTESTS=0",
-                        "SAMPLEDATA=0",
-                        "FORWARDLOGS=0",
-                        "SUPERVISORWEB=0");
+                .ExposePort(KafkaPort, KafkaPort)
+                .WithEnvironment(
+                    $"BROKER_PORT={KafkaPort}", 
+                    $"ZK_PORT={ZookeeperPort}",
+                    $"ADV_HOST={host}",
+                    "REST_PORT=0",
+                    "WEB_PORT=0",
+                    "CONNECT_PORT=0",
+                    "REGISTRY_PORT=0",
+                    "RUNTESTS=0",
+                    "SAMPLEDATA=0",
+                    "FORWARDLOGS=0",
+                    "SUPERVISORWEB=0");
                 this.kafkaContainer = builder.Build().Start();
                 this.kafkaContainer.WaitForRunning();
             }

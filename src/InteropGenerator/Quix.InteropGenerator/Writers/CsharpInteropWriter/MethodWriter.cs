@@ -415,7 +415,14 @@ public class MethodWriter : BaseWriter
                 }
                 var keyTypeText = typeWriter.LookupTypeAsText(generics[0]);
                 var valueTypeText = typeWriter.LookupTypeAsText(generics[1]);
-                writer.Write($"{targetVarCreate}{targetName} = {nameof(DictionaryInterop)}.{nameof(DictionaryInterop.FromUPtr)}<{dictTypeText}, {keyTypeText}, {valueTypeText}>({sourceName});");
+                if (Utils.HasParameterlessConstructor(target)) {
+                    writer.Write($"{targetVarCreate}{targetName} = {nameof(DictionaryInterop)}.{nameof(DictionaryInterop.FromUPtr)}<{dictTypeText}, {keyTypeText}, {valueTypeText}>({sourceName});");
+                }
+                else
+                {
+                    writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromHPtr)}<{dictTypeText}>({sourceName});");
+
+                }
                 return targetName;
             }
             
@@ -424,7 +431,7 @@ public class MethodWriter : BaseWriter
                 // The following is using array allocation with size rather than linq in order to improve performance and
                 // remove the need for referencing LINQ. Resulting code is an eyesore, but better overall
                 var unmanagedArrayName = $"{sourceName}ArrUnmanaged";
-                var generic = target.GetElementType();
+                var generic = target.HasElementType ? target.GetElementType() : typeof(object);
                 var elementTypeAsText = typeWriter.LookupTypeAsText(generic);
                 var elementTypeAsUnmanagedText = typeWriter.GetInteropTypeString(generic, false);
                 writer.Write($"var {unmanagedArrayName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromArrayUPtr)}({sourceName}, typeof({elementTypeAsUnmanagedText})) as {elementTypeAsUnmanagedText}[];");

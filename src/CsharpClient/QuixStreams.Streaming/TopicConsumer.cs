@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
 
@@ -11,9 +12,11 @@ namespace QuixStreams.Streaming
     /// </summary>
     public class TopicConsumer : ITopicConsumer
     {
-        private ILogger logger = Logging.CreateLogger<StreamConsumer>();
+        private readonly ILogger logger = Logging.CreateLogger<StreamConsumer>();
         private readonly TelemetryKafkaConsumer telemetryKafkaConsumer;
         private bool isDisposed = false;
+        private readonly object stateLock = new object();
+        private volatile TopicStateManager stateManager = null;
 
         /// <inheritdoc />
         public event EventHandler<IStreamConsumer> OnStreamReceived;
@@ -102,6 +105,24 @@ namespace QuixStreams.Streaming
             if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
             telemetryKafkaConsumer.Start();
         }
+
+        /// <inheritdoc />
+        public TopicStateManager GetStateManager()
+        {
+            if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
+
+            if (this.stateManager != null) return this.stateManager;
+            lock (stateLock)
+            {
+                if (this.stateManager != null) return this.stateManager;
+                var topic = this.telemetryKafkaConsumer.Topic;
+
+                this.stateManager = App.GetStateManager().GetTopicStateManager(this, topic);
+            }
+
+            return this.stateManager;
+        }
+
 
         /// <inheritdoc />
         public void Dispose()

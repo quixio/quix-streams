@@ -49,7 +49,7 @@ public class MethodInfoWriter : BaseWriter
         {
             if (parameterInfo.IsOut)
             {
-                paramNames[parameterInfo.Name] = parameterInfo.Name + "Out";
+                paramNames[parameterInfo.Name] = parameterInfo.Name;
                 continue;
             }
             var result = await TryWriteTypeConversion(contentWriter, parameterInfo.ParameterType, parameterInfo.Name, null, true);

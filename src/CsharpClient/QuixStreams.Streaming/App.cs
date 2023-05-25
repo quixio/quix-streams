@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Mono.Unix;
 using Mono.Unix.Native;
+using QuixStreams.State.Storage;
+using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Streaming.States;
 
 namespace QuixStreams.Streaming
 {
@@ -16,6 +20,7 @@ namespace QuixStreams.Streaming
     /// </summary>
     public static class App
     {
+        private static AppStateManager stateManager;
         private static readonly ConcurrentDictionary<ITopicConsumer, bool> topicConsumers = new ConcurrentDictionary<ITopicConsumer, bool>();
         private static readonly ConcurrentDictionary<IRawTopicConsumer, bool> rawTopicConsumers = new ConcurrentDictionary<IRawTopicConsumer, bool>();
         private static readonly ConcurrentDictionary<ITopicProducer, bool> topicProducers = new ConcurrentDictionary<ITopicProducer, bool>();
@@ -217,6 +222,26 @@ namespace QuixStreams.Streaming
 
             // Now we're done with main, tell the shutdown handler
             waitForMainExit.Set();
+        }
+
+        /// <summary>
+        /// Sets the state storage for the app
+        /// </summary>
+        /// <param name="stateStorage">The state storage to use for app's state manager</param>
+        public static void SetStateStorage(IStateStorage stateStorage)
+        {
+            if (App.stateManager != null) throw new InvalidOperationException("App state manager may only be set once");
+            App.stateManager = new AppStateManager(stateStorage);
+        }
+
+        /// <summary>
+        /// Retrieves the state manager for the application
+        /// </summary>
+        /// <returns></returns>
+        public static AppStateManager GetStateManager()
+        {
+            if (App.stateManager == null) SetStateStorage(new LocalFileStorage(autoCreateDir: true));
+            return App.stateManager;
         }
 
         internal static void Register(TopicConsumer topicConsumer)

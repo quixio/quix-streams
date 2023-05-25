@@ -10,44 +10,31 @@
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/client-library-intro.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
-# What is Quix Streams?
+# Quix Streams
 
-<b>Quix Streams</b> is a stream processing library, focused on <b>time-series data</b> and ease of use. It's designed to be used for high-frequency telemetry services when you need to process <b>high volumes</b> of time-series data with up to nanosecond precision. It uses a message broker such as <b>Apache Kafka</b>, instead of a database, so you can process time-series data with high performance and save resources without introducing delay.
+Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka and Kubernetes in a highly abstracted and easy to use Python interface.
 
-Quix Streams <b>does not use</b> any domain-specific language or embedded framework, it's a library that you can use in your code base. This means that with Quix Streams you can use any external library for your chosen language. For example in Python, you can leverage Pandas, NumPy, PyTorch, TensorFlow, Transformers, OpenCV. 
+Quix Streams has the following benefits:
 
-Quix Streams currently supports the following languages:
+ - No JVM, no orchestrator, no server-side engine.
 
-- Python 
-- C#
+ - Pure Python (no DSL’s!) providing native support for the entire Python ecosystem (Pandas, scikit-learn, TensorFlow, PyTorch etc).
 
-Quix Streams is [designed to be extended](https://github.com/quixio/quix-streams/blob/main/arch-notes.md) to multiple programming languages. 
+ - Simplified [state management](https://quix.io/docs/client-library/state-management.html) backed by Kubernetes PVC for enhanced resiliency.
 
-You can use Quix Streams to:
+ - [DataFrames](#support-for-dataframes) and buffers provide a powerful processing environment where a Python data scientist can use their existing batch skills to process streaming data.
 
-- produce time-series and event data to a Kafka topic.
-- consume time-series and event data from a Kafka topic.
-- process data by creating pipelines using the <b>publish–subscribe</b> pattern.
-- Group data by streams to send different types of data (Timeseries, events, metadata or binary) into one ordered stream of data.
+ - Resilient horizontal scaling using [Streaming Context](https://quix.io/docs/client-library/features/streaming-context.html).
 
-## What is time-series data?
+ - Native support for structured and semistructured (time-series) and unstructured (binary) data files.
 
-Time-series data is a series of data points indexed in time order. Typically, time-series data is collected at regular intervals, such as days, hours, minutes, seconds, or milliseconds. In a data frame representation, each row of the data frame corresponds to a single time point, and each column contains a different variable or observation measured at that time point.
+ - Support for handling larger data files (video, audio etc) in Kafka with enhanced serialisation and deserialisation.
 
-```
-timestamp            value1   value2   value3   value4   value5   value6   value7
-2022-01-01 01:20:00  25.3     10.1     32.3     56.2     15.3     12.2     27.1  
-2022-01-01 01:20:01  26.2     11.2     31.2     55.1     16.2     13.1     28.2  
-2022-01-01 01:20:02  24.1     12.3     30.1     54.3     17.1     14.2     29.1  
-2022-01-01 01:20:03  23.4     13.4     29.2     53.2     18.3     15.3     30.2  
-2022-01-01 01:20:04  22.6     14.5     28.3     52.1     19.2     16.2     31.1  
-2022-01-01 01:20:05  22.4     14.6     28.1     52.8     19.2     16.4     31.1  
-...                  ...      ...      ...      ...      ...      ...      ...   
-```
+ - Treats time as a first class citizen - time being the most important factor in real-TIME applications!
 
-Time-series data is often plotted on a graph with the x-axis representing the time at which the data was collected and the y-axis representing the value of the data point.
 
-![Telemetry](./images/telemetry.png)
+Use Quix Streams if you’re building machine learning/AI and physics-based applications that depend on real-time data from Kafka to deliver quick, reliable insights and efficient end-user experiences. 
+
 
 ## Getting started 🏄
 
@@ -58,8 +45,6 @@ Install Quix streams with the following command:
 ```shell
 python3 -m pip install quixstreams
 ```
-
-* To install Quix Streams on Macs with **M1** or **M2** chips, see our special installation guide: [Installing on Quix Streams on a M1/M2 Mac](https://github.com/quixio/quix-streams/blob/main/mac-m1-m2-install.md).
 
 ### Install Kafka
 

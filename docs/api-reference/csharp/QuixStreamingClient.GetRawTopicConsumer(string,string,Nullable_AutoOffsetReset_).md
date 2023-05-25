@@ -28,6 +28,8 @@ The consumer group id to use for consuming messages. If null, consumer group is 
 
 The offset to use when there is no saved offset for the consumer group.
 
+Implements [GetRawTopicConsumer(string, string, Nullable&lt;AutoOffsetReset&gt;)](IQuixStreamingClient.GetRawTopicConsumer(string,string,Nullable_AutoOffsetReset_).md 'QuixStreams.Streaming.IQuixStreamingClient.GetRawTopicConsumer(string, string, System.Nullable<QuixStreams.Telemetry.Kafka.AutoOffsetReset>)')
+
 #### Returns
 [IRawTopicConsumer](IRawTopicConsumer.md 'QuixStreams.Streaming.Raw.IRawTopicConsumer')  
-Instance of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')
+Instance of [IRawTopicConsumer](IRawTopicConsumer.md 'QuixStreams.Streaming.Raw.IRawTopicConsumer')

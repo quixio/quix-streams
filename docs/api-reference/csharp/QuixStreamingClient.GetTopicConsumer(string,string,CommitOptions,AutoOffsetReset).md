@@ -34,6 +34,8 @@ The settings to use for committing
 
 The offset to use when there is no saved offset for the consumer group.
 
+Implements [GetTopicConsumer(string, string, CommitOptions, AutoOffsetReset)](IQuixStreamingClient.GetTopicConsumer(string,string,CommitOptions,AutoOffsetReset).md 'QuixStreams.Streaming.IQuixStreamingClient.GetTopicConsumer(string, string, QuixStreams.Transport.Fw.CommitOptions, QuixStreams.Telemetry.Kafka.AutoOffsetReset)')
+
 #### Returns
 [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')  
 Instance of [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsumer')
