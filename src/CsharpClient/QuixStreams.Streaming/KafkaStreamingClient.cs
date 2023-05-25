@@ -29,21 +29,21 @@ namespace QuixStreams.Streaming
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
         IRawTopicConsumer GetRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null);
 
         /// <summary>
         /// Gets a topic producer capable of publishing non-quixstreams messages.  
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
         IRawTopicProducer GetRawTopicProducer(string topic);
 
         /// <summary>
         /// Gets a topic producer capable of publishing stream messages. 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         ITopicProducer GetTopicProducer(string topic);
     }
 
@@ -148,7 +148,7 @@ namespace QuixStreams.Streaming
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
         public IRawTopicConsumer GetRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             var rawTopicConsumer = new RawTopicConsumer(brokerAddress, topic, consumerGroup, brokerProperties, autoOffset ?? AutoOffsetReset.Latest);
@@ -162,7 +162,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing non-quixstreams messages.  
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
         public IRawTopicProducer GetRawTopicProducer(string topic)
         {
             var rawTopicProducer = new RawTopicProducer(brokerAddress, topic, brokerProperties);
@@ -175,7 +175,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing stream messages. 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         public ITopicProducer GetTopicProducer(string topic)
         {
             var topicProducer = new TopicProducer(new KafkaProducerConfiguration(brokerAddress, brokerProperties), topic);

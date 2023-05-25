@@ -47,21 +47,21 @@ namespace QuixStreams.Streaming
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
         IRawTopicConsumer GetRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null);
 
         /// <summary>
         /// Gets a topic producer capable of publishing non-quixstreams messages. 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
         IRawTopicProducer GetRawTopicProducer(string topicIdOrName);
 
         /// <summary>
         /// Gets a topic producer capable of publishing stream messages.
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         ITopicProducer GetTopicProducer(string topicIdOrName);
     }
 
@@ -169,7 +169,7 @@ namespace QuixStreams.Streaming
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
         public IRawTopicConsumer GetRawTopicConsumer(string topicIdOrName, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
@@ -184,7 +184,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing non-quixstreams messages. 
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
         public IRawTopicProducer GetRawTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
@@ -198,7 +198,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing stream messages.
         /// </summary>
         /// <param name="topicIdOrName">Id or name of the topic. If name is provided, workspace will be derived from environment variable or token, in that order</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         public ITopicProducer GetTopicProducer(string topicIdOrName)
         {
             if (string.IsNullOrWhiteSpace(topicIdOrName)) throw new ArgumentNullException(nameof(topicIdOrName));
