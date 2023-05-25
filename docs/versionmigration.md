@@ -466,9 +466,9 @@ def on_event_data_handler(stream: StreamConsumer, data: EventData):
 … the rest of your code
 ```
 
-### NumPy types no longer handled transparently
+### Pre 0.5.3 some types are not handled transparently
 
-Certain code may generate run-time errors such as:
+As of 0.5.3 we've taken care of most cases we're aware of, such as using NumPy numerical values instead of built-in python types. If you're using a version before this, you will encounter runtime errors for some cases, such as:
 
 ```
 Invalid type <class 'numpy.float64'> passed as parameter value
