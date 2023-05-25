@@ -1,9 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
+using QuixStreams.Telemetry.Models.Utility;
+using QuixStreams.Transport.IO;
 
 namespace QuixStreams.Streaming
 {
@@ -120,7 +124,23 @@ namespace QuixStreams.Streaming
 
         private void OnStreamPackageReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamPackage package)
         {
-            this.logger.LogTrace("StreamConsumer: OnPackageReceived");
+            if (package.Type == typeof(byte[]))
+            {
+                this.logger.LogTrace("StreamConsumer: OnStreamPackageReceived - raw message.");
+                var ev = new EventDataRaw
+                {
+                    Timestamp = ((DateTime)package.TransportContext[KnownTransportContextKeys.BrokerMessageTime]).ToUnixNanoseconds(),
+                    Id = streamPipeline.StreamId,
+                    Tags = new Dictionary<string, string>(),
+                    Value = Encoding.UTF8.GetString((byte[])package.Value)
+                };
+
+                this.OnEventData?.Invoke(this, ev);
+                return;
+            }
+
+
+            this.logger.LogTrace("StreamConsumer: OnStreamPackageReceived");
             this.OnPackageReceived?.Invoke(this, new PackageReceivedEventArgs(this.topicConsumer, this, package));
         }
 
@@ -157,7 +177,7 @@ namespace QuixStreams.Streaming
             this.logger.LogTrace("StreamConsumer: OnEventDefinitionsReceived");
             this.OnEventDefinitionsChanged?.Invoke(this, obj);
         }
-
+        
         private void OnStreamEndReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.StreamEnd obj)
         {
             RaiseStreamClosed(obj.StreamEndType);

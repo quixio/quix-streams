@@ -18,13 +18,21 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Attempts to retrieve the streamId from the package according to Kafka protocol
         /// </summary>
-        /// <param name="transportContext">The transport contect to retrieve the streamId from</param>
+        /// <param name="transportContext">The transport context to retrieve the streamId from</param>
         /// <param name="streamId">The streamId retrieved</param>
         /// <returns>Whether retrieval was successful</returns>
         protected override bool TryGetStreamId(TransportContext transportContext, out string streamId)
         {
-            streamId = Encoding.UTF8.GetString(transportContext.GetKey());
-            if (streamId == null) return false;
+            var key = transportContext.GetKey();
+
+            if (key == null)
+            {
+                streamId = null;
+                return false;
+            }
+            
+            streamId = Encoding.UTF8.GetString(key);
+
             if (streamId.IndexOfAny(new char[] {'/', '\\'}) > -1)
             {
                 streamId = streamId.Replace("/", "-").Replace("\\", "-");

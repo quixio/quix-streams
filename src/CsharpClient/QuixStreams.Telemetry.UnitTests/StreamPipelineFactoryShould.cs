@@ -162,6 +162,26 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
         }
 
+        [Fact]
+        public void StreamPackageReceived_WithoutStreamId_ShouldUseDefaultStreamId()
+        {
+            // Arrange
+            var consumer = Substitute.For<IConsumer>();
+            var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
+            factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
+            factory.Open();
+
+            // Act
+            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
+            {
+                // empty transport context (no stream id)   
+            }));
+            consumer.OnNewPackage(package);
+
+            // Assert
+            factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
+            factory.ContextCache.GetAll().Keys.First().Should().Be(StreamPipeline.DefaultStreamIdWhenMissing);
+        }
 
         class TestStreamPipelineFactory : StreamPipelineFactory
         {
@@ -182,8 +202,7 @@ namespace QuixStreams.Telemetry.UnitTests
 
             protected override bool TryGetStreamId(TransportContext transportContext, out string streamId)
             {
-                streamId = transportContext[TransportContextStreamIdKey].ToString();
-                return true;
+                return transportContext.TryGetTypedValue(TransportContextStreamIdKey, out streamId);
             }
         }
 

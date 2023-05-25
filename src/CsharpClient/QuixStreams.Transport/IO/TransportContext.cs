@@ -58,5 +58,11 @@ namespace QuixStreams.Transport.IO
         /// Type is <see cref="string" />
         /// </summary>
         public const string MessageGroupKey = "MessageGroupKey";
+        
+        /// <summary>
+        /// Represents the timestamp when a message is received by the broker.
+        /// Type is <see cref="string" />
+        /// </summary>
+        public const string BrokerMessageTime = "BrokerMessageTime";
     }
 }
