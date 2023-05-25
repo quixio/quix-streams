@@ -127,30 +127,47 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         public void Publish(TimeseriesDataRaw data)
         {
             long epochDifference = this.streamProducer.Epoch.ToUnixNanoseconds();
-
+            long[] updatedTimestamps = null;
+            
             if (epochDifference != 0)
             {
-                for (int i = 0; i < data.Timestamps.Length; i++)
+                updatedTimestamps = new long[data.Timestamps.Length];
+                for (int i = 0; i < updatedTimestamps.Length; i++)
                 {
-                    data.Timestamps[i] += epochDifference;
+                    updatedTimestamps[i] = data.Timestamps[i] + epochDifference;
                 }
             }
             
-            foreach (var tag in this.DefaultTags)
-            {
-                if (!data.TagValues.TryGetValue(tag.Key, out var tagValues))
-                {
-                    tagValues = new string[data.Timestamps.Length];
-                    data.TagValues.Add(tag.Key, tagValues);
-                }
+            Dictionary<string, string[]> updatedTagValues = null;
 
-                for (int i = 0; i < data.Timestamps.Length; i++)
+            if (this.DefaultTags.Count > 0)
+            {
+                updatedTagValues = new Dictionary<string, string[]>(data.TagValues);
+                foreach (var tag in this.DefaultTags)
                 {
-                    tagValues[i] = tag.Value;
+                    if (!updatedTagValues.TryGetValue(tag.Key, out var tagValues))
+                    {
+                        tagValues = new string[data.Timestamps.Length];
+                        updatedTagValues[tag.Key] = tagValues;
+                    }
+
+                    for (int i = 0; i < data.Timestamps.Length; i++)
+                    {
+                        tagValues[i] = tag.Value;
+                    }
                 }
             }
-            
-            this.WriteChunk(data);
+
+            var newData = new QuixStreams.Telemetry.Models.TimeseriesDataRaw(
+                data.Epoch, 
+                updatedTimestamps ?? data.Timestamps, 
+                data.NumericValues, 
+                data.StringValues, 
+                data.BinaryValues, 
+                updatedTagValues ?? data.TagValues
+            );
+
+            this.WriteChunk(newData);
         }
         
         /// <summary>

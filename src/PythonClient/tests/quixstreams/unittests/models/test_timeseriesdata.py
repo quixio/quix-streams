@@ -462,7 +462,7 @@ class TimeseriesDataTests(unittest.TestCase):
         self.assertEqual(len(data_a.timestamps), len(data_b.timestamps), "Timestamp count")
         for index_a, ts_a in enumerate(data_a.timestamps):
             ts_b = data_b.timestamps[index_a]
-            self.assert_timestamps_are_equal(ts_a, ts_b)
+            TimeseriesDataTests.assert_timestamps_are_equal(self, ts_a, ts_b)
 
     def assert_timestamps_are_equal(self, ts_a: TimeseriesDataTimestamp, ts_b: TimeseriesDataTimestamp) -> None:
         self.assertEqual(ts_a.timestamp_nanoseconds, ts_b.timestamp_nanoseconds, "Timestamp")
