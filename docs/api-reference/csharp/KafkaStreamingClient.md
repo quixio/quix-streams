@@ -6,10 +6,13 @@
 A Kafka streaming client capable of creating topic consumer and producers.
 
 ```csharp
-public class KafkaStreamingClient
+public class KafkaStreamingClient :
+QuixStreams.Streaming.IKafkaStreamingClient
 ```
 
 Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.Object 'System.Object') &#129106; KafkaStreamingClient
+
+Implements [IKafkaStreamingClient](IKafkaStreamingClient.md 'QuixStreams.Streaming.IKafkaStreamingClient')
 
 | Constructors | |
 | :--- | :--- |

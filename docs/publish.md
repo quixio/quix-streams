@@ -972,7 +972,7 @@ You can publish messages with or without a key. The following example demonstrat
 === "Python"
     
     ``` python
-    with (producer := client.create_raw_topic_producer(TOPIC_ID)):    
+    with (producer := client.get_raw_topic_producer(TOPIC_ID)):    
         data = bytearray(bytes("TEXT CONVERTED TO BYTES",'utf-8'))
         
         #publish value with KEY to kafka

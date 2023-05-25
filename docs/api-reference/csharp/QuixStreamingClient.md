@@ -7,10 +7,13 @@ Streaming client for Kafka configured automatically using Environment Variables 
 Use this Client when you use this library together with Quix platform.
 
 ```csharp
-public class QuixStreamingClient
+public class QuixStreamingClient :
+QuixStreams.Streaming.IQuixStreamingClient
 ```
 
 Inheritance [System.Object](https://docs.microsoft.com/en-us/dotnet/api/System.Object 'System.Object') &#129106; QuixStreamingClient
+
+Implements [IQuixStreamingClient](IQuixStreamingClient.md 'QuixStreams.Streaming.IQuixStreamingClient')
 
 | Constructors | |
 | :--- | :--- |

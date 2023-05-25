@@ -22,6 +22,7 @@ Implements [ITopicConsumer](ITopicConsumer.md 'QuixStreams.Streaming.ITopicConsu
 | Methods | |
 | :--- | :--- |
 | [Commit()](TopicConsumer.Commit().md 'QuixStreams.Streaming.TopicConsumer.Commit()') | Commit packages read up until now |
+| [GetStateManager()](TopicConsumer.GetStateManager().md 'QuixStreams.Streaming.TopicConsumer.GetStateManager()') | Gets the manager for the topic states |
 | [Subscribe()](TopicConsumer.Subscribe().md 'QuixStreams.Streaming.TopicConsumer.Subscribe()') | Start subscribing to streams.<br/>Use 'OnStreamReceived' event to read stream after executing this method |
 
 | Events | |

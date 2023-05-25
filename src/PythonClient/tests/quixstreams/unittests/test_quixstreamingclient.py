@@ -7,6 +7,14 @@ import pytest
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropException
 from src.quixstreams import QuixStreamingClient
 
+"""
+# Uncomment the following to enable debug files
+import src.quixstreams as qx
+from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
+InteropUtils.enable_debug()
+qx.Logging.update_factory(qx.LogLevel.Debug)
+"""
+
 
 class StreamingClientTests(unittest.TestCase):
 
