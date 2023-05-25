@@ -127,7 +127,8 @@ namespace QuixStreams.Streaming.Models
         public EventData AddTag(string tagId, string tagValue)
         {
             if (string.IsNullOrWhiteSpace(tagId)) throw new ArgumentNullException(nameof(tagId), "Tag id can't be null or empty");
-            if (string.IsNullOrWhiteSpace(tagValue)) throw new ArgumentNullException(nameof(tagValue), $"Tag ({tagId}) value can't be null or empty");
+            if (tagValue == null) return this.RemoveTag(tagId);
+            
             this.Tags[tagId] = tagValue;
 
             return this;
