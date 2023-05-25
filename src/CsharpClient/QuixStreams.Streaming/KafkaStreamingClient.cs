@@ -11,10 +11,46 @@ using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming
 {
+    public interface IKafkaStreamingClient
+    {
+        /// <summary>
+        /// Gets a topic consumer capable of subscribing to receive incoming streams.
+        /// </summary>
+        /// <param name="topic">Name of the topic.</param>
+        /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
+        /// <param name="options">The settings to use for committing</param>
+        /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
+        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        ITopicConsumer GetTopicConsumer(string topic, string consumerGroup = null, CommitOptions options = null, AutoOffsetReset autoOffset = AutoOffsetReset.Latest);
+
+        /// <summary>
+        /// Gets a topic consumer capable of subscribing to receive non-quixstreams incoming messages. 
+        /// </summary>
+        /// <param name="topic">Name of the topic.</param>
+        /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
+        /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
+        IRawTopicConsumer GetRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null);
+
+        /// <summary>
+        /// Gets a topic producer capable of publishing non-quixstreams messages.  
+        /// </summary>
+        /// <param name="topic">Name of the topic.</param>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
+        IRawTopicProducer GetRawTopicProducer(string topic);
+
+        /// <summary>
+        /// Gets a topic producer capable of publishing stream messages. 
+        /// </summary>
+        /// <param name="topic">Name of the topic.</param>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
+        ITopicProducer GetTopicProducer(string topic);
+    }
+
     /// <summary>
     /// A Kafka streaming client capable of creating topic consumer and producers.
     /// </summary>
-    public class KafkaStreamingClient
+    public class KafkaStreamingClient : IKafkaStreamingClient
     {
         private readonly ILogger logger = Logging.CreateLogger<KafkaStreamingClient>();
         private readonly string brokerAddress;
@@ -112,7 +148,7 @@ namespace QuixStreams.Streaming
         /// <param name="topic">Name of the topic.</param>
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="autoOffset">The offset to use when there is no saved offset for the consumer group.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicConsumer"/></returns>
         public IRawTopicConsumer GetRawTopicConsumer(string topic, string consumerGroup = null, AutoOffsetReset? autoOffset = null)
         {
             var rawTopicConsumer = new RawTopicConsumer(brokerAddress, topic, consumerGroup, brokerProperties, autoOffset ?? AutoOffsetReset.Latest);
@@ -126,7 +162,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing non-quixstreams messages.  
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="IRawTopicProducer"/></returns>
         public IRawTopicProducer GetRawTopicProducer(string topic)
         {
             var rawTopicProducer = new RawTopicProducer(brokerAddress, topic, brokerProperties);
@@ -139,7 +175,7 @@ namespace QuixStreams.Streaming
         /// Gets a topic producer capable of publishing stream messages. 
         /// </summary>
         /// <param name="topic">Name of the topic.</param>
-        /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
+        /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         public ITopicProducer GetTopicProducer(string topic)
         {
             var topicProducer = new TopicProducer(new KafkaProducerConfiguration(brokerAddress, brokerProperties), topic);
@@ -164,7 +200,7 @@ namespace QuixStreams.Streaming
         /// <param name="consumerGroup">The consumer group id to use for consuming messages. If null, consumer group is not used and only consuming new messages.</param>
         /// <param name="commitMode">The commit strategy to use for this topic</param>
         /// <returns>Instance of <see cref="ITopicConsumer"/></returns>
-        public static ITopicConsumer GetTopicConsumer(this KafkaStreamingClient client, string topic, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
+        public static ITopicConsumer GetTopicConsumer(this IKafkaStreamingClient client, string topic, string consumerGroup = null, CommitMode commitMode = CommitMode.Automatic, AutoOffsetReset autoOffset =  AutoOffsetReset.Latest)
         {
             switch (commitMode)
             {
