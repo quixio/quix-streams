@@ -77,9 +77,10 @@ class StreamConsumer(object):
             self._streamEventsConsumer.dispose()
         if self._streamPropertiesConsumer is not None:
             self._streamPropertiesConsumer.dispose()
+        if self._stream_state_manager is not None:
+            self._stream_state_manager.dispose()
         self._on_stream_closed_dispose()
         self._on_package_received_dispose()
-        self._stream_state_manager.dispose()
 
     @property
     def topic(self) -> 'TopicConsumer':
