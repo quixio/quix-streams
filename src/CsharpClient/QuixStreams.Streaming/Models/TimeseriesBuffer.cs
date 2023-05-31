@@ -553,6 +553,7 @@ namespace QuixStreams.Streaming.Models
         /// <returns>Filtered dictionary</returns>
         private static Dictionary<string, T[]> GenerateDictionaryMaskFilterMethod<T>(Dictionary<string, T[]> originalDictionary, List<int> selectRows)
         {
+            if (originalDictionary == null) return null;
             var newDictionary = new Dictionary<string, T[]>(originalDictionary.Count);
             foreach (var kvp in originalDictionary)
             {
