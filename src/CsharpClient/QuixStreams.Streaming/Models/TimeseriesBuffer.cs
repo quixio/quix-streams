@@ -410,9 +410,11 @@ namespace QuixStreams.Streaming.Models
                 {
                     List<TimeseriesDataRaw> loadedData;
 
+                    var rowCount = 0;
                     lock (this._lock)
                     {
                         if (this.totalRowsCount == 0) return; // check again in case it changes since entering the condition
+                        rowCount = totalRowsCount;
                         loadedData = new List<TimeseriesDataRaw>(this.bufferedFrames);
                         if (loadedData.Count == 0) return; // this shouldn't be possible any more, but safer code won't hurt
                         this.totalRowsCount = 0;
@@ -421,7 +423,7 @@ namespace QuixStreams.Streaming.Models
 
                     if (this.OnDataReleased == null && this.OnRawReleased == null) return;
                     
-                    var newPdrw = this.ConcatDataFrames(loadedData);
+                    var newPdrw = this.ConcatDataFrames(loadedData, rowCount);
                     if (this.mergeOnFlush)
                     {
                         newPdrw = this.MergeTimestamps(newPdrw);
@@ -660,25 +662,33 @@ namespace QuixStreams.Streaming.Models
         /// <summary>
         /// Concatenate list of TimeseriesDataRaws into a single TimeseriesDataRaw
         /// </summary>
-        /// <param name="TimeseriesDataRaws">List of data to concatenate</param>
+        /// <param name="timeseriesDataRaws">List of data to concatenate</param>
+        /// <param name="rowCount">The total number of rows the result will have</param>
         /// <returns>New object with the proper length containing concatenated data</returns>
-        protected TimeseriesDataRaw ConcatDataFrames(List<TimeseriesDataRaw> TimeseriesDataRaws)
+        protected TimeseriesDataRaw ConcatDataFrames(List<TimeseriesDataRaw> timeseriesDataRaws, int rowCount)
         {
-            if (TimeseriesDataRaws.Count == 0) return new TimeseriesDataRaw();
-            long newEpoch = TimeseriesDataRaws.First().Epoch; 
+            if (timeseriesDataRaws.Count == 0) return new TimeseriesDataRaw();
+            long newEpoch = timeseriesDataRaws.First().Epoch; 
             
             // Timestamps must be shifted if the epoch is different than the target epoch
-            long[] newTimestamps = ArrayConcatMethod(
-                TimeseriesDataRaws.Select(e =>
+            long[] newTimestamps = new long[rowCount];
+            var timestampRunningIndex = 0;
+            foreach (var timeseriesDataRaw in timeseriesDataRaws)
+            {
+                if (timeseriesDataRaw.Epoch == newEpoch)
                 {
-                    if(e.Epoch == newEpoch)
-                        return e.Timestamps;
-                    long epochDiff = e.Epoch - newEpoch;
-                    //TODO: can allocate twice ( potential performance improvement )
-                    return e.Timestamps.Select((ts) => ts + epochDiff).ToArray();
-                }).ToArray());
-
-            int rowsLen = newTimestamps.Length;
+                    timeseriesDataRaw.Timestamps.CopyTo(newTimestamps, timestampRunningIndex);
+                    timestampRunningIndex += timeseriesDataRaw.Timestamps.Length;
+                    continue;
+                }
+                
+                long epochDiff = timeseriesDataRaw.Epoch - newEpoch;
+                foreach (var timestamp in timeseriesDataRaw.Timestamps)
+                {
+                    newTimestamps[timestampRunningIndex] = timestamp + epochDiff;
+                    timestampRunningIndex++;
+                }
+            }
 
             Dictionary<string, string[]> newTagValues = new Dictionary<string, string[]>();
             Dictionary<string, double?[]> newNumericValues = new Dictionary<string, double?[]>();
@@ -688,24 +698,24 @@ namespace QuixStreams.Streaming.Models
             int index = 0;
             if (parametersFilter.Length > 0)
             {
-                for (var i = 0; i < TimeseriesDataRaws.Count(); i++)
+                foreach (var raw in timeseriesDataRaws)
                 {
-                    ExtendDictionaryWithKeyFilter(TimeseriesDataRaws[i].NumericValues, this.parametersFilterSet, index, rowsLen, newNumericValues);
-                    ExtendDictionaryWithKeyFilter(TimeseriesDataRaws[i].BinaryValues, this.parametersFilterSet, index, rowsLen, newBinaryValues);
-                    ExtendDictionaryWithKeyFilter(TimeseriesDataRaws[i].StringValues, this.parametersFilterSet, index, rowsLen, newStringValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].TagValues, index, rowsLen, newTagValues);
-                    index += TimeseriesDataRaws[i].Timestamps.Length;
+                    ExtendDictionaryWithKeyFilter(raw.NumericValues, this.parametersFilterSet, index, rowCount, newNumericValues);
+                    ExtendDictionaryWithKeyFilter(raw.BinaryValues, this.parametersFilterSet, index, rowCount, newBinaryValues);
+                    ExtendDictionaryWithKeyFilter(raw.StringValues, this.parametersFilterSet, index, rowCount, newStringValues);
+                    ExtendDictionary(raw.TagValues, index, rowCount, newTagValues);
+                    index += raw.Timestamps.Length;
                 }
             }
             else
             {
-                for (var i = 0; i < TimeseriesDataRaws.Count(); i++)
+                foreach (var raw in timeseriesDataRaws)
                 {
-                    ExtendDictionary(TimeseriesDataRaws[i].NumericValues, index, rowsLen, newNumericValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].BinaryValues, index, rowsLen, newBinaryValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].StringValues, index, rowsLen, newStringValues);
-                    ExtendDictionary(TimeseriesDataRaws[i].TagValues, index, rowsLen, newTagValues);
-                    index += TimeseriesDataRaws[i].Timestamps.Length;
+                    ExtendDictionary(raw.NumericValues, index, rowCount, newNumericValues);
+                    ExtendDictionary(raw.BinaryValues, index, rowCount, newBinaryValues);
+                    ExtendDictionary(raw.StringValues, index, rowCount, newStringValues);
+                    ExtendDictionary(raw.TagValues, index, rowCount, newTagValues);
+                    index += raw.Timestamps.Length;
                 }
             }
 
@@ -728,26 +738,9 @@ namespace QuixStreams.Streaming.Models
             }
         }
 
-        /// <summary>
-        /// Function which concatenate arrays in an efficient way
-        /// </summary>
-        /// <param name="inp">List of arrays to concatenate</param>
-        /// <returns>Concatenated array</returns>
-        private static T[] ArrayConcatMethod<T>(IEnumerable<T[]> inp)
-        {
-            var newRowCount = inp.Select((arg => arg.Length)).Aggregate(((i, i1) => i + i1));
-            T[] ret = new T[newRowCount];
-            int index = 0;
-            foreach (var item in inp)
-            {
-                item.CopyTo(ret, index);
-                index += item.Length;
-            }
-            return ret;
-        }
-
         private static void ExtendDictionary<T>(Dictionary<string, T[]> mergeWith, int index, int defaultLen, Dictionary<string, T[]> originalDict)
         {
+            if (mergeWith == null) return;
             foreach (var keyValuePair in mergeWith)
             {
                 bool isNotNull = false;
