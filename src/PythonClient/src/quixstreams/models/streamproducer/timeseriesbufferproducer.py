@@ -7,7 +7,7 @@ import pandas as pd
 
 from ..netdict import NetDict
 from ..timeseriesbuffer import TimeseriesBuffer
-from ... import TimeseriesData
+from ... import TimeseriesData, TimeseriesDataRaw, TimeseriesDataTimestamp
 from ...builders import TimeseriesDataBuilder
 from ...helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ...helpers.nativedecorator import nativedecorator
@@ -117,12 +117,12 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         """
         self._interop.Flush()
 
-    def publish(self, packet: Union[TimeseriesData, pd.DataFrame]) -> None:
+    def publish(self, packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw, TimeseriesDataTimestamp]) -> None:
         """
         Publish the provided timeseries packet to the buffer.
 
         Args:
-            packet: The packet containing TimeseriesData or panda DataFrame
+            packet: The packet containing TimeseriesData, TimeseriesDataRaw, TimeseriesDataTimestamp, or pandas DataFrame.
                 - packet type panda.DataFrame:
                     * Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
                     * Note 2: Tags should be prefixed by TAG__ or they will be treated as timeseries parameters
@@ -154,6 +154,12 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
         """
         if isinstance(packet, TimeseriesData):
             self._interop.Publish(packet.get_net_pointer())
+            return
+        if isinstance(packet, TimeseriesDataRaw):
+            self._interop.Publish2(packet.get_net_pointer())
+            return
+        if isinstance(packet, TimeseriesDataTimestamp):
+            self._interop.Publish3(packet.get_net_pointer())
             return
         if isinstance(packet, pd.DataFrame):
             data = TimeseriesData.from_panda_dataframe(packet)

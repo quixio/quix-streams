@@ -1167,6 +1167,235 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(len(read_data.timestamps[0].parameters), 4, "Missing parameter")
         TimeseriesDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
         TimeseriesDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
+    
+    def test_timeseriesDataRaw_publish_via_buffer_and_consume(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_producer = client.get_topic_producer(topic_name)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group,
+                                                   auto_offset_reset=AutoOffsetReset.Earliest)
+
+        stream = None  # The outgoing stream
+        event = threading.Event()  # used for assertion
+        consumed_timeseries_data: qx.TimeseriesData = None
+
+        def on_stream_received_handler(stream_received: qx.StreamConsumer):
+            if stream.stream_id == stream_received.stream_id:
+                param_buffer = stream_received.timeseries.create_buffer()
+                param_buffer.on_data_released = on_timeseries_data_handler
+
+        def on_timeseries_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            nonlocal consumed_timeseries_data
+            consumed_timeseries_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        stream = topic_producer.create_stream()
+
+        published_timeseries_data_raw = qx.TimeseriesDataRaw()
+        published_timeseries_data_raw.set_values(
+            epoch=0,
+            timestamps=[1, 2, 3],
+            numeric_values={"numeric": [3, 12.32, None]},
+            string_values={"string": ["one", None, "three"]},
+            binary_values={"binary": [bytes("byte1", "utf-8"), None, None]},
+            tag_values={"tag1": ["t1", "t2", None]},
+        )
+
+        stream.timeseries.publish(published_timeseries_data_raw)
+
+        # Assert
+        self.waitforresult(event)
+        print("------ PUBLISHED ------")
+        print(published_timeseries_data_raw)
+        print("------ CONSUMED ------")
+        print(consumed_timeseries_data)
+        topic_consumer.dispose()  # cleanup
+
+        self.assertEqual(len(consumed_timeseries_data.timestamps), 3, "Received wrong number of timestamps")
+        published_timeseries_data = published_timeseries_data_raw.convert_to_timeseriesdata()
+        # evaluate neither contains more nor less than should, and is done by checking both ways
+        TimeseriesDataTests.assert_data_are_equal(self, published_timeseries_data, consumed_timeseries_data)
+        TimeseriesDataTests.assert_data_are_equal(self, consumed_timeseries_data, published_timeseries_data)
+
+    def test_timeseriesDataTimestamp_publish_direct_and_consume(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_producer = client.get_topic_producer(topic_name)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group,
+                                                   auto_offset_reset=AutoOffsetReset.Earliest)
+
+        stream = None  # The outgoing stream
+        event = threading.Event()  # used for assertion
+        consumed_timeseries_data: qx.TimeseriesData = None
+
+        def on_stream_received_handler(stream_received: qx.StreamConsumer):
+            if stream.stream_id == stream_received.stream_id:
+                param_buffer = stream_received.timeseries.create_buffer()
+                param_buffer.on_data_released = on_timeseries_data_handler
+
+        def on_timeseries_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            nonlocal consumed_timeseries_data
+            consumed_timeseries_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        stream = topic_producer.create_stream()
+
+        published_timestamp = qx.TimeseriesData().add_timestamp_nanoseconds(10) \
+            .add_value("bufferless_1", 1) \
+            .add_value("bufferless_2", "test") \
+            .add_value("bufferless_3", "test") \
+            .add_value("bufferless_4", bytearray("bufferless_4", "UTF-8")) \
+            .add_value("bufferless_5", bytes(bytearray("bufferless_5", "UTF-8"))) \
+            .remove_value("bufferless_3") \
+            .add_tag("tag1", "tag1val") \
+            .add_tag("tag2", "tag2val") \
+            .remove_tag("tag2")
+
+        stream.timeseries.publish(published_timestamp)
+
+        # Assert
+        self.waitforresult(event)
+        print("------ PUBLISHED ------")
+        print(published_timestamp)
+        print("------ CONSUMED ------")
+        print(consumed_timeseries_data)
+        topic_consumer.dispose()  # cleanup
+
+        self.assertEqual(len(consumed_timeseries_data.timestamps), 1, "Multiple timestamps received")
+        self.assertEqual(len(consumed_timeseries_data.timestamps[0].parameters), 4, "Missing parameter")
+        # evaluate neither contains more nor less than should, and is done by checking both ways
+        TimeseriesDataTests.assert_timestamps_are_equal(self, published_timestamp, consumed_timeseries_data.timestamps[0])
+        TimeseriesDataTests.assert_timestamps_are_equal(self, consumed_timeseries_data.timestamps[0], published_timestamp)
+
+    def test_timeseriesDataTimestamp_publish_via_buffer_and_consume(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_producer = client.get_topic_producer(topic_name)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group,
+                                                   auto_offset_reset=AutoOffsetReset.Earliest)
+
+        stream = None  # The outgoing stream
+        event = threading.Event()  # used for assertion
+        consumed_timeseries_data: qx.TimeseriesData = None
+
+        def on_stream_received_handler(stream_received: qx.StreamConsumer):
+            if stream.stream_id == stream_received.stream_id:
+                param_buffer = stream_received.timeseries.create_buffer()
+                param_buffer.buffer_timeout = 100
+                param_buffer.on_data_released = on_parameter_data_handler
+
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            nonlocal consumed_timeseries_data
+            consumed_timeseries_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        stream = topic_producer.create_stream()
+        stream.timeseries.buffer.packet_size = 10  # this is to enforce buffering until we want
+
+        utc_now = datetime.utcnow()  # for assertion purposes save it
+        timestamp1 = qx.TimeseriesData().add_timestamp(utc_now) \
+            .add_value("string_param", "value1") \
+            .add_value("num_param", 123.43) \
+            .add_value("binary_param", bytearray("binary_param", "UTF-8")) \
+            .add_value("binary_param2", bytes(bytearray("binary_param2", "UTF-8"))) \
+            .add_tag("Tag2", "tag two updated") \
+            .add_tag("Tag3", "tag three") \
+            .add_tags({"tag4": "tag4val", "tag5": "tag5val"})
+
+        timestamp2 = qx.TimeseriesData().add_timestamp_milliseconds(123456789) \
+            .add_value("string_param", "value1") \
+            .add_value("num_param", 83.756) \
+            .add_value("binary_param", bytearray("binary_param3", "UTF-8"))
+
+        stream.timeseries.buffer.publish(timestamp1)
+        stream.timeseries.buffer.publish(timestamp2)
+
+        stream.timeseries.buffer.flush()
+
+        # Assert
+        self.waitforresult(event)
+        print("------ PUBLISHED ------")
+        print(timestamp1)
+        print(timestamp2)
+        print("------ CONSUMED ------")
+        print(consumed_timeseries_data)
+        topic_consumer.dispose()  # cleanup
+        self.assertEqual(2, len(consumed_timeseries_data.timestamps))
+
+    def test_parameters_write_direct_and_read(self):
+        # Arrange
+        print("Starting Integration test {}".format(sys._getframe().f_code.co_name))
+        topic_name = sys._getframe().f_code.co_name  # current method name
+        consumer_group = "irrelevant"  # because the kafka we're testing against doesn't have topic initially, using consumer group and offset 'earliest' is the only stable way to read from it before beginning to write
+        client = qx.KafkaStreamingClient(TestIntegration.broker_list, None)
+        topic_producer = client.get_topic_producer(topic_name)
+        topic_consumer = client.get_topic_consumer(topic_name, consumer_group, auto_offset_reset=AutoOffsetReset.Earliest)
+
+        stream = None  # The outgoing stream
+        event = threading.Event()  # used for assertion
+        read_data: qx.TimeseriesData = None
+
+        def on_stream_received_handler(stream_received: qx.StreamConsumer):
+            if stream.stream_id == stream_received.stream_id:
+                param_buffer = stream_received.timeseries.create_buffer()
+                param_buffer.on_data_released = on_parameter_data_handler
+
+        def on_parameter_data_handler(stream: qx.StreamConsumer, data: qx.TimeseriesData):
+            nonlocal read_data
+            read_data = data
+            event.set()
+
+        topic_consumer.on_stream_received = on_stream_received_handler
+        topic_consumer.subscribe()
+
+        # Act
+        stream = topic_producer.create_stream()
+
+        written_data = qx.TimeseriesData()
+        written_data.add_timestamp_nanoseconds(10) \
+            .add_value("bufferless_1", 1) \
+            .add_value("bufferless_2", "test") \
+            .add_value("bufferless_3", "test") \
+            .add_value("bufferless_4", bytearray("bufferless_4", "UTF-8")) \
+            .add_value("bufferless_5", bytes(bytearray("bufferless_5", "UTF-8"))) \
+            .remove_value("bufferless_3") \
+            .add_tag("tag1", "tag1val") \
+            .add_tag("tag2", "tag2val") \
+            .remove_tag("tag2")
+
+        stream.timeseries.publish(written_data)
+
+        # Assert
+        self.waitforresult(event)
+        print("------ Written ------")
+        print(written_data)
+        print("------ READ ------")
+        print(read_data)
+        topic_consumer.dispose()  # cleanup
+        self.assertEqual(len(read_data.timestamps[0].parameters), 4, "Missing parameter")
+        TimeseriesDataTests.assert_data_are_equal(self, written_data, read_data)  # evaluate neither contains more or less than should
+        TimeseriesDataTests.assert_data_are_equal(self, read_data, written_data)  # and is done by checking both ways
 
     def test_parameters_write_direct_and_read_all_options(self):
         # Arrange
@@ -1842,12 +2071,12 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(received_messages[2].value, message_raw.value)
 
         keys = received_messages[0].metadata.keys()
-        self.assertIn('MessageGroupKey', keys)
+        self.assertNotIn('MessageGroupKey', keys)  # because key was not set
+        self.assertNotIn('KafkaKey', keys)  # because key was not set
         self.assertIn('KafkaTopic', keys)
-        self.assertIn('KafkaKey', keys)
         self.assertIn('KafkaPartition', keys)
         self.assertIn('KafkaOffset', keys)
-        self.assertIn('KafkaDateTime', keys)
+        self.assertIn('BrokerMessageTime', keys)
         self.assertIn('KafkaMessageSize', keys)
 # endregion
 

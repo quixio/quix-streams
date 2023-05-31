@@ -93,7 +93,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
 
         /// <summary>
-        /// Publish the provided timeseries data to the buffer.
+        /// Publish timeseries data to the buffer.
         /// </summary>
         /// <param name="data">Data to publish</param>
         public void Publish(TimeseriesData data)
@@ -118,6 +118,78 @@ namespace QuixStreams.Streaming.Models.StreamProducer
             }
 
             this.WriteChunk(data.ConvertToTimeseriesDataRaw(false, false)); // use merge & clean of Buffer is more efficient
+        }
+        
+        /// <summary>
+        /// Publish timeseries data raw to the buffer.
+        /// </summary>
+        /// <param name="data">Data to publish</param>
+        public void Publish(TimeseriesDataRaw data)
+        {
+            long epochDifference = this.streamProducer.Epoch.ToUnixNanoseconds();
+            long[] updatedTimestamps = null;
+            
+            if (epochDifference != 0)
+            {
+                updatedTimestamps = new long[data.Timestamps.Length];
+                for (int i = 0; i < updatedTimestamps.Length; i++)
+                {
+                    updatedTimestamps[i] = data.Timestamps[i] + epochDifference;
+                }
+            }
+            
+            Dictionary<string, string[]> updatedTagValues = null;
+
+            if (this.DefaultTags.Count > 0)
+            {
+                updatedTagValues = new Dictionary<string, string[]>(data.TagValues);
+                foreach (var tag in this.DefaultTags)
+                {
+                    if (!updatedTagValues.TryGetValue(tag.Key, out var tagValues))
+                    {
+                        tagValues = new string[data.Timestamps.Length];
+                        updatedTagValues[tag.Key] = tagValues;
+                    }
+
+                    for (int i = 0; i < data.Timestamps.Length; i++)
+                    {
+                        tagValues[i] = tag.Value;
+                    }
+                }
+            }
+
+            var newData = new QuixStreams.Telemetry.Models.TimeseriesDataRaw(
+                data.Epoch, 
+                updatedTimestamps ?? data.Timestamps, 
+                data.NumericValues, 
+                data.StringValues, 
+                data.BinaryValues, 
+                updatedTagValues ?? data.TagValues
+            );
+
+            this.WriteChunk(newData);
+        }
+        
+        /// <summary>
+        /// Publish single timestamp to the buffer.
+        /// </summary>
+        /// <param name="timestamp">Timeseries timestamp to publish</param>
+        public void Publish(TimeseriesDataTimestamp timestamp)
+        {
+            if (!timestamp.EpochIncluded)
+            {
+                timestamp.TimestampNanoseconds += this.Epoch.ToUnixNanoseconds();
+                timestamp.EpochIncluded = true;
+            }
+
+            foreach (var kv in this.DefaultTags)
+            {
+                if (!timestamp.Tags.ContainsKey(kv.Key))
+                {
+                    timestamp.AddTag(kv.Key, kv.Value);
+                }
+            }
+            this.WriteChunk(timestamp.ConvertToTimeseriesDataRaw());
         }
 
 

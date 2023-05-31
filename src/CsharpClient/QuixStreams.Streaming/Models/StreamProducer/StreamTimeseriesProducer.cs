@@ -73,7 +73,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
             this.streamProducer.Publish(data.ConvertToTimeseriesDataRaw());
         }
-
+        
         /// <summary>
         /// Publish data in TimeseriesDataRaw format without any buffering
         /// </summary>
@@ -100,7 +100,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 updatedTimestamps[i] = data.Timestamps[i] + epochDiff;
             }
 
-            QuixStreams.Telemetry.Models.TimeseriesDataRaw new_data = new QuixStreams.Telemetry.Models.TimeseriesDataRaw(
+            QuixStreams.Telemetry.Models.TimeseriesDataRaw newData = new QuixStreams.Telemetry.Models.TimeseriesDataRaw(
                 data.Epoch, 
                 updatedTimestamps, 
                 data.NumericValues, 
@@ -109,10 +109,29 @@ namespace QuixStreams.Streaming.Models.StreamProducer
                 data.TagValues
             );
 
-            this.streamProducer.Publish(new_data);
+            this.streamProducer.Publish(newData);
         }
 
+        /// <summary>
+        /// Publish single timestamp to stream without any buffering
+        /// </summary>
+        /// <param name="timestamp">Timeseries timestamp to publish</param>
+        public void Publish(TimeseriesDataTimestamp timestamp)
+        {
+            if (isDisposed)
+            {
+                throw new ObjectDisposedException(nameof(StreamTimeseriesProducer));
+            }
+            
+            if (!timestamp.EpochIncluded)
+            {
+                timestamp.TimestampNanoseconds += this.streamProducer.Epoch.ToUnixNanoseconds();
+                timestamp.EpochIncluded = true;
+            }
 
+            this.streamProducer.Publish(timestamp.ConvertToTimeseriesDataRaw());
+        }
+        
         /// <summary>
         /// Default Location of the parameters. Parameter definitions added with <see cref="AddDefinition"/> will be inserted at this location.
         /// See <see cref="AddLocation"/> for adding definitions at a different location without changing default.

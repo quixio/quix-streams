@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 import pandas
 import numpy as np
 from src.quixstreams.helpers.timeconverter import TimeConverter
-from src.quixstreams import TimeseriesData
+from src.quixstreams import TimeseriesData, TimeseriesDataTimestamp
 
 from src.quixstreams.models.parametervalue import ParameterValueType
 
@@ -458,24 +458,27 @@ class TimeseriesDataTests(unittest.TestCase):
         _assert_time(pandas.DataFrame([{"TiMeSTAMP": 5000000, "value": 0.1}]), 5000000)
         _assert_time(pandas.DataFrame([{"value": 0.1, "TiMeSTAMP": 5000000}]), 5000000)
 
-    def assert_data_are_equal(self, data_a: TimeseriesData, data_b: TimeseriesData):
+    def assert_data_are_equal(self, data_a: TimeseriesData, data_b: TimeseriesData) -> None:
         self.assertEqual(len(data_a.timestamps), len(data_b.timestamps), "Timestamp count")
         for index_a, ts_a in enumerate(data_a.timestamps):
             ts_b = data_b.timestamps[index_a]
-            self.assertEqual(ts_a.timestamp_nanoseconds, ts_b.timestamp_nanoseconds, "Timestamp")
-            for param_id_a, parameter_value_a in ts_a.parameters.items():
-                parameter_value_b = ts_b.parameters.get(param_id_a)
-                if parameter_value_b is None and parameter_value_a.value is None:
-                    # The value was removed from the sent timeseries data at some point, and for performance reasons is just nulled out rather than cleaned up
-                    continue
-                parameter_value_b = ts_b.parameters[param_id_a]
-                self.assertEqual(parameter_value_a.type, parameter_value_b.type, "Value type")
-                if parameter_value_a.type == ParameterValueType.String:
-                    self.assertEqual(parameter_value_a.string_value, parameter_value_b.string_value,
-                                     "Value (string)")
-                if parameter_value_a.type == ParameterValueType.Numeric:
-                    self.assertEqual(parameter_value_a.numeric_value, parameter_value_b.numeric_value,
-                                     "Value (numeric)")
-            for tag_id_a, tag_value_a in ts_a.tags.items():
-                tag_value_b = ts_b.tags[tag_id_a]
-                self.assertEqual(tag_value_a, tag_value_b, "tag")
+            TimeseriesDataTests.assert_timestamps_are_equal(self, ts_a, ts_b)
+
+    def assert_timestamps_are_equal(self, ts_a: TimeseriesDataTimestamp, ts_b: TimeseriesDataTimestamp) -> None:
+        self.assertEqual(ts_a.timestamp_nanoseconds, ts_b.timestamp_nanoseconds, "Timestamp")
+        for param_id_a, parameter_value_a in ts_a.parameters.items():
+            parameter_value_b = ts_b.parameters.get(param_id_a)
+            if parameter_value_b is None and parameter_value_a.value is None:
+                # The value was removed from the sent timeseries data at some point, and for performance reasons is just nulled out rather than cleaned up
+                continue
+            parameter_value_b = ts_b.parameters[param_id_a]
+            self.assertEqual(parameter_value_a.type, parameter_value_b.type, "Value type")
+            if parameter_value_a.type == ParameterValueType.String:
+                self.assertEqual(parameter_value_a.string_value, parameter_value_b.string_value,
+                                 "Value (string)")
+            if parameter_value_a.type == ParameterValueType.Numeric:
+                self.assertEqual(parameter_value_a.numeric_value, parameter_value_b.numeric_value,
+                                 "Value (numeric)")
+        for tag_id_a, tag_value_a in ts_a.tags.items():
+            tag_value_b = ts_b.tags[tag_id_a]
+            self.assertEqual(tag_value_a, tag_value_b, "tag")
