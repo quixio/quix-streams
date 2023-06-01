@@ -551,6 +551,7 @@ namespace QuixStreams.Streaming.Models
         /// <returns>Filtered dictionary</returns>
         private static Dictionary<string, T[]> GenerateDictionaryMaskFilterMethod<T>(Dictionary<string, T[]> originalDictionary, List<int> selectRows)
         {
+            if (originalDictionary == null) return null;
             var newDictionary = new Dictionary<string, T[]>(originalDictionary.Count);
             foreach (var kvp in originalDictionary)
             {
@@ -748,6 +749,7 @@ namespace QuixStreams.Streaming.Models
 
         private static void ExtendDictionary<T>(Dictionary<string, T[]> mergeWith, int index, int defaultLen, Dictionary<string, T[]> originalDict)
         {
+            if (mergeWith == null) return;
             foreach (var keyValuePair in mergeWith)
             {
                 bool isNotNull = false;
