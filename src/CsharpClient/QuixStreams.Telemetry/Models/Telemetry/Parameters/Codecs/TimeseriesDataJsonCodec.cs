@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -24,7 +25,15 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
             var ret = ConvertToDo(doBytes);
             return ret;
         }
-        
+
+        /// <inheritdoc />
+        public override TimeseriesDataRaw Deserialize(ArraySegment<byte> contentBytes)
+        {
+            var doBytes = BaseCodec.Deserialize(contentBytes);
+            var ret = ConvertToDo(doBytes);
+            return ret;
+        }
+
         /// <inheritdoc />
         public override byte[] Serialize(TimeseriesDataRaw obj)
         {

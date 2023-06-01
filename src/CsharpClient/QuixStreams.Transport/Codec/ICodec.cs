@@ -21,6 +21,13 @@ namespace QuixStreams.Transport.Codec
         /// <param name="contentBytes">The entry to serialize</param>
         /// <returns>The deserialized object</returns>
         TContent Deserialize(byte[] contentBytes);
+        
+        /// <summary>
+        /// Attempts to deserialize the byte array with the codec.
+        /// </summary>
+        /// <param name="contentBytes">The entry to serialize</param>
+        /// <returns>The deserialized object</returns>
+        TContent Deserialize(ArraySegment<byte> contentBytes);
     }
 
     /// <summary>
@@ -58,5 +65,13 @@ namespace QuixStreams.Transport.Codec
         /// <param name="content">The deserialized object</param>
         /// <returns><c>True</c> if successful else <c>false</c></returns>
         bool TryDeserialize(byte[] contentBytes, out object content);
+        
+        /// <summary>
+        /// Attempts to deserialize the byte array with the codec.
+        /// </summary>
+        /// <param name="contentBytes">The entry to serialize</param>
+        /// <param name="content">The deserialized object</param>
+        /// <returns><c>True</c> if successful else <c>false</c></returns>
+        bool TryDeserialize(ArraySegment<byte> contentBytes, out object content);
     }
 }

@@ -36,6 +36,16 @@ namespace QuixStreams.Transport.Fw.Codecs
                 return (TContent) serializer.Deserialize(reader, typeof(TContent));
             }
         }
+        
+        /// <inheritdoc />
+        public override TContent Deserialize(ArraySegment<byte> contentBytes)
+        {
+            using (var stream = new MemoryStream(contentBytes.Array, contentBytes.Offset, contentBytes.Count))
+            using (var reader = new StreamReader(stream, Constants.Utf8NoBOMEncoding))
+            {
+                return (TContent) serializer.Deserialize(reader, typeof(TContent));
+            }
+        }
 
         /// <inheritdoc />
         public override byte[] Serialize(TContent obj)
@@ -111,7 +121,27 @@ namespace QuixStreams.Transport.Fw.Codecs
                 return false;
             }
         }
-        
+
+        /// <inheritdoc />
+        public bool TryDeserialize(ArraySegment<byte> contentBytes, out object content)
+        {
+            content = null;
+            try
+            {
+                using (var stream = new MemoryStream(contentBytes.Array, contentBytes.Offset, contentBytes.Count))
+                {
+                    using (var reader = new StreamReader(stream, Constants.Utf8NoBOMEncoding))
+                    {
+                        content = serializer.Deserialize(reader, typeof(object));
+                        return content != null;
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }        }
+
         /// <inheritdoc/>
         public Type Type => typeof(object);
     }

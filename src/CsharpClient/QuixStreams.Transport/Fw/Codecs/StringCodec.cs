@@ -1,4 +1,5 @@
-﻿using QuixStreams.Transport.Codec;
+﻿using System;
+using QuixStreams.Transport.Codec;
 
 namespace QuixStreams.Transport.Fw.Codecs
 {
@@ -24,6 +25,12 @@ namespace QuixStreams.Transport.Fw.Codecs
         public override string Deserialize(byte[] contentBytes)
         {
             return Constants.Utf8NoBOMEncoding.GetString(contentBytes);
+        }
+        
+        /// <inheritdoc />
+        public override string Deserialize(ArraySegment<byte> contentBytes)
+        {
+            return Constants.Utf8NoBOMEncoding.GetString(contentBytes.Array, contentBytes.Offset, contentBytes.Count);
         }
 
         /// <inheritdoc />

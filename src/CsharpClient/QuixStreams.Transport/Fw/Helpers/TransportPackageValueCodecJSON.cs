@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization;
+using System.Text;
 using Newtonsoft.Json;
 using QuixStreams.Transport.Codec;
 using QuixStreams.Transport.Fw.Codecs;
@@ -27,19 +29,19 @@ namespace QuixStreams.Transport.Fw.Helpers
         public static readonly byte[] ArrayOpeningCharacter = Constants.Utf8NoBOMEncoding.GetBytes(@"[");
         public static readonly byte[] ArrayClosingCharacter = Constants.Utf8NoBOMEncoding.GetBytes(@"]");
 
-        private static bool IsJson(byte[] bytes)
+        private static bool IsJson(ArraySegment<byte> bytes)
         {
             bool IsObject()
             {
-                if (bytes.Length < JsonOpeningCharacter.Length + JsonClosingCharacter.Length) return false;
+                if (bytes.Count < JsonOpeningCharacter.Length + JsonClosingCharacter.Length) return false;
                 for (var index = 0; index < JsonOpeningCharacter.Length; index++)
                 {
-                    if (bytes[index] != JsonOpeningCharacter[index]) return false;
+                    if (bytes.Array[bytes.Offset + index] != JsonOpeningCharacter[index]) return false;
                 }
 
                 for (var index = JsonClosingCharacter.Length - 1; index >= 0; index--)
                 {
-                    if (bytes[bytes.Length - 1 - index] != JsonClosingCharacter[index]) return false;
+                    if (bytes.Array[bytes.Offset + bytes.Count - 1 - index] != JsonClosingCharacter[index]) return false;
                 }
 
                 return true;
@@ -47,15 +49,15 @@ namespace QuixStreams.Transport.Fw.Helpers
 
             bool IsArray()
             {
-                if (bytes.Length < ArrayOpeningCharacter.Length + ArrayOpeningCharacter.Length) return false;
+                if (bytes.Count < ArrayOpeningCharacter.Length + ArrayOpeningCharacter.Length) return false;
                 for (var index = 0; index < ArrayOpeningCharacter.Length; index++)
                 {
-                    if (bytes[index] != ArrayOpeningCharacter[index]) return false;
+                    if (bytes.Array[bytes.Offset +index] != ArrayOpeningCharacter[index]) return false;
                 }
 
                 for (var index = ArrayOpeningCharacter.Length - 1; index >= 0; index--)
                 {
-                    if (bytes[bytes.Length - 1 - index] != ArrayClosingCharacter[index]) return false;
+                    if (bytes.Array[bytes.Offset + bytes.Count - 1 - index] != ArrayClosingCharacter[index]) return false;
                 }
 
                 return true;
@@ -63,7 +65,7 @@ namespace QuixStreams.Transport.Fw.Helpers
 
             return IsArray() || IsObject();
         }
-
+        
         public static TransportPackageValue Deserialize(byte[] contentBytes)
         {
             using (var ms = new MemoryStream(contentBytes))
@@ -73,8 +75,8 @@ namespace QuixStreams.Transport.Fw.Helpers
                 var modelKey = ModelKey.WellKnownModelKeys.Default;
                 var metaData = MetaData.Empty;
                 var valueAvailable = false;
-                var valueStartsAt = -1L;
-                var valueEndsAt = -1L;
+                int valueStartsAt = -1;
+                int valueEndsAt = -1;
                 using (var reader = new JsonTextReader(sr))
                 {
                     reader.CloseInput = false;
@@ -112,7 +114,7 @@ namespace QuixStreams.Transport.Fw.Helpers
                                         FailSerialization();
                                     }
 
-                                    valueStartsAt = (long) reader.Value;
+                                    valueStartsAt = (int)(long) reader.Value;
                                     break;
                                 case ValueBytesEndPropertyName:
                                     ReadNext(reader);
@@ -121,7 +123,7 @@ namespace QuixStreams.Transport.Fw.Helpers
                                         FailSerialization();
                                     }
 
-                                    valueEndsAt = (long) reader.Value;
+                                    valueEndsAt = (int)(long) reader.Value;
                                     break;
                                 case ValueBytesPropertyName:
                                     valueAvailable = true;
@@ -137,17 +139,16 @@ namespace QuixStreams.Transport.Fw.Helpers
                     throw new SerializationException($"Failed to deserialize '{nameof(TransportPackageValue)}' because model value details are not found");
                 }
 
-                var valueBytes = new byte[valueEndsAt - valueStartsAt];
-                ms.Position = valueStartsAt;
-                ms.Read(valueBytes, 0, valueBytes.Length);
-                if (!IsJson(valueBytes))
+                var content = new ArraySegment<byte>(contentBytes, valueStartsAt, valueEndsAt - valueStartsAt);
+                if (!IsJson(content))
                 {
-                    var reader = new JsonTextReader(new StreamReader(ms));
-                    ms.Position = valueStartsAt;
-                    var newValueBytes = reader.ReadAsBytes();
-                    valueBytes = newValueBytes;
+                    // +1, -2, because the value is "....", so trimming the leading and trailing "
+                    byte[] decodedByteArray =Convert.FromBase64String(Encoding.ASCII.GetString(content.Array, content.Offset + 1 , content.Count -2 )); 
+
+                    content = new ArraySegment<byte>(decodedByteArray);
                 }
-                return new TransportPackageValue(valueBytes, new CodecBundle(modelKey, codecId), metaData);
+
+                return new TransportPackageValue(content, new CodecBundle(modelKey, codecId), metaData);
             }
         }
         
@@ -185,7 +186,7 @@ namespace QuixStreams.Transport.Fw.Helpers
                     }
                     else
                     {
-                        writer.WriteValue(value);
+                        writer.WriteValue(value.ToArray());
                     }
 
                     writer.Flush();

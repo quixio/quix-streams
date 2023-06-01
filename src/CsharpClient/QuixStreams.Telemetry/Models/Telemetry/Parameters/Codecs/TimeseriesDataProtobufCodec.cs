@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -196,7 +197,7 @@ namespace QuixStreams.Telemetry.Models.Codecs
         /// <inheritdoc />
         public override TimeseriesDataRaw Deserialize(byte[] contentBytes)
         {
-            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes));
+            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes)); // TODO ????? copy ?
 
             var numericValues = DeserializeNumerics(raw.NumericValues);
             var stringValues = DeserializeStrings(raw.StringValues);
@@ -213,7 +214,28 @@ namespace QuixStreams.Telemetry.Models.Codecs
             };
             return ret;
         }
-        
+
+        /// <inheritdoc />
+        public override TimeseriesDataRaw Deserialize(ArraySegment<byte> contentBytes)
+        {
+            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes.Array, contentBytes.Offset, contentBytes.Count)); // TODO ????? copy ?
+
+            var numericValues = DeserializeNumerics(raw.NumericValues);
+            var stringValues = DeserializeStrings(raw.StringValues);
+            var binaryValues = DeserializeBinaries(raw.BinaryValues);
+            var tagValues = DeserializeStrings(raw.TagValues);
+            var ret = new TimeseriesDataRaw
+            {
+                Epoch = raw.Epoch,
+                Timestamps = raw.Timestamps.ToArray(),
+                NumericValues = numericValues,
+                StringValues = stringValues,
+                BinaryValues = binaryValues,
+                TagValues = tagValues,
+            };
+            return ret;
+        }
+
         /// <inheritdoc />
         public override byte[] Serialize(TimeseriesDataRaw obj)
         {

@@ -15,7 +15,7 @@ namespace QuixStreams.Transport.Fw.Helpers
         /// <param name="packageValue">The value to de/serialize </param>
         /// <param name="codecBundle">The codec details to use for de/serialization</param>
         /// <param name="metaData">The metadata that belongs to the value</param>
-        public TransportPackageValue(byte[] packageValue, CodecBundle codecBundle, MetaData metaData = null)
+        public TransportPackageValue(ArraySegment<byte> packageValue, CodecBundle codecBundle, MetaData metaData = null)
         {
             this.Value = packageValue;
             this.CodecBundle = codecBundle;
@@ -23,9 +23,18 @@ namespace QuixStreams.Transport.Fw.Helpers
         }
 
         /// <summary>
+        /// Initializes a new instance of <see cref="TransportPackageValue"/>
+        /// </summary>
+        /// <param name="packageValue">The value to de/serialize </param>
+        /// <param name="codecBundle">The codec details to use for de/serialization</param>
+        /// <param name="metaData">The metadata that belongs to the value</param>
+        public TransportPackageValue(byte[] packageValue, CodecBundle codecBundle, MetaData metaData = null) :
+            this(new ArraySegment<byte>(packageValue), codecBundle, metaData) {}
+
+        /// <summary>
         /// The value to de/serialize
         /// </summary>
-        public byte[] Value { get; }
+        public ArraySegment<byte> Value { get; }
 
         /// <summary>
         /// The codec details to use for de/serialization
