@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Common.Test;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
@@ -19,7 +20,7 @@ namespace QuixStreams.Streaming.UnitTests
         public TestStreamingClient(CodecType codec = CodecType.Protobuf, TimeSpan publishDelay = default)
         {
             this.publishDelay = publishDelay;
-            CodecRegistry.Register(codec);
+            CodecSettings.SetGlobalCodecType(codec);
         }
 
         public ITopicConsumer GetTopicConsumer()
