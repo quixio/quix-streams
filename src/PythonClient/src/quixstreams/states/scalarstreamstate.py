@@ -52,7 +52,7 @@ class ScalarStreamState(Generic[StreamStateType]):
         self._on_flushing_internal = None
         if not self._immutable:
             def on_flushing_internal():
-                self._interop.set_Value(self.convert_val_from_python(self._in_memory_value))
+                self._underlying_value = self._in_memory_value
 
             self._on_flushing_internal = on_flushing_internal
             self.on_flushing = None  # this will subscribe to the event and invoke the internal
