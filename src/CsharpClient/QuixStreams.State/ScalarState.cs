@@ -11,7 +11,7 @@ using QuixStreams.State.Storage;
 namespace QuixStreams.State
 {
     /// <summary>
-    /// Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
+    /// Represents a state container that stores scalar value with the ability to flush changes to a specified storage.
     /// </summary>
     public class ScalarState: IState
     {
@@ -33,10 +33,10 @@ namespace QuixStreams.State
         /// <summary>
         /// Represents the key used to store the state in the storage.
         /// </summary>
-        public const string StorageKey = "SCALAR_VALUE";
+        private const string StorageKey = "SCALAR";
 
         /// <summary>
-        /// Represents the in-memory state holding the key-value pairs of last persisted hash values
+        /// Represents the hash of last flushed value that is persisted
         /// </summary>
         private int lastFlushHash = default;
         
@@ -69,7 +69,7 @@ namespace QuixStreams.State
         }
 
         /// <summary>
-        /// Removes all key-value pairs from the in-memory state and marks the state for clearing when flushed.
+        /// Sets the value of in-memory state to null and marks the state for clearing when flushed.
         /// </summary>
         public void Clear()
         {
@@ -78,7 +78,7 @@ namespace QuixStreams.State
         }
 
         /// <summary>
-        /// Gets or sets the element with the specified key in the in-memory state.
+        /// Gets or sets the value to the in-memory state.
         /// </summary>
         /// <returns>Returns the value</returns>
         public StateValue Value
@@ -140,7 +140,7 @@ namespace QuixStreams.State
     }
     
     /// <summary>
-    /// Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
+    /// Represents a state container that stores scalar value with the ability to flush changes to a specified storage.
     /// </summary>
     public class ScalarState<T> : IState
     {
@@ -156,7 +156,7 @@ namespace QuixStreams.State
         private bool clearBeforeFlush;
         
         /// <summary>
-        /// The underlying state storage for this State, responsible for managing the actual key-value pairs.
+        /// The underlying state storage for this State, responsible for managing the actual value.
         /// </summary>
         private readonly ScalarState underlyingScalarState;
 
@@ -309,12 +309,19 @@ namespace QuixStreams.State
             this.inMemoryValue = underlyingScalarState.Value != null ? genericConverter(underlyingScalarState.Value) : default;
         }
         
+        /// <summary>
+        /// Sets the value of in-memory state to null and marks the state for clearing when flushed.
+        /// </summary>
         public void Clear()
         {
             this.inMemoryValue = default;
             this.clearBeforeFlush = true;
         }
         
+        /// <summary>
+        /// Gets or sets the value to the in-memory state.
+        /// </summary>
+        /// <returns>Returns the value</returns>
         public T Value
         {
             get => this.inMemoryValue;

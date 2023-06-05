@@ -3,7 +3,7 @@ using System;
 namespace QuixStreams.Streaming.States
 {
     /// <summary>
-    /// fill me
+    /// Interface for a stream state
     /// </summary>
     public interface IStreamState
     {

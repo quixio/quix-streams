@@ -267,7 +267,7 @@ class StreamConsumer(object):
             state_type: The type of the state
 
         Returns:
-            DictStreamState: The stream state
+            ScalarStreamState: The stream state
 
          Example:
             >>> stream_consumer.get_scalar_state('some_state')

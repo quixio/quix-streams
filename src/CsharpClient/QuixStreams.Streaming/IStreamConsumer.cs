@@ -68,7 +68,7 @@ namespace QuixStreams.Streaming
         }
         
         /// <summary>
-        /// Gets the dictionary type stream state for the specified storage name using the provided default value factory.
+        /// Gets the scalar type stream state for the specified storage name using the provided default value factory.
         /// </summary>
         /// <typeparam name="T">The type of the stream state value.</typeparam>
         /// <param name="streamConsumer">The stream consumer to get the state for</param>

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State;
@@ -8,12 +7,12 @@ using QuixStreams.State.Storage;
 namespace QuixStreams.Streaming.States
 {
     /// <summary>
-    /// Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
+    /// Represents a scalar storage of a value with a specific means to be persisted.
     /// </summary>
     public class StreamScalarState : IStreamState
     {
         /// <summary>
-        /// The underlying state storage for this StreamState, responsible for managing the actual key-value pairs.
+        /// The underlying state storage for this StreamState, responsible for managing the actual value.
         /// </summary>
         private readonly State.ScalarState scalarState;
 
@@ -36,17 +35,19 @@ namespace QuixStreams.Streaming.States
         {
             this.scalarState = new State.ScalarState(storage, loggerFactory);
         }
-
         
-        /// <inheritdoc cref="IDictionary.Clear" />
+        /// <summary>
+        /// Sets the value of in-memory state to null and marks the state for clearing when flushed.
+        /// </summary>
         public void Clear()
         {
             this.scalarState.Clear();
         }
         
         /// <summary>
-        /// fill me
+        /// Gets or sets the value to the in-memory state.
         /// </summary>
+        /// <returns>Returns the value</returns>
         public StateValue Value
         {
             get => scalarState.Value;
@@ -73,21 +74,18 @@ namespace QuixStreams.Streaming.States
     }
     
     /// <summary>
-    /// Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
+    /// Represents a scalar storage of a value with a specific means to be persisted.
     /// </summary>
     /// <typeparam name="T">The type of values stored in the StreamState.</typeparam>
     public class StreamScalarState<T> : IStreamState
     {
         /// <summary>
-        /// The underlying state storage for this StreamState, responsible for managing the actual key-value pairs.
+        /// The underlying state storage for this StreamState, responsible for managing the actual value.
         /// </summary>
         private readonly State.ScalarState<T> scalarState;
-        /// <summary>
-        /// Returns whether the cache keys are case-sensitive
-        /// </summary>
         
         /// <summary>
-        /// A function that takes a string key and returns a default value of type T when the key is not found in the state storage.
+        /// A function that returns a default value of type T when the value has not been set yet.
         /// </summary>
         private readonly StreamStateDefaultValueDelegate<T> defaultValueFactory;
 
@@ -114,8 +112,9 @@ namespace QuixStreams.Streaming.States
         }
         
         /// <summary>
-        /// fill me
+        /// Gets or sets the value to the in-memory state.
         /// </summary>
+        /// <returns>Returns the value</returns>
         public T Value
         {
             get

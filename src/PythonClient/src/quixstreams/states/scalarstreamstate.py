@@ -12,7 +12,7 @@ from typing import Generic, Callable
 @nativedecorator
 class ScalarStreamState(Generic[StreamStateType]):
     """
-    Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
+    Represents a state container that stores a scalar value with the ability to flush changes to a specified storage.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p, state_type: StreamStateType, default_value_factory: Callable[[], StreamStateType]):
