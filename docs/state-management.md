@@ -16,7 +16,7 @@ Quix Streams has state management built in to enable values to be used and persi
 
 ## State management
 
-The library is providing automatic state management which handles application lifecycle automatically, such as commits and revocation to ensure the state reflects the processed and committed messages only. The stream state managed is available on stream consumer and not the producer currently.
+The library is providing automatic state management which handles application lifecycle automatically, such as commits and revocation to ensure the state reflects the processed and committed messages only. There are two types of state available: dictionary state and scalar state. The stream state managed is available on stream consumer and not the producer currently.
 
 ### Reading and writing
 
@@ -153,6 +153,27 @@ You can delete any or all state using the state manager of a specific level. See
         var streamStateManager = streamConsumer.GetStateManager();
         streamStateManager.DeleteState("some_state");
         streamStateManager.DeleteStates(); // deletes all
+    ```
+
+### Scalar state type
+In addition to the dictionary state type, we also have the scalar state type. It functions similarly, but holds just a single value, making it simpler to use. Below is an example:
+
+=== "Python"
+    ``` python
+    def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
+        # Define a scalar state with a default value of 0.
+        stream_state = stream_consumer.get_scalar_state("total_rpm", lambda: 0)
+
+        # Iterate over all the timestamps in the data.
+        for row in data.timestamps:
+            # Extract the numeric value for 'EngineRPM'.
+            rpm = row.parameters["EngineRPM"].numeric_value
+
+            # Increment the state value by the extracted RPM.
+            stream_state.value += rpm
+
+            # Add the updated state value to the row as 'total_rpm'.
+            row.add_value("total_rpm", stream_state.value)
     ```
 
 ### Storage types
