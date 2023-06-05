@@ -33,7 +33,7 @@ namespace QuixStreams.State
         /// <summary>
         /// Represents the key used to store the state in the storage.
         /// </summary>
-        private const string StorageKey = "SCALAR";
+        public const string StorageKey = "SCALAR";
 
         /// <summary>
         /// Represents the hash of last flushed value that is persisted
