@@ -12,7 +12,7 @@ public class StreamStateShould
     [Fact]
     public void Constructor_ShouldCreateStreamState()
     {
-        var streamState = new StreamState<int>(new InMemoryStorage(), missingStateKey => -1, NullLoggerFactory.Instance);
+        var streamState = new StreamDictionaryState<int>(new InMemoryStorage(), missingStateKey => -1, NullLoggerFactory.Instance);
 
         streamState.Should().NotBeNull();
 
@@ -24,7 +24,7 @@ public class StreamStateShould
     [Fact]
     public void Constructor_WithNullStateStorage_ShouldThrowArgumentNullException()
     {
-        Action nullTopicName = () => new StreamState<int>(null, missingStateKey => -1, NullLoggerFactory.Instance);
+        Action nullTopicName = () => new StreamDictionaryState<int>(null, missingStateKey => -1, NullLoggerFactory.Instance);
 
         nullTopicName.Should().Throw<ArgumentNullException>().WithMessage("*storage*");
     }
@@ -34,7 +34,7 @@ public class StreamStateShould
     {
         // Arrange
         var storage = new InMemoryStorage();
-        var streamState = new StreamState<string>(storage, null, NullLoggerFactory.Instance);
+        var streamState = new StreamDictionaryState<string>(storage, null, NullLoggerFactory.Instance);
 
         // Act 1
         streamState.Add("Key1", "Value1"); // will keep as is, before clear
@@ -69,7 +69,7 @@ public class StreamStateShould
         streamState["Key8"].Should().Be("Value8");
 
         // Act 3
-        var streamState2 = new StreamState<string>(storage, null, NullLoggerFactory.Instance);
+        var streamState2 = new StreamDictionaryState<string>(storage, null, NullLoggerFactory.Instance);
 
         // Assert 3
         streamState2.Count.Should().Be(3);

@@ -62,9 +62,22 @@ namespace QuixStreams.Streaming
         /// <param name="storageName">The name of the storage.</param>
         /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
         /// <returns>The dictionary stream state for the specified storage name using the provided default value factory.</returns>
-        public static StreamState<T> GetDictionaryState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        public static StreamDictionaryState<T> GetDictionaryState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
         {
             return streamConsumer.GetStateManager().GetDictionaryState(storageName, defaultValueFactory);
+        }
+        
+        /// <summary>
+        /// Gets the dictionary type stream state for the specified storage name using the provided default value factory.
+        /// </summary>
+        /// <typeparam name="T">The type of the stream state value.</typeparam>
+        /// <param name="streamConsumer">The stream consumer to get the state for</param>
+        /// <param name="storageName">The name of the storage.</param>
+        /// <param name="defaultValueFactory">A delegate that creates the default value for the stream state when a previously not set key is accessed.</param>
+        /// <returns>The dictionary stream state for the specified storage name using the provided default value factory.</returns>
+        public static StreamScalarState<T> GetScalarState<T>(this IStreamConsumer streamConsumer, string storageName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        {
+            return streamConsumer.GetStateManager().GetScalarState(storageName, defaultValueFactory);
         }
     }
     

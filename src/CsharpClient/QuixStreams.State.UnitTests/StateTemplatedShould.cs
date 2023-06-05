@@ -16,7 +16,7 @@ public class StateTemplatedShould
         public void Constructor_ShouldCreateState()
         {
             var storage = new InMemoryStorage();
-            var state = new State<int>(storage);
+            var state = new DictionaryState<int>(storage);
 
             state.Should().NotBeNull();
         }
@@ -24,7 +24,7 @@ public class StateTemplatedShould
         [Fact]
         public void Constructor_WithNullStateStorage_ShouldThrowArgumentNullException()
         {
-            Action nullTopicName = () => new State<int>((IStateStorage)null);
+            Action nullTopicName = () => new DictionaryState<int>((IStateStorage)null);
 
             nullTopicName.Should().Throw<ArgumentNullException>().WithMessage("*storage*");
         }
@@ -35,7 +35,7 @@ public class StateTemplatedShould
         public void StringConversion_ShouldStoreAndRetrieveCorrectly(string key, string value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<string>(storage);
+            var state = new DictionaryState<string>(storage);
 
             state[key] = value;
 
@@ -43,7 +43,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<string>(storage);
+            var state2 = new DictionaryState<string>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -53,7 +53,7 @@ public class StateTemplatedShould
         public void DoubleConversion_ShouldStoreAndRetrieveCorrectly(string key, double value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<double>(storage);
+            var state = new DictionaryState<double>(storage);
 
             state[key] = value;
 
@@ -61,7 +61,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<double>(storage);
+            var state2 = new DictionaryState<double>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -71,7 +71,7 @@ public class StateTemplatedShould
         public void DecimalConversion_ShouldStoreAndRetrieveCorrectly(string key, decimal value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<decimal>(storage);
+            var state = new DictionaryState<decimal>(storage);
 
             state[key] = value;
 
@@ -79,7 +79,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 =  new State<decimal>(storage);
+            var state2 =  new DictionaryState<decimal>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -89,7 +89,7 @@ public class StateTemplatedShould
         public void FloatConversion_ShouldStoreAndRetrieveCorrectly(string key, float value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<float>(storage);
+            var state = new DictionaryState<float>(storage);
 
             state[key] = value;
 
@@ -97,7 +97,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 =  new State<float>(storage);
+            var state2 =  new DictionaryState<float>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -108,7 +108,7 @@ public class StateTemplatedShould
         public void BoolConversion_ShouldStoreAndRetrieveCorrectly(string key, bool value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<bool>(storage);
+            var state = new DictionaryState<bool>(storage);
 
             state[key] = value;
 
@@ -116,7 +116,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<bool>(storage);
+            var state2 = new DictionaryState<bool>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -127,7 +127,7 @@ public class StateTemplatedShould
         public void CharConversion_ShouldStoreAndRetrieveCorrectly(string key, char value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<char>(storage);
+            var state = new DictionaryState<char>(storage);
 
             state[key] = value;
 
@@ -135,7 +135,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<char>(storage);
+            var state2 = new DictionaryState<char>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -145,7 +145,7 @@ public class StateTemplatedShould
         public void LongConversion_ShouldStoreAndRetrieveCorrectly(string key, long value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<long>(storage);
+            var state = new DictionaryState<long>(storage);
 
             state[key] = value;
 
@@ -153,7 +153,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<long>(storage);
+            var state2 = new DictionaryState<long>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -163,7 +163,7 @@ public class StateTemplatedShould
         public void UlongConversion_ShouldStoreAndRetrieveCorrectly(string key, ulong value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<ulong>(storage);
+            var state = new DictionaryState<ulong>(storage);
 
             state[key] = value;
 
@@ -171,7 +171,7 @@ public class StateTemplatedShould
 
             state.Flush();
             
-            var state2 = new State<ulong>(storage);
+            var state2 = new DictionaryState<ulong>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -182,7 +182,7 @@ public class StateTemplatedShould
         public void IntConversion_ShouldStoreAndRetrieveCorrectly(string key, int value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<int>(storage);
+            var state = new DictionaryState<int>(storage);
 
             state[key] = value;
 
@@ -190,7 +190,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<int>(storage);
+            var state2 = new DictionaryState<int>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -200,7 +200,7 @@ public class StateTemplatedShould
         public void UintConversion_ShouldStoreAndRetrieveCorrectly(string key, uint value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<uint>(storage);
+            var state = new DictionaryState<uint>(storage);
 
             state[key] = value;
 
@@ -208,7 +208,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<uint>(storage);
+            var state2 = new DictionaryState<uint>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -218,7 +218,7 @@ public class StateTemplatedShould
         public void ShortConversion_ShouldStoreAndRetrieveCorrectly(string key, short value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<short>(storage);
+            var state = new DictionaryState<short>(storage);
 
             state[key] = value;
 
@@ -226,7 +226,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<short>(storage);
+            var state2 = new DictionaryState<short>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -236,7 +236,7 @@ public class StateTemplatedShould
         public void UshortConversion_ShouldStoreAndRetrieveCorrectly(string key, ushort value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<ushort>(storage);
+            var state = new DictionaryState<ushort>(storage);
 
             state[key] = value;
 
@@ -244,7 +244,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<ushort>(storage);
+            var state2 = new DictionaryState<ushort>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -254,7 +254,7 @@ public class StateTemplatedShould
         public void ByteConversion_ShouldStoreAndRetrieveCorrectly(string key, byte value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<byte>(storage);
+            var state = new DictionaryState<byte>(storage);
 
             state[key] = value;
 
@@ -262,7 +262,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<byte>(storage);
+            var state2 = new DictionaryState<byte>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -272,7 +272,7 @@ public class StateTemplatedShould
         public void SbyteConversion_ShouldStoreAndRetrieveCorrectly(string key, sbyte value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<sbyte>(storage);
+            var state = new DictionaryState<sbyte>(storage);
 
             state[key] = value;
 
@@ -280,7 +280,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<sbyte>(storage);
+            var state2 = new DictionaryState<sbyte>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -290,7 +290,7 @@ public class StateTemplatedShould
         public void DatetimeConversion_ShouldStoreAndRetrieveCorrectly(string key, DateTime value)
         {
             var storage = new InMemoryStorage();
-            var state = new State<DateTime>(storage);
+            var state = new DictionaryState<DateTime>(storage);
 
             state[key] = value;
 
@@ -298,7 +298,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<DateTime>(storage);
+            var state2 = new DictionaryState<DateTime>(storage);
             
             state2[key].Should().Be(value);
         }
@@ -313,7 +313,7 @@ public class StateTemplatedShould
         {
             var storage = new InMemoryStorage();
             var key = "TestKey";
-            var state = new State<CustomClass>(storage);
+            var state = new DictionaryState<CustomClass>(storage);
 
             var customObject = new CustomClass { Id = 1, Name = "TestObject" };
             state[key] = customObject;
@@ -322,7 +322,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<CustomClass>(storage);
+            var state2 = new DictionaryState<CustomClass>(storage);
             
             state2[key].Should().BeEquivalentTo(customObject);
         }
@@ -332,7 +332,7 @@ public class StateTemplatedShould
         {
             var storage = new InMemoryStorage();
             var key = "TestKey";
-            var state = new State<List<CustomClass>>(storage);
+            var state = new DictionaryState<List<CustomClass>>(storage);
             state.Clear();
 
             var customObject = new CustomClass { Id = 1, Name = "TestObject" };
@@ -345,7 +345,7 @@ public class StateTemplatedShould
             
             state.Flush();
             
-            var state2 = new State<List<CustomClass>>(storage);
+            var state2 = new DictionaryState<List<CustomClass>>(storage);
             
             state2[key].Count.Should().Be(2);
             state2[key].All(y=> y.IsSameOrEqualTo(customObject)).Should().BeTrue();
@@ -356,7 +356,7 @@ public class StateTemplatedShould
         {
             var storage = new InMemoryStorage();
             var key = "TestKey";
-            var state = new State<int>(storage);
+            var state = new DictionaryState<int>(storage);
 
             state[key] += 2;
             state[key] -= 1;
@@ -371,7 +371,7 @@ public class StateTemplatedShould
         {
             var storage = new InMemoryStorage();
             // Arrange
-            var state = new State<string>(storage);
+            var state = new DictionaryState<string>(storage);
             state.Add("Key1", "Value1");
             state.Add("Key2", "Value2");
 
@@ -379,7 +379,7 @@ public class StateTemplatedShould
             state.Clear();
             state.Count.Should().Be(0);
             state.Flush();
-            var state2 = new State<string>(storage);
+            var state2 = new DictionaryState<string>(storage);
 
             // Assert
             state2.Count.Should().Be(0);
@@ -390,7 +390,7 @@ public class StateTemplatedShould
         {
             var storage = new InMemoryStorage();
             // Arrange
-            var state = new State<string>(storage);
+            var state = new DictionaryState<string>(storage);
             
             // Act 1
             state.Add("Key1", "Value1"); // will keep as is, before clear
@@ -425,7 +425,7 @@ public class StateTemplatedShould
             state["Key8"].Should().Be("Value8");
 
             // Act 3
-            var state2 = new State<string>(storage);
+            var state2 = new DictionaryState<string>(storage);
 
             // Assert 3
             state2.Count.Should().Be(3);
@@ -439,7 +439,7 @@ public class StateTemplatedShould
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State<string>(storage);
+            var state = new DictionaryState<string>(storage);
             state.Add("key", "value");
             state.Flush();
 
