@@ -4,41 +4,35 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using ConsoleTables;
 using MathNet.Numerics.Statistics;
-using QuixStreams.Streaming;
 using QuixStreams.Streaming.UnitTests;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.ThroughputTest;
 
 namespace QuixStreams.ThroughputTest
 {
     public class StreamingTestRaw
-    {
+    {   
         public const string TestName = "Baseline";
         public void Run(CancellationToken ct, bool useBuffer = false)
         {
             var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
             // usage stuff
             
-            // CodecRegistry.Register(CodecType.ImprovedJson);
-            var client = new TestStreamingClient();
+            var client = new TestStreamingClient(CodecType.Json);
 
             var topicConsumer = client.GetTopicConsumer();
             var topicProducer = client.GetTopicProducer();
-
-            var stream = topicProducer.CreateStream();
-            Console.WriteLine("Test stream: " + stream.StreamId);
 
             var timer = new System.Timers.Timer()
             {
                 Interval = 1000, Enabled = false, AutoReset = false
             };
             var sw = Stopwatch.StartNew();
-            ulong totalAmount = 0;
-            var parameterTimer = Stopwatch.StartNew();            
+            long totalAmount = 0;
+            var parameterTimer = Stopwatch.StartNew();
             var parameters = new List<double>();
-
             
             timer.Elapsed += (s, e) =>
             {
@@ -49,13 +43,15 @@ namespace QuixStreams.ThroughputTest
                         parameterTimer.Restart();
                         return;
                     }
+
+                    var amount = totalAmount;
+                    Interlocked.Add(ref totalAmount, -amount);
                     
                     var cpu = Math.Round(currentProcess.TotalProcessorTime.TotalMilliseconds / sw.Elapsed.TotalMilliseconds * 100.0, 3);
                     var mem = Math.Round(currentProcess.WorkingSet64 / 1024.0 / 1024, 2);
                     
                     
-                    var avg = Math.Round(totalAmount / parameterTimer.Elapsed.TotalSeconds);
-                    totalAmount = 0;
+                    var avg = Math.Round(amount / parameterTimer.Elapsed.TotalSeconds);
                     parameterTimer.Restart();
                     parameters.Add(avg);
                     
@@ -95,17 +91,10 @@ namespace QuixStreams.ThroughputTest
                     timer.Start();
                 }
             };
-            var mre = new ManualResetEvent(false);
 
             topicConsumer.OnStreamReceived += (sender, reader) =>
             {
-                if (reader.StreamId != stream.StreamId)
-                {
-                    Console.WriteLine("Ignoring " + reader.StreamId);
-                    return;
-                }
 
-                mre.Set();
                 timer.Start();
 
                 var buffer = reader.Timeseries.CreateBuffer();
@@ -120,53 +109,100 @@ namespace QuixStreams.ThroughputTest
                     var amount = args.Data.NumericValues.Keys.Count;
                     amount += args.Data.StringValues.Keys.Count;
                     amount *= args.Data.Timestamps.Length;
-                    totalAmount += (ulong)amount;
+                    Interlocked.Add(ref totalAmount, amount);
                 };
             };
             topicConsumer.Subscribe();
-
             
-            stream.Timeseries.Buffer.PacketSize = 1000;
-            // stream.Timeseries.Buffer.TimeSpanInMilliseconds = 1000;
-            // stream.Timeseries.Buffer.BufferTimeout = 1000;
-            //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
-
-            
-            stream.Epoch = DateTime.UtcNow;
-            stream.Properties.Name = "Throughput test Stream"; // this is here to avoid sending data until reader is ready
-            while (!ct.IsCancellationRequested)
-            {
-                if (mre.WaitOne(TimeSpan.FromSeconds(1))) break;
-            }
-            
-            var index = 0;
-            var totalSamples = 30;
+         
+            var totalSamples = 3000;
             var datalist = GenerateData().Take(totalSamples).ToList();
-
-            index = 0;
-            while (!ct.IsCancellationRequested)
+            bool doPerParameterSample = true;
+            if (doPerParameterSample)
             {
-                stream.Timeseries.Publish(datalist[index]);
-                index = (index + 1) % totalSamples;
+                datalist = ConvertToPerParameter(datalist);
             }
+
+            Parallel.For(0, 1, (i) =>
+            {
+                var stream = topicProducer.CreateStream();
+                Console.WriteLine("Test stream: " + stream.StreamId);
+                stream.Timeseries.Buffer.PacketSize = 100;
+                //stream.Timeseries.Buffer.TimeSpanInMilliseconds = 2000;
+                // stream.Timeseries.Buffer.BufferTimeout = 1000;
+                //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
+
             
-            stream.Close();
+                stream.Epoch = DateTime.UtcNow;
+                stream.Properties.Name = "Throughput test Stream"; // this is here to avoid sending data until reader is ready
+
+                var index = 0;
+                while (!ct.IsCancellationRequested)
+                {
+                    stream.Timeseries.Buffer.Publish(datalist[index]);
+                    index = (index + 1) % datalist.Count;
+                }
+                
+                stream.Close();
+            });
+            
             topicConsumer.Dispose();
         }
 
-        private TimeseriesDataRaw GenerateDataRaw(Generator generator, List<string> stringParameters, List<string> numericParameters)
+        private static List<TimeseriesDataRaw> ConvertToPerParameter(List<TimeseriesDataRaw> datalist)
         {
-            var totalLength = 3250;
+            // ignoring tags for now, as original data is not expected to have it
+            
+            var newList = new List<TimeseriesDataRaw>();
+            foreach (var data in datalist)
+            {
+                for (var index = 0; index < data.Timestamps.Length; index++)
+                {
+                    var ts = data.Timestamps[index];
+                    foreach (var pair in data.NumericValues)
+                    {
+                        var value = pair.Value[index];
+                        if (!value.HasValue) continue;
+                        var newData = new TimeseriesDataRaw(data.Epoch, new[] { ts },
+                            new Dictionary<string, double?[]>() { { pair.Key, new[] { value } } }, null, null, null);
+                        newList.Add(newData);
+                    }
+                    
+                    foreach (var pair in data.StringValues)
+                    {
+                        var value = pair.Value[index];
+                        if (value == null) continue;
+                        var newData = new TimeseriesDataRaw(data.Epoch, new[] { ts }, null,
+                            new Dictionary<string, string[]>() { { pair.Key, new[] { value } } }, null, null);
+                        newList.Add(newData);
+                    }
+                    
+                    foreach (var pair in data.BinaryValues)
+                    {
+                        var value = pair.Value[index];
+                        if (value == null) continue;
+                        var newData = new TimeseriesDataRaw(data.Epoch, new[] { ts }, null, null,
+                            new Dictionary<string, byte[][]>() { { pair.Key, new[] { value } } }, null);
+                        newList.Add(newData);
+                    }
+                }
+            }
 
-            var timestamps = new long[totalLength];
+            return newList;
+        }
+
+        private TimeseriesDataRaw GenerateDataRaw(Generator generator, List<string> stringParameters, List<string> numericParameters, long timestampStart, long delta, int count)
+        {
+
+            var timestamps = new long[count];
 
             var numericValues = new Dictionary<string, double?[]>();
             var stringValues = new Dictionary<string, string[]>();
 
             var data = new TimeseriesDataRaw();
-            for (var loopCount = 0; loopCount < totalLength; loopCount++)
+            for (var loopCount = 0; loopCount < count; loopCount++)
             {
-                timestamps[loopCount] = DateTime.UtcNow.ToBinary();
+                timestamps[loopCount] = timestampStart + delta * loopCount;
                 foreach (var stringParameter in stringParameters)
                 {
                     if (!generator.HasValue())
@@ -176,7 +212,7 @@ namespace QuixStreams.ThroughputTest
 
                     if (!stringValues.TryGetValue(stringParameter, out var stringArray))
                     {
-                        stringArray = new string[totalLength];
+                        stringArray = new string[count];
                         stringValues[stringParameter] = stringArray;
                     }
 
@@ -192,7 +228,7 @@ namespace QuixStreams.ThroughputTest
 
                     if (!numericValues.TryGetValue(numericParameter, out var numericArray))
                     {
-                        numericArray = new double?[totalLength];
+                        numericArray = new double?[count];
                         numericValues[numericParameter] = numericArray;
                     }
 
@@ -214,9 +250,13 @@ namespace QuixStreams.ThroughputTest
             var numericParameters = generator.GenerateParameters(90).ToList();
 
 
+            var time = DateTime.UtcNow.ToBinary();
+            var delta = (long)TimeSpan.FromSeconds(1).TotalNanoseconds;
+
             while (true)
             {
-                yield return GenerateDataRaw(generator, stringParameters, numericParameters);
+                yield return GenerateDataRaw(generator, stringParameters, numericParameters, time, 0, 1);
+                time += delta;
             }
         }
 

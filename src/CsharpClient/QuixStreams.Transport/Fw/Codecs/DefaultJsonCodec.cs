@@ -140,7 +140,8 @@ namespace QuixStreams.Transport.Fw.Codecs
             catch
             {
                 return false;
-            }        }
+            }        
+        }
 
         /// <inheritdoc/>
         public Type Type => typeof(object);

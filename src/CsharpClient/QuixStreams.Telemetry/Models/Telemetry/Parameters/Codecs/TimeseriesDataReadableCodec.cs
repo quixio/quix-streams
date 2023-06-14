@@ -9,9 +9,9 @@ using QuixStreams.Transport.Fw.Codecs;
 namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
 {
     /// <summary>
-    /// TimeseriesData Json Codec implementation
+    /// TimeseriesData Codec implementation that is human readable but not JSON for most purposes
     /// </summary>
-    public class TimeseriesDataJsonCodec : Codec<TimeseriesDataRaw>
+    public class TimeseriesDataReadableCodec : Codec<TimeseriesDataRaw>
     {
         private static readonly DefaultJsonCodec<TimeseriesDataCodeDto> BaseCodec = new DefaultJsonCodec<TimeseriesDataCodeDto>();
 

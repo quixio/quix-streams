@@ -121,7 +121,7 @@ namespace QuixStreams.Telemetry.UnitTests.Models.Telemetry.Parameters
                 timeseriesData.BinaryValues[name] = availableValues;
             }
 
-            var codec = new TimeseriesDataJsonCodec();
+            var codec = new TimeseriesDataReadableCodec();
             var newCodecSw = Stopwatch.StartNew();
             var newCodecSerialized = codec.Serialize(timeseriesData);
             newCodecSw.Stop();

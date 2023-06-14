@@ -69,6 +69,12 @@ namespace QuixStreams.Telemetry.Models
                 case CodecType.Json:
                     foreach (var modelKey in modelKeys)
                     {
+                        if (typeof(TimeseriesDataRaw) == modelType)
+                        {
+                            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataJsonCodec());
+                            continue;
+                        }
+
                         QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());   
                     }
                     break;
@@ -78,7 +84,7 @@ namespace QuixStreams.Telemetry.Models
                         if (typeof(TimeseriesDataRaw) == modelType)
                         {
                             // Register the better performing specific codecs also for writing/reading
-                            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataJsonCodec());
+                            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataReadableCodec());
                         }
                     }
 
