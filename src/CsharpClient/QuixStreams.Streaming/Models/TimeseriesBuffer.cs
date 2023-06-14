@@ -23,6 +23,7 @@ namespace QuixStreams.Streaming.Models
         private int? bufferTimeout = null;
         private int? packetSize = null;
         private long? timeSpanInNanoseconds = null;
+        private long? leadingEdgeDelay = null;
         private Func<TimeseriesDataTimestamp, bool> customTriggerBeforeEnqueue = null;
         private Func<TimeseriesData, bool> customTrigger = null;
         private Func<TimeseriesDataTimestamp, bool> filter = null;
@@ -39,6 +40,11 @@ namespace QuixStreams.Streaming.Models
         /// Event invoked when TimeseriesData is received from the buffer
         /// </summary>
         public event EventHandler<TimeseriesDataReadEventArgs> OnDataReleased;
+        
+        /// <summary>
+        /// Items arriving after LeadingEdgeDelay are discarded from the output topic but released in this event for further processing or forwarding.
+        /// </summary>
+        public event EventHandler<TimeseriesDataReadEventArgs> OnBackfill;
 
         /// <summary>
         /// Event invoked when TimeseriesDataRaw is received from the buffer
@@ -85,6 +91,7 @@ namespace QuixStreams.Streaming.Models
             this.PacketSize = bufferConfiguration.PacketSize;
             this.BufferTimeout = bufferConfiguration.BufferTimeout;
             this.TimeSpanInNanoseconds = bufferConfiguration.TimeSpanInNanoseconds;
+            this.LeadingEdgeDelay = bufferConfiguration.LeadingEdgeDelay;
             this.CustomTrigger = bufferConfiguration.CustomTrigger;
             this.CustomTriggerBeforeEnqueue = bufferConfiguration.CustomTriggerBeforeEnqueue;
             this.Filter = bufferConfiguration.Filter;
@@ -186,6 +193,23 @@ namespace QuixStreams.Streaming.Models
             }
         }
 
+        /// <summary>
+        /// Leading edge delay configuration in Milliseconds . <see cref="TimeseriesBufferConfiguration.LeadingEdgeDelay"/>
+        /// </summary>
+        public long? LeadingEdgeDelay
+        {
+            get => this.leadingEdgeDelay;
+            set
+            {
+                if (isDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(TimeseriesBuffer));
+                }
+                this.leadingEdgeDelay = value;
+                this.UpdateIfAllConditionsAreNull();
+            }
+        }
+        
         /// <summary>
         /// Filter configuration. <see cref="TimeseriesBufferConfiguration.Filter"/>
         /// </summary>
@@ -464,7 +488,8 @@ namespace QuixStreams.Streaming.Models
                    this.CustomTriggerBeforeEnqueue == null &&
                    this.PacketSize == null &&
                    this.TimeSpanInMilliseconds == null &&
-                   this.TimeSpanInNanoseconds == null;
+                   this.TimeSpanInNanoseconds == null &&
+                   this.LeadingEdgeDelay == null;
         }
 
         private void OnFlushBufferTimeoutTimerEvent(object state)

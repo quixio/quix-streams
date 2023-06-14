@@ -22,16 +22,8 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // when the buffer is disabled it is expected that each frame passed to the buffer is raised as-is.
             
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
 
@@ -88,19 +80,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithPacketSizeConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithPacketSizeConfiguration_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.PacketSize = 2;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.PacketSize = 2;
@@ -124,18 +108,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithTimeSpanMsConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithTimeSpanMsConfiguration_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.TimeSpanInMilliseconds = 200;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.TimeSpanInMilliseconds = 200;
@@ -159,19 +136,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithTimeSpanNsConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithTimeSpanNsConfiguration_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.TimeSpanInNanoseconds = 200 * (long) 1e6;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.TimeSpanInNanoseconds = 200 * (long) 1e6;
@@ -193,7 +162,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void WriteData_WithTimeSpanAndBufferTimeoutConfiguration_ShouldRaiseProperOnReceiveEvents()
+        public void WriteData_WithTimeSpanAndBufferTimeoutConfiguration_ShouldRaiseOnDataReleasedCorrectly()
         {
             // Arrange
             var bufferConfiguration = new TimeseriesBufferConfiguration() 
@@ -228,21 +197,13 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithFilterConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithFilterConfiguration_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // when the buffer is disabled it is expected that each frame passed to the buffer is raised as-is.
             
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.Filter = (timestamp) => timestamp.Parameters["param2"].NumericValue == 2;
@@ -266,19 +227,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithBufferTimeout_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithBufferTimeout_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.BufferTimeout = 100;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.BufferTimeout = 100;
@@ -302,19 +255,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithCustomTriggerConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithCustomTriggerConfiguration_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.CustomTrigger = (data) => data.Timestamps.Count == 2;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.CustomTrigger = (data) => data.Timestamps.Count == 2;
@@ -339,19 +284,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithCustomTriggerBeforeEnqueueConfiguration_ShouldRaiseProperOnReceiveEvents(bool initialConfig)
+        public void WriteData_WithCustomTriggerBeforeEnqueueConfiguration_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
         {
             // Arrange
-            var bufferConfiguration = new TimeseriesBufferConfiguration() // Set the buffer explicitly to null
-            {
-                PacketSize = null,
-                TimeSpanInMilliseconds = null,
-                TimeSpanInNanoseconds = null,
-                BufferTimeout = null,
-                Filter = null,
-                CustomTrigger = null,
-                CustomTriggerBeforeEnqueue = null
-            };
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
             if (initialConfig) bufferConfiguration.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
             var buffer = new TimeseriesBuffer(bufferConfiguration);
             if (!initialConfig) buffer.CustomTriggerBeforeEnqueue = timestamp => timestamp.Tags["tag2"] == "value2";
@@ -372,7 +309,248 @@ namespace QuixStreams.Streaming.UnitTests.Models
             receivedData[0].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(0).Take(2).ToList()));
             receivedData[1].Should().BeEquivalentTo(new TimeseriesData(data.Timestamps.Skip(2).Take(2).ToList()));
         }
+        
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void WriteData_WithEdgeDelayConfig_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
+        {
+            // Arrange
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
 
+            if (initialConfig) bufferConfiguration.LeadingEdgeDelay = 500;
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            if (!initialConfig) buffer.LeadingEdgeDelay = 500;
+            
+            var receivedData = new List<TimeseriesData>();
+            var onDataReleasedRaiseCount = 0;
+            buffer.OnDataReleased += (sender, args) =>
+            {
+                receivedData.Add(args.Data);
+                onDataReleasedRaiseCount++;
+            };
+            
+            //Act
+            foreach (var timeseriesDataWithSingleTimestamp in new []{300, 200, 400, 500, 800, 900, 1000}.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
+            {
+                buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
+            }
+
+            // Assert
+            onDataReleasedRaiseCount.Should().Be(3);
+            receivedData.Count.Should().Be(3); // (200, 300), 400, 500
+            receivedData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(200, 300));
+            receivedData[1].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(400));
+            receivedData[2].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(500));
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void WriteData_WithEdgeDelayAndTimespanConfig_ShouldRaiseOnDataReleasedCorrectly(bool initialConfig)
+        {
+            // Arrange
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
+            if (initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 5000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            if (!initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 5000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+        
+
+            var receivedData = new List<TimeseriesData>();
+            var onDataReleasedRaiseCount = 0;
+            buffer.OnDataReleased += (sender, args) =>
+            {
+                receivedData.Add(args.Data);
+                onDataReleasedRaiseCount++;
+            };
+
+
+            //Act
+            foreach (var timeseriesDataWithSingleTimestamp in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000}.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
+            {
+                buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
+            }
+
+            
+            // Assert
+            onDataReleasedRaiseCount.Should().Be(1);
+            receivedData.Count.Should().Be(1); // (1000, 1250, 1500, 1750, 2000, 2500)
+            receivedData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(1000, 1250, 1500, 1750, 2000, 2500));
+            
+            // or
+            // onDataReleasedRaiseCount.Should().Be(4);
+            // receivedData.Count.Should().Be(4); // (1000, 1250), (1500, 1750), 2000, 2500
+            // receivedData[0].Should().BeEquivalentTo(GetTimeseriesDataWithFixedTimestamp(1000, 1250));
+            // receivedData[1].Should().BeEquivalentTo(GetTimeseriesDataWithFixedTimestamp(1500, 1750));
+            // receivedData[2].Should().BeEquivalentTo(GetTimeseriesDataWithFixedTimestamp(2000));
+            // receivedData[3].Should().BeEquivalentTo(GetTimeseriesDataWithFixedTimestamp(2500));
+        }
+        
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void WriteData_WithEdgeDelayAndTimespanConfig_ShouldRaiseOnDataReleasedWithOrderedTimestamps(bool initialConfig)
+        {
+            // Arrange
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
+            if (initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 1000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            if (!initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 1000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+        
+
+            var receivedData = new List<TimeseriesData>();
+            var onDataReleasedRaiseCount = 0;
+            buffer.OnDataReleased += (sender, args) =>
+            {
+                receivedData.Add(args.Data);
+                onDataReleasedRaiseCount++;
+            };
+
+
+            //Act
+            foreach (var timeseriesDataWithSingleTimestamp in new []{1250, 1000, 1300, 2000, 1400, 1500}.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
+            {
+                buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
+            }
+            
+            // Sending timestamps in a single timestamp data
+            buffer.WriteChunk(CreateTimeseriesDataWithFixedTimestamp(2250, 2000, 2300, 3000, 2400, 2500).ConvertToTimeseriesDataRaw(false, false));
+            
+            // Assert
+            onDataReleasedRaiseCount.Should().Be(2);
+            receivedData.Count.Should().Be(2); // (1000, 1250, 1300, 1400, 1500) + (2000, 2250, 2300, 2400, 2500)
+            receivedData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(1000, 1250, 1300, 1400, 1500));
+            receivedData[1].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(2000, 2250, 2300, 2400, 2500));
+            
+        }
+        
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void WriteData_WithEdgeDelayAndTimespanConfig_WithoutDataReleasedEvent_ShouldRaiseOnBackfillCorrectly(bool initialConfig)
+        {
+            // Arrange
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
+            if (initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 1000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            if (!initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 1000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+            
+            buffer.OnDataReleased += (sender, args) => { };
+            
+            var backfilledData = new List<TimeseriesData>();
+            var onBackfillRaiseCount = 0;
+            buffer.OnBackfill += (sender, args) =>
+            {
+                backfilledData.Add(args.Data);
+                onBackfillRaiseCount++;
+            };
+
+            //Act
+            foreach (var timeseriesDataWithSingleTimestamp in new []{1000, 1250, 1500, 2500, 10, 20}.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
+            {
+                buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
+            }
+
+            buffer.WriteChunk(CreateTimeseriesDataWithFixedTimestamp(30, 40).ConvertToTimeseriesDataRaw(false, false));
+            
+            // Assert
+            onBackfillRaiseCount.Should().Be(3);
+            backfilledData.Count.Should().Be(3); // 10, 20, (30, 40)
+            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(10));
+            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(20));
+            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(30, 40));
+        }
+        
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void WriteData_WithEdgeDelayAndTimespanConfig_WithDataReleasedEvent_ShouldRaiseOnBackfillCorrectly(bool initialConfig)
+        {
+            // Arrange
+            var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
+
+            if (initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 1000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+
+            var buffer = new TimeseriesBuffer(bufferConfiguration);
+            if (!initialConfig)
+            {
+                bufferConfiguration.LeadingEdgeDelay = 1000;
+                bufferConfiguration.TimeSpanInMilliseconds = 500;
+            }
+            
+            var backfilledData = new List<TimeseriesData>();
+            var onBackfillRaiseCount = 0;
+            buffer.OnBackfill += (sender, args) =>
+            {
+                backfilledData.Add(args.Data);
+                onBackfillRaiseCount++;
+            };
+
+            //Act
+            foreach (var timeseriesDataWithSingleTimestamp in new []{1000, 1250, 1500, 2500, 10, 20 }.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
+            {
+                buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
+            }
+
+            buffer.WriteChunk(CreateTimeseriesDataWithFixedTimestamp(30, 40).ConvertToTimeseriesDataRaw(false, false));
+            
+            // Assert
+            onBackfillRaiseCount.Should().Be(3);
+            backfilledData.Count.Should().Be(3); // 10, 20, (30, 40)
+            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(10));
+            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(20));
+            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(30, 40));
+        }
+
+        private TimeseriesBufferConfiguration GetEmptyTimeseriesBufferConfiguration()
+        {
+            return new TimeseriesBufferConfiguration
+            {
+                PacketSize = null,
+                TimeSpanInMilliseconds = null,
+                TimeSpanInNanoseconds = null,
+                LeadingEdgeDelay = null,
+                BufferTimeout = null,
+                Filter = null,
+                CustomTrigger = null,
+                CustomTriggerBeforeEnqueue = null
+            };
+        }
+        
         private TimeseriesData GenerateTimeseriesData()
         {
             var data = new TimeseriesData();
@@ -403,5 +581,16 @@ namespace QuixStreams.Streaming.UnitTests.Models
             return data;
         }
 
+        private TimeseriesData CreateTimeseriesDataWithFixedTimestamp(params int[] msWithEpochArray)
+        {
+            var data = new TimeseriesData();
+            foreach (var msWithEpoch in msWithEpochArray)
+            {
+                data.AddTimestampNanoseconds(msWithEpoch, epochIncluded: true)
+                    .AddValue("ms_value", msWithEpoch);
+            }
+
+            return data;
+        }
     }
 }
