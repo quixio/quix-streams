@@ -57,30 +57,44 @@ namespace QuixStreams.ThroughputTest
                     
                     var mean = parameters.Mean();
                     var std = parameters.StandardDeviation();
+
+                    var removedMessage = "";
+                    if (parameters.Count > 110)
+                    {
+                        // keep last 100 measurements
+                        var before = parameters.Count;
+                        parameters = parameters.Skip(parameters.Count - 100).ToList();
+                        removedMessage = $"Trimmed ({before-parameters.Count} measurements";
+                    }
                     
                     Console.Clear();
                     
                     // remove outliers
                     var outliersRemovedMessage = "";
-                    if (!double.IsNaN(std) && parameters.Count % 10 == 0)
+                    if (!double.IsNaN(std) || parameters.Count % 10 == 0)
                     {
                         var lowThreshold = mean - std * 2;
                         var highThreshold = mean + std * 2;
                         var initialCount = parameters.Count;
-                        parameters = parameters.Where(x => lowThreshold < x && x < highThreshold).ToList();
-                        var afterCount = parameters.Count;
+                        var considered = parameters.Where(x => lowThreshold < x && x < highThreshold).ToList();
+                        
+                        var afterCount = considered.Count;
                         if (initialCount != afterCount)
                         {
                             outliersRemovedMessage = $"{initialCount - afterCount} outliers were removed";
+                            mean = parameters.Mean();
+                            std = parameters.StandardDeviation();
                         }
-                        
+
                     }
 
-                    var table = new ConsoleTable("Test", "Buffer", "Params/s", "Std", "CPU", "Mem MB");
-                    table.AddRow(TestName, useBuffer, mean.ToString("n0"), std.ToString("n0"), cpu.ToString("n0"), mem.ToString("n0"));
+                    var table = new ConsoleTable("Test", "Buffer", "Params/s", "Std", "Sample Count", "CPU", "Mem MB");
+                    table.AddRow(TestName, useBuffer, mean.ToString("n0"), std.ToString("n0"), parameters.Count.ToString("n0"), cpu.ToString("n0"), mem.ToString("n0"));
                     table.Write(Format.MarkDown);
                     
                     Console.WriteLine(outliersRemovedMessage);
+                    Console.WriteLine(removedMessage);
+
                 }
                 catch (Exception ex)
                 {
@@ -135,7 +149,7 @@ namespace QuixStreams.ThroughputTest
             {
                 var stream = topicProducer.CreateStream();
                 Console.WriteLine("Test stream: " + stream.StreamId);
-                //stream.Timeseries.Buffer.PacketSize = 100;
+                stream.Timeseries.Buffer.PacketSize = 1000;
                 //stream.Timeseries.Buffer.TimeSpanInMilliseconds = 2000;
                 // stream.Timeseries.Buffer.BufferTimeout = 1000;
                 //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
@@ -147,7 +161,7 @@ namespace QuixStreams.ThroughputTest
                 var index = 0;
                 while (!ct.IsCancellationRequested)
                 {
-                    stream.Timeseries.Publish(datalist[index]);
+                    stream.Timeseries.Buffer.Publish(datalist[index]);
                     index = (index + 1) % datalist.Count;
                 }
                 
