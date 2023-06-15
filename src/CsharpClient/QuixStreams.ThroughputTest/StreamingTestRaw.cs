@@ -97,20 +97,28 @@ namespace QuixStreams.ThroughputTest
 
                 timer.Start();
 
-                var buffer = reader.Timeseries.CreateBuffer();
-                buffer.PacketSize = 1;
                 if (useBuffer)
                 {
+                    var buffer = reader.Timeseries.CreateBuffer();
                     buffer.PacketSize = 1000;
+                    buffer.OnRawReleased += (sender2, args) => 
+                    {
+                        var amount = args.Data.NumericValues?.Keys.Count ?? 0;
+                        amount += args.Data.StringValues?.Keys.Count ?? 0;
+                        amount *= args.Data.Timestamps?.Length ?? 0;
+                        Interlocked.Add(ref totalAmount, amount);
+                    };
                 }
-                //reader.Timeseries.OnRawReceived += (sender2, args) =>
-                buffer.OnRawReleased += (sender2, args) => 
+                else
                 {
-                    var amount = args.Data.NumericValues.Keys.Count;
-                    amount += args.Data.StringValues.Keys.Count;
-                    amount *= args.Data.Timestamps.Length;
-                    Interlocked.Add(ref totalAmount, amount);
-                };
+                    reader.Timeseries.OnRawReceived += (sender2, args) => 
+                    {
+                        var amount = args.Data.NumericValues?.Keys.Count ?? 0;
+                        amount += args.Data.StringValues?.Keys.Count ?? 0;
+                        amount *= args.Data.Timestamps?.Length ?? 0;
+                        Interlocked.Add(ref totalAmount, amount);
+                    };
+                }
             };
             topicConsumer.Subscribe();
             
@@ -127,7 +135,7 @@ namespace QuixStreams.ThroughputTest
             {
                 var stream = topicProducer.CreateStream();
                 Console.WriteLine("Test stream: " + stream.StreamId);
-                stream.Timeseries.Buffer.PacketSize = 100;
+                //stream.Timeseries.Buffer.PacketSize = 100;
                 //stream.Timeseries.Buffer.TimeSpanInMilliseconds = 2000;
                 // stream.Timeseries.Buffer.BufferTimeout = 1000;
                 //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
@@ -139,7 +147,7 @@ namespace QuixStreams.ThroughputTest
                 var index = 0;
                 while (!ct.IsCancellationRequested)
                 {
-                    stream.Timeseries.Buffer.Publish(datalist[index]);
+                    stream.Timeseries.Publish(datalist[index]);
                     index = (index + 1) % datalist.Count;
                 }
                 
