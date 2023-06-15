@@ -197,7 +197,7 @@ namespace QuixStreams.Telemetry.Models.Codecs
         /// <inheritdoc />
         public override TimeseriesDataRaw Deserialize(byte[] contentBytes)
         {
-            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes)); // TODO ????? copy ?
+            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes));
 
             var numericValues = DeserializeNumerics(raw.NumericValues);
             var stringValues = DeserializeStrings(raw.StringValues);
@@ -218,7 +218,7 @@ namespace QuixStreams.Telemetry.Models.Codecs
         /// <inheritdoc />
         public override TimeseriesDataRaw Deserialize(ArraySegment<byte> contentBytes)
         {
-            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes.Array, contentBytes.Offset, contentBytes.Count)); // TODO ????? copy ?
+            var raw = TimeseriesDataRawProto.Parser.ParseFrom(ByteString.CopyFrom(contentBytes.Array, contentBytes.Offset, contentBytes.Count));
 
             var numericValues = DeserializeNumerics(raw.NumericValues);
             var stringValues = DeserializeStrings(raw.StringValues);

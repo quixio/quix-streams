@@ -64,7 +64,7 @@ namespace QuixStreams.ThroughputTest
                         // keep last 100 measurements
                         var before = parameters.Count;
                         parameters = parameters.Skip(parameters.Count - 100).ToList();
-                        removedMessage = $"Trimmed ({before-parameters.Count} measurements";
+                        removedMessage = $"Trimmed {before-parameters.Count} measurements";
                     }
                     
                     Console.Clear();
@@ -114,7 +114,7 @@ namespace QuixStreams.ThroughputTest
                 if (useBuffer)
                 {
                     var buffer = reader.Timeseries.CreateBuffer();
-                    buffer.PacketSize = 1000;
+                    buffer.PacketSize = 100;
                     buffer.OnRawReleased += (sender2, args) => 
                     {
                         var amount = args.Data.NumericValues?.Keys.Count ?? 0;
@@ -149,7 +149,7 @@ namespace QuixStreams.ThroughputTest
             {
                 var stream = topicProducer.CreateStream();
                 Console.WriteLine("Test stream: " + stream.StreamId);
-                stream.Timeseries.Buffer.PacketSize = 1000;
+                stream.Timeseries.Buffer.PacketSize = 10000;
                 //stream.Timeseries.Buffer.TimeSpanInMilliseconds = 2000;
                 // stream.Timeseries.Buffer.BufferTimeout = 1000;
                 //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
@@ -161,7 +161,7 @@ namespace QuixStreams.ThroughputTest
                 var index = 0;
                 while (!ct.IsCancellationRequested)
                 {
-                    stream.Timeseries.Buffer.Publish(datalist[index]);
+                    stream.Timeseries.Buffer. Publish(datalist[index]);
                     index = (index + 1) % datalist.Count;
                 }
                 
@@ -277,8 +277,10 @@ namespace QuixStreams.ThroughputTest
 
             while (true)
             {
-                yield return GenerateDataRaw(generator, stringParameters, numericParameters, time, 0, 1);
-                time += delta;
+                var count = 1;
+                var result = GenerateDataRaw(generator, stringParameters, numericParameters, time, delta, count);
+                time += result.Timestamps[^1] + delta;
+                yield return result;
             }
         }
 
