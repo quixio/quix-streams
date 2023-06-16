@@ -92,6 +92,42 @@ namespace QuixStreams.Telemetry.Models
 
             return JsonConvert.SerializeObject(this, settings);
         }
+        
+        /// <summary>
+        /// Sorts the Timestamps array and all associated data arrays within NumericValues, StringValues, 
+        /// BinaryValues, and TagValues dictionaries in increasing order based on the Timestamps values. 
+        /// </summary>
+        public void SortByTimestamp()
+        {
+            if (Timestamps == null || Timestamps.Length == 0) return;
+            
+            // Create a list of indexes from 0 to the size of the Timestamps array
+            List<int> indexes = Enumerable.Range(0, Timestamps.Length).ToList();
+
+            // Sort this list based on corresponding value from Timestamps array
+            indexes.Sort((a, b) => Timestamps[a].CompareTo(Timestamps[b]));
+
+            // Reorder Timestamp values based on sorted indexes
+            Timestamps = ReorderByIndexes(Timestamps, indexes);
+
+            // Reorder values dictionaries
+            NumericValues = ReorderByIndexes(NumericValues, indexes);
+            StringValues = ReorderByIndexes(StringValues, indexes);
+            BinaryValues = ReorderByIndexes(BinaryValues, indexes);
+            TagValues = ReorderByIndexes(TagValues, indexes);
+        }
+
+        private static long[] ReorderByIndexes(long[] array, List<int> indexes)
+        {
+            return indexes.Select(index => array[index]).ToArray();
+        }
+
+        private static Dictionary<string, T[]> ReorderByIndexes<T>(Dictionary<string, T[]> dict, List<int> indexes)
+        {
+            return dict.ToDictionary(
+                pair => pair.Key, 
+                pair => indexes.Select(index => pair.Value[index]).ToArray());
+        }
     }
 
     /// <summary>

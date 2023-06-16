@@ -203,7 +203,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// </summary>
         public void Flush()
         {
-            this.FlushData(false);
+            this.FlushData(false, includeDataInLeadingEdgeDelay: true);
         }
         
         protected override void InvokeOnReceive(object sender, TimeseriesDataReadEventArgs args)

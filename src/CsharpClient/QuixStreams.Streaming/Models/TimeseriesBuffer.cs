@@ -23,7 +23,7 @@ namespace QuixStreams.Streaming.Models
         private int? bufferTimeout = null;
         private int? packetSize = null;
         private long? timeSpanInNanoseconds = null;
-        private long? leadingEdgeDelay = null;
+        private long? leadingEdgeDelayInNanoseconds = null;
         private Func<TimeseriesDataTimestamp, bool> customTriggerBeforeEnqueue = null;
         private Func<TimeseriesData, bool> customTrigger = null;
         private Func<TimeseriesDataTimestamp, bool> filter = null;
@@ -53,11 +53,14 @@ namespace QuixStreams.Streaming.Models
 
         // List representing internal data structure of the buffer
         private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
+        private TimeseriesDataRaw delayedBufferedFrames = new TimeseriesDataRaw { Timestamps = Array.Empty<long>() };
         private object _lock;
         private int totalRowsCount = 0; // Totals rows count in bufferedFrames
 
         private long minTimeSpan = Int64.MaxValue;
         private long maxTimeSpan = Int64.MinValue;
+        private long leadingEdge = Int64.MinValue;
+        private long lastTimestampReleased = Int64.MinValue; // needed for onBackfill event
 
         private readonly Timer flushBufferTimeoutTimer; // Timer for Timeout buffer configuration
         
@@ -198,14 +201,14 @@ namespace QuixStreams.Streaming.Models
         /// </summary>
         public long? LeadingEdgeDelay
         {
-            get => this.leadingEdgeDelay;
+            get => this.leadingEdgeDelayInNanoseconds / (long)1e6;
             set
             {
                 if (isDisposed)
                 {
                     throw new ObjectDisposedException(nameof(TimeseriesBuffer));
                 }
-                this.leadingEdgeDelay = value;
+                this.leadingEdgeDelayInNanoseconds = value * (long)1e6;
                 this.UpdateIfAllConditionsAreNull();
             }
         }
@@ -266,7 +269,7 @@ namespace QuixStreams.Streaming.Models
         }
 
         /// <summary>
-        /// Writes a chunck of data into the buffer
+        /// Writes a chunk of data into the buffer
         /// </summary>
         /// <param name="timeseriesDataRaw">Data in <see cref="OnDataReleased"/> format</param>
         protected internal void WriteChunk(QuixStreams.Telemetry.Models.TimeseriesDataRaw timeseriesDataRaw)
@@ -283,6 +286,16 @@ namespace QuixStreams.Streaming.Models
                 timeseriesDataRaw = FilterDataFrameByFilterFunction(timeseriesDataRaw, this.filter);
             }
 
+            if (this.leadingEdgeDelayInNanoseconds != null)
+            {
+                UpdateLeadingEdge(timeseriesDataRaw);
+                timeseriesDataRaw = FilterDataFrameByLeadingEdgeDelay(timeseriesDataRaw);
+            }
+
+            if (timeseriesDataRaw.Timestamps.Length > 0)
+            {
+                
+            }
             lock (this._lock)
             {
                 if (this.bufferingDisabled)
@@ -293,14 +306,16 @@ namespace QuixStreams.Streaming.Models
                 }
                 else
                 {
-
                     var epoch = timeseriesDataRaw.Epoch;
                     int startIndex = 0;
                     TimeseriesData timeseriesData = null;
 
                     for (var i = 0; i < timeseriesDataRaw.Timestamps.Length; i++)
                     {
+                        // Check if flush condition is met by Timespan config
                         var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(timeseriesDataRaw, i);
+                        
+                        // If not, check if flush condition is met by custom trigger
                         if (!flushCondition && this.customTriggerBeforeEnqueue != null)
                         {
                             if (timeseriesData == null)
@@ -311,6 +326,7 @@ namespace QuixStreams.Streaming.Models
                             flushCondition = this.customTriggerBeforeEnqueue(timeseriesData.Timestamps[i]);
                         }
 
+                        // Flush if condition is met
                         if (flushCondition)
                         {
                             // add pending rows before flushing
@@ -322,7 +338,7 @@ namespace QuixStreams.Streaming.Models
                             startIndex = i;
                         }
 
-                        // Enqueue
+                        // Enqueue, add rows to the buffer
                         this.totalRowsCount++;
 
                         if (EvaluateFlushDataConditionsAfterEnqueue(timeseriesDataRaw, startIndex, i))
@@ -419,13 +435,21 @@ namespace QuixStreams.Streaming.Models
         /// Flush data from the buffer and release it to make it available for Read events subscribers
         /// </summary>
         /// <param name="force">If true is flushing data even when disposed</param>
-        internal void FlushData(bool force)
+        /// <param name="includeDataInLeadingEdgeDelay">Determine whether to include data inside leading edge delay</param>
+        internal void FlushData(bool force, bool includeDataInLeadingEdgeDelay = false)
         {
             if (!force && isDisposed)
             {
                 throw new ObjectDisposedException(nameof(TimeseriesBuffer));
             }
 
+            if (includeDataInLeadingEdgeDelay)
+            {
+                delayedBufferedFrames.SortByTimestamp();
+                bufferedFrames.Add(delayedBufferedFrames);
+                totalRowsCount += delayedBufferedFrames.Timestamps.Length;
+            }
+            
             this.logger.LogTrace("Executing buffer release. Total {totalRowsCount} rows in {chunksCount} raw chunks.", this.totalRowsCount, this.bufferedFrames.Count);
             
             if (this.totalRowsCount > 0)
@@ -450,7 +474,7 @@ namespace QuixStreams.Streaming.Models
                     {
                         newPdrw = this.MergeTimestamps(newPdrw);
                     }
-
+                    
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
 
                     if (newPdrw.Timestamps.Length <= 0) return;
@@ -459,6 +483,8 @@ namespace QuixStreams.Streaming.Models
                     if (this.OnDataReleased == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
                     this.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(null, null, data));
+                    
+                    this.lastTimestampReleased = newPdrw.Timestamps.Last();
                 }
 
                 RaiseData();
@@ -514,6 +540,40 @@ namespace QuixStreams.Streaming.Models
             }
             
             return this.SelectPdrRowsByMask(data, filteredRows);
+        }
+        
+        private void UpdateLeadingEdge(TimeseriesDataRaw data)
+        {
+            foreach (var timestamp in data.Timestamps)
+            {
+                this.leadingEdge = Math.Max(this.leadingEdge, timestamp);
+            }
+        }
+        
+        private TimeseriesDataRaw FilterDataFrameByLeadingEdgeDelay(TimeseriesDataRaw data)
+        {
+            if (delayedBufferedFrames.Timestamps != null)
+            {
+                data = ConcatDataFrames(new List<TimeseriesDataRaw>{delayedBufferedFrames, data});    
+            }
+            
+            var indexOfDataToRelease = new List<int>();
+            for (var i = 0; i < data.Timestamps.Length; i++)
+            {
+                var nano = data.Timestamps[i];
+                
+                if (this.leadingEdge - nano >= this.leadingEdgeDelayInNanoseconds)
+                {
+                    indexOfDataToRelease.Add(i);
+                }
+            }
+            
+            var dataToRelease = SelectPdrRowsByMask(data, indexOfDataToRelease);
+            this.delayedBufferedFrames = SelectPdrRowsByMask(data, Enumerable.Range(0, data.Timestamps.Length).Except(indexOfDataToRelease).ToList());
+
+            dataToRelease.SortByTimestamp();
+
+            return dataToRelease;
         }
 
         /// <summary>
@@ -915,10 +975,8 @@ namespace QuixStreams.Streaming.Models
             this.logger.LogTrace("Disposing buffer.");
             if (this.isDisposed) return;
             this.isDisposed = true;
-            this.FlushData(true);
+            this.FlushData(true, includeDataInLeadingEdgeDelay: true);
             flushBufferTimeoutTimer?.Dispose();
         }
-
-
     }
 }
