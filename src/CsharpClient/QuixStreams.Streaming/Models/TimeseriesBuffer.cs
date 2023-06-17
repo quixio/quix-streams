@@ -53,14 +53,14 @@ namespace QuixStreams.Streaming.Models
 
         // List representing internal data structure of the buffer
         private List<TimeseriesDataRaw> bufferedFrames = new List<TimeseriesDataRaw>();
-        private TimeseriesDataRaw delayedBufferedFrames = new TimeseriesDataRaw { Timestamps = Array.Empty<long>() };
+        private TimeseriesDataRaw bufferedFramesDelayed = new TimeseriesDataRaw();
         private object _lock;
         private int totalRowsCount = 0; // Totals rows count in bufferedFrames
 
         private long minTimeSpan = Int64.MaxValue;
         private long maxTimeSpan = Int64.MinValue;
         private long leadingEdge = Int64.MinValue;
-        private long lastTimestampReleased = Int64.MinValue; // needed for onBackfill event
+        private long lastTimestampReleased = Int64.MinValue;
 
         private readonly Timer flushBufferTimeoutTimer; // Timer for Timeout buffer configuration
         
@@ -289,13 +289,10 @@ namespace QuixStreams.Streaming.Models
             if (this.leadingEdgeDelayInNanoseconds != null)
             {
                 UpdateLeadingEdge(timeseriesDataRaw);
+                timeseriesDataRaw = FilterAndBackfillLateArrivingData(timeseriesDataRaw);
                 timeseriesDataRaw = FilterDataFrameByLeadingEdgeDelay(timeseriesDataRaw);
             }
 
-            if (timeseriesDataRaw.Timestamps.Length > 0)
-            {
-                
-            }
             lock (this._lock)
             {
                 if (this.bufferingDisabled)
@@ -443,11 +440,11 @@ namespace QuixStreams.Streaming.Models
                 throw new ObjectDisposedException(nameof(TimeseriesBuffer));
             }
 
-            if (includeDataInLeadingEdgeDelay)
+            if (includeDataInLeadingEdgeDelay && bufferedFramesDelayed.Timestamps != null)
             {
-                delayedBufferedFrames.SortByTimestamp();
-                bufferedFrames.Add(delayedBufferedFrames);
-                totalRowsCount += delayedBufferedFrames.Timestamps.Length;
+                bufferedFramesDelayed.SortByTimestamp();
+                bufferedFrames.Add(bufferedFramesDelayed);
+                totalRowsCount += bufferedFramesDelayed.Timestamps.Length;
             }
             
             this.logger.LogTrace("Executing buffer release. Total {totalRowsCount} rows in {chunksCount} raw chunks.", this.totalRowsCount, this.bufferedFrames.Count);
@@ -476,15 +473,15 @@ namespace QuixStreams.Streaming.Models
                     }
                     
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
-
+                    
+                    this.lastTimestampReleased = newPdrw.Timestamps.Last();
+                    
                     if (newPdrw.Timestamps.Length <= 0) return;
                     this.InvokeOnRawReceived(this, new TimeseriesDataRawReadEventArgs(null, null, newPdrw));
 
                     if (this.OnDataReleased == null) return;
                     var data = new Streaming.Models.TimeseriesData(newPdrw, this.parametersFilter, false, false);
                     this.InvokeOnReceive(this, new TimeseriesDataReadEventArgs(null, null, data));
-                    
-                    this.lastTimestampReleased = newPdrw.Timestamps.Last();
                 }
 
                 RaiseData();
@@ -505,17 +502,21 @@ namespace QuixStreams.Streaming.Models
         protected virtual void InvokeOnReceive(object sender, TimeseriesDataReadEventArgs args)
         {
             this.OnDataReleased?.Invoke(this, args);
-        } 
+        }
+        
+        protected virtual void InvokeOnBackill(object sender, TimeseriesDataReadEventArgs args)
+        {
+            this.OnBackfill?.Invoke(this, args);
+        }
 
         private void UpdateIfAllConditionsAreNull()
         {
             this.bufferingDisabled = this.BufferTimeout == null &&
-                   this.CustomTrigger == null &&
-                   this.CustomTriggerBeforeEnqueue == null &&
-                   this.PacketSize == null &&
-                   this.TimeSpanInMilliseconds == null &&
-                   this.TimeSpanInNanoseconds == null &&
-                   this.LeadingEdgeDelay == null;
+                                     this.CustomTrigger == null &&
+                                     this.CustomTriggerBeforeEnqueue == null &&
+                                     this.PacketSize == null &&
+                                     this.TimeSpanInMilliseconds == null &&
+                                     this.TimeSpanInNanoseconds == null;
         }
 
         private void OnFlushBufferTimeoutTimerEvent(object state)
@@ -549,27 +550,53 @@ namespace QuixStreams.Streaming.Models
                 this.leadingEdge = Math.Max(this.leadingEdge, timestamp);
             }
         }
+
+        private TimeseriesDataRaw FilterAndBackfillLateArrivingData(TimeseriesDataRaw data)
+        {
+            if (this.OnBackfill == null)
+                return data;
+            
+            var indexesToBackfill = new List<int>();
+            for (var i = 0; i < data.Timestamps.Length; i++)
+            {
+                var nano = data.Timestamps[i];
+                
+                if (nano <= this.lastTimestampReleased)
+                {
+                    indexesToBackfill.Add(i);
+                }
+            }
+
+            if (!indexesToBackfill.Any()) return data;
+            var backfillData = SelectPdrRowsByMask(data, indexesToBackfill);
+            this.InvokeOnBackill(this, new TimeseriesDataReadEventArgs(null, null, new TimeseriesData(backfillData, parametersFilter, false, false)));
+                
+            var newDataIndexes = Enumerable.Range(0, data.Timestamps.Length).Except(indexesToBackfill).ToList();
+            data = SelectPdrRowsByMask(data, newDataIndexes);
+
+            return data;
+        }
         
         private TimeseriesDataRaw FilterDataFrameByLeadingEdgeDelay(TimeseriesDataRaw data)
         {
-            if (delayedBufferedFrames.Timestamps != null)
+            if (bufferedFramesDelayed.Timestamps != null)
             {
-                data = ConcatDataFrames(new List<TimeseriesDataRaw>{delayedBufferedFrames, data});    
+                data = ConcatDataFrames(new List<TimeseriesDataRaw>{bufferedFramesDelayed, data});    
             }
             
-            var indexOfDataToRelease = new List<int>();
+            var indexesToRelease = new List<int>();
             for (var i = 0; i < data.Timestamps.Length; i++)
             {
                 var nano = data.Timestamps[i];
                 
                 if (this.leadingEdge - nano >= this.leadingEdgeDelayInNanoseconds)
                 {
-                    indexOfDataToRelease.Add(i);
+                    indexesToRelease.Add(i);
                 }
             }
             
-            var dataToRelease = SelectPdrRowsByMask(data, indexOfDataToRelease);
-            this.delayedBufferedFrames = SelectPdrRowsByMask(data, Enumerable.Range(0, data.Timestamps.Length).Except(indexOfDataToRelease).ToList());
+            var dataToRelease = SelectPdrRowsByMask(data, indexesToRelease);
+            this.bufferedFramesDelayed = SelectPdrRowsByMask(data, Enumerable.Range(0, data.Timestamps.Length).Except(indexesToRelease).ToList());
 
             dataToRelease.SortByTimestamp();
 

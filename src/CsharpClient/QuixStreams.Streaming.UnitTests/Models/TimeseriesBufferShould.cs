@@ -442,7 +442,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithLEDelayAndTimeSpanConfig_WithoutDataReleasedEvent_ShouldRaiseOnBackfillCorrectly(bool initialConfig)
+        public void WriteData_WithLEDelayAndTimeSpanConfig_WithDataReleasedEvent_ShouldRaiseOnBackfillCorrectly(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
@@ -482,14 +482,14 @@ namespace QuixStreams.Streaming.UnitTests.Models
             onBackfillRaiseCount.Should().Be(3);
             backfilledData.Count.Should().Be(3); // 10, 20, (30, 40)
             backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(10));
-            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(20));
-            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(30, 40));
+            backfilledData[1].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(20));
+            backfilledData[2].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(30, 40));
         }
         
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void WriteData_WithLEDelayAndTimeSpanConfig_WithDataReleasedEvent_ShouldRaiseOnBackfillCorrectly(bool initialConfig)
+        public void WriteData_WithLEDelayAndTimeSpanConfig_WithoutDataReleasedEvent_ShouldRaiseOnBackfillCorrectly(bool initialConfig)
         {
             // Arrange
             var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
@@ -516,7 +516,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             };
 
             //Act
-            foreach (var timeseriesDataWithSingleTimestamp in new []{1000, 1250, 1500, 2500, 10, 20 }.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
+            foreach (var timeseriesDataWithSingleTimestamp in new []{1000, 1250, 1500, 2500, 3000, 10, 20 }.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
             {
                 buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
             }
@@ -524,11 +524,8 @@ namespace QuixStreams.Streaming.UnitTests.Models
             buffer.WriteChunk(CreateTimeseriesDataWithFixedTimestamp(30, 40).ConvertToTimeseriesDataRaw(false, false));
             
             // Assert
-            onBackfillRaiseCount.Should().Be(3);
-            backfilledData.Count.Should().Be(3); // 10, 20, (30, 40)
-            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(10));
-            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(20));
-            backfilledData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(30, 40));
+            onBackfillRaiseCount.Should().Be(0);
+            backfilledData.Count.Should().Be(0);
         }
         
         [Theory]
