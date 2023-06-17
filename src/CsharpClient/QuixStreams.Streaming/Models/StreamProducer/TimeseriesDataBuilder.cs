@@ -3,7 +3,7 @@
 namespace QuixStreams.Streaming.Models.StreamProducer
 {
     /// <summary>
-    /// Builder for managing <see cref="TimeseriesDataTimestamp"/> instances on <see cref="TimeseriesBufferProducer"/> 
+    /// Builder for managing <see cref="TimeseriesDataTimestamp"/> instances on <see cref="TimeseriesBufferProducer"/>
     /// </summary>
     public class TimeseriesDataBuilder
     {
@@ -40,6 +40,19 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// Adds new parameter value at the time the builder is created for
         /// </summary>
         /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">Numeric value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        public TimeseriesDataBuilder AddValue(string parameterId, double value, bool overwrite)
+        {
+            this.timestamp.AddValue(parameterId, value, overwrite);
+
+            return this;
+        }
+
+        /// <summary>
+        /// Adds new parameter value at the time the builder is created for
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
         /// <param name="value">String value</param>
         public TimeseriesDataBuilder AddValue(string parameterId, string value)
         {
@@ -47,7 +60,20 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
             return this;
         }
-        
+
+        /// <summary>
+        /// Adds new parameter value at the time the builder is created for
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">String value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        public TimeseriesDataBuilder AddValue(string parameterId, string value, bool overwrite)
+        {
+            this.timestamp.AddValue(parameterId, value, overwrite);
+
+            return this;
+        }
+
         /// <summary>
         /// Adds new parameter value at the time the builder is created for
         /// </summary>
@@ -59,7 +85,19 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
             return this;
         }
-        
+
+        /// <summary>
+        /// Adds new parameter value at the time the builder is created for
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">Binary value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        public TimeseriesDataBuilder AddValue(string parameterId, byte[] value, bool overwrite)
+        {
+            this.timestamp.AddValue(parameterId, value, overwrite);
+
+            return this;
+        }
 
         /// <summary>
         /// Adds a tag to the values.
@@ -72,7 +110,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
             return this;
         }
-        
+
         /// <summary>
         /// Adds tags to the values.
         /// </summary>

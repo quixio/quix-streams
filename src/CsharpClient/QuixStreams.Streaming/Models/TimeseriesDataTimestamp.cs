@@ -37,7 +37,7 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return !this.TimeseriesData.epochsIncluded[this.timestampRawIndex] 
+                return !this.TimeseriesData.epochsIncluded[this.timestampRawIndex]
                     ? this.TimeseriesData.rawData.Timestamps[this.timestampRawIndex] + this.TimeseriesData.rawData.Epoch
                     : this.TimeseriesData.rawData.Timestamps[this.timestampRawIndex];
             }
@@ -82,6 +82,19 @@ namespace QuixStreams.Streaming.Models
         /// <returns>This instance</returns>
         public TimeseriesDataTimestamp AddValue(string parameterId, double value)
         {
+            return AddValue(parameterId, value, overwrite: true);
+        }
+
+        /// <summary>
+        /// Adds a new numeric value.
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">Numeric value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        /// <returns>This instance</returns>
+        public TimeseriesDataTimestamp AddValue(string parameterId, double value, bool overwrite)
+        {
+            var valueExists = false;
             if (!this.TimeseriesData.rawData.NumericValues.TryGetValue(parameterId, out var values))
             {
                 values = new double?[this.TimeseriesData.rawData.Timestamps.Length];
@@ -89,8 +102,15 @@ namespace QuixStreams.Streaming.Models
 
                 this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
             }
+            else
+            {
+                valueExists = values[this.timestampRawIndex] != null;
+            }
 
-            values[this.timestampRawIndex] = value;
+            if (overwrite || !valueExists)
+            {
+                values[this.timestampRawIndex] = value;
+            }
 
             return this;
         }
@@ -103,6 +123,19 @@ namespace QuixStreams.Streaming.Models
         /// <returns>This instance</returns>
         public TimeseriesDataTimestamp AddValue(string parameterId, string value)
         {
+            return AddValue(parameterId, value, overwrite: true);
+        }
+
+        /// <summary>
+        /// Adds a new string value.
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">String value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        /// <returns>This instance</returns>
+        public TimeseriesDataTimestamp AddValue(string parameterId, string value, bool overwrite)
+        {
+            var valueExists = false;
             if (!this.TimeseriesData.rawData.StringValues.TryGetValue(parameterId, out var values))
             {
                 values = new string[this.TimeseriesData.rawData.Timestamps.Length];
@@ -110,8 +143,15 @@ namespace QuixStreams.Streaming.Models
 
                 this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
             }
+            else
+            {
+                valueExists = values[this.timestampRawIndex] != null;
+            }
 
-            values[this.timestampRawIndex] = value;
+            if (overwrite || !valueExists)
+            {
+                values[this.timestampRawIndex] = value;
+            }
 
             return this;
         }
@@ -120,10 +160,23 @@ namespace QuixStreams.Streaming.Models
         /// Adds a new binary value.
         /// </summary>
         /// <param name="parameterId">Parameter Id</param>
-        /// <param name="value">String value</param>
+        /// <param name="value">Byte array value</param>
         /// <returns>This instance</returns>
         public TimeseriesDataTimestamp AddValue(string parameterId, byte[] value)
         {
+            return AddValue(parameterId, value, overwrite: true);
+        }
+
+        /// <summary>
+        /// Adds a new binary value.
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">Byte array value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        /// <returns>This instance</returns>
+        public TimeseriesDataTimestamp AddValue(string parameterId, byte[] value, bool overwrite)
+        {
+            var valueExists = false;
             if (!this.TimeseriesData.rawData.BinaryValues.TryGetValue(parameterId, out var values))
             {
                 values = new byte[this.TimeseriesData.rawData.Timestamps.Length][];
@@ -131,8 +184,15 @@ namespace QuixStreams.Streaming.Models
 
                 this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
             }
+            else
+            {
+                valueExists = values[this.timestampRawIndex] != null;
+            }
 
-            values[this.timestampRawIndex] = value;
+            if (overwrite || !valueExists)
+            {
+                values[this.timestampRawIndex] = value;
+            }
 
             return this;
         }
@@ -152,6 +212,26 @@ namespace QuixStreams.Streaming.Models
             if (valueType == ParameterValueType.Numeric) this.AddValue(parameterId, value.NumericValue ?? 0);
             else if (valueType == ParameterValueType.String) this.AddValue(parameterId, value.StringValue);
             else if (valueType == ParameterValueType.Binary) this.AddValue(parameterId, value.BinaryValue);
+
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a new value.
+        /// </summary>
+        /// <param name="parameterId">Parameter Id</param>
+        /// <param name="value">The value</param>
+        /// <param name="overwrite">Indicates whether to overwrite the value for the parameter if it already exists.</param>
+        /// <returns>This instance</returns>
+        public TimeseriesDataTimestamp AddValue(string parameterId, ParameterValue value, bool overwrite)
+        {
+            if (value.Value == null) return this;
+
+            var valueType = value.Type;
+
+            if (valueType == ParameterValueType.Numeric) this.AddValue(parameterId, value.NumericValue ?? 0, overwrite);
+            else if (valueType == ParameterValueType.String) this.AddValue(parameterId, value.StringValue, overwrite);
+            else if (valueType == ParameterValueType.Binary) this.AddValue(parameterId, value.BinaryValue, overwrite);
 
             return this;
         }
@@ -194,7 +274,7 @@ namespace QuixStreams.Streaming.Models
 
             return this;
         }
-        
+
         /// <summary>
         /// Copies the tags from the specified dictionary.
         /// Conflicting tags will be overwritten
@@ -223,7 +303,7 @@ namespace QuixStreams.Streaming.Models
 
             return this;
         }
-        
+
         internal TimeseriesDataRaw ConvertToTimeseriesDataRaw()
         {
             return new TimeseriesData(new List<TimeseriesDataTimestamp>{this}).rawData;
