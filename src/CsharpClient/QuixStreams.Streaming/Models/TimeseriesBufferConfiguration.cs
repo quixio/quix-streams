@@ -36,12 +36,13 @@ namespace QuixStreams.Streaming.Models
         }
         
         /// <summary>
-        /// Gets or sets the leading edge delay for the buffer in milliseconds. Used when data is arriving to the buffer with no order.
-        /// When the difference between the a package's timestamp in buffer is surpasses the leading edge delay, the <see cref="TimeseriesBuffer.OnDataReleased"/> event
-        /// is invoked and the data is cleared from the buffer.
-        /// Defaults to null (disabled)..
-        /// Note: It should be used in combination with <see cref="TimeSpanInMilliseconds"/> to avoid sending packages one by one.
+        /// Gets or sets the buffer's leading edge delay in milliseconds.
+        /// The <see cref="TimeseriesBuffer.OnDataReleased"/> event is triggered, and the data is removed from the buffer once a package's timestamp exceeds the leading edge delay.
+        /// The default value is null, which means this feature is disabled.
         /// </summary>
+        /// <remarks>
+        /// A leading edge delay is particularly useful in time-sensitive applications where data is expected to arrive out of order. By delaying the release of data from the buffer based on a package's timestamp, we can help ensure that data is processed in the correct order.
+        /// </remarks>
         public long? LeadingEdgeDelay { get; set; } = null;
 
 

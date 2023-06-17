@@ -94,8 +94,7 @@ namespace QuixStreams.Telemetry.Models
         }
         
         /// <summary>
-        /// Sorts the Timestamps array and all associated data arrays within NumericValues, StringValues, 
-        /// BinaryValues, and TagValues dictionaries in increasing order based on the Timestamps values. 
+        /// Sorts all data in increasing order based on the Timestamps values. 
         /// </summary>
         public void SortByTimestamp()
         {

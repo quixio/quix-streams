@@ -42,7 +42,8 @@ namespace QuixStreams.Streaming.Models
         public event EventHandler<TimeseriesDataReadEventArgs> OnDataReleased;
         
         /// <summary>
-        /// Items arriving after LeadingEdgeDelay are discarded from the output topic but released in this event for further processing or forwarding.
+        /// Data arriving with a timestamp earlier then the lastest released timestamp is discarded but released in this event for further processing or forwarding.
+        /// This event is invoked only if the buffer is configured with a leading edge delay.
         /// </summary>
         public event EventHandler<TimeseriesDataReadEventArgs> OnBackfill;
 
@@ -197,7 +198,7 @@ namespace QuixStreams.Streaming.Models
         }
 
         /// <summary>
-        /// Leading edge delay configuration in Milliseconds . <see cref="TimeseriesBufferConfiguration.LeadingEdgeDelay"/>
+        /// Leading edge delay configuration in Milliseconds. <see cref="TimeseriesBufferConfiguration.LeadingEdgeDelay"/>
         /// </summary>
         public long? LeadingEdgeDelay
         {
@@ -309,10 +310,8 @@ namespace QuixStreams.Streaming.Models
 
                     for (var i = 0; i < timeseriesDataRaw.Timestamps.Length; i++)
                     {
-                        // Check if flush condition is met by Timespan config
                         var flushCondition = EvaluateFlushDataConditionsBeforeEnqueue(timeseriesDataRaw, i);
                         
-                        // If not, check if flush condition is met by custom trigger
                         if (!flushCondition && this.customTriggerBeforeEnqueue != null)
                         {
                             if (timeseriesData == null)
@@ -323,7 +322,7 @@ namespace QuixStreams.Streaming.Models
                             flushCondition = this.customTriggerBeforeEnqueue(timeseriesData.Timestamps[i]);
                         }
 
-                        // Flush if condition is met
+                        // Flush data if a flush condition is met
                         if (flushCondition)
                         {
                             // add pending rows before flushing
@@ -335,7 +334,7 @@ namespace QuixStreams.Streaming.Models
                             startIndex = i;
                         }
 
-                        // Enqueue, add rows to the buffer
+                        // Enqueue
                         this.totalRowsCount++;
 
                         if (EvaluateFlushDataConditionsAfterEnqueue(timeseriesDataRaw, startIndex, i))
@@ -471,7 +470,7 @@ namespace QuixStreams.Streaming.Models
                     {
                         newPdrw = this.MergeTimestamps(newPdrw);
                     }
-                    
+
                     this.logger.LogTrace("Buffer released. After merge and clean new data contains {rows} rows.", newPdrw.Timestamps.Length);
                     
                     this.lastTimestampReleased = newPdrw.Timestamps.Last();
