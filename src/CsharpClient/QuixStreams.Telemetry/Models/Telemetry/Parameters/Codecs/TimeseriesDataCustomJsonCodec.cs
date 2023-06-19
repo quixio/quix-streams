@@ -54,45 +54,24 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
         }
 
 
-        private void Serialize1(StreamWriter streamWriter, TimeseriesDataRaw obj)
-        {
-            using (var jsonWriter = new JsonTextWriter(streamWriter))
-            {
-                jsonWriter.CloseOutput = false;
-                JsonConverter.WriteJson(jsonWriter, obj);
-            }
-        }
-
-        private void Serialize2(StreamWriter streamWriter, TimeseriesDataRaw obj)
-        {
-            using (var jsonWriter = new JsonTextWriter(streamWriter))
-            {
-                jsonWriter.CloseOutput = false;
-                new JsonSerializer().Serialize(jsonWriter, obj);
-            }
-        }
 
         /// <inheritdoc />
         public override byte[] Serialize(TimeseriesDataRaw obj)
         {
-            try
+            using (var memoryStream = new MemoryStream())
             {
-                using (var memoryStream = new MemoryStream())
+                using (var streamWriter = new StreamWriter(memoryStream, Encoding.UTF8, 4096, true))
                 {
-                    using (var streamWriter = new StreamWriter(memoryStream, Encoding.UTF8, 4096, true))
+                    using (var jsonWriter = new JsonTextWriter(streamWriter))
                     {
-                        Serialize1(streamWriter, obj);
-
+                        jsonWriter.CloseOutput = false;
+                        JsonConverter.WriteJson(jsonWriter, obj);
                     }
-
-                    var arr = new byte[memoryStream.Position];
-                    Array.Copy(memoryStream.ToArray(), arr, memoryStream.Position);
-                    return arr;
                 }
-            }
-            catch (Exception ex)
-            {
-                throw;
+
+                var arr = new byte[memoryStream.Position];
+                Array.Copy(memoryStream.ToArray(), arr, memoryStream.Position);
+                return arr;
             }
         }
 
