@@ -47,12 +47,16 @@ class TopicConsumer(object):
         self._on_committing = None
         self._on_committing_ref = None  # keeping reference to avoid GC
 
+        self._topic_state_manager = None
+
     def _finalizerfunc(self):
         self._on_stream_received_dispose()
         self._on_streams_revoked_dispose()
         self._on_revoking_dispose()
         self._on_committing_dispose()
         self._on_committed_dispose()
+        if self._topic_state_manager is not None:
+            self._topic_state_manager.dispose()
         self._active_streams = None
 
     # region on_stream_received
@@ -283,7 +287,17 @@ class TopicConsumer(object):
         self._interop.Commit()
 
     def get_state_manager(self) -> TopicStateManager:
-        self._interop.GetStateManager()
+        """
+        Gets the manager for the topic states.
+
+        Returns:
+            TopicStateManager: The topic state manager
+        """
+
+        if self._topic_state_manager is None:
+            self._topic_state_manager = TopicStateManager(self._interop.GetStateManager())
+
+        return self._topic_state_manager
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         """
