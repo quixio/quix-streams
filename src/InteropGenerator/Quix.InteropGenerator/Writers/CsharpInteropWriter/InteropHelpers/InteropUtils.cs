@@ -382,6 +382,7 @@ public class InteropUtils
     [UnmanagedCallersOnly(EntryPoint = "interoputils_pin_hptr_target")]
     public static IntPtr PinHPtrTarget(IntPtr ptr)
     {
+        LogDebug("invoked interoputils_pin_hptr_target with ptr {0}", ptr);
         if (ptr == IntPtr.Zero)
         {
             if (DebugMode) Console.WriteLine($"Allocated null Ptr");
@@ -398,7 +399,9 @@ public class InteropUtils
     public static IntPtr GetPinAddress(IntPtr pinnedPtr)
     {
         if (pinnedPtr == IntPtr.Zero) return IntPtr.Zero;
+        LogDebug("Getting pinned address ptr for {0}", pinnedPtr);
         var handler = GCHandle.FromIntPtr(pinnedPtr);
+        LogDebug("Got pinned address ptr for {0}, which is ", pinnedPtr, handler.AddrOfPinnedObject());
         return handler.AddrOfPinnedObject();
     }
 
@@ -409,6 +412,7 @@ public class InteropUtils
             LogDebug($"Converting null Ptr to type: {typeof(T).FullName}");
             return default;
         }
+        LogDebug("Converting Ptr {0}", ptr);
         var handler = GCHandle.FromIntPtr(ptr);
         LogDebug("Converted Ptr {0} to type: {1}, {2}", ptr, handler.Target?.GetType().FullName, handler.Target == null ? "is null" : "is not null");
         return (T)handler.Target;
@@ -422,7 +426,9 @@ public class InteropUtils
     public static object FromHPtr(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero) return null;
+        LogDebug("Converting Ptr {0}", ptr);
         var handler = GCHandle.FromIntPtr(ptr);
+        LogDebug("Converted Ptr {0} to type: {1}, {2}", ptr, handler.Target?.GetType().FullName, handler.Target == null ? "is null" : "is not null");
         return handler.Target;
     }
 
@@ -440,6 +446,7 @@ public class InteropUtils
     public static void FreeHPtr(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero) return; // exception maybe ? (however that might be a problem due to unmanaged nature)
+        LogDebug("Freeing Ptr: {0}", ptr);
         var handler = GCHandle.FromIntPtr(ptr);
         LogDebug("Freed Ptr: {0}", ptr);
         handler.Free();

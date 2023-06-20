@@ -15,7 +15,7 @@ from tests.quixstreams.unittests.models.test_timeseriesdata import TimeseriesDat
 from src import quixstreams as qx
 from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils, InteropException
 
-#InteropUtils.enable_debug()
+InteropUtils.enable_debug()
 Logging.update_factory(LogLevel.Trace)
 
 from datetime import datetime, timedelta
