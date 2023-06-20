@@ -277,7 +277,7 @@ class StreamConsumer(object):
             this will return a state where type is 'Any', with an integer 1 (zero) as default when
             value has not been set yet. The lambda function will be invoked with 'get_state_type_check' key to determine type
 
-            >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return {}, float)
+            >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 0, float)
             this will return a state where type is a specific type, with default value
 
             >>> stream_consumer.get_scalar_state('some_state', state_type=float)
