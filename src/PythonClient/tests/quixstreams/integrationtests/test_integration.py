@@ -1,5 +1,5 @@
 import time
-from typing import List, Dict
+from typing import List
 import unittest
 import threading
 import pandas as pd
@@ -2122,6 +2122,7 @@ class TestIntegration(unittest.TestCase):
         app_state_manager = qx.App.get_state_manager()
         topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
+
         rolling_sum_state_somevalue = stream_state_manager.get_dict_state('rollingsum')['somevalue']
         self.assertEqual(5, rolling_sum_state_somevalue)
         object_state_somevalue = stream_state_manager.get_dict_state('objectstate')['somevalue']
@@ -2146,14 +2147,15 @@ class TestIntegration(unittest.TestCase):
             row_count_received = 0
 
             def on_dataframe_received_handler(stream_consumer: qx.StreamConsumer, data: qx.TimeseriesData):
-                stream_state = stream_consumer.get_dict_state("app_state", lambda x: 0)  # default value for state name.
-
+                dict_stream_state = stream_consumer.get_dict_state("app_state", lambda missing_key: 0)
+                scalar_stream_state = stream_consumer.get_scalar_state("scalar_state", lambda: 0)
                 for row in data.timestamps:
                     some_integer = row.parameters["some_integer"].numeric_value
+                    dict_stream_state["some_integer_sum"] += some_integer
 
-                    stream_state["some_integer_sum"] += some_integer
+                    scalar_stream_state.value += some_integer
 
-                    actual_values_sum.append(stream_state["some_integer_sum"])
+                    actual_values_sum.append(dict_stream_state["some_integer_sum"])
 
                     nonlocal row_count_received
                     row_count_received += 1
@@ -2186,12 +2188,18 @@ class TestIntegration(unittest.TestCase):
         app_state_manager = qx.App.get_state_manager()
         topic_state_manager = app_state_manager.get_topic_state_manager(topic_name)
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
-        some_integer_sum = stream_state_manager.get_dict_state('app_state', state_type=int)['some_integer_sum']
-        self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum)
+
+        # Assert that the dict state is correct
+        some_integer_sum_from_dict_state = stream_state_manager.get_dict_state('app_state', state_type=int)['some_integer_sum']
+        self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum_from_dict_state)
+
+        # Assert that the scalar state is correct
+        some_integer_sum_from_scalar_state = stream_state_manager.get_scalar_state('scalar_state')
+        self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum_from_scalar_state.value)
 
         # The following should not raise exception, meant to raise only warning
-        some_integer_sum = stream_state_manager.get_dict_state('app_state', state_type=float)['some_integer_sum']
-        self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum)
+        some_integer_sum_from_dict_state = stream_state_manager.get_dict_state('app_state', state_type=float)['some_integer_sum']
+        self.assertEqual(repeat_count*(repeat_count+1)/2, some_integer_sum_from_dict_state)
 
         rolling_sum = 0
         print(actual_values_sum)

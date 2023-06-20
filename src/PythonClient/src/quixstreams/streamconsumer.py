@@ -13,7 +13,8 @@ from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixStreamsStreaming.IStreamConsumer import IStreamConsumer as sci
 from .native.Python.QuixStreamsStreaming.PackageReceivedEventArgs import PackageReceivedEventArgs
 from .native.Python.QuixStreamsStreaming.StreamClosedEventArgs import StreamClosedEventArgs
-from .states.streamstate import StreamState
+from .states.dictstreamstate import DictStreamState
+from .states.scalarstreamstate import ScalarStreamState
 from .states.streamstatemanager import StreamStateManager
 
 from typing import TypeVar
@@ -227,7 +228,7 @@ class StreamConsumer(object):
             self._streamTimeseriesConsumer = StreamTimeseriesConsumer(self, self._interop.get_Timeseries())
         return self._streamTimeseriesConsumer
 
-    def get_dict_state(self, state_name: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> StreamState[StreamStateType]:
+    def get_dict_state(self, state_name: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> DictStreamState[StreamStateType]:
         """
         Creates a new application state of dictionary type with automatically managed lifecycle for the stream
 
@@ -237,7 +238,7 @@ class StreamConsumer(object):
             state_type: The type of the state
 
         Returns:
-            StreamState: The stream state
+            DictStreamState: The stream state
 
          Example:
             >>> stream_consumer.get_dict_state('some_state')
@@ -255,6 +256,35 @@ class StreamConsumer(object):
         """
 
         return self.get_state_manager().get_dict_state(state_name, default_value_factory, state_type)
+
+    def get_scalar_state(self, state_name: str, default_value_factory: Callable[[], StreamStateType] = None, state_type: StreamStateType = None) -> ScalarStreamState[StreamStateType]:
+        """
+        Creates a new application state of scalar type with automatically managed lifecycle for the stream
+
+        Args:
+            state_name: The name of the state
+            default_value_factory: The default value factory to create value when it has not been set yet
+            state_type: The type of the state
+
+        Returns:
+            ScalarStreamState: The stream state
+
+         Example:
+            >>> stream_consumer.get_scalar_state('some_state')
+            This will return a state where type is 'Any'
+
+            >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 1)
+            this will return a state where type is 'Any', with an integer 1 (zero) as default when
+            value has not been set yet. The lambda function will be invoked with 'get_state_type_check' key to determine type
+
+            >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 0, float)
+            this will return a state where type is a specific type, with default value
+
+            >>> stream_consumer.get_scalar_state('some_state', state_type=float)
+            this will return a state where type is a float with a default value of that type
+        """
+
+        return self.get_state_manager().get_scalar_state(state_name, default_value_factory, state_type)
 
     def get_state_manager(self) -> StreamStateManager:
         """

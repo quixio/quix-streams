@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,7 +16,7 @@ public class StreamStateManagerShould
     }
     
     [Fact]
-    public void GetStates_ShouldReturnExcepted()
+    public void GetDictionaryState_ShouldReturnExcepted()
     {
         // Arrange
         var manager = CreateStreamStateManager();
@@ -37,7 +38,7 @@ public class StreamStateManagerShould
     }
     
     [Fact]
-    public void GetState_ShouldReturnSameManagerAlways()
+    public void GetDictionaryState_ShouldReturnSameManagerAlways()
     {
         // Arrange
         var manager = CreateStreamStateManager();
@@ -49,6 +50,79 @@ public class StreamStateManagerShould
         // Assert
         testStreamState.Should().NotBeNull();
         testStreamState.Should().BeSameAs(testStreamState2);
+    }
+    
+    [Fact]
+    public void GetDictionaryState_StateNameUsedByDifferentStateType_ShouldThrow()
+    {
+        // Arrange
+        var manager = CreateStreamStateManager();
+        manager.GetDictionaryState("test");
+        
+        // Assert
+        Action scalarStateAct = () => manager.GetScalarState("test");
+        scalarStateAct.Should().Throw<ArgumentException>();
+        
+        Action dictGenericStateAct = () => manager.GetDictionaryState<int>("test");
+        dictGenericStateAct.Should().Throw<ArgumentException>();
+        
+        Action scalarGenericStateAct = () => manager.GetScalarState<int>("test");
+        scalarGenericStateAct.Should().Throw<ArgumentException>();
+    }
+    
+    [Fact]
+    public void GetDictionaryStateGeneric_StateNameUsedByDifferentStateType_ShouldThrow()
+    {
+        // Arrange
+        var manager = CreateStreamStateManager();
+        manager.GetDictionaryState<bool>("test");
+        
+        // Assert
+        Action dictStateAct = () => manager.GetDictionaryState("test");
+        dictStateAct.Should().Throw<ArgumentException>();
+
+        Action dictDiffGenericStateAct = () => manager.GetDictionaryState<int>("test");
+        dictDiffGenericStateAct.Should().Throw<ArgumentException>();
+        
+        Action scalarStateAct = () => manager.GetScalarState("test");
+        scalarStateAct.Should().Throw<ArgumentException>();
+    }
+    
+    [Fact]
+    public void GetScalarState_StateNameUsedByDifferentStateType_ShouldThrow()
+    {
+        // Arrange
+        var manager = CreateStreamStateManager();
+        manager.GetScalarState("test");
+        
+        // Assert
+        Action scalarGenericStateAct = () => manager.GetScalarState<int>("test");
+        scalarGenericStateAct.Should().Throw<ArgumentException>();
+        
+        Action dictStateAct = () => manager.GetDictionaryState("test");
+        dictStateAct.Should().Throw<ArgumentException>();
+        
+        Action dictDiffGenericStateAct = () => manager.GetDictionaryState<int>("test");
+        dictDiffGenericStateAct.Should().Throw<ArgumentException>();
+        
+    }
+    
+    [Fact]
+    public void GetScalarStateGeneric_StateNameUsedByDifferentStateType_ShouldThrow()
+    {
+        // Arrange
+        var manager = CreateStreamStateManager();
+        manager.GetScalarState<bool>("test");
+        
+        // Assert
+        Action scalarDiffGenericStateAct = () => manager.GetDictionaryState<int>("test");
+        scalarDiffGenericStateAct.Should().Throw<ArgumentException>();
+        
+        Action dictStateAct = () => manager.GetDictionaryState("test");
+        dictStateAct.Should().Throw<ArgumentException>();
+        
+        Action dictGenericStateAct = () => manager.GetDictionaryState<int>("test");
+        dictGenericStateAct.Should().Throw<ArgumentException>();
     }
     
     [Fact]

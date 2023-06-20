@@ -5,7 +5,7 @@ from typing import List, Tuple
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
-from ..native.Python.QuixStreamsStreaming.States.StreamState import StreamState as ssi
+from ..native.Python.QuixStreamsStreaming.States.StreamDictionaryState import StreamDictionaryState as sdsi
 
 from ..models.netdict import NetDict
 from ..state.statevalue import StateValue
@@ -16,30 +16,30 @@ StreamStateType = TypeVar('StreamStateType')
 
 
 @nativedecorator
-class StreamState(Generic[StreamStateType]):
+class DictStreamState(Generic[StreamStateType]):
     """
-    Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
+    Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
     """
 
     def __init__(self, net_pointer: ctypes.c_void_p, state_type: StreamStateType, default_value_factory: Callable[[str], StreamStateType]):
         """
-        Initializes a new instance of StreamState.
+        Initializes a new instance of DictStreamState.
 
-        NOTE: Do not initialize this class manually, use StreamStateManager.get_state
+        NOTE: Do not initialize this class manually, use StreamStateManager.get_dict_state
 
         Args:
-            net_pointer: The .net object representing a StreamState.
+            net_pointer: The .net object representing a DictStreamState.
             state_type: The type of the state
             default_value_factory: The default value factory to create value when the key is not yet present in the state
         """
 
         if net_pointer is None:
-            raise Exception("StreamState is none")
+            raise Exception("DictStreamState is none")
 
         if state_type is None:
             raise Exception('state_type must be specified')
 
-        self._interop = ssi(net_pointer)
+        self._interop = sdsi(net_pointer)
         self._default_value_factory = default_value_factory
         self._type = state_type
 

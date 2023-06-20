@@ -13,7 +13,7 @@ namespace QuixStreams.State
     /// <summary>
     /// Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
     /// </summary>
-    public class State : IDictionary<string, StateValue>, IDictionary
+    public class DictionaryState : IState, IDictionary<string, StateValue>, IDictionary
     {
         /// <summary>
         /// Represents the storage where the state changes will be persisted.
@@ -43,7 +43,7 @@ namespace QuixStreams.State
         /// <summary>
         /// The logger for the class
         /// </summary>
-        private readonly ILogger<State> logger;
+        private readonly ILogger<DictionaryState> logger;
 
         /// <summary>
         /// Returns whether the cache keys are case-sensitive
@@ -61,14 +61,14 @@ namespace QuixStreams.State
         public event EventHandler OnFlushed;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="State"/> class using the specified storage.
+        /// Initializes a new instance of the <see cref="DictionaryState"/> class using the specified storage.
         /// </summary>
         /// <param name="storage">An instance of <see cref="IStateStorage"/> that represents the storage to persist state changes to.</param>
         /// <param name="loggerFactory">The logger factory to use</param>
         /// <exception cref="ArgumentNullException">Thrown when the storage parameter is null.</exception>
-        public State(IStateStorage storage, ILoggerFactory loggerFactory = null)
+        public DictionaryState(IStateStorage storage, ILoggerFactory loggerFactory = null)
         {
-            this.logger = loggerFactory?.CreateLogger<State>() ?? NullLogger<State>.Instance;
+            this.logger = loggerFactory?.CreateLogger<DictionaryState>() ?? NullLogger<DictionaryState>.Instance;
             this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
             var keys = this.storage.GetAllKeys();
             foreach (var key in keys)
@@ -363,7 +363,7 @@ namespace QuixStreams.State
     /// <summary>
     /// Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
     /// </summary>
-    public class State<T> : IDictionary<string, T>
+    public class DictionaryState<T> : IState, IDictionary<string, T>
     {
         /// <summary>
         /// The logger for the class
@@ -383,7 +383,7 @@ namespace QuixStreams.State
         /// <summary>
         /// The underlying state storage for this State, responsible for managing the actual key-value pairs.
         /// </summary>
-        private readonly State underlyingState;
+        private readonly DictionaryState underlyingDictionaryState;
 
         /// <summary>
         /// A function that converts a StateValue to the desired value of type T, using appropriate conversion logic based on the type of T.
@@ -408,7 +408,7 @@ namespace QuixStreams.State
         /// <summary>
         /// Returns whether the cache keys are case-sensitive
         /// </summary>
-        public bool IsCaseSensitive => this.underlyingState.IsCaseSensitive;
+        public bool IsCaseSensitive => this.underlyingDictionaryState.IsCaseSensitive;
 
         /// <summary>
         /// Raised immediately before a flush operation is performed.
@@ -421,32 +421,32 @@ namespace QuixStreams.State
         public event EventHandler OnFlushed;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="State"/> class with the specified storage and logger factory.
+        /// Initializes a new instance of the <see cref="DictionaryState"/> class with the specified storage and logger factory.
         /// </summary>
         /// <param name="storage">The storage provider to persist state changes to. Must not be null.</param>
         /// <param name="loggerFactory">Optional logger factory to enable logging from within the state object.</param>
         /// <exception cref="ArgumentNullException">Thrown when the storage parameter is null.</exception>
-        public State(IStateStorage storage, ILoggerFactory loggerFactory = null) : this(new State(storage, loggerFactory), loggerFactory)
+        public DictionaryState(IStateStorage storage, ILoggerFactory loggerFactory = null) : this(new DictionaryState(storage, loggerFactory), loggerFactory)
         {
         }
         
         /// <summary>
-        /// Initializes a new instance of the <see cref="State"/> class with the specified storage and logger factory.
+        /// Initializes a new instance of the <see cref="DictionaryState"/> class with the specified storage and logger factory.
         /// </summary>
-        /// <param name="state">The state to persist state changes to. Must not be null.</param>
+        /// <param name="dictionaryState">The state to persist state changes to. Must not be null.</param>
         /// <param name="loggerFactory">Optional logger factory to enable logging from within the state object.</param>
         /// <exception cref="ArgumentNullException">Thrown when the storage parameter is null.</exception>
-        public State(State state, ILoggerFactory loggerFactory = null)
+        public DictionaryState(DictionaryState dictionaryState, ILoggerFactory loggerFactory = null)
         {
-            this.underlyingState = state ?? throw new ArgumentNullException(nameof(state));
-            this.logger = loggerFactory?.CreateLogger<State<T>>() ?? new NullLogger<State<T>>();
+            this.underlyingDictionaryState = dictionaryState ?? throw new ArgumentNullException(nameof(dictionaryState));
+            this.logger = loggerFactory?.CreateLogger<DictionaryState<T>>() ?? new NullLogger<DictionaryState<T>>();
             var type = typeof(T);
             switch (Type.GetTypeCode(type))
             {
                 case TypeCode.Empty:
                 case TypeCode.DBNull:
                     throw new ArgumentException(
-                        $"{Type.GetTypeCode(type)} is not supported by {nameof(State<T>)}.");
+                        $"{Type.GetTypeCode(type)} is not supported by {nameof(DictionaryState<T>)}.");
                 case TypeCode.Object:
                     var options = new JsonSerializerSettings()
                     {
@@ -541,7 +541,7 @@ namespace QuixStreams.State
                     throw new ArgumentOutOfRangeException();
             }
 
-            foreach (var pair in this.underlyingState)
+            foreach (var pair in this.underlyingDictionaryState)
             {
                 this.inMemoryCache[pair.Key] = genericConverter(pair.Value);
             }
@@ -663,7 +663,7 @@ namespace QuixStreams.State
             if (this.clearBeforeFlush)
             {
                 logger.LogTrace("Clearing state before flush as clear was requested");
-                this.underlyingState.Clear();
+                this.underlyingDictionaryState.Clear();
                 this.clearBeforeFlush = false;
             }
 
@@ -677,7 +677,7 @@ namespace QuixStreams.State
                     if (changeType.Value == ChangeType.Removed)
                     {
                         logger.LogTrace("Removing key '{0}' from state as part of flush", changeType.Key);
-                        this.underlyingState.Remove(changeType.Key);
+                        this.underlyingDictionaryState.Remove(changeType.Key);
                     }
                 }
 
@@ -686,7 +686,7 @@ namespace QuixStreams.State
                 {
                     // Update the internal state by applying a state value converter to each value and storing the result in the state with the same key
                     // this is necessary because reference types might have changed without this instance knowing
-                    this.underlyingState[pair.Key] = stateValueConverter(pair.Value);
+                    this.underlyingDictionaryState[pair.Key] = stateValueConverter(pair.Value);
                     logger.LogTrace("Updating key '{0}' from state as part of flush", pair.Key);
                 }
             }
@@ -698,14 +698,14 @@ namespace QuixStreams.State
                     // For any change that has a value of "Removed", remove the corresponding key from the internal state
                     if (changeType.Value == ChangeType.Removed)
                     {
-                        this.underlyingState.Remove(changeType.Key);
+                        this.underlyingDictionaryState.Remove(changeType.Key);
                         logger.LogTrace("Removing key '{0}' from state as part of flush", changeType.Key);
                     }
                     else
                     {
                         // For any change that is not "Removed", look up the corresponding value in the in-memory cache
                         // Apply the state value converter to the value and store the result in the internal state with the same key
-                        this.underlyingState[changeType.Key] = stateValueConverter(inMemoryCache[changeType.Key]);
+                        this.underlyingDictionaryState[changeType.Key] = stateValueConverter(inMemoryCache[changeType.Key]);
                         logger.LogTrace("Updating key '{0}' from state as part of flush", changeType.Key);
                     }
                 }
@@ -714,7 +714,7 @@ namespace QuixStreams.State
             this.changes.Clear();
 
             logger.LogTrace("Flushing underlying state as part of flush");
-            this.underlyingState.Flush();
+            this.underlyingDictionaryState.Flush();
             logger.LogTrace("Flushed underlying state as part of flush");
             OnFlushed?.Invoke(this, EventArgs.Empty);
             this.logger.LogTrace("Flushed state.");
@@ -738,7 +738,7 @@ namespace QuixStreams.State
                 try
                 {
                     this.inMemoryCache.Remove(change.Key); // Remove current value
-                    var value = this.underlyingState[change.Key];
+                    var value = this.underlyingDictionaryState[change.Key];
                     if (value == null) continue;
                     this.inMemoryCache[change.Key] = genericConverter(value); // set original value
                 }
@@ -763,6 +763,5 @@ namespace QuixStreams.State
             Removed,
             AddedOrUpdated
         }
-        
     }
 }

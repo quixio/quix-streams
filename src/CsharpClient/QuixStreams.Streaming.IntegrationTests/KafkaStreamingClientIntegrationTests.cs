@@ -663,7 +663,7 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public void ReadingAStreamWithSameConsumerGroup_ShouldGetRevokedOnOne()
         {
-            var topic = nameof(StreamReadAndWriteBuilders);
+            var topic = nameof(ReadingAStreamWithSameConsumerGroup_ShouldGetRevokedOnOne);
             RunTest(() =>
             {
                 // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
@@ -737,9 +737,9 @@ namespace QuixStreams.Streaming.IntegrationTests
         }
 
         [Fact]
-        public void StreamAndTopicState_ShouldWorkAsExpected()
+        public void StreamState_ShouldWorkAsExpected()
         {
-            var topic = nameof(StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected);
+            var topic = nameof(StreamState_ShouldWorkAsExpected);
             RunTest(() =>
             {
                 // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
@@ -757,7 +757,8 @@ namespace QuixStreams.Streaming.IntegrationTests
                 var msgCounter = 0;
                 topicConsumer.OnStreamReceived += (sender, stream) =>
                 {
-                    var rollingSum = stream.GetDictionaryState("RollingSum", (sid) => 0d);
+                    var rollingSum = stream.GetScalarState("RollingSumTotal", (sid) => 0d);
+                    var rollingSumPerParameter = stream.GetDictionaryState("RollingSum", (sid) => 0d);
 
                     stream.Timeseries.OnDataReceived += (o, args) =>
                     {
@@ -767,9 +768,10 @@ namespace QuixStreams.Streaming.IntegrationTests
                             {
                                 if (parameter.Value.Type == ParameterValueType.Numeric)
                                 {
-                                    rollingSum[parameter.Key] += parameter.Value.NumericValue ?? 0;
+                                    rollingSumPerParameter[parameter.Key] += parameter.Value.NumericValue ?? 0;
+                                    rollingSum.Value += parameter.Value.NumericValue ?? 0;
 
-                                    this.output.WriteLine($"Rolling sum for {parameter.Key} is {rollingSum[parameter.Key]}");
+                                    this.output.WriteLine($"Rolling sum for {parameter.Key} is {rollingSumPerParameter[parameter.Key]}");
                                 }  
                             }
                         }
@@ -816,25 +818,28 @@ namespace QuixStreams.Streaming.IntegrationTests
                 manager.GetStreamStates().Should().BeEquivalentTo(new List<string>() { "stream1", "stream2" });
                 
                 output.WriteLine($"Checking Stream 1 Rolling sum for params");
-                var streamState = manager.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
-                streamState["param1"].Should().Be(14);
-                streamState["param2"].Should().Be(10);
+                var stream1StateRollingSum = manager.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
+                var stream1StateRollingSumPerParam = manager.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
+                stream1StateRollingSumPerParam["param1"].Should().Be(14);
+                stream1StateRollingSumPerParam["param2"].Should().Be(10);
+                stream1StateRollingSum.Value.Should().Be(24);
                 output.WriteLine($"Checked Stream 1 Rolling sum for params");
                 output.WriteLine($"Checking Stream 2 Rolling sum for params");
-                var streamState2 = manager.GetStreamStateManager(streamProducer2.StreamId).GetDictionaryState<double>("RollingSum");
-                streamState2["param1"].Should().Be(9);
-                streamState2["param2"].Should().Be(10);
+                var stream2StateRollingSum = manager.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
+                var stream2StateRollingSumPerParam = manager.GetStreamStateManager(streamProducer2.StreamId).GetDictionaryState<double>("RollingSum");
+                stream2StateRollingSumPerParam["param1"].Should().Be(9);
+                stream2StateRollingSumPerParam["param2"].Should().Be(10);
+                stream2StateRollingSum.Value.Should().Be(19);
                 output.WriteLine($"Checked Stream 2 Rolling sum for params");
 
                 //topicStateManager.DeleteStreamStates().Should().Be(2);
-
             });
         }
         
         [Fact]
-        public void StreamAndTopicState_CommittedFromAnotherThread_ShouldWorkAsExpected()
+        public void StreamState_CommittedFromAnotherThread_ShouldWorkAsExpected()
         {
-            var topic = nameof(StreamCloseAndReopenSameStream_ShouldRaiseEventAsExpected);
+            var topic = nameof(StreamState_CommittedFromAnotherThread_ShouldWorkAsExpected);
             // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
             // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
             // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were

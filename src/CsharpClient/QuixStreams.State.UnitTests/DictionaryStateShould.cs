@@ -6,7 +6,7 @@ using Xunit;
 
 namespace QuixStreams.State.UnitTests
 {
-    public class StateShould
+    public class DictionaryStateShould
     {
         [Fact]
         public void Constructor_UsingNonEmptyState_ShouldLoadState()
@@ -14,7 +14,7 @@ namespace QuixStreams.State.UnitTests
             // Arrange
             var storage = new InMemoryStorage();
             storage.SetAsync("existing", new StateValue("whatever"));
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
 
             // Assert
             state.Count.Should().Be(1);
@@ -26,7 +26,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
 
             // Act
             state.Add("key", new StateValue("value"));
@@ -40,7 +40,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
             // Act
@@ -55,7 +55,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
 
@@ -71,7 +71,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
 
@@ -87,7 +87,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
             state.Flush();
@@ -104,7 +104,7 @@ namespace QuixStreams.State.UnitTests
         public void State_WithNullStorage_ShouldThrowArgumentNullException()
         {
             // Act
-            Action act = () => new State(null);
+            Action act = () => new DictionaryState(null);
 
             // Assert
             act.Should().Throw<ArgumentNullException>();
@@ -115,7 +115,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
             // Act
@@ -130,7 +130,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
 
             // Act
             bool containsKey = state.ContainsKey("key");
@@ -144,7 +144,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
             // Act
@@ -160,7 +160,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
 
             // Act
             bool success = state.TryGetValue("key", out StateValue value);
@@ -175,7 +175,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
             // Act
@@ -191,7 +191,7 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             var storage = new InMemoryStorage();
-            var state = new State(storage);
+            var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
             state.Flush();
 
