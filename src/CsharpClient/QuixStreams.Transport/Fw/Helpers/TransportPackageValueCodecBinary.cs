@@ -75,39 +75,24 @@ namespace QuixStreams.Transport.Fw.Helpers
 
         public static byte[] Serialize(TransportPackageValue transportPackageValue)
         {
-            try
-            {
-
-            using (var ms = new MemoryStream())
-            using (var sw = new StreamWriter(ms, Constants.Utf8NoBOMEncoding))
-            {
-                using (var writer = new BinaryWriter(ms))
-                {
-                    byte codecVersion = 1;
-                    writer.Write(codecVersion);
-
-                    writer.Write(transportPackageValue.CodecBundle.CodecId);
-                    writer.Write(transportPackageValue.CodecBundle.ModelKey);
-
-                    SerializeMetadata(writer, transportPackageValue.MetaData);
-
-                    byte[] value = transportPackageValue.Value;
-                    writer.Write(value.Length);
-                    writer.Write(value);
-                    
-                    writer.Flush();
-                }
-
-                return ms.ToArray();
-            }
+            using var ms = new MemoryStream();
+            using var writer = new BinaryWriter(ms);
             
-            }
-            catch (Exception e)
-            {
-                Console.Write(e);
-                throw e;
-            }
+            byte codecVersion = 1;
+            writer.Write(codecVersion);
 
+            writer.Write(transportPackageValue.CodecBundle.CodecId);
+            writer.Write(transportPackageValue.CodecBundle.ModelKey);
+
+            SerializeMetadata(writer, transportPackageValue.MetaData);
+
+            var value = transportPackageValue.Value;
+            writer.Write(value.Count);
+            writer.Write(value.Array, value.Offset, value.Count);
+
+            writer.Flush();
+
+            return ms.ToArray();
         }
     }
 }

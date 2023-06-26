@@ -1,4 +1,6 @@
-﻿using QuixStreams.Transport.Codec;
+﻿using System;
+using System.Linq;
+using QuixStreams.Transport.Codec;
 
 namespace QuixStreams.Transport.Fw.Codecs
 {
@@ -24,6 +26,12 @@ namespace QuixStreams.Transport.Fw.Codecs
         public override byte[] Deserialize(byte[] contentBytes)
         {
             return contentBytes;
+        }
+
+        /// <inheritdoc />
+        public override byte[] Deserialize(ArraySegment<byte> contentBytes)
+        {
+            return contentBytes.ToArray();
         }
 
         /// <inheritdoc />

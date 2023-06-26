@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -8,9 +9,9 @@ using QuixStreams.Transport.Fw.Codecs;
 namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
 {
     /// <summary>
-    /// TimeseriesData Json Codec implementation
+    /// TimeseriesData Codec implementation that is human readable but not JSON for most purposes
     /// </summary>
-    public class TimeseriesDataJsonCodec : Codec<TimeseriesDataRaw>
+    public class TimeseriesDataReadableCodec : Codec<TimeseriesDataRaw>
     {
         private static readonly DefaultJsonCodec<TimeseriesDataCodeDto> BaseCodec = new DefaultJsonCodec<TimeseriesDataCodeDto>();
 
@@ -24,7 +25,15 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
             var ret = ConvertToDo(doBytes);
             return ret;
         }
-        
+
+        /// <inheritdoc />
+        public override TimeseriesDataRaw Deserialize(ArraySegment<byte> contentBytes)
+        {
+            var doBytes = BaseCodec.Deserialize(contentBytes);
+            var ret = ConvertToDo(doBytes);
+            return ret;
+        }
+
         /// <inheritdoc />
         public override byte[] Serialize(TimeseriesDataRaw obj)
         {

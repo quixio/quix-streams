@@ -24,12 +24,32 @@ namespace QuixStreams.Transport.Codec
 
         /// <inheritdoc />
         public abstract TContent Deserialize(byte[] contentBytes);
+        
+        
+        /// <inheritdoc />
+        public abstract TContent Deserialize(ArraySegment<byte> contentBytes);
 
         /// <inheritdoc />
         public abstract byte[] Serialize(TContent obj);
 
         /// <inheritdoc />
         public virtual bool TryDeserialize(byte[] contentBytes, out object content)
+        {
+            content = null;
+            try
+            {
+                content = this.Deserialize(contentBytes);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to deserialize message with codec {0}", this.Id);
+                return false;
+            }
+        }
+        
+        /// <inheritdoc />
+        public virtual bool TryDeserialize(ArraySegment<byte> contentBytes, out object content)
         {
             content = null;
             try
