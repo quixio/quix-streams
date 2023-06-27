@@ -120,3 +120,9 @@ class KafkaStreamingClient(object):
         """
         raw_topic_hptr = self._interop.GetRawTopicProducer(topic)
         return RawTopicProducer(raw_topic_hptr)
+
+    def __enter__(self):
+        return self._interop.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self._interop.__exit__(exc_type, exc_val, exc_tb)

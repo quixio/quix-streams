@@ -4,7 +4,7 @@ from typing import Callable
 
 from .helpers.nativedecorator import nativedecorator
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .native.Python.QuixStreamsStreaming.ITopicProducer import ITopicProducer as tpi
+from .native.Python.QuixStreamsStreaming.TopicProducer import TopicProducer as tpi
 from .streamproducer import StreamProducer
 
 
@@ -33,6 +33,15 @@ class TopicProducer(object):
     def _finalizerfunc(self):
         self._on_disposed_dispose()
 
+    def dispose(self):
+        self._interop.Dispose()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.dispose()
+
     # region on_disposed
     @property
     def on_disposed(self) -> Callable[['TopicProducer'], None]:
@@ -56,7 +65,8 @@ class TopicProducer(object):
         """
         self._on_disposed = value
         if self._on_disposed_ref is None:
-            self._on_disposed_ref = self._interop.add_OnDisposed(self._on_disposed_wrapper)
+            self._on_disposed_ref = self._interop.add_OnDisposed(
+                self._on_disposed_wrapper)
 
     def _on_disposed_wrapper(self, stream_hptr, arg_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -107,7 +117,8 @@ class TopicProducer(object):
         # TODO retrieving same stream constantly might result in weird behavior here
         return StreamProducer(self, result_hptr)
 
-    def get_or_create_stream(self, stream_id: str, on_stream_created: Callable[[StreamProducer], None] = None) -> StreamProducer:
+    def get_or_create_stream(self, stream_id: str, on_stream_created: Callable[
+        [StreamProducer], None] = None) -> StreamProducer:
         """
         Retrieves a stream that was previously created by this instance if the stream is not closed, otherwise creates a new stream.
 
@@ -132,4 +143,5 @@ class TopicProducer(object):
 
             callback = on_create_callback
 
-        return StreamProducer(self, self._interop.GetOrCreateStream(stream_id, callback)[0])
+        return StreamProducer(self,
+                              self._interop.GetOrCreateStream(stream_id, callback)[0])

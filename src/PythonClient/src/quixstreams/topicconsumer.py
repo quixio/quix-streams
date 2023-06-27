@@ -49,6 +49,15 @@ class TopicConsumer(object):
 
         self._topic_state_manager = None
 
+    def dispose(self):
+        self._interop.Dispose()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.dispose()
+
     def _finalizerfunc(self):
         self._on_stream_received_dispose()
         self._on_streams_revoked_dispose()
@@ -82,7 +91,8 @@ class TopicConsumer(object):
         """
         self._on_stream_received = value
         if self._on_stream_received_ref is None:
-            self._on_stream_received_ref = self._interop.add_OnStreamReceived(self._on_stream_received_wrapper)
+            self._on_stream_received_ref = self._interop.add_OnStreamReceived(
+                self._on_stream_received_wrapper)
 
     def _on_stream_received_wrapper(self, topic_hptr, stream_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -107,7 +117,8 @@ class TopicConsumer(object):
 
     # region on_streams_revoked
     @property
-    def on_streams_revoked(self) -> Callable[['TopicConsumer', List['StreamConsumer']], None]:
+    def on_streams_revoked(self) -> Callable[
+        ['TopicConsumer', List['StreamConsumer']], None]:
         """
         Gets the event handler for when streams are revoked for the topic.
 
@@ -118,7 +129,8 @@ class TopicConsumer(object):
         return self._on_streams_revoked
 
     @on_streams_revoked.setter
-    def on_streams_revoked(self, value: Callable[['TopicConsumer', List['StreamConsumer']], None]) -> None:
+    def on_streams_revoked(self, value: Callable[
+        ['TopicConsumer', List['StreamConsumer']], None]) -> None:
         """
         Sets the event handler for when streams are revoked for the topic.
 
@@ -129,7 +141,8 @@ class TopicConsumer(object):
 
         self._on_streams_revoked = value
         if self._on_streams_revoked_ref is None:
-            self._on_streams_revoked_ref = self._interop.add_OnStreamsRevoked(self._on_streams_revoked_wrapper)
+            self._on_streams_revoked_ref = self._interop.add_OnStreamsRevoked(
+                self._on_streams_revoked_wrapper)
 
     def _on_streams_revoked_wrapper(self, topic_hptr, streams_uptr):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
@@ -173,7 +186,8 @@ class TopicConsumer(object):
         """
         self._on_revoking = value
         if self._on_revoking_ref is None:
-            self._on_revoking_ref = self._interop.add_OnRevoking(self._on_revoking_wrapper)
+            self._on_revoking_ref = self._interop.add_OnRevoking(
+                self._on_revoking_wrapper)
 
     def _on_revoking_wrapper(self, topic_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -214,7 +228,8 @@ class TopicConsumer(object):
         """
         self._on_committed = value
         if self._on_committed_ref is None:
-            self._on_committed_ref = self._interop.add_OnCommitted(self._on_committed_wrapper)
+            self._on_committed_ref = self._interop.add_OnCommitted(
+                self._on_committed_wrapper)
 
     def _on_committed_wrapper(self, topic_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -255,7 +270,8 @@ class TopicConsumer(object):
         """
         self._on_committing = value
         if self._on_committing_ref is None:
-            self._on_committing_ref = self._interop.add_OnCommitting(self._on_committing_wrapper)
+            self._on_committing_ref = self._interop.add_OnCommitting(
+                self._on_committing_wrapper)
 
     def _on_committing_wrapper(self, topic_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have

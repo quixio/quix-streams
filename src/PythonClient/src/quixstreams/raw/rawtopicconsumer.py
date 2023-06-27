@@ -128,3 +128,6 @@ class RawTopicConsumer(object):
         Starts subscribing to the streams.
         """
         self._interop.Subscribe()
+
+    def dispose(self):
+        self._interop.Dispose()
