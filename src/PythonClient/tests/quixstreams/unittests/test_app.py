@@ -5,11 +5,6 @@ import pytest
 import src.quixstreams as qx
 
 
-from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-InteropUtils.enable_debug()
-qx.Logging.update_factory(qx.LogLevel.Debug)
-
-
 class AppTests(unittest.TestCase):
 
     @pytest.mark.skip('Test fails with "App state manager may only be set once"')

@@ -3,11 +3,6 @@ from datetime import datetime
 
 from src.quixstreams import RawMessage
 
-from src.quixstreams import EventData, App
-
-from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-InteropUtils.enable_debug()
-
 
 class RawMessageTests(unittest.TestCase):
 
