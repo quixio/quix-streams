@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Streaming.Models.StreamProducer;
 
@@ -106,6 +107,14 @@ namespace QuixStreams.Streaming.Models
                     startIndex = i;
                 }
             }
+        }
+        
+        /// <summary>
+        /// Flushes all data in the buffer
+        /// </summary>
+        public void Flush()
+        {
+            Publish(rows.Keys.ToArray());
         }
 
         private void Publish(params (long, long)[] keys)
@@ -256,6 +265,7 @@ namespace QuixStreams.Streaming.Models
         {
             if (committed)
             {
+                // Already committed
                 return;
             }
 

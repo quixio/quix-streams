@@ -1,6 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
 using FluentAssertions;
 using NSubstitute;
 using Quix.TestBase.Extensions;
@@ -130,54 +128,146 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
         
         
-        // [Theory]
-        // [InlineData(true)]
-        // [InlineData(false)]
-        // public void FlushData_WithLEDelayAndTimeSpanConfig_ShouldFlushCorrectly(bool initialConfig)
-        // {
-        //     // Arrange
-        //     var bufferConfiguration = GetEmptyTimeseriesBufferConfiguration();
-        //
-        //     if (initialConfig)
-        //     {
-        //         bufferConfiguration.LeadingEdgeDelay = 5000;
-        //         bufferConfiguration.TimeSpanInMilliseconds = 500;
-        //     }
-        //
-        //     var buffer = new TimeseriesBuffer(bufferConfiguration);
-        //     if (!initialConfig)
-        //     {
-        //         buffer.LeadingEdgeDelay = 5000;
-        //         buffer.TimeSpanInMilliseconds = 500;
-        //     }
-        //
-        //
-        //     var receivedData = new List<TimeseriesData>();
-        //     var onDataReleasedRaiseCount = 0;
-        //     buffer.OnDataReleased += (sender, args) =>
-        //     {
-        //         receivedData.Add(args.Data);
-        //         onDataReleasedRaiseCount++;
-        //     };
-        //
-        //
-        //     //Act
-        //     foreach (var timeseriesDataWithSingleTimestamp in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000}.Select(x => CreateTimeseriesDataWithFixedTimestamp(x)))
-        //     {
-        //         buffer.WriteChunk(timeseriesDataWithSingleTimestamp.ConvertToTimeseriesDataRaw(false, false)); 
-        //     }
-        //
-        //     buffer.FlushData(false, includeDataInLeadingEdgeDelay: true);
-        //
-        //     // or
-        //     onDataReleasedRaiseCount.Should().Be(4);
-        //     receivedData.Count.Should().Be(4); // (1000, 1250), (1500, 1750), 2000, (2500, 9000)
-        //     receivedData[0].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(1000, 1250));
-        //     receivedData[1].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(1500, 1750));
-        //     receivedData[2].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(2000));
-        //     receivedData[3].Should().BeEquivalentTo(CreateTimeseriesDataWithFixedTimestamp(2500, 9000));
-        //
-        // }
+        [Fact]
+        public void Flush_WithDataInTheBuffer_ShouldFlushEverything()
+        {
+            // Arrange
+            var topicProducer = Substitute.For<ITopicProducer>();
+            var streamProducer = Substitute.For<IStreamProducerInternal>();
+            
+            var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
+
+            var buffer = new LeadingEdgeBuffer(timeseriesProducer, 1000, 500);
+            
+            var publishedData = new List<TimeseriesDataRaw>();
+            var onDataReleasedRaiseCount = 0;
+            streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
+            {
+                onDataReleasedRaiseCount++;
+                publishedData.Add(x);
+            }));
+        
+        
+            //Act
+            foreach (var timestampInMs in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000})
+            {
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Commit(); 
+            }
+        
+            buffer.Flush();
+            
+            // Assert
+            onDataReleasedRaiseCount.Should().Be(4);
+            publishedData.Count.Should().Be(4); // (1000, 1250), (1500, 1750), 2000, (2500, 9000)
+            publishedData[0].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(1000, 1250));
+            publishedData[1].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(1500, 1750));
+            publishedData[2].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2000));
+            publishedData[3].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2500, 9000));
+        }
+
+        [Fact]
+        public void AddValue_WithDoubleParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            row.AddValue("param", 1.0);
+
+            // Act
+            row.AddValue("param", 2.0, false);
+
+            // Assert
+            row.NumericValues["param"].Should().Be(1.0);
+        }
+
+        [Fact]
+        public void AddValue_WithDoubleParameter_OverwriteTrue_ShouldOverwriteExistingValue()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            row.AddValue("param", 1.0);
+
+            // Act
+            row.AddValue("param", 2.0, true);
+
+            // Assert
+            row.NumericValues["param"].Should().Be(2.0);
+        }
+        
+        [Fact]
+        public void AddValue_WithStringParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            row.AddValue("param", "oldValue");
+
+            // Act
+            row.AddValue("param", "newValue", false);
+
+            // Assert
+            row.StringValues["param"].Should().Be("oldValue");
+        }
+        
+        [Fact]
+        public void AddValue_WithStringParameter_OverwriteTrue_ShouldOverwriteExistingValue()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            row.AddValue("param", "oldValue");
+
+            // Act
+            row.AddValue("param", "newValue", true);
+
+            // Assert
+            row.StringValues["param"].Should().Be("newValue");
+        }
+
+        [Fact]
+        public void AddValue_WithByteArrayParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            row.AddValue("param", new byte[] { 1, 2, 3 });
+
+            // Act
+            row.AddValue("param", new byte[] { 4, 5, 6 }, false);
+
+            // Assert
+            row.BinaryValues["param"].Should().Equal(new byte[] { 1, 2, 3 });
+        }
+
+        [Fact]
+        public void AddValue_WithByteArrayParameter_OverwriteTrue_ShouldOverwriteExistingValue()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            row.AddValue("param", new byte[] { 1, 2, 3 });
+
+            // Act
+            row.AddValue("param", new byte[] { 4, 5, 6 }, true);
+
+            // Assert
+            row.BinaryValues["param"].Should().Equal(new byte[] { 4, 5, 6 });
+        }
+        
+        [Fact]
+        public void AppendToTimeseriesData_ShouldAddAllValuesToTimeseriesData()
+        {
+            // Arrange
+            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string> { { "tag", "value" } });
+            row.AddValue("param1", 1.0);
+            row.AddValue("param2", "string value");
+            row.AddValue("param3", new byte[] { 1, 2, 3 });
+
+            // Act
+            var result = row.AppendToTimeseriesData(new TimeseriesData());
+            
+            // Assert
+            result.rawData.NumericValues["param1"].Should().Contain(1.0);
+            result.rawData.StringValues["param2"].Should().Contain("string value");
+            result.rawData.BinaryValues["param3"].Should().ContainEquivalentOf(new byte[] { 1, 2, 3 });
+            result.rawData.TagValues["tag"].Should().Contain("value");
+            
+        }
         
         private TimeseriesDataRaw CreateTSDataRawWithFixedTimestamp(params int[] msWithEpochArray)
         {
