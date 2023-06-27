@@ -17,7 +17,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
         
         [Fact]
-        public void WriteToBuffer_WithHighLeadingEdgeDelay_ShouldPublishDataCorrectly()
+        public void AddRowToBuffer_WithHighLeadingEdgeDelay_ShouldPublishDataCorrectly()
         {
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
@@ -39,7 +39,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             //Act
             foreach (var timestampInMs in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000})
             {
-                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Commit();
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Publish();
             }
             
             onDataReleasedRaiseCount.Should().Be(3);
@@ -50,7 +50,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
 
         [Fact]
-        public void WriteToBuffer_WithUnorderedTimestamps_ShouldPublishDataCorrectly()
+        public void AddRowToBuffer_WithUnorderedTimestamps_ShouldPublishDataCorrectly()
         {
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
@@ -72,7 +72,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             //Act
             foreach (var timestampInMs in new []{1250, 1000, 1300, 2000, 1400, 1750, 2500, 3000, 3250, 3000, 3300, 3500, 6000})
             {
-                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Commit(); 
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Publish(); 
             }
             
             // Assert
@@ -86,7 +86,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
         
         [Fact]
-        public void WriteToBuffer_WithTimestampsArrivingTooLate_ShouldRaiseOnBackfillCorrectly()
+        public void AddRowToBuffer_WithTimestampsArrivingTooLate_ShouldRaiseOnBackfillCorrectly()
         {
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
@@ -115,7 +115,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             //Act
             foreach (var timestampInMs in new []{1000, 1250, 1500, 2500, 10, 20, 30})
             {
-                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Commit(); 
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Publish(); 
             }
             
         
@@ -151,7 +151,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
             //Act
             foreach (var timestampInMs in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000})
             {
-                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Commit(); 
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs).Publish(); 
             }
         
             buffer.Flush();
@@ -169,7 +169,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithDoubleParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
             row.AddValue("param", 1.0);
 
             // Act
@@ -183,7 +183,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithDoubleParameter_OverwriteTrue_ShouldOverwriteExistingValue()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
             row.AddValue("param", 1.0);
 
             // Act
@@ -197,7 +197,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithStringParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
             row.AddValue("param", "oldValue");
 
             // Act
@@ -211,7 +211,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithStringParameter_OverwriteTrue_ShouldOverwriteExistingValue()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
             row.AddValue("param", "oldValue");
 
             // Act
@@ -225,7 +225,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithByteArrayParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
             row.AddValue("param", new byte[] { 1, 2, 3 });
 
             // Act
@@ -239,7 +239,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithByteArrayParameter_OverwriteTrue_ShouldOverwriteExistingValue()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
             row.AddValue("param", new byte[] { 1, 2, 3 });
 
             // Act
@@ -253,7 +253,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AppendToTimeseriesData_ShouldAddAllValuesToTimeseriesData()
         {
             // Arrange
-            var row = new TimeseriesDataRow(null, 1, new Dictionary<string, string> { { "tag", "value" } });
+            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string> { { "tag", "value" } });
             row.AddValue("param1", 1.0);
             row.AddValue("param2", "string value");
             row.AddValue("param3", new byte[] { 1, 2, 3 });

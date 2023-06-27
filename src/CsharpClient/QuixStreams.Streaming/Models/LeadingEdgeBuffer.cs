@@ -8,7 +8,10 @@ namespace QuixStreams.Streaming.Models
 {
     public class LeadingEdgeBuffer
     {
-        private readonly SortedDictionary<(long, long), TimeseriesDataRow> rows;
+        /// <summary>
+        /// Sorted dictionary of rows in the buffer. Key is a tuple of the timestamp and a hash of the tags. 
+        /// </summary>
+        private readonly SortedDictionary<(long, long), LeadingEdgeRow> rows;
         private readonly StreamTimeseriesProducer producer;
         private readonly long leadingEdgeDelayInNanoseconds;
         private readonly long bucketInNanoseconds;
@@ -33,7 +36,7 @@ namespace QuixStreams.Streaming.Models
             this.producer = producer;
             this.leadingEdgeDelayInNanoseconds = leadingEdgeDelayMs * (long)1e6;
             this.bucketInNanoseconds = bucketMs * (long)1e6;
-            this.rows = new SortedDictionary<(long, long), TimeseriesDataRow>();
+            this.rows = new SortedDictionary<(long, long), LeadingEdgeRow>();
         }
         
         
@@ -43,17 +46,17 @@ namespace QuixStreams.Streaming.Models
         /// <param name="timestampInNanoseconds">Timestamp in nanoseconds</param>
         /// <param name="tags">Optional Tags</param>
         /// <returns></returns>
-        public TimeseriesDataRow GetOrCreateTimestamp(long timestampInNanoseconds, Dictionary<string, string> tags = null)
+        public LeadingEdgeRow GetOrCreateTimestamp(long timestampInNanoseconds, Dictionary<string, string> tags = null)
         {
             if (!rows.TryGetValue((timestampInNanoseconds, TagsHash(tags)), out var row))
             {
-                row = new TimeseriesDataRow(this, timestampInNanoseconds, tags);
+                row = new LeadingEdgeRow(this, timestampInNanoseconds, tags);
             }
 
             return row;
         }
 
-        internal void WriteToBuffer(TimeseriesDataRow row)
+        internal void AddRowToBuffer(LeadingEdgeRow row)
         {
             if (rows.ContainsKey((row.Timestamp, TagsHash(row.Tags))))
             {
@@ -69,10 +72,13 @@ namespace QuixStreams.Streaming.Models
             rows[(row.Timestamp, TagsHash(row.Tags))] = row;
             leadingEdgeInNanoseconds = Math.Max(this.leadingEdgeInNanoseconds, row.Timestamp);
 
-            EnsureFlushed();
+            EnsurePublished();
         }
 
-        private void EnsureFlushed()
+        /// <summary>
+        /// Publishes data inside the buffer that should be published based on the leading edge delay and the bucket size configuration.
+        /// </summary>
+        private void EnsurePublished()
         {
             var keysToPublish = new List<(long, long)>();
             foreach (var row in rows)
@@ -159,7 +165,7 @@ namespace QuixStreams.Streaming.Models
     /// <summary>
     /// Represents a single row of data in the <see cref="LeadingEdgeBuffer"/>
     /// </summary>
-    public class TimeseriesDataRow
+    public class LeadingEdgeRow
     {
         internal long Timestamp { get; }
         internal Dictionary<string, double> NumericValues { get; }
@@ -168,9 +174,9 @@ namespace QuixStreams.Streaming.Models
         internal Dictionary<string, string> Tags { get; }
 
         private readonly LeadingEdgeBuffer buffer;
-        private bool committed = false;
+        private bool publishedToBuffer = false;
 
-        public TimeseriesDataRow(LeadingEdgeBuffer buffer, long timestamp, Dictionary<string, string> tags)
+        public LeadingEdgeRow(LeadingEdgeBuffer buffer, long timestamp, Dictionary<string, string> tags)
         {
             this.buffer = buffer;
             this.Timestamp = timestamp;
@@ -189,7 +195,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
         /// <returns>Returns the current TimeseriesDataRow instance. This allows for method chaining</returns>
-        public TimeseriesDataRow AddValue(string parameter, double value, bool overwrite = false)
+        public LeadingEdgeRow AddValue(string parameter, double value, bool overwrite = false)
         {
             if (NumericValues.ContainsKey(parameter) && !overwrite)
             {
@@ -208,7 +214,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
         /// <returns>Returns the current TimeseriesDataRow instance. This allows for method chaining</returns>
-        public TimeseriesDataRow AddValue(string parameter, string value, bool overwrite = false)
+        public LeadingEdgeRow AddValue(string parameter, string value, bool overwrite = false)
         {
             if (StringValues.ContainsKey(parameter) && !overwrite)
             {
@@ -226,7 +232,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="value">Value of the parameter</param>
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
-        public TimeseriesDataRow AddValue(string parameter, byte[] value, bool overwrite = false)
+        public LeadingEdgeRow AddValue(string parameter, byte[] value, bool overwrite = false)
         {
             if (BinaryValues.ContainsKey(parameter) && !overwrite)
             {
@@ -261,16 +267,16 @@ namespace QuixStreams.Streaming.Models
         /// <summary>
         /// This method commits the current object instance to the <see cref="LeadingEdgeBuffer"/>.
         /// </summary>
-        public void Commit()
+        public void Publish()
         {
-            if (committed)
+            if (publishedToBuffer)
             {
-                // Already committed
+                // Already published to the buffer
                 return;
             }
 
-            committed = true;
-            buffer.WriteToBuffer(this);
+            publishedToBuffer = true;
+            buffer.AddRowToBuffer(this);
         }
     }
 }
