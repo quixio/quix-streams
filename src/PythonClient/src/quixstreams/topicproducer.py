@@ -36,12 +36,6 @@ class TopicProducer(object):
     def dispose(self):
         self._interop.Dispose()
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.dispose()
-
     # region on_disposed
     @property
     def on_disposed(self) -> Callable[['TopicProducer'], None]:

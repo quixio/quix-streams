@@ -52,12 +52,6 @@ class TopicConsumer(object):
     def dispose(self):
         self._interop.Dispose()
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.dispose()
-
     def _finalizerfunc(self):
         self._on_stream_received_dispose()
         self._on_streams_revoked_dispose()
