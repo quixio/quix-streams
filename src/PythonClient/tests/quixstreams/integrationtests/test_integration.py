@@ -1607,7 +1607,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert special_func_invocation_count == 3
 
 
-@pytest.mark.skip("TODO: Fix segmentation fault")
 class TestRawData(BaseIntegrationTest):
     def test_raw_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
         # Arrange
