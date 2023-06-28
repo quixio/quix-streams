@@ -145,10 +145,9 @@ jobs:
         run: |
           python -m pytest -s -v --ignore=tests/quixstreams/manual --ignore=tests/quixstreams/integrationtests
       - name: Run integration tests
-        continue-on-error: true  # These tests are flaky
         working-directory: src/PythonClient
         run: |
-          python -m pytest -s -v tests/quixstreams/integrationtests
+          python -m pytest -v tests/quixstreams/integrationtests
 
   test-dotnet:
     permissions:
