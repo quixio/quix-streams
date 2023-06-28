@@ -88,13 +88,9 @@ class StreamingClientTests(unittest.TestCase):
         os.environ["Quix__Sdk__Token"] = "something"
         sc = QuixStreamingClient()
         sc.api_url = "https://test.quix.ai"
-        # Act
-        try:
+        # point here is it can fail inside c#, but not python
+        with self.assertRaises(InteropException):
             sc.get_topic_consumer('sometest')
-        # Assert
-        except InteropException as ex:
-            # point here is it can fail inside c#, but not python
-            self.assertEqual(ex.message, "nodename nor servname provided, or not known (test.quix.ai:443)")
 
     def test_cache_period_getset(self):
         # Act
