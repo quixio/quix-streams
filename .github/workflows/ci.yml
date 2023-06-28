@@ -138,7 +138,7 @@ jobs:
       - name: Download native code to Python project
         uses: actions/download-artifact@v3
         with:
-          name: linux-native-amd64
+          name: linux-amd64-native
           path: src/PythonClient/src/quixstreams/native/
       - name: Run unit tests
         working-directory: src/PythonClient
