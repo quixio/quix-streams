@@ -1,66 +1,125 @@
+import argparse
 import os
-import sys
 import shutil
 import subprocess
-import platform
+import sys
 
-def parse_arguments(args):
-    options = {
-        'no-interop': False, # When set to true, does not copy the generated interop layer to native python folder. Useful for when testing existing manual modifications without spending time on rebuilding.
-        'no-python': False, # When set to true, does not copy the generated python wrapper to native python folder. Useful when doing manual modifications to test fixes
-        'no-regen': False, # When set to true, leave the interop results as they are. Useful when making manual modifications to either c# or python side to test fixes.
-        'configuration': "-c release /p:DebugType=None /p:DebugSymbols=false",
-    }
 
-    for arg in args:
-        if arg == "--no-interop":
-            options['no-interop'] = True
-        elif arg == "--no-python":
-            options['no-python'] = True
-        elif arg == "--no-regen":
-            options['no-regen'] = True
-        elif arg == "--debug":
-            options['configuration'] = "-c debug"
+def parse_args():
+    parser = argparse.ArgumentParser(description="Build C# to native for Linux")
+    parser.add_argument(
+        "--no-interop",
+        help="If set, don't copy the generated interop layer to native python folder. "
+        "Useful for when testing existing manual modifications without "
+        "spending time on rebuilding.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-python",
+        help="If set, don't copy the generated python wrapper to native python folder."
+        "Useful when doing manual modifications to test fixes",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-regen",
+        help="If set, leave the interop results as they are. "
+        "Useful when making manual modifications to either c# or python side"
+        " to test fixes",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--debug",
+        help="set -c configuration for build options",
+        action="store_true",
+    )
+    return parser.parse_args()
 
-    return options
 
 def build_streaming_project(csharpfolder, framework, streamingoutpath):
     print("Build streaming project")
-    subprocess.run(f"dotnet publish {csharpfolder}/QuixStreams.Streaming/QuixStreams.Streaming.csproj {framework} -c release -o {streamingoutpath}", shell=True, check=True)
+    subprocess.run(
+        f"dotnet publish "
+        f"{csharpfolder}/QuixStreams.Streaming/QuixStreams.Streaming.csproj "
+        f"{framework} "
+        f"-c release "
+        f"-o {streamingoutpath}",
+        shell=True,
+        check=True,
+    )
 
-def build_and_run_interop_generator(interopfolder, streamingoutpath, interopoutput, interopconfig, noregen, dotnetruntime):
+
+def build_and_run_interop_generator(
+    interopfolder,
+    streamingoutpath,
+    interopoutput,
+    interopconfig,
+    noregen,
+    dotnetruntime,
+):
     if not noregen:
         print("Build interop generator")
-        interopgeneratoroutput = f"{interopfolder}/Quix.InteropGenerator/bin/Publish/{dotnetruntime}"
-        subprocess.run(f"dotnet publish {interopfolder}/Quix.InteropGenerator/Quix.InteropGenerator.csproj -c release -o {interopgeneratoroutput}", shell=True, check=True)
-        
+        interopgeneratoroutput = (
+            f"{interopfolder}/Quix.InteropGenerator/bin/Publish/{dotnetruntime}"
+        )
+        subprocess.run(
+            f"dotnet publish "
+            f"{interopfolder}/Quix.InteropGenerator/Quix.InteropGenerator.csproj "
+            f"-c release "
+            f"-o {interopgeneratoroutput}",
+            shell=True,
+            check=True,
+        )
+
         print("Run interop generator")
-        subprocess.run(f"{os.path.abspath(interopgeneratoroutput)}/Quix.InteropGenerator -a \"{streamingoutpath}/QuixStreams.Streaming.dll\" -o \"{interopoutput}\" -c \"{interopconfig}\"", shell=True, check=True)
+        subprocess.run(
+            f"{os.path.abspath(interopgeneratoroutput)}/Quix.InteropGenerator "
+            f'-a "{streamingoutpath}/QuixStreams.Streaming.dll" '
+            f'-o "{interopoutput}" '
+            f'-c "{interopconfig}"',
+            shell=True,
+            check=True,
+        )
     else:
         print("Not regenerating interop projects due to --no-regen flag")
 
-def build_interop_projects(interopoutputcsharp, configuration, dotnetruntime, destPlatform, nointerop):
+
+def build_interop_projects(
+    interopoutputcsharp, configuration, dotnetruntime, dest_platform, nointerop
+):
     if not nointerop:
         print("Cleaning interop folder...")
-        shutil.rmtree(destPlatform, ignore_errors=True)
+        shutil.rmtree(dest_platform, ignore_errors=True)
 
         print("Build interop projects")
         for subdir in os.listdir(interopoutputcsharp):
             interop_project_dir = f"{interopoutputcsharp}/{subdir}"
-            dest_platform_subdir = f"{destPlatform}/{subdir}"
-            subprocess.run(f"dotnet publish {interop_project_dir}/{subdir}.csproj /p:NativeLib=Shared /p:SelfContained=true {configuration} -r {dotnetruntime} -o {dest_platform_subdir}", shell=True, check=True)
+            dest_platform_subdir = f"{dest_platform}/{subdir}"
+            cmd = (
+                f"dotnet publish {interop_project_dir}/{subdir}.csproj "
+                f"/p:NativeLib=Shared "
+                f"/p:SelfContained=true "
+                f"-r {dotnetruntime} "
+                f"{configuration} "
+                f"-o {dest_platform_subdir}"
+            )
+            subprocess.run(
+                cmd,
+                shell=True,
+                check=True,
+            )
     else:
         print("Not recompiling interop due to --no-interop flag")
 
-def copy_python_interop(interopoutput, destPython, nopython):
+
+def copy_python_interop(interopoutput, dest_python, nopython):
     if not nopython:
         print("Cleaning python folder...")
-        shutil.rmtree(destPython, ignore_errors=True)
+        shutil.rmtree(dest_python, ignore_errors=True)
 
-        print("Copying python interop to native")
-        shutil.copytree(f"{interopoutput}/Python", destPython)
+        print(f"Copying python interop to native dir: {dest_python}")
+        shutil.copytree(f"{interopoutput}/Python", dest_python)
         count = 0
-        for root, dirs, files in os.walk(destPython):
+        for root, dirs, files in os.walk(dest_python):
             count += len(files)
 
         print(f"{count} files copied.")
@@ -69,42 +128,63 @@ def copy_python_interop(interopoutput, destPython, nopython):
 
 
 def main():
-    options = parse_arguments(sys.argv[1:])
-    
+    args_ = parse_args()
     archname = os.uname().machine
-    python_platform = f'{os.uname().sysname}-{os.uname().machine}'.lower()
-
-    if archname == 'aarch64':
-        dotnetruntime = 'linux-arm64'
-    elif archname == 'x86_64':
-        dotnetruntime = 'linux-x64'
+    python_platform = f"{os.uname().sysname}-{archname}".lower()
+    if archname == "aarch64":
+        dotnet_runtime = "linux-arm64"
+    elif archname == "x86_64":
+        dotnet_runtime = "linux-x64"
     else:
-        print(f'Not yet supported architecture {archname}')
+        print(f"Not yet supported architecture {archname}")
         sys.exit(1)
 
-    print(f'Building for linux architecture {archname} with dotnet runtime id {dotnetruntime} with python platform {python_platform}')
-    
+    print(
+        f"Building for linux architecture {archname} with dotnet "
+        f"runtime id {dotnet_runtime} with python platform {python_platform}"
+    )
+
     interopfolder = "../../../InteropGenerator"
     csharpfolder = "../../../CsharpClient"
     pythonfolder = "../../../PythonClient"
-    streamingoutpath = f"{csharpfolder}/QuixStreams.Streaming/bin/Publish/{dotnetruntime}"
+    streamingoutpath = (
+        f"{csharpfolder}/QuixStreams.Streaming/bin/Publish/{dotnet_runtime}"
+    )
     framework = "-f net8.0"
 
     build_streaming_project(csharpfolder, framework, streamingoutpath)
 
     interopoutput = f"{interopfolder}/InteropOutput"
     interopconfig = f"{interopfolder}/InteropConfig"
-    
-    build_and_run_interop_generator(interopfolder, streamingoutpath, interopoutput, interopconfig, options['no-regen'], dotnetruntime)
+
+    build_and_run_interop_generator(
+        interopfolder,
+        streamingoutpath,
+        interopoutput,
+        interopconfig,
+        args_.no_regen,
+        dotnet_runtime,
+    )
 
     dest = f"{pythonfolder}/src/quixstreams/native"
-    destPython = f"{dest}/Python"
-    destPlatform = f"{dest}/{python_platform}"
-    
+    dest_python = f"{dest}/Python"
+    dest_platform = f"{dest}/{python_platform}"
+
     interopoutputcsharp = f"{interopoutput}/Csharp"
-    
-    build_interop_projects(interopoutputcsharp, options['configuration'], dotnetruntime, destPlatform, options['no-interop'])
-    copy_python_interop(interopoutput, destPython, options['no-python'])
+
+    configuration = (
+        "-c release /p:DebugType=None /p:DebugSymbols=false"
+        if not args_.debug
+        else "-c debug"
+    )
+    build_interop_projects(
+        interopoutputcsharp,
+        configuration,
+        dotnet_runtime,
+        dest_platform,
+        args_.no_interop,
+    )
+    copy_python_interop(interopoutput, dest_python, args_.no_python)
 
 
 if __name__ == "__main__":
