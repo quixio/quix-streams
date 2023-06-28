@@ -626,13 +626,14 @@ public class MethodWriter : BaseWriter
                     var type = arguments[index];
                     if (index != arguments.Length - 1 || !hasReturn)
                     {
+                        writer.Write($"InteropUtils.LogDebug($\"Parameter {index} is getting converted now.\");");
                         if (index != 0) invocationSb.Append(", ");
                         var name = $"arg{index}";
                         var result = WriteTypeConversion(writer, preFunctionWriter, type, true, name);
-                        //if (unmanagedType == typeof(IntPtr)) writer.Write($"Console.WriteLine(\"{this.methodWrittenDetails.EntryPoint} invoking with value ptr: \" + {result});"); // helpful for debug
-                        //else writer.Write($"Console.WriteLine(\"{this.methodWrittenDetails.EntryPoint} invoking with value: \" + {result});"); // helpful for debug
                         appendEmptyLineAfterConversions |= name != result;
                         invocationSb.Append(result);
+                        writer.Write($"InteropUtils.LogDebug($\"Parameter {index} for {this.methodWrittenDetails.EntryPoint} has value: {{{result}}}\");");
+
                     }
                 
                     if (index == arguments.Length - 1)

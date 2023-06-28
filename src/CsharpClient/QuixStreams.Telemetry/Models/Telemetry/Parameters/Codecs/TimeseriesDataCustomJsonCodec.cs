@@ -127,11 +127,11 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
                 return new TimeseriesDataRaw
                 {
                     Epoch = epoch,
-                    Timestamps = timestamps.ToArray(),
-                    NumericValues = numericValues,
-                    StringValues = stringValues,
-                    BinaryValues = binaryValues,
-                    TagValues = tagValues
+                    Timestamps = timestamps?.ToArray() ?? Array.Empty<long>(),
+                    NumericValues = numericValues ?? new Dictionary<string, double?[]>(),
+                    StringValues = stringValues ?? new Dictionary<string, string[]>(),
+                    BinaryValues = binaryValues ?? new Dictionary<string, byte[][]>(),
+                    TagValues = tagValues ?? new Dictionary<string, string[]>()
                 };
             }
 

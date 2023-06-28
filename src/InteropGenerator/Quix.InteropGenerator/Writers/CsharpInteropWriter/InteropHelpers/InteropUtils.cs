@@ -382,6 +382,7 @@ public class InteropUtils
     [UnmanagedCallersOnly(EntryPoint = "interoputils_pin_hptr_target")]
     public static IntPtr PinHPtrTarget(IntPtr ptr)
     {
+        LogDebug("Invoked interoputils_pin_hptr_target with HPtr: {0}", ptr);
         if (ptr == IntPtr.Zero)
         {
             if (DebugMode) Console.WriteLine($"Allocated null Ptr");
@@ -397,6 +398,7 @@ public class InteropUtils
     [UnmanagedCallersOnly(EntryPoint = "interoputils_get_pin_address")]
     public static IntPtr GetPinAddress(IntPtr pinnedPtr)
     {
+        LogDebug("Invoked interoputils_get_pin_address with Pinned Ptr: {0}", pinnedPtr);
         if (pinnedPtr == IntPtr.Zero) return IntPtr.Zero;
         var handler = GCHandle.FromIntPtr(pinnedPtr);
         return handler.AddrOfPinnedObject();
@@ -439,6 +441,7 @@ public class InteropUtils
     [UnmanagedCallersOnly(EntryPoint = "interoputils_free_hptr")]
     public static void FreeHPtr(IntPtr ptr)
     {
+        LogDebug("Invoked interoputils_free_hptr with HPtr: {0}", ptr);
         if (ptr == IntPtr.Zero) return; // exception maybe ? (however that might be a problem due to unmanaged nature)
         var handler = GCHandle.FromIntPtr(ptr);
         LogDebug("Freed Ptr: {0}", ptr);
