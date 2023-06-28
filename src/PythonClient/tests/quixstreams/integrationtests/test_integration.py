@@ -1415,7 +1415,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert_timeseries_data_equal(written_data, read_data)
         assert_timeseries_data_equal(read_data, written_data)
 
-    @pytest.mark.skip("TODO: Fix segmentation fault")
     def test_parameters_read_with_parameter_filter(self,
                                                    test_name,
                                                    topic_consumer_earliest,
@@ -1553,7 +1552,6 @@ class TestTimeseriesData(BaseIntegrationTest):
     def test_parameters_read_with_filter(self, topic_consumer_earliest, topic_producer):
         pass
 
-    @pytest.mark.skip('TODO: Fix segmentation fault')
     def test_parameters_read_with_filter_from_buffer_config(self,
                                                             test_name,
                                                             topic_consumer_earliest,
@@ -1609,7 +1607,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert special_func_invocation_count == 3
 
 
-@pytest.mark.skip("TODO: Fix segmentation fault")
 class TestRawData(BaseIntegrationTest):
     def test_raw_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
         # Arrange
@@ -1707,7 +1704,6 @@ class TestStreamState(BaseIntegrationTest):
             'somevalue']
         assert {'key': 'value'} == object_state_somevalue
 
-    @pytest.mark.skip("TODO: Fix segmentation fault")
     def test_stream_state_used_from_data_handler(self,
                                                  test_name,
                                                  topic_producer,
@@ -1796,7 +1792,7 @@ class TestStreamState(BaseIntegrationTest):
             rolling_sum += i + 1
             assert rolling_sum == actual_values_sum[i]
 
-    @pytest.mark.skip('TODO: Fix segmentation fault')
+    @pytest.mark.skip('TODO: fix test hanging sometimes')
     def test_stream_state_committed_from_background_thread(self,
                                                            test_name,
                                                            topic_producer,

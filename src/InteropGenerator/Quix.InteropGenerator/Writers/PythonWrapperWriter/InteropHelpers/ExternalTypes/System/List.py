@@ -25,7 +25,7 @@ class List:
 
     # ctypes function return type//parameter fix
     interop_func = InteropUtils.get_function("list_get_value")
-    interop_func.argtypes = [c_void_p]
+    interop_func.argtypes = [c_void_p, c_int]
     interop_func.restype = c_void_p
     @staticmethod
     def GetValue(list_hptr: c_void_p, index: c_int) -> c_void_p:
