@@ -138,17 +138,16 @@ jobs:
       - name: Download native code to Python project
         uses: actions/download-artifact@v3
         with:
-          name: linux-native-amd64
+          name: linux-amd64-native
           path: src/PythonClient/src/quixstreams/native/
       - name: Run unit tests
         working-directory: src/PythonClient
         run: |
           python -m pytest -s -v --ignore=tests/quixstreams/manual --ignore=tests/quixstreams/integrationtests
       - name: Run integration tests
-        continue-on-error: true  # These tests are flaky
         working-directory: src/PythonClient
         run: |
-          python -m pytest -s -v tests/quixstreams/integrationtests
+          python -m pytest -v tests/quixstreams/integrationtests
 
   test-dotnet:
     permissions:
