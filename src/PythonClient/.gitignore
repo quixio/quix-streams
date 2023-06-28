@@ -17,3 +17,8 @@ dist/
 *egg-info
 **/__pycache__/**
 tests/state-files/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
