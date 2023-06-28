@@ -120,7 +120,6 @@ public class ListInterop
             var target = InteropUtils.FromHPtr<IList>(dictionaryHPtr);
             var listType = target.GetType().GetGenericArguments()[0];
             var value = InteropUtils.PtrToObject(valuePtr, listType);
-            ;
             target.Add(value);
         }
         catch (Exception ex)
