@@ -3,12 +3,9 @@ import random
 
 import pandas as pd
 
-from src.quixstreams.native.Python.InteropHelpers.InteropUtils import InteropUtils
-#InteropUtils.enable_debug()
-
 from src import quixstreams as qx
-from src.quixstreams.models.parametervalue import ParameterValueType
-qx.logging.Logging.update_factory(qx.logging.LogLevel.Debug)
+
+# InteropUtils.enable_debug()
 
 qx.CodecSettings.set_global_codec_type(codec_type=qx.CodecType.Protobuf)
 client = qx.KafkaStreamingClient('127.0.0.1:9092', None)

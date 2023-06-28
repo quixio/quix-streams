@@ -3,7 +3,8 @@ from typing import Union
 
 from .rawmessage import RawMessage
 from ..helpers.nativedecorator import nativedecorator
-from ..native.Python.QuixStreamsStreaming.Raw.RawTopicProducer import RawTopicProducer as rtpi
+from ..native.Python.QuixStreamsStreaming.Raw.RawTopicProducer import \
+    RawTopicProducer as rtpi
 
 
 @nativedecorator
@@ -11,6 +12,7 @@ class RawTopicProducer(object):
     """
     Class to produce raw messages into a Topic (capable of producing non-quixstreams messages)
     """
+
     def __init__(self, net_pointer: ctypes.c_void_p):
         """
         Initializes a new instance of the RawTopicProducer class.
@@ -31,3 +33,6 @@ class RawTopicProducer(object):
         if not isinstance(message, RawMessage):
             message = RawMessage(message)
         self._interop.Publish(message.get_net_pointer())
+
+    def dispose(self):
+        self._interop.Dispose()

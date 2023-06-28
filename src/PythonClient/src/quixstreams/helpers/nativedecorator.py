@@ -1,6 +1,3 @@
-import weakref
-
-
 def _dummy(*args, **kwargs):
     pass
 
@@ -30,11 +27,12 @@ def nativedecorator(cls):
         orig_del(self)
 
     def new_enter(self):
-        orig_enter(self)
+        return orig_enter(self)
 
     def new_exit(self, exc_type, exc_val, exc_tb):
-        orig_exit(self, exc_type, exc_val, exc_tb)
+        result = orig_exit(self, exc_type, exc_val, exc_tb)
         new_dispose(self)
+        return result
 
     def new_dispose(self, *args, **kwargs):
         if self._nativedecorator_finalized:
