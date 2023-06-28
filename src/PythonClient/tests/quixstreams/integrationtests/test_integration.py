@@ -1792,7 +1792,7 @@ class TestStreamState(BaseIntegrationTest):
             rolling_sum += i + 1
             assert rolling_sum == actual_values_sum[i]
 
-    @pytest.mark.skip('TODO: Fix segmentation fault')
+    @pytest.mark.skip('TODO: fix test hanging sometimes')
     def test_stream_state_committed_from_background_thread(self,
                                                            test_name,
                                                            topic_producer,
