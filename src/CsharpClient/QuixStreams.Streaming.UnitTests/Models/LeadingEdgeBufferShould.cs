@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using FluentAssertions;
 using NSubstitute;
 using Quix.TestBase.Extensions;
@@ -22,10 +23,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
+
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = new LeadingEdgeBuffer(timeseriesProducer, 5000, 500);
+            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(5000, 500);
             
             var publishedData = new List<TimeseriesDataRaw>();
             var onDataReleasedRaiseCount = 0;
@@ -55,10 +57,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
+
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = new LeadingEdgeBuffer(timeseriesProducer, 1000, 500);
+            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000, 500);
             
             var publishedData = new List<TimeseriesDataRaw>();
             var onDataReleasedRaiseCount = 0;
@@ -94,21 +97,13 @@ namespace QuixStreams.Streaming.UnitTests.Models
             
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = new LeadingEdgeBuffer(timeseriesProducer, 1000, 500);
+            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000, 500);
             
-            var publishedData = new List<TimeseriesDataRaw>();
-            var onDataReleasedRaiseCount = 0;
-            streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
-            {
-                onDataReleasedRaiseCount++;
-                publishedData.Add(x);
-            }));
-        
             var backfilledData = new List<TimeseriesData>();
             var onBackfillRaiseCount = 0;
-            buffer.OnBackfill += (sender, args) =>
+            buffer.OnBackfill += (sender, data) =>
             {
-                backfilledData.Add(args.Data);
+                backfilledData.Add(data);
                 onBackfillRaiseCount++;
             };
         
@@ -134,16 +129,15 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
             
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = new LeadingEdgeBuffer(timeseriesProducer, 1000, 500);
+            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000, 500);
             
             var publishedData = new List<TimeseriesDataRaw>();
-            var onDataReleasedRaiseCount = 0;
             streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
             {
-                onDataReleasedRaiseCount++;
                 publishedData.Add(x);
             }));
         
@@ -157,19 +151,92 @@ namespace QuixStreams.Streaming.UnitTests.Models
             buffer.Flush();
             
             // Assert
-            onDataReleasedRaiseCount.Should().Be(4);
             publishedData.Count.Should().Be(4); // (1000, 1250), (1500, 1750), 2000, (2500, 9000)
             publishedData[0].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(1000, 1250));
             publishedData[1].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(1500, 1750));
             publishedData[2].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2000));
             publishedData[3].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2500, 9000));
         }
+        
+        
+        [Fact]
+        public void Flush_WithEpochInProducer_ShouldFlushExpected()
+        {
+            // Arrange
+            var topicProducer = Substitute.For<ITopicProducer>();
+            var streamProducer = Substitute.For<IStreamProducerInternal>();
+            var offsetTs = TimeSpan.FromSeconds(1);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch + offsetTs);
+            
+            var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
+
+            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000, 500);
+            
+            var publishedData = new List<TimeseriesDataRaw>();
+            streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
+            {
+                publishedData.Add(x);
+            }));
+        
+        
+            //Act
+            foreach (var timestampInMs in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000})
+            {
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs + offsetTs.TotalMilliseconds).Publish(); 
+            }
+        
+            buffer.Flush();
+            
+            // Assert
+            publishedData.Count.Should().Be(4); // (2000, 2250), (2500, 2750), 3000, (3500, 10000)
+            publishedData[0].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2000, 2250));
+            publishedData[1].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2500, 2750));
+            publishedData[2].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(3000));
+            publishedData[3].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(3500, 10000));
+        }
+        
+        [Fact]
+        public void Flush_WithEpochInLeadingEdgeBuffer_ShouldFlushExpected()
+        {
+            // Arrange
+            var topicProducer = Substitute.For<ITopicProducer>();
+            var streamProducer = Substitute.For<IStreamProducerInternal>();
+            var offsetTs = TimeSpan.FromSeconds(1);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch + offsetTs * 10000); // this should be totally ignored
+            
+            var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
+
+            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000, 500);
+            buffer.Epoch = (int)(offsetTs.TotalMilliseconds * 1e6); // this should not be ignored
+            
+            var publishedData = new List<TimeseriesDataRaw>();
+            streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
+            {
+                publishedData.Add(x);
+            }));
+        
+        
+            //Act
+            foreach (var timestampInMs in new []{1000, 1250, 1500, 1750, 2000, 2500, 9000})
+            {
+                buffer.GetOrCreateTimestamp(timestampInMs * (long)1e6).AddValue("ms_value", timestampInMs + offsetTs.TotalMilliseconds).Publish(); 
+            }
+        
+            buffer.Flush();
+            
+            // Assert
+            publishedData.Count.Should().Be(4); // (2000, 2250), (2500, 2750), 3000, (3500, 10000)
+            publishedData[0].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2000, 2250));
+            publishedData[1].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(2500, 2750));
+            publishedData[2].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(3000));
+            publishedData[3].Should().BeEquivalentTo(CreateTSDataRawWithFixedTimestamp(3500, 10000));
+        }
 
         [Fact]
         public void AddValue_WithDoubleParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeTimestamp(null, 1, true, new Dictionary<string, string>());
             row.AddValue("param", 1.0);
 
             // Act
@@ -183,7 +250,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithDoubleParameter_OverwriteTrue_ShouldOverwriteExistingValue()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeTimestamp(null, 1, true, new Dictionary<string, string>());
             row.AddValue("param", 1.0);
 
             // Act
@@ -197,7 +264,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithStringParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeTimestamp(null, 1, true, new Dictionary<string, string>());
             row.AddValue("param", "oldValue");
 
             // Act
@@ -211,7 +278,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithStringParameter_OverwriteTrue_ShouldOverwriteExistingValue()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeTimestamp(null, 1, true, new Dictionary<string, string>());
             row.AddValue("param", "oldValue");
 
             // Act
@@ -225,7 +292,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithByteArrayParameter_OverwriteFalse_ShouldNotOverwriteExistingValue()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeTimestamp(null, 1, true, new Dictionary<string, string>());
             row.AddValue("param", new byte[] { 1, 2, 3 });
 
             // Act
@@ -239,7 +306,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AddValue_WithByteArrayParameter_OverwriteTrue_ShouldOverwriteExistingValue()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string>());
+            var row = new LeadingEdgeTimestamp(null, 1, true, new Dictionary<string, string>());
             row.AddValue("param", new byte[] { 1, 2, 3 });
 
             // Act
@@ -253,7 +320,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
         public void AppendToTimeseriesData_ShouldAddAllValuesToTimeseriesData()
         {
             // Arrange
-            var row = new LeadingEdgeRow(null, 1, new Dictionary<string, string> { { "tag", "value" } });
+            var row = new LeadingEdgeTimestamp(null, 1,true, new Dictionary<string, string> { { "tag", "value" } });
             row.AddValue("param1", 1.0);
             row.AddValue("param2", "string value");
             row.AddValue("param3", new byte[] { 1, 2, 3 });
