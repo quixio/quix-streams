@@ -1,21 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using QuixStreams.Streaming.Models.StreamProducer;
 
 namespace QuixStreams.Streaming.Models
 {
     public class LeadingEdgeBuffer
     {
+        
         /// <summary>
-        /// Sorted dictionary of rows in the buffer. Key is a tuple of the timestamp and a hash of the tags. 
+        /// Sorted dictionary of rows in the buffer
         /// </summary>
         private readonly SortedDictionary<TimestampKey, LeadingEdgeTimestamp> rows;
 
         private readonly StreamTimeseriesProducer producer;
         private readonly long leadingEdgeDelayInNanoseconds;
-        private readonly long bucketInNanoseconds;
 
         private long leadingEdgeInNanoseconds = long.MinValue;
         private long lastTimestampReleased = long.MinValue;
@@ -40,12 +39,10 @@ namespace QuixStreams.Streaming.Models
         /// </summary>
         /// <param name="producer">Instance of <see cref="StreamTimeseriesProducer"/></param>
         /// <param name="leadingEdgeDelayMs">Leading edge delay configuration in Milliseconds</param>
-        /// <param name="bucketMs">Time between timestamps to wait for before publishing data in milliseconds</param>
-        internal LeadingEdgeBuffer(StreamTimeseriesProducer producer, int leadingEdgeDelayMs, int bucketMs)
+        internal LeadingEdgeBuffer(StreamTimeseriesProducer producer, int leadingEdgeDelayMs)
         {
             this.producer = producer;
             this.leadingEdgeDelayInNanoseconds = leadingEdgeDelayMs * (long)1e6;
-            this.bucketInNanoseconds = bucketMs * (long)1e6;
             this.rows = new SortedDictionary<TimestampKey, LeadingEdgeTimestamp>();
         }
 
@@ -63,94 +60,90 @@ namespace QuixStreams.Streaming.Models
             if (!rows.TryGetValue(key, out var row))
             {
                 row = new LeadingEdgeTimestamp(this, ts, this.Epoch != null, tags);
+                this.rows.Add(key, row);
+                leadingEdgeInNanoseconds = Math.Max(this.leadingEdgeInNanoseconds, ts);
             }
 
             return row;
         }
 
-        internal void AddRowToBuffer(LeadingEdgeTimestamp timestamp)
+        /// <summary>
+        /// Publishes all data in the buffer, regardless of leading edge condition.
+        /// </summary>
+        public void Flush()
         {
-            var key = new TimestampKey(timestamp.Timestamp, timestamp.Tags);
-
-            if (rows.ContainsKey(key))
-            {
-                return;
-            }
-
-            if (timestamp.Timestamp <= this.lastTimestampReleased)
-            {
-                this.OnBackfill?.Invoke(this, timestamp.AppendToTimeseriesData(new TimeseriesData()));
-                return;
-            }
-
-            rows[key] = timestamp;
-            leadingEdgeInNanoseconds = Math.Max(this.leadingEdgeInNanoseconds, timestamp.Timestamp);
-
-            EnsurePublished();
+            Release(true);
         }
 
         /// <summary>
-        /// Publishes data inside the buffer that should be published based on the leading edge delay and the bucket size configuration.
+        /// Publishes data according to leading edge condition
         /// </summary>
-        private void EnsurePublished()
+        public void Publish()
         {
-            var keysToPublish = new List<TimestampKey>();
+            Release(false);
+        }
+        
+        private void Release(bool flushAll)
+        {
+            if (rows.Count == 0) return;
+            
+            var itemsToPublish = new List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>>(rows.Count); // prep for worst case to avoid constant resizing
+            var itemsToBackFill = new List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>>(rows.Count); // prep for worst case to avoid constant resizing
+
             foreach (var row in rows)
             {
                 var tsInNanoseconds = row.Key.Timestamp;
 
-                if (this.leadingEdgeInNanoseconds - tsInNanoseconds >= this.leadingEdgeDelayInNanoseconds)
+                if (tsInNanoseconds <= this.lastTimestampReleased)
                 {
-                    keysToPublish.Add(row.Key);
+                    itemsToBackFill.Add(row);
+                    continue;
                 }
-            }
+                    
+                if (flushAll || this.leadingEdgeInNanoseconds - tsInNanoseconds >= this.leadingEdgeDelayInNanoseconds)
+                {
+                    itemsToPublish.Add(row);
+                    continue;
+                }
 
-            int startIndex = 0;
-            long minTimestamp = Int64.MaxValue;
-            long maxTimestamp = Int64.MinValue;
-            for (int i = 0; i < keysToPublish.Count; i++)
+                // Due to ordered nature of the dictionary, if we reach
+                // to any we don't publish, we don't publish the rest either
+                break; 
+            }
+            
+            RaiseBackfillData(itemsToBackFill);
+
+            PublishLeadingEdgeData(itemsToPublish);
+        }
+        
+        private void RaiseBackfillData(List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>> itemsToBackFill)
+        {
+            if (itemsToBackFill.Count == 0) return;
+
+            var timeseriesData = new TimeseriesData(capacity: itemsToBackFill.Count);
+            foreach (var item in itemsToBackFill)
             {
-                var nano = keysToPublish[i].Timestamp;
-
-                minTimestamp = Math.Min(minTimestamp, nano);
-                maxTimestamp = Math.Max(maxTimestamp, nano);
-
-                var nsDiff = maxTimestamp - minTimestamp;
-                if (nsDiff >= this.bucketInNanoseconds)
-                {
-                    // Reset min/max to this value, as will be flushing everything but this
-                    minTimestamp = nano;
-                    maxTimestamp = nano;
-
-                    Publish(keysToPublish.GetRange(startIndex, i - startIndex).ToArray());
-
-                    startIndex = i;
-                }
+                rows.Remove(item.Key);
+                timeseriesData = item.Value.AppendToTimeseriesData(timeseriesData);
             }
+
+            this.OnBackfill?.Invoke(this, timeseriesData);
         }
 
-        /// <summary>
-        /// Flushes all data in the buffer
-        /// </summary>
-        public void Flush()
+        private void PublishLeadingEdgeData(List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>> itemsToPublish)
         {
-            Publish(rows.Keys.ToArray());
-        }
+            if (itemsToPublish.Count == 0) return;
 
-        private void Publish(params TimestampKey[] keys)
-        {
-            var timeseriesData = new TimeseriesData(capacity: keys.Length);
-            foreach (var key in keys)
+            var timeseriesData = new TimeseriesData(capacity: itemsToPublish.Count);
+            foreach (var item in itemsToPublish)
             {
-                var timestampInNanoseconds = key.Timestamp;
-                var row = rows[key];
-
-                timeseriesData = row.AppendToTimeseriesData(timeseriesData);
-
-                this.lastTimestampReleased = Math.Max(this.lastTimestampReleased, timestampInNanoseconds);
-                rows.Remove(key);
+                rows.Remove(item.Key);
+                timeseriesData = item.Value.AppendToTimeseriesData(timeseriesData);
             }
+            
+            this.lastTimestampReleased = Math.Max(this.lastTimestampReleased, timeseriesData.Timestamps[timeseriesData.Timestamps.Count-1].TimestampNanoseconds);
 
+            this.OnPublish?.Invoke(this, timeseriesData);
             producer.Publish(timeseriesData);
         }
 
@@ -235,26 +228,46 @@ namespace QuixStreams.Streaming.Models
     /// </summary>
     public class LeadingEdgeTimestamp
     {
-        internal long Timestamp { get; }
-        internal Dictionary<string, double> NumericValues { get; }
-        internal Dictionary<string, string> StringValues { get; }
-        internal Dictionary<string, byte[]> BinaryValues { get; }
+        /// <summary>
+        /// The timestamp in nanoseconds
+        /// </summary>
+        public long Timestamp { get; }
+        
+         
+        /// <summary>
+        /// The numeric values of the timestamp
+        /// </summary>
+        internal Dictionary<string, double> NumericValues { get; private set; }
+        
+         
+        /// <summary>
+        /// The string values of the timestamp
+        /// </summary>
+        internal Dictionary<string, string> StringValues { get; private set; }
+        
+        /// <summary>
+        /// The binary values of the timestamp
+        /// </summary>
+        internal Dictionary<string, byte[]> BinaryValues { get; private set; }
+        
+        /// <summary>
+        /// This can't be edited externally, as it would mess the sorted dictionary implementation
+        /// </summary>
         internal Dictionary<string, string> Tags { get; }
 
         private readonly LeadingEdgeBuffer buffer;
-        private bool publishedToBuffer = false;
+        
+        /// <summary>
+        /// Whether an epoch is included in the timestamp
+        /// </summary>
         public readonly bool EpochIncluded = false;
 
-        public LeadingEdgeTimestamp(LeadingEdgeBuffer buffer, long timestamp, bool epochIncluded, Dictionary<string, string> tags)
+        internal LeadingEdgeTimestamp(LeadingEdgeBuffer buffer, long timestamp, bool epochIncluded, Dictionary<string, string> tags)
         {
             this.buffer = buffer;
             this.Timestamp = timestamp;
             this.EpochIncluded = epochIncluded;
             this.Tags = tags;
-
-            NumericValues = new Dictionary<string, double>();
-            StringValues = new Dictionary<string, string>();
-            BinaryValues = new Dictionary<string, byte[]>();
         }
 
         /// <summary>
@@ -264,15 +277,15 @@ namespace QuixStreams.Streaming.Models
         /// <param name="value">Value of the parameter</param>
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
-        /// <returns>Returns the current TimeseriesDataRow instance. This allows for method chaining</returns>
+        /// <returns>Returns the current LeadingEdgeTimestamp instance. This allows for method chaining</returns>
         public LeadingEdgeTimestamp AddValue(string parameter, double value, bool overwrite = false)
         {
-            if (NumericValues.ContainsKey(parameter) && !overwrite)
+            NumericValues ??= new Dictionary<string, double>();
+            if (overwrite || !NumericValues.ContainsKey(parameter))
             {
-                return this;
+                NumericValues[parameter] = value;
             }
 
-            NumericValues[parameter] = value;
             return this;
         }
 
@@ -283,15 +296,15 @@ namespace QuixStreams.Streaming.Models
         /// <param name="value">Value of the parameter</param>
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
-        /// <returns>Returns the current TimeseriesDataRow instance. This allows for method chaining</returns>
+        /// <returns>Returns the current LeadingEdgeTimestamp instance. This allows for method chaining</returns>
         public LeadingEdgeTimestamp AddValue(string parameter, string value, bool overwrite = false)
         {
-            if (StringValues.ContainsKey(parameter) && !overwrite)
+            StringValues ??= new Dictionary<string, string>();
+            if (overwrite || !StringValues.ContainsKey(parameter))
             {
-                return this;
+                StringValues[parameter] = value;
             }
-
-            StringValues[parameter] = value;
+            
             return this;
         }
 
@@ -301,52 +314,48 @@ namespace QuixStreams.Streaming.Models
         /// <param name="parameter">Parameter name</param>
         /// <param name="value">Value of the parameter</param>
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
-        /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
+        /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current LeadingEdgeTimestamp instance.</param>
         public LeadingEdgeTimestamp AddValue(string parameter, byte[] value, bool overwrite = false)
         {
-            if (BinaryValues.ContainsKey(parameter) && !overwrite)
+            BinaryValues ??= new Dictionary<string, byte[]>();
+            if (overwrite || !BinaryValues.ContainsKey(parameter))
             {
-                return this;
+                BinaryValues[parameter] = value;
             }
 
-            BinaryValues[parameter] = value;
             return this;
         }
 
         internal TimeseriesData AppendToTimeseriesData(TimeseriesData existingTimeseriesData)
         {
+            if (NumericValues == null && StringValues == null && BinaryValues == null) return existingTimeseriesData;
             var ts = existingTimeseriesData.AddTimestampNanoseconds(Timestamp, epochIncluded: EpochIncluded).AddTags(Tags);
-            foreach (var numericValue in NumericValues)
+
+            if (NumericValues != null)
             {
-                ts.AddValue(numericValue.Key, numericValue.Value);
+                foreach (var numericValue in NumericValues)
+                {
+                    ts.AddValue(numericValue.Key, numericValue.Value);
+                }
             }
 
-            foreach (var stringValue in StringValues)
+            if (StringValues != null)
             {
-                ts.AddValue(stringValue.Key, stringValue.Value);
+                foreach (var stringValue in StringValues)
+                {
+                    ts.AddValue(stringValue.Key, stringValue.Value);
+                }
             }
 
-            foreach (var binaryValue in BinaryValues)
+            if (BinaryValues != null)
             {
-                ts.AddValue(binaryValue.Key, binaryValue.Value);
+                foreach (var binaryValue in BinaryValues)
+                {
+                    ts.AddValue(binaryValue.Key, binaryValue.Value);
+                }
             }
 
             return existingTimeseriesData;
-        }
-        
-        /// <summary>
-        /// This method commits the current object instance to the <see cref="LeadingEdgeBuffer"/>.
-        /// </summary>
-        public void Publish()
-        {
-            if (publishedToBuffer)
-            {
-                // Already published to the buffer
-                return;
-            }
-
-            publishedToBuffer = true;
-            buffer.AddRowToBuffer(this);
         }
     }
 }

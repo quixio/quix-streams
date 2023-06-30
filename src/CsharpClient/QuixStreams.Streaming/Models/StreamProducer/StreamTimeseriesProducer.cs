@@ -238,10 +238,9 @@ namespace QuixStreams.Streaming.Models.StreamProducer
         /// Creates a new <see cref="LeadingEdgeBuffer"/> using this producer
         /// </summary>
         /// <param name="leadingEdgeDelayMs">Leading edge delay configuration in Milliseconds</param>
-        /// <param name="bucketMs">Time between timestamps to wait for before publishing data in milliseconds</param>
-        public LeadingEdgeBuffer CreateLeadingEdgeBuffer(int leadingEdgeDelayMs, int bucketMs)
+        public LeadingEdgeBuffer CreateLeadingEdgeBuffer(int leadingEdgeDelayMs)
         {
-            return new LeadingEdgeBuffer(this, leadingEdgeDelayMs, bucketMs);
+            return new LeadingEdgeBuffer(this, leadingEdgeDelayMs);
         }
 
         private void Flush(bool force)
