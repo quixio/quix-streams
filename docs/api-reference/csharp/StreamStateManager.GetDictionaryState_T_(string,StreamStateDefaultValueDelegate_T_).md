@@ -6,7 +6,7 @@
 Creates a new application state of dictionary type with automatically managed lifecycle for the stream
 
 ```csharp
-public QuixStreams.Streaming.States.StreamState<T> GetDictionaryState<T>(string stateName, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T> defaultValueFactory=null);
+public QuixStreams.Streaming.States.StreamDictionaryState<T> GetDictionaryState<T>(string stateName, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T> defaultValueFactory=null);
 ```
 #### Type parameters
 
@@ -28,5 +28,5 @@ The name of the state
 The value factory for the state when the state has no value for the key
 
 #### Returns
-[QuixStreams.Streaming.States.StreamState&lt;](StreamState_T_.md 'QuixStreams.Streaming.States.StreamState<T>')[T](StreamStateManager.GetDictionaryState_T_(string,StreamStateDefaultValueDelegate_T_).md#QuixStreams.Streaming.States.StreamStateManager.GetDictionaryState_T_(string,QuixStreams.Streaming.States.StreamStateDefaultValueDelegate_T_).T 'QuixStreams.Streaming.States.StreamStateManager.GetDictionaryState<T>(string, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T>).T')[&gt;](StreamState_T_.md 'QuixStreams.Streaming.States.StreamState<T>')  
+[QuixStreams.Streaming.States.StreamDictionaryState&lt;](StreamDictionaryState_T_.md 'QuixStreams.Streaming.States.StreamDictionaryState<T>')[T](StreamStateManager.GetDictionaryState_T_(string,StreamStateDefaultValueDelegate_T_).md#QuixStreams.Streaming.States.StreamStateManager.GetDictionaryState_T_(string,QuixStreams.Streaming.States.StreamStateDefaultValueDelegate_T_).T 'QuixStreams.Streaming.States.StreamStateManager.GetDictionaryState<T>(string, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T>).T')[&gt;](StreamDictionaryState_T_.md 'QuixStreams.Streaming.States.StreamDictionaryState<T>')  
 Dictionary stream state

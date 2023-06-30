@@ -340,19 +340,32 @@
   * [StreamStateManager](#quixstreams.states.streamstatemanager.StreamStateManager)
     * [\_\_init\_\_](#quixstreams.states.streamstatemanager.StreamStateManager.__init__)
     * [get\_dict\_state](#quixstreams.states.streamstatemanager.StreamStateManager.get_dict_state)
+    * [get\_scalar\_state](#quixstreams.states.streamstatemanager.StreamStateManager.get_scalar_state)
     * [get\_states](#quixstreams.states.streamstatemanager.StreamStateManager.get_states)
     * [delete\_state](#quixstreams.states.streamstatemanager.StreamStateManager.delete_state)
     * [delete\_states](#quixstreams.states.streamstatemanager.StreamStateManager.delete_states)
-* [quixstreams.states.streamstate](#quixstreams.states.streamstate)
-  * [StreamState](#quixstreams.states.streamstate.StreamState)
-    * [\_\_init\_\_](#quixstreams.states.streamstate.StreamState.__init__)
-    * [type](#quixstreams.states.streamstate.StreamState.type)
-    * [on\_flushed](#quixstreams.states.streamstate.StreamState.on_flushed)
-    * [on\_flushed](#quixstreams.states.streamstate.StreamState.on_flushed)
-    * [on\_flushing](#quixstreams.states.streamstate.StreamState.on_flushing)
-    * [on\_flushing](#quixstreams.states.streamstate.StreamState.on_flushing)
-    * [flush](#quixstreams.states.streamstate.StreamState.flush)
-    * [reset](#quixstreams.states.streamstate.StreamState.reset)
+* [quixstreams.states.scalarstreamstate](#quixstreams.states.scalarstreamstate)
+  * [ScalarStreamState](#quixstreams.states.scalarstreamstate.ScalarStreamState)
+    * [\_\_init\_\_](#quixstreams.states.scalarstreamstate.ScalarStreamState.__init__)
+    * [type](#quixstreams.states.scalarstreamstate.ScalarStreamState.type)
+    * [on\_flushed](#quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushed)
+    * [on\_flushed](#quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushed)
+    * [on\_flushing](#quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushing)
+    * [on\_flushing](#quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushing)
+    * [flush](#quixstreams.states.scalarstreamstate.ScalarStreamState.flush)
+    * [reset](#quixstreams.states.scalarstreamstate.ScalarStreamState.reset)
+    * [value](#quixstreams.states.scalarstreamstate.ScalarStreamState.value)
+    * [value](#quixstreams.states.scalarstreamstate.ScalarStreamState.value)
+* [quixstreams.states.dictstreamstate](#quixstreams.states.dictstreamstate)
+  * [DictStreamState](#quixstreams.states.dictstreamstate.DictStreamState)
+    * [\_\_init\_\_](#quixstreams.states.dictstreamstate.DictStreamState.__init__)
+    * [type](#quixstreams.states.dictstreamstate.DictStreamState.type)
+    * [on\_flushed](#quixstreams.states.dictstreamstate.DictStreamState.on_flushed)
+    * [on\_flushed](#quixstreams.states.dictstreamstate.DictStreamState.on_flushed)
+    * [on\_flushing](#quixstreams.states.dictstreamstate.DictStreamState.on_flushing)
+    * [on\_flushing](#quixstreams.states.dictstreamstate.DictStreamState.on_flushing)
+    * [flush](#quixstreams.states.dictstreamstate.DictStreamState.flush)
+    * [reset](#quixstreams.states.dictstreamstate.DictStreamState.reset)
 * [quixstreams.states](#quixstreams.states)
 * [quixstreams.states.appstatemanager](#quixstreams.states.appstatemanager)
   * [AppStateManager](#quixstreams.states.appstatemanager.AppStateManager)
@@ -376,6 +389,7 @@
     * [on\_committing](#quixstreams.topicconsumer.TopicConsumer.on_committing)
     * [subscribe](#quixstreams.topicconsumer.TopicConsumer.subscribe)
     * [commit](#quixstreams.topicconsumer.TopicConsumer.commit)
+    * [get\_state\_manager](#quixstreams.topicconsumer.TopicConsumer.get_state_manager)
     * [get\_net\_pointer](#quixstreams.topicconsumer.TopicConsumer.get_net_pointer)
 * [quixstreams.streamconsumer](#quixstreams.streamconsumer)
   * [StreamConsumer](#quixstreams.streamconsumer.StreamConsumer)
@@ -390,6 +404,7 @@
     * [events](#quixstreams.streamconsumer.StreamConsumer.events)
     * [timeseries](#quixstreams.streamconsumer.StreamConsumer.timeseries)
     * [get\_dict\_state](#quixstreams.streamconsumer.StreamConsumer.get_dict_state)
+    * [get\_scalar\_state](#quixstreams.streamconsumer.StreamConsumer.get_scalar_state)
     * [get\_state\_manager](#quixstreams.streamconsumer.StreamConsumer.get_state_manager)
     * [get\_net\_pointer](#quixstreams.streamconsumer.StreamConsumer.get_net_pointer)
 * [quixstreams.state.localfilestorage](#quixstreams.state.localfilestorage)
@@ -2198,15 +2213,16 @@ Get the buffer for producing timeseries data.
 
 ```python
 def publish(
-        packet: Union[TimeseriesData, pd.DataFrame,
-                      TimeseriesDataRaw]) -> None
+    packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw,
+                  TimeseriesDataTimestamp]
+) -> None
 ```
 
 Publish the given packet to the stream without any buffering.
 
 **Arguments**:
 
-- `packet` - The packet containing TimeseriesData, TimeseriesDataRaw, or pandas DataFrame.
+- `packet` - The packet containing TimeseriesData, TimeseriesDataRaw, TimeseriesDataTimestamp, or pandas DataFrame.
   
 
 **Notes**:
@@ -2572,14 +2588,17 @@ Immediately publishes the data from the buffer without waiting for the buffer co
 #### publish
 
 ```python
-def publish(packet: Union[TimeseriesData, pd.DataFrame]) -> None
+def publish(
+    packet: Union[TimeseriesData, pd.DataFrame, TimeseriesDataRaw,
+                  TimeseriesDataTimestamp]
+) -> None
 ```
 
 Publish the provided timeseries packet to the buffer.
 
 **Arguments**:
 
-- `packet` - The packet containing TimeseriesData or panda DataFrame
+- `packet` - The packet containing TimeseriesData, TimeseriesDataRaw, TimeseriesDataTimestamp, or pandas DataFrame.
   - packet type panda.DataFrame:
   * Note 1: panda data frame should contain 'time' label, else the first integer label will be taken as time.
   * Note 2: Tags should be prefixed by TAG__ or they will be treated as timeseries parameters
@@ -5108,7 +5127,8 @@ NOTE: Do not initialize this class manually, use StreamConsumer.get_state_manage
 def get_dict_state(
         state_name: str,
         default_value_factory: Callable[[str], StreamStateType] = None,
-        state_type: StreamStateType = None) -> StreamState[StreamStateType]
+        state_type: StreamStateType = None
+) -> DictStreamState[StreamStateType]
 ```
 
 Creates a new application state of dictionary type with automatically managed lifecycle for the stream
@@ -5134,6 +5154,42 @@ Creates a new application state of dictionary type with automatically managed li
   
   >>> state_manager.get_dict_state('some_state', state_type=float)
   this will return a state where type is a float without default value, resulting in KeyError when not found
+
+<a id="quixstreams.states.streamstatemanager.StreamStateManager.get_scalar_state"></a>
+
+#### get\_scalar\_state
+
+```python
+def get_scalar_state(
+        state_name: str,
+        default_value_factory: Callable[[], StreamStateType] = None,
+        state_type: StreamStateType = None
+) -> ScalarStreamState[StreamStateType]
+```
+
+Creates a new application state of scalar type with automatically managed lifecycle for the stream
+
+**Arguments**:
+
+- `state_name` - The name of the state
+- `default_value_factory` - The default value factory to create value when it has not been set yet
+- `state_type` - The type of the state
+  
+
+**Example**:
+
+  >>> stream_consumer.get_scalar_state('some_state')
+  This will return a state where type is 'Any'
+  
+  >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 1)
+  this will return a state where type is 'Any', with an integer 1 (zero) as default when
+  value has not been set yet. The lambda function will be invoked with 'get_state_type_check' key to determine type
+  
+  >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 0, float)
+  this will return a state where type is a specific type, with default value
+  
+  >>> stream_consumer.get_scalar_state('some_state', state_type=float)
+  this will return a state where type is a float with a default value of that type
 
 <a id="quixstreams.states.streamstatemanager.StreamStateManager.get_states"></a>
 
@@ -5182,41 +5238,41 @@ Deletes all states for the current stream.
 
 - `int` - The number of states that were deleted
 
-<a id="quixstreams.states.streamstate"></a>
+<a id="quixstreams.states.scalarstreamstate"></a>
 
-# quixstreams.states.streamstate
+# quixstreams.states.scalarstreamstate
 
-<a id="quixstreams.states.streamstate.StreamState"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState"></a>
 
-## StreamState Objects
+## ScalarStreamState Objects
 
 ```python
 @nativedecorator
-class StreamState(Generic[StreamStateType])
+class ScalarStreamState(Generic[StreamStateType])
 ```
 
-Represents a dictionary-like storage of key-value pairs with a specific topic and storage name.
+Represents a state container that stores a scalar value with the ability to flush changes to a specified storage.
 
-<a id="quixstreams.states.streamstate.StreamState.__init__"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.__init__"></a>
 
 #### \_\_init\_\_
 
 ```python
 def __init__(net_pointer: ctypes.c_void_p, state_type: StreamStateType,
-             default_value_factory: Callable[[str], StreamStateType])
+             default_value_factory: Callable[[], StreamStateType])
 ```
 
-Initializes a new instance of StreamState.
+Initializes a new instance of ScalarStreamState.
 
-NOTE: Do not initialize this class manually, use StreamStateManager.get_state
+NOTE: Do not initialize this class manually, use StreamStateManager.get_scalar_state
 
 **Arguments**:
 
-- `net_pointer` - The .net object representing a StreamState.
+- `net_pointer` - The .net object representing a ScalarStreamState.
 - `state_type` - The type of the state
-- `default_value_factory` - The default value factory to create value when the key is not yet present in the state
+- `default_value_factory` - A function that returns a default value of type T when the value has not been set yet
 
-<a id="quixstreams.states.streamstate.StreamState.type"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.type"></a>
 
 #### type
 
@@ -5225,13 +5281,13 @@ NOTE: Do not initialize this class manually, use StreamStateManager.get_state
 def type() -> type
 ```
 
-Gets the type of the StreamState
+Gets the type of the ScalarStreamState
 
 **Returns**:
 
 - `StreamStateType` - type of the state
 
-<a id="quixstreams.states.streamstate.StreamState.on_flushed"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushed"></a>
 
 #### on\_flushed
 
@@ -5246,7 +5302,7 @@ Gets the handler for when flush operation is completed.
 
   Callable[[], None]: The event handler for after flush.
 
-<a id="quixstreams.states.streamstate.StreamState.on_flushed"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushed"></a>
 
 #### on\_flushed
 
@@ -5261,7 +5317,7 @@ Sets the handler for when flush operation is completed.
 
 - `value` - The parameterless callback to invoke
 
-<a id="quixstreams.states.streamstate.StreamState.on_flushing"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushing"></a>
 
 #### on\_flushing
 
@@ -5276,7 +5332,7 @@ Gets the handler for when flush operation begins.
 
   Callable[[], None]: The event handler for after flush.
 
-<a id="quixstreams.states.streamstate.StreamState.on_flushing"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.on_flushing"></a>
 
 #### on\_flushing
 
@@ -5291,7 +5347,7 @@ Sets the handler for when flush operation begins.
 
 - `value` - The parameterless callback to invoke
 
-<a id="quixstreams.states.streamstate.StreamState.flush"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.flush"></a>
 
 #### flush
 
@@ -5301,7 +5357,166 @@ def flush()
 
 Flushes the changes made to the in-memory state to the specified storage.
 
-<a id="quixstreams.states.streamstate.StreamState.reset"></a>
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.reset"></a>
+
+#### reset
+
+```python
+def reset()
+```
+
+Reset the state to before in-memory modifications
+
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.value"></a>
+
+#### value
+
+```python
+@property
+def value()
+```
+
+Gets the value of the state.
+
+**Returns**:
+
+- `StreamStateType` - The value of the state.
+
+<a id="quixstreams.states.scalarstreamstate.ScalarStreamState.value"></a>
+
+#### value
+
+```python
+@value.setter
+def value(val: StreamStateType)
+```
+
+Sets the value of the state.
+
+**Arguments**:
+
+- `val` - The value of the state.
+
+<a id="quixstreams.states.dictstreamstate"></a>
+
+# quixstreams.states.dictstreamstate
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState"></a>
+
+## DictStreamState Objects
+
+```python
+@nativedecorator
+class DictStreamState(Generic[StreamStateType])
+```
+
+Represents a state container that stores key-value pairs with the ability to flush changes to a specified storage.
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(net_pointer: ctypes.c_void_p, state_type: StreamStateType,
+             default_value_factory: Callable[[str], StreamStateType])
+```
+
+Initializes a new instance of DictStreamState.
+
+NOTE: Do not initialize this class manually, use StreamStateManager.get_dict_state
+
+**Arguments**:
+
+- `net_pointer` - The .net object representing a DictStreamState.
+- `state_type` - The type of the state
+- `default_value_factory` - The default value factory to create value when the key is not yet present in the state
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.type"></a>
+
+#### type
+
+```python
+@property
+def type() -> type
+```
+
+Gets the type of the StreamState
+
+**Returns**:
+
+- `StreamStateType` - type of the state
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.on_flushed"></a>
+
+#### on\_flushed
+
+```python
+@property
+def on_flushed() -> Callable[[], None]
+```
+
+Gets the handler for when flush operation is completed.
+
+**Returns**:
+
+  Callable[[], None]: The event handler for after flush.
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.on_flushed"></a>
+
+#### on\_flushed
+
+```python
+@on_flushed.setter
+def on_flushed(value: Callable[[], None]) -> None
+```
+
+Sets the handler for when flush operation is completed.
+
+**Arguments**:
+
+- `value` - The parameterless callback to invoke
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.on_flushing"></a>
+
+#### on\_flushing
+
+```python
+@property
+def on_flushing() -> Callable[[], None]
+```
+
+Gets the handler for when flush operation begins.
+
+**Returns**:
+
+  Callable[[], None]: The event handler for after flush.
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.on_flushing"></a>
+
+#### on\_flushing
+
+```python
+@on_flushing.setter
+def on_flushing(value: Callable[[], None]) -> None
+```
+
+Sets the handler for when flush operation begins.
+
+**Arguments**:
+
+- `value` - The parameterless callback to invoke
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.flush"></a>
+
+#### flush
+
+```python
+def flush()
+```
+
+Flushes the changes made to the in-memory state to the specified storage.
+
+<a id="quixstreams.states.dictstreamstate.DictStreamState.reset"></a>
 
 #### reset
 
@@ -5622,6 +5837,20 @@ def commit()
 
 Commit packages consumed up until now
 
+<a id="quixstreams.topicconsumer.TopicConsumer.get_state_manager"></a>
+
+#### get\_state\_manager
+
+```python
+def get_state_manager() -> TopicStateManager
+```
+
+Gets the manager for the topic states.
+
+**Returns**:
+
+- `TopicStateManager` - The topic state manager
+
 <a id="quixstreams.topicconsumer.TopicConsumer.get_net_pointer"></a>
 
 #### get\_net\_pointer
@@ -5819,7 +6048,8 @@ Gets the consumer for accessing timeseries related information of the stream suc
 def get_dict_state(
         state_name: str,
         default_value_factory: Callable[[str], StreamStateType] = None,
-        state_type: StreamStateType = None) -> StreamState[StreamStateType]
+        state_type: StreamStateType = None
+) -> DictStreamState[StreamStateType]
 ```
 
 Creates a new application state of dictionary type with automatically managed lifecycle for the stream
@@ -5833,7 +6063,7 @@ Creates a new application state of dictionary type with automatically managed li
 
 **Returns**:
 
-- `StreamState` - The stream state
+- `DictStreamState` - The stream state
   
 
 **Example**:
@@ -5850,6 +6080,47 @@ Creates a new application state of dictionary type with automatically managed li
   
   >>> stream_consumer.get_dict_state('some_state', state_type=float)
   this will return a state where type is a float without default value, resulting in KeyError when not found
+
+<a id="quixstreams.streamconsumer.StreamConsumer.get_scalar_state"></a>
+
+#### get\_scalar\_state
+
+```python
+def get_scalar_state(
+        state_name: str,
+        default_value_factory: Callable[[], StreamStateType] = None,
+        state_type: StreamStateType = None
+) -> ScalarStreamState[StreamStateType]
+```
+
+Creates a new application state of scalar type with automatically managed lifecycle for the stream
+
+**Arguments**:
+
+- `state_name` - The name of the state
+- `default_value_factory` - The default value factory to create value when it has not been set yet
+- `state_type` - The type of the state
+  
+
+**Returns**:
+
+- `ScalarStreamState` - The stream state
+  
+
+**Example**:
+
+  >>> stream_consumer.get_scalar_state('some_state')
+  This will return a state where type is 'Any'
+  
+  >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 1)
+  this will return a state where type is 'Any', with an integer 1 (zero) as default when
+  value has not been set yet. The lambda function will be invoked with 'get_state_type_check' key to determine type
+  
+  >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 0, float)
+  this will return a state where type is a specific type, with default value
+  
+  >>> stream_consumer.get_scalar_state('some_state', state_type=float)
+  this will return a state where type is a float with a default value of that type
 
 <a id="quixstreams.streamconsumer.StreamConsumer.get_state_manager"></a>
 

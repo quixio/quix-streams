@@ -6,7 +6,7 @@
 Gets the dictionary type stream state for the specified storage name using the provided default value factory.
 
 ```csharp
-public static QuixStreams.Streaming.States.StreamState<T> GetDictionaryState<T>(this QuixStreams.Streaming.IStreamConsumer streamConsumer, string storageName, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T> defaultValueFactory=null);
+public static QuixStreams.Streaming.States.StreamDictionaryState<T> GetDictionaryState<T>(this QuixStreams.Streaming.IStreamConsumer streamConsumer, string storageName, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T> defaultValueFactory=null);
 ```
 #### Type parameters
 
@@ -36,5 +36,5 @@ The name of the storage.
 A delegate that creates the default value for the stream state when a previously not set key is accessed.
 
 #### Returns
-[QuixStreams.Streaming.States.StreamState&lt;](StreamState_T_.md 'QuixStreams.Streaming.States.StreamState<T>')[T](IStreamConsumerExtensions.GetDictionaryState_T_(thisIStreamConsumer,string,StreamStateDefaultValueDelegate_T_).md#QuixStreams.Streaming.IStreamConsumerExtensions.GetDictionaryState_T_(thisQuixStreams.Streaming.IStreamConsumer,string,QuixStreams.Streaming.States.StreamStateDefaultValueDelegate_T_).T 'QuixStreams.Streaming.IStreamConsumerExtensions.GetDictionaryState<T>(this QuixStreams.Streaming.IStreamConsumer, string, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T>).T')[&gt;](StreamState_T_.md 'QuixStreams.Streaming.States.StreamState<T>')  
+[QuixStreams.Streaming.States.StreamDictionaryState&lt;](StreamDictionaryState_T_.md 'QuixStreams.Streaming.States.StreamDictionaryState<T>')[T](IStreamConsumerExtensions.GetDictionaryState_T_(thisIStreamConsumer,string,StreamStateDefaultValueDelegate_T_).md#QuixStreams.Streaming.IStreamConsumerExtensions.GetDictionaryState_T_(thisQuixStreams.Streaming.IStreamConsumer,string,QuixStreams.Streaming.States.StreamStateDefaultValueDelegate_T_).T 'QuixStreams.Streaming.IStreamConsumerExtensions.GetDictionaryState<T>(this QuixStreams.Streaming.IStreamConsumer, string, QuixStreams.Streaming.States.StreamStateDefaultValueDelegate<T>).T')[&gt;](StreamDictionaryState_T_.md 'QuixStreams.Streaming.States.StreamDictionaryState<T>')  
 The dictionary stream state for the specified storage name using the provided default value factory.

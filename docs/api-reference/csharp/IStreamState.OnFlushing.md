@@ -1,12 +1,12 @@
 #### [QuixStreams.Streaming](index.md 'index')
-### [QuixStreams.Streaming.States](QuixStreams.Streaming.States.md 'QuixStreams.Streaming.States').[StreamState](StreamState.md 'QuixStreams.Streaming.States.StreamState')
+### [QuixStreams.Streaming.States](QuixStreams.Streaming.States.md 'QuixStreams.Streaming.States').[IStreamState](IStreamState.md 'QuixStreams.Streaming.States.IStreamState')
 
-## StreamState.OnFlushing Event
+## IStreamState.OnFlushing Event
 
 Raised immediately before a flush operation is performed.
 
 ```csharp
-public event EventHandler OnFlushing;
+event EventHandler OnFlushing;
 ```
 
 #### Event Type
