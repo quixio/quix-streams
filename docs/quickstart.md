@@ -405,7 +405,7 @@ Try one of the following resources to continue your Quix learning journey:
 
 * [Quix Streams GitHub](https://github.com/quixio/quix-streams){target=_blank}
 
-* [Quix definitions](../platform/definitions.html)
+* [Quix Platform glossary](../platform/glossary.md)
 
 * [The Stream community on Slack](https://quix.io/slack-invite){target=_blank}
 
