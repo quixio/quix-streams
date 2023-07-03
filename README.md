@@ -237,6 +237,9 @@ If you’re sending data at <b>high frequency</b>, processing each message can b
     buffer.on_dataframe_released = on_read_dataframe_handler
     ```
 
+
+For a detailed overview of built-in buffers, [visit our documentation](https://quix.io/docs/client-library/features/builtin-buffers.html).
+
 ### Support for DataFrames
 
 Time-series parameters are emitted at the same time, so they share one timestamp. Handling this data independently is wasteful. The library uses a tabular system that can work for instance with <b>Pandas DataFrames</b> natively. Each row has a timestamp and <b>user-defined tags</b> as indexes.
