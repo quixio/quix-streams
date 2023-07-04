@@ -6,7 +6,7 @@ Serialization can be difficult, especially if it’s done with performance in mi
 
 Quix Streams automatically serializes data from your language's built in types. You can work with familiar types, such as [pandas DataFrame](https://pandas.pydata.org/docs/user_guide/dsintro.html#dataframe), or use the Quix [TimeseriesData](../subscribe.md#timeseriesdata-format) type, and leave the library to perform any type conversions required.
 
-The `CodecSettings` class allows us to change the message codec type, a way of encoding and decoding messages.
+The `CodecSettings` class allows us to change the message codec type, the way of encoding and decoding messages.
 
 There are three supported types of codecs:
 
