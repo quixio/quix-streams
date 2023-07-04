@@ -11,7 +11,7 @@ Buffers in Quix Streams work at the timestamp level, accumulating timestamps unt
 The buffer can be used to [subscribe](../subscribe.md#using-a-buffer) to and [publish](../publish.md#using-a-buffer) time-series data.
 
  ## Leading edge buffer
- In addition to the package size, timespan and timeout buffer configurations, Quix Streams also offers the `LeadingEdgeBuffer` – a buffer that can be especially useful when data received is out-of-order and must be ordered before it is consumed and late arriving data.
+ In addition to the package size, timespan and timeout buffer configurations, Quix Streams also offers a `LeadingEdgeBuffer` – buffer that can be especially useful when dealing with out-of-order data that must be ordered before it is consumed.
 
 ```csharp
 // Create LeadingEdgeBuffer with leading edge delay of 1000ms
