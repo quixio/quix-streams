@@ -20,7 +20,7 @@ Message codec type can be changes like so (with C#):
 CodecSettings.SetGlobalCodecType(CodecType.Protobuf);
 ```
 
-Here is how to do it in Python:
+It can be done in Python as well:
 
 ```python
 CodecSettings.set_global_codec_type(CodecType.Protobuf)
