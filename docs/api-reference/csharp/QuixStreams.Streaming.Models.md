@@ -6,6 +6,8 @@
 | :--- | :--- |
 | [EventData](EventData.md 'QuixStreams.Streaming.Models.EventData') | Represents a single point in time with event value and tags attached to it |
 | [EventDefinition](EventDefinition.md 'QuixStreams.Streaming.Models.EventDefinition') | Describes additional context for the event |
+| [LeadingEdgeBuffer](LeadingEdgeBuffer.md 'QuixStreams.Streaming.Models.LeadingEdgeBuffer') | |
+| [LeadingEdgeTimestamp](LeadingEdgeTimestamp.md 'QuixStreams.Streaming.Models.LeadingEdgeTimestamp') | Represents a single row of data in the [LeadingEdgeBuffer](LeadingEdgeBuffer.md 'QuixStreams.Streaming.Models.LeadingEdgeBuffer') |
 | [ParameterDefinition](ParameterDefinition.md 'QuixStreams.Streaming.Models.ParameterDefinition') | Describes additional context for the parameter |
 | [TimeseriesBuffer](TimeseriesBuffer.md 'QuixStreams.Streaming.Models.TimeseriesBuffer') | Represents a class used to consume and produce stream messages in a buffered manner. |
 | [TimeseriesBufferConfiguration](TimeseriesBufferConfiguration.md 'QuixStreams.Streaming.Models.TimeseriesBufferConfiguration') | Describes the configuration for timeseries buffers |

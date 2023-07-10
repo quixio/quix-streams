@@ -6,7 +6,7 @@
 Creates a new application state of dictionary type with automatically managed lifecycle for the stream
 
 ```csharp
-public QuixStreams.Streaming.States.StreamState GetDictionaryState(string stateName);
+public QuixStreams.Streaming.States.StreamDictionaryState GetDictionaryState(string stateName);
 ```
 #### Parameters
 
@@ -17,5 +17,5 @@ public QuixStreams.Streaming.States.StreamState GetDictionaryState(string stateN
 The name of the state
 
 #### Returns
-[StreamState](StreamState.md 'QuixStreams.Streaming.States.StreamState')  
+[StreamDictionaryState](StreamDictionaryState.md 'QuixStreams.Streaming.States.StreamDictionaryState')  
 Dictionary stream state
