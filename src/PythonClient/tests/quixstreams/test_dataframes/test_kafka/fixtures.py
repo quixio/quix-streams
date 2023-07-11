@@ -5,6 +5,39 @@ import pytest
 from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
 
 from src.quixstreams.dataframes.kafka import AsyncProducer
+from src.quixstreams.dataframes.kafka.consumer import AsyncConsumer, AutoOffsetReset
+
+
+@pytest.fixture()
+def consumer_factory(kafka_container, event_loop):
+    def factory(
+        broker_address: str = kafka_container.broker_address,
+        consumer_group: str = "tests",
+        auto_offset_reset: AutoOffsetReset = "latest",
+        auto_commit_enable: bool = True,
+        extra_config: dict = None,
+    ) -> AsyncConsumer:
+        extra_config = extra_config or {}
+
+        # Make consumers to refresh cluster metadata often
+        # to react on re-assignment changes faster
+        extra_config["topic.metadata.refresh.interval.ms"] = 3000
+
+        return AsyncConsumer(
+            broker_address=broker_address,
+            consumer_group=consumer_group,
+            auto_commit_enable=auto_commit_enable,
+            auto_offset_reset=auto_offset_reset,
+            extra_config=extra_config,
+            loop=event_loop,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def consumer(consumer_factory) -> AsyncConsumer:
+    return consumer_factory()
 
 
 @pytest.fixture()
