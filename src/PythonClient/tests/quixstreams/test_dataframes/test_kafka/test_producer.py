@@ -30,7 +30,7 @@ class TestAsyncProducer:
         topic_name, _ = await topic_factory()
         extra_config = {
             # Set impossible message timeout to simulate a failure
-            "linger.ms": 1,
+            "linger.ms": 1.9,
             "message.timeout.ms": 2,
         }
         value = b"1" * 1001
