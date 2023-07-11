@@ -458,6 +458,11 @@ namespace QuixStreams.Streaming
                 securityOptions.UseSasl = false;
             }
 
+            if (ws.BrokerSettings?.BrokerType == WorkspaceBrokerType.ConfluentCloud)
+            {
+                brokerProperties["client.id"] = ws.BrokerSettings.ConfluentCloudSettings.ClientID;
+            }
+
             var client = new KafkaStreamingClient(ws.Broker.Address, securityOptions, brokerProperties, debug);
             return wsToStreamingClientDict.GetOrAdd(ws.WorkspaceId, client);
         }
