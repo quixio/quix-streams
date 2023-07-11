@@ -2,8 +2,7 @@ import pytest
 
 from src import quixstreams as qx
 from src.quixstreams import AutoOffsetReset
-from .containerhelper import ContainerHelper
-from .types import KafkaContainer
+from tests.quixstreams.types import KafkaContainer
 
 
 @pytest.fixture()
@@ -16,14 +15,7 @@ def test_name(request: pytest.FixtureRequest) -> str:
     )
 
 
-@pytest.fixture(scope='session')
-def kafka_container() -> KafkaContainer:
-    kafka_container, broker_address, kafka_port, zookeeper_port = ContainerHelper.create_kafka_container()
-    print("Starting Kafka container")
-    ContainerHelper.start_kafka_container(kafka_container)
-    print("Started Kafka container")
-    yield KafkaContainer(broker_address=broker_address)
-    kafka_container.stop()
+
 
 
 @pytest.fixture()

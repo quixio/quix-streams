@@ -1,0 +1,2 @@
+class QuixException(Exception):
+    pass
