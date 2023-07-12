@@ -1,4 +1,5 @@
 ﻿using System;
+using Newtonsoft.Json;
 
 namespace QuixStreams.Streaming.QuixApi.Portal
 {
@@ -218,6 +219,7 @@ namespace QuixStreams.Streaming.QuixApi.Portal
         /// <summary>
         /// Broker type
         /// </summary>
+        [JsonConverter(typeof(WorkspaceBrokerTypeJsonConverter))]
         public WorkspaceBrokerType BrokerType { get; set; }
 
         /// <summary>

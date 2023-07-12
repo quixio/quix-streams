@@ -14,6 +14,7 @@ public class StreamingClientShould
     [Theory]
     [InlineData("confluent-testTopic")]
     [InlineData("quixdev-secondTest")]
+    [InlineData("different-topic")]
     public void GetTopicConsumer_ShouldUseClientId(string topicName)
     {
         // Arrange
@@ -44,6 +45,12 @@ public class StreamingClientShould
         ""id"": ""quixdev-secondTest"",
         ""name"": ""quixdev-secondTest"",
         ""workspaceId"": ""quixdev"",
+        ""status"": ""Ready"",
+    },
+    {
+        ""id"": ""different-topic"",
+        ""name"": ""different-topic"",
+        ""workspaceId"": ""different"",
         ""status"": ""Ready"",
     }
 ]";
@@ -108,6 +115,33 @@ public class StreamingClientShould
         },
         ""repositoryId"": ""xxxxxxxxxx"",
         ""branch"": ""chris"",
+        ""environmentName"": ""Testing"",
+        ""version"": 2,
+        ""branchProtected"": false
+    },
+    {
+        ""workspaceId"": ""different"",
+        ""name"": ""Unknown Kafka Workspace"",
+        ""status"": ""Ready"",
+        ""brokerType"": ""SharedKafka"",
+        ""broker"": {
+            ""address"": ""xxxx:9092"",
+            ""securityMode"": ""SaslSsl"",
+            ""sslPassword"": ""xxxx"",
+            ""saslMechanism"": ""ScramSha256"",
+            ""username"": ""xxxx"",
+            ""password"": ""xxxx"",
+            ""hasCertificate"": false
+        },
+        ""workspaceClassId"": ""Standard"",
+        ""storageClassId"": ""Standard"",
+        ""createdAt"": ""2023-07-07T14:02:00.932Z"",
+        ""brokerSettings"": {
+            ""brokerType"": ""ThisIsNew"",
+            ""syncTopics"": false
+        },
+        ""repositoryId"": ""xxxxxxxxxx"",
+        ""branch"": ""main"",
         ""environmentName"": ""Testing"",
         ""version"": 2,
         ""branchProtected"": false
