@@ -27,22 +27,20 @@ class TestAsyncProducer:
     async def test_producer_produce_blocking_failure_raises_error(
         self, producer_factory, topic_factory
     ):
-        topic_name, _ = await topic_factory()
-        extra_config = {
-            # Set impossible message timeout to simulate a failure
-            "linger.ms": 1.9,
-            "message.timeout.ms": 2,
-        }
-        value = b"1" * 1001
+        topic, _ = await topic_factory()
 
+        # Set "acks" to 1000 to simulate an error
+        extra_config = {
+            "retries": 1,
+            "acks": "1000",
+        }
         async with producer_factory(extra_config=extra_config) as producer:
+            coro = producer.produce(topic=topic, key="test", value=b"1", blocking=True)
             with pytest.raises(confluent_kafka.KafkaException) as raised:
-                await producer.produce(
-                    topic=topic_name, key="test", value=value, blocking=True
-                )
+                await coro
 
         kafka_err: confluent_kafka.KafkaError = raised.value.args[0]
-        assert kafka_err.code() == confluent_kafka.KafkaError._MSG_TIMED_OUT
+        assert kafka_err.code() == confluent_kafka.KafkaError.INVALID_REQUIRED_ACKS
 
     async def test_producer_produce_non_blocking_failure_no_error(
         self, producer_factory, topic_factory
