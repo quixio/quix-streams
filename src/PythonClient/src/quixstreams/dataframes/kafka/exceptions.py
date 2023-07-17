@@ -1,4 +1,4 @@
-from ...exceptions import QuixException
+from ..exceptions import QuixException
 
 
 class AsyncProducerNotStartedError(QuixException):
