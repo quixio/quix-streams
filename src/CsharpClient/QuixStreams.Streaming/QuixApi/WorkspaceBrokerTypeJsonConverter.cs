@@ -4,7 +4,7 @@ using QuixStreams.Streaming.QuixApi.Portal;
 
 namespace QuixStreams.Streaming.QuixApi
 {
-    public class WorkspaceBrokerTypeJsonConverter : JsonConverter
+    internal class WorkspaceBrokerTypeJsonConverter : JsonConverter
     {
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
