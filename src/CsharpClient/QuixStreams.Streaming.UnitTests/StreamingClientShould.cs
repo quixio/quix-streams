@@ -58,10 +58,9 @@ public class StreamingClientShould
     private string workspaces = @"
 [
     {
-        ""workspaceId"": ""confluent"",
-        ""name"": ""ConfluentCloud example"",
+        ""workspaceId"": ""confluent""
+        ,""name"": ""Confluent Kafka Workspace"",
         ""status"": ""Ready"",
-        ""brokerType"": ""ConfluentCloud"",
         ""broker"": {
             ""address"": ""xxxxx:9092"",
             ""securityMode"": ""SaslSsl"",
@@ -71,32 +70,18 @@ public class StreamingClientShould
             ""password"": ""xxxxx"",
             ""hasCertificate"": false
         },
-        ""workspaceClassId"": ""Standard"",
-        ""storageClassId"": ""Standard"",
-        ""createdAt"": ""2023-07-04T15:20:04.58Z"",
         ""brokerSettings"": {
             ""brokerType"": ""ConfluentCloud"",
             ""syncTopics"": false,
             ""confluentCloudSettings"": {
-                ""apiKey"": ""xxxxx"",
-                ""apiSecret"": ""xxxxx"",
-                ""clusterID"": ""xxxxx"",
-                ""bootstrapServer"": ""xxxxx:9092"",
-                ""restEndpoint"": ""xxxxx"",
                 ""clientID"": ""testclientid""
             }
-        },
-        ""repositoryId"": ""xxxxx"",
-        ""branch"": ""main"",
-        ""environmentName"": ""prod"",
-        ""version"": 2,
-        ""branchProtected"": true
+        }
     },
     {
         ""workspaceId"": ""quixdev"",
         ""name"": ""Shared Kafka Workspace"",
         ""status"": ""Ready"",
-        ""brokerType"": ""SharedKafka"",
         ""broker"": {
             ""address"": ""xxxx:9092"",
             ""securityMode"": ""SaslSsl"",
@@ -106,24 +91,14 @@ public class StreamingClientShould
             ""password"": ""xxxx"",
             ""hasCertificate"": false
         },
-        ""workspaceClassId"": ""Standard"",
-        ""storageClassId"": ""Standard"",
-        ""createdAt"": ""2023-07-07T14:02:00.932Z"",
         ""brokerSettings"": {
-            ""brokerType"": ""SharedKafka"",
-            ""syncTopics"": false
-        },
-        ""repositoryId"": ""xxxxxxxxxx"",
-        ""branch"": ""chris"",
-        ""environmentName"": ""Testing"",
-        ""version"": 2,
-        ""branchProtected"": false
+            ""brokerType"": ""SharedKafka""
+        }
     },
     {
         ""workspaceId"": ""different"",
         ""name"": ""Unknown Kafka Workspace"",
         ""status"": ""Ready"",
-        ""brokerType"": ""SharedKafka"",
         ""broker"": {
             ""address"": ""xxxx:9092"",
             ""securityMode"": ""SaslSsl"",
@@ -133,18 +108,9 @@ public class StreamingClientShould
             ""password"": ""xxxx"",
             ""hasCertificate"": false
         },
-        ""workspaceClassId"": ""Standard"",
-        ""storageClassId"": ""Standard"",
-        ""createdAt"": ""2023-07-07T14:02:00.932Z"",
         ""brokerSettings"": {
-            ""brokerType"": ""ThisIsNew"",
-            ""syncTopics"": false
-        },
-        ""repositoryId"": ""xxxxxxxxxx"",
-        ""branch"": ""main"",
-        ""environmentName"": ""Testing"",
-        ""version"": 2,
-        ""branchProtected"": false
+            ""brokerType"": ""ThisIsNew""
+        }
     }
 ]";
 
