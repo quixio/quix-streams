@@ -203,5 +203,41 @@ namespace QuixStreams.State.UnitTests
             StateValue value = state["key"];
             value.StringValue.Should().BeEquivalentTo("value");
         }
+        
+        [Fact]
+        public void Update_WithNullValue_ShouldNotBeInStorage()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new DictionaryState(storage);
+            state.Add("key", new StateValue(new byte[] {1,2,3}));
+            state.Flush();
+            storage.ContainsKey("key").Should().BeTrue();
+
+            // Act
+            state["key"] = new StateValue((byte[])null);
+            state.Flush();
+
+            // Assert
+            storage.ContainsKey("key").Should().BeFalse();
+        }
+        
+        [Fact]
+        public void Update_WithNull_ShouldNotBeInStorage()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new DictionaryState(storage);
+            state.Add("key", new StateValue(new byte[] {1,2,3}));
+            state.Flush();
+            storage.ContainsKey("key").Should().BeTrue();
+
+            // Act
+            state["key"] = null;
+            state.Flush();
+
+            // Assert
+            storage.ContainsKey("key").Should().BeFalse();
+        }
     }
 }

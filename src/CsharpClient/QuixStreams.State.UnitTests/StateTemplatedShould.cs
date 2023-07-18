@@ -451,6 +451,26 @@ public class StateTemplatedShould
             var value = state["key"];
             value.Should().BeEquivalentTo("value");
         }
+        
+        [Fact]
+        public void Add_WithNullValue_ShouldRemoveFromState()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new DictionaryState<object>(storage);
+            state.Add("key", "value");
+            state.Flush();
+            storage.ContainsKey("key").Should().BeTrue();
+
+            // Act
+            state["key"] = null;
+            state.Flush();
+
+            // Assert
+            var value = state["key"];
+            value.Should().BeNull();
+            storage.ContainsKey("key").Should().BeFalse();
+        }
 
         public class CustomClass : IEquatable<CustomClass>
         {
