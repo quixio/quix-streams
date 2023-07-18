@@ -20,6 +20,7 @@ namespace QuixStreams.State.UnitTests
             value.Type.Should().BeEquivalentTo(StateValue.StateType.Bool);
             value.BoolValue.Should().Be(true);
         }
+        
         [Fact]
         public void TestString()
         {
@@ -27,6 +28,17 @@ namespace QuixStreams.State.UnitTests
             value.Type.Should().BeEquivalentTo(StateValue.StateType.String);
             value.StringValue.Should().Be("TestStr312");
         }
+        
+        [Fact]
+        public void TestString_WithNull_ShouldReturnNull()
+        {
+            var value = new StateValue((string)null);
+            value.Type.Should().BeEquivalentTo(StateValue.StateType.String);
+            value.StringValue.Should().BeNull();
+            value.IsNull().Should().BeTrue();
+        }
+
+        
         [Fact]
         public void TestDouble()
         {
@@ -42,6 +54,28 @@ namespace QuixStreams.State.UnitTests
             var value = new StateValue(bytes);
             value.Type.Should().BeEquivalentTo(StateValue.StateType.Binary);
             value.BinaryValue.Should().BeEquivalentTo(bytes, options => options.WithStrictOrdering());
+        }
+        
+        [Fact]
+        public void TestBinary_WithNull_ShouldReturnNull()
+        {
+            var bytes = (byte[])null;
+
+            var value = new StateValue(bytes);
+            value.Type.Should().BeEquivalentTo(StateValue.StateType.Binary);
+            value.BinaryValue.Should().BeNull();
+            value.IsNull().Should().BeTrue();
+        }
+        
+        [Fact]
+        public void TestObject_WithValue_ShouldReturnValue()
+        {
+            var bytes = (byte[])null;
+
+            var value = new StateValue(bytes, StateValue.StateType.Object);
+            value.Type.Should().BeEquivalentTo(StateValue.StateType.Object);
+            value.BinaryValue.Should().BeNull();
+            value.IsNull().Should().BeTrue();
         }
 
 

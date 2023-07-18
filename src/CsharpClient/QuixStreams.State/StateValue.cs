@@ -189,12 +189,35 @@ namespace QuixStreams.State
             }
         }
 
-        public override int GetHashCode()
+        /// <summary>
+        /// Returns whether the State value is null or not if the allows
+        /// </summary>
+        /// <returns>True if null, false otherwise</returns>
+        public bool IsNull()
         {
-            switch (Type)
+            switch (this.Type)
             {
                 case StateType.Binary:
-                    return this.BinaryValue.GetHashCode();
+                    return this.BinaryValue == null;
+                case StateType.Long:
+                case StateType.Bool:
+                case StateType.Double:
+                    return false;
+                case StateType.String:
+                    return this.StringValue == null;
+                case StateType.Object:
+                    return this.BinaryValue == null;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        public override int GetHashCode()
+        {
+            switch (this.Type)
+            {
+                case StateType.Binary:
+                    return this.BinaryValue?.GetHashCode() ?? 0;
                 case StateType.Long:
                     return this.LongValue.GetHashCode();
                 case StateType.Bool:
@@ -202,9 +225,9 @@ namespace QuixStreams.State
                 case StateType.Double:
                     return this.DoubleValue.GetHashCode();
                 case StateType.String:
-                    return this.StringValue.GetHashCode();
+                    return this.StringValue?.GetHashCode() ?? 0;
                 case StateType.Object:
-                    return this.BinaryValue.GetHashCode();
+                    return this.BinaryValue?.GetHashCode() ?? 0;
                 default:
                     throw new ArgumentOutOfRangeException();
             }

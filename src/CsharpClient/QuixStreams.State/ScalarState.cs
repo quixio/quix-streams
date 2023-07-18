@@ -101,7 +101,7 @@ namespace QuixStreams.State
                 this.clearBeforeFlush = false;
             }
             
-            if (Value == null)
+            if (Value == null || Value.IsNull())
             {
                 this.lastFlushHash = default;
                 storage.Remove(StorageKey);

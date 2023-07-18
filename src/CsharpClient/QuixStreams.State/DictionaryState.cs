@@ -183,7 +183,9 @@ namespace QuixStreams.State
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
             inMemoryState.Add(key, value);
-            this.changes[key] = ChangeType.AddedOrUpdated;
+            this.changes[key] = value == null || value.IsNull() 
+                ? ChangeType.Removed
+                : ChangeType.AddedOrUpdated;
         }
 
         /// <summary>
@@ -237,7 +239,7 @@ namespace QuixStreams.State
             set
             {
                 if (!this.IsCaseSensitive) key = key.ToLower();
-                if (value == null) this.changes[key] = ChangeType.Removed;
+                if (value == null || value.IsNull()) this.changes[key] = ChangeType.Removed;
                 else this.changes[key] = ChangeType.AddedOrUpdated;
                 this.inMemoryState[key] = value;
             }
@@ -283,10 +285,19 @@ namespace QuixStreams.State
                 }
                 else
                 {
-                    var hash = inMemoryState[changeType.Key].GetHashCode();
-                    if (lastFlushHash.TryGetValue(changeType.Key, out var existingHash) && existingHash == hash) continue;
-                    this.lastFlushHash[changeType.Key] = hash;
-                    tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+                    var value = inMemoryState[changeType.Key];
+                    if (value == null || value.IsNull())
+                    {
+                        this.lastFlushHash.Remove(changeType.Key);
+                        tasks.Add(this.storage.RemoveAsync(changeType.Key));
+                    }
+                    else
+                    {
+                        var hash = value.GetHashCode();
+                        if (lastFlushHash.TryGetValue(changeType.Key, out var existingHash) && existingHash == hash) continue;
+                        this.lastFlushHash[changeType.Key] = hash;
+                        tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+                    }
                 }
             }
             
@@ -453,7 +464,9 @@ namespace QuixStreams.State
                         Formatting = Formatting.None
                     };
                     genericConverter = value => JsonConvert.DeserializeObject<T>(value.StringValue);
-                    stateValueConverter = value => new StateValue(JsonConvert.SerializeObject(value, options)); // must be evaluated lazily as internal references can change whenever
+                    stateValueConverter = value => value == null 
+                        ? new StateValue(null, StateValue.StateType.Object) 
+                        : new StateValue(JsonConvert.SerializeObject(value, options)); // must be evaluated lazily as internal references can change whenever
                     break;
                 case TypeCode.Boolean:
                     genericConverter = value => (T)(object)value.BoolValue;
@@ -602,7 +615,9 @@ namespace QuixStreams.State
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
             inMemoryCache.Add(key, value);
-            this.changes[key] = ChangeType.AddedOrUpdated;
+            this.changes[key] = value == null 
+                ? ChangeType.Removed
+                : ChangeType.AddedOrUpdated;
         }
 
         /// <inheritdoc/>
@@ -641,7 +656,9 @@ namespace QuixStreams.State
             set
             {
                 if (!this.IsCaseSensitive) key = key.ToLower();
-                this.changes[key] = ChangeType.AddedOrUpdated;
+                this.changes[key] = value == null
+                    ? ChangeType.Removed
+                    : ChangeType.AddedOrUpdated;
                 this.inMemoryCache[key] = value;
             }
         }
