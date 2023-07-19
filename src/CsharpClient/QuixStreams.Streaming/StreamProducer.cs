@@ -229,6 +229,8 @@ namespace QuixStreams.Streaming
             this.Events.Flush();
             
             this.WaitForLastSendTaskToFinish();
+            this.logger.LogTrace("Flushed stream {0}", this.StreamId);
+
         }        
 
         /// <inheritdoc />
