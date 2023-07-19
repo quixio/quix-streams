@@ -34,7 +34,16 @@ class TopicProducer(object):
         self._on_disposed_dispose()
 
     def dispose(self):
+        """
+        Flushes pending data to the broker and disposes underlying resources
+        """
         self._interop.Dispose()
+
+    def flush(self):
+        """
+        Flushes pending data to the broker
+        """
+        self._interop.Flush()
 
     # region on_disposed
     @property

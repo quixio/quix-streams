@@ -35,4 +35,13 @@ class RawTopicProducer(object):
         self._interop.Publish(message.get_net_pointer())
 
     def dispose(self):
+        """
+        Flushes pending messages and disposes underlying resources
+        """
         self._interop.Dispose()
+
+    def flush(self):
+        """
+        Flushes pending messages to the broker
+        """
+        self._interop.Flush()

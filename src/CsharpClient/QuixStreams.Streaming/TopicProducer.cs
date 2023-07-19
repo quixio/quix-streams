@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
+using Microsoft.Extensions.Logging;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Transport.Kafka;
 
@@ -10,10 +12,12 @@ namespace QuixStreams.Streaming
     /// </summary>
     public class TopicProducer : ITopicProducerInternal
     {
+        private readonly string topic;
         private readonly Func<string, TelemetryKafkaProducer> createKafkaProducer;
         private readonly ConcurrentDictionary<string, Lazy<IStreamProducer>> streams = new ConcurrentDictionary<string, Lazy<IStreamProducer>>();
         private readonly IKafkaProducer kafkaProducer;
-        
+        private readonly ILogger<TopicProducer> logger = Logging.CreateLogger<TopicProducer>();
+
         /// <inheritdoc />
         public event EventHandler OnDisposed;
         
@@ -31,6 +35,7 @@ namespace QuixStreams.Streaming
         /// </summary>
         public TopicProducer(KafkaProducerConfiguration config, string topic)
         {
+            this.topic = topic;
             this.kafkaProducer = KafkaHelper.OpenKafkaInput(config, topic, out var byteSplitter);
 
             createKafkaProducer = (string streamId) => new TelemetryKafkaProducer(this.kafkaProducer, byteSplitter, streamId);
@@ -91,11 +96,30 @@ namespace QuixStreams.Streaming
         {
             this.streams.TryRemove(streamId, out var stream);
         }
-
+        
         /// <inheritdoc />
+        public void Flush()
+        {
+            this.logger.LogTrace("Flushing topic {0}", topic);
+            var activeStreams = this.streams.ToList();
+            foreach (var stream in activeStreams)
+            {
+                this.logger.LogTrace("Flushing stream {0} for topic {1}", stream.Key, topic);
+                // All should be evaluated at this point, as lazy is mainly there to avoid creating new
+                // if already exists in a thread-safe manner, but if got added it'll be evaluated
+                stream.Value.Value.Flush(); 
+            }
+            this.kafkaProducer?.Flush(default);
+            this.logger.LogTrace("Flushed topic {0}", topic);
+
+        }
+
+        /// <summary>
+        /// Flushes pending data to the broker and disposes underlying resources
+        /// </summary>
         public void Dispose()
         {
-            this.kafkaProducer?.Flush(default);
+            this.Flush();
             this.kafkaProducer?.Dispose();
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }
