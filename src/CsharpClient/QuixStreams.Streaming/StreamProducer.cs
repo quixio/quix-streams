@@ -223,6 +223,7 @@ namespace QuixStreams.Streaming
 
         public void Flush()
         {
+            this.logger.LogTrace("Flushing stream {0}", this.StreamId);
             this.Properties.Flush();
             this.Timeseries.Flush();
             this.Events.Flush();

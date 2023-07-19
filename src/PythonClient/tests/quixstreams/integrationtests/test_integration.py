@@ -478,6 +478,38 @@ class TestTopicProducer(BaseIntegrationTest):
         # Assert
         assert topic_producer == callback_topic_disposed
 
+    def test_flush_stream_data_is_flushed(self,
+                                             test_name,
+                                             topic_consumer_earliest: qx.TopicConsumer,
+                                             topic_producer: qx.TopicProducer):
+        # Arrange
+        print(f'Starting Integration test "{test_name}"')
+
+        event = threading.Event()  # used to trigger evaluation
+
+        # Act
+        stream = topic_producer.create_stream()
+        def received_stream_handler(received_stream: qx.StreamConsumer):
+            if received_stream.stream_id != stream.stream_id:
+                print("Received another stream")
+                return
+
+            print("Received correct stream")
+
+            def raw_received_handler(stream, data):
+                event.set()
+
+            received_stream.timeseries.on_raw_received = raw_received_handler
+
+        topic_consumer_earliest.on_stream_received = received_stream_handler
+        topic_consumer_earliest.subscribe()
+
+        stream.timeseries.buffer.packet_size = 10000  # to test if gets flushed
+        stream.timeseries.buffer.add_timestamp_nanoseconds(100).add_value("some", "value").publish()
+
+        topic_producer.flush()
+        self.wait_for_result(event)
+
 
 class TestTopicConsumer(BaseIntegrationTest):
     def test_stream_open(self,
@@ -1652,6 +1684,73 @@ class TestRawData(BaseIntegrationTest):
         assert 'BrokerMessageTime' in keys
         assert 'KafkaMessageSize' in keys
 
+    def test_dispose_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
+        # Arrange
+        print(f'Starting Integration test "{test_name}"')
+
+        received_messages: List[qx.RawMessage] = []
+        event = threading.Event()  # used for assertion
+        counter = 0
+
+        def on_message_received_handler(topic: qx.RawTopicConsumer,
+                                        message: qx.RawMessage):
+            nonlocal received_messages, counter
+            received_messages.append(message)
+            counter = counter + 1
+            if counter == 3:
+                event.set()
+
+        raw_topic_consumer.on_message_received = on_message_received_handler
+        raw_topic_consumer.subscribe()
+
+        # Act
+        message_bytes = bytes("Test Quix Raw with bytes", "utf-8")
+        raw_topic_producer.publish(message_bytes)
+        message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
+        raw_topic_producer.publish(message_bytearray)
+        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        raw_topic_producer.publish(message_raw)
+
+        raw_topic_producer.dispose()
+
+        self.wait_for_result(event)
+
+        # Assert
+        assert len(received_messages) == 3
+
+    def test_dispose_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
+        # Arrange
+        print(f'Starting Integration test "{test_name}"')
+
+        received_messages: List[qx.RawMessage] = []
+        event = threading.Event()  # used for assertion
+        counter = 0
+
+        def on_message_received_handler(topic: qx.RawTopicConsumer,
+                                        message: qx.RawMessage):
+            nonlocal received_messages, counter
+            received_messages.append(message)
+            counter = counter + 1
+            if counter == 3:
+                event.set()
+
+        raw_topic_consumer.on_message_received = on_message_received_handler
+        raw_topic_consumer.subscribe()
+
+        # Act
+        message_bytes = bytes("Test Quix Raw with bytes", "utf-8")
+        raw_topic_producer.publish(message_bytes)
+        message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
+        raw_topic_producer.publish(message_bytearray)
+        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        raw_topic_producer.publish(message_raw)
+
+        raw_topic_producer.flush()
+
+        self.wait_for_result(event)
+
+        # Assert
+        assert len(received_messages) == 3
 
 class TestStreamState(BaseIntegrationTest):
     def test_stream_state_manager(self,
