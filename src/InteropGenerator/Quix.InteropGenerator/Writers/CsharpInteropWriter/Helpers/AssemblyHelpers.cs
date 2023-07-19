@@ -74,7 +74,17 @@ public class AssemblyHelpers
     /// <returns></returns>
     public static List<Type> GetPublicAssemblyTypes(Assembly assembly)
     {
-        return assembly.GetTypes().Where(y => (y.IsPublic || y.IsNestedPublic) && Utils.IsInteropSupported(y)).ToList();
+        return assembly.GetTypes().Where(y => (y.IsPublic || IsPublicNestedType(y)) && Utils.IsInteropSupported(y)).ToList();
+    }
+
+    private static bool IsPublicNestedType(Type type)
+    {
+        if (type == null) return false;
+        if (!type.IsNested) return false;
+        if (!type.IsNestedPublic) return false;
+        if (type.DeclaringType == null) return false;
+        if (!type.DeclaringType.IsPublic && !IsPublicNestedType(type.DeclaringType)) return false;
+        return true;
     }
 
     /// <summary>
