@@ -214,7 +214,7 @@ namespace QuixStreams.State.Storage.FileStorage
         public bool IsCaseSensitive => false;
         
         /// <inheritdoc/>
-        public IStateStorage GetOrCreateSubStorage(string subStorageName)
+        public IStateStorage GetOrCreateSubStorage(string subStorageName, string dbName = null)
         {
             return CreateNewStorageInstance(GetSubStoragePath(subStorageName));
         }
@@ -233,7 +233,7 @@ namespace QuixStreams.State.Storage.FileStorage
         protected abstract IStateStorage CreateNewStorageInstance(string path);
         
         /// <inheritdoc/>
-        public bool DeleteSubStorage(string subStorageName)
+        public bool DeleteSubStorage(string subStorageName, string dbName = null)
         {
             var subPath = GetSubStoragePath(subStorageName);
             if (!Directory.Exists(subPath)) return false;
@@ -314,5 +314,13 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <returns>IDisposable for disposing the lock</returns>
         protected abstract Task<IDisposable> LockInternalKey(string key, LockType type);
 
+        /// <inheritdoc/>
+        public void StartTransaction() => throw new NotSupportedException();
+        
+        /// <inheritdoc/>
+        public bool CommitTransaction() => throw new NotSupportedException();
+        
+        /// <inheritdoc/>
+        public bool CanPerformTransactions => false;
     }
 }

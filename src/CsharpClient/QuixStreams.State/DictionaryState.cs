@@ -75,6 +75,12 @@ namespace QuixStreams.State
             {
                 inMemoryState[key] = this.storage.Get(key);
             }
+
+            if (this.storage.CanPerformTransactions)
+            {
+                OnFlushing += (sender, args) => this.storage.StartTransaction();
+                OnFlushed += (sender, args) => this.storage.CommitTransaction();
+            }
         }
 
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
@@ -331,7 +337,7 @@ namespace QuixStreams.State
 
             Task.WaitAll(tasks);
 
-            // Assign result to inmemory
+            // Assign result to in-memory
             foreach (var task in tasks)
             {
                 var (key, value) = task.Result;

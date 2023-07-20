@@ -111,7 +111,7 @@ namespace QuixStreams.Streaming.States
                 {
                     this.logger.LogTrace("Creating Stream state manager for {0}", key);
                     return new StreamStateManager(this.topicConsumer, key,
-                        this.stateStorage.GetOrCreateSubStorage(GetSubStorageName(key)), this.loggerFactory,
+                        this.stateStorage.GetOrCreateSubStorage(GetSubStorageName(key), "TOPIC_PARTITION"), this.loggerFactory,
                         this.topicName + " ");
                 });
         }

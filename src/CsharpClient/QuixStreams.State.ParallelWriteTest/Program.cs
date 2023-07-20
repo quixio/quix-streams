@@ -13,9 +13,9 @@ namespace QuixStreams.State.ParallelWriteTest
         {
             Console.WriteLine("Parallel write test");
 
-            var storage = new LocalFileStorage();
+            var storage = new RocksDbStorage("./state/paraleltest", "harisdb");
             storage.Clear();
-
+            
             Random rnd = new Random();
             Byte[] data = new byte[] {0, 1, 2, 3};
             storage.Set("GLOBALKEY", data);

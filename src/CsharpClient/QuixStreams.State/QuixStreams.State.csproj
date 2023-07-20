@@ -36,6 +36,7 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
+		<PackageReference Include="RocksDB" Version="8.3.2.39829" />
 	</ItemGroup>
 
 </Project>

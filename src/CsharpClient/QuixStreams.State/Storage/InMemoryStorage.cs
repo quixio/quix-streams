@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +18,7 @@ namespace QuixStreams.State.Storage
 
         private readonly object subStateLock = new object();
         private readonly IDictionary<string, IStateStorage> subStates = new ConcurrentDictionary<string, IStateStorage>();
-
+        
         /// <inheritdoc/>
         public Task SaveRaw(string key, byte[] data)
         {
@@ -69,7 +70,7 @@ namespace QuixStreams.State.Storage
         public bool IsCaseSensitive => true;
 
         /// <inheritdoc/>
-        public IStateStorage GetOrCreateSubStorage(string subStorageName)
+        public IStateStorage GetOrCreateSubStorage(string subStorageName, string dbName = null)
         {
             if (this.subStates.TryGetValue(subStorageName, out var existing)) return existing;
             lock (this.subStateLock)
@@ -83,7 +84,7 @@ namespace QuixStreams.State.Storage
         }
 
         /// <inheritdoc/>
-        public bool DeleteSubStorage(string subStorageName)
+        public bool DeleteSubStorage(string subStorageName, string dbName = null)
         {
             return this.subStates.Remove(subStorageName);
         }
@@ -109,5 +110,14 @@ namespace QuixStreams.State.Storage
         {
             return this.subStates.Keys.ToArray();
         }
+        
+        /// <inheritdoc/>
+        public void StartTransaction() => throw new NotSupportedException();
+        
+        /// <inheritdoc/>
+        public bool CommitTransaction() => throw new NotSupportedException();
+        
+        /// <inheritdoc/>
+        public bool CanPerformTransactions => false;
     }
 }
