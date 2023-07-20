@@ -90,6 +90,9 @@ public class MethodWriter : BaseWriter
                 }
                 else delayedWriter.Write($"InteropUtils.LogDebug($\"Arg {argName.Key} ({argName.Value}) has value: {{{argName.Key}}}\");");   
             }
+        }, (w) =>
+        {
+            writer.Write($"InteropUtils.LogDebug($\"Invoked entrypoint {this.methodWrittenDetails.EntryPoint}\");");    
         });
 
         var paramNames = new Dictionary<string, string>();
@@ -643,6 +646,7 @@ public class MethodWriter : BaseWriter
                         invocationSb.Append(");");
                         if (hasReturn) invocationSb.Insert(0, "var result = ");
                         writer.Write(invocationSb.ToString());
+                        writer.Write($"InteropUtils.LogDebug($\"Invoked handler {{(IntPtr){sourceName}}} for {this.methodWrittenDetails.EntryPoint}\");");
                         if (hasReturn)
                         {
                             var result = WriteTypeConversion(writer, preFunctionWriter, type, false, "result");

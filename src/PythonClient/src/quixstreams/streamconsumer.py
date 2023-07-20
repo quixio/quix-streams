@@ -46,7 +46,11 @@ class StreamConsumer(object):
 
         # define events and their ref holder
         self._on_stream_closed = None
+        self._on_stream_closed_internal = on_close_cb_always
         self._on_stream_closed_ref = None  # keeping reference to avoid GC
+        if self._on_stream_closed_internal is not None:
+            self.on_stream_closed = None  # this will trigger subscription of wrapper
+
 
         self._on_package_received = None
         self._on_package_received_ref = None  # keeping reference to avoid GC
@@ -54,22 +58,6 @@ class StreamConsumer(object):
         self._streamId = None
 
         self._stream_state_manager = None
-
-        if on_close_cb_always is not None:
-            def _on_close_cb_always_wrapper(sender_hptr, args_hptr):
-                try:
-                    # To avoid unnecessary overhead and complication, we're using the instances we already have
-                    with (args := StreamClosedEventArgs(args_hptr)):
-                        on_close_cb_always(self)
-
-                    refcount = sys.getrefcount(self)
-                    if refcount == -1:  # TODO figure out correct number
-                        self.dispose()
-                    InteropUtils.free_hptr(sender_hptr)
-                except:
-                    traceback.print_exc()
-
-            self._on_close_cb_always_ref = self._interop.add_OnStreamClosed(_on_close_cb_always_wrapper)
 
     def _finalizerfunc(self):
         if self._streamTimeseriesConsumer is not None:
@@ -115,20 +103,29 @@ class StreamConsumer(object):
                 The first parameter is the stream that closes, and the second is the close type.
         """
         self._on_stream_closed = value
-        if self._on_stream_closed_ref is None:
-            self._on_stream_closed_ref = self._interop.add_OnStreamClosed(self._on_stream_closed_wrapper)
+
+        self._on_stream_closed_dispose()
+
+        if self._on_stream_closed is None and self._on_stream_closed_internal is None:
+            return # there is nothing to subscribe for
+
+        self._on_stream_closed_ref = self._interop.add_OnStreamClosed(self._on_stream_closed_wrapper)
 
     def _on_stream_closed_wrapper(self, sender_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
         try:
             with (args := StreamClosedEventArgs(args_hptr)):
                 converted = ec.enum_to_another(args.get_EndType(), StreamEndType)
-                self.on_stream_closed(self, converted)
+
+                if self.on_stream_closed is not None:
+                    self._on_stream_closed(self, converted)
+
+                if self._on_stream_closed_internal is not None:
+                    self._on_stream_closed_internal(self)
+
             InteropUtils.free_hptr(sender_hptr)
         except:
             traceback.print_exc()
-        finally:
-            self.dispose()
 
     def _on_stream_closed_dispose(self):
         if self._on_stream_closed_ref is not None:
