@@ -18,9 +18,23 @@ namespace QuixStreams.State.UnitTests
             this.dbDirectory = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}");
             storage = new RocksDbStorage(dbDirectory, "test");
         }
-
+        
         [Fact]
-        public async Task SaveAndLoadRaw_WithSameDbNameButDifferentStorages_SeparatesDataForEachStorage()
+        public async Task SaveAndLoadRaw_SavesAndLoadsData()
+        {
+            // Arrange
+            var testData = new byte[] { 1, 2, 3 };
+
+            // Act
+            await storage.SaveRaw("key", testData);
+            var data = await storage.LoadRaw("key");
+
+            // Assert
+            data.Should().BeEquivalentTo(testData);
+        }
+        
+        [Fact]
+        public async Task SaveAndLoadRaw_WithSubStoragesSharingDb_SeparatesDataOfSubStorages()
         {
             // Arrange
             var testData1 = new byte[] { 1, 1, 1 };
@@ -39,20 +53,6 @@ namespace QuixStreams.State.UnitTests
             data1.Should().BeEquivalentTo(testData1);
             data2.Should().BeEquivalentTo(testData2);
         }
-
-        [Fact]
-        public async Task SaveAndLoadRaw_SavesAndLoadsData()
-        {
-            // Arrange
-            var testData = new byte[] { 1, 2, 3 };
-
-            // Act
-            await storage.SaveRaw("key", testData);
-            var data = await storage.LoadRaw("key");
-
-            // Assert
-            data.Should().BeEquivalentTo(testData);
-        }
         
         [Fact]
         public async Task ContainsKeyAsync_ReturnsTrueWhenKeyExists()
@@ -67,7 +67,7 @@ namespace QuixStreams.State.UnitTests
             // Assert
             containsKey.Should().BeTrue();
         }
-
+        
         [Fact]
         public async Task ContainsKeyAsync_ReturnsFalseWhenKeyDoesNotExist()
         {
@@ -78,6 +78,23 @@ namespace QuixStreams.State.UnitTests
             containsKey.Should().BeFalse();
         }
 
+        [Fact]
+        public async Task ContainsAsync_WithSubStoragesSharingDb_ReturnsIfKeyExistsFromCorrectSubStorage()
+        {
+            // Arrange
+            var subStorage1 = storage.GetOrCreateSubStorage("subStorage1");
+            var subStorage2 = storage.GetOrCreateSubStorage("subStorage2");
+
+            // Act
+            await subStorage1.SaveRaw("key", new byte[] { 1, 1, 1 });
+            var containsResult1 = await subStorage1.ContainsKeyAsync("key");
+            var containsResult2 = await subStorage2.ContainsKeyAsync("key");
+
+            // Assert
+            containsResult1.Should().BeTrue();
+            containsResult2.Should().BeFalse();
+        }
+        
         [Fact]
         public async Task RemoveAsync_RemovesKey()
         {
@@ -94,6 +111,33 @@ namespace QuixStreams.State.UnitTests
         }
 
         [Fact]
+        public async Task RemoveAsync_WithSubStoragesSharingDb_RemovesKeyFromCorrectSubStorage()
+        {
+            // Arrange
+            var testData = new byte[] { 1, 2, 3 };
+            var subStorage1 = storage.GetOrCreateSubStorage("subStorage1");
+            var subStorage2 = storage.GetOrCreateSubStorage("subStorage2");
+            var subStorage3 = storage.GetOrCreateSubStorage("subStorage3");
+
+            // Act
+            await subStorage1.SaveRaw("key", testData);
+            await subStorage2.SaveRaw("key", testData);
+            await subStorage3.SaveRaw("key", testData);
+            
+            await subStorage2.RemoveAsync("key");
+            
+
+            // Assert
+            var data1 = await subStorage1.LoadRaw("key");
+            var data2 = await subStorage2.LoadRaw("key");
+            var data3 = await subStorage3.LoadRaw("key");
+
+            data1.Should().BeEquivalentTo(testData);
+            data2.Should().BeNull();
+            data3.Should().BeEquivalentTo(testData);
+        }
+        
+        [Fact]
         public async Task GetAllKeysAsync_GetsAllKeys()
         {
             // Arrange
@@ -108,6 +152,24 @@ namespace QuixStreams.State.UnitTests
         }
 
         [Fact]
+        public async Task GetAllKeysAsync_WithSubStoragesSharingDb_GetsAllKeysFromCorrectSubStorage()
+        {
+            // Arrange
+            var subStorage1 = storage.GetOrCreateSubStorage("subStorage1");
+            var subStorage2 = storage.GetOrCreateSubStorage("subStorage2");
+            
+            // Act
+            await subStorage1.SaveRaw("key1", new byte[] { 1, 2, 3 });
+            await subStorage2.SaveRaw("key1", new byte[] { 4, 5, 6 });
+            await subStorage2.SaveRaw("key2", new byte[] { 7, 8, 9 });
+
+            var keys = await subStorage2.GetAllKeysAsync();
+            
+            // Assert
+            keys.Should().Contain(new[] { "key1", "key2" });
+        }
+        
+        [Fact]
         public async Task ClearAsync_RemovesAllData()
         {
             // Arrange
@@ -115,14 +177,31 @@ namespace QuixStreams.State.UnitTests
             await storage.SaveRaw("key2", new byte[] { 4, 5, 6 });
 
             // Act
-            var keys = await storage.GetAllKeysAsync();
             await storage.ClearAsync();
-            keys = await storage.GetAllKeysAsync();
+            var keys = await storage.GetAllKeysAsync();
 
             // Assert
             keys.Should().BeEmpty();
         }
 
+        [Fact]
+        public async Task ClearAsync_WithSubStoragesSharingDb_RemovesAllDataForCorrectSubStorage()
+        {
+            // Arrange
+            var subStorage1 = storage.GetOrCreateSubStorage("subStorage1");
+            var subStorage2 = storage.GetOrCreateSubStorage("subStorage2");
+            
+            // Act
+            await subStorage1.SaveRaw("key1", new byte[] { 1, 2, 3 });
+            await subStorage2.SaveRaw("key2", new byte[] { 4, 5, 6 });
+            
+            await subStorage1.ClearAsync();
+            var keys = await subStorage1.GetAllKeysAsync();
+            
+            // Assert
+            keys.Should().BeEmpty();
+        }
+        
         [Fact]
         public async Task Count_ReturnsCorrectNumberOfKeys()
         {
