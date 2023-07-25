@@ -4,6 +4,7 @@ using QuixStreams.State.Storage;
 using System.Threading.Tasks;
 using System;
 using System.IO;
+using RocksDbSharp;
 
 namespace QuixStreams.State.UnitTests
 {
@@ -217,7 +218,7 @@ namespace QuixStreams.State.UnitTests
         }
 
         [Fact]
-        public async Task GetOrCreateSubStorage_CreatesNewSubStorage()
+        public void GetOrCreateSubStorage_CreatesNewSubStorage()
         {
             // Act
             var subStorage = storage.GetOrCreateSubStorage("subStorage1");
@@ -227,21 +228,56 @@ namespace QuixStreams.State.UnitTests
         }
         
         [Fact]
-        public async Task GetOrCreateSubStorage_GetsTheExistingIfExists()
+        public void GetOrCreateSubStorage_DoesntCreateNewIfAlreadyExists()
         {
             // Act
             storage.GetOrCreateSubStorage("subStorage1");
+            storage.GetOrCreateSubStorage("subStorage2");
             storage.GetOrCreateSubStorage("subStorage1");
 
-            // Act
-            var subStorages = storage.GetSubStorages();
+            // Assert
+            storage.GetSubStorages().Should().HaveCount(2);
+        }
+        
+        [Fact]
+        public void GetOrCreateSubStorage_CreatesNewSubStorageWhenAllDeleted()
+        {
+            // Arrange
+            storage.GetOrCreateSubStorage("subStorage1");
+            storage.GetOrCreateSubStorage("subStorage2");
+            storage.GetOrCreateSubStorage("subStorage1");
+                        
+            // Deleting and re-creating them
+            storage.DeleteSubStorages();
+            storage.GetSubStorages().Should().BeEmpty();
+            
+            storage.GetOrCreateSubStorage("subStorage1");
+            storage.GetOrCreateSubStorage("subStorage2");
+            storage.GetOrCreateSubStorage("subStorage1");
             
             // Assert
-            subStorages.Should().HaveCount(2);
+            storage.GetSubStorages().Should().HaveCount(2);
+        }
+        
+        [Fact]
+        public void GetOrCreateSubStorage_CreatesNewIfPreviouslyDeleted()
+        {
+            // Arrange
+            storage.GetOrCreateSubStorage("subStorage1");
+            storage.GetOrCreateSubStorage("subStorage2");
+
+            // Act
+            storage.DeleteSubStorage("subStorage1");
+            storage.GetSubStorages().Should().ContainSingle();
+            
+            storage.GetOrCreateSubStorage("subStorage1");
+            
+            // Assert
+            storage.GetSubStorages().Should().HaveCount(2);
         }
 
         [Fact]
-        public async Task DeleteSubStorage_DeletesExistingSubStorage()
+        public void DeleteSubStorage_DeletesExistingSubStorage()
         {
             // Arrange
             var subStorageName = "subStorage2";
@@ -255,7 +291,7 @@ namespace QuixStreams.State.UnitTests
         }
 
         [Fact]
-        public async Task DeleteSubStorages_DeletesAllSubStorages()
+        public void DeleteSubStorages_DeletesAllSubStorages()
         {
             // Arrange
             storage.GetOrCreateSubStorage("subStorage3");
@@ -269,7 +305,7 @@ namespace QuixStreams.State.UnitTests
         }
 
         [Fact]
-        public async Task GetSubStorages_ReturnsAllSubStorages()
+        public void GetSubStorages_ReturnsAllSubStorages()
         {
             // Arrange
             var subStorage1 = "subStorage5";
@@ -374,13 +410,15 @@ namespace QuixStreams.State.UnitTests
         }
 
         [Fact]
-        public void Constructor_ThrowsException_WhenStorageNameIsNull()
+        public void Constructor_ThrowsException_WhenStorageNameIsNullOrDefault()
         {
             // Act
             Func<RocksDbStorage> act = () => new RocksDbStorage("testDir", null);
+            Func<RocksDbStorage> act2 = () => new RocksDbStorage("testDir", ColumnFamilies.DefaultName);
 
             // Assert
             act.Should().Throw<ArgumentException>();
+            act2.Should().Throw<ArgumentException>();
         }
 
         public void Dispose()

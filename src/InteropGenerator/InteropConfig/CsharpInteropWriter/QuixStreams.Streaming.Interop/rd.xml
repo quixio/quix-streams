@@ -13,6 +13,7 @@
             <Type Name="QuixStreams.State.Storage.IStateStorage" Dynamic="Required All" />
             <Type Name="QuixStreams.State.Storage.StorageExtensions" Dynamic="Required All" />
             <Type Name="QuixStreams.State.Storage.InMemoryStorage" Dynamic="Required All" />
+            <Type Name="QuixStreams.State.Storage.RocksDbStorage" Dynamic="Required All" />
             <Type Name="QuixStreams.State.Storage.FileStorage.LocalFileStorage.LocalFileStorage" Dynamic="Required All" />
             <Type Name="QuixStreams.State.StateValue" Dynamic="Required All" />
             <Type Name="QuixStreams.State.StateValue+StateType" Dynamic="Required All" />
