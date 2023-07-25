@@ -23,6 +23,9 @@ public class InteropUtils
     public static bool DebugMode = false;
     private static Lazy<StreamWriter> debuglogs = new Lazy<StreamWriter>(() => File.AppendText($"./debuglogs_{(DateTime.Now.ToString("yyyy-MM-dd_HH_mm_ss"))}.txt"));
     private static object debugLogsLock = new object();
+    private static int debugLogIndent = 0;
+    private const int indentSize = 2;
+
 
     public static void LogDebug(string format, params object[] @params)
     {
@@ -31,9 +34,27 @@ public class InteropUtils
         // in order to not have potential for incorrect log write
         lock (debugLogsLock)
         {
+            if (debugLogIndent > 0) debuglogs.Value.Write(new string(' ', debugLogIndent));
             debuglogs.Value.WriteLine(string.Format(format, @params));
 
             debuglogs.Value.Flush();
+        }
+    }
+    
+    public static void LogDebugIndentIncr()
+    {
+        if (!DebugMode) return;
+        lock (debugLogsLock)
+        {
+            debugLogIndent += indentSize;
+        }
+    }
+    public static void LogDebugIndentDecr()
+    {
+        if (!DebugMode) return;
+        lock (debugLogsLock)
+        {
+            debugLogIndent = Math.Max(0, debugLogIndent-indentSize);
         }
     }
     
@@ -358,6 +379,18 @@ public class InteropUtils
         if (messagePtr == IntPtr.Zero) return;
         var message = InteropUtils.PtrToStringUTF8(messagePtr);
         InteropUtils.LogDebug(message);
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "interoputils_log_debug_indentincr")]
+    public static void LogDebugIndentIncrInterop()
+    {
+        LogDebugIndentIncr();
+    }
+    
+    [UnmanagedCallersOnly(EntryPoint = "interoputils_log_debug_indentdecr")]
+    public static void LogDebugIndentDecrInterop()
+    {
+        LogDebugIndentIncr();
     }
     
     

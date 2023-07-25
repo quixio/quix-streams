@@ -79,6 +79,7 @@ public class MethodWriter : BaseWriter
     {
         using var iw = new IndentWriter<DelayedWriter>(writer);
         writer.Write($"InteropUtils.LogDebug($\"Invoking entrypoint {this.methodWrittenDetails.EntryPoint}\");");
+        writer.Write($"InteropUtils.LogDebugIndentIncr();");
         using var ehw = new ExceptionHandlerWriter<DelayedWriter>(writer, this.methodWrittenDetails.ReturnType != typeof(void), delayedWriter =>
         {
             delayedWriter.Write($"InteropUtils.LogDebug(\"Exception in {this.methodWrittenDetails.EntryPoint}\");");
@@ -92,6 +93,7 @@ public class MethodWriter : BaseWriter
             }
         }, (w) =>
         {
+            writer.Write($"InteropUtils.LogDebugIndentDecr();");
             writer.Write($"InteropUtils.LogDebug($\"Invoked entrypoint {this.methodWrittenDetails.EntryPoint}\");");    
         });
 

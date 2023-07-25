@@ -36,6 +36,12 @@ class InteropUtils(object):
 
         interoputils_log_debug = getattr(lib, "interoputils_log_debug")
         interoputils_log_debug.argtypes = [c_void_p]
+        
+        interoputils_log_debug_indentincr = getattr(lib, "interoputils_log_debug_indentincr")
+        interoputils_log_debug.argtypes = []
+        
+        interoputils_log_debug_indentdecr = getattr(lib, "interoputils_log_debug_indentdecr")
+        interoputils_log_debug.argtypes = []
 
         interoputils_alloc_uptr = getattr(lib, "interoputils_alloc_uptr")
         interoputils_alloc_uptr.argtypes = [ctypes.c_int32]
@@ -170,6 +176,28 @@ class InteropUtils(object):
         message_ptr = InteropUtils.utf8_to_ptr(message)
 
         InteropUtils.invoke("interoputils_log_debug", message_ptr)
+        
+    @staticmethod
+    def log_debug_indent_increment():
+        """
+        Increments the indent for log messages
+        """
+
+        if not InteropUtils.DebugEnabled:
+            return
+
+        InteropUtils.invoke("interoputils_log_debug_indentincr")
+           
+    @staticmethod
+    def log_debug_indent_decrement():
+        """
+        Decrements the indent for log messages
+        """
+
+        if not InteropUtils.DebugEnabled:
+            return
+
+        InteropUtils.invoke("interoputils_log_debug_indentdecr")
 
     @staticmethod
     def enable_debug():
