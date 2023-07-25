@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using RocksDbSharp;
@@ -16,23 +15,32 @@ namespace QuixStreams.State.Storage
         private readonly RocksDb db;
         private readonly string dbDirectory;
         private ColumnFamilyHandle columnFamily = null;
-        private readonly string storageName;
+        private readonly string storageName; //column family name
         
         private readonly WriteBatch writeBatch = new WriteBatch();
         private bool useWriteBatch = false;
         
+        /// <summary>
+        /// Holds references of RocksDb instances for sub-storages to ensure only one exists and avoid IO lock issue.
+        /// Key is the sub-storage name and value is the RocksDb instance.
+        /// </summary>
         private readonly Dictionary<string, RocksDbStorage> subStorages = new Dictionary<string, RocksDbStorage>();
-
+        
         /// <summary>
         /// Instantiates a new instance of <see cref="RocksDbStorage"/>
         /// </summary>
         /// <param name="dbDirectory">The directory for storing the states</param>
-        /// <param name="storageName">Name of the storage</param>
-        public RocksDbStorage(string dbDirectory, string storageName)
+        /// <param name="storageName">Name of the storage. Used to separate data if other storages use the same database</param>
+        public RocksDbStorage(string dbDirectory, string storageName = "default-storage")
         {
             if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(storageName))
             {
                 throw new ArgumentException("dbDirectory and storageName cannot be null or empty");
+            }
+
+            if (storageName == ColumnFamilies.DefaultName)
+            {
+                throw new ArgumentException($"storageName cannot be '{ColumnFamilies.DefaultName}' as it is reserved by rocksdb");
             }
             
             if (!Directory.Exists(dbDirectory))
@@ -173,15 +181,15 @@ namespace QuixStreams.State.Storage
             {
                 subStorage = new RocksDbStorage(GetSubDatabasePath(dbName), subStorageName);
             }
-            
-            subStorage.Clear();
-            
+
+            subStorage.db.DropColumnFamily(subStorage.storageName);
             if (IsDatabaseEmpty(subStorage))
             {
                 Directory.Delete(subStorage.dbDirectory, true);
             }
             
             subStorage.Dispose();
+            subStorages.Remove(subStorageName);
             return true;
         }
 
@@ -189,11 +197,17 @@ namespace QuixStreams.State.Storage
         public int DeleteSubStorages()
         {
             var deleted = 0;
-            foreach (var dbDirectory in Directory.EnumerateDirectories(this.dbDirectory))
+            foreach (var subDbDirectory in Directory.EnumerateDirectories(this.dbDirectory))
             {
-                Directory.Delete(dbDirectory, true);
+                Directory.Delete(subDbDirectory, true);
                 deleted++;
             }
+
+            foreach (var subStorage in subStorages.Values)
+            {
+                subStorage.Dispose();
+            }
+            subStorages.Clear();
             return deleted;
         }
 
@@ -202,12 +216,14 @@ namespace QuixStreams.State.Storage
         {
             var storageNames = new List<string>();
             
-            foreach (var dbName in Directory.EnumerateDirectories(this.dbDirectory).Select(Path.GetFileName))
+            foreach (var subDbDirectory in Directory.EnumerateDirectories(this.dbDirectory))
             {
-                RocksDb.TryListColumnFamilies(new DbOptions(), GetSubDatabasePath(dbName), out var columnFamiliesNames);
+                RocksDb.TryListColumnFamilies(new DbOptions(),  subDbDirectory, out var columnFamiliesNames);
                 storageNames.AddRange(columnFamiliesNames ?? Array.Empty<string>());
             }
-
+            
+            storageNames.RemoveAll(x => x == ColumnFamilies.DefaultName);
+            
             return storageNames;
         }
 
@@ -223,13 +239,17 @@ namespace QuixStreams.State.Storage
             try
             {
                 db.Write(writeBatch);
-                writeBatch.Clear();
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return false;
             }
-
+            finally
+            {
+                writeBatch.Clear();
+                useWriteBatch = false;
+            }
+            
             return true;
         }
         

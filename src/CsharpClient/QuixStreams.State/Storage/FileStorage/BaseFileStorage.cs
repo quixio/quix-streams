@@ -25,7 +25,7 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <param name="autoCreateDir">Create the directory if it doesn't exist</param>
         protected BaseFileStorage(string storageDirectory = null, bool autoCreateDir = true)
         {
-            this.storageDirectory = storageDirectory != null ? storageDirectory : DefaultDir;
+            this.storageDirectory = storageDirectory ?? DefaultDir;
 
             if (autoCreateDir)
             {
@@ -47,7 +47,7 @@ namespace QuixStreams.State.Storage.FileStorage
             Reader,
 
             /// <summary>
-            /// Locl for write operations
+            /// Lock for write operations
             /// </summary>
             Writer
         }

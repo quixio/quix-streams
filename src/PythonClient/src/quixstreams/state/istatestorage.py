@@ -140,6 +140,28 @@ class IStateStorage(object):
         """
         se.Clear(self._pointer)
 
+    @property
+    def can_perform_transactions(self) -> bool:
+        """
+        Returns whether the transactions are supported
+        """
+        return self._interop.get_CanPerformTransactions()
+
+    def start_transaction(self):
+        """
+        Starts a transaction.
+        """
+        return self._interop.StartTransaction()
+
+    def commit_transaction(self) -> bool:
+        """
+        Commits a transaction.
+
+        Returns:
+            bool: Whether the transaction is successfully committed
+        """
+        return self._interop.CommitTransaction()
+
     # endregion
 
     def get_net_pointer(self) -> ctypes.c_void_p:
