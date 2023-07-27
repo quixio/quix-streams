@@ -34,6 +34,7 @@ public class InteropUtils
         // in order to not have potential for incorrect log write
         lock (debugLogsLock)
         {
+            debuglogs.Value.Write("[" + DateTime.Now.ToString("YY-MM-dd HH:mm:ss.fff") + "]  ");
             if (debugLogIndent > 0) debuglogs.Value.Write(new string(' ', debugLogIndent));
             debuglogs.Value.WriteLine(string.Format(format, @params));
 
@@ -390,7 +391,7 @@ public class InteropUtils
     [UnmanagedCallersOnly(EntryPoint = "interoputils_log_debug_indentdecr")]
     public static void LogDebugIndentDecrInterop()
     {
-        LogDebugIndentIncr();
+        LogDebugIndentDecr();
     }
     
     
