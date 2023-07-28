@@ -17,6 +17,7 @@ namespace QuixStreams.Streaming
         private readonly ConcurrentDictionary<string, Lazy<IStreamProducer>> streams = new ConcurrentDictionary<string, Lazy<IStreamProducer>>();
         private readonly IKafkaProducer kafkaProducer;
         private readonly ILogger<TopicProducer> logger = Logging.CreateLogger<TopicProducer>();
+        private bool disposed = false;
 
         /// <inheritdoc />
         public event EventHandler OnDisposed;
@@ -119,6 +120,8 @@ namespace QuixStreams.Streaming
         /// </summary>
         public void Dispose()
         {
+            if (disposed) return;
+            disposed = true;
             this.Flush();
             this.kafkaProducer?.Dispose();
             this.OnDisposed?.Invoke(this, EventArgs.Empty);

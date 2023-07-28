@@ -32,7 +32,7 @@ public class LogParser
             if (splitIndex > -1)
             {
                 var timePart = line.Substring(0, splitIndex + 1);
-                var linePart = line.Substring(splitIndex + timeSplitText.Length);
+                var linePart = line.Substring(splitIndex + timeSplitText.Length).TrimStart();
                 line = linePart;
             }
             foreach (var parserPair in parsers)

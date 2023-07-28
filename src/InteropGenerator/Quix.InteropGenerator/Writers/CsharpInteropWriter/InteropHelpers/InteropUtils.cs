@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 // leave it as InteropHelpers.Interop.
 namespace InteropHelpers.Interop;
@@ -34,7 +35,8 @@ public class InteropUtils
         // in order to not have potential for incorrect log write
         lock (debugLogsLock)
         {
-            debuglogs.Value.Write("[" + DateTime.Now.ToString("YYYY-MM-dd HH:mm:ss.fff") + "]  ");
+            int threadId = Thread.CurrentThread.ManagedThreadId;
+            debuglogs.Value.Write($"[{DateTime.Now:yy-MM-dd HH:mm:ss.fff}][{threadId}]  ");
             if (debugLogIndent > 0) debuglogs.Value.Write(new string(' ', debugLogIndent));
             debuglogs.Value.WriteLine(string.Format(format, @params));
 

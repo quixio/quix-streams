@@ -317,9 +317,15 @@ public class MethodWriter : BaseWriter
         // Write the conversion from the handler to pointer that we can use to unsubscribe with
         var del = this.parameterInfos.First();
         var convertedName = paramNames[del.Name];
-        this.returnType = typeof(IntPtr);
+        ReplaceReturnType(typeof(IntPtr));
         var resultName = convertedName + "Ptr";
         writer.Write($"var {resultName} = InteropUtils.ToHPtr({convertedName});");
+        
+        
+        var handlerTypeAsText = typeWriter.LookupTypeAsText(paramTypes[this.parameterInfos[0].Name]);
+        writer.Write($"InteropUtils.LogDebug($\"Added handler type \\\"{handlerTypeAsText}\\\" with ptr value {{{resultName}}}.\");");
+
+        
         writer.Write($"return {resultName};");
     }
 
@@ -339,6 +345,9 @@ public class MethodWriter : BaseWriter
         WriteArgumentConversion(writer, voidWriter, out paramNames, out paramTypes, out instanceArgName);
 
         writer.Write(handlerConversionText);
+        
+        writer.Write($"InteropUtils.LogDebug($\"Removing handler type \\\"{handlerTypeAsText}\\\" with ptr value {{{valParam.Name}}}.\");");
+
         
         var sb = new StringBuilder();
         // Write the actual subscription
@@ -479,6 +488,12 @@ public class MethodWriter : BaseWriter
             this.methodParameterOrder[ii] = replacedParameterInfo;
             break;
         }
+    }
+
+    private void ReplaceReturnType(Type type)
+    {
+        this.returnType = type;
+        this.methodWrittenDetails.ReturnType = type;
     }
 
     private string WriteDefaultValue(DelayedWriter writer, ParameterInfo parameterInfo, string variableName)

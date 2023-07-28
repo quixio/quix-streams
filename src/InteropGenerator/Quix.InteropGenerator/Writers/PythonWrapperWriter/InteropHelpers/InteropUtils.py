@@ -1,10 +1,13 @@
 import ctypes
+import inspect
 import threading
 from ctypes import c_void_p
 import os
 import sysconfig
 from typing import Callable
 
+import traceback
+import sys
 
 class InteropException(Exception):
 
@@ -16,6 +19,7 @@ class InteropException(Exception):
 
 
 class InteropUtils(object):
+
     DebugEnabled = False
 
     lib = None
@@ -24,6 +28,7 @@ class InteropUtils(object):
     __last_exception = None
     __interop_exception_handler_ref = None
     __exception_handler = None
+    __logged_ptrs = []
 
     @staticmethod
     def set_lib(lib, with_debug_enabled=False):
@@ -36,10 +41,10 @@ class InteropUtils(object):
 
         interoputils_log_debug = getattr(lib, "interoputils_log_debug")
         interoputils_log_debug.argtypes = [c_void_p]
-        
+
         interoputils_log_debug_indentincr = getattr(lib, "interoputils_log_debug_indentincr")
         interoputils_log_debug.argtypes = []
-        
+
         interoputils_log_debug_indentdecr = getattr(lib, "interoputils_log_debug_indentdecr")
         interoputils_log_debug.argtypes = []
 
@@ -144,7 +149,7 @@ class InteropUtils(object):
     def __set_exception_callback(callback: Callable[[InteropException], None]):
         """
         Sets the exception handler for the library
-        
+
         callback: Callable[[InteropException], None]
             The callback which takes InteropException and returns nothing
         """
@@ -165,7 +170,7 @@ class InteropUtils(object):
     def log_debug(message: str):
         """
         Logs debug message if debugging is enabled
-        
+
         message: str
             The message to log
         """
@@ -176,7 +181,7 @@ class InteropUtils(object):
         message_ptr = InteropUtils.utf8_to_ptr(message)
 
         InteropUtils.invoke("interoputils_log_debug", message_ptr)
-        
+
     @staticmethod
     def log_debug_indent_increment():
         """
@@ -187,7 +192,7 @@ class InteropUtils(object):
             return
 
         InteropUtils.invoke("interoputils_log_debug_indentincr")
-           
+
     @staticmethod
     def log_debug_indent_decrement():
         """
@@ -268,8 +273,26 @@ class InteropUtils(object):
         hptr: c_void_p
             Pointer to .Net GC Handle
         """
+        if InteropUtils.DebugEnabled and hptr in InteropUtils.__logged_ptrs:
+            stack_trace = inspect.stack()
+
+            # Format the stack trace into a readable string
+            InteropUtils.log_debug(f"Freeing HPTR {hptr}")
+            msg = ""
+            for frame_info in stack_trace:
+                msg = msg + f"File: {frame_info.filename}, Line: {frame_info.lineno}, Function: {frame_info.function}\n"
+
+            InteropUtils.log_debug(msg)
 
         return InteropUtils.invoke("interoputils_free_hptr", hptr)
+
+    @staticmethod
+    def add_logged(ptr: c_void_p):
+        """
+        Adds the specified pointer to the logged pointer list, so it is easier to trace where it is used
+        """
+        if ptr not in InteropUtils.__logged_ptrs:
+            InteropUtils.__logged_ptrs.append(ptr)
 
     @staticmethod
     def free_uptr(uptr: c_void_p) -> None:

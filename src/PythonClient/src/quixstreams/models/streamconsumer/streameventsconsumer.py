@@ -35,10 +35,10 @@ class StreamEventsConsumer(object):
 
         # define events and their ref holder
         self._on_data_received = None
-        self._on_data_received_ref = None  # keeping reference to avoid GC
+        self._on_data_received_refs = None  # keeping reference to avoid GC
 
         self._on_definitions_changed = None
-        self._on_definitions_changed_ref = None  # keeping reference to avoid GC
+        self._on_definitions_changed_refs = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
         self._on_data_received_dispose()
@@ -65,8 +65,8 @@ class StreamEventsConsumer(object):
             value: The first parameter is the stream the event is received for. The second is the event.
         """
         self._on_data_received = value
-        if self._on_data_received_ref is None:
-            self._on_data_received_ref = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
+        if self._on_data_received_refs is None:
+            self._on_data_received_refs = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
 
     def _on_data_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -79,9 +79,9 @@ class StreamEventsConsumer(object):
             traceback.print_exc()
 
     def _on_data_received_dispose(self):
-        if self._on_data_received_ref is not None:
-            self._interop.remove_OnDataReceived(self._on_data_received_ref)
-            self._on_data_received_ref = None
+        if self._on_data_received_refs is not None:
+            self._interop.remove_OnDataReceived(self._on_data_received_refs[0])
+            self._on_data_received_refs = None
 
     # endregion on_data_received
 
@@ -106,8 +106,8 @@ class StreamEventsConsumer(object):
             value: The first parameter is the stream the event definitions changed for.
         """
         self._on_definitions_changed = value
-        if self._on_definitions_changed_ref is None:
-            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(
+        if self._on_definitions_changed_refs is None:
+            self._on_definitions_changed_refs = self._interop.add_OnDefinitionsChanged(
                 self._on_definitions_changed_wrapper)
 
     def _on_definitions_changed_wrapper(self, stream_hptr, args_hptr):
@@ -120,9 +120,9 @@ class StreamEventsConsumer(object):
             traceback.print_exc()
 
     def _on_definitions_changed_dispose(self):
-        if self._on_definitions_changed_ref is not None:
-            self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_ref)
-            self._on_definitions_changed_ref = None
+        if self._on_definitions_changed_refs is not None:
+            self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_refs[0])
+            self._on_definitions_changed_refs = None
 
     # endregion on_definitions_changed
 

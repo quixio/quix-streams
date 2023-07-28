@@ -1,9 +1,9 @@
 import ctypes
 import logging
-import weakref
 
 from .scalarstreamstate import ScalarStreamState
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.QuixStreamsStreaming.States.StreamStateManager import StreamStateManager as ssmi
 from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 
@@ -34,8 +34,13 @@ class StreamStateManager(object):
         if net_pointer is None:
             raise Exception("StreamStateManager is none")
 
-        self._cache = weakref.WeakValueDictionary()
+        self._cache = {}
         self._interop = ssmi(net_pointer)
+
+    def _finalizerfunc(self):
+        for (k, v) in self._cache.items():
+            v.dispose()
+
 
     def get_dict_state(self, state_name: str, default_value_factory: Callable[[str], StreamStateType] = None, state_type: StreamStateType = None) -> DictStreamState[StreamStateType]:
         """

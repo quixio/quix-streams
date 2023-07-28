@@ -41,10 +41,10 @@ class ScalarStreamState(Generic[StreamStateType]):
 
         # Define events and their reference holders
         self._on_flushed = None
-        self._on_flushed_ref = None  # Keeping reference to avoid garbage collection
+        self._on_flushed_refs = None  # Keeping reference to avoid garbage collection
 
         self._on_flushing = None
-        self._on_flushing_ref = None  # Keeping reference to avoid garbage collection
+        self._on_flushing_refs = None  # Keeping reference to avoid garbage collection
 
         # Check if type is immutable, because it needs special handling. Content could change without ScalarStreamState being
         # notified
@@ -92,15 +92,15 @@ class ScalarStreamState(Generic[StreamStateType]):
         """
 
         self._on_flushed = value
-        if self._on_flushed_ref is not None:
-            self._interop.remove_OnFlushed(self._on_flushed_ref)
-            self._on_flushed_ref = None
+        if self._on_flushed_refs is not None:
+            self._interop.remove_OnFlushed(self._on_flushed_refs[0])
+            self._on_flushed_refs = None
 
         if self.on_flushed is None:
             return
 
-        if self._on_flushed_ref is None:
-            self._on_flushed_ref = self._interop.add_OnFlushed(self._on_flushed_wrapper)
+        if self._on_flushed_refs is None:
+            self._on_flushed_refs = self._interop.add_OnFlushed(self._on_flushed_wrapper)
 
     def _on_flushed_wrapper(self, sender_hptr, args_hptr):
         try:
@@ -112,9 +112,9 @@ class ScalarStreamState(Generic[StreamStateType]):
             InteropUtils.free_hptr(args_hptr)
 
     def _on_flushed_dispose(self):
-        if self._on_flushed_ref is not None:
-            self._interop.remove_OnFlushed(self._on_flushed_ref)
-            self._on_flushed_ref = None
+        if self._on_flushed_refs is not None:
+            self._interop.remove_OnFlushed(self._on_flushed_refs[0])
+            self._on_flushed_refs = None
 
     # End region on_flushed
 
@@ -139,15 +139,15 @@ class ScalarStreamState(Generic[StreamStateType]):
         """
 
         self._on_flushing = value
-        if self._on_flushing_ref is not None:
-            self._interop.remove_OnFlushing(self._on_flushing_ref)
-            self._on_flushing_ref = None
+        if self._on_flushing_refs is not None:
+            self._interop.remove_OnFlushing(self._on_flushing_refs[0])
+            self._on_flushing_refs = None
 
         if self.on_flushing is None and self._on_flushing_internal is None:
             return
 
-        if self._on_flushing_ref is None:
-            self._on_flushing_ref = self._interop.add_OnFlushing(self._on_flushing_wrapper)
+        if self._on_flushing_refs is None:
+            self._on_flushing_refs = self._interop.add_OnFlushing(self._on_flushing_wrapper)
 
     def _on_flushing_wrapper(self, sender_hptr, args_hptr):
         try:
@@ -162,9 +162,9 @@ class ScalarStreamState(Generic[StreamStateType]):
             InteropUtils.free_hptr(args_hptr)
 
     def _on_flushing_dispose(self):
-        if self._on_flushing_ref is not None:
-            self._interop.remove_OnFlushing(self._on_flushing_ref)
-            self._on_flushing_ref = None
+        if self._on_flushing_refs is not None:
+            self._interop.remove_OnFlushing(self._on_flushing_refs[0])
+            self._on_flushing_refs = None
 
     # End region on_flushing
 

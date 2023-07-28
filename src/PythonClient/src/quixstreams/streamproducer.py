@@ -42,7 +42,7 @@ class StreamProducer(object):
 
         # define events and their ref holder
         self._on_write_exception = None
-        self._on_write_exception_ref = None  # keeping reference to avoid GC
+        self._on_write_exception_refs = None  # keeping reference to avoid GC
 
         self._stream_id = self._interop.get_StreamId()
 
@@ -88,8 +88,8 @@ class StreamProducer(object):
                 The first parameter is the stream is received for, second is the exception.
         """
         self._on_write_exception = value
-        if self._on_write_exception_ref is None:
-            self._on_write_exception_ref = self._interop.add_OnWriteException(self._on_write_exception_wrapper)
+        if self._on_write_exception_refs is None:
+            self._on_write_exception_refs = self._interop.add_OnWriteException(self._on_write_exception_wrapper)
 
     def _on_write_exception_wrapper(self, stream_hptr, exception_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -102,9 +102,9 @@ class StreamProducer(object):
             traceback.print_exc()
 
     def _on_write_exception_dispose(self):
-        if self._on_write_exception_ref is not None:
-            self._interop.remove_OnWriteException(self._on_write_exception_ref)
-            self._on_write_exception_ref = None
+        if self._on_write_exception_refs is not None:
+            self._interop.remove_OnWriteException(self._on_write_exception_refs[0])
+            self._on_write_exception_refs = None
 
     # endregion on_write_exception
 
