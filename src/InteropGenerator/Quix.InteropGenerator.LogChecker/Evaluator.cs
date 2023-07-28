@@ -20,7 +20,15 @@ public class Evaluator
             {
                 case LogParser.PtrAllocationLineParser ptrAllocation:
                     allocationCount++;
-                    remainingAllocations.Add(ptrAllocation.Ptr, ptrAllocation);
+                    try
+                    {
+                        remainingAllocations.Add(ptrAllocation.Ptr, ptrAllocation);
+                    }
+                    catch
+                    {
+                        oddStuff.Add((parser, $"Allocated pointer {ptrAllocation.Ptr} multiple times without being deallocated first"));
+                    }
+
                     allocations[ptrAllocation.Ptr] = ptrAllocation;
                     break;
                 case LogParser.PtrFreedLineParser ptrFreed:

@@ -34,7 +34,7 @@ public class InteropUtils
         // in order to not have potential for incorrect log write
         lock (debugLogsLock)
         {
-            debuglogs.Value.Write("[" + DateTime.Now.ToString("YY-MM-dd HH:mm:ss.fff") + "]  ");
+            debuglogs.Value.Write("[" + DateTime.Now.ToString("YYYY-MM-dd HH:mm:ss.fff") + "]  ");
             if (debugLogIndent > 0) debuglogs.Value.Write(new string(' ', debugLogIndent));
             debuglogs.Value.WriteLine(string.Format(format, @params));
 

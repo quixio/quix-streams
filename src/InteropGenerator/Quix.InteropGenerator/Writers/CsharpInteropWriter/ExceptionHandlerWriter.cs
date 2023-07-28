@@ -6,14 +6,14 @@ namespace Quix.InteropGenerator.Writers.CsharpInteropWriter;
 internal class ExceptionHandlerWriter<T> : IDisposable where T: IIndentWriter, IContentWriter
 {
     private readonly T contentWriter;
-    private readonly bool hasReturnValue;
+    private readonly Func<Type> getReturnType;
     private readonly Action<T> onExceptionCallback;
     private readonly Action<T> onFinallyCallback;
 
-    public ExceptionHandlerWriter(T contentWriter, bool hasReturnValue, Action<T> onExceptionCallback = null, Action<T> onFinallyCallback = null)
+    public ExceptionHandlerWriter(T contentWriter, Func<Type> getReturnType, Action<T> onExceptionCallback = null, Action<T> onFinallyCallback = null)
     {
         this.contentWriter = contentWriter;
-        this.hasReturnValue = hasReturnValue;
+        this.getReturnType = getReturnType;
         this.onExceptionCallback = onExceptionCallback;
         this.onFinallyCallback = onFinallyCallback;
 
@@ -34,7 +34,7 @@ internal class ExceptionHandlerWriter<T> : IDisposable where T: IIndentWriter, I
             onExceptionCallback(contentWriter);
         }
         contentWriter.Write("InteropUtils.RaiseException(ex);");
-        if (hasReturnValue) contentWriter.Write("return default;");
+        if (getReturnType() != typeof(void)) contentWriter.Write("return default;");
         contentWriter.DecrementIndent();
         contentWriter.Write("}");
         if (onFinallyCallback == null) return;
