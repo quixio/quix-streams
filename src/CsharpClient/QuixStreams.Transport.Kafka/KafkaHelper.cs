@@ -32,7 +32,32 @@ namespace QuixStreams.Transport.Kafka
             return new Package<byte[]>(consumeResult.Message.Value, null, tContext);
         }
 
-        private static Regex stateChangeRegex = new Regex(": ([^ ]+): Broker changed state ([a-zA-Z_]*) -> ([a-zA-Z_]*)$", RegexOptions.Compiled);
+        private static Regex BrokerNameChangeRegex = new Regex("Name changed from ([^ ]+) to (.+)$", RegexOptions.Compiled);
+
+        
+        public static bool TryParseBrokerNameChange(LogMessage logMessage, out string oldName, out string newName)
+        {
+            oldName = null;
+            newName = null;
+            try
+            {
+                // UPDATE [thrd:127.0.0.1:9092/bootstrap]: 127.0.0.1:9092/0: Name changed from 127.0.0.1:9092/bootstrap to 127.0.0.1:9092/0
+                if (logMessage == null) return false;
+                if (logMessage.Level != SyslogLevel.Debug) return false;
+                if (!logMessage.Message.Contains("Name changed from ")) return false;
+                var segments = BrokerNameChangeRegex.Match(logMessage.Message);
+                if (!segments.Success) return false; // Outdated regex?
+                oldName = segments.Groups[1].Value;
+                newName = segments.Groups[2].Value;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static Regex StateChangeRegex = new Regex(": ([^ ]+): Broker changed state ([a-zA-Z_]*) -> ([a-zA-Z_]*)$", RegexOptions.Compiled);
 
         public static bool TryParseBrokerState(LogMessage logMessage, out string broker, out string state)
         {
@@ -44,7 +69,8 @@ namespace QuixStreams.Transport.Kafka
                 if (logMessage == null) return false;
                 if (logMessage.Level != SyslogLevel.Debug) return false;
                 if (!logMessage.Message.Contains("Broker changed state")) return false;
-                var segments = stateChangeRegex.Match(logMessage.Message);
+                var segments = StateChangeRegex.Match(logMessage.Message);
+                if (!segments.Success) return false; // Outdated regex?
                 broker = segments.Groups[1].Value;
                 state = segments.Groups[3].Value;
                 return true;
