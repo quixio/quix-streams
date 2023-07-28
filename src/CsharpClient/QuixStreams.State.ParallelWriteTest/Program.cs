@@ -13,11 +13,26 @@ namespace QuixStreams.State.ParallelWriteTest
         {
             Console.WriteLine("Parallel write test");
 
-            var storage = new RocksDbStorage("./state/paraleltest", "harisdb");
-            storage.Clear();
+            var storages = new List<IStateStorage>()
+            {
+                new RocksDbStorage("./state/paraleltest"),
+                new LocalFileStorage(),
+                new InMemoryStorage()
+            };
             
+            foreach (var storage in storages)
+            {
+                Console.WriteLine("Testing " + storage.GetType().Name);
+                RunParallelWriteTest(storage);
+            }
+        }
+
+        private static void RunParallelWriteTest(IStateStorage storage)
+        {
+            storage.Clear();
+
             Random rnd = new Random();
-            Byte[] data = new byte[] {0, 1, 2, 3};
+            Byte[] data = new byte[] { 0, 1, 2, 3 };
             storage.Set("GLOBALKEY", data);
             Thread.Sleep(1000);
 
@@ -28,14 +43,13 @@ namespace QuixStreams.State.ParallelWriteTest
             {
                 var thread = new Thread(() =>
                 {
-                    Console.WriteLine("STARTING THREAD "+i);
-                    
+                    Console.WriteLine("STARTING THREAD " + i);
+
                     Task.Run(
                         (async () =>
                         {
                             try
                             {
-
                                 for (var j = 0; j < 20; ++j)
                                 {
                                     Random rnd = new Random();
@@ -56,12 +70,10 @@ namespace QuixStreams.State.ParallelWriteTest
                         })
                     ).Wait();
 
-                    Console.WriteLine("ENDING THREAD "+i);
-                    
+                    Console.WriteLine("ENDING THREAD " + i);
                 });
 
                 threads.Add(thread);
-                
             }
 
             Console.WriteLine("Starting parallel writes");
@@ -78,9 +90,8 @@ namespace QuixStreams.State.ParallelWriteTest
                 thread.Join();
             }
 
-            Console.WriteLine("successfully "+counter+" times read and written in parallel");
+            Console.WriteLine("successfully " + counter + " times read and written in parallel");
             Console.WriteLine("DONE");
-
         }
     }
 }
