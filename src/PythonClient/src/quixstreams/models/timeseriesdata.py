@@ -39,9 +39,9 @@ class TimeseriesData(object):
         self._init_timestamps()  # else the first time addition could result in double counting it in local cache
 
     def _finalizerfunc(self):
-        if self._timestamps is not None:
-            [pdstamp.dispose() for pdstamp in self._timestamps]
-            self._timestamps = None
+        # do not dispose individual timestamps,
+        # let GC deal with it, otherwise might remove still used instances
+        self._timestamps = None
 
 
     # TODO
