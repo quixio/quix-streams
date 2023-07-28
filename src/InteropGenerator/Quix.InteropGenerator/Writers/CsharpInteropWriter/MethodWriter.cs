@@ -106,55 +106,46 @@ public class MethodWriter : BaseWriter
         });
         
         
-        WriteArgumentConversion(writer, preFunctionWriter, out var nameConversions, out var instanceArgName);
-
         if (this.methodBase.IsSpecialName)
         {
-            HandleSpecialName(writer, preFunctionWriter, nameConversions, instanceArgName);
+            HandleSpecialName(writer, preFunctionWriter);
         }
         else
         {
-            HandleRegularMethod(writer, preFunctionWriter, nameConversions, instanceArgName);
+            HandleRegularMethod(writer, preFunctionWriter);
         }
     }
 
-    private void HandleSpecialName(DelayedWriter writer, DelayedWriter preFunctionWriter, Dictionary<string, string> paramNames, string instanceArgName)
+    private void HandleSpecialName(DelayedWriter writer, DelayedWriter preFunctionWriter)
     {
         var name = methodBase.Name;
         if (name.StartsWith("add_"))
         {
-            // Handle add method
-            HandleAddMethod(writer, paramNames, instanceArgName);
+            HandleAddMethod(writer);
         }
         else if (name.StartsWith("remove_"))
         {
-            // Handle remove method
-            HandleRemoveMethod(writer, paramNames, instanceArgName);
+            HandleRemoveMethod(writer);
         }
         else if (name.StartsWith("get_"))
         {
-            // Handle property getter
-            HandlePropertyGetter(writer, preFunctionWriter, paramNames, instanceArgName);
+            HandlePropertyGetter(writer, preFunctionWriter);
         }
         else if (name.StartsWith("set_"))
         {
-            // Handle property setter
-            HandlePropertySetter(writer, paramNames, instanceArgName);
+            HandlePropertySetter(writer);
         }
         else if (name.StartsWith("op_Equality"))
         {
-            // Handle equality operator
-            HandleOperator(writer, preFunctionWriter, paramNames, "==");
+            HandleOperator(writer, preFunctionWriter, "==");
         }
         else if (name.StartsWith("op_Inequality"))
         {
-            // Handle inequality operator
-            HandleOperator(writer, preFunctionWriter, paramNames, "!=");
+            HandleOperator(writer, preFunctionWriter, "!=");
         }
         else if (this.methodBase.IsConstructor)
         {
-            // Handle constructor
-            HandleConstructor(writer, preFunctionWriter, paramNames);
+            HandleConstructor(writer, preFunctionWriter);
         }
         else
         {
@@ -162,22 +153,27 @@ public class MethodWriter : BaseWriter
         }
     }
 
-    private void WriteArgumentConversion(DelayedWriter writer, DelayedWriter preFunctionWriter, out Dictionary<string, string> nameConversions, out string instanceArgName)
+    private void WriteArgumentConversion(DelayedWriter writer, DelayedWriter preFunctionWriter, out Dictionary<string, string> nameConversions, out Dictionary<string, Type> paramType, out string instanceArgName)
     {
         nameConversions = new Dictionary<string, string>();
+        paramType = new Dictionary<string, Type>();
         var anyRecast = false;
 
         instanceArgName = Utils.GetInstanceParameterName(this.methodWrittenDetails.DeclaringType, this.methodBase);
         if (instanceArgName != null)
         {
+            paramType[instanceArgName] = this.methodBase.DeclaringType;
             var result = WriteTypeConversion(writer, preFunctionWriter, this.methodBase.DeclaringType, false,
                 instanceArgName);
-            nameConversions[instanceArgName] = result;
-            anyRecast |= instanceArgName != result;
+            nameConversions[instanceArgName] = result.Name;
+            paramType[result.Name] = result.Type;
+            anyRecast |= instanceArgName != result.Name;
         }
 
         foreach (var parameterInfo in this.parameterInfos)
         {
+            paramType[parameterInfo.Name] = parameterInfo.ParameterType;
+
             if (parameterInfo.IsOut)
             {
                 nameConversions[parameterInfo.Name] = parameterInfo.Name + "Out";
@@ -186,8 +182,9 @@ public class MethodWriter : BaseWriter
 
             var result = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, false,
                 parameterInfo.Name);
-            nameConversions[parameterInfo.Name] = result;
-            anyRecast |= instanceArgName != result;
+            nameConversions[parameterInfo.Name] = result.Name;
+            paramType[result.Name] = result.Type;
+            anyRecast |= instanceArgName != result.Name;
 
             nameConversions[parameterInfo.Name] = WriteDefaultValue(writer, parameterInfo, nameConversions[parameterInfo.Name]);
         }
@@ -195,8 +192,10 @@ public class MethodWriter : BaseWriter
         if (anyRecast) writer.WriteEmptyLine();
     }
 
-    private void HandleRegularMethod(DelayedWriter writer, DelayedWriter preFunctionWriter, Dictionary<string, string> paramNames, string instanceArgName)
+    private void HandleRegularMethod(DelayedWriter writer, DelayedWriter preFunctionWriter)
     {
+        WriteArgumentConversion(writer, preFunctionWriter, out var paramNames, out var paramTypes, out var instanceArgName);
+
         var sb = new StringBuilder();
         var resultName = string.Empty;
         if (this.returnType != typeof(void))
@@ -252,7 +251,7 @@ public class MethodWriter : BaseWriter
             {
                 var result = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, true,
                     paramNames[parameterInfo.Name]);
-                writer.Write($"Marshal.WriteIntPtr({parameterInfo.Name}, {result});");
+                writer.Write($"Marshal.WriteIntPtr({parameterInfo.Name}, {result.Name});");
             }
         }
 
@@ -260,7 +259,7 @@ public class MethodWriter : BaseWriter
         if (!string.IsNullOrWhiteSpace(resultName))
         {
             var result = WriteTypeConversion(writer, preFunctionWriter, this.returnType, true, resultName);
-            writer.Write($"return {result};");
+            writer.Write($"return {result.Name};");
         }
     }
 
@@ -299,8 +298,9 @@ public class MethodWriter : BaseWriter
         return sb;
     }
 
-    private void HandleAddMethod(DelayedWriter writer, Dictionary<string, string> paramNames, string instanceArgName)
+    private void HandleAddMethod(DelayedWriter writer)
     {
+        WriteArgumentConversion(writer, null, out var paramNames, out var paramTypes, out var instanceArgName);
 
         var sb = new StringBuilder();
         // Write the actual subscription
@@ -312,25 +312,49 @@ public class MethodWriter : BaseWriter
         sb.Append(paramNames[this.parameterInfos.First().Name]);
         sb.Append(";");
         writer.Write(sb.ToString());
+        
+        
+        // Write the conversion from the handler to pointer that we can use to unsubscribe with
+        var del = this.parameterInfos.First();
+        var convertedName = paramNames[del.Name];
+        this.returnType = typeof(IntPtr);
+        var resultName = convertedName + "Ptr";
+        writer.Write($"var {resultName} = InteropUtils.ToHPtr({convertedName});");
+        writer.Write($"return {resultName};");
     }
 
-    private void HandleRemoveMethod(DelayedWriter writer, Dictionary<string, string> paramNames, string instanceArgName)
+    private void HandleRemoveMethod(DelayedWriter writer)
     {
+        var voidWriter = new DelayedWriter();
+        WriteArgumentConversion(voidWriter, voidWriter, out var paramNames, out var paramTypes, out var instanceArgName);
+
+        var replaced = new ReplacedParameterInfo(this.parameterInfos[0], typeof(IntPtr));
+        var handlerName = GetResultName(paramNames, "handler");
+        var valParam = replaced.Original;
+        var handlerTypeAsText = typeWriter.LookupTypeAsText(paramTypes[valParam.Name]);
+        var handlerConversionText = $"var {handlerName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromHPtr)}<{handlerTypeAsText}>({valParam.Name});";
+        
+        ReplaceParameterInfo(replaced);
+        
+        WriteArgumentConversion(writer, voidWriter, out paramNames, out paramTypes, out instanceArgName);
+
+        writer.Write(handlerConversionText);
+        
         var sb = new StringBuilder();
         // Write the actual subscription
-        
         if (this.methodBase.IsStatic) sb.Append(Utils.GetTypeNameForNaming(this.methodBase.DeclaringType));
         else sb.Append(paramNames[instanceArgName]);
         sb.Append(".");
         sb.Append(this.methodBase.Name.Substring("remove_".Length));
         sb.Append(" -= ");
-        sb.Append(paramNames[this.parameterInfos.First().Name]);
+        sb.Append(handlerName);
         sb.Append(";");
         writer.Write(sb.ToString());
     }
 
-    private void HandlePropertyGetter(DelayedWriter writer, DelayedWriter preFunctionWriter, Dictionary<string, string> paramNames, string instanceArgName)
+    private void HandlePropertyGetter(DelayedWriter writer, DelayedWriter preFunctionWriter)
     {
+        WriteArgumentConversion(writer, null, out var paramNames, out var paramTypes, out var instanceArgName);
         var sb = new StringBuilder();
         var resultName = GetResultName(paramNames);
         sb.Append($"var {resultName} = ");
@@ -355,11 +379,12 @@ public class MethodWriter : BaseWriter
         writer.Write(sb.ToString());
         
         var result = WriteTypeConversion(writer, preFunctionWriter, this.returnType, true, resultName);
-        writer.Write($"return {result};");
+        writer.Write($"return {result.Name};");
     }
 
-    private void HandlePropertySetter(DelayedWriter writer, Dictionary<string, string> paramNames, string instanceArgName)
+    private void HandlePropertySetter(DelayedWriter writer)
     {
+        WriteArgumentConversion(writer, null, out var paramNames, out var paramTypes, out var instanceArgName);
         var sb = new StringBuilder();
         var methodName = this.methodBase.Name.Substring("set_".Length);
         if (this.methodBase.IsStatic) sb.Append(Utils.GetTypeNameForNaming(this.methodBase.DeclaringType));
@@ -385,8 +410,10 @@ public class MethodWriter : BaseWriter
         writer.Write(sb.ToString());
     }
 
-    private void HandleOperator(DelayedWriter writer, DelayedWriter preFunctionWriter, Dictionary<string, string> paramNames, string operatorText)
+    private void HandleOperator(DelayedWriter writer, DelayedWriter preFunctionWriter, string operatorText)
     {
+        WriteArgumentConversion(writer, null, out var paramNames, out var paramTypes, out var instanceArgName);
+
         var sb = new StringBuilder();
         
         var resultName = GetResultName(paramNames, "operationResult");
@@ -399,11 +426,13 @@ public class MethodWriter : BaseWriter
         writer.Write(sb.ToString());
         
         var result = WriteTypeConversion(writer, preFunctionWriter, this.returnType, true, resultName);
-        writer.Write($"return {result};");
+        writer.Write($"return {result.Name};");
     }
 
-    private void HandleConstructor(DelayedWriter writer, DelayedWriter preFunctionWriter, Dictionary<string, string> paramNames)
+    private void HandleConstructor(DelayedWriter writer, DelayedWriter preFunctionWriter)
     {
+        WriteArgumentConversion(writer, null, out var paramNames, out var paramTypes, out var instanceArgName);
+
         var sb = new StringBuilder();
         
         var resultName = GetResultName(paramNames, "constructorResult");
@@ -417,7 +446,7 @@ public class MethodWriter : BaseWriter
         writer.Write(sb.ToString());
         
         var result = WriteTypeConversion(writer, preFunctionWriter, this.returnType, true, resultName);
-        writer.Write($"return {result};");
+        writer.Write($"return {result.Name};");
     }
 
     private string GetResultName(Dictionary<string,string> paramNames, string baseName = "result")
@@ -431,6 +460,25 @@ public class MethodWriter : BaseWriter
         }
 
         return resultName;
+    }
+    
+    
+
+    private void ReplaceParameterInfo(ReplacedParameterInfo replacedParameterInfo)
+    {
+        for (var ii = 0; ii <= this.parameterInfos.Length; ii++)
+        {
+            if (this.parameterInfos[ii] != replacedParameterInfo.Original) continue;
+            this.parameterInfos[ii] = replacedParameterInfo;
+            break;
+        }
+        
+        for (var ii = 0; ii <= this.methodParameterOrder.Length; ii++)
+        {
+            if (this.methodParameterOrder[ii] != replacedParameterInfo.Original) continue;
+            this.methodParameterOrder[ii] = replacedParameterInfo;
+            break;
+        }
     }
 
     private string WriteDefaultValue(DelayedWriter writer, ParameterInfo parameterInfo, string variableName)
@@ -483,7 +531,7 @@ public class MethodWriter : BaseWriter
     /// <returns>The name of the variable the converted result will be assigned to</returns>
     /// <exception cref="Exception"></exception>
     /// <exception cref="NotSupportedMethodException"></exception>
-    private string WriteTypeConversion(DelayedWriter writer, DelayedWriter preFunctionWriter, Type typeToConvert, bool toUnmanaged, string sourceName, string targetName = null, bool createTargetVar = true)
+    private TypeConversionResult WriteTypeConversion(DelayedWriter writer, DelayedWriter preFunctionWriter, Type typeToConvert, bool toUnmanaged, string sourceName, string targetName = null, bool createTargetVar = true)
     {
         Type source, target;
         if (toUnmanaged)
@@ -499,7 +547,7 @@ public class MethodWriter : BaseWriter
         
         sourceName = GetValidParameterName(sourceName); // none of the generated ones should be a reserved keyword, and if it is a parameter of a method, then it'll be the result of this method anyway
         var targetVarCreate = (createTargetVar ? "var " : "");
-        if (target == source) return sourceName;
+        if (target == source) return new TypeConversionResult(sourceName, typeToConvert);
 
         if (source == typeof(IntPtr))
         {
@@ -517,14 +565,14 @@ public class MethodWriter : BaseWriter
                     targetName = spanTargetName;
                 }
 
-                return targetName;
+                return new TypeConversionResult(targetName, typeof(string));
             }
             
             if (!toUnmanaged && Utils.IsBlittableType(target))
             {
                 targetName ??= $"{sourceName}UPtr";
                 writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromUPtr)}<{target.Name}>({sourceName});");
-                return targetName;
+                return new TypeConversionResult(targetName, target);
             }
 
             if (typeof(IDictionary).IsAssignableFrom(target))
@@ -550,7 +598,7 @@ public class MethodWriter : BaseWriter
                     writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromHPtr)}<{dictTypeText}>({sourceName});");
 
                 }
-                return targetName;
+                return new TypeConversionResult(targetName, target);
             }
             
             if (source != typeof(Array) && typeof(Array).IsAssignableFrom(target))
@@ -569,12 +617,12 @@ public class MethodWriter : BaseWriter
                 writer.Write($"for (var {targetName}Index = 0; {targetName}Index < {targetName}.Length; {targetName}Index++) {{"); // start of for
                 writer.IncrementIndent();
                 var innerBodyConvertResultName = WriteTypeConversion(writer, preFunctionWriter, generic, false, $"{unmanagedArrayName}[{targetName}Index]", $"{targetName}Converted");
-                writer.Write($"{targetName}[{targetName}Index] = {innerBodyConvertResultName};");
+                writer.Write($"{targetName}[{targetName}Index] = {innerBodyConvertResultName.Name};");
                 writer.DecrementIndent();
                 writer.Write("}"); // end of for
                 writer.DecrementIndent();
                 writer.Write($"}}"); // end of null check
-                return targetName;
+                return new TypeConversionResult(targetName, target);
             }
            
             targetName ??= $"{sourceName}Inst";
@@ -582,7 +630,7 @@ public class MethodWriter : BaseWriter
             var typeText = typeWriter.LookupTypeAsText(target);
 
             writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromHPtr)}<{typeText}>({sourceName});");
-            return targetName;
+            return new TypeConversionResult(targetName, target);
         }
         
         if (target == typeof(IntPtr))
@@ -591,14 +639,14 @@ public class MethodWriter : BaseWriter
             {
                 targetName ??= $"{sourceName}UPtr";
                 writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.Utf8StringToUPtr)}({sourceName});");
-                return targetName;
+                return new TypeConversionResult(targetName, target);
             }
 
             if (toUnmanaged && Utils.IsBlittableType(source))
             {
                 targetName ??= $"{sourceName}UPtr";
                 writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.ToUPtr)}({sourceName});");
-                return targetName;
+                return new TypeConversionResult(targetName, target);
             }
 
             if (source != typeof(Array) && typeof(Array).IsAssignableFrom(source))
@@ -617,12 +665,12 @@ public class MethodWriter : BaseWriter
                     writer.Write($"var {targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.ToArrayUPtr)}({sourceName}, typeof({elementTypeAsText}));");
                 }
 
-                return targetName;
+                return new TypeConversionResult(targetName, target);
             }
 
             targetName ??= $"{sourceName}HPtr";
             writer.Write($"{targetVarCreate}{targetName} = {nameof(InteropUtils)}.{nameof(InteropUtils.ToHPtr)}({sourceName});");
-            return targetName;
+            return new TypeConversionResult(targetName, target);
         }
 
         if (typeof(Delegate).IsAssignableFrom(target) && source.BaseType == typeof(MulticastDelegate))
@@ -668,9 +716,9 @@ public class MethodWriter : BaseWriter
                     var parameterInfo = delegateParameters[index];
                     if (index != 0) invocationSb.Append(", ");
                     var name = $"arg{index}";
-                    var newName = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, false, name);
-                    appendEmptyLineAfterConversions |= name != newName;
-                    invocationSb.Append(newName);
+                    var result = WriteTypeConversion(writer, preFunctionWriter, parameterInfo.ParameterType, false, name);
+                    appendEmptyLineAfterConversions |= name != result.Name;
+                    invocationSb.Append(result.Name);
                 }
 
                 var hasReturn = delegateMethodInfo.ReturnType != typeof(void);
@@ -681,7 +729,7 @@ public class MethodWriter : BaseWriter
                 if (hasReturn)
                 {
                     var newName = WriteTypeConversion(writer, preFunctionWriter, delegateMethodInfo.ReturnType, true, $"{targetName}Result");
-                    writer.Write("return " + newName + ";");
+                    writer.Write("return " + newName.Name + ";");
                 }
             }
 
@@ -694,7 +742,7 @@ public class MethodWriter : BaseWriter
 
             var targetNameDelegate = $"{targetName}Delegate";
             writer.Write($"{delegateName} {targetNameDelegate} = {targetName};");
-            return $"Marshal.GetFunctionPointerForDelegate({targetNameDelegate})";
+            return new TypeConversionResult($"Marshal.GetFunctionPointerForDelegate({targetNameDelegate})", target);
         }
 
 
@@ -757,9 +805,9 @@ public class MethodWriter : BaseWriter
                         if (index != 0) invocationSb.Append(", ");
                         var name = $"arg{index}";
                         var result = WriteTypeConversion(writer, preFunctionWriter, type, true, name);
-                        appendEmptyLineAfterConversions |= name != result;
-                        invocationSb.Append(result);
-                        writer.Write($"InteropUtils.LogDebug($\"Parameter {index} for {this.methodWrittenDetails.EntryPoint} has value: {{{result}}}\");");
+                        appendEmptyLineAfterConversions |= name != result.Name;
+                        invocationSb.Append(result.Name);
+                        writer.Write($"InteropUtils.LogDebug($\"Parameter {index} for {this.methodWrittenDetails.EntryPoint} has value: {{{result.Name}}}\");");
 
                     }
                 
@@ -774,7 +822,7 @@ public class MethodWriter : BaseWriter
                         if (hasReturn)
                         {
                             var result = WriteTypeConversion(writer, preFunctionWriter, type, false, "result");
-                            writer.Write("return " + result + ";");
+                            writer.Write("return " + result.Name + ";");
                         }
                     }
                 }   
@@ -824,23 +872,23 @@ public class MethodWriter : BaseWriter
             else throw new NotSupportedMethodException("Unhandled type");
             writer.DecrementIndent();
             writer.Write("};");
-            return targetName;
+            return new TypeConversionResult(targetName, target);
         }
 
         if (target == typeof(byte))
         {
             targetName ??= $"{sourceName}Byte";
             writer.Write($"{targetVarCreate}{targetName} = Convert.ToByte({sourceName});");
-            return targetName;
+            return new TypeConversionResult(targetName, target);
         }
         if (target == typeof(bool))
         {
             targetName ??= $"{sourceName}Boolean";
             writer.Write($"{targetVarCreate}{targetName} = Convert.ToBoolean({sourceName});");
-            return targetName;
+            return new TypeConversionResult(targetName, target);
         }
 
-        return sourceName;
+        return new TypeConversionResult(targetName, source);
     }
 
     private Dictionary<string, string> WriteFunctionHeader(DelayedWriter writer)
@@ -929,5 +977,39 @@ public class MethodWriter : BaseWriter
         var nameBase = Utils.GetTypeNameForNaming(this.methodWrittenDetails.DeclaringType).ToLowerInvariant();
         var methodName = this.methodWrittenDetails.UniqueMethodName.ToLowerInvariant();
         return $"{nameBase}_{methodName}";
+    }
+
+    private class TypeConversionResult
+    {
+        public TypeConversionResult(string name, Type type)
+        {
+            this.Name = name;
+            this.Type = type;
+        }
+
+        public Type Type { get; }
+
+        public string Name { get; }
+    }
+
+    private class ReplacedParameterInfo : ParameterInfo
+    {
+        private readonly object defaultValue;
+
+        public ReplacedParameterInfo(ParameterInfo original, Type newType)
+        {
+            this.Original = original;
+            NewParameterType = newType;
+        }
+
+        public ParameterInfo Original { get; }
+        public Type NewParameterType { get; }
+
+        public override string Name => Original.Name;
+        public override Type ParameterType => NewParameterType;
+
+        public override object DefaultValue => null; // TODO, might need to implement this
+
+        public override bool HasDefaultValue => false; // TODO, might need to implement this
     }
 }
