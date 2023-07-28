@@ -65,7 +65,7 @@ namespace QuixStreams.Transport.Kafka
                 if (config.Debug.Contains("all")) return config;
                 if (config.Debug.Contains("broker")) return config;
                 // There is a debug configuration other than all or queue
-                this.logger.LogDebug("In order to enable a workaround to check if broker is up, additional queue logs will be visible");
+                this.logger.LogDebug("In order to enable a workaround to check if broker is up, additional broker logs will be visible");
                 config.Debug = (config.Debug.TrimEnd(new[] { ',', ' ' }) + ",broker").TrimStart(',');
                 return config;
             }
