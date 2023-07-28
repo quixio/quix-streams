@@ -293,14 +293,7 @@ namespace QuixStreams.Transport.Kafka
                     }
                     else
                     {
-                        this.logger.LogInformation("[{0}] {1}/{2} brokers are up (after all being marked down)", this.configId, upBrokerCount, this.brokerStates.Count);
-                        if (this.logger.IsEnabled(LogLevel.Debug))
-                        {
-                            foreach (var brokerState in brokerStates)
-                            {
-                                this.logger.LogDebug("[{0}] Broker {1} has state {2}", this.configId, brokerState.Key, brokerState.Value);
-                            }
-                        }
+                        this.logger.LogDebug("[{0}] {1}/{2} brokers are up (after all being marked down)", this.configId, upBrokerCount, this.brokerStates.Count);
                     }
                 } 
                 do
