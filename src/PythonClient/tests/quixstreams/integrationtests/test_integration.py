@@ -823,7 +823,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert isinstance(binary_value, bytes)
         assert binary_value == bytes(bytearray("binary_param", "UTF-8"))
 
-    @pytest.mark.skip('TODO: Fix timeouts')
     def test_parameters_write_via_buffer_and_read(self,
                                                   test_name,
                                                   topic_consumer_earliest,
@@ -1007,7 +1006,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         # and is done by checking both ways
         assert_timeseries_data_equal(read_data, written_data)
 
-    @pytest.mark.skip('TODO: Fix timeouts')
     def test_timeseries_data_raw_publish_via_buffer_and_consume(self,
                                                                 test_name,
                                                                 topic_consumer_earliest,
@@ -1122,7 +1120,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert_timestamps_equal(consumed_timeseries_data.timestamps[0],
                                 published_timestamp)
 
-    @pytest.mark.skip('TODO: Fix timeouts')
     def test_timeseries_data_timestamp_publish_via_buffer_and_consume(self,
                                                                       test_name,
                                                                       topic_producer,
