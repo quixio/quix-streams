@@ -57,13 +57,13 @@ class TimeseriesBuffer(object):
 
         # define events and their ref holder
         self._on_data_released = None
-        self._on_data_released_ref = None  # keeping reference to avoid GC
+        self._on_data_released_refs = None  # keeping references to avoid GC
 
         self._on_raw_released = None
-        self._on_raw_released_ref = None  # keeping reference to avoid GC
+        self._on_raw_released_refs = None  # keeping references to avoid GC
 
         self._on_dataframe_released = None
-        self._on_dataframe_released_ref = None  # keeping reference to avoid GC
+        self._on_dataframe_released_refs = None  # keeping references to avoid GC
 
     def _finalizerfunc(self):
         self._on_data_released_dispose()
@@ -92,8 +92,8 @@ class TimeseriesBuffer(object):
             value: The event handler. The first parameter is the stream the data is received for, second is the data in TimeseriesData format.
         """
         self._on_data_released = value
-        if self._on_data_released_ref is None:
-            self._on_data_released_ref = self._interop_pb.add_OnDataReleased(self._on_data_released_wrapper)
+        if self._on_data_released_refs is None:
+            self._on_data_released_refs = self._interop_pb.add_OnDataReleased(self._on_data_released_wrapper)
 
     def _on_data_released_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -106,9 +106,9 @@ class TimeseriesBuffer(object):
             traceback.print_exc()
 
     def _on_data_released_dispose(self):
-        if self._on_data_released_ref is not None:
-            self._interop_pb.remove_OnDataReleased(self._on_data_released_ref)
-            self._on_data_released_ref = None
+        if self._on_data_released_refs is not None:
+            self._interop_pb.remove_OnDataReleased(self._on_data_released_refs[0])
+            self._on_data_released_refs = None
 
     # endregion on_data_released
 
@@ -133,8 +133,8 @@ class TimeseriesBuffer(object):
             value: The event handler. The first parameter is the stream the data is received for, second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_released = value
-        if self._on_raw_released_ref is None:
-            self._on_raw_released_ref = self._interop_pb.add_OnRawReleased(self._on_raw_released_wrapper)
+        if self._on_raw_released_refs is None:
+            self._on_raw_released_refs = self._interop_pb.add_OnRawReleased(self._on_raw_released_wrapper)
 
     def _on_raw_released_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -146,9 +146,9 @@ class TimeseriesBuffer(object):
             traceback.print_exc()
 
     def _on_raw_released_dispose(self):
-        if self._on_raw_released_ref is not None:
-            self._interop_pb.remove_OnRawReleased(self._on_raw_released_ref)
-            self._on_raw_released_ref = None
+        if self._on_raw_released_refs is not None:
+            self._interop_pb.remove_OnRawReleased(self._on_raw_released_refs[0])
+            self._on_raw_released_refs = None
 
     # endregion on_raw_released
 
@@ -173,8 +173,8 @@ class TimeseriesBuffer(object):
             value: The event handler. The first parameter is the stream the data is received for, second is the data in pandas.DataFrame format.
         """
         self._on_dataframe_released = value
-        if self._on_dataframe_released_ref is None:
-            self._on_dataframe_released_ref = self._interop_pb.add_OnRawReleased(self._on_dataframe_released_wrapper)
+        if self._on_dataframe_released_refs is None:
+            self._on_dataframe_released_refs = self._interop_pb.add_OnRawReleased(self._on_dataframe_released_wrapper)
 
     def _on_dataframe_released_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -189,9 +189,9 @@ class TimeseriesBuffer(object):
             traceback.print_exc()
 
     def _on_dataframe_released_dispose(self):
-        if self._on_dataframe_released_ref is not None:
-            self._interop_pb.remove_OnRawReleased(self._on_dataframe_released_ref)
-            self._on_dataframe_released_ref = None
+        if self._on_dataframe_released_refs is not None:
+            self._interop_pb.remove_OnRawReleased(self._on_dataframe_released_refs[0])
+            self._on_dataframe_released_refs = None
 
     # endregion on_dataframe_released
 

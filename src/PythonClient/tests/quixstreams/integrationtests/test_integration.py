@@ -823,7 +823,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert isinstance(binary_value, bytes)
         assert binary_value == bytes(bytearray("binary_param", "UTF-8"))
 
-    @pytest.mark.skip('TODO: Fix timeouts')
     def test_parameters_write_via_buffer_and_read(self,
                                                   test_name,
                                                   topic_consumer_earliest,
@@ -1007,7 +1006,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         # and is done by checking both ways
         assert_timeseries_data_equal(read_data, written_data)
 
-    @pytest.mark.skip('TODO: Fix timeouts')
     def test_timeseries_data_raw_publish_via_buffer_and_consume(self,
                                                                 test_name,
                                                                 topic_consumer_earliest,
@@ -1122,7 +1120,6 @@ class TestTimeseriesData(BaseIntegrationTest):
         assert_timestamps_equal(consumed_timeseries_data.timestamps[0],
                                 published_timestamp)
 
-    @pytest.mark.skip('TODO: Fix timeouts')
     def test_timeseries_data_timestamp_publish_via_buffer_and_consume(self,
                                                                       test_name,
                                                                       topic_producer,
@@ -2056,3 +2053,91 @@ class TestApp(BaseIntegrationTest):
         event_thread.join()
         assert read_data is not None
         assert shutdown_callback_value
+
+
+class TestDictionary(BaseIntegrationTest):
+
+    def test_stream_state(self,
+                          test_name,
+                          topic_consumer_earliest):
+        print(f'Starting Integration test "{test_name}"')
+
+        mngr = topic_consumer_earliest.get_state_manager()
+        stmngr = mngr.get_stream_state_manager("test")
+
+        state = stmngr.get_dict_state("thestatename")
+        state["statekey"] = "statevalue"
+
+        assert state["statekey"] == "statevalue"
+
+class TestMultipleStreams(BaseIntegrationTest):
+
+    def test_multiple_streams_created_and_closed(self,
+                                           test_name,
+                                           topic_producer,
+                                           topic_consumer_earliest,
+                                           topic_name):
+        # Arrange
+        print(f'Starting Integration test "{test_name}"')
+        event = threading.Event()  # used for assertion
+
+
+        print("---- Subscribe to streams ----")
+
+        total = 5
+        counter = 0
+        def received_stream_handler(received_stream: qx.StreamConsumer):
+            print(f"Received stream {received_stream.stream_id}")
+
+            InteropUtils.log_debug("Getting Dict State")
+            dict_state = received_stream.get_dict_state("dict_stuff")
+            dict_state.on_flushed = lambda : InteropUtils.log_debug(f"Flushed {received_stream.stream_id}")
+            dict_state.on_flushing = lambda: InteropUtils.log_debug(f"Flushing {received_stream.stream_id}")
+            InteropUtils.log_debug("Setting Dict State value")
+            dict_state["someKey"] = "somevalue"
+            InteropUtils.log_debug("Done Setting Dict State value")
+
+            InteropUtils.log_debug("Getting Scalar State")
+            scalar_state = received_stream.get_scalar_state("scalar_stuff")
+            scalar_state.on_flushed = lambda: InteropUtils.log_debug(f"Flushed {received_stream.stream_id}")
+            scalar_state.on_flushing = lambda: InteropUtils.log_debug(f"Flushing {received_stream.stream_id}")
+            InteropUtils.log_debug("Setting Scalar State value")
+            scalar_state.value = "some_scalar_value"
+            InteropUtils.log_debug("Done Setting Scalar State value")
+
+
+            def stream_closes_handler(stream, mode):
+                print(f"Stream closes: {received_stream.stream_id}")
+                nonlocal counter
+                nonlocal total
+                counter = counter + 1
+                if counter == total:
+                    event.set()
+
+            received_stream.on_stream_closed = stream_closes_handler
+
+        topic_consumer_earliest.on_stream_received = received_stream_handler
+
+        event = threading.Event()  # used to block sending until the consumer actually subscribed
+        print("---- Start publishing ----")
+
+        for i in range(0, total):
+            output_stream = topic_producer.create_stream(f"test-stream-{i}")
+            print(output_stream.stream_id)
+            output_stream.close()
+
+        InteropUtils.log_debug("-------- FLUSHING PRODUCER ---------")
+        topic_producer.flush()
+
+        InteropUtils.log_debug("-------- SUBSCRIBING TO CONSUMER ---------")
+
+        topic_consumer_earliest.subscribe()
+
+        InteropUtils.log_debug("-------- WAITING FOR MSGS ---------")
+
+        self.wait_for_result(event, 20)
+        InteropUtils.log_debug("-------- COMMITTING ---------")
+        topic_consumer_earliest.commit()
+        InteropUtils.log_debug("-------- COMMIT DONE ---------")
+        InteropUtils.log_debug("-------- TEST DONE ---------")
+

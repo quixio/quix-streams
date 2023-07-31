@@ -1,3 +1,6 @@
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
+
+
 def _dummy(*args, **kwargs):
     pass
 
@@ -18,9 +21,19 @@ def nativedecorator(cls):
         if self._nativedecorator_finalized:
             return
 
+        ptr = getattr(self, "_interop").get_interop_ptr__()
+
+        InteropUtils.log_debug(f"Finalizing {cls.__name__} ({ptr.value})")
+        InteropUtils.log_debug_indent_increment()
+
         self._nativedecorator_finalized = True
         orig_finalizer(self)
+
         getattr(self, "_interop").dispose_ptr__()
+
+        InteropUtils.log_debug_indent_decrement()
+        InteropUtils.log_debug(f"Finalized {cls.__name__} ({ptr.value})")
+
 
     def new_del(self):
         new_finalizerfunc(self)
@@ -35,10 +48,20 @@ def nativedecorator(cls):
         return result
 
     def new_dispose(self, *args, **kwargs):
+
+        ptr = getattr(self, "_interop").get_interop_ptr__()
+
+        InteropUtils.log_debug(f"Disposing {cls.__name__} ({ptr.value})")
+        InteropUtils.log_debug_indent_increment()
+
         if self._nativedecorator_finalized:
             return
 
         orig_dispose(self, *args, **kwargs)
+        new_finalizerfunc(self)
+
+        InteropUtils.log_debug_indent_decrement()
+        InteropUtils.log_debug(f"Disposed {cls.__name__} ({ptr.value})")
 
     cls.__init__ = new_init
     cls._finalizerfunc = new_finalizerfunc

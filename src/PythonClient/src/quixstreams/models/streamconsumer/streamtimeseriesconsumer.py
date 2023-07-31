@@ -44,16 +44,16 @@ class StreamTimeseriesConsumer(object):
 
         # Define events and their reference holders.
         self._on_data_received = None
-        self._on_data_received_ref = None  # Keeping reference to avoid GC.
+        self._on_data_received_refs = None  # Keeping references to avoid GC.
 
         self._on_raw_received = None
-        self._on_raw_received_ref = None  # Keeping reference to avoid GC.
+        self._on_raw_received_refs = None  # Keeping references to avoid GC.
 
         self._on_dataframe_received = None
-        self._on_dataframe_received_ref = None  # Keeping reference to avoid GC.
+        self._on_dataframe_received_refs = None  # Keeping references to avoid GC.
 
         self._on_definitions_changed = None
-        self._on_definitions_changed_ref = None  # Keeping reference to avoid GC.
+        self._on_definitions_changed_refs = None  # Keeping references to avoid GC.
 
     def _finalizerfunc(self):
         [buffer.dispose() for buffer in self._buffers]
@@ -84,8 +84,8 @@ class StreamTimeseriesConsumer(object):
                 The first parameter is the stream that receives the data, and the second is the data in TimeseriesData format.
         """
         self._on_data_received = value
-        if self._on_data_received_ref is None:
-            self._on_data_received_ref = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
+        if self._on_data_received_refs is None:
+            self._on_data_received_refs = self._interop.add_OnDataReceived(self._on_data_received_wrapper)
 
     def _on_data_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have.
@@ -97,9 +97,9 @@ class StreamTimeseriesConsumer(object):
             traceback.print_exc()
 
     def _on_data_received_dispose(self):
-        if self._on_data_received_ref is not None:
-            self._interop.remove_OnDataReceived(self._on_data_received_ref)
-            self._on_data_received_ref = None
+        if self._on_data_received_refs is not None:
+            self._interop.remove_OnDataReceived(self._on_data_received_refs[0])
+            self._on_data_received_refs = None
 
     # endregion on_data_received
 
@@ -125,8 +125,8 @@ class StreamTimeseriesConsumer(object):
                 The first parameter is the stream that receives the data, and the second is the data in TimeseriesDataRaw format.
         """
         self._on_raw_received = value
-        if self._on_raw_received_ref is None:
-            self._on_raw_received_ref = self._interop.add_OnRawReceived(self._on_raw_received_wrapper)
+        if self._on_raw_received_refs is None:
+            self._on_raw_received_refs = self._interop.add_OnRawReceived(self._on_raw_received_wrapper)
 
     def _on_raw_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have.
@@ -138,9 +138,9 @@ class StreamTimeseriesConsumer(object):
             traceback.print_exc()
 
     def _on_raw_received_dispose(self):
-        if self._on_raw_received_ref is not None:
-            self._interop.remove_OnRawReceived(self._on_raw_received_ref)
-            self._on_raw_received_ref = None
+        if self._on_raw_received_refs is not None:
+            self._interop.remove_OnRawReceived(self._on_raw_received_refs[0])
+            self._on_raw_received_refs = None
 
     # endregion on_raw_receive
 
@@ -166,8 +166,8 @@ class StreamTimeseriesConsumer(object):
                 The first parameter is the stream that receives the data, and the second is the data in pandas DataFrame format.
         """
         self._on_dataframe_received = value
-        if self._on_dataframe_received_ref is None:
-            self._on_dataframe_received_ref = self._interop.add_OnRawReceived(self._on_dataframe_received_wrapper)
+        if self._on_dataframe_received_refs is None:
+            self._on_dataframe_received_refs = self._interop.add_OnRawReceived(self._on_dataframe_received_wrapper)
 
     def _on_dataframe_received_wrapper(self, stream_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -182,9 +182,9 @@ class StreamTimeseriesConsumer(object):
             traceback.print_exc()
 
     def _on_dataframe_received_dispose(self):
-        if self._on_dataframe_received_ref is not None:
-            self._interop.remove_OnRawReceived(self._on_dataframe_received_ref)
-            self._on_dataframe_received_ref = None
+        if self._on_dataframe_received_refs is not None:
+            self._interop.remove_OnRawReceived(self._on_dataframe_received_refs[0])
+            self._on_dataframe_received_refs = None
 
     # endregion on_dataframe_receive
 
@@ -211,8 +211,8 @@ class StreamTimeseriesConsumer(object):
                 The first parameter is the stream for which the parameter definitions changed.
         """
         self._on_definitions_changed = value
-        if self._on_definitions_changed_ref is None:
-            self._on_definitions_changed_ref = self._interop.add_OnDefinitionsChanged(
+        if self._on_definitions_changed_refs is None:
+            self._on_definitions_changed_refs = self._interop.add_OnDefinitionsChanged(
                 self._on_definitions_changed_wrapper)
 
     def _on_definitions_changed_wrapper(self, stream_hptr, args_hptr):
@@ -225,9 +225,9 @@ class StreamTimeseriesConsumer(object):
             traceback.print_exc()
 
     def _on_definitions_changed_dispose(self):
-        if self._on_definitions_changed_ref is not None:
-            self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_ref)
-            self._on_definitions_changed_ref = None
+        if self._on_definitions_changed_refs is not None:
+            self._interop.remove_OnDefinitionsChanged(self._on_definitions_changed_refs[0])
+            self._on_definitions_changed_refs = None
 
     # endregion on_definitions_changed
 

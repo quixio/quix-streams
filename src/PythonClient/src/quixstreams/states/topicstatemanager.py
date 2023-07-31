@@ -1,8 +1,8 @@
 import ctypes
-import weakref
 from typing import List
 
 from ..helpers.nativedecorator import nativedecorator
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.QuixStreamsStreaming.States.TopicStateManager import TopicStateManager as tsmi
 
 from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
@@ -28,8 +28,12 @@ class TopicStateManager(object):
         if net_pointer is None:
             raise Exception("TopicStateManager is none")
 
-        self._stream_state_cache = weakref.WeakValueDictionary()
+        self._stream_state_cache = {}
         self._interop = tsmi(net_pointer)
+
+    def _finalizerfunc(self):
+        for (k, v) in self._stream_state_cache.items():
+            v.dispose()
 
     def get_stream_states(self) -> List[str]:
         """

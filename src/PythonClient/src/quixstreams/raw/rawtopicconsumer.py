@@ -32,10 +32,10 @@ class RawTopicConsumer(object):
 
         # define events and their ref holder
         self._on_message_received = None
-        self._on_message_received_ref = None  # keeping reference to avoid GC
+        self._on_message_received_refs = None  # keeping references to avoid GC
 
         self._on_error_occurred = None
-        self._on_error_occurred_ref = None  # keeping reference to avoid GC
+        self._on_error_occurred_refs = None  # keeping references to avoid GC
 
     def _finalizerfunc(self):
         self._on_message_received_dispose()
@@ -63,8 +63,8 @@ class RawTopicConsumer(object):
                 The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
         """
         self._on_message_received = value
-        if self._on_message_received_ref is None:
-            self._on_message_received_ref = self._interop.add_OnMessageReceived(self._on_message_received_wrapper)
+        if self._on_message_received_refs is None:
+            self._on_message_received_refs = self._interop.add_OnMessageReceived(self._on_message_received_wrapper)
 
     def _on_message_received_wrapper(self, topic_hptr, message_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -75,9 +75,9 @@ class RawTopicConsumer(object):
             traceback.print_exc()
 
     def _on_message_received_dispose(self):
-        if self._on_message_received_ref is not None:
-            self._interop.remove_OnMessageReceived(self._on_message_received_ref)
-            self._on_message_received_ref = None
+        if self._on_message_received_refs is not None:
+            self._interop.remove_OnMessageReceived(self._on_message_received_refs[0])
+            self._on_message_received_refs = None
 
     # endregion on_message_received
 
@@ -103,8 +103,8 @@ class RawTopicConsumer(object):
                 The first parameter is the RawTopicConsumer instance for which the error is received, and the second is the exception.
         """
         self._on_error_occurred = value
-        if self._on_error_occurred_ref is None:
-            self._on_error_occurred_ref = self._interop.add_OnErrorOccurred(self._on_error_occurred_wrapper)
+        if self._on_error_occurred_refs is None:
+            self._on_error_occurred_refs = self._interop.add_OnErrorOccurred(self._on_error_occurred_wrapper)
 
     def _on_error_occurred_wrapper(self, topic_hptr, error_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
@@ -117,9 +117,9 @@ class RawTopicConsumer(object):
             traceback.print_exc()
 
     def _on_error_occurred_dispose(self):
-        if self._on_error_occurred_ref is not None:
-            self._interop.remove_OnErrorOccurred(self._on_error_occurred_ref)
-            self._on_error_occurred_ref = None
+        if self._on_error_occurred_refs is not None:
+            self._interop.remove_OnErrorOccurred(self._on_error_occurred_refs[0])
+            self._on_error_occurred_refs = None
 
     # endregion on_error_occurred
 

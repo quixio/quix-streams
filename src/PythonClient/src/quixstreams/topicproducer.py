@@ -28,7 +28,7 @@ class TopicProducer(object):
 
         # define events and their ref holder
         self._on_disposed = None
-        self._on_disposed_ref = None  # keeping reference to avoid GC
+        self._on_disposed_refs = None  # keeping reference to avoid GC
 
     def _finalizerfunc(self):
         self._on_disposed_dispose()
@@ -67,9 +67,8 @@ class TopicProducer(object):
                 The first parameter is the TopicProducer instance that got disposed.
         """
         self._on_disposed = value
-        if self._on_disposed_ref is None:
-            self._on_disposed_ref = self._interop.add_OnDisposed(
-                self._on_disposed_wrapper)
+        if self._on_disposed_refs is None:
+            self._on_disposed_refs = self._interop.add_OnDisposed(self._on_disposed_wrapper)
 
     def _on_disposed_wrapper(self, stream_hptr, arg_hptr):
         # To avoid unnecessary overhead and complication, we're using the stream instance we already have
@@ -81,9 +80,9 @@ class TopicProducer(object):
             traceback.print_exc()
 
     def _on_disposed_dispose(self):
-        if self._on_disposed_ref is not None:
-            self._interop.remove_OnDisposed(self._on_disposed_ref)
-            self._on_disposed_ref = None
+        if self._on_disposed_refs is not None:
+            self._interop.remove_OnDisposed(self._on_disposed_refs[0])
+            self._on_disposed_refs = None
 
     # endregion on_disposed
 
@@ -146,5 +145,4 @@ class TopicProducer(object):
 
             callback = on_create_callback
 
-        return StreamProducer(self,
-                              self._interop.GetOrCreateStream(stream_id, callback)[0])
+        return StreamProducer(self, self._interop.GetOrCreateStream(stream_id, callback)[0])
