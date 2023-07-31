@@ -23,6 +23,8 @@
   * [RawTopicProducer](#quixstreams.raw.rawtopicproducer.RawTopicProducer)
     * [\_\_init\_\_](#quixstreams.raw.rawtopicproducer.RawTopicProducer.__init__)
     * [publish](#quixstreams.raw.rawtopicproducer.RawTopicProducer.publish)
+    * [dispose](#quixstreams.raw.rawtopicproducer.RawTopicProducer.dispose)
+    * [flush](#quixstreams.raw.rawtopicproducer.RawTopicProducer.flush)
 * [quixstreams.raw.rawtopicconsumer](#quixstreams.raw.rawtopicconsumer)
   * [RawTopicConsumer](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer)
     * [\_\_init\_\_](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.__init__)
@@ -73,6 +75,8 @@
 * [quixstreams.topicproducer](#quixstreams.topicproducer)
   * [TopicProducer](#quixstreams.topicproducer.TopicProducer)
     * [\_\_init\_\_](#quixstreams.topicproducer.TopicProducer.__init__)
+    * [dispose](#quixstreams.topicproducer.TopicProducer.dispose)
+    * [flush](#quixstreams.topicproducer.TopicProducer.flush)
     * [on\_disposed](#quixstreams.topicproducer.TopicProducer.on_disposed)
     * [on\_disposed](#quixstreams.topicproducer.TopicProducer.on_disposed)
     * [create\_stream](#quixstreams.topicproducer.TopicProducer.create_stream)
@@ -764,6 +768,26 @@ Publishes the given message to the associated topic producer.
 - `message` - The message to be published, which can be either
   a RawMessage instance, bytes, or a bytearray.
 
+<a id="quixstreams.raw.rawtopicproducer.RawTopicProducer.dispose"></a>
+
+#### dispose
+
+```python
+def dispose()
+```
+
+Flushes pending messages and disposes underlying resources
+
+<a id="quixstreams.raw.rawtopicproducer.RawTopicProducer.flush"></a>
+
+#### flush
+
+```python
+def flush()
+```
+
+Flushes pending messages to the broker
+
 <a id="quixstreams.raw.rawtopicconsumer"></a>
 
 # quixstreams.raw.rawtopicconsumer
@@ -1440,6 +1464,26 @@ NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_
 **Arguments**:
 
 - `net_pointer` - The .net object representing a StreamingClient.
+
+<a id="quixstreams.topicproducer.TopicProducer.dispose"></a>
+
+#### dispose
+
+```python
+def dispose()
+```
+
+Flushes pending data to the broker and disposes underlying resources
+
+<a id="quixstreams.topicproducer.TopicProducer.flush"></a>
+
+#### flush
+
+```python
+def flush()
+```
+
+Flushes pending data to the broker
 
 <a id="quixstreams.topicproducer.TopicProducer.on_disposed"></a>
 

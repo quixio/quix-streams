@@ -21,6 +21,8 @@ Implements [IRawTopicProducer](IRawTopicProducer.md 'QuixStreams.Streaming.Raw.I
 
 | Methods | |
 | :--- | :--- |
+| [Dispose()](RawTopicProducer.Dispose().md 'QuixStreams.Streaming.Raw.RawTopicProducer.Dispose()') | Flushes pending messages and disposes underlying resources |
+| [Flush()](RawTopicProducer.Flush().md 'QuixStreams.Streaming.Raw.RawTopicProducer.Flush()') | Flushes pending messages to the broker |
 | [Publish(RawMessage)](RawTopicProducer.Publish(RawMessage).md 'QuixStreams.Streaming.Raw.RawTopicProducer.Publish(QuixStreams.Streaming.Raw.RawMessage)') | Publish data to the topic |
 
 | Events | |

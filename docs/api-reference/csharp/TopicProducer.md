@@ -24,6 +24,8 @@ Implements [ITopicProducer](ITopicProducer.md 'QuixStreams.Streaming.ITopicProdu
 | :--- | :--- |
 | [CreateStream()](TopicProducer.CreateStream().md 'QuixStreams.Streaming.TopicProducer.CreateStream()') | Creates a new stream and returns the related stream producer to operate it. |
 | [CreateStream(string)](TopicProducer.CreateStream(string).md 'QuixStreams.Streaming.TopicProducer.CreateStream(string)') | Creates a new stream and returns the related stream producer to operate it. |
+| [Dispose()](TopicProducer.Dispose().md 'QuixStreams.Streaming.TopicProducer.Dispose()') | Flushes pending data to the broker and disposes underlying resources |
+| [Flush()](TopicProducer.Flush().md 'QuixStreams.Streaming.TopicProducer.Flush()') | Flushes pending data to the broker |
 | [GetOrCreateStream(string, Action&lt;IStreamProducer&gt;)](TopicProducer.GetOrCreateStream(string,Action_IStreamProducer_).md 'QuixStreams.Streaming.TopicProducer.GetOrCreateStream(string, System.Action<QuixStreams.Streaming.IStreamProducer>)') | Retrieves a stream that was previously created by this instance, if the stream is not closed, otherwise creates a new stream. |
 | [GetStream(string)](TopicProducer.GetStream(string).md 'QuixStreams.Streaming.TopicProducer.GetStream(string)') | Retrieves a stream that was previously created by this instance, if the stream is not closed. |
 | [RemoveStream(string)](TopicProducer.RemoveStream(string).md 'QuixStreams.Streaming.TopicProducer.RemoveStream(string)') | Removes a stream from the internal list of streams |
