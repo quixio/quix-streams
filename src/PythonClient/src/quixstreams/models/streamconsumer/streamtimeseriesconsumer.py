@@ -44,16 +44,16 @@ class StreamTimeseriesConsumer(object):
 
         # Define events and their reference holders.
         self._on_data_received = None
-        self._on_data_received_refs = None  # Keeping reference to avoid GC.
+        self._on_data_received_refs = None  # Keeping references to avoid GC.
 
         self._on_raw_received = None
-        self._on_raw_received_refs = None  # Keeping reference to avoid GC.
+        self._on_raw_received_refs = None  # Keeping references to avoid GC.
 
         self._on_dataframe_received = None
-        self._on_dataframe_received_refs = None  # Keeping reference to avoid GC.
+        self._on_dataframe_received_refs = None  # Keeping references to avoid GC.
 
         self._on_definitions_changed = None
-        self._on_definitions_changed_refs = None  # Keeping reference to avoid GC.
+        self._on_definitions_changed_refs = None  # Keeping references to avoid GC.
 
     def _finalizerfunc(self):
         [buffer.dispose() for buffer in self._buffers]

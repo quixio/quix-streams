@@ -36,7 +36,7 @@ class StreamPropertiesConsumer(object):
 
         # Define events and their reference holders
         self._on_changed = None
-        self._on_changed_refs = None  # Keeping reference to avoid garbage collection
+        self._on_changed_refs = None  # Keeping references to avoid garbage collection
 
         self._metadata = None
         self._parents = None

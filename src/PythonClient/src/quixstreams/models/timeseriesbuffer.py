@@ -57,13 +57,13 @@ class TimeseriesBuffer(object):
 
         # define events and their ref holder
         self._on_data_released = None
-        self._on_data_released_refs = None  # keeping reference to avoid GC
+        self._on_data_released_refs = None  # keeping references to avoid GC
 
         self._on_raw_released = None
-        self._on_raw_released_refs = None  # keeping reference to avoid GC
+        self._on_raw_released_refs = None  # keeping references to avoid GC
 
         self._on_dataframe_released = None
-        self._on_dataframe_released_refs = None  # keeping reference to avoid GC
+        self._on_dataframe_released_refs = None  # keeping references to avoid GC
 
     def _finalizerfunc(self):
         self._on_data_released_dispose()

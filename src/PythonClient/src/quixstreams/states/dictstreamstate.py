@@ -71,10 +71,10 @@ class DictStreamState(Generic[StreamStateType]):
 
         # Define events and their reference holders
         self._on_flushed = None
-        self._on_flushed_refs = None  # Keeping reference to avoid garbage collection
+        self._on_flushed_refs = None  # Keeping references to avoid garbage collection
 
         self._on_flushing = None
-        self._on_flushing_refs = None  # Keeping reference to avoid garbage collection
+        self._on_flushing_refs = None  # Keeping references to avoid garbage collection
 
         # Check if type is immutable, because it needs special handling. Content could change without StreamState being
         # notified

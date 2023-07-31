@@ -32,10 +32,10 @@ class RawTopicConsumer(object):
 
         # define events and their ref holder
         self._on_message_received = None
-        self._on_message_received_refs = None  # keeping reference to avoid GC
+        self._on_message_received_refs = None  # keeping references to avoid GC
 
         self._on_error_occurred = None
-        self._on_error_occurred_refs = None  # keeping reference to avoid GC
+        self._on_error_occurred_refs = None  # keeping references to avoid GC
 
     def _finalizerfunc(self):
         self._on_message_received_dispose()
