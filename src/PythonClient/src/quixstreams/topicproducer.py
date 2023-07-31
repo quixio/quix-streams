@@ -28,7 +28,7 @@ class TopicProducer(object):
 
         # define events and their ref holder
         self._on_disposed = None
-        self._on_disposed_refs = None  # keeping reference to avoid GC
+        self._on_disposed_refs = None  # Keeping references to avoid GC
 
     def _finalizerfunc(self):
         self._on_disposed_dispose()

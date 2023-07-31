@@ -33,19 +33,19 @@ class TopicConsumer(object):
 
         # define events and their ref holder
         self._on_stream_received = None
-        self._on_stream_received_refs = None  # keeping reference to avoid GC
+        self._on_stream_received_refs = None  # Keeping references to avoid GC
 
         self._on_streams_revoked = None
-        self._on_streams_revoked_refs = None  # keeping reference to avoid GC
+        self._on_streams_revoked_refs = None  # Keeping references to avoid GC
 
         self._on_revoking = None
-        self._on_revoking_refs = None  # keeping reference to avoid GC
+        self._on_revoking_refs = None  # Keeping references to avoid GC
 
         self._on_committed = None
-        self._on_committed_refs = None  # keeping reference to avoid GC
+        self._on_committed_refs = None  # Keeping references to avoid GC
 
         self._on_committing = None
-        self._on_committing_refs = None  # keeping reference to avoid GC
+        self._on_committing_refs = None  # Keeping references to avoid GC
 
         self._topic_state_manager = None
 

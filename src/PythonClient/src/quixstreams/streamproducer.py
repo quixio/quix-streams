@@ -42,7 +42,7 @@ class StreamProducer(object):
 
         # define events and their ref holder
         self._on_write_exception = None
-        self._on_write_exception_refs = None  # keeping reference to avoid GC
+        self._on_write_exception_refs = None  # Keeping references to avoid GC
 
         self._stream_id = self._interop.get_StreamId()
 

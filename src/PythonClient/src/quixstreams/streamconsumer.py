@@ -46,13 +46,13 @@ class StreamConsumer(object):
         # define events and their ref holder
         self._on_stream_closed = None
         self._on_stream_closed_internal = on_close_cb_always
-        self._on_stream_closed_refs = None  # keeping reference to avoid GC
+        self._on_stream_closed_refs = None  # Keeping references to avoid GC
         if self._on_stream_closed_internal is not None:
             self.on_stream_closed = None  # this will trigger subscription of wrapper
 
 
         self._on_package_received = None
-        self._on_package_received_refs = None  # keeping reference to avoid GC
+        self._on_package_received_refs = None  # Keeping references to avoid GC
 
         self._streamId = None
 
