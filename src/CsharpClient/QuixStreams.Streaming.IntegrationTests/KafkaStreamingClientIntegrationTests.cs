@@ -1061,25 +1061,6 @@ namespace QuixStreams.Streaming.IntegrationTests
             this.output.WriteLine($"Wrote {iteration} iteration");
             exceptionOccurred.Should().BeFalse();
         }
-
-        // private async Task RunTest(Func<Task> test)
-        // {
-        //     var count = 0;
-        //     while (count < MaxTestRetry)
-        //     {
-        //         try
-        //         {
-        //             count++;
-        //             await test();
-        //             return; // success
-        //         }
-        //         catch (Exception ex)
-        //         {
-        //             this.output.WriteLine($"Attempt {count} failed");
-        //             this.output.WriteLine(ex.ToString());
-        //         }
-        //     }
-        // }
         
         private void RunTest(Action test)
         {

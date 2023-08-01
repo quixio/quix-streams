@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using RocksDbSharp;
 
@@ -18,7 +19,7 @@ namespace QuixStreams.State.Storage
         /// Holds references of RocksDb instances to ensure only one exists and avoid IO lock issue.
         /// Key is the db directory and value is a tuple of RocksDb instance and reference count.
         /// </summary>
-        private static readonly Dictionary<string, (RocksDb Db, int RefCount)> RocksDbInstances = new Dictionary<string, (RocksDb, int)>();
+        private static readonly Dictionary<string, RocksDbInstance> RocksDbInstances = new ();
         
         private readonly RocksDb db;
         private readonly string dbDirectory;
@@ -28,7 +29,7 @@ namespace QuixStreams.State.Storage
         private readonly WriteBatch writeBatch = new();
         private bool useWriteBatch = false;
 
-        private const char Slash = '/'; // Separator for sub-storage name 
+        private const char SubStorageSeparator = '/';
         
         /// <summary>
         /// In-memory loaded sub-storages.   
@@ -153,12 +154,12 @@ namespace QuixStreams.State.Storage
         /// <inheritdoc/>
         public IStateStorage GetOrCreateSubStorage(string subStorageName, string dbName = null)
         {
-            if (subStorageName.Contains(Slash))
+            if (subStorageName.Contains(SubStorageSeparator))
             {
-                throw new ArgumentException($"{nameof(storageName)} cannot contain slash character '{Slash}'.");
+                throw new ArgumentException($"{nameof(storageName)} cannot contain slash character '{SubStorageSeparator}'.");
             }
             
-            subStorageName = $"{this.storageName}{Slash}{subStorageName}";
+            subStorageName = $"{this.storageName}{SubStorageSeparator}{subStorageName}";
             var dbDir = string.IsNullOrEmpty(dbName) ? this.dbDirectory : GetSubDatabasePath(dbName);
             
             if (GetSubStoragesWithDb().Any(x => x.Key == subStorageName && x.Value != dbDir))
@@ -181,7 +182,7 @@ namespace QuixStreams.State.Storage
         /// <inheritdoc/>
         public bool DeleteSubStorage(string subStorageName)
         {
-            subStorageName = $"{this.storageName}{Slash}{subStorageName}";
+            subStorageName = $"{this.storageName}{SubStorageSeparator}{subStorageName}";
 
             var subs = GetSubStoragesWithDb();
             
@@ -190,7 +191,7 @@ namespace QuixStreams.State.Storage
                 return false;
             }
             
-            var subStoragesOfTheSubStorage = subs.Where(sub => sub.Key.StartsWith($"{subStorageName}{Slash}"));
+            var subStoragesOfTheSubStorage = subs.Where(sub => sub.Key.StartsWith($"{subStorageName}{SubStorageSeparator}"));
 
             foreach (var sub in subStoragesOfTheSubStorage.Append(new (subStorageName, subStorageDbDirectory)))
             {
@@ -249,7 +250,7 @@ namespace QuixStreams.State.Storage
             // Remove sub-sub-storages names
             return storageNames.Select(x =>
             {
-                var endOfStorageNameIndex = x.IndexOf(Slash);
+                var endOfStorageNameIndex = x.IndexOf(SubStorageSeparator);
                 return endOfStorageNameIndex == -1 ? x : x.Remove(endOfStorageNameIndex);
             }).ToImmutableHashSet();
         }
@@ -266,7 +267,7 @@ namespace QuixStreams.State.Storage
                     if (cfName == ColumnFamilies.DefaultName)
                         continue;
 
-                    if (!cfName.StartsWith($"{this.storageName}{Slash}"))
+                    if (!cfName.StartsWith($"{this.storageName}{SubStorageSeparator}"))
                         continue;
 
                     subs.Add(cfName, subDbDirectory);
@@ -314,9 +315,9 @@ namespace QuixStreams.State.Storage
                 return;
             }
             
-            dbWithRefCount.RefCount -= 1; // decrease reference count
+            dbWithRefCount.DecrementRefCount();
 
-            if (dbWithRefCount.RefCount <= 0)
+            if (!dbWithRefCount.IsUsed())
             {
                 dbWithRefCount.Db.Dispose(); // dispose the db
                 RocksDbInstances.Remove(dbDirectory);   
@@ -337,7 +338,7 @@ namespace QuixStreams.State.Storage
         {
             if (RocksDbInstances.TryGetValue(dbDirectory, out var dbWithRefCount))
             {
-                dbWithRefCount.RefCount += 1; // increase reference count
+                dbWithRefCount.IncrementRefCount();
                 return dbWithRefCount.Db;
             }
             
@@ -357,9 +358,41 @@ namespace QuixStreams.State.Storage
             }
             
             var db = RocksDb.Open(dbOptions, dbDirectory, columnFamilies);
-            RocksDbInstances.Add(dbDirectory, (db, 1));
+            RocksDbInstances.Add(dbDirectory, new RocksDbInstance(db, 1));
 
             return db;
+        }
+
+        private class RocksDbInstance
+        {
+            public RocksDb Db { get; }
+
+            private int refCount;
+
+            public RocksDbInstance(RocksDb db, int initialRefCount)
+            {
+                Db = db;
+                refCount = initialRefCount;
+            }
+
+            public void IncrementRefCount()
+            {
+                Interlocked.Increment(ref refCount);
+            }
+            
+            public void DecrementRefCount()
+            {
+                var result = Interlocked.Decrement(ref refCount);
+                if (result < 0)
+                {
+                    throw new InvalidOperationException("De-referenced the RocksDB instance more times than tracked");
+                }
+            }
+
+            public bool IsUsed()
+            {
+                return this.refCount != 0;
+            }
         }
     }
 }
