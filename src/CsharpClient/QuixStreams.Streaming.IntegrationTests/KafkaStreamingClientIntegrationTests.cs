@@ -839,6 +839,122 @@ namespace QuixStreams.Streaming.IntegrationTests
             });
         }
         
+        [Fact]
+        public void StreamState_Concurrency()
+        {
+            var topic = nameof(StreamState_Concurrency);
+            RunTest(async () =>
+            {
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                var topicProducer = client.GetTopicProducer(topic);
+                
+                // Clean previous run
+                var topicStateManager = topicConsumer.GetStateManager();
+                topicStateManager.DeleteStreamStates();
+                topicStateManager.GetStreamStates().Should().BeEmpty();
+
+                var msgCounter = 0;
+                topicConsumer.OnStreamReceived += (sender, stream) =>
+                {
+                    var rollingSum = stream.GetScalarState("RollingSumTotal", (sid) => 0d);
+                    var rollingSumPerParameter = stream.GetDictionaryState("RollingSum", (sid) => 0d);
+
+                    stream.Timeseries.OnDataReceived += (o, args) =>
+                    {
+                        foreach (var data in args.Data.Timestamps)
+                        {
+                            foreach (var parameter in data.Parameters)
+                            {
+                                if (parameter.Value.Type == ParameterValueType.Numeric)
+                                {
+                                    rollingSumPerParameter[parameter.Key] += parameter.Value.NumericValue ?? 0;
+                                    rollingSum.Value += parameter.Value.NumericValue ?? 0;
+                        
+                                    this.output.WriteLine($"Rolling sum for {parameter.Key} is {rollingSumPerParameter[parameter.Key]}");
+                                }  
+                            }
+                        }
+                        
+                        msgCounter++;
+                    };
+                };
+                
+                topicConsumer.Subscribe();
+                
+                var startTime = DateTime.UtcNow;
+                var streamProducer = topicProducer.GetOrCreateStream("stream1");
+                var producerTask1 = ProducerAsync(streamProducer, startTime, new List<(long, string, int)>
+                {
+                    (1, "param1", 5),
+                    (2, "param2", 10),
+                    (3, "param1", 9)
+                });
+                
+                var streamProducer2 = topicProducer.GetOrCreateStream("stream2");
+                var producerTask2 = ProducerAsync(streamProducer2, startTime, new List<(long, string, int)>
+                {
+                    (1, "param1", 5),
+                    (2, "param2", 7),
+                    (3, "param1", 4),
+                    (4, "param2", 3)
+                });
+
+                await Task.WhenAll(producerTask1, producerTask2);
+                
+                topicProducer.Dispose();
+                output.WriteLine("Closed Producer");
+                
+                // Wait for enough messages to be received
+                
+                output.WriteLine("Waiting for messages");
+                SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10));
+                output.WriteLine($"Waited for messages, got {msgCounter}");
+
+
+                msgCounter.Should().Be(7);
+                output.WriteLine($"Got expected number of messages");
+                topicConsumer.Commit();
+                topicConsumer.Dispose();
+
+                output.WriteLine($"Checking if topic state manager returns the expected stream states");
+                var manager = App.GetStateManager().GetTopicStateManager(topic);
+                manager.GetStreamStates().Should().BeEquivalentTo(new List<string>() { "stream1", "stream2" });
+                
+                output.WriteLine($"Checking Stream 1 Rolling sum for params");
+                var stream1StateRollingSum = manager.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
+                var stream1StateRollingSumPerParam = manager.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
+                stream1StateRollingSumPerParam["param1"].Should().Be(14);
+                stream1StateRollingSumPerParam["param2"].Should().Be(10);
+                stream1StateRollingSum.Value.Should().Be(24);
+                output.WriteLine($"Checked Stream 1 Rolling sum for params");
+                output.WriteLine($"Checking Stream 2 Rolling sum for params");
+                var stream2StateRollingSum = manager.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
+                var stream2StateRollingSumPerParam = manager.GetStreamStateManager(streamProducer2.StreamId).GetDictionaryState<double>("RollingSum");
+                stream2StateRollingSumPerParam["param1"].Should().Be(9);
+                stream2StateRollingSumPerParam["param2"].Should().Be(10);
+                stream2StateRollingSum.Value.Should().Be(19);
+                output.WriteLine($"Checked Stream 2 Rolling sum for params");
+
+                async Task ProducerAsync(IStreamProducer streamProducer, DateTime startTime, List<(long ms, string paramName, int val)> values)
+                {
+                    await Task.Run(() =>
+                    {
+                        foreach (var (microseconds, param, value) in values)
+                        {
+                            streamProducer.Timeseries.Buffer.AddTimestamp(startTime.AddMicroseconds(microseconds)).AddValue(param, value).Publish();
+                        }
+
+                        streamProducer.Timeseries.Flush();
+                    });
+                };
+            });
+        }
+        
+        
         
         [Fact]
         public void StreamState_CommittedFromAnotherThread_ShouldWorkAsExpected()
@@ -946,24 +1062,24 @@ namespace QuixStreams.Streaming.IntegrationTests
             exceptionOccurred.Should().BeFalse();
         }
 
-        private async Task RunTest(Func<Task> test)
-        {
-            var count = 0;
-            while (count < MaxTestRetry)
-            {
-                try
-                {
-                    count++;
-                    await test();
-                    return; // success
-                }
-                catch (Exception ex)
-                {
-                    this.output.WriteLine($"Attempt {count} failed");
-                    this.output.WriteLine(ex.ToString());
-                }
-            }
-        }
+        // private async Task RunTest(Func<Task> test)
+        // {
+        //     var count = 0;
+        //     while (count < MaxTestRetry)
+        //     {
+        //         try
+        //         {
+        //             count++;
+        //             await test();
+        //             return; // success
+        //         }
+        //         catch (Exception ex)
+        //         {
+        //             this.output.WriteLine($"Attempt {count} failed");
+        //             this.output.WriteLine(ex.ToString());
+        //         }
+        //     }
+        // }
         
         private void RunTest(Action test)
         {

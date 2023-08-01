@@ -48,11 +48,6 @@ namespace QuixStreams.State.Storage
             {
                 throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(storageName)} cannot be null or empty.");
             }
-
-            if (storageName.Contains(Slash))
-            {
-                throw new ArgumentException($"{nameof(storageName)} cannot contain slash character '{Slash}'.");
-            }
             
             if (storageName == ColumnFamilies.DefaultName)
             {
@@ -158,7 +153,12 @@ namespace QuixStreams.State.Storage
         /// <inheritdoc/>
         public IStateStorage GetOrCreateSubStorage(string subStorageName, string dbName = null)
         {
-            subStorageName = $"{this.storageName}/{subStorageName}";
+            if (subStorageName.Contains(Slash))
+            {
+                throw new ArgumentException($"{nameof(storageName)} cannot contain slash character '{Slash}'.");
+            }
+            
+            subStorageName = $"{this.storageName}{Slash}{subStorageName}";
             var dbDir = string.IsNullOrEmpty(dbName) ? this.dbDirectory : GetSubDatabasePath(dbName);
             
             if (GetSubStoragesWithDb().Any(x => x.Key == subStorageName && x.Value != dbDir))

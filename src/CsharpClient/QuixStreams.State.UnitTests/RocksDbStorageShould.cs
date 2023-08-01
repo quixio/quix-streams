@@ -443,10 +443,10 @@ namespace QuixStreams.State.UnitTests
         }
         
         [Fact]
-        public void Constructor_ThrowsException_WhenStorageNameContainsSlashChar()
+        public void GetOrCreateSubStorage_ThrowsException_WhenStorageNameContainsSlashChar()
         {
             // Act
-            Func<RocksDbStorage> act = () => new RocksDbStorage("testDir", "pre/post");
+            Func<IStateStorage> act = () => storage.GetOrCreateSubStorage("suffix/pre");
 
             // Assert
             act.Should().Throw<ArgumentException>();
