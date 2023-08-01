@@ -10,19 +10,19 @@ namespace QuixStreams.Streaming.Models
     public readonly struct ParameterValue
     {
         private readonly long timestampRawIndex;
-        private readonly Parameter parameter;
+        private readonly TimeseriesDataParameter timeseriesDataParameter;
 
-        internal ParameterValue(long timestampRawIndex, Parameter parameter)
+        internal ParameterValue(long timestampRawIndex, TimeseriesDataParameter timeseriesDataParameter)
         {
             this.timestampRawIndex = timestampRawIndex;
-            this.parameter = parameter;
-            this.Type = this.parameter.ValueType;
+            this.timeseriesDataParameter = timeseriesDataParameter;
+            this.Type = this.timeseriesDataParameter.ValueType;
         }
 
         /// <summary>
         /// Gets the Parameter Id of the parameter
         /// </summary>
-        public readonly string ParameterId => this.parameter.ParameterId;
+        public readonly string ParameterId => this.timeseriesDataParameter.ParameterId;
 
         /// <summary>
         /// Gets the type of value, which is numeric, string or binary if set, else empty
@@ -36,16 +36,16 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return this.parameter.NumericValues?[this.timestampRawIndex];
+                return this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.parameter.NumericValues == null)
+                if (this.timeseriesDataParameter.NumericValues == null)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of Numeric type.");
                 }
 
-                this.parameter.NumericValues[this.timestampRawIndex] = value;
+                this.timeseriesDataParameter.NumericValues[this.timestampRawIndex] = value;
             }
         }
 
@@ -56,16 +56,16 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return this.parameter.StringValues?[this.timestampRawIndex];
+                return this.timeseriesDataParameter.StringValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.parameter.StringValues == null)
+                if (this.timeseriesDataParameter.StringValues == null)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of String type.");
                 }
 
-                this.parameter.StringValues[this.timestampRawIndex] = value;
+                this.timeseriesDataParameter.StringValues[this.timestampRawIndex] = value;
             }
         }
 
@@ -76,16 +76,16 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return this.parameter.BinaryValues?[this.timestampRawIndex];
+                return this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.parameter.BinaryValues == null)
+                if (this.timeseriesDataParameter.BinaryValues == null)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of Binary type.");
                 }
 
-                this.parameter.BinaryValues[this.timestampRawIndex] = value;
+                this.timeseriesDataParameter.BinaryValues[this.timestampRawIndex] = value;
             }
         }
 
@@ -96,9 +96,9 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return (object)this.parameter.NumericValues?[this.timestampRawIndex]
-                    ?? (object)this.parameter.StringValues?[this.timestampRawIndex]
-                    ?? (object)this.parameter.BinaryValues?[this.timestampRawIndex];
+                return (object)this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex]
+                    ?? (object)this.timeseriesDataParameter.StringValues?[this.timestampRawIndex]
+                    ?? (object)this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
             }
         }
 
@@ -165,7 +165,7 @@ namespace QuixStreams.Streaming.Models
             {
                 var hash = 397;
                 hash ^= this.timestampRawIndex.GetHashCode();
-                hash ^= this.parameter.GetHashCode();
+                hash ^= this.timeseriesDataParameter.GetHashCode();
 
                 return hash;
             }

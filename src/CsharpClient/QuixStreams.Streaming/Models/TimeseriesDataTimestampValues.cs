@@ -77,7 +77,7 @@ namespace QuixStreams.Streaming
             {
                 if (!this.TimeseriesData.parameterList.TryGetValue(key, out var parameter))
                 {
-                    parameter = new Parameter(key);
+                    parameter = new TimeseriesDataParameter(key);
                 }
 
                 return new ParameterValue(this.timestampRawIndex, parameter);

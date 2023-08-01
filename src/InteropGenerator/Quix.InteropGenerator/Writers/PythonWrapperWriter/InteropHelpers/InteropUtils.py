@@ -273,26 +273,46 @@ class InteropUtils(object):
         hptr: c_void_p
             Pointer to .Net GC Handle
         """
-        if InteropUtils.DebugEnabled and hptr in InteropUtils.__logged_ptrs:
-            stack_trace = inspect.stack()
-
-            # Format the stack trace into a readable string
-            InteropUtils.log_debug(f"Freeing HPTR {hptr}")
-            msg = ""
-            for frame_info in stack_trace:
-                msg = msg + f"File: {frame_info.filename}, Line: {frame_info.lineno}, Function: {frame_info.function}\n"
-
-            InteropUtils.log_debug(msg)
+        
+        InteropUtils.log_pointer(hptr)
 
         return InteropUtils.invoke("interoputils_free_hptr", hptr)
 
     @staticmethod
-    def add_logged(ptr: c_void_p):
+    def add_logged_pointer(ptr: c_void_p):
         """
         Adds the specified pointer to the logged pointer list, so it is easier to trace where it is used
         """
+        if not InteropUtils.DebugEnabled:
+            return
+
         if ptr not in InteropUtils.__logged_ptrs:
             InteropUtils.__logged_ptrs.append(ptr)
+    
+    @staticmethod
+    def is_logged_pointer(ptr: c_void_p):
+        """
+        Returns whether the pointer is logged
+        """
+        if not InteropUtils.DebugEnabled:
+            return False
+        return ptr in InteropUtils.__logged_ptrs
+
+    @staticmethod
+    def log_pointer(ptr: c_void_p):
+        """
+        Logs the pointer if it was previously added to the logged pointer
+        """
+
+        if not InteropUtils.is_logged_pointer(ptr):
+            return
+
+        stack_trace = inspect.stack()
+        msg = ""
+        for frame_info in stack_trace:
+            msg = msg + f"File: {frame_info.filename}, Line: {frame_info.lineno}, Function: {frame_info.function}\n"
+
+        InteropUtils.log_debug(msg)
 
     @staticmethod
     def free_uptr(uptr: c_void_p) -> None:

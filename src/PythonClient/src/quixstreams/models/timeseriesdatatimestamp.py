@@ -3,6 +3,7 @@ import numbers
 from datetime import datetime, timedelta
 from typing import Union, Dict
 
+from ..helpers.defaultdictkeyed import defaultdictkeyed
 from ..helpers.dotnet.datetimeconverter import DateTimeConverter as dtc
 from ..helpers.nativedecorator import nativedecorator
 from ..models.parametervalue import ParameterValue, ParameterValueType
@@ -76,10 +77,24 @@ class TimeseriesDataTimestamp:
                     return None
                 return ParameterValue(net_hptr)
 
+            def _default_value_selector(key: str):
+                if str is None:
+                    return None
+
+                parameters_hptr = self._interop.get_Parameters()
+                try:
+                    key_uptr = iu.utf8_to_uptr(key)
+                    return _value_converter_to_python(di.GetValue(parameters_hptr, key_uptr))
+                finally:
+                    iu.free_hptr(parameters_hptr)
+
+
+
             parameters_hptr = self._interop.get_Parameters()
             try:
                 parameters_uptr = di.ReadAnyHPtrToUPtr(parameters_hptr)
-                self._parameters = di.ReadStringPointers(parameters_uptr, _value_converter_to_python)
+                params_dict = di.ReadStringPointers(parameters_uptr, _value_converter_to_python)
+                self._parameters = defaultdictkeyed(_default_value_selector, params_dict)
             finally:
                 iu.free_hptr(parameters_hptr)
 
