@@ -46,16 +46,31 @@ namespace QuixStreams.State.Serializers
                             {
                                 byte[] data = value.BinaryValue;
                                 writer.Write(TypeBinary);
-                                writer.Write(data.Length);
-                                writer.Write(data);
+
+                                if (data != null)
+                                {
+                                    writer.Write(data.Length);
+                                    writer.Write(data);
+                                }
+                                else
+                                {
+                                    writer.Write(-1);
+                                }
                             }
                             break;
                         case StateValue.StateType.Object:
                         {
-                            byte[] data = value.BinaryValue;
+                            byte[] data = value.BinaryValue ?? Array.Empty<byte>();
                             writer.Write(TypeObject);
-                            writer.Write(data.Length);
-                            writer.Write(data);
+                            if (data != null)
+                            {
+                                writer.Write(data.Length);
+                                writer.Write(data);
+                            }
+                            else
+                            {
+                                writer.Write(-1);
+                            }
                         }
                             break;                        
                         case StateValue.StateType.Bool:
@@ -81,7 +96,7 @@ namespace QuixStreams.State.Serializers
                             break;
                         case StateValue.StateType.String:
                             {
-                                string data = value.StringValue;
+                                string data = value.StringValue ?? ""; // null would throw arg exc
                                 writer.Write(TypeString);
                                 writer.Write(data);
                             }
@@ -146,13 +161,15 @@ namespace QuixStreams.State.Serializers
                         case TypeBinary:
                             {
                                 int dataLength = reader.ReadInt32();
+                                if (dataLength == -1) return new StateValue((byte[])null);
                                 return new StateValue(reader.ReadBytes(dataLength));
                             }
                         case TypeObject:
-                        {
-                            int dataLength = reader.ReadInt32();
-                            return new StateValue(reader.ReadBytes(dataLength), StateValue.StateType.Object);
-                        }                        
+                            {
+                                int dataLength = reader.ReadInt32();
+                                if (dataLength == -1) return new StateValue((byte[])null);
+                                return new StateValue(reader.ReadBytes(dataLength), StateValue.StateType.Object);
+                            }                        
                         case TypeBool:
                             {
                                 return new StateValue(reader.ReadBoolean());

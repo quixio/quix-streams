@@ -107,5 +107,59 @@ namespace QuixStreams.State.UnitTests
             // Assert
             state.Value.StringValue.Should().BeEquivalentTo("value");
         }
+        
+        [Fact]
+        public void Update_WithNullByteValue_ShouldBeRemovedFromState()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new ScalarState(storage);
+            state.Value = new StateValue(new byte[] {1,2,3});
+            state.Flush();
+            storage.ContainsKey(ScalarState.StorageKey).Should().BeTrue();
+
+            // Act
+            state.Value = new StateValue((byte[])null);
+            state.Flush();
+
+            // Assert
+            storage.ContainsKey(ScalarState.StorageKey).Should().BeFalse();
+        }
+        
+        [Fact]
+        public void Update_WithNullObjectValue_ShouldBeRemovedFromState()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new ScalarState(storage);
+            state.Value = new StateValue(new byte[] {1,2,3}, StateValue.StateType.Object);
+            state.Flush();
+            storage.ContainsKey(ScalarState.StorageKey).Should().BeTrue();
+
+            // Act
+            state.Value = new StateValue(null, StateValue.StateType.Object);
+            state.Flush();
+
+            // Assert
+            storage.ContainsKey(ScalarState.StorageKey).Should().BeFalse();
+        }
+        
+        [Fact]
+        public void Update_WithNullStringValue_ShouldBeRemovedFromState()
+        {
+            // Arrange
+            var storage = new InMemoryStorage();
+            var state = new ScalarState(storage);
+            state.Value = new StateValue("something");
+            state.Flush();
+            storage.ContainsKey(ScalarState.StorageKey).Should().BeTrue();
+
+            // Act
+            state.Value = new StateValue((string)null);
+            state.Flush();
+
+            // Assert
+            storage.ContainsKey(ScalarState.StorageKey).Should().BeFalse();
+        }
     }
 }

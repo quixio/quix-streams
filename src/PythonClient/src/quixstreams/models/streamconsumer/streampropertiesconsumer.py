@@ -36,7 +36,7 @@ class StreamPropertiesConsumer(object):
 
         # Define events and their reference holders
         self._on_changed = None
-        self._on_changed_ref = None  # Keeping reference to avoid garbage collection
+        self._on_changed_refs = None  # Keeping references to avoid garbage collection
 
         self._metadata = None
         self._parents = None
@@ -69,8 +69,8 @@ class StreamPropertiesConsumer(object):
             value: The first parameter is the stream it is invoked for.
         """
         self._on_changed = value
-        if self._on_changed_ref is None:
-            self._on_changed_ref = self._interop.add_OnChanged(self._on_changed_wrapper)
+        if self._on_changed_refs is None:
+            self._on_changed_refs = self._interop.add_OnChanged(self._on_changed_wrapper)
 
     def _on_changed_wrapper(self, sender_hptr, args_hptr):
         # To avoid unnecessary overhead and complication, we're using the instances we already have
@@ -82,9 +82,9 @@ class StreamPropertiesConsumer(object):
             traceback.print_exc()
 
     def _on_changed_dispose(self):
-        if self._on_changed_ref is not None:
-            self._interop.remove_OnChanged(self._on_changed_ref)
-            self._on_changed_ref = None
+        if self._on_changed_refs is not None:
+            self._interop.remove_OnChanged(self._on_changed_refs[0])
+            self._on_changed_refs = None
 
     # End region on_changed
 

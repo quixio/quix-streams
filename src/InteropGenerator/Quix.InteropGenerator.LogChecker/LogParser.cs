@@ -21,10 +21,19 @@ public class LogParser
         while (!sr.EndOfStream)
         {
             var line = await sr.ReadLineAsync();
-            if (line.Contains('\0'))
+            if (line!.Contains('\0'))
             {
                 line = line.Replace("\0", "");
                 Console.WriteLine($"Line {lineNumber} has '\\0' char in it, expect problems");
+            }
+            
+            const string timeSplitText = "]  ";
+            var splitIndex = line.IndexOf(timeSplitText);
+            if (splitIndex > -1)
+            {
+                var timePart = line.Substring(0, splitIndex + 1);
+                var linePart = line.Substring(splitIndex + timeSplitText.Length).TrimStart();
+                line = linePart;
             }
             foreach (var parserPair in parsers)
             {

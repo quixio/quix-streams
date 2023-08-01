@@ -114,7 +114,7 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
                                 stringValues = ParseDict(reader, ref size, o => (string)o);
                                 break;
                             case "BinaryValues":
-                                binaryValues = ParseDict(reader, ref size, o => Convert.FromBase64String((string)o));
+                                binaryValues = ParseDict(reader, ref size, o => o == null ? null : Convert.FromBase64String((string)o));
                                 break;
                             case "TagValues":
                                 tagValues = ParseDict(reader, ref size, o => (string)o);

@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,8 @@ namespace QuixStreams.Transport.Kafka
         private IDictionary<string, string> brokerStates = new ConcurrentDictionary<string, string>();
         private bool checkBrokerStateBeforeSend = false;
         private bool logOnNextBrokerStateUp = false;
+        private bool disableKafkaLogsByBrokerLogWorkaround = false; // if enabled, no actual kafka logs should be shown
+
 
         private readonly ProduceDelegate produce;
 
@@ -40,7 +43,7 @@ namespace QuixStreams.Transport.Kafka
         /// <param name="topicConfiguration">The topic configuration</param>
         public KafkaProducer(PublisherConfiguration publisherConfiguration, ProducerTopicConfiguration topicConfiguration)
         {
-            this.config = publisherConfiguration.ToProducerConfig();
+            this.config = this.GetKafkaProducerConfig(publisherConfiguration);
             SetConfigId(topicConfiguration);
             if (topicConfiguration.Partition == Partition.Any)
             {
@@ -51,6 +54,26 @@ namespace QuixStreams.Transport.Kafka
                 var topicPartition = new TopicPartition(topicConfiguration.Topic, topicConfiguration.Partition);
                 this.produce = (key, value, handler, _) => this.producer.Produce(topicPartition, new Message<byte[], byte[]> { Key = key, Value = value }, handler);
             }
+        }
+        
+        private ProducerConfig GetKafkaProducerConfig(PublisherConfiguration publisherConfiguration)
+        {
+            var config = publisherConfiguration.ToProducerConfig();
+            config.Debug = config.Debug;
+            if (!string.IsNullOrWhiteSpace(config.Debug))
+            {
+                if (config.Debug.Contains("all")) return config;
+                if (config.Debug.Contains("broker")) return config;
+                // There is a debug configuration other than all or queue
+                this.logger.LogDebug("In order to enable a workaround to check if broker is up, additional broker logs will be visible");
+                config.Debug = (config.Debug.TrimEnd(new[] { ',', ' ' }) + ",broker").TrimStart(',');
+                return config;
+            }
+
+            disableKafkaLogsByBrokerLogWorkaround = true;
+            config.Debug = "broker";
+
+            return config;
         }
         
         private void SetConfigId(ProducerTopicConfiguration topicConfiguration)
@@ -84,14 +107,24 @@ namespace QuixStreams.Transport.Kafka
 
                 this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
-                    .SetLogHandler(this.StatisticsHandler)
+                    .SetLogHandler(this.ProducerLogHandler)
                     .Build();
             }
         }
-
-        private void StatisticsHandler(IProducer<byte[], byte[]> producer, LogMessage log)
+        
+        private void ProducerLogHandler(IProducer<byte[], byte[]> consumer, LogMessage msg)
         {
-            if (KafkaHelper.TryParseBrokerState(log, out var broker, out var state))
+            if (KafkaHelper.TryParseBrokerNameChange(msg, out var oldName, out var newName))
+            {
+                if (brokerStates.ContainsKey(oldName))
+                {
+                    brokerStates[newName] = brokerStates[oldName];
+                    brokerStates.Remove(oldName);
+                    if (disableKafkaLogsByBrokerLogWorkaround) this.logger.LogTrace("[{0}] Broker {1} is now {2}", this.configId, oldName, newName);
+                }
+            }
+            
+            if (KafkaHelper.TryParseBrokerState(msg, out var broker, out var state))
             {
                 if (logOnNextBrokerStateUp && state.Equals("up", StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -99,6 +132,33 @@ namespace QuixStreams.Transport.Kafka
                 } 
                 brokerStates[broker] = state;
             }
+            
+            if (disableKafkaLogsByBrokerLogWorkaround) return;
+            
+            switch (msg.Level)
+            {
+                case SyslogLevel.Alert:
+                case SyslogLevel.Warning:
+                    logger.LogWarning("[{0}][Kafka log][{1}] {2}", this.configId, msg.Facility, msg.Message);
+                    break;
+                case SyslogLevel.Emergency:
+                case SyslogLevel.Critical:
+                    logger.LogCritical("[{0}][Kafka log][{1}] {2}", this.configId, msg.Facility, msg.Message);
+                    break;
+                case SyslogLevel.Error:
+                    logger.LogError("[{0}][Kafka log][{1}] {2}", this.configId, msg.Facility, msg.Message);
+                    break;
+                case SyslogLevel.Notice:
+                case SyslogLevel.Info:
+                    logger.LogInformation("[{0}][Kafka log][{1}] {2}", this.configId, msg.Facility, msg.Message);
+                    break;
+                case SyslogLevel.Debug:
+                    logger.LogDebug("[{0}][Kafka log][{1}] {2}", this.configId, msg.Facility, msg.Message);
+                    break;
+                default:
+                    logger.LogDebug("[{0}][Kafka log][{1}] {2}", this.configId, msg.Facility, msg.Message);
+                    break;
+            } 
         }
 
         private void ErrorHandler(IProducer<byte[], byte[]> producer, Error error)
@@ -218,7 +278,7 @@ namespace QuixStreams.Transport.Kafka
                 if (checkBrokerStateBeforeSend)
                 {
                     checkBrokerStateBeforeSend = false;
-                    var upBrokerCount = this.brokerStates.Count(y => !y.Value.Equals("up", StringComparison.InvariantCultureIgnoreCase));
+                    var upBrokerCount = this.brokerStates.Count(y => y.Value.Equals("up", StringComparison.InvariantCultureIgnoreCase));
                     if (upBrokerCount == 0)
                     {
                         logOnNextBrokerStateUp = true;

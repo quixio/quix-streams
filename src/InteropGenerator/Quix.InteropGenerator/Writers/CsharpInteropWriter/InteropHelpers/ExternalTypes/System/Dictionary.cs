@@ -90,7 +90,6 @@ public class DictionaryInterop
 
     private static IntPtr DictionaryToUptr(IDictionary dictionary)
     {
-        InteropUtils.LogDebug("Dictionary");
         var count = dictionary.Count;
         if (count == 0)
         {

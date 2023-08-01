@@ -9,8 +9,6 @@ namespace QuixStreams.State.UnitTests
 {
     public abstract class BaseCRUDShould
     {
-        
-        
         protected abstract BaseFileStorage GetStorage();
 
         protected async Task testLong(BaseFileStorage storage, string key, long inp)

@@ -1,4 +1,5 @@
 ﻿using System;
+using Newtonsoft.Json;
 
 namespace QuixStreams.Streaming.QuixApi.Portal
 {
@@ -36,6 +37,11 @@ namespace QuixStreams.Streaming.QuixApi.Portal
         /// Broker connection details of the Workspace
         /// </summary>
         public WorkspaceBrokerDetails Broker { get; set; }
+        
+        /// <summary>
+        /// The broker settings
+        /// </summary>
+        public WorkspaceBrokerSettings BrokerSettings { get; set; }
     }
 
     /// <summary>
@@ -175,5 +181,61 @@ namespace QuixStreams.Streaming.QuixApi.Portal
         /// The workspace is disabled
         /// </summary>
         Disabled
+    }
+    
+    internal enum WorkspaceBrokerType
+    {
+        /// <summary>
+        /// Unknown broker type
+        /// </summary>
+        Unknown,
+        
+        /// <summary>
+        /// Quix shared managed Kafka cluster
+        /// </summary>
+        SharedKafka,
+
+        /// <summary>
+        /// Confluent Cloud Kafka cluster 
+        /// </summary>
+        ConfluentCloud,
+
+        /// <summary>
+        /// Self Hosted Kafka cluster
+        /// </summary>
+        SelfHosted,
+
+        /// <summary>
+        /// Amazon Msk Kafka cluster
+        /// </summary>
+        AmazonMsk
+    }
+    
+    /// <summary>
+    /// Describes the workspace broker settings
+    /// </summary>
+    internal class WorkspaceBrokerSettings
+    {
+        /// <summary>
+        /// Broker type
+        /// </summary>
+        [JsonConverter(typeof(WorkspaceBrokerTypeJsonConverter))]
+        public WorkspaceBrokerType BrokerType { get; set; }
+
+        /// <summary>
+        /// Confluent Cloud settings
+        /// </summary>
+        public ConfluentCloudSettings ConfluentCloudSettings { get; set; }
+    }
+
+    /// <summary>
+    /// Describes Confluent cluster settings
+    /// </summary>
+    internal class ConfluentCloudSettings
+    {
+        /// <summary>
+        /// Partnership ID
+        /// </summary>
+        public string ClientID { get; set; }
     }
 }

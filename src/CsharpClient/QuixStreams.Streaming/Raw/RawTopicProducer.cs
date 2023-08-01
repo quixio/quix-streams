@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 using QuixStreams.Transport.IO;
 using QuixStreams.Transport.Kafka;
 
@@ -11,8 +12,9 @@ namespace QuixStreams.Streaming.Raw
     public class RawTopicProducer: IRawTopicProducer
     {
         private string topicName;
-
+        private readonly ILogger logger = Logging.CreateLogger<RawTopicProducer>();
         private readonly IKafkaProducer kafkaProducer = null;
+        private bool disposed = false;
         
         /// <inheritdoc />
         public event EventHandler OnDisposed;
@@ -44,10 +46,23 @@ namespace QuixStreams.Streaming.Raw
             data.SetKey(message.Key);
             kafkaProducer.Publish(data);
         }
-
+        
         /// <inheritdoc />
+        public void Flush()
+        {
+            this.logger.LogTrace("Flushing topic {1}", this.topicName);
+            this.kafkaProducer?.Flush(default);
+            this.logger.LogTrace("Flushed topic {1}", this.topicName);
+        }
+
+        /// <summary>
+        /// Flushes pending messages and disposes underlying resources
+        /// </summary>
         public void Dispose()
         {
+            if (disposed) return;
+            disposed = true;
+            this.Flush();
             this.kafkaProducer?.Dispose();
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }

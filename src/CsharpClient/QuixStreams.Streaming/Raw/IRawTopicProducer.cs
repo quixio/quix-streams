@@ -13,6 +13,11 @@ namespace QuixStreams.Streaming.Raw
         public void Publish(RawMessage data);
         
         /// <summary>
+        /// Flushes pending messages to the broker
+        /// </summary>
+        void Flush();
+        
+        /// <summary>
         /// Raised when the resource is disposed
         /// </summary>
         public event EventHandler OnDisposed;

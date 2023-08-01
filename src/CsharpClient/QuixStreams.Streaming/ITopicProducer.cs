@@ -34,6 +34,11 @@ namespace QuixStreams.Streaming
         /// <param name="onStreamCreated">Callback executed when a new Stream is created in the topic producer because it doesn't exist.</param>
         /// <returns>Stream producer to allow the stream to push data to the platform.</returns>
         IStreamProducer GetOrCreateStream(string streamId, Action<IStreamProducer> onStreamCreated = null);
+
+        /// <summary>
+        /// Flushes pending data to the broker
+        /// </summary>
+        void Flush();
         
         /// <summary>
         /// Raised when the resource finished disposing

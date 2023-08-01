@@ -71,10 +71,10 @@ class DictStreamState(Generic[StreamStateType]):
 
         # Define events and their reference holders
         self._on_flushed = None
-        self._on_flushed_ref = None  # Keeping reference to avoid garbage collection
+        self._on_flushed_refs = None  # Keeping references to avoid garbage collection
 
         self._on_flushing = None
-        self._on_flushing_ref = None  # Keeping reference to avoid garbage collection
+        self._on_flushing_refs = None  # Keeping references to avoid garbage collection
 
         # Check if type is immutable, because it needs special handling. Content could change without StreamState being
         # notified
@@ -86,7 +86,7 @@ class DictStreamState(Generic[StreamStateType]):
                     self._underlying[key] = val
 
             self._on_flushing_internal = on_flushing_internal
-            self.on_flushing = None  # this will subscribe to the even and invoke the internal
+            self.on_flushing = None  # this will subscribe to the event and invoke the internal
 
     def _finalizerfunc(self):
         self._on_flushed_dispose()
@@ -123,19 +123,16 @@ class DictStreamState(Generic[StreamStateType]):
         """
 
         self._on_flushed = value
-        if self._on_flushed_ref is not None:
-            self._interop.remove_OnFlushed(self._on_flushed_ref)
-            self._on_flushed_ref = None
+        self._on_flushed_dispose()
 
-        if self.on_flushed is None:
+        if self._on_flushed is None:
             return
 
-        if self._on_flushed_ref is None:
-            self._on_flushed_ref = self._interop.add_OnFlushed(self._on_flushed_wrapper)
+        self._on_flushed_refs = self._interop.add_OnFlushed(self._on_flushed_wrapper)
 
     def _on_flushed_wrapper(self, sender_hptr, args_hptr):
         try:
-            self._on_flushed(self._stream_consumer)
+            self._on_flushed()
         except:
             traceback.print_exc()
         finally:
@@ -143,9 +140,9 @@ class DictStreamState(Generic[StreamStateType]):
             InteropUtils.free_hptr(args_hptr)
 
     def _on_flushed_dispose(self):
-        if self._on_flushed_ref is not None:
-            self._interop.remove_OnFlushed(self._on_flushed_ref)
-            self._on_flushed_ref = None
+        if self._on_flushed_refs is not None:
+            self._interop.remove_OnFlushed(self._on_flushed_refs[0])
+            self._on_flushed_refs = None
 
     # End region on_flushed
 
@@ -170,15 +167,12 @@ class DictStreamState(Generic[StreamStateType]):
         """
 
         self._on_flushing = value
-        if self._on_flushing_ref is not None:
-            self._interop.remove_OnFlushing(self._on_flushing_ref)
-            self._on_flushing_ref = None
+        self._on_flushing_dispose()
 
-        if self.on_flushing is None and self._on_flushing_internal is None:
+        if self._on_flushing is None and self._on_flushing_internal is None:
             return
 
-        if self._on_flushing_ref is None:
-            self._on_flushing_ref = self._interop.add_OnFlushing(self._on_flushing_wrapper)
+        self._on_flushing_refs = self._interop.add_OnFlushing(self._on_flushing_wrapper)
 
     def _on_flushing_wrapper(self, sender_hptr, args_hptr):
         try:
@@ -192,10 +186,11 @@ class DictStreamState(Generic[StreamStateType]):
             InteropUtils.free_hptr(sender_hptr)
             InteropUtils.free_hptr(args_hptr)
 
+
     def _on_flushing_dispose(self):
-        if self._on_flushing_ref is not None:
-            self._interop.remove_OnFlushing(self._on_flushing_ref)
-            self._on_flushing_ref = None
+        if self._on_flushing_refs is not None:
+            self._interop.remove_OnFlushing(self._on_flushing_refs[0])
+            self._on_flushing_refs = None
 
     # End region on_flushing
 
