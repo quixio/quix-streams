@@ -240,23 +240,38 @@ namespace QuixStreams.State.UnitTests
         }
         
         [Fact]
-        public void GetOrCreateSubStorage_CreatesNewSubStorageWhenAllDeleted()
+        public void GetOrCreateSubStorage_ThrowsExceptionWhenCreatingSubStorageWithSameNameButDifferentDb()
         {
             // Arrange
             storage.GetOrCreateSubStorage("subStorage1");
-            storage.GetOrCreateSubStorage("subStorage2");
-            storage.GetOrCreateSubStorage("subStorage1");
+
+            // Act
+            Func<IStateStorage> act = () => storage.GetOrCreateSubStorage("subStorage1", "newDb");
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+        
+        [Fact]
+        public void GetOrCreateSubStorage_CreatesNewSubStorageWhenAllDeleted()
+        {
+            // Arrange
+            var sub1 = storage.GetOrCreateSubStorage("subStorage1");
+            var sub2 = sub1.GetOrCreateSubStorage("subStorage2", "newDb-depth1");
+            sub2.GetOrCreateSubStorage("subStorage3", "newDb-depth2");
                         
             // Deleting and re-creating them
             storage.DeleteSubStorages();
             storage.GetSubStorages().Should().BeEmpty();
             
-            storage.GetOrCreateSubStorage("subStorage1");
-            storage.GetOrCreateSubStorage("subStorage2");
-            storage.GetOrCreateSubStorage("subStorage1");
+            sub1 = storage.GetOrCreateSubStorage("subStorage1");
+            sub2 = sub1.GetOrCreateSubStorage("subStorage2", "newDb-depth1");
+            sub2.GetOrCreateSubStorage("subStorage3", "newDb-depth2");
             
             // Assert
-            storage.GetSubStorages().Should().HaveCount(2);
+            storage.GetSubStorages().Should().HaveCount(1);
+            sub1.GetSubStorages().Should().HaveCount(1);
+            sub2.GetSubStorages().Should().HaveCount(1);
         }
         
         [Fact]
@@ -264,60 +279,66 @@ namespace QuixStreams.State.UnitTests
         {
             // Arrange
             storage.GetOrCreateSubStorage("subStorage1");
-            storage.GetOrCreateSubStorage("subStorage2");
+            storage.GetOrCreateSubStorage("subStorage2", "newDb");
+            storage.GetOrCreateSubStorage("subStorage3", "anotherDb");
 
             // Act
             storage.DeleteSubStorage("subStorage1");
+            storage.DeleteSubStorage("subStorage2");
             storage.GetSubStorages().Should().ContainSingle();
             
             storage.GetOrCreateSubStorage("subStorage1");
+            storage.GetOrCreateSubStorage("subStorage2", "newDb");
             
             // Assert
-            storage.GetSubStorages().Should().HaveCount(2);
+            storage.GetSubStorages().Should().HaveCount(3);
         }
 
         [Fact]
         public void DeleteSubStorage_DeletesExistingSubStorage()
         {
             // Arrange
-            var subStorageName = "subStorage2";
-            storage.GetOrCreateSubStorage(subStorageName);
+            var sub1 = storage.GetOrCreateSubStorage("subStorage1");
+            sub1.GetOrCreateSubStorage("subStorage2");
 
             // Act
-            var result = storage.DeleteSubStorage(subStorageName);
+            var result = storage.DeleteSubStorage("subStorage1");
 
             // Assert
             result.Should().BeTrue();
+            storage.GetSubStorages().Should().BeEmpty();
         }
 
         [Fact]
         public void DeleteSubStorages_DeletesAllSubStorages()
         {
             // Arrange
-            storage.GetOrCreateSubStorage("subStorage3");
-            storage.GetOrCreateSubStorage("subStorage4");
+            var sub1 = storage.GetOrCreateSubStorage("subStorage1");
+            var sub2 = storage.GetOrCreateSubStorage("subStorage2");
+            sub1.GetOrCreateSubStorage("subStorage3");
+            sub2.GetOrCreateSubStorage("subStorage4", "newDb");
 
             // Act
             var deletedCount = storage.DeleteSubStorages();
 
             // Assert
-            deletedCount.Should().Be(2);
+            deletedCount.Should().Be(4);
         }
 
         [Fact]
         public void GetSubStorages_ReturnsAllSubStorages()
         {
             // Arrange
-            var subStorage1 = "subStorage5";
-            var subStorage2 = "subStorage6";
-            storage.GetOrCreateSubStorage(subStorage1);
-            storage.GetOrCreateSubStorage(subStorage2);
+            var sub1 = storage.GetOrCreateSubStorage("subStorage1");
+            var sub2 = storage.GetOrCreateSubStorage("subStorage2");
+            sub1.GetOrCreateSubStorage("subStorage3");
+            sub2.GetOrCreateSubStorage("subStorage4", "newDb");
 
             // Act
             var storages = storage.GetSubStorages();
 
             // Assert
-            storages.Should().Contain(new[] { subStorage1, subStorage2 });
+            storages.Should().Contain(new[] { "subStorage1", "subStorage2" });
         }
 
         [Fact]
@@ -426,6 +447,17 @@ namespace QuixStreams.State.UnitTests
             // Cleanup
             storage.Dispose();
             System.IO.Directory.Delete(this.dbDirectory, true);
+        }
+        
+        [Fact]
+        public void OpenTest()
+        {
+            var columnFamilies2 = new ColumnFamilies();
+            columnFamilies2.Add("cfName", new ColumnFamilyOptions());
+            columnFamilies2.Add("harisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharis", new ColumnFamilyOptions());
+
+            var x = RocksDb.Open(new DbOptions().SetCreateIfMissing().SetCreateMissingColumnFamilies(), "./", columnFamilies2);
+            //var x3 = RocksDb.Open(new DbOptions().SetCreateIfMissing(), "./");
         }
     }
 }

@@ -6,9 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
+using QuixStreams.State.Storage;
+using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
 using QuixStreams.Telemetry;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Raw;
+using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
@@ -740,6 +743,7 @@ namespace QuixStreams.Streaming.IntegrationTests
         public void StreamState_ShouldWorkAsExpected()
         {
             var topic = nameof(StreamState_ShouldWorkAsExpected);
+            App.SetStateStorage(new RocksDbStorage("./state"));
             RunTest(() =>
             {
                 // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
@@ -770,7 +774,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                                 {
                                     rollingSumPerParameter[parameter.Key] += parameter.Value.NumericValue ?? 0;
                                     rollingSum.Value += parameter.Value.NumericValue ?? 0;
-
+                        
                                     this.output.WriteLine($"Rolling sum for {parameter.Key} is {rollingSumPerParameter[parameter.Key]}");
                                 }  
                             }
@@ -804,7 +808,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 // Wait for enough messages to be received
                 
                 output.WriteLine("Waiting for messages");
-                SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10000));
+                SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10));
                 output.WriteLine($"Waited for messages, got {msgCounter}");
 
 
@@ -835,6 +839,7 @@ namespace QuixStreams.Streaming.IntegrationTests
                 //topicStateManager.DeleteStreamStates().Should().Be(2);
             });
         }
+        
         
         [Fact]
         public void StreamState_CommittedFromAnotherThread_ShouldWorkAsExpected()

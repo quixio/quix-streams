@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using RocksDbSharp;
@@ -12,20 +14,29 @@ namespace QuixStreams.State.Storage
     /// </summary>
     public class RocksDbStorage : IStateStorage, IDisposable
     {
+        /// <summary>
+        /// Holds references of RocksDb instances to ensure only one exists and avoid IO lock issue.
+        /// Key is the db directory and value is a tuple of RocksDb instance and reference count.
+        /// </summary>
+        private static readonly Dictionary<string, (RocksDb Db, int RefCount)> RocksDbInstances = new Dictionary<string, (RocksDb, int)>();
+        
         private readonly RocksDb db;
         private readonly string dbDirectory;
         private ColumnFamilyHandle columnFamily = null;
-        private readonly string storageName; //column family name
-        
+        private readonly string storageName;
+
         private readonly WriteBatch writeBatch = new WriteBatch();
         private bool useWriteBatch = false;
+
+        private const char Slash = '/'; // Separator for sub-storage name 
         
         /// <summary>
-        /// Holds references of RocksDb instances for sub-storages to ensure only one exists and avoid IO lock issue.
-        /// Key is the sub-storage name and value is the RocksDb instance.
+        /// In-memory loaded sub-storages.   
+        /// Key is the sub-storage name and value is RocksDbStorage instance.
         /// </summary>
         private readonly Dictionary<string, RocksDbStorage> subStorages = new Dictionary<string, RocksDbStorage>();
-        
+
+
         /// <summary>
         /// Instantiates a new instance of <see cref="RocksDbStorage"/>
         /// </summary>
@@ -38,27 +49,14 @@ namespace QuixStreams.State.Storage
                 throw new ArgumentException("dbDirectory and storageName cannot be null or empty");
             }
 
+            // Check if storage name contains 'Slash'
+            
             if (storageName == ColumnFamilies.DefaultName)
             {
                 throw new ArgumentException($"storageName cannot be '{ColumnFamilies.DefaultName}' as it is reserved by rocksdb");
             }
-            
-            if (!Directory.Exists(dbDirectory))
-            {
-                Directory.CreateDirectory(dbDirectory);
-            }
 
-            var dbOptions = new DbOptions().SetCreateIfMissing();
-            var columnFamilies = new ColumnFamilies();
-            if (RocksDb.TryListColumnFamilies(dbOptions, dbDirectory, out var columnFamiliesNames))
-            {
-                foreach (var cfName in columnFamiliesNames)
-                {
-                    columnFamilies.Add(cfName, new ColumnFamilyOptions());
-                }
-            }
-            
-            this.db = RocksDb.Open(dbOptions, dbDirectory, columnFamilies);
+            this.db = GetOrCreateRocksDbInstance(dbDirectory);
             
             if (!db.TryGetColumnFamily(storageName, out var storageCf))
             {
@@ -157,38 +155,53 @@ namespace QuixStreams.State.Storage
         /// <inheritdoc/>
         public IStateStorage GetOrCreateSubStorage(string subStorageName, string dbName = null)
         {
-            if (string.IsNullOrEmpty(dbName))
-                dbName = subStorageName;
-
+            subStorageName = $"{this.storageName}/{subStorageName}";
+            var dbDir = string.IsNullOrEmpty(dbName) ? this.dbDirectory : GetSubDatabasePath(dbName);
+            
+            if (GetSubStoragesWithDb().Any(x => x.Key == subStorageName && x.Value != dbDir))
+            {
+                var nameWithoutParent = subStorageName.Substring(this.storageName.Length + 1);
+                throw new ArgumentException($"Sub-storage with name '{nameWithoutParent}' already exists in a different database");
+            }
+            
             if (subStorages.TryGetValue(subStorageName, out var subStorage))
             {
                 return subStorage;
             }
-            
-            subStorage = new RocksDbStorage(GetSubDatabasePath(dbName), subStorageName);
+
+            subStorage = new RocksDbStorage(dbDir, subStorageName);
             subStorages.Add(subStorageName, subStorage);
 
             return subStorage;
         }
 
         /// <inheritdoc/>
-        public bool DeleteSubStorage(string subStorageName, string dbName = null)
+        public bool DeleteSubStorage(string subStorageName)
         {
-            if (string.IsNullOrEmpty(dbName))
-                dbName = subStorageName;
+            subStorageName = $"{this.storageName}{Slash}{subStorageName}";
 
-            if (!subStorages.TryGetValue(subStorageName, out var subStorage))
+            var subs = GetSubStoragesWithDb();
+            
+            if (!subs.TryGetValue(subStorageName, out var subStorageDbDirectory))
             {
-                subStorage = new RocksDbStorage(GetSubDatabasePath(dbName), subStorageName);
-            }
-
-            subStorage.db.DropColumnFamily(subStorage.storageName);
-            if (IsDatabaseEmpty(subStorage))
-            {
-                Directory.Delete(subStorage.dbDirectory, true);
+                return false;
             }
             
-            subStorage.Dispose();
+            var subStoragesOfTheSubStorage = subs.Where(sub => sub.Key.StartsWith($"{subStorageName}{Slash}"));
+
+            foreach (var sub in subStoragesOfTheSubStorage.Append(new (subStorageName, subStorageDbDirectory)))
+            {
+                var subDb = GetOrCreateRocksDbInstance(sub.Value);
+                
+                subDb.DropColumnFamily(sub.Key);
+
+                if (IsDatabaseEmpty(subDb))
+                {
+                    Directory.Delete(sub.Value, false);
+                }
+            }
+            
+            subStorages[subStorageName]?.Dispose();
             subStorages.Remove(subStorageName);
             return true;
         }
@@ -197,12 +210,20 @@ namespace QuixStreams.State.Storage
         public int DeleteSubStorages()
         {
             var deleted = 0;
-            foreach (var subDbDirectory in Directory.EnumerateDirectories(this.dbDirectory))
+            foreach (var sub in GetSubStoragesWithDb())
             {
-                Directory.Delete(subDbDirectory, true);
+                var subDb = GetOrCreateRocksDbInstance(sub.Value);
+                
+                subDb.DropColumnFamily(sub.Key);
                 deleted++;
+                
+                if (IsDatabaseEmpty(subDb))
+                {
+                    Directory.Delete(sub.Value, false);
+                }
             }
 
+            // Dispose of sub-storages that are referenced in memory
             foreach (var subStorage in subStorages.Values)
             {
                 subStorage.Dispose();
@@ -216,15 +237,40 @@ namespace QuixStreams.State.Storage
         {
             var storageNames = new List<string>();
             
-            foreach (var subDbDirectory in Directory.EnumerateDirectories(this.dbDirectory))
+            // Get all sub-storage names
+            storageNames.AddRange(GetSubStoragesWithDb().Keys);
+            
+            // Remove the parent's storage name
+            storageNames = storageNames.Select(x => x.Substring(this.storageName.Length + 1)).ToList();
+            
+            // Remove sub-sub-storages names
+            return storageNames.Select(x =>
             {
-                RocksDb.TryListColumnFamilies(new DbOptions(),  subDbDirectory, out var columnFamiliesNames);
-                storageNames.AddRange(columnFamiliesNames ?? Array.Empty<string>());
+                var endOfStorageNameIndex = x.IndexOf(Slash);
+                return endOfStorageNameIndex == -1 ? x : x.Remove(endOfStorageNameIndex);
+            }).ToImmutableHashSet();
+        }
+        
+        private Dictionary<string, string> GetSubStoragesWithDb()
+        {
+            var subs = new Dictionary<string, string>();
+
+            foreach (var subDbDirectory in Directory.EnumerateDirectories(this.dbDirectory).Append(this.dbDirectory))
+            {
+                RocksDb.TryListColumnFamilies(new DbOptions(), subDbDirectory, out var columnFamiliesNames);
+                foreach (var cfName in columnFamiliesNames)
+                {
+                    if (cfName == ColumnFamilies.DefaultName)
+                        continue;
+
+                    if (!cfName.StartsWith($"{this.storageName}{Slash}"))
+                        continue;
+
+                    subs.Add(cfName, subDbDirectory);
+                }
             }
-            
-            storageNames.RemoveAll(x => x == ColumnFamilies.DefaultName);
-            
-            return storageNames;
+
+            return subs;
         }
 
         /// <inheritdoc/>
@@ -258,18 +304,59 @@ namespace QuixStreams.State.Storage
         /// </summary>
         public void Dispose()
         {
-            db.Dispose();
-            writeBatch.Dispose();
+            this.writeBatch.Dispose();
+            
+            if (!RocksDbInstances.TryGetValue(this.dbDirectory, out var dbWithRefCount))
+            {
+                return;
+            }
+            
+            dbWithRefCount.RefCount -= 1; // decrease reference count
+
+            if (dbWithRefCount.RefCount <= 0)
+            {
+                dbWithRefCount.Db.Dispose(); // dispose the db
+                RocksDbInstances.Remove(dbDirectory);   
+            }
         }
         
         private string GetSubDatabasePath(string dbName) => $"{this.dbDirectory}{Path.DirectorySeparatorChar}{dbName}";
-
-        private static bool IsDatabaseEmpty(RocksDbStorage storage)
+        
+        private static bool IsDatabaseEmpty(RocksDb db)
         {
-            using var iterator = storage.db.NewIterator();
+            using var iterator = db.NewIterator();
             iterator.SeekToFirst();
             
             return iterator.Valid();
+        }
+
+        private static RocksDb GetOrCreateRocksDbInstance(string dbDirectory)
+        {
+            if (RocksDbInstances.TryGetValue(dbDirectory, out var dbWithRefCount))
+            {
+                dbWithRefCount.RefCount += 1; // increase reference count
+                return dbWithRefCount.Db;
+            }
+            
+            if (!Directory.Exists(dbDirectory))
+            {
+                Directory.CreateDirectory(dbDirectory);
+            }
+
+            var dbOptions = new DbOptions().SetCreateIfMissing();
+            var columnFamilies = new ColumnFamilies();
+            if (RocksDb.TryListColumnFamilies(dbOptions, dbDirectory, out var columnFamiliesNames))
+            {
+                foreach (var cfName in columnFamiliesNames)
+                {
+                    columnFamilies.Add(cfName, new ColumnFamilyOptions());
+                }
+            }
+            
+            var db = RocksDb.Open(dbOptions, dbDirectory, columnFamilies);
+            RocksDbInstances.Add(dbDirectory, (db, 1));
+
+            return db;
         }
     }
 }

@@ -84,7 +84,7 @@ namespace QuixStreams.State.Storage
         }
 
         /// <inheritdoc/>
-        public bool DeleteSubStorage(string subStorageName, string dbName = null)
+        public bool DeleteSubStorage(string subStorageName)
         {
             return this.subStates.Remove(subStorageName);
         }

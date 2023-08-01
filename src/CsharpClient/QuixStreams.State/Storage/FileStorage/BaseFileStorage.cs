@@ -233,7 +233,7 @@ namespace QuixStreams.State.Storage.FileStorage
         protected abstract IStateStorage CreateNewStorageInstance(string path);
         
         /// <inheritdoc/>
-        public bool DeleteSubStorage(string subStorageName, string dbName = null)
+        public bool DeleteSubStorage(string subStorageName)
         {
             var subPath = GetSubStoragePath(subStorageName);
             if (!Directory.Exists(subPath)) return false;
