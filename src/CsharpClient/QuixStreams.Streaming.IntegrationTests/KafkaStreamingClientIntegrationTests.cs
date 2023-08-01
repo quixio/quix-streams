@@ -743,7 +743,6 @@ namespace QuixStreams.Streaming.IntegrationTests
         public void StreamState_ShouldWorkAsExpected()
         {
             var topic = nameof(StreamState_ShouldWorkAsExpected);
-            App.SetStateStorage(new RocksDbStorage("./state"));
             RunTest(() =>
             {
                 // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)

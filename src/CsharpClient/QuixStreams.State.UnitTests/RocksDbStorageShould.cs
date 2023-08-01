@@ -441,23 +441,22 @@ namespace QuixStreams.State.UnitTests
             act.Should().Throw<ArgumentException>();
             act2.Should().Throw<ArgumentException>();
         }
+        
+        [Fact]
+        public void Constructor_ThrowsException_WhenStorageNameContainsSlashChar()
+        {
+            // Act
+            Func<RocksDbStorage> act = () => new RocksDbStorage("testDir", "pre/post");
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
 
         public void Dispose()
         {
             // Cleanup
             storage.Dispose();
             System.IO.Directory.Delete(this.dbDirectory, true);
-        }
-        
-        [Fact]
-        public void OpenTest()
-        {
-            var columnFamilies2 = new ColumnFamilies();
-            columnFamilies2.Add("cfName", new ColumnFamilyOptions());
-            columnFamilies2.Add("harisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharisharis", new ColumnFamilyOptions());
-
-            var x = RocksDb.Open(new DbOptions().SetCreateIfMissing().SetCreateMissingColumnFamilies(), "./", columnFamilies2);
-            //var x3 = RocksDb.Open(new DbOptions().SetCreateIfMissing(), "./");
         }
     }
 }

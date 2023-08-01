@@ -22,10 +22,10 @@ namespace QuixStreams.State.Storage
         
         private readonly RocksDb db;
         private readonly string dbDirectory;
-        private ColumnFamilyHandle columnFamily = null;
+        private ColumnFamilyHandle columnFamily;
         private readonly string storageName;
 
-        private readonly WriteBatch writeBatch = new WriteBatch();
+        private readonly WriteBatch writeBatch = new();
         private bool useWriteBatch = false;
 
         private const char Slash = '/'; // Separator for sub-storage name 
@@ -34,7 +34,7 @@ namespace QuixStreams.State.Storage
         /// In-memory loaded sub-storages.   
         /// Key is the sub-storage name and value is RocksDbStorage instance.
         /// </summary>
-        private readonly Dictionary<string, RocksDbStorage> subStorages = new Dictionary<string, RocksDbStorage>();
+        private readonly Dictionary<string, RocksDbStorage> subStorages = new();
 
 
         /// <summary>
@@ -46,14 +46,17 @@ namespace QuixStreams.State.Storage
         {
             if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(storageName))
             {
-                throw new ArgumentException("dbDirectory and storageName cannot be null or empty");
+                throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(storageName)} cannot be null or empty.");
             }
 
-            // Check if storage name contains 'Slash'
+            if (storageName.Contains(Slash))
+            {
+                throw new ArgumentException($"{nameof(storageName)} cannot contain slash character '{Slash}'.");
+            }
             
             if (storageName == ColumnFamilies.DefaultName)
             {
-                throw new ArgumentException($"storageName cannot be '{ColumnFamilies.DefaultName}' as it is reserved by rocksdb");
+                throw new ArgumentException($"{nameof(storageName)} cannot be '{ColumnFamilies.DefaultName}' as it is reserved by rocksdb.");
             }
 
             this.db = GetOrCreateRocksDbInstance(dbDirectory);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -240,7 +241,7 @@ namespace QuixStreams.Streaming
         /// <returns></returns>
         public static AppStateManager GetStateManager()
         {
-            if (App.stateManager == null) SetStateStorage(new LocalFileStorage(autoCreateDir: true));
+            if (App.stateManager == null) SetStateStorage(new RocksDbStorage(Path.Combine(".", "state"), "app-state"));
             return App.stateManager;
         }
 
