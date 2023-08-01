@@ -104,7 +104,7 @@ namespace QuixStreams.State.Storage
         /// <summary>
         /// Commits a transaction
         /// </summary>
-        /// <returns>Returns whether the transaction is successfully committed</returns>
-        public bool CommitTransaction();
+        /// <exception>Throws exception if the transaction fails</exception>
+        public void CommitTransaction();
     }
 }

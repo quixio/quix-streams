@@ -357,10 +357,10 @@ namespace QuixStreams.State.UnitTests
             loadedData.Should().BeNull();
 
             // Act
-            var result = storage.CommitTransaction();
+            var action = () => storage.CommitTransaction();
 
             // Assert
-            result.Should().BeTrue();
+            action.Should().NotThrow();
             loadedData = await storage.LoadRaw("key");
             loadedData.Should().BeEquivalentTo(testData);
         }

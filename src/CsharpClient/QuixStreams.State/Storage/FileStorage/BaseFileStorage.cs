@@ -318,7 +318,7 @@ namespace QuixStreams.State.Storage.FileStorage
         public void StartTransaction() => throw new NotSupportedException();
         
         /// <inheritdoc/>
-        public bool CommitTransaction() => throw new NotSupportedException();
+        public void CommitTransaction() => throw new NotSupportedException();
         
         /// <inheritdoc/>
         public bool CanPerformTransactions => false;

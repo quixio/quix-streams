@@ -284,23 +284,17 @@ namespace QuixStreams.State.Storage
         }
         
         /// <inheritdoc/>
-        public bool CommitTransaction()
+        public void CommitTransaction()
         {
             try
             {
                 db.Write(writeBatch);
-            }
-            catch (Exception)
-            {
-                return false;
             }
             finally
             {
                 writeBatch.Clear();
                 useWriteBatch = false;
             }
-            
-            return true;
         }
         
         /// <summary>
