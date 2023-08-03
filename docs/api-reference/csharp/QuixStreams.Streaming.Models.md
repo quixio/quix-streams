@@ -12,6 +12,7 @@
 | [TimeseriesBuffer](TimeseriesBuffer.md 'QuixStreams.Streaming.Models.TimeseriesBuffer') | Represents a class used to consume and produce stream messages in a buffered manner. |
 | [TimeseriesBufferConfiguration](TimeseriesBufferConfiguration.md 'QuixStreams.Streaming.Models.TimeseriesBufferConfiguration') | Describes the configuration for timeseries buffers |
 | [TimeseriesData](TimeseriesData.md 'QuixStreams.Streaming.Models.TimeseriesData') | Represents a collection of [TimeseriesDataTimestamp](TimeseriesDataTimestamp.md 'QuixStreams.Streaming.Models.TimeseriesDataTimestamp') |
+| [TimeseriesDataParameter](TimeseriesDataParameter.md 'QuixStreams.Streaming.Models.TimeseriesDataParameter') | Timeseries data parameter |
 
 | Structs | |
 | :--- | :--- |
