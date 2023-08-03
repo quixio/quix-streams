@@ -15,7 +15,7 @@ namespace QuixStreams.Streaming.Models
     {
         private static Lazy<ILogger> logger = new Lazy<ILogger>(() => Logging.CreateLogger<TimeseriesData>());
         internal QuixStreams.Telemetry.Models.TimeseriesDataRaw rawData;
-        internal Dictionary<string, Parameter> parameterList;
+        internal Dictionary<string, TimeseriesDataParameter> parameterList;
         internal List<int> timestampsList;
 
         private int nextIndexRawData = 0;
@@ -33,7 +33,7 @@ namespace QuixStreams.Streaming.Models
             this.rawData = this.EmptyRawData(capacity);
             this.epochsIncluded = new bool[capacity];
             this.timestampsList = new List<int>();
-            this.parameterList = new Dictionary<string, Parameter>();
+            this.parameterList = new Dictionary<string, TimeseriesDataParameter>();
         }
 
         /// <summary>
@@ -103,7 +103,7 @@ namespace QuixStreams.Streaming.Models
             this.rawData = this.EmptyRawData(timestamps.Count);
             this.epochsIncluded = new bool[timestamps.Count];
             this.timestampsList = new List<int>();
-            this.parameterList = new Dictionary<string, Parameter>();
+            this.parameterList = new Dictionary<string, TimeseriesDataParameter>();
 
             AddTimestamps(timestamps);
 
@@ -120,20 +120,20 @@ namespace QuixStreams.Streaming.Models
             }
         }
 
-        private Dictionary<string, Parameter> GetParameterList()
+        private Dictionary<string, TimeseriesDataParameter> GetParameterList()
         {
-            var list = new Dictionary<string, Parameter>();
+            var list = new Dictionary<string, TimeseriesDataParameter>();
 
             foreach (var kv in this.rawData.NumericValues)
             {
-                list[kv.Key] = new Parameter(kv.Key, kv.Value);
+                list[kv.Key] = new TimeseriesDataParameter(kv.Key, kv.Value);
             }
 
             foreach (var kv in this.rawData.StringValues)
             {
                 try
                 {
-                    list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                    list.Add(kv.Key, new TimeseriesDataParameter(kv.Key, kv.Value));
                 }
                 catch (ArgumentException)
                 {
@@ -146,7 +146,7 @@ namespace QuixStreams.Streaming.Models
             {
                 try
                 {
-                    list.Add(kv.Key, new Parameter(kv.Key, kv.Value));
+                    list.Add(kv.Key, new TimeseriesDataParameter(kv.Key, kv.Value));
                 }
                 catch (ArgumentException)
                 {
@@ -590,43 +590,80 @@ namespace QuixStreams.Streaming.Models
         Binary = 3
     }
 
-    internal class Parameter
+    /// <summary>
+    /// Timeseries data parameter
+    /// </summary>
+    public class TimeseriesDataParameter
     {
-        public Parameter(string parameterId)
+        /// <summary>
+        /// Initializes a new instance of Timeseries data parameter with empty type
+        /// </summary>
+        /// <param name="parameterId">The id of the parameter</param>
+        public TimeseriesDataParameter(string parameterId)
         {
             this.ParameterId = parameterId;
             this.ValueType = ParameterValueType.Empty;
         }
 
-        public Parameter(string parameterId, double?[] numericValues)
+        /// <summary>
+        /// Initializes a new instance of Timeseries data parameter with double type
+        /// </summary>
+        /// <param name="parameterId">The id of the parameter</param>
+        /// <param name="numericValues">The values</param>
+        public TimeseriesDataParameter(string parameterId, double?[] numericValues)
         {
             this.ParameterId = parameterId;
             this.NumericValues = numericValues;
             this.ValueType = numericValues == null ? ParameterValueType.Empty : ParameterValueType.Numeric;
         }
 
-        public Parameter(string parameterId, string[] stringValues)
+        /// <summary>
+        /// Initializes a new instance of Timeseries data parameter with string type
+        /// </summary>
+        /// <param name="parameterId">The id of the parameter</param>
+        /// <param name="stringValues">The values</param>
+        public TimeseriesDataParameter(string parameterId, string[] stringValues)
         {
             this.ParameterId = parameterId;
             this.StringValues = stringValues;
             this.ValueType = stringValues == null ? ParameterValueType.Empty : ParameterValueType.String;
         }
 
-        public Parameter(string parameterId, byte[][] binaryValues)
+        /// <summary>
+        /// Initializes a new instance of Timeseries data parameter with binary type
+        /// </summary>
+        /// <param name="parameterId">The id of the parameter</param>
+        /// <param name="binaryValues">The values</param>
+        public TimeseriesDataParameter(string parameterId, byte[][] binaryValues)
         {
             this.ParameterId = parameterId;
             this.BinaryValues = binaryValues;
             this.ValueType = binaryValues == null ? ParameterValueType.Empty : ParameterValueType.Binary;
         }
 
+        /// <summary>
+        /// The type of the parameter values
+        /// </summary>
         public readonly ParameterValueType ValueType;
 
+        /// <summary>
+        /// The parameter id
+        /// </summary>
         public readonly string ParameterId;
 
+        /// <summary>
+        /// The numeric values
+        /// </summary>
         public readonly double?[] NumericValues;
 
+        /// <summary>
+        /// The string values
+        /// </summary>
         public readonly string[] StringValues;
 
+        /// <summary>
+        /// The binary values
+        /// </summary>
         public readonly byte[][] BinaryValues;
 
         public override bool Equals(Object obj)

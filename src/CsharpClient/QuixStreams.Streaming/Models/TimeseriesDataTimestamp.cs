@@ -14,9 +14,9 @@ namespace QuixStreams.Streaming.Models
         internal readonly TimeseriesData TimeseriesData;
         internal readonly long timestampRawIndex;
 
-        internal TimeseriesDataTimestamp(TimeseriesData TimeseriesData, long rawIndex)
+        internal TimeseriesDataTimestamp(TimeseriesData timeseriesData, long rawIndex)
         {
-            this.TimeseriesData = TimeseriesData;
+            this.TimeseriesData = timeseriesData;
             this.timestampRawIndex = rawIndex;
         }
 
@@ -87,7 +87,7 @@ namespace QuixStreams.Streaming.Models
                 values = new double?[this.TimeseriesData.rawData.Timestamps.Length];
                 this.TimeseriesData.rawData.NumericValues.Add(parameterId, values);
 
-                this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
+                this.TimeseriesData.parameterList[parameterId] = new TimeseriesDataParameter(parameterId, values);
             }
 
             values[this.timestampRawIndex] = value;
@@ -108,7 +108,7 @@ namespace QuixStreams.Streaming.Models
                 values = new string[this.TimeseriesData.rawData.Timestamps.Length];
                 this.TimeseriesData.rawData.StringValues.Add(parameterId, values);
 
-                this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
+                this.TimeseriesData.parameterList[parameterId] = new TimeseriesDataParameter(parameterId, values);
             }
 
             values[this.timestampRawIndex] = value;
@@ -129,7 +129,7 @@ namespace QuixStreams.Streaming.Models
                 values = new byte[this.TimeseriesData.rawData.Timestamps.Length][];
                 this.TimeseriesData.rawData.BinaryValues.Add(parameterId, values);
 
-                this.TimeseriesData.parameterList[parameterId] = new Parameter(parameterId, values);
+                this.TimeseriesData.parameterList[parameterId] = new TimeseriesDataParameter(parameterId, values);
             }
 
             values[this.timestampRawIndex] = value;
