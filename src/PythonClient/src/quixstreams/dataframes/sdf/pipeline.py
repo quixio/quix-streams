@@ -3,27 +3,31 @@ from typing import Self, Optional, Any, Callable, TypeAlias
 import operator
 
 OpValue: TypeAlias = int | float | bool
-MessageApplier: TypeAlias = Callable[[dict], Optional[dict]]
-MessageFieldApplier: TypeAlias = Callable[[dict], OpValue]
+ColumnValue: TypeAlias = int | float | bool | list | dict
+EventApplier: TypeAlias = Callable[[dict], Optional[dict]]
+EventColumnApplier: TypeAlias = Callable[[dict], OpValue]
 
 
-class PipelineField:
-    def __init__(self, name: Optional[str] = None, _eval_func: Optional[MessageFieldApplier] = None):
+class EventColumn:
+    def __init__(self, name: Optional[str] = None, _eval_func: Optional[EventColumnApplier] = None):
         self.name = name
         self._eval_func = _eval_func if _eval_func else lambda message: message[self.name]
 
     @staticmethod
     def _as_pipeline_field(value):
-        if not isinstance(value, PipelineField):
-            return PipelineField(_eval_func=lambda message: value)
+        if not isinstance(value, EventColumn):
+            return EventColumn(_eval_func=lambda message: value)
         return value
 
-    def _operation(self, other: Any, op: Callable[OpValue, OpValue]) -> Self:
-        return PipelineField(
+    def _operation(self, other: Any, op: Callable[[OpValue, OpValue], OpValue]) -> Self:
+        return EventColumn(
             _eval_func=lambda message: op(self.eval(message), self._as_pipeline_field(other).eval(message)))
 
-    def eval(self, message: dict) -> OpValue:
+    def eval(self, message: dict) -> ColumnValue:
         return self._eval_func(message)
+
+    def apply(self, f: EventColumnApplier) -> Self:
+        return EventColumn(_eval_func=lambda message: f(self.eval(message)))
 
     def __mod__(self, other):
         return self._operation(other, operator.mod)
@@ -66,7 +70,7 @@ class PipelineField:
 
 
 class PipelineFunction:
-    def __init__(self, func: MessageApplier):
+    def __init__(self, func: EventApplier):
         self._id = str(uuid.uuid4())
         self._func = func
 
@@ -78,18 +82,18 @@ class PipelineFunction:
         return self._id
 
 
-class Pipeline:
+class MessagePipeline:
 
     def __init__(self, functions: list[PipelineFunction] = None):
         self._functions = functions or []
         self._id = str(uuid.uuid4())
 
     @staticmethod
-    def _filter(pf: PipelineField) -> MessageApplier:
+    def _filter(pf: EventColumn) -> EventApplier:
         return lambda message: message if pf.eval(message) else None
 
     @staticmethod
-    def _subset(keys: list) -> MessageApplier:
+    def _subset(keys: list) -> EventApplier:
         return lambda message: {k: message[k] for k in keys}
 
     @staticmethod
@@ -101,41 +105,42 @@ class Pipeline:
     def functions(self) -> list[PipelineFunction]:
         return self._functions
 
-    def apply(self, func: MessageApplier):
+    def apply(self, func: EventApplier):
         self._functions.append(PipelineFunction(func=func))
 
-    def process(self, message: dict) -> Optional[dict]:
-        result = message
+    def process(self, event: dict) -> Optional[dict]:
+        result = event
         for func in self._functions:
+            print(f'processing func {func._func.__name__}')
             result = func(result)
+            print(result)
             if result is None:
                 print('result was filtered')
                 break
         return result
 
-    def __getitem__(self, item: str | list | PipelineField) -> PipelineField | Self:
-        if isinstance(item, PipelineField):
+    def __getitem__(self, item: str | list | EventColumn) -> EventColumn | Self:
+        if isinstance(item, EventColumn):
             self.apply(self._filter(item))
             return self
         elif isinstance(item, list):
             self.apply(self._subset(item))
             return self
-        return PipelineField(name=item)
+        return EventColumn(name=item)
 
-    def __setitem__(self, key: str, value: PipelineField | OpValue):
-        if isinstance(value, PipelineField):
+    def __setitem__(self, key: str, value: EventColumn | OpValue):
+        if isinstance(value, EventColumn):
             self.apply(lambda message: self._set_item(key, value.eval(message), message))
         else:
             self.apply(lambda message: self._set_item(key, value, message))
 
 
 if __name__ == "__main__":
-    p = Pipeline()
+    p = MessagePipeline()
     p = p[['x', 'y']]
-    p["z"] = p["x"]
-    p["z"] = p["x"] + p["y"]
-    p["a"] = p["x"] + 2
+    p["z"] = p["x"].apply(lambda _: _+500)
+    p["a"] = p["x"] + p["y"]
     p["b"] = 12
     p = p[(p['x'] >= 1) & (p['y'] < 10)]
-    result = p.process(message={"x": 1, "y": 2, "q": 3})
+    result = p.process(event={"x": 1, "y": 2, "q": 3})
     print(result)
