@@ -12,7 +12,12 @@ namespace QuixStreams.Streaming.Models
         private readonly long timestampRawIndex;
         private readonly TimeseriesDataParameter timeseriesDataParameter;
 
-        internal ParameterValue(long timestampRawIndex, TimeseriesDataParameter timeseriesDataParameter)
+        /// <summary>
+        /// Initializes a new instance with the of <see cref="ParameterValue"/> with the specified index and parameter
+        /// </summary>
+        /// <param name="timestampRawIndex">The index to reference to in the parameter</param>
+        /// <param name="timeseriesDataParameter">The parameter the value will be derived from</param>
+        public ParameterValue(long timestampRawIndex, TimeseriesDataParameter timeseriesDataParameter)
         {
             this.timestampRawIndex = timestampRawIndex;
             this.timeseriesDataParameter = timeseriesDataParameter;
@@ -36,11 +41,12 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
+                if (this.Type != ParameterValueType.Numeric) return null;
                 return this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.timeseriesDataParameter.NumericValues == null)
+                if (this.Type != ParameterValueType.Numeric)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of Numeric type.");
                 }
@@ -56,11 +62,12 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
+                if (this.Type != ParameterValueType.String) return null;
                 return this.timeseriesDataParameter.StringValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.timeseriesDataParameter.StringValues == null)
+                if (this.Type != ParameterValueType.String)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of String type.");
                 }
@@ -76,11 +83,12 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
+                if (this.Type != ParameterValueType.Binary) return null;
                 return this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.timeseriesDataParameter.BinaryValues == null)
+                if (this.Type != ParameterValueType.Binary)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of Binary type.");
                 }
@@ -96,9 +104,19 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return (object)this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex]
-                    ?? (object)this.timeseriesDataParameter.StringValues?[this.timestampRawIndex]
-                    ?? (object)this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
+                switch (Type)
+                {
+                    case ParameterValueType.Empty:
+                        return null;
+                    case ParameterValueType.Numeric:
+                        return this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex];
+                    case ParameterValueType.String:
+                        return this.timeseriesDataParameter.StringValues?[this.timestampRawIndex];
+                    case ParameterValueType.Binary:
+                        return this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
             }
         }
 
@@ -113,7 +131,7 @@ namespace QuixStreams.Streaming.Models
             var lhsValue = lhs.Value;
             var rhsValue = rhs.Value;
 
-            if (lhsValue?.GetType() != rhsValue?.GetType())
+            if (lhs.Type != rhs.Type)
             {
                 return false;
             }

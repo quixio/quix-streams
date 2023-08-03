@@ -626,7 +626,9 @@ public class MethodWriter : BaseWriter
                 var elementTypeAsUnmanagedText = typeWriter.GetInteropTypeString(generic, false);
                 writer.Write($"var {unmanagedArrayName} = {nameof(InteropUtils)}.{nameof(InteropUtils.FromArrayUPtr)}({sourceName}, typeof({elementTypeAsUnmanagedText})) as {elementTypeAsUnmanagedText}[];");
                 targetName ??= $"{sourceName}Arr";
-                writer.Write($"{targetVarCreate}{targetName} = {unmanagedArrayName} == null ? null : new {elementTypeAsText}[{unmanagedArrayName}.Length];");
+                
+                // There seem to be a bug in NAOT where byte[][len] is not working but (byte[][])Array.CreateInstance(typeof(byte[]), len) does
+                writer.Write($"{targetVarCreate}{targetName} = {unmanagedArrayName} == null ? null : ({elementTypeAsText}[])Array.CreateInstance(typeof({elementTypeAsText}), {unmanagedArrayName}.Length);");
                 writer.Write($"if ({targetName} != null) {{"); // start of null check
                 writer.IncrementIndent();
                 writer.Write($"for (var {targetName}Index = 0; {targetName}Index < {targetName}.Length; {targetName}Index++) {{"); // start of for

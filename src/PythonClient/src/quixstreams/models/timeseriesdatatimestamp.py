@@ -81,14 +81,7 @@ class TimeseriesDataTimestamp:
                 if str is None:
                     return None
 
-                parameters_hptr = self._interop.get_Parameters()
-                try:
-                    key_uptr = iu.utf8_to_uptr(key)
-                    return _value_converter_to_python(di.GetValue(parameters_hptr, key_uptr))
-                finally:
-                    iu.free_hptr(parameters_hptr)
-
-
+                return ParameterValue.create_empty_instance(key)
 
             parameters_hptr = self._interop.get_Parameters()
             try:
