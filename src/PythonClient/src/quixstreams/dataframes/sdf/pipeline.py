@@ -4,7 +4,6 @@ import operator
 
 OpValue: TypeAlias = int | float | bool
 ColumnValue: TypeAlias = int | float | bool | list | dict
-RowApplier: TypeAlias = Callable[[dict], Optional[dict]]
 ColumnApplier: TypeAlias = Callable[[dict], OpValue]
 
 
@@ -12,24 +11,35 @@ class Row:
     def __init__(self, data: dict, timestamp: str = None):
         self.data = data
         self.timestamp = timestamp
+    
+    def __setitem__(self, key, value):
+        self.data[key] = value
+    
+    def __getitem__(self, item):
+        return self.data[item]
+
+    def __bool__(self):
+        return bool(self.data)
+
+    def update(self, data):
+        self.data = data
 
 
 class Column:
-    def __init__(self, name: Optional[str] = None, _eval_func: Optional[ColumnApplier] = None):
-        self.name = name
-        self._eval_func = _eval_func if _eval_func else lambda row: row[self.name]
+    def __init__(self, col_name: Optional[str] = None, _eval_func: Optional[ColumnApplier] = None):
+        self.col_name = col_name
+        self._eval_func = _eval_func if _eval_func else lambda row: row[self.col_name]
 
     @staticmethod
-    def _as_pipeline_field(value):
+    def _as_column(value: Any) -> 'Column':
         if not isinstance(value, Column):
             return Column(_eval_func=lambda row: value)
         return value
 
     def _operation(self, other: Any, op: Callable[[OpValue, OpValue], OpValue]) -> Self:
-        return Column(
-            _eval_func=lambda row: op(self.eval(row), self._as_pipeline_field(other).eval(row)))
+        return Column(_eval_func=lambda row: op(self.eval(row), self._as_column(other).eval(row)))
 
-    def eval(self, row: dict) -> ColumnValue:
+    def eval(self, row: Row) -> ColumnValue:
         return self._eval_func(row)
 
     def apply(self, f: ColumnApplier) -> Self:
@@ -75,12 +85,15 @@ class Column:
         return self._operation(other, operator.ge)
 
 
+RowApplier: TypeAlias = Callable[[Row], Optional[Row]]
+
+
 class PipelineFunction:
     def __init__(self, func: RowApplier):
         self._id = str(uuid.uuid4())
         self._func = func
 
-    def __call__(self, row: dict):
+    def __call__(self, row: Row):
         return self._func(row)
 
     @property
@@ -99,10 +112,10 @@ class Pipeline:
 
     @staticmethod
     def _subset(keys: list) -> RowApplier:
-        return lambda row: {k: row[k] for k in keys}
+        return lambda row: row.update({k: row[k] for k in keys})
 
     @staticmethod
-    def _set_item(k: str, v: OpValue, row: dict) -> dict:
+    def _set_item(k: str, v: OpValue, row: Row) -> Row:
         row[k] = v
         return row
 
@@ -121,7 +134,7 @@ class Pipeline:
         elif isinstance(item, list):
             self.apply(self._subset(item))
             return self
-        return Column(name=item)
+        return Column(col_name=item)
 
     def __setitem__(self, key: str, value: Column | OpValue):
         if isinstance(value, Column):
@@ -130,17 +143,14 @@ class Pipeline:
             self.apply(lambda row: self._set_item(key, value, row))
 
     @staticmethod
-    def _process_function(func: PipelineFunction, data: list | dict):
-        print(f'processing func {func._func.__name__}')
-        if isinstance(data, dict):
+    def _process_function(func: PipelineFunction, data: Row | List[Row]):
+        if isinstance(data, Row):
             return func(data)
         else:
-            print('processing list')
             data = [func(d) for d in data]
-            print(data)
             return data if any(data) else None
 
-    def process(self, event: dict | List[dict]) -> Optional[dict | List[dict]]:
+    def process(self, event: Row | List[Row]) -> Optional[Row | List[Row]]:
         result = event
         for func in self._functions:
             print(f'processing func {func._func.__name__}')
@@ -152,21 +162,22 @@ class Pipeline:
 
 
 if __name__ == "__main__":
-    def more_rows(data):
-        data_out = []
-        for row in data['numbers']:
-            data_out.append({**data, 'numbers': row})
-        return data_out
-    p = Pipeline()
-    p = p.apply(more_rows)
-    p = p[['numbers']]
-    result = p.process(event={'numbers': [1, 2, 3], 'letters': 'woo'})
-    print(result)
+    # def more_rows(data):
+    #     data_out = []
+    #     for row in data['numbers']:
+    #         data_out.append({**data, 'numbers': row})
+    #     return data_out
+    # p = Pipeline()
+    # p = p.apply(more_rows)
+    # p = p[['numbers']]
+    # result = p.process(event={'numbers': [1, 2, 3], 'letters': 'woo'})
+    # print(result)
 
     p = Pipeline()
     p["z"] = p["x"].apply(lambda _: _+500)
     p["a"] = p["x"] + p["y"]
     p["b"] = 12
+    p["c"] = p["z"] + 1
     p = p[(p['x'] >= 1) & (p['y'] < 10)]
-    result = p.process(event={"x": 1, "y": 2, "q": 3})
-
+    result = p.process(event=Row(data={"x": 1, "y": 2, "q": 3}))
+    print(result.data if isinstance(result, Row) else [r.data for r in result])
