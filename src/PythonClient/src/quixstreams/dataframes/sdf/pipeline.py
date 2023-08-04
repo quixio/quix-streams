@@ -1,33 +1,39 @@
 import uuid
-from typing import Self, Optional, Any, Callable, TypeAlias
+from typing import Self, Optional, Any, Callable, TypeAlias, List
 import operator
 
 OpValue: TypeAlias = int | float | bool
 ColumnValue: TypeAlias = int | float | bool | list | dict
-EventApplier: TypeAlias = Callable[[dict], Optional[dict]]
-EventColumnApplier: TypeAlias = Callable[[dict], OpValue]
+RowApplier: TypeAlias = Callable[[dict], Optional[dict]]
+ColumnApplier: TypeAlias = Callable[[dict], OpValue]
 
 
-class EventColumn:
-    def __init__(self, name: Optional[str] = None, _eval_func: Optional[EventColumnApplier] = None):
+class Row:
+    def __init__(self, data: dict, timestamp: str = None):
+        self.data = data
+        self.timestamp = timestamp
+
+
+class Column:
+    def __init__(self, name: Optional[str] = None, _eval_func: Optional[ColumnApplier] = None):
         self.name = name
-        self._eval_func = _eval_func if _eval_func else lambda message: message[self.name]
+        self._eval_func = _eval_func if _eval_func else lambda row: row[self.name]
 
     @staticmethod
     def _as_pipeline_field(value):
-        if not isinstance(value, EventColumn):
-            return EventColumn(_eval_func=lambda message: value)
+        if not isinstance(value, Column):
+            return Column(_eval_func=lambda row: value)
         return value
 
     def _operation(self, other: Any, op: Callable[[OpValue, OpValue], OpValue]) -> Self:
-        return EventColumn(
-            _eval_func=lambda message: op(self.eval(message), self._as_pipeline_field(other).eval(message)))
+        return Column(
+            _eval_func=lambda row: op(self.eval(row), self._as_pipeline_field(other).eval(row)))
 
-    def eval(self, message: dict) -> ColumnValue:
-        return self._eval_func(message)
+    def eval(self, row: dict) -> ColumnValue:
+        return self._eval_func(row)
 
-    def apply(self, f: EventColumnApplier) -> Self:
-        return EventColumn(_eval_func=lambda message: f(self.eval(message)))
+    def apply(self, f: ColumnApplier) -> Self:
+        return Column(_eval_func=lambda row: f(self.eval(row)))
 
     def __mod__(self, other):
         return self._operation(other, operator.mod)
@@ -70,77 +76,97 @@ class EventColumn:
 
 
 class PipelineFunction:
-    def __init__(self, func: EventApplier):
+    def __init__(self, func: RowApplier):
         self._id = str(uuid.uuid4())
         self._func = func
 
-    def __call__(self, message: dict):
-        return self._func(message)
+    def __call__(self, row: dict):
+        return self._func(row)
 
     @property
     def id(self) -> str:
         return self._id
 
 
-class MessagePipeline:
-
+class Pipeline:
     def __init__(self, functions: list[PipelineFunction] = None):
         self._functions = functions or []
         self._id = str(uuid.uuid4())
 
     @staticmethod
-    def _filter(pf: EventColumn) -> EventApplier:
-        return lambda message: message if pf.eval(message) else None
+    def _filter(pf: Column) -> RowApplier:
+        return lambda row: row if pf.eval(row) else None
 
     @staticmethod
-    def _subset(keys: list) -> EventApplier:
-        return lambda message: {k: message[k] for k in keys}
+    def _subset(keys: list) -> RowApplier:
+        return lambda row: {k: row[k] for k in keys}
 
     @staticmethod
-    def _set_item(k: str, v: OpValue, message: dict) -> dict:
-        message[k] = v
-        return message
+    def _set_item(k: str, v: OpValue, row: dict) -> dict:
+        row[k] = v
+        return row
 
     @property
     def functions(self) -> list[PipelineFunction]:
         return self._functions
 
-    def apply(self, func: EventApplier):
+    def apply(self, func: RowApplier):
         self._functions.append(PipelineFunction(func=func))
+        return self
 
-    def process(self, event: dict) -> Optional[dict]:
-        result = event
-        for func in self._functions:
-            print(f'processing func {func._func.__name__}')
-            result = func(result)
-            print(result)
-            if result is None:
-                print('result was filtered')
-                break
-        return result
-
-    def __getitem__(self, item: str | list | EventColumn) -> EventColumn | Self:
-        if isinstance(item, EventColumn):
+    def __getitem__(self, item: str | list | Column) -> Column | Self:
+        if isinstance(item, Column):
             self.apply(self._filter(item))
             return self
         elif isinstance(item, list):
             self.apply(self._subset(item))
             return self
-        return EventColumn(name=item)
+        return Column(name=item)
 
-    def __setitem__(self, key: str, value: EventColumn | OpValue):
-        if isinstance(value, EventColumn):
-            self.apply(lambda message: self._set_item(key, value.eval(message), message))
+    def __setitem__(self, key: str, value: Column | OpValue):
+        if isinstance(value, Column):
+            self.apply(lambda row: self._set_item(key, value.eval(row), row))
         else:
-            self.apply(lambda message: self._set_item(key, value, message))
+            self.apply(lambda row: self._set_item(key, value, row))
+
+    @staticmethod
+    def _process_function(func: PipelineFunction, data: list | dict):
+        print(f'processing func {func._func.__name__}')
+        if isinstance(data, dict):
+            return func(data)
+        else:
+            print('processing list')
+            data = [func(d) for d in data]
+            print(data)
+            return data if any(data) else None
+
+    def process(self, event: dict | List[dict]) -> Optional[dict | List[dict]]:
+        result = event
+        for func in self._functions:
+            print(f'processing func {func._func.__name__}')
+            result = self._process_function(func, result)
+            if not result:
+                print('result was filtered')
+                break
+        return result
 
 
 if __name__ == "__main__":
-    p = MessagePipeline()
-    p = p[['x', 'y']]
+    def more_rows(data):
+        data_out = []
+        for row in data['numbers']:
+            data_out.append({**data, 'numbers': row})
+        return data_out
+    p = Pipeline()
+    p = p.apply(more_rows)
+    p = p[['numbers']]
+    result = p.process(event={'numbers': [1, 2, 3], 'letters': 'woo'})
+    print(result)
+
+    p = Pipeline()
     p["z"] = p["x"].apply(lambda _: _+500)
     p["a"] = p["x"] + p["y"]
     p["b"] = 12
     p = p[(p['x'] >= 1) & (p['y'] < 10)]
     result = p.process(event={"x": 1, "y": 2, "q": 3})
-    print(result)
+
