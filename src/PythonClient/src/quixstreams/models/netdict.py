@@ -55,7 +55,7 @@ class ReadOnlyNetDict(object):
         self._finalizer.detach()
         InteropUtils.free_hptr(self._pointer)
 
-    def dispose(self):
+    def dispose(self) -> None:
         self._finalizer()
 
     def _get_actual_key_from(self, key) -> Any:

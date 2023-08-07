@@ -18,6 +18,11 @@ def nativedecorator(cls):
         orig_init(self, *args, **kwargs)
 
     def new_finalizerfunc(self):
+        """
+        Finalizes the underlying object
+        Finalize is implementation specific but generally de-references the underlying objects which
+        may or may not result in garbage collection of the de-referenced objects
+        """
         if self._nativedecorator_finalized:
             return
 
@@ -47,7 +52,12 @@ def nativedecorator(cls):
         new_dispose(self)
         return result
 
-    def new_dispose(self, *args, **kwargs):
+    def new_dispose(self, *args, **kwargs) -> None:
+        """
+        Disposes the underlying object in addition to finalizing it
+        Dispose is implementation specific but it generally frees underlying resources rather than just
+        de-references
+        """
 
         ptr = getattr(self, "_interop").get_interop_ptr__()
 

@@ -2119,7 +2119,32 @@ class TestDictionary(BaseIntegrationTest):
 
         assert state["statekey"] == "statevalue"
 
-class TestMultipleStreams(BaseIntegrationTest):
+class TestUseCases(BaseIntegrationTest):
+
+    def test_multiple_retrieval_of_same_stream(self,
+                                               test_name,
+                                               topic_producer):
+        # Also tests if the dispose/finalize is done correctly
+
+        print(f'Starting Integration test "{test_name}"')
+
+        stream_created = 0
+        def on_stream_create(stream: qx.StreamProducer):
+            nonlocal stream_created
+            stream_created = stream_created + 1
+
+        print("---- Get stream for the first time ----")
+
+        topic_producer.get_or_create_stream("test", on_stream_create).properties.location = "test"
+
+        print("---- Get stream for the second time ----")
+
+        topic_producer.get_or_create_stream("test", on_stream_create).properties.location = "test"
+
+        print("---- Assert ----")
+
+        assert stream_created == 1
+
 
     def test_multiple_streams_created_and_closed(self,
                                            test_name,

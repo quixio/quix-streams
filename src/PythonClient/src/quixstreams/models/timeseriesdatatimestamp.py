@@ -34,6 +34,9 @@ class TimeseriesDataTimestamp:
         self._tags = None  # to cache whatever is read from .net
 
     def _finalizerfunc(self):
+        self._parameters = None
+
+    def dispose(self) -> None:
         self._clear_parameters()
 
     def _clear_parameters(self):

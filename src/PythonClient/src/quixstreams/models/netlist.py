@@ -28,7 +28,7 @@ class NetReadOnlyList(object):
         self._finalizer.detach()
         InteropUtils.free_hptr(self._pointer)
 
-    def dispose(self):
+    def dispose(self) -> None:
         self._finalizer()
 
     def _get_actual_from(self, value):

@@ -55,6 +55,16 @@ class TopicConsumer(object):
         self._on_revoking_dispose()
         self._on_committing_dispose()
         self._on_committed_dispose()
+        del self._topic_state_manager
+
+        del self._active_streams
+
+    def dispose(self) -> None:
+        self._on_stream_received_dispose()
+        self._on_streams_revoked_dispose()
+        self._on_revoking_dispose()
+        self._on_committing_dispose()
+        self._on_committed_dispose()
         if self._topic_state_manager is not None:
             self._topic_state_manager.dispose()
 
