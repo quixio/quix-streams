@@ -17,11 +17,11 @@ namespace QuixStreams.Speedtest
             };
             
             // Uncomment this for testing Transport layer only
-//            new TransportTest().Run(cts.Token);
-            new StreamingTestRaw().Run(cts.Token);
+            //new TransportTest().Run(cts.Token);
+            //new StreamingTestRaw().Run(cts.Token);
             
             // Uncomment this for testing Streaming and below layers
-            //new StreamingTest().Run(cts.Token);
+            new StreamingTest().Run(cts.Token);
 //            new BufferTest().Run(cts.Token);
         }
     }

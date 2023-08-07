@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using QuixStreams.Kafka;
 using QuixStreams.Telemetry.Kafka;
-using QuixStreams.Transport.Kafka;
 
 namespace QuixStreams.Streaming
 {

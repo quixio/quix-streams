@@ -1,9 +1,8 @@
 using System;
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
+using QuixStreams.Kafka.Transport.SerDes.Legacy.MessageValue;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport.Fw;
-using QuixStreams.Transport.Fw.Models;
 
 namespace QuixStreams.Streaming.Utils
 {
@@ -20,7 +19,7 @@ namespace QuixStreams.Streaming.Utils
         /// <summary>
         /// The logger for the class
         /// </summary>
-        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => Logging.CreateLogger(typeof(CodecSettings)));
+        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => QuixStreams.Logging.CreateLogger(typeof(CodecSettings)));
 
         static CodecSettings()
         {
@@ -38,14 +37,14 @@ namespace QuixStreams.Streaming.Utils
             
             if (codecType == CodecType.Protobuf)
             {
-                SerializingModifier.PackageCodecType = TransportPackageValueCodecType.Binary;
+                QuixStreams.Kafka.Transport.SerDes.PackageSerializationSettings.LegacyValueCodecType = TransportPackageValueCodecType.Binary;
             }
             else
             {
-                SerializingModifier.PackageCodecType = TransportPackageValueCodecType.Json;
+                QuixStreams.Kafka.Transport.SerDes.PackageSerializationSettings.LegacyValueCodecType = TransportPackageValueCodecType.Json;
             }
             CurrentCodec = codecType;
-            logger.Value.LogDebug("Codecs are configured to publish using {0} with {1} package codec.", codecType, SerializingModifier.PackageCodecType);
+            logger.Value.LogDebug("Codecs are configured to publish using {0} with {1} package codec.", codecType, QuixStreams.Kafka.Transport.SerDes.PackageSerializationSettings.LegacyValueCodecType);
         }
     }
 }

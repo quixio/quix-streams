@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
+        <LangVersion>8.0</LangVersion>
+        
+        <IsPackable>false</IsPackable>
+        <RootNamespace>QuixStreams.Transport.Kafka.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.2.0" />
+        <PackageReference Include="xunit" Version="2.4.0" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+        <PackageReference Include="coverlet.collector" Version="1.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Quix.TestBase\Quix.TestBase.csproj" />
+      <ProjectReference Include="..\QuixStreams.IntegrationTestBase\QuixStreams.IntegrationTestBase.csproj" />
+      <ProjectReference Include="..\QuixStreams.Kafka\QuixStreams.Kafka.csproj" />
+    </ItemGroup>
+
+</Project>

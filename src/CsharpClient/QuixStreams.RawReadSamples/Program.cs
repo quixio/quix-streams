@@ -9,18 +9,6 @@ namespace QuixStreams.RawReadSamples
 
             (new Thread(() =>
             {
-                TestReadMeta.Run();
-            })).Start();
-
-            (new Thread(() =>
-            {
-                TestWriteMeta.Run();
-            })).Start();
-
-
-/*
-            (new Thread(() =>
-            {
                 TestReadKey.Run();
             })).Start();
 
@@ -28,7 +16,6 @@ namespace QuixStreams.RawReadSamples
             {
                 TestWriteKey.Run();
             })).Start();
-*/
         }
     }
 }

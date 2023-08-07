@@ -1,4 +1,5 @@
 ﻿using System;
+using QuixStreams.Kafka;
 
 namespace QuixStreams.Streaming.Raw
 {
@@ -16,7 +17,7 @@ namespace QuixStreams.Streaming.Raw
         /// <summary>
         /// Event raised when a message is received from the topic
         /// </summary>
-        public event EventHandler<RawMessage> OnMessageReceived;
+        public event EventHandler<KafkaMessage> OnMessageReceived;
 
         /// <summary>
         /// Event raised when a new error occurs

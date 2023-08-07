@@ -1,5 +1,7 @@
 ﻿﻿using System;
  using System.Threading;
+ using QuixStreams.Kafka.Transport.SerDes;
+ using QuixStreams.Kafka.Transport.SerDes.Legacy.MessageValue;
  using QuixStreams.Telemetry.Kafka;
  using QuixStreams.Telemetry.Models;
 
@@ -9,8 +11,10 @@
     {
         static void Main()
         {
-            CodecRegistry.Register(CodecType.Protobuf);
-            
+            CodecRegistry.Register(CodecType.Json);
+            PackageSerializationSettings.LegacyValueCodecType = TransportPackageValueCodecType.Json;
+            PackageSerializationSettings.Mode = PackageSerializationMode.LegacyValue;
+
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (s, e) =>
             {

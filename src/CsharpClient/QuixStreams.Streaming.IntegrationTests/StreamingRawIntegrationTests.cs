@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Quix.TestBase.Extensions;
+using QuixStreams.Kafka;
+using QuixStreams;
 using QuixStreams.Telemetry.Kafka;
 using Xunit;
 using Xunit.Abstractions;
@@ -18,7 +20,7 @@ namespace QuixStreams.Streaming.IntegrationTests
         {
             this.output = output;
             QuixStreams.Logging.Factory = output.CreateLoggerFactory();
-            client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, kafkaDockerTestFixture.SecurityOptions);
+            client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, null);
         }
 
 
@@ -48,7 +50,7 @@ namespace QuixStreams.Streaming.IntegrationTests
             topicConsumer.Subscribe();
 
             var topicProducer = client.GetRawTopicProducer(topicName);
-            topicProducer.Publish(new Raw.RawMessage(toSend));
+            topicProducer.Publish(new KafkaMessage(null, toSend, null));
 
             SpinWait.SpinUntil(() => received.Count > 0, 5000);
 
@@ -84,7 +86,7 @@ namespace QuixStreams.Streaming.IntegrationTests
 
             topicConsumer.Subscribe();
             var topicProducer = client.GetRawTopicProducer(topicName);
-            topicProducer.Publish(new Raw.RawMessage(toSend));
+            topicProducer.Publish(new KafkaMessage(null, toSend, null));
 
             SpinWait.SpinUntil(() => received.Count > 0, 5000);
 

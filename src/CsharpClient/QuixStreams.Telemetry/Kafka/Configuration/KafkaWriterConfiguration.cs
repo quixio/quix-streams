@@ -30,18 +30,6 @@ namespace QuixStreams.Telemetry.Kafka
         public string BrokerList { get; }
 
         /// <summary>
-        /// Maximum Kafka protocol request message size in bytes.
-        /// default: 1000012
-        /// </summary>
-        public int MaxMessageSize { get; } = 1000012;
-
-        /// <summary>
-        /// Maximum Kafka protocol key size in bytes.
-        /// default: 1024
-        /// </summary>
-        public int MaxKeySize { get; } = 1024;
-
-        /// <summary>
         /// Extra Kafka configuration properties
         /// </summary>
         public IDictionary<string, string> Properties { get; }

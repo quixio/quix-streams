@@ -1,10 +1,11 @@
 ﻿using System;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using QuixStreams.Kafka;
+using QuixStreams;
+using QuixStreams.Kafka.Transport;
+using QuixStreams.Kafka.Transport.SerDes;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport.Fw;
-using QuixStreams.Transport.Kafka;
 
 namespace QuixStreams.Telemetry.Kafka
 {
@@ -14,9 +15,9 @@ namespace QuixStreams.Telemetry.Kafka
     /// </summary>
     public class TelemetryKafkaProducer : StreamComponent, IDisposable
     {
-        private readonly ILogger logger = Logging.CreateLogger<TelemetryKafkaProducer>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<TelemetryKafkaProducer>();
 
-        private QuixStreams.Transport.IO.IProducer transportProducer;
+        private IKafkaTransportProducer kafkaTransportProducer;
 
         /// <summary>
         /// The globally unique identifier of the stream.
@@ -32,11 +33,11 @@ namespace QuixStreams.Telemetry.Kafka
         /// Initializes a new instance of <see cref="TelemetryKafkaProducer"/>
         /// </summary>
         /// <param name="producer">A stream package producer. Share this among multiple instances of this class to prevent re-initialization.</param>
-        /// <param name="byteSplitter">The byte splitter to use. </param>
+        /// <param name="kafkaMessageSplitter">The kafka message splitter to use. </param>
         /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
-        public TelemetryKafkaProducer(QuixStreams.Transport.IO.IProducer producer, IByteSplitter byteSplitter, string streamId = null)
+        public TelemetryKafkaProducer(IKafkaProducer producer, IKafkaMessageSplitter kafkaMessageSplitter, string streamId = null)
         {
-            this.transportProducer = new QuixStreams.Transport.TransportProducer(producer, byteSplitter);
+            this.kafkaTransportProducer = new QuixStreams.Kafka.Transport.KafkaTransportProducer(producer, kafkaMessageSplitter: kafkaMessageSplitter);
 
             this.InitializeStreaming(streamId);
         }
@@ -56,19 +57,14 @@ namespace QuixStreams.Telemetry.Kafka
         {
             try
             {
-                var transportPackage = new QuixStreams.Transport.IO.Package(
-                    package.Type,
-                    package.Value
-                );
+                var transportPackage = new TransportPackage(package.Type, StreamId, package.Value);
 
-                if (transportProducer == null)
+                if (kafkaTransportProducer == null)
                 {
-                    throw new InvalidOperationException("Writer is already closed.");
+                    throw new InvalidOperationException("Producer is already closed.");
                 }
 
-                transportPackage.SetKey(Encoding.UTF8.GetBytes(StreamId));
-
-                await this.transportProducer.Publish(transportPackage, this.CancellationToken);
+                await this.kafkaTransportProducer.Publish(transportPackage, this.CancellationToken);
                 await this.Output.Send(package);
             }
             catch (Exception e)
@@ -87,7 +83,7 @@ namespace QuixStreams.Telemetry.Kafka
         private void Stop()
         {
             // Transport layer
-            this.transportProducer = null;
+            this.kafkaTransportProducer = null;
         }
 
         /// <inheritdoc />

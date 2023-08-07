@@ -6,9 +6,9 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using FluentAssertions;
+using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs;
-using QuixStreams.Transport.Fw.Codecs;
 using Xunit;
 using Xunit.Abstractions;
 

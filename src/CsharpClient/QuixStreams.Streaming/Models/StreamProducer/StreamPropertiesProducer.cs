@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Streaming.Models.StreamProducer
@@ -28,7 +29,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
 
         private long lastHeartbeatRebroadcastTime = 0;  // in milliseconds
         private int heartbeatRebroadcastFlushInterval = 30*1000;
-        private readonly ILogger<StreamTimeseriesProducer> logger = Logging.CreateLogger<StreamTimeseriesProducer>();
+        private readonly ILogger<StreamTimeseriesProducer> logger = QuixStreams.Logging.CreateLogger<StreamTimeseriesProducer>();
 
         /// <summary>
         /// Automatic flush interval of the properties metadata into the channel [ in milliseconds ]

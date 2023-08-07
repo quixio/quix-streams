@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using FluentAssertions;
 using NSubstitute;
+using QuixStreams.Streaming.UnitTests.Helpers;
 using QuixStreams.Telemetry.Models;
 using Xunit;
 

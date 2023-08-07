@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
-using QuixStreams.Transport.IO;
 
 namespace QuixStreams.Streaming
 {
@@ -17,7 +17,7 @@ namespace QuixStreams.Streaming
     internal class StreamConsumer : StreamPipeline, IStreamConsumerInternal
     {
         private readonly ITopicConsumer topicConsumer;
-        private readonly ILogger logger = Logging.CreateLogger<StreamConsumer>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamConsumer>();
         private readonly StreamPropertiesConsumer streamPropertiesConsumer;
         private readonly StreamTimeseriesConsumer streamTimeseriesConsumer;
         private readonly StreamEventsConsumer streamEventsConsumer;
@@ -131,9 +131,10 @@ namespace QuixStreams.Streaming
             if (package.Type == typeof(byte[]))
             {
                 this.logger.LogTrace("StreamConsumer: OnStreamPackageReceived - raw message.");
+                throw new NotImplementedException();
                 var ev = new EventDataRaw
                 {
-                    Timestamp = ((DateTime)package.TransportContext[KnownTransportContextKeys.BrokerMessageTime]).ToUnixNanoseconds(),
+                    Timestamp = default,//((DateTime)package.KafkaMessage.Headers["BrokerTime"].ToUnixNanoseconds(),
                     Id = streamPipeline.StreamId,
                     Tags = new Dictionary<string, string>(),
                     Value = Encoding.UTF8.GetString((byte[])package.Value)

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Streaming.Exceptions;
 using QuixStreams.Streaming.Models.StreamProducer;
 using QuixStreams.Telemetry;
@@ -20,7 +21,7 @@ namespace QuixStreams.Streaming
     internal class StreamProducer: StreamPipeline, IStreamProducerInternal
     {
         public event Action<Type> OnBeforeSend;
-        private readonly ILogger logger = Logging.CreateLogger<StreamProducer>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamProducer>();
         private readonly StreamPropertiesProducer streamPropertiesProducer;
         private readonly StreamTimeseriesProducer streamTimeseriesProducer;
         private readonly StreamEventsProducer streamEventsProducer;

@@ -4,7 +4,9 @@
     <DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
     <Configurations>Debug;Release;Python</Configurations>
     <Platforms>AnyCPU</Platforms>
-    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+
+    <TargetFramework Condition=" '$(Configuration)' == 'Python' ">net8.0</TargetFramework>
+    <TargetFrameworks Condition=" '$(Configuration)' != 'Python' ">net7.0;netstandard2.0</TargetFrameworks>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -24,10 +26,16 @@
     <PackageReference Include="Google.Protobuf" Version="3.22.1" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
   </ItemGroup>
+  
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>QuixStreams.Telemetry.UnitTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\QuixStreams.Transport\QuixStreams.Transport.csproj" />
-    <ProjectReference Include="..\QuixStreams.Transport.Kafka\QuixStreams.Transport.Kafka.csproj" />
+    <ProjectReference Include="..\QuixStreams.Kafka\QuixStreams.Kafka.csproj" />
+    <ProjectReference Include="..\QuixStreams.Kafka.Transport\QuixStreams.Kafka.Transport.csproj" />
   </ItemGroup>
 
 </Project>

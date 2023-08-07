@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using QuixStreams.Transport.Codec;
-using QuixStreams.Transport.Fw.Codecs;
+using QuixStreams.Kafka.Transport.SerDes.Codecs;
+using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
 
 namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
 {

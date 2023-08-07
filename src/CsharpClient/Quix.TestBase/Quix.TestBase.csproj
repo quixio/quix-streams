@@ -2,9 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
-        <Configurations>Debug;Release;Python</Configurations>
-        <Platforms>AnyCPU</Platforms>
+        <IsPackable>false</IsPackable>
     </PropertyGroup>
 
     <ItemGroup>

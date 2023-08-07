@@ -5,10 +5,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using FluentAssertions.Extensions;
 using Quix.TestBase.Extensions;
+using QuixStreams.Kafka;
+using QuixStreams;
 using QuixStreams.Telemetry;
 using QuixStreams.Streaming.Models;
-using QuixStreams.Streaming.Raw;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
@@ -30,7 +32,7 @@ namespace QuixStreams.Streaming.IntegrationTests
         {
             this.output = output;
             QuixStreams.Logging.Factory = output.CreateLoggerFactory();
-            client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, kafkaDockerTestFixture.SecurityOptions);
+            client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, null);
             output.WriteLine($"Created client with brokerlist '{kafkaDockerTestFixture.BrokerList}'");
         }
         
@@ -480,7 +482,7 @@ namespace QuixStreams.Streaming.IntegrationTests
 
                 // ** Consuming messages with Raw topic consumer
 
-                var consumedRawMessages = new List<RawMessage>();
+                var consumedRawMessages = new List<KafkaMessage>();
 
                 rawTopicConsumer.OnMessageReceived += (s, rawMessage) =>
                 {
@@ -495,7 +497,7 @@ namespace QuixStreams.Streaming.IntegrationTests
 
                 rawTopicConsumer.Subscribe();
 
-                rawTopicProducer.Publish(new RawMessage(messageContentInBytes));
+                rawTopicProducer.Publish(new KafkaMessage(null, messageContentInBytes, null));
                 
                 SpinWait.SpinUntil(() => consumedRawMessages.Count >= 1, 10000);
                 try
@@ -537,8 +539,8 @@ namespace QuixStreams.Streaming.IntegrationTests
 
                 topicConsumer.Subscribe();
 
-                rawTopicProducer.Publish(new RawMessage(key: "some key"u8.ToArray(), value: messageContentInBytes));
-                rawTopicProducer.Publish(new RawMessage(key: null, value: messageContentInBytes));
+                rawTopicProducer.Publish(new KafkaMessage(Encoding.UTF8.GetBytes("some key"), messageContentInBytes, null));
+                rawTopicProducer.Publish(new KafkaMessage(key: null, value: messageContentInBytes, null));
 
                 SpinWait.SpinUntil(() => consumedEvents.Count >= 2, 10000);
                 try

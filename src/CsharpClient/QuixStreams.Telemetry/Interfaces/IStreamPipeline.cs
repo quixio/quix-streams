@@ -18,12 +18,6 @@ namespace QuixStreams.Telemetry
         string StreamId { get; }
 
         /// <summary>
-        /// List of metadata parameters read from the source of the data.
-        /// The list of parameters depends on the implementation of the Transport layer, for instance for a Kafka broker we can find here the Topic information.
-        /// </summary>
-        Dictionary<string, string> SourceMetadata { get; set; }
-
-        /// <summary>
         /// Chain a new component to the pipeline.
         /// This method links the Output of the last component of the pipeline to the Input of the added component.
         /// </summary>

@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Threading;
+using QuixStreams.Kafka.Transport.SerDes;
+using QuixStreams.Kafka.Transport.SerDes.Legacy.MessageValue;
+using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.PerformanceTest
@@ -11,7 +14,8 @@ namespace QuixStreams.PerformanceTest
 
         static void Main(string[] args)
         {
-            CodecRegistry.Register(CodecType.Protobuf);
+            CodecSettings.SetGlobalCodecType(CodecType.Json);
+            PackageSerializationSettings.Mode = PackageSerializationMode.LegacyValue;
             
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (s, e) =>

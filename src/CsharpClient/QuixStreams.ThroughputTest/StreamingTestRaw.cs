@@ -1,13 +1,16 @@
-﻿using System;
-using System.Collections.Concurrent;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConsoleTables;
+using FluentAssertions.Extensions;
 using MathNet.Numerics.Statistics;
-using QuixStreams.Streaming.UnitTests;
+using Microsoft.Extensions.Logging;
+using QuixStreams;
+using QuixStreams.Kafka.Transport.SerDes;
+using QuixStreams.Streaming.UnitTests.Helpers;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.ThroughputTest
@@ -20,7 +23,9 @@ namespace QuixStreams.ThroughputTest
             var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
             // usage stuff
             
-            var client = new TestStreamingClient(CodecType.Json);
+            QuixStreams.Logging.UpdateFactory(LogLevel.Debug);
+            QuixStreams.Kafka.Transport.SerDes.PackageSerializationSettings.Mode = PackageSerializationMode.Header;
+            var client = new TestStreamingClient(CodecType.Protobuf);
 
             var topicConsumer = client.GetTopicConsumer();
             var topicProducer = client.GetTopicProducer();
@@ -110,7 +115,6 @@ namespace QuixStreams.ThroughputTest
             {
 
                 timer.Start();
-
                 if (useBuffer)
                 {
                     var buffer = reader.Timeseries.CreateBuffer();
@@ -135,10 +139,12 @@ namespace QuixStreams.ThroughputTest
                 }
             };
             topicConsumer.Subscribe();
-            
-         
+
+            var density = 100;
             var totalSamples = 3000;
-            var datalist = GenerateData().Take(totalSamples).ToList();
+            var takeCount = (int)Math.Ceiling((double)totalSamples / density);
+            Console.WriteLine("Generating data...");
+            var datalist = GenerateData(density).Take(takeCount).ToList();
             bool doPerParameterSample = true;
             if (doPerParameterSample)
             {
@@ -149,19 +155,18 @@ namespace QuixStreams.ThroughputTest
             {
                 var stream = topicProducer.CreateStream();
                 Console.WriteLine("Test stream: " + stream.StreamId);
-                stream.Timeseries.Buffer.PacketSize = 10000;
-                //stream.Timeseries.Buffer.TimeSpanInMilliseconds = 2000;
+                stream.Timeseries.Buffer.PacketSize = 100;
+                // stream.Timeseries.Buffer.TimeSpanInMilliseconds = 2000;
                 // stream.Timeseries.Buffer.BufferTimeout = 1000;
-                //stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
+                // stream.Timeseries.Buffer.PacketSize = 1; // To not keep messages around and send immediately 
 
-            
                 stream.Epoch = DateTime.UtcNow;
                 stream.Properties.Name = "Throughput test Stream"; // this is here to avoid sending data until reader is ready
 
                 var index = 0;
                 while (!ct.IsCancellationRequested)
                 {
-                    stream.Timeseries.Buffer. Publish(datalist[index]);
+                    stream.Timeseries.Buffer.Publish(datalist[index]);
                     index = (index + 1) % datalist.Count;
                 }
                 
@@ -265,7 +270,7 @@ namespace QuixStreams.ThroughputTest
             return data;
         }
 
-        private IEnumerable<TimeseriesDataRaw> GenerateData()
+        private IEnumerable<TimeseriesDataRaw> GenerateData(int samplePerRaw)
         {
             var generator = new Generator();
             var stringParameters = generator.GenerateParameters(10).ToList();
@@ -273,13 +278,13 @@ namespace QuixStreams.ThroughputTest
 
 
             var time = DateTime.UtcNow.ToBinary();
-            var delta = (long)TimeSpan.FromSeconds(1).TotalNanoseconds;
+            var delta = (long)TimeSpan.FromSeconds(1).TotalNanoseconds();
 
             while (true)
             {
-                var count = 1;
+                var count = samplePerRaw;
                 var result = GenerateDataRaw(generator, stringParameters, numericParameters, time, delta, count);
-                time += result.Timestamps[^1] + delta;
+                time += result.Timestamps.Last() + delta;
                 yield return result;
             }
         }
