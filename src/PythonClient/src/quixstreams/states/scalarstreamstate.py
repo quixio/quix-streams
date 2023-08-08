@@ -104,7 +104,7 @@ class ScalarStreamState(Generic[StreamStateType]):
 
     def _on_flushed_wrapper(self, sender_hptr, args_hptr):
         try:
-            self._on_flushed(self._stream_consumer)
+            self._on_flushed()
         except:
             traceback.print_exc()
         finally:
