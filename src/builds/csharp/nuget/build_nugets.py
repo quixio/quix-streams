@@ -7,8 +7,8 @@ import fileinput
 from typing import List
 
 version = "0.5.5.0"
-informal_version = "0.5.5.0-dev10"
-nuget_version = "0.5.5.0-dev10"
+informal_version = "0.5.5.0-dev11"
+nuget_version = "0.5.5.0-dev11"
 
 
 def updatecsproj(projfilepath):
