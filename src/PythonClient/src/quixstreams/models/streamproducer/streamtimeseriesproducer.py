@@ -33,7 +33,7 @@ class StreamTimeseriesProducer(object):
         self._stream_producer = stream_producer
 
     def _finalizerfunc(self):
-        del self._buffer
+        pass
 
     def dispose(self):
         if self._buffer is not None:

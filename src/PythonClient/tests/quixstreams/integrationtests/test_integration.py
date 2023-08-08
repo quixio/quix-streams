@@ -223,6 +223,7 @@ class TestStreamProperties(BaseIntegrationTest):
                                      test_name,
                                      topic_producer: qx.TopicProducer
                                      ):
+
         # Arrange
         print(f'Starting Integration test "{test_name}"')
         print("---- Start publishing ----")
@@ -236,8 +237,7 @@ class TestStreamProperties(BaseIntegrationTest):
             self,
             test_name,
             topic_consumer_earliest: qx.TopicConsumer,
-            topic_producer: qx.TopicProducer
-    ):
+            topic_producer: qx.TopicProducer):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
         event = threading.Event()  # used to trigger evaluation

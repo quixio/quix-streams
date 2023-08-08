@@ -41,7 +41,7 @@ class TimeseriesData(object):
     def _finalizerfunc(self):
         # do not dispose individual timestamps,
         # let GC deal with it, otherwise might remove still used instances
-        del self._timestamps
+        pass
 
 
     # TODO

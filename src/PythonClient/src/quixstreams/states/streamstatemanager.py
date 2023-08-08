@@ -38,7 +38,7 @@ class StreamStateManager(object):
         self._interop = ssmi(net_pointer)
 
     def _finalizerfunc(self):
-        del self._cache
+        pass
 
     def dispose(self) -> None:
         for (k, v) in self._cache.items():

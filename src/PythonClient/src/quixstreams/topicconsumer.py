@@ -55,8 +55,6 @@ class TopicConsumer(object):
         self._on_revoking_dispose()
         self._on_committing_dispose()
         self._on_committed_dispose()
-        del self._topic_state_manager
-        del self._active_streams
 
     def dispose(self) -> None:
         self._on_stream_received_dispose()
@@ -112,7 +110,6 @@ class TopicConsumer(object):
                     for v in self._active_streams:
                         InteropUtils.log_debug(f"  Stream {v.stream_id}");
                     self._active_streams.remove(stream)
-                    stream.dispose()
 
             stream = StreamConsumer(stream_hptr, self, remove_active_stream)
             InteropUtils.log_debug(f"Adding {stream.stream_id} to the active streams")

@@ -47,9 +47,6 @@ class StreamProducer(object):
         self._stream_id = self._interop.get_StreamId()
 
     def _finalizerfunc(self):
-        del self._streamTimeseriesProducer
-        del self._streamEventsProducer
-        del self._streamPropertiesProducer
         self._on_write_exception_dispose()
 
     def dispose(self) -> None:
