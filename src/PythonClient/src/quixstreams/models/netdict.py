@@ -57,7 +57,6 @@ class ReadOnlyNetDict(object):
 
     def _finalizerfunc(self):
         self._finalizer.detach()
-        InteropUtils.log_pointer(self._pointer, True)
         InteropUtils.free_hptr(self._pointer)
 
     def dispose(self) -> None:
