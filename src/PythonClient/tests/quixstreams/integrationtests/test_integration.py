@@ -1799,6 +1799,21 @@ class TestRawData(BaseIntegrationTest):
         assert len(received_messages) == 3
 
 class TestStreamState(BaseIntegrationTest):
+
+    def test_in_dict_state(self):
+        app_state_manager = qx.App.get_state_manager()
+        topic_state_manager = app_state_manager.get_topic_state_manager("topic")
+        stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
+        dict_state = stream_state_manager.get_dict_state("test")
+
+        if "a" in dict_state:
+            assert False
+
+        dict_state["a"] = "b"
+
+        if "a" not in dict_state:
+            assert False
+
     def test_stream_state_manager(self,
                                   test_name,
                                   topic_consumer_earliest,

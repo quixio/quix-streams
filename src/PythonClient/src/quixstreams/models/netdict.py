@@ -80,9 +80,9 @@ class ReadOnlyNetDict(object):
         item = di.GetValue(self._pointer, actual_key)
         return self._get_actual_value_to(item)
 
-    def __contains__(self, item) -> bool:
-        actual_item = self._get_actual_value_from(item)
-        return di.GetValue(self._pointer, actual_item)
+    def __contains__(self, key) -> bool:
+        actual_key = self._get_actual_key_from(key)
+        return di.Contains(self._pointer, actual_key)
 
     def __str__(self) -> str:
         text = "{"
