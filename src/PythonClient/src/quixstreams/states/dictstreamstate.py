@@ -67,7 +67,8 @@ class DictStreamState(Generic[StreamStateType]):
                                    val_converter_to_python=convert_val_to_python,
                                    val_converter_from_python=convert_val_from_python,
                                    key_converter_to_python_list=ai.ReadStrings,
-                                   val_converter_to_python_list=convert_val_to_python_list)
+                                   val_converter_to_python_list=convert_val_to_python_list,
+                                   self_dispose=False)
 
         # Define events and their reference holders
         self._on_flushed = None

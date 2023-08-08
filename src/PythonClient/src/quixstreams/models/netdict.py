@@ -18,7 +18,8 @@ class ReadOnlyNetDict(object):
 
     def __init__(self, net_pointer, key_converter_to_python=None, key_converter_from_python=None,
                  val_converter_to_python=None, val_converter_from_python=None,
-                 key_converter_to_python_list=None, val_converter_to_python_list=None):
+                 key_converter_to_python_list=None, val_converter_to_python_list=None,
+                 self_dispose: bool = True):
 
         self._pointer = net_pointer
         self._key_converter_to_python = key_converter_to_python
@@ -49,10 +50,14 @@ class ReadOnlyNetDict(object):
                                                                                      converter_to_python=self._val_converter_to_python,
                                                                                      converter_from_python=self._val_converter_from_python)
 
-        self._finalizer = weakref.finalize(self, self._finalizerfunc)
+        if self_dispose:
+            self._finalizer = weakref.finalize(self, self._finalizerfunc)
+        else:
+            self._finalizer = lambda x: None
 
     def _finalizerfunc(self):
         self._finalizer.detach()
+        InteropUtils.log_pointer(self._pointer, True)
         InteropUtils.free_hptr(self._pointer)
 
     def dispose(self) -> None:
@@ -132,7 +137,8 @@ class NetDict(ReadOnlyNetDict):
 
     def __init__(self, net_pointer, key_converter_to_python=None, key_converter_from_python=None,
                  val_converter_to_python=None, val_converter_from_python=None,
-                 key_converter_to_python_list=None, val_converter_to_python_list=None):
+                 key_converter_to_python_list=None, val_converter_to_python_list=None,
+                 self_dispose: bool = True):
 
         ReadOnlyNetDict.__init__(self,
                                  net_pointer=net_pointer,
@@ -141,7 +147,8 @@ class NetDict(ReadOnlyNetDict):
                                  val_converter_to_python=val_converter_to_python,
                                  val_converter_from_python=val_converter_from_python,
                                  key_converter_to_python_list=key_converter_to_python_list,
-                                 val_converter_to_python_list=val_converter_to_python_list)
+                                 val_converter_to_python_list=val_converter_to_python_list,
+                                 self_dispose=self_dispose)
 
     @staticmethod
     def constructor_for_string_string(net_pointer=None):
