@@ -56,7 +56,6 @@ class TopicConsumer(object):
         self._on_committing_dispose()
         self._on_committed_dispose()
         del self._topic_state_manager
-
         del self._active_streams
 
     def dispose(self) -> None:
