@@ -7,7 +7,7 @@ import fileinput
 from typing import List
 
 version = "0.5.5.0"
-informal_version = "0.5.5.0-10"
+informal_version = "0.5.5.0-dev10"
 nuget_version = "0.5.5.0-dev10"
 
 
