@@ -1,6 +1,9 @@
 import uuid
 from typing import Self, Optional, Any, Callable, TypeAlias, List
 import operator
+from datetime import timedelta
+
+UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days", "w": "weeks"}
 
 OpValue: TypeAlias = int | float | bool
 ColumnValue: TypeAlias = int | float | bool | list | dict
@@ -8,21 +11,92 @@ ColumnApplier: TypeAlias = Callable[[dict], OpValue]
 
 
 class Row:
-    def __init__(self, data: dict, timestamp: str = None):
-        self.data = data
-        self.timestamp = timestamp
-    
+    def __init__(self, data: dict, timestamp: str = None, _key: str = None, _db: dict = None):
+        self._data = data
+        self._timestamp = timestamp
+        self._key = _key
+        self._partition = ''
+        self._db = db
+
+    @property
+    def data(self):
+        return self._data
+
+    @property
+    def timestamp(self):
+        return self._timestamp
+
     def __setitem__(self, key, value):
-        self.data[key] = value
-    
+        self._data[key] = value
+
     def __getitem__(self, item):
-        return self.data[item]
+        return self._data[item]
 
     def __bool__(self):
-        return bool(self.data)
+        return bool(self._data)
 
-    def update(self, data):
-        self.data = data
+    def _set_data(self, data: dict) -> Self:
+        self._data = data
+        return self
+
+
+class StatefulOperation:
+    _method_name = None
+
+    def __init__(self, segment: str, _origin):
+        self._segment_size = segment
+        self._origin = _origin
+
+    @staticmethod
+    def _convert_to_seconds(shorthand: str):
+        value = int(shorthand[:-1])
+        td = timedelta(**{UNITS[shorthand[-1]]: value})
+        return td.seconds + 60 * 60 * 24 * td.days
+
+    def _key_prefix(self, row: Row):
+        return f'{self._method_name}-{self._segment_size}__{row._key}'
+
+    def _query_for_records(self, row: Row):
+        # would be replaced with real query
+        min_timestamp = str(int(row.timestamp)-self._convert_to_seconds(self._segment_size))
+        return [self._convert_query_to_row((k, v)) for k, v in row._db.items() if k.startswith(self._key_prefix(row)) and k.split('__')[-1] > min_timestamp]
+
+    @staticmethod
+    def _convert_query_to_row(query_row: tuple):
+        # post-processing on any raw data retrieved from DB to convert them into Row objects
+        return Row(timestamp=query_row[0], data=query_row[1])
+
+    @staticmethod
+    def _join_all_data(queried_rows: List[Row], row: Row):
+        return queried_rows + [row]
+
+    def _write_event_to_db(self, row: Row):
+        row._db[f'{self._key_prefix(row)}__{row.timestamp}'] = row.data
+        return row
+
+    def _prep_data(self, row: Row):
+        data_out = self._join_all_data(self._query_for_records(row), row)
+        self._write_event_to_db(row)
+        return data_out
+
+
+class ShiftedWindow(StatefulOperation):
+    _method_name = 'shifted'
+
+
+class RollingWindow(StatefulOperation):
+    _method_name = 'rolling'
+
+    @staticmethod
+    def _col_mean(col: str, rows: List[Row]):
+        return sum([row[col] for row in rows])/len(rows)
+
+    def _mean(self, rows: list[Row]):
+        cols = list(rows[0].data.keys())
+        return Row(data={col: self._col_mean(col, rows) for col in cols}, timestamp=rows[-1].timestamp)
+
+    def mean(self):
+        return self._origin._apply_rolling(lambda row, timestamp: self._mean(self._prep_data(row)))
 
 
 class Column:
@@ -42,8 +116,14 @@ class Column:
     def eval(self, row: Row) -> ColumnValue:
         return self._eval_func(row)
 
-    def apply(self, f: ColumnApplier) -> Self:
-        return Column(_eval_func=lambda row: f(self.eval(row)))
+    def apply(self, func: ColumnApplier) -> Self:
+        return Column(_eval_func=lambda row: func(self.eval(row)))
+
+    # def _apply_rolling(self, func: Callable[[Any, Any], Any]) -> Self:
+    #     return Column(_eval_func=lambda row: func(self.eval(row), row.timestamp))
+
+    def rolling(self, segment: str):
+        return RollingWindow(segment=segment, _origin=self)
 
     def __mod__(self, other):
         return self._operation(other, operator.mod)
@@ -102,8 +182,8 @@ class PipelineFunction:
 
 
 class Pipeline:
-    def __init__(self, functions: list[PipelineFunction] = None):
-        self._functions = functions or []
+    def __init__(self, _functions: list[PipelineFunction] = None):
+        self._functions = _functions or []
         self._id = str(uuid.uuid4())
 
     @staticmethod
@@ -112,7 +192,7 @@ class Pipeline:
 
     @staticmethod
     def _subset(keys: list) -> RowApplier:
-        return lambda row: row.update({k: row[k] for k in keys})
+        return lambda row: row._set_data({k: row[k] for k in keys})
 
     @staticmethod
     def _set_item(k: str, v: OpValue, row: Row) -> Row:
@@ -126,6 +206,9 @@ class Pipeline:
     def apply(self, func: RowApplier):
         self._functions.append(PipelineFunction(func=func))
         return self
+
+    # def _append_pipeline(self, pipeline: Self):
+    #     self._functions.append(PipelineFunction(func=pipeline.process))
 
     def __getitem__(self, item: str | list | Column) -> Column | Self:
         if isinstance(item, Column):
@@ -141,6 +224,9 @@ class Pipeline:
             self.apply(lambda row: self._set_item(key, value.eval(row), row))
         else:
             self.apply(lambda row: self._set_item(key, value, row))
+
+    def rolling(self, segment: str):
+        return RollingWindow(segment=segment, _origin=self)
 
     @staticmethod
     def _process_function(func: PipelineFunction, data: Row | List[Row]):
@@ -173,11 +259,29 @@ if __name__ == "__main__":
     # result = p.process(event={'numbers': [1, 2, 3], 'letters': 'woo'})
     # print(result)
 
+    db = {
+            'rolling-10s__test-key__1691155440': {'x': 1000, 'y': 1000},
+            'rolling-10s__test-key__1691155450': {'x': 4, 'y': 1},
+            'rolling-10s__test-key__1691155453': {'x': 2, 'y': 4}
+    }
     p = Pipeline()
-    p["z"] = p["x"].apply(lambda _: _+500)
-    p["a"] = p["x"] + p["y"]
-    p["b"] = 12
-    p["c"] = p["z"] + 1
-    p = p[(p['x'] >= 1) & (p['y'] < 10)]
-    result = p.process(event=Row(data={"x": 1, "y": 2, "q": 3}))
-    print(result.data if isinstance(result, Row) else [r.data for r in result])
+    p = p[['x', 'y']]
+    # p["z"] = p["x"].apply(lambda v: v + 500)
+    # p["a"] = p["x"] + p["y"]
+    p = p.rolling('10s').mean()
+    p["b"] = p['x'] + p['y']
+    # p['b_roll'] = p['b'].rolling('5s').mean()
+    # p["c"] = p["z"] + 1
+    # p = p[(p['x'] >= 1) & (p['y'] < 10)]
+    # p = p.apply(lambda row: row if row['x'] > 1 else None)
+    print('Pipeline built')
+    events = [
+        Row(data={"x": 1, "y": 2, "q": 3}, timestamp='1691155455', _key='test-key', _db=db),
+        Row(data={"x": 5, "y": 2, "q": 10}, timestamp='1691155456', _key='test-key', _db=db)
+    ]
+    for event in events:
+        result = p.process(event=event)
+        if result:
+            print(result.data if isinstance(result, Row) else [r.data for r in result])
+        else:
+            print('Result filtered')
