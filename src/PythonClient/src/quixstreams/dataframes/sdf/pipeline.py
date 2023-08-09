@@ -119,9 +119,6 @@ class Column:
     def apply(self, func: ColumnApplier) -> Self:
         return Column(_eval_func=lambda row: func(self.eval(row)))
 
-    # def _apply_rolling(self, func: Callable[[Any, Any], Any]) -> Self:
-    #     return Column(_eval_func=lambda row: func(self.eval(row), row.timestamp))
-
     def rolling(self, segment: str):
         return RollingWindow(segment=segment, _origin=self)
 
@@ -207,9 +204,6 @@ class Pipeline:
         self._functions.append(PipelineFunction(func=func))
         return self
 
-    # def _append_pipeline(self, pipeline: Self):
-    #     self._functions.append(PipelineFunction(func=pipeline.process))
-
     def __getitem__(self, item: str | list | Column) -> Column | Self:
         if isinstance(item, Column):
             self.apply(self._filter(item))
@@ -245,43 +239,3 @@ class Pipeline:
                 print('result was filtered')
                 break
         return result
-
-
-if __name__ == "__main__":
-    # def more_rows(data):
-    #     data_out = []
-    #     for row in data['numbers']:
-    #         data_out.append({**data, 'numbers': row})
-    #     return data_out
-    # p = Pipeline()
-    # p = p.apply(more_rows)
-    # p = p[['numbers']]
-    # result = p.process(event={'numbers': [1, 2, 3], 'letters': 'woo'})
-    # print(result)
-
-    db = {
-            'rolling-10s__test-key__1691155440': {'x': 1000, 'y': 1000},
-            'rolling-10s__test-key__1691155450': {'x': 4, 'y': 1},
-            'rolling-10s__test-key__1691155453': {'x': 2, 'y': 4}
-    }
-    p = Pipeline()
-    p = p[['x', 'y']]
-    # p["z"] = p["x"].apply(lambda v: v + 500)
-    # p["a"] = p["x"] + p["y"]
-    p = p.rolling('10s').mean()
-    p["b"] = p['x'] + p['y']
-    # p['b_roll'] = p['b'].rolling('5s').mean()
-    # p["c"] = p["z"] + 1
-    # p = p[(p['x'] >= 1) & (p['y'] < 10)]
-    # p = p.apply(lambda row: row if row['x'] > 1 else None)
-    print('Pipeline built')
-    events = [
-        Row(data={"x": 1, "y": 2, "q": 3}, timestamp='1691155455', _key='test-key', _db=db),
-        Row(data={"x": 5, "y": 2, "q": 10}, timestamp='1691155456', _key='test-key', _db=db)
-    ]
-    for event in events:
-        result = p.process(event=event)
-        if result:
-            print(result.data if isinstance(result, Row) else [r.data for r in result])
-        else:
-            print('Result filtered')
