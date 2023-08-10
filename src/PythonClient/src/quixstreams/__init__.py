@@ -58,4 +58,4 @@ from .topicconsumer import TopicConsumer
 from .streamproducer import StreamProducer
 
 from .logging import Logging, LogLevel
-from .state import *
+from .statestorages import *

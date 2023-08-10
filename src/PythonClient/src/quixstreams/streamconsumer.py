@@ -18,7 +18,8 @@ from .states.streamstatemanager import StreamStateManager
 
 from typing import TypeVar
 
-StreamStateType = TypeVar('StreamStateType')
+from .statestorages.statetype import StreamStateType
+
 
 @nativedecorator
 class StreamConsumer(object):
@@ -65,8 +66,6 @@ class StreamConsumer(object):
             self._streamEventsConsumer.dispose()
         if self._streamPropertiesConsumer is not None:
             self._streamPropertiesConsumer.dispose()
-        if self._stream_state_manager is not None:
-            self._stream_state_manager.dispose()
         self._on_stream_closed_dispose()
         self._on_package_received_dispose()
 
@@ -293,7 +292,7 @@ class StreamConsumer(object):
         """
 
         if self._stream_state_manager is None:
-            self._stream_state_manager = StreamStateManager(self._interop.GetStateManager())
+            self._stream_state_manager = self._topic.get_state_manager().get_stream_state_manager(stream_id=self.stream_id)
 
         return self._stream_state_manager
 

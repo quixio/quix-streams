@@ -1,85 +1,93 @@
-import ctypes
-import weakref
-from typing import List
+from typing import Dict, Type
+from collections import defaultdict
 
-from ..helpers.nativedecorator import nativedecorator
-from ..native.Python.QuixStreamsStreaming.States.AppStateManager import AppStateManager as tsmi
+from ..states.topicstatemanager import IStateStorage, TopicStateManager
 
-from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 
-from .topicstatemanager import TopicStateManager
-
-@nativedecorator
-class AppStateManager(object):
+class AppStateManager:
     """
-    Manages the states of an app.
+    AppStateManager is a class that manages the states of different topics in the app.
+
+    Attributes:
+        storage: The state storage to use for the application state.
+        topic_state_managers: A dictionary that maps topic names to their state managers.
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, storage: IStateStorage):
         """
-        Initializes a new instance of AppStateManager.
-
-        NOTE: Do not initialize this class manually, use App.get_state_manager
+        The constructor for AppStateManager class.
 
         Args:
-            net_pointer: The .net object representing a AppStateManager.
+            storage: The state storage to use for the application state.
         """
+        self.storage = storage
+        # self.logger = self.logger_factory.getLogger("AppStateManager")
+        self.topic_state_managers: Dict[str, TopicStateManager] = defaultdict(TopicStateManager)
 
-        if net_pointer is None:
-            raise Exception("AppStateManager is none")
-
-        self._topic_state_cache = weakref.WeakValueDictionary()
-        self._interop = tsmi(net_pointer)
-
-    def get_topic_states(self) -> List[str]:
+    def get_topic_states(self) -> Dict[str, Type[IStateStorage]]:
         """
-        Returns a collection of all available topic states for the app.
+        Returns all available topic states for the current app.
 
         Returns:
-            List[str]: All available app topic states for the app.
+            A dictionary of string values representing the topic state names.
         """
-
-        return ei.ReadStrings(self._interop.GetTopicStates())
-
-    def get_topic_state_manager(self, topic_name: str) -> TopicStateManager:
-        """
-        Gets an instance of the TopicStateManager for the specified topic.
-
-        Args:
-            topic_name: The name of the topic
-        """
-
-        instance = self._topic_state_cache.get(topic_name)
-        if instance is not None:
-            return instance
-
-        instance = TopicStateManager(self._interop.GetTopicStateManager(topic_name))
-        self._topic_state_cache[topic_name] = instance
-        return instance
-
-    def delete_topic_state(self, topic_name: str) -> bool:
-        """
-        Deletes the specified topic state
-
-        Args:
-            topic_name: The name of the topic
-
-        Returns:
-            bool: Whether the topic state was deleted
-        """
-
-        del self._topic_state_cache[topic_name]
-
-        return self._interop.DeleteTopicState(topic_name)
+        return self.storage.get_sub_storages()
 
     def delete_topic_states(self) -> int:
         """
-        Deletes all topic states for the app.
+        Deletes all topic states for the current app.
 
         Returns:
-            int: The number of topic states that were deleted
+            The number of topic states that were deleted.
         """
+        # self.logger.trace("Deleting topic states")
+        count = self.storage.delete_sub_storages()
+        self.topic_state_managers.clear()
+        return count
 
-        self._topic_state_cache.clear()
+    def delete_topic_state(self, topic_name: str) -> bool:
+        """
+        Deletes the topic state with the specified name.
 
-        return self._interop.DeleteTopicStates()
+        Args:
+            topic_name: The name of the topic state to delete.
+
+        Returns:
+            A boolean indicating whether the topic state was deleted.
+        """
+        # self.logger.trace(f"Deleting topic states for {topic_name}")
+        if not self.storage.delete_sub_storage(self.get_sub_storage_name(topic_name)):
+            return False
+        del self.topic_state_managers[topic_name]
+        return True
+
+    def get_sub_storage_name(self, topic_name: str) -> str:
+        """
+        Returns the sub storage name with correct prefix.
+
+        Args:
+            topic_name: The topic name to prefix.
+
+        Returns:
+            The prefixed topic name.
+        """
+        return topic_name.replace('/', '_').replace('\\', '_').replace(':', '_').replace('//', '_')
+
+    def get_topic_state_manager(self, topic_name: str, topic_consumer=None) -> TopicStateManager:
+        """
+        Gets an instance of the TopicStateManager class for the specified topic name.
+
+        Args:
+            topic_name: The topic name.
+            topic_consumer: The topic consumer to create the state manager for.
+
+        Returns:
+            The newly created TopicStateManager instance.
+        """
+        if topic_name not in self.topic_state_managers:
+            # self.logger.trace(f"Creating Topic state manager for {topic_name}")
+            self.topic_state_managers[topic_name] = TopicStateManager(topic_consumer=topic_consumer,
+                                                                      topic_name=topic_name,
+                                                                      state_storage=self.storage.get_or_create_sub_storage(
+                                                                          self.get_sub_storage_name(topic_name)))
+        return self.topic_state_managers[topic_name]

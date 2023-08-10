@@ -30,4 +30,15 @@ class AppTests(unittest.TestCase):
 
         self.assertIsNotNone(app_state_manager)
 
-        topic_manager = app_state_manager.get_topic_state_manager('test')
+        topic_manager = app_state_manager.get_topic_state_manager(topic_name='test')\
+            .get_stream_state_manager(stream_id='test2')\
+            .get_dictionary_state(state_name='test3')
+
+        topic_manager['test'] = 'test4'
+
+        self.assertEqual(topic_manager['test'], 'test4')
+        self.assertEqual(topic_manager.get('test'), 'test4')
+        self.assertEqual(topic_manager.get('test2'), None)
+        self.assertEqual(list(topic_manager.keys()), ['test'])
+
+

@@ -1,9 +1,8 @@
 import math
 import unittest
 
-from src.quixstreams.state.statevalue import StateValue
-from src.quixstreams.state.localfilestorage import LocalFileStorage
-from src.quixstreams.state.inmemorystorage import InMemoryStorage
+from quixstreams.statestorages.statevalue import StateValue
+from quixstreams.statestorages.inmemorystorage import InMemoryStorage
 
 
 class InMemoryStorageTests(unittest.TestCase):
@@ -138,13 +137,13 @@ class InMemoryStorageTests(unittest.TestCase):
 
         try:
             # Act
-            val = StateValue(3.12)
-            storage.set("StateValue", val)
+            state_value = StateValue(3.12)
+            storage.set("StateValue", state_value)
 
             # Assert
             res = storage.get("StateValue")
             self.assertIsNotNone(res)
-            self.assertEqual(val.value, res)
+            self.assertEqual(state_value.value, res)
         finally:
             storage.clear()
 

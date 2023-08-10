@@ -28,7 +28,7 @@ namespace QuixStreams.Streaming.States
         public event EventHandler OnFlushed;
 
         /// <summary>
-        /// Initializes a new instance of the StreamState class.
+        /// Initializes a new instance of the StreamDictionaryState class.
         /// </summary>
         /// <param name="storage">The storage the stream state is going to use as underlying storage</param>
         /// <param name="loggerFactory">The logger factory to use</param>

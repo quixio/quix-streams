@@ -43,9 +43,9 @@ def on_committing_handler(topic_consumer: qx.TopicConsumer):
 def on_revoking_handler(topic_consumer: qx.topicconsumer):
     print("Revoking!")
 
-from src.quixstreams.state import LocalFileStorage, InMemoryStorage
+from src.quixstreams.statestorages import InMemoryStorage
 
-storage = InMemoryStorage(LocalFileStorage("state/test"))
+storage = InMemoryStorage()
 storage.clear()
 storage.set("floatval", 12.51)
 storage.set("stringval", "str")

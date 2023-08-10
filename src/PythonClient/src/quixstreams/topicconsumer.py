@@ -2,6 +2,7 @@ import ctypes
 import traceback
 from typing import Callable, List
 
+from .app import App
 from .helpers.nativedecorator import nativedecorator
 from .native.Python.InteropHelpers.InteropUtils import InteropUtils
 from .native.Python.QuixStreamsStreaming.TopicConsumer import TopicConsumer as tci
@@ -47,7 +48,7 @@ class TopicConsumer(object):
         self._on_committing = None
         self._on_committing_refs = None  # keeping reference to avoid GC
 
-        self._topic_state_manager = None
+        self._topic_state_manager: TopicStateManager = None
 
     def _finalizerfunc(self):
         self._on_stream_received_dispose()
@@ -55,8 +56,6 @@ class TopicConsumer(object):
         self._on_revoking_dispose()
         self._on_committing_dispose()
         self._on_committed_dispose()
-        if self._topic_state_manager is not None:
-            self._topic_state_manager.dispose()
 
         if self._active_streams is not None:
             for stream in self._active_streams:
@@ -311,7 +310,8 @@ class TopicConsumer(object):
         """
 
         if self._topic_state_manager is None:
-            self._topic_state_manager = TopicStateManager(self._interop.GetStateManager())
+            self._topic_state_manager = App.get_state_manager().get_topic_state_manager(topic_consumer=self,
+                                                                                        topic_name=self._interop.get_Topic())
 
         InteropUtils.log_debug(f"_topic_state_manager is {self._topic_state_manager}")
 

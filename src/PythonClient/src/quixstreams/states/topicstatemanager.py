@@ -1,89 +1,105 @@
-import ctypes
-from typing import List
+from typing import Dict, Type
+from collections import defaultdict
+import threading
 
-from ..helpers.nativedecorator import nativedecorator
-from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from ..native.Python.QuixStreamsStreaming.States.TopicStateManager import TopicStateManager as tsmi
+from ..native.Python.QuixStreamsStreaming.ITopicConsumer import ITopicConsumer
+from ..states.streamstatemanager import StreamStateManager
+from ..statestorages.istatestorage import IStateStorage
 
-from ..native.Python.InteropHelpers.ExternalTypes.System.Enumerable import Enumerable as ei
 
-from .streamstatemanager import StreamStateManager
-
-@nativedecorator
-class TopicStateManager(object):
+class TopicStateManager:
     """
-    Manages the states of a topic.
+    TopicStateManager is a class that manages the states of a topic.
+
+    Attributes:
+        topic_consumer: The topic consumer this manager is for.
+        topic_name: The name of the topic.
+        state_storage: The state storage to use.
+        logger: The logger to use.
+        stream_state_managers: A dictionary that maps stream ids to their state managers.
     """
 
-    def __init__(self, net_pointer: ctypes.c_void_p):
+    def __init__(self, topic_name: str, state_storage: IStateStorage,
+                 topic_consumer: ITopicConsumer = None):
         """
-        Initializes a new instance of TopicStateManager.
-
-        NOTE: Do not initialize this class manually, use TopicConsumer.get_state_manager
+        The constructor for TopicStateManager class.
 
         Args:
-            net_pointer: The .net object representing a TopicStateManager.
+            topic_name: The name of the topic.
+            state_storage: The state storage to use.
+            topic_consumer: The topic consumer this manager is for.
         """
+        self.topic_consumer = topic_consumer
+        self.topic_name = topic_name
+        self.state_storage = state_storage
+        # self.logger = self.logger_factory.getLogger("TopicStateManager")
+        self.stream_state_managers: Dict[str, StreamStateManager] = defaultdict(StreamStateManager)
+        self.state_lock = threading.Lock()
 
-        if net_pointer is None:
-            raise Exception("TopicStateManager is none")
-
-        self._stream_state_cache = {}
-        self._interop = tsmi(net_pointer)
-
-    def _finalizerfunc(self):
-        for (k, v) in self._stream_state_cache.items():
-            v.dispose()
-
-    def get_stream_states(self) -> List[str]:
+    def get_stream_states(self) -> Dict[str, Type[IStateStorage]]:
         """
-        Returns a collection of all available stream state ids for the current topic.
+        Returns all available stream states for the current topic.
 
         Returns:
-            List[str]: All available stream state ids for the current topic.
+            A dictionary of string values representing the stream state names.
         """
-
-        return ei.ReadStrings(self._interop.GetStreamStates())
-
-    def get_stream_state_manager(self, stream_id: str) -> StreamStateManager:
-        """
-        Gets an instance of the StreamStateManager for the specified stream_id.
-
-        Args:
-            stream_id: The ID of the stream
-        """
-
-        instance = self._stream_state_cache.get(stream_id)
-        if instance is not None:
-            return instance
-
-        instance = StreamStateManager(self._interop.GetStreamStateManager(stream_id))
-        self._stream_state_cache[stream_id] = instance
-        return instance
-
-    def delete_stream_state(self, stream_id: str) -> bool:
-        """
-        Deletes the stream state for the specified stream
-
-        Args:
-            stream_id: The ID of the stream
-
-        Returns:
-            bool: Whether the stream state was deleted
-        """
-
-        del self._stream_state_cache[stream_id]
-
-        return self._interop.DeleteStreamState(stream_id)
+        return self.state_storage.get_sub_storages()
 
     def delete_stream_states(self) -> int:
         """
         Deletes all stream states for the current topic.
 
         Returns:
-            int: The number of stream states that were deleted
+            The number of stream states that were deleted.
         """
+        # self.logger.trace(f"Deleting Stream states for topic {self.topic_name}")
+        count = self.state_storage.delete_sub_storages()
+        self.stream_state_managers.clear()
+        return count
 
-        self._stream_state_cache.clear()
+    def delete_stream_state(self, stream_id: str) -> bool:
+        """
+        Deletes the stream state with the specified stream id.
 
-        return self._interop.DeleteStreamStates()
+        Args:
+            stream_id: The id of the stream state to delete.
+
+        Returns:
+            A boolean indicating whether the stream state was deleted.
+        """
+        # self.logger.trace(f"Deleting Stream states for {stream_id}")
+        if not self.state_storage.delete_sub_storage(self.get_sub_storage_name(stream_id)):
+            return False
+        del self.stream_state_managers[stream_id]
+        return True
+
+    def get_sub_storage_name(self, stream_id: str) -> str:
+        """
+        Returns the sub storage name with correct prefix.
+
+        Args:
+            stream_id: The stream id to prefix.
+
+        Returns:
+            The prefixed stream id.
+        """
+        return stream_id.replace('/', '_').replace('\\', '_').replace(':', '_').replace('//', '_')
+
+    def get_stream_state_manager(self, stream_id: str) -> StreamStateManager:
+        """
+        Gets an instance of the StreamStateManager class for the specified stream id.
+
+        Args:
+            stream_id: The ID of the stream.
+
+        Returns:
+            The newly created StreamStateManager instance.
+        """
+        if stream_id not in self.stream_state_managers:
+            # self.logger.trace(f"Creating Stream state manager for {stream_id}")
+            self.stream_state_managers[stream_id] = StreamStateManager(stream_id=stream_id,
+                                                                       state_storage=self.state_storage.get_or_create_sub_storage(
+                                                                           self.get_sub_storage_name(stream_id)),
+                                                                       log_prefix=self.topic_name + " ",
+                                                                       topic_consumer=self.topic_consumer)
+        return self.stream_state_managers[stream_id]

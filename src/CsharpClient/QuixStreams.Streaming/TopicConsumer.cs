@@ -17,6 +17,12 @@ namespace QuixStreams.Streaming
         private bool isDisposed = false;
         private readonly object stateLock = new object();
         private volatile TopicStateManager stateManager = null;
+        
+        /// <summary>
+        /// Gets the topic name.
+        /// Needed for python client to be able to access it.
+        /// </summary>
+        public string Topic => telemetryKafkaConsumer.Topic;
 
         /// <inheritdoc />
         public event EventHandler<IStreamConsumer> OnStreamReceived;

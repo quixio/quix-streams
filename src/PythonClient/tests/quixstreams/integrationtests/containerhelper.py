@@ -47,7 +47,7 @@ class ContainerHelper:
         start = datetime.datetime.utcnow()
         cut_off = start + datetime.timedelta(seconds=20)
         while cut_off > datetime.datetime.utcnow():
-            time.sleep(0.5)
+            time.sleep(5)
             logs = kafka_container.get_logs()
             if "success: broker entered RUNNING state" in logs[0].decode("utf-8") and \
                     "success: zookeeper entered RUNNING state" in logs[0].decode("utf-8"):

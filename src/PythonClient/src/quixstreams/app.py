@@ -4,11 +4,12 @@ import traceback
 import signal
 from typing import Callable
 
+from .statestorages.inmemorystorage import InMemoryStorage
 from .native.Python.QuixStreamsStreaming.App import App as ai
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationToken import CancellationToken as cti
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationTokenSource import CancellationTokenSource as ctsi
 from .states.appstatemanager import AppStateManager
-from .state.istatestorage import IStateStorage
+from .statestorages.istatestorage import IStateStorage
 
 
 class CancellationTokenSource:
@@ -78,6 +79,8 @@ class App:
     Provides utilities to handle default streaming behaviors and automatic resource cleanup on shutdown.
     """
 
+    state_manager = None
+
     @staticmethod
     def run(cancellation_token: CancellationToken = None, before_shutdown: Callable[[], None] = None):
         """
@@ -123,19 +126,24 @@ class App:
     @staticmethod
     def get_state_manager() -> AppStateManager:
         """
-        Retrieves the state manager for the application
+        Retrieves the state manager for the application.
 
         Returns:
             AppStateManager: the app's state manager
         """
-        return AppStateManager(ai.GetStateManager())
+        if App.state_manager is None:
+            App.set_state_storage(InMemoryStorage())
+        return App.state_manager
 
     @staticmethod
-    def set_state_storage(storage: IStateStorage) -> None:
+    def set_state_storage(state_storage: IStateStorage):
         """
-        Sets the state storage for the app
+        Sets the state storage for the app.
 
-        Args:
-            storage: The state storage to use for app's state manager
+         Args:
+            state_storage: The state storage to use for app's state manager
         """
-        return ai.SetStateStorage(storage.get_net_pointer())
+        if App.state_manager is not None:
+            raise Exception("App state manager may only be set once")
+        App.state_manager = AppStateManager(state_storage)
+

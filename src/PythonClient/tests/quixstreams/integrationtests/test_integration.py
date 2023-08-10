@@ -1764,8 +1764,11 @@ class TestStreamState(BaseIntegrationTest):
         print("---- Subscribe to streams ----")
 
         def on_stream_received_handler(stream_consumer: qx.StreamConsumer):
+            print("TRYING TO GET STATE")
             rolling_sum_state = stream_consumer.get_dict_state("rollingsum",
                                                                lambda key: float(0))
+
+            print("---- Set some state ----")
             rolling_sum_state['somevalue'] = 5
             object_state = stream_consumer.get_dict_state("objectstate",
                                                           lambda key: {})

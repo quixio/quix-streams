@@ -9,14 +9,6 @@
             <Type Name="QuixStreams.Streaming.KafkaStreamingClientExtensions" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="QuixStreams.Telemetry" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
-        <Assembly Name="QuixStreams.State">
-            <Type Name="QuixStreams.State.Storage.IStateStorage" Dynamic="Required All" />
-            <Type Name="QuixStreams.State.Storage.StorageExtensions" Dynamic="Required All" />
-            <Type Name="QuixStreams.State.Storage.InMemoryStorage" Dynamic="Required All" />
-            <Type Name="QuixStreams.State.Storage.FileStorage.LocalFileStorage.LocalFileStorage" Dynamic="Required All" />
-            <Type Name="QuixStreams.State.StateValue" Dynamic="Required All" />
-            <Type Name="QuixStreams.State.StateValue+StateType" Dynamic="Required All" />
-        </Assembly>
         <Assembly Name="Confluent.Kafka" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
         <Assembly Name="QuixStreams.Transport">
             <Type Name="QuixStreams.Logging" Dynamic="Required All" />
