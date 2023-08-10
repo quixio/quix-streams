@@ -5,7 +5,9 @@ from typing import Union
 from ..helpers.enumconverter import EnumConverter as ec
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.QuixStreamsStreaming.Models.ParameterValue import ParameterValue as pvi
+from ..native.Python.QuixStreamsStreaming.Models.TimeseriesDataParameter import TimeseriesDataParameter as tsdpi
 
 
 class ParameterValueType(Enum):
@@ -48,6 +50,16 @@ class ParameterValue(object):
         elif self._type == ParameterValueType.Numeric:
             self._numeric = self._interop.get_NumericValue()
             self._value = self._numeric
+
+    @staticmethod
+    def create_empty_instance(parameter_id: str):
+        tsdp_hptr = tsdpi.Constructor(parameter_id)
+        try:
+            pv_hptr = pvi.Constructor(0, tsdp_hptr)
+            return ParameterValue(pv_hptr)
+        finally:
+            InteropUtils.free_hptr(tsdp_hptr)
+
 
     @property
     def numeric_value(self) -> float:
