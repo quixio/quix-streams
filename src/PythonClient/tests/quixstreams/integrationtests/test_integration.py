@@ -1806,13 +1806,11 @@ class TestStreamState(BaseIntegrationTest):
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
         dict_state = stream_state_manager.get_dict_state("test")
 
-        if "a" in dict_state:
-            assert False
+        assert "a" in dict_state
 
         dict_state["a"] = "b"
 
-        if "a" not in dict_state:
-            assert False
+        assert "a" not in dict_state
 
     def test_stream_state_manager(self,
                                   test_name,

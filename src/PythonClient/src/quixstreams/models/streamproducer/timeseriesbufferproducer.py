@@ -37,7 +37,7 @@ class TimeseriesBufferProducer(TimeseriesBuffer):
             raise Exception("TimeseriesBufferProducer is none")
 
         self._interop = tsbpi(net_pointer)
-        super().__init_(stream_producer, net_pointer)
+        super().__init__(stream_producer, net_pointer)
 
     @property
     def default_tags(self) -> Dict[str, str]:
