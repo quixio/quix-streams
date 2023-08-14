@@ -82,7 +82,7 @@ class NetList(NetReadOnlyList):
     """
 
     def __init__(self, net_pointer, converter_to_python=None, converter_from_python=None):
-        NetReadOnlyList.__init__(self, net_pointer, converter_to_python, converter_from_python)
+        super().__init__(net_pointer, converter_to_python, converter_from_python)
 
     @staticmethod
     def constructor_for_string(net_pointer=None):

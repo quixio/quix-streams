@@ -139,15 +139,14 @@ class NetDict(ReadOnlyNetDict):
                  key_converter_to_python_list=None, val_converter_to_python_list=None,
                  self_dispose: bool = True):
 
-        ReadOnlyNetDict.__init__(self,
-                                 net_pointer=net_pointer,
-                                 key_converter_to_python=key_converter_to_python,
-                                 key_converter_from_python=key_converter_from_python,
-                                 val_converter_to_python=val_converter_to_python,
-                                 val_converter_from_python=val_converter_from_python,
-                                 key_converter_to_python_list=key_converter_to_python_list,
-                                 val_converter_to_python_list=val_converter_to_python_list,
-                                 self_dispose=self_dispose)
+        super().__init__(net_pointer=net_pointer,
+                         key_converter_to_python=key_converter_to_python,
+                         key_converter_from_python=key_converter_from_python,
+                         val_converter_to_python=val_converter_to_python,
+                         val_converter_from_python=val_converter_from_python,
+                         key_converter_to_python_list=key_converter_to_python_list,
+                         val_converter_to_python_list=val_converter_to_python_list,
+                         self_dispose=self_dispose)
 
     @staticmethod
     def constructor_for_string_string(net_pointer=None):

@@ -35,8 +35,7 @@ class _UnderlyingNetDict(NetDict):
             hptrs = ai.ReadPointers(arr_uptr)
             return [StateValue(hptr) for hptr in hptrs]
 
-        NetDict.__init__(self,
-                         net_pointer=net_pointer,
+        super().__init__(net_pointer=net_pointer,
                          key_converter_to_python=InteropUtils.ptr_to_utf8,
                          key_converter_from_python=InteropUtils.utf8_to_ptr,
                          val_converter_to_python=convert_val_to_python,
