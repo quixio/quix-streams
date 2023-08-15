@@ -35,13 +35,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def build_streaming_project(csharpfolder, framework, streamingoutpath):
+def build_streaming_project(dotnet_command, csharpfolder, framework, streamingoutpath):
     print("Build streaming project")
     subprocess.run(
-        f"dotnet publish "
+        f"{dotnet_command} publish "
         f"{csharpfolder}/QuixStreams.Streaming/QuixStreams.Streaming.csproj "
         f"{framework} "
-        f"-c release "
+        f"-c Python "
         f"-o {streamingoutpath}",
         shell=True,
         check=True,
@@ -49,6 +49,7 @@ def build_streaming_project(csharpfolder, framework, streamingoutpath):
 
 
 def build_and_run_interop_generator(
+    dotnet_command,
     interopfolder,
     streamingoutpath,
     interopoutput,
@@ -62,9 +63,9 @@ def build_and_run_interop_generator(
             f"{interopfolder}/Quix.InteropGenerator/bin/Publish/{dotnetruntime}"
         )
         subprocess.run(
-            f"dotnet publish "
+            f"{dotnet_command} publish "
             f"{interopfolder}/Quix.InteropGenerator/Quix.InteropGenerator.csproj "
-            f"-c release "
+            f"-c Python "
             f"-o {interopgeneratoroutput}",
             shell=True,
             check=True,
@@ -84,7 +85,7 @@ def build_and_run_interop_generator(
 
 
 def build_interop_projects(
-    interopoutputcsharp, configuration, dotnetruntime, dest_platform, nointerop
+    dotnet_command, interopoutputcsharp, configuration, dotnetruntime, dest_platform, nointerop
 ):
     if not nointerop:
         print("Cleaning interop folder...")
@@ -95,7 +96,7 @@ def build_interop_projects(
             interop_project_dir = f"{interopoutputcsharp}/{subdir}"
             dest_platform_subdir = f"{dest_platform}/{subdir}"
             subprocess.run(
-                f"dotnet publish "
+                f"{dotnet_command} publish "
                 f"{interop_project_dir}/{subdir}.csproj "
                 f"/p:NativeLib=Shared "
                 f"/p:SelfContained=true "
@@ -224,6 +225,7 @@ def main():
     args_ = parse_args()
     archname = os.uname().machine
     python_platform = f"{os.uname().sysname}-{os.uname().machine}".lower()
+    dotnet_command = "dotnet"
 
     if archname == "arm64":
         dotnetruntime = "osx.11.0-arm64"
@@ -239,6 +241,12 @@ def main():
         f"with python platform {python_platform}"
     )
 
+    extra_install_dir = os.path.join(os.getcwd(), '.dotnet')
+
+    if os.path.exists(extra_install_dir):
+        print("Using local folder .dotnet, as present")
+        dotnet_command=f"{extra_install_dir}/dotnet"
+
     interopfolder = "../../../InteropGenerator"
     csharpfolder = "../../../CsharpClient"
     pythonfolder = "../../../PythonClient"
@@ -247,12 +255,13 @@ def main():
     )
     framework = "-f net8.0"
 
-    build_streaming_project(csharpfolder, framework, streamingoutpath)
+    build_streaming_project(dotnet_command, csharpfolder, framework, streamingoutpath)
 
     interopoutput = f"{interopfolder}/InteropOutput"
     interopconfig = f"{interopfolder}/InteropConfig"
 
     build_and_run_interop_generator(
+        dotnet_command,
         interopfolder,
         streamingoutpath,
         interopoutput,
@@ -274,6 +283,7 @@ def main():
     )
 
     build_interop_projects(
+        dotnet_command,
         interopoutputcsharp,
         configuration,
         dotnetruntime,

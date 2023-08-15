@@ -18,7 +18,7 @@
             <Type Name="QuixStreams.State.StateValue+StateType" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="Confluent.Kafka" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
-        <Assembly Name="QuixStreams.Transport">
+        <Assembly Name="QuixStreams.Kafka">
             <Type Name="QuixStreams.Logging" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="Confluent.Kafka">
