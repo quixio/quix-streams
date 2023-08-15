@@ -223,6 +223,7 @@ class TestStreamProperties(BaseIntegrationTest):
                                      test_name,
                                      topic_producer: qx.TopicProducer
                                      ):
+
         # Arrange
         print(f'Starting Integration test "{test_name}"')
         print("---- Start publishing ----")
@@ -236,8 +237,7 @@ class TestStreamProperties(BaseIntegrationTest):
             self,
             test_name,
             topic_consumer_earliest: qx.TopicConsumer,
-            topic_producer: qx.TopicProducer
-    ):
+            topic_producer: qx.TopicProducer):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
         event = threading.Event()  # used to trigger evaluation
@@ -1799,6 +1799,19 @@ class TestRawData(BaseIntegrationTest):
         assert len(received_messages) == 3
 
 class TestStreamState(BaseIntegrationTest):
+
+    def test_in_dict_state(self):
+        app_state_manager = qx.App.get_state_manager()
+        topic_state_manager = app_state_manager.get_topic_state_manager("topic")
+        stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
+        dict_state = stream_state_manager.get_dict_state("test")
+
+        assert "a" in dict_state
+
+        dict_state["a"] = "b"
+
+        assert "a" not in dict_state
+
     def test_stream_state_manager(self,
                                   test_name,
                                   topic_consumer_earliest,
@@ -2119,7 +2132,32 @@ class TestDictionary(BaseIntegrationTest):
 
         assert state["statekey"] == "statevalue"
 
-class TestMultipleStreams(BaseIntegrationTest):
+class TestUseCases(BaseIntegrationTest):
+
+    def test_multiple_retrieval_of_same_stream(self,
+                                               test_name,
+                                               topic_producer):
+        # Also tests if the dispose/finalize is done correctly
+
+        print(f'Starting Integration test "{test_name}"')
+
+        stream_created = 0
+        def on_stream_create(stream: qx.StreamProducer):
+            nonlocal stream_created
+            stream_created = stream_created + 1
+
+        print("---- Get stream for the first time ----")
+
+        topic_producer.get_or_create_stream("test", on_stream_create).properties.location = "test"
+
+        print("---- Get stream for the second time ----")
+
+        topic_producer.get_or_create_stream("test", on_stream_create).properties.location = "test"
+
+        print("---- Assert ----")
+
+        assert stream_created == 1
+
 
     def test_multiple_streams_created_and_closed(self,
                                            test_name,

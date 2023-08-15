@@ -40,6 +40,9 @@ class RawTopicConsumer(object):
     def _finalizerfunc(self):
         self._on_message_received_dispose()
 
+    def dispose(self) -> None:
+        self._interop.Dispose()
+
     # region on_message_received
     @property
     def on_message_received(self) -> Callable[['RawTopicConsumer', RawMessage], None]:
@@ -128,6 +131,3 @@ class RawTopicConsumer(object):
         Starts subscribing to the streams.
         """
         self._interop.Subscribe()
-
-    def dispose(self):
-        self._interop.Dispose()

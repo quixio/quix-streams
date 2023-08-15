@@ -33,7 +33,7 @@ class TopicProducer(object):
     def _finalizerfunc(self):
         self._on_disposed_dispose()
 
-    def dispose(self):
+    def dispose(self) -> None:
         """
         Flushes pending data to the broker and disposes underlying resources
         """
