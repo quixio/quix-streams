@@ -1475,7 +1475,7 @@ NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_
 #### dispose
 
 ```python
-def dispose()
+def dispose() -> None
 ```
 
 Flushes pending data to the broker and disposes underlying resources
@@ -6266,6 +6266,7 @@ Initializes the InMemoryStorage instance.
 ## StateValue Objects
 
 ```python
+@nativedecorator
 class StateValue(object)
 ```
 
