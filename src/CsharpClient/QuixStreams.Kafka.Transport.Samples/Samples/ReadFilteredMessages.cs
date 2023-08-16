@@ -37,7 +37,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             Interlocked.Increment(ref this.consumedCounter);
             var key = e.Key;
             var value = e.Value;
-            var timestamp = e.KafkaMessage.MessageTime.Timestamp;
+            var timestamp = e.KafkaMessage.Timestamp.UtcDateTime;
             return Task.CompletedTask;
         }
 

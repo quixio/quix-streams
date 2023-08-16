@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Kafka.Transport.SerDes.Legacy;
 
@@ -112,15 +113,13 @@ namespace QuixStreams.Kafka.Transport.SerDes
                 var segment = new byte[length];
                 Array.Copy(message.Value, start, segment, 0, length);
                 var headers = CreateSegmentDictionary(index, countAsBytes, messageId);
-                if (message.Headers != null)
+                var messageHeaders = message.Headers?.ToList() ?? new List<KafkaHeader>();
+                foreach (var header in headers)
                 {
-                    foreach (var kvp in message.Headers)
-                    {
-                        headers[kvp.Key] = kvp.Value;
-                    }
+                    messageHeaders.Add(new KafkaHeader(header.Key, header.Value));
                 }
 
-                var segmentMessage = new KafkaMessage(message.Key, segment, headers);
+                var segmentMessage = new KafkaMessage(message.Key, segment, messageHeaders);
                 yield return segmentMessage;
                 start = end;
             }

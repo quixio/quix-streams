@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -35,7 +36,9 @@ namespace QuixStreams.Kafka.Transport.SerDes
         {
             var key = messageSegment.Key == null ? string.Empty : Constants.Utf8NoBOMEncoding.GetString(messageSegment.Key);
             mergerBufferId = default(MergerBufferId);
-            if (messageSegment.Headers?.TryGetValue(Constants.KafkaMessageHeaderSplitMessageId, out var messageIdBytes) != true)
+            var messageIdBytes = messageSegment.Headers
+                ?.FirstOrDefault(y => y.Key == Constants.KafkaMessageHeaderSplitMessageId)?.Value;
+            if (messageIdBytes == null)
             {
                 if (this.TryConvertLegacySplitMessage(messageSegment, out var newMessage))
                 {
@@ -46,22 +49,26 @@ namespace QuixStreams.Kafka.Transport.SerDes
                 message = messageSegment;
                 return MessageMergeResult.Unmerged;
             }
-            
-            if (messageSegment.Headers?.TryGetValue(Constants.KafkaMessageHeaderSplitMessageCount, out var messageCountBytes) != true)
-            {
-                // not something we know how to merge
-                message = messageSegment;
-                return MessageMergeResult.Unmerged;
-            }
-            
-            if (messageSegment.Headers?.TryGetValue(Constants.KafkaMessageHeaderSplitMessageIndex, out var messageIndexBytes) != true)
+
+            var messageCountBytes = messageSegment.Headers?.FirstOrDefault(y =>
+                y.Key == Constants.KafkaMessageHeaderSplitMessageCount)?.Value;
+            if (messageCountBytes == null)
             {
                 // not something we know how to merge
                 message = messageSegment;
                 return MessageMergeResult.Unmerged;
             }
 
-            var messageId = Encoding.ASCII.GetString(messageIdBytes); // Whether it is guid or not, doesn't matter, uniqueness matters
+            var messageIndexBytes = messageSegment.Headers?.FirstOrDefault(y =>
+                y.Key == Constants.KafkaMessageHeaderSplitMessageIndex)?.Value;
+            if (messageIndexBytes == null)
+            {
+                // not something we know how to merge
+                message = messageSegment;
+                return MessageMergeResult.Unmerged;
+            }
+
+            var messageId = Convert.ToBase64String(messageIdBytes); // Whether it is guid or not, doesn't matter, uniqueness matters
             var messageIndex = BitConverter.ToInt32(messageIndexBytes, 0);
             var messageCount = BitConverter.ToInt32(messageCountBytes, 0);
 
@@ -111,15 +118,13 @@ namespace QuixStreams.Kafka.Transport.SerDes
 
             var idAsBytes = BitConverter.GetBytes(msgId); // new ones use guid, but reader side shouldn't actually care what it is
             var headerDict = KafkaMessageSplitter.CreateSegmentDictionary(msgIndex, BitConverter.GetBytes(messageCount), idAsBytes);
-            if (message.Headers != null)
+            var messageHeaders = message.Headers?.ToList() ?? new List<KafkaHeader>();
+            foreach (var header in headerDict)
             {
-                foreach (var header in headerDict)
-                {
-                    headerDict[header.Key] = header.Value;
-                }
+                messageHeaders.Add(new KafkaHeader(header.Key, header.Value));
             }
 
-            convertedMessage = new KafkaMessage(message.Key, msgData, headerDict, message.MessageTime, message.TopicPartitionOffset);
+            convertedMessage = new KafkaMessage(message.Key, msgData, messageHeaders, message.Timestamp, message.TopicPartitionOffset);
 
             return true;
         }
@@ -148,8 +153,10 @@ namespace QuixStreams.Kafka.Transport.SerDes
             for (var msgIndex = 0; msgIndex < completedBuffer.Count; msgIndex++)
             {
                 var message = completedBuffer[msgIndex];
-                if (message?.Headers.TryGetValue(Constants.KafkaMessageHeaderSplitMessageIndex, out var indexBytes) !=
-                    true)
+                var indexBytes = message?.Headers?.FirstOrDefault(y=>
+                    y.Key == Constants.KafkaMessageHeaderSplitMessageIndex)
+                    ?.Value;
+                if (indexBytes == null)
                 {
                     logger.LogDebug("Received last segment for {0}, but some of the segments can no longer be found.",
                         messageGroupId);
@@ -180,19 +187,16 @@ namespace QuixStreams.Kafka.Transport.SerDes
                 Array.Copy(messageSegment.Value, 0, msgBuffer, destinationIndex, messageSegment.Value.Length);
                 destinationIndex += messageSegment.Value.Length;
                 sourceMessages[index] = new KafkaMessage(messageSegment.Key, Array.Empty<byte>(),
-                    messageSegment.Headers, messageSegment.MessageTime,
+                    messageSegment.Headers, messageSegment.Timestamp,
                     messageSegment.TopicPartitionOffset);  // In order to not keep duplicate in memory
             }
 
             var firstMessage = sourceMessages[0];
-            var headers = new Dictionary<string, byte[]>();
+            List<KafkaHeader> headers = null;
             if (firstMessage.Headers != null)
             {
-                foreach (var header in firstMessage.Headers)
-                {
-                    if (header.Key == Constants.KafkaMessageHeaderSplitMessageIndex) continue;
-                    headers[header.Key] = header.Value;
-                }
+                headers = firstMessage.Headers.Where(y => y.Key != Constants.KafkaMessageHeaderSplitMessageIndex)
+                    .ToList();
             }
             
             return new MergedKafkaMessage(sourceMessages, firstMessage.Key, msgBuffer, headers, firstMessage.TopicPartitionOffset);
@@ -213,7 +217,9 @@ namespace QuixStreams.Kafka.Transport.SerDes
         public MergerBufferId(KafkaMessage message)
         {
             this.Key = message.Key == null ? string.Empty : Constants.Utf8NoBOMEncoding.GetString(message.Key);
-            if (message.Headers == null || !message.Headers.TryGetValue(Constants.KafkaMessageHeaderSplitMessageId, out var messageIdBytes))
+            var messageIdBytes = message.Headers?.FirstOrDefault(y =>
+                y.Key == Constants.KafkaMessageHeaderSplitMessageId)?.Value;
+            if (messageIdBytes == null)
             {
                 this.MessageId = Guid.NewGuid().ToString("N");
                 return;

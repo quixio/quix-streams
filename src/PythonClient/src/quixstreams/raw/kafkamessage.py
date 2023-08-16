@@ -4,11 +4,11 @@ from typing import Union, Dict
 from ..helpers.nativedecorator import nativedecorator
 from ..models.netdict import NetDict
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
-from ..native.Python.QuixStreamsStreaming.Raw.RawMessage import RawMessage as rmi
+from ..native.Python.QuixStreamsKafka.KafkaMessage import KafkaMessage as kmi
 
 
 @nativedecorator
-class RawMessage(object):
+class KafkaMessage(object):
     """
     The message consumed from topic without any transformation.
     """

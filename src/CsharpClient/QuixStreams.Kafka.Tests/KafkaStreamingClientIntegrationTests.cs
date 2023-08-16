@@ -47,7 +47,7 @@ namespace QuixStreams.Transport.Kafka.Tests
                 {
                     var key = Encoding.UTF8.GetBytes($"Key{i}");
                     var value = Encoding.UTF8.GetBytes($"Value{i}");
-                    var header = new Dictionary<string, byte[]>() { { "ModelKey", Encoding.UTF8.GetBytes("Test") } };
+                    var header = new List<KafkaHeader>() { new KafkaHeader("ModelKey", Encoding.UTF8.GetBytes("Test"))};
                     messagesToSend.Add(new KafkaMessage(key, value, header));
                 }
 
@@ -122,7 +122,7 @@ namespace QuixStreams.Transport.Kafka.Tests
             {
                 var key = Encoding.UTF8.GetBytes($"Key{i}");
                 var value = Encoding.UTF8.GetBytes($"Value{i}");
-                var header = new Dictionary<string, byte[]>() { { "ModelKey", Encoding.UTF8.GetBytes("Test") } };
+                var header = new List<KafkaHeader>() { new KafkaHeader("ModelKey", Encoding.UTF8.GetBytes("Test"))};
                 messagesToSend.Add(new KafkaMessage(key, value, header));
             }
 

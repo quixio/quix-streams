@@ -69,7 +69,7 @@ namespace QuixStreams.Kafka
                                 Key = msg.Key,
                                 Value = msg.Value,
                                 Headers = msg.KafkaHeaders,
-                                Timestamp = (Timestamp)msg.MessageTime
+                                Timestamp = (Timestamp)msg.Timestamp
                             }, handler);
                 };
             }
@@ -82,7 +82,7 @@ namespace QuixStreams.Kafka
                         Key = msg.Key,
                         Value = msg.Value,
                         Headers = msg.KafkaHeaders,
-                        Timestamp = (Timestamp)msg.MessageTime
+                        Timestamp = (Timestamp)msg.Timestamp
                     }, handler);
             }
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Runtime.Serialization;
 using QuixStreams.Kafka.Transport.SerDes.Codecs;
 using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
@@ -36,12 +37,16 @@ namespace QuixStreams.Kafka.Transport.SerDes
         {
             package = null;
             if (message.Headers == null) return false;
-            if (message.Headers.TryGetValue(Constants.KafkaMessageHeaderCodecId, out var codecIdBytes) != true)
+            var codecIdBytes = message.Headers?.FirstOrDefault(y => 
+                    y.Key == Constants.KafkaMessageHeaderCodecId)?.Value;
+            if (codecIdBytes == null)
             {
                 return false;
             }
 
-            if (message.Headers.TryGetValue(Constants.KafkaMessageHeaderModelKey, out var modelKeyBytes) != true)
+            var modelKeyBytes = message.Headers?.FirstOrDefault(y=> 
+                    y.Key == Constants.KafkaMessageHeaderModelKey)?.Value;
+            if (modelKeyBytes == null)
             {
                 return false;
             }

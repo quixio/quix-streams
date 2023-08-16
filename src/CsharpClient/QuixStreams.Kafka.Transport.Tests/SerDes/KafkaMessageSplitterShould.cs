@@ -107,9 +107,9 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             for (var index = 0; index < segments.Count; index++)
             {
                 var segment = segments[index];
-                var messageId = Constants.Utf8NoBOMEncoding.GetString(segment.Headers[Constants.KafkaMessageHeaderSplitMessageId]);
-                var messageIndex = BitConverter.ToInt32(segment.Headers[Constants.KafkaMessageHeaderSplitMessageIndex], 0);
-                var messageCount = BitConverter.ToInt32(segment.Headers[Constants.KafkaMessageHeaderSplitMessageCount], 0);
+                var messageId = Constants.Utf8NoBOMEncoding.GetString(segment.Headers.First(y=> y.Key == Constants.KafkaMessageHeaderSplitMessageId).Value);
+                var messageIndex = BitConverter.ToInt32(segment.Headers.First(y=> y.Key == Constants.KafkaMessageHeaderSplitMessageIndex).Value, 0);
+                var messageCount = BitConverter.ToInt32(segment.Headers.First(y=> y.Key == Constants.KafkaMessageHeaderSplitMessageCount).Value, 0);
                 if (index == 0)
                 {
                     expectedMessageId = messageId;
@@ -169,7 +169,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             random.NextBytes(data);
             var key = new byte[5];
             random.NextBytes(key);
-            var header = new Dictionary<string, byte[]>() { { "test", new byte[4] } };
+            var header = new List<KafkaHeader>() { new KafkaHeader("test", new byte[4])};
             var message = new KafkaMessage(key, data, header);
 
             // Act

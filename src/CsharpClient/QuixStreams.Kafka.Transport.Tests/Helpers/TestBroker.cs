@@ -121,12 +121,10 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
     
     public class TestProducedKafkaMessage : KafkaMessage
     {
-        public TestProducedKafkaMessage(KafkaMessage message, TopicPartitionOffset offset) : base(message.Key, message.Value, message.Headers, message.MessageTime, message.TopicPartitionOffset)
+        public TestProducedKafkaMessage(KafkaMessage message, TopicPartitionOffset offset) : base(message.Key, message.Value, message.Headers, message.Timestamp, message.TopicPartitionOffset)
         {
             this.TopicPartitionOffset = offset;
-            this.MessageTime = message.MessageTime.Type == KafkaMessageTimeType.ProduceTime
-                ? new KafkaMessageTime(DateTime.UtcNow, KafkaMessageTimeType.CreateTime)
-                : message.MessageTime;
+            this.Timestamp = message.Timestamp;
         }
     }
 }

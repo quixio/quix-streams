@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using Confluent.Kafka;
 
 namespace QuixStreams.Kafka
@@ -22,7 +24,7 @@ namespace QuixStreams.Kafka
         /// <summary>
         /// The headers of the message. Can be null.
         /// </summary>
-        public IDictionary<string, byte[]> Headers { get; protected set; }
+        public ICollection<KafkaHeader> Headers { get; protected set; }
 
         /// <summary>
         /// Kafka headers
@@ -47,7 +49,7 @@ namespace QuixStreams.Kafka
         /// <summary>
         /// The message time
         /// </summary>
-        public KafkaMessageTime MessageTime { get; protected set; }
+        public Timestamp Timestamp { get; protected set; }
 
         /// <summary>
         /// Create a new Kafka message with the specified properties.
@@ -57,7 +59,7 @@ namespace QuixStreams.Kafka
         /// <param name="headers">The headers of the message. Specify null for no </param>
         /// <param name="messageTime">The optional message time. Defaults to utc now</param>
         /// <param name="topicPartitionOffset">The topic and partition with the specified offset this message is representing</param>
-        public KafkaMessage(byte[] key, byte[] value, IDictionary<string, byte[]> headers = null, KafkaMessageTime messageTime = null, TopicPartitionOffset topicPartitionOffset = null)
+        public KafkaMessage(byte[] key, byte[] value, ICollection<KafkaHeader> headers = null, Timestamp? messageTime = null, TopicPartitionOffset topicPartitionOffset = null)
         {
             Key = key;
             MessageSize += key?.Length ?? 0;
@@ -77,7 +79,7 @@ namespace QuixStreams.Kafka
                 MessageSize += HeaderSize;
             }
 
-            MessageTime = messageTime ?? KafkaMessageTime.ProduceTime;
+            Timestamp = messageTime ?? Timestamp.Default;
 
             TopicPartitionOffset = topicPartitionOffset;
         }
@@ -92,11 +94,11 @@ namespace QuixStreams.Kafka
             KafkaHeaders = consumeResult.Message.Headers;
             if (KafkaHeaders != null)
             {
-                Headers = new Dictionary<string, byte[]>();
+                Headers = new List<KafkaHeader>();
                 foreach (var kvp in KafkaHeaders)
                 {
                     var kvpValue = kvp.GetValueBytes();
-                    Headers.Add(kvp.Key, kvpValue);
+                    Headers.Add(new KafkaHeader(kvp.Key, kvpValue));
                     HeaderSize += kvp.Key.Length * 4; // UTF-8 chars are between 1-4 bytes, so worst case assumed
                     HeaderSize += kvpValue.Length;
                 }
@@ -105,7 +107,7 @@ namespace QuixStreams.Kafka
             }
             
             this.TopicPartitionOffset = consumeResult.TopicPartitionOffset;
-            this.MessageTime = consumeResult.Message.Timestamp;
+            this.Timestamp = consumeResult.Message.Timestamp;
         }
 
         /// <summary>
@@ -128,106 +130,49 @@ namespace QuixStreams.Kafka
         }
     }
 
-    /// <summary>
-    /// Time of the kafka message
-    /// </summary>
-    public class KafkaMessageTime
+    public class KafkaHeader
     {
         /// <summary>
-        /// Singleton instance of Kafka Message time with Produce Time type
+        /// Initializes a new instance of Kafka Header
         /// </summary>
-        public static KafkaMessageTime ProduceTime = new KafkaMessageTime(DateTime.MinValue, KafkaMessageTimeType.ProduceTime);
+        /// <param name="key">The key of the header</param>
+        /// <param name="value">The value of the header</param>
+        /// <exception cref="ArgumentNullException">When either key or value is null</exception>
+        public KafkaHeader(string key, byte[] value)
+        {
+            this.Key = key ?? throw new ArgumentNullException(nameof(key));
+            this.Value = value ?? throw new ArgumentNullException(nameof(value));
+        }
         
         /// <summary>
-        /// The UTC time of the message
+        /// Initializes a new instance of Kafka Header
         /// </summary>
-        public DateTime Timestamp { get; }
+        /// <param name="key">The key of the header</param>
+        /// <param name="value">The value of the header as string. Will be UTF-8 converted</param>
+        /// <exception cref="ArgumentNullException">When either key or value is null</exception>
+        public KafkaHeader(string key, string value)
+        {
+            this.Key = key ?? throw new ArgumentNullException(nameof(key));
+            this.Value = Encoding.UTF8.GetBytes(value ?? throw new ArgumentNullException(nameof(value)));
+        }
+        
+        /// <summary>
+        /// The key of the header
+        /// </summary>
+        public string Key { get; }
+        
+        /// <summary>
+        /// The value of the header
+        /// </summary>
+        public byte[] Value { get; }
 
         /// <summary>
-        /// The type of the message time
+        /// Returns the header value as string
         /// </summary>
-        public KafkaMessageTimeType Type { get; }
-        
-        /// <summary>
-        /// Creates a new instance of <see cref="KafkaMessageTime"/> with current UTC time and
-        /// <see cref="KafkaMessageTime.CreateTime"/> type
-        /// </summary>
-        public KafkaMessageTime()
+        /// <returns>Header value as string</returns>
+        public string GetValueAsString()
         {
-            this.Timestamp = DateTime.UtcNow;
-            this.Type = KafkaMessageTimeType.CreateTime;
+            return Encoding.UTF8.GetString(this.Value);
         }
-
-        /// <summary>
-        /// Creates a new instance of <see cref="KafkaMessageTime"/> with the specified time and type
-        /// </summary>
-        /// <param name="timestamp"></param>
-        /// <param name="type"></param>
-        public KafkaMessageTime(DateTime timestamp, KafkaMessageTimeType type)
-        {
-            this.Timestamp = timestamp;
-            this.Type = type;
-        }
-        
-        /// <summary>
-        /// Implicitly converts to confluent kafka timestamp
-        /// </summary>
-        /// <param name="time">the time to convert</param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentOutOfRangeException">unknown type</exception>
-        public static explicit operator Timestamp(KafkaMessageTime time)
-        {
-            return time.Type switch
-            {
-                KafkaMessageTimeType.Unknown => new Timestamp(time.Timestamp, TimestampType.NotAvailable),
-                KafkaMessageTimeType.LogAppendTime => new Timestamp(time.Timestamp, TimestampType.LogAppendTime),
-                KafkaMessageTimeType.CreateTime => new Timestamp(time.Timestamp, TimestampType.CreateTime),
-                KafkaMessageTimeType.ProduceTime => new Timestamp(DateTime.UtcNow, TimestampType.CreateTime),
-                _ => throw new ArgumentOutOfRangeException()
-            };
-        }
-        
-        /// <summary>
-        /// Implicitly converts to confluent kafka timestamp
-        /// </summary>
-        /// <param name="time">the time to convert</param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentOutOfRangeException">unknown type</exception>
-        public static implicit operator KafkaMessageTime(Timestamp time)
-        {
-            return time.Type switch
-            {
-                TimestampType.NotAvailable => new KafkaMessageTime(time.UtcDateTime, KafkaMessageTimeType.Unknown),
-                TimestampType.LogAppendTime => new KafkaMessageTime(time.UtcDateTime, KafkaMessageTimeType.LogAppendTime),
-                TimestampType.CreateTime => new KafkaMessageTime(time.UtcDateTime, KafkaMessageTimeType.CreateTime),
-                _ => throw new ArgumentOutOfRangeException()
-            };
-        }
-    }
-
-    /// <summary>
-    /// The kafka message time type
-    /// </summary>
-    public enum KafkaMessageTimeType
-    {
-        /// <summary>
-        /// The time the message got appended to the log
-        /// </summary>
-        LogAppendTime,
-        
-        /// <summary>
-        /// The time the message got created
-        /// </summary>
-        CreateTime,
-        
-        /// <summary>
-        /// The time the message is queued to be sent to kafka
-        /// </summary>
-        ProduceTime,
-        
-        /// <summary>
-        /// Time type is not known
-        /// </summary>
-        Unknown
     }
 }
