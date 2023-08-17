@@ -1,9 +1,11 @@
 import dataclasses
 from typing import Mapping, Optional, Union, List
+
 from .timestamps import MessageTimestamp
 from .types import MessageKey, MessageHeaders
 
 
+# TODO: add other dict functions like .get() , __contains__  and .copy()
 @dataclasses.dataclass(eq=True, kw_only=True, slots=True)
 class Row:
     """
