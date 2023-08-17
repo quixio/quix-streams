@@ -1,15 +1,30 @@
 import pytest
 
-from quixstreams.dataframes.models.rows import Row
-from quixstreams.dataframes.models.timestamps import MessageTimestamp, TimestampType
-from quixstreams.dataframes.dataframe.pipeline import Pipeline, PipelineFunction
-from quixstreams.dataframes.dataframe.dataframe import StreamingDataFrame
-from quixstreams.dataframes.dataframe.column import Column
+from src.quixstreams.dataframes.models.rows import Row
+from src.quixstreams.dataframes.models.timestamps import MessageTimestamp, TimestampType
+from src.quixstreams.dataframes.dataframe.pipeline import Pipeline, PipelineFunction
+from src.quixstreams.dataframes.dataframe.dataframe import StreamingDataFrame
+from src.quixstreams.dataframes.dataframe.column import Column
 from copy import deepcopy
+from functools import partial
 
 
 @pytest.fixture()
-def message_value():
+def row_msg_value_factory():
+    def _row_msg_value_factory(message_value):
+        return Row(
+            value=message_value,
+            topic='test_topic',
+            partition=0,
+            offset=0,
+            size=0,
+            timestamp=MessageTimestamp(1234567890, TimestampType(1))
+        )
+    return _row_msg_value_factory
+
+
+@pytest.fixture()
+def msg_value_with_ints():
     return {
         'k': 0,
         'x': 5,
@@ -20,7 +35,7 @@ def message_value():
 
 
 @pytest.fixture()
-def message_value_with_list():
+def msg_value_with_list():
     return {
         'x': 5,
         'x_list': [0, 1, 2],
@@ -28,32 +43,27 @@ def message_value_with_list():
 
 
 @pytest.fixture()
-def message_timestamp():
-    return MessageTimestamp(1234567890, TimestampType(1))
+def msg_value_with_bools():
+    return {
+        'x': True,
+        'y': True,
+        'z': False
+    }
 
 
 @pytest.fixture()
-def row(message_value, message_timestamp):
-    return Row(
-        value=message_value,
-        topic='test_topic',
-        partition=0,
-        offset=0,
-        size=0,
-        timestamp=message_timestamp
-    )
+def row_with_ints(row_msg_value_factory, msg_value_with_ints):
+    return row_msg_value_factory(msg_value_with_ints)
 
 
 @pytest.fixture()
-def row_with_list(message_value_with_list, message_timestamp):
-    return Row(
-        value=message_value_with_list,
-        topic='test_topic',
-        partition=0,
-        offset=0,
-        size=0,
-        timestamp=message_timestamp
-    )
+def row_with_list(row_msg_value_factory, msg_value_with_list):
+    return row_msg_value_factory(msg_value_with_list)
+
+
+@pytest.fixture()
+def row_with_bools(row_msg_value_factory, msg_value_with_bools):
+    return row_msg_value_factory(msg_value_with_bools)
 
 
 @pytest.fixture()
@@ -67,9 +77,9 @@ def pipeline_function():
 def pipeline(pipeline_function):
     return Pipeline(
         name='test_pipeline',
-        _functions=[pipeline_function],
-        _graph={'test_pipeline_parent': 'test_pipeline'},
-        _parent='test_pipeline_parent'
+        functions=[pipeline_function],
+        graph={'test_pipeline_parent': 'test_pipeline'},
+        parent='test_pipeline_parent'
     )
 
 
@@ -88,21 +98,34 @@ def more_rows_func():
     def more_rows(row):
         rows_out = []
         for item in row['x_list']:
-            rows_out.append({**row, 'x_list': item})
+            row_out = deepcopy(row)
+            row_out['x_list'] = item
+            rows_out.append(row_out)
         return rows_out
     return more_rows
 
 
-@pytest.fixture()
-def row_values_plus_1_func():
-    def row_values_plus_1(row):
-        for k, v in row.items():
-            row[k] = v + 1
-        return row
-    return row_values_plus_1
+def row_values_plus_n(n, row):
+    for k, v in row.items():
+        row[k] = v + n
+    return row
 
 
 @pytest.fixture()
-def row_with_values_plus_1(row, row_values_plus_1_func):
-    row = deepcopy(row)
-    return row_values_plus_1_func(row)
+def row_plus_n_func():
+    """
+    This generally will be used alongside "row_plus_n"
+    """
+    def _row_values_plus_n(n):
+        return partial(row_values_plus_n, n)
+    return _row_values_plus_n
+
+
+@pytest.fixture()
+def row_plus_n():
+    """
+    This generally will be used alongside "row_plus_n_func"
+    """
+    def _row_plus_n(n, row):
+        return row_values_plus_n(n, deepcopy(row))
+    return _row_plus_n
