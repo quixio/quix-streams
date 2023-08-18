@@ -1,8 +1,17 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
+
+from src.quixstreams.dataframes.error_callbacks import (
+    ConsumerErrorCallback,
+    ProducerErrorCallback,
+)
+from src.quixstreams.dataframes.kafka import Partitioner, AutoOffsetReset
+from src.quixstreams.dataframes.rowconsumer import RowConsumer
+from src.quixstreams.dataframes.rowproducer import RowProducer
 
 
 @pytest.fixture()
@@ -12,8 +21,12 @@ def kafka_admin_client(kafka_container) -> AdminClient:
 
 @pytest.fixture()
 def executor() -> ThreadPoolExecutor:
-    with ThreadPoolExecutor(1) as executor:
+    executor = ThreadPoolExecutor(1)
+    try:
         yield executor
+    finally:
+        # Kill all the threads after leaving the test
+        executor.shutdown(wait=False)
 
 
 @pytest.fixture()
@@ -44,3 +57,48 @@ def set_topic_partitions(kafka_admin_client):
         return topic, num_partitions
 
     return func
+
+
+@pytest.fixture()
+def row_consumer_factory(kafka_container):
+    def factory(
+        broker_address: str = kafka_container.broker_address,
+        consumer_group: str = "tests",
+        auto_offset_reset: AutoOffsetReset = "latest",
+        auto_commit_enable: bool = True,
+        extra_config: dict = None,
+        on_error: Optional[ConsumerErrorCallback] = None,
+    ) -> RowConsumer:
+        extra_config = extra_config or {}
+
+        # Make consumers to refresh cluster metadata often
+        # to react on re-assignment changes faster
+        extra_config["topic.metadata.refresh.interval.ms"] = 3000
+        return RowConsumer(
+            broker_address=broker_address,
+            consumer_group=consumer_group,
+            auto_commit_enable=auto_commit_enable,
+            auto_offset_reset=auto_offset_reset,
+            extra_config=extra_config,
+            on_error=on_error,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def row_producer_factory(kafka_container):
+    def factory(
+        broker_address: str = kafka_container.broker_address,
+        partitioner: Partitioner = "murmur2",
+        extra_config: dict = None,
+        on_error: Optional[ProducerErrorCallback] = None,
+    ) -> RowProducer:
+        return RowProducer(
+            broker_address=broker_address,
+            partitioner=partitioner,
+            extra_config=extra_config,
+            on_error=on_error,
+        )
+
+    return factory
