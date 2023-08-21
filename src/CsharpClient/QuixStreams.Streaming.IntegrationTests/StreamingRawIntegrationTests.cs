@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Quix.TestBase.Extensions;
 using QuixStreams.Kafka;
 using QuixStreams;
@@ -14,27 +15,22 @@ namespace QuixStreams.Streaming.IntegrationTests
     public class StreamingRawIntegrationTests
     {
         private readonly ITestOutputHelper output;
+        private readonly KafkaDockerTestFixture kafkaDockerTestFixture;
         private readonly KafkaStreamingClient client;
 
         public StreamingRawIntegrationTests(ITestOutputHelper output, KafkaDockerTestFixture kafkaDockerTestFixture)
         {
             this.output = output;
+            this.kafkaDockerTestFixture = kafkaDockerTestFixture;
             QuixStreams.Logging.Factory = output.CreateLoggerFactory();
             client = new KafkaStreamingClient(kafkaDockerTestFixture.BrokerList, null);
         }
 
-
-
-        [Fact(Skip = "Pending fix")]
-        public void StreamReadAndWrite()
+        [Fact]
+        public async Task StreamRawWithoutKey_ShouldReadExpected()
         {
             var topicName = "streaming-raw-integration-test";
-            
-                        
-            var justCreateMeMyTopic = client.GetRawTopicProducer(topicName);
-            justCreateMeMyTopic.Dispose(); // should cause a flush
-            Thread.Sleep(5000); // This is only necessary because the container we use for kafka and how a topic creation is handled for the unit test
-
+            await this.kafkaDockerTestFixture.EnsureTopic(topicName, 1);
 
             var topicConsumer = client.GetRawTopicConsumer(topicName, "Default", AutoOffsetReset.Latest);
 
@@ -52,9 +48,9 @@ namespace QuixStreams.Streaming.IntegrationTests
             var topicProducer = client.GetRawTopicProducer(topicName);
             topicProducer.Publish(new KafkaMessage(null, toSend, null));
 
-            SpinWait.SpinUntil(() => received.Count > 0, 5000);
+            SpinWait.SpinUntil(() => received.Count > 0, 10000);
 
-            Console.WriteLine($"received {received.Count} items");
+            output.WriteLine($"received {received.Count} items");
             Assert.Single(received);
             Assert.Equal(toSend, received[0]);
 
@@ -62,12 +58,12 @@ namespace QuixStreams.Streaming.IntegrationTests
             topicConsumer.Dispose();
             topicProducer.Dispose();
         }
-
-
-        [Fact(Skip = "Pending fix")]
-        public void StreamReadAndWriteWithKey()
+        
+        [Fact]
+        public async Task StreamWithKey_ShouldReadExpected()
         {
             var topicName = "streaming-raw-integration-test2";
+            await this.kafkaDockerTestFixture.EnsureTopic(topicName, 1);
             
             var justCreateMeMyTopic = client.GetRawTopicProducer(topicName);
             justCreateMeMyTopic.Dispose(); // should cause a flush

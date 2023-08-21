@@ -131,10 +131,9 @@ namespace QuixStreams.Streaming
             if (package.Type == typeof(byte[]))
             {
                 this.logger.LogTrace("StreamConsumer: OnStreamPackageReceived - raw message.");
-                throw new NotImplementedException();
                 var ev = new EventDataRaw
                 {
-                    Timestamp = default,//((DateTime)package.KafkaMessage.Headers["BrokerTime"].ToUnixNanoseconds(),
+                    Timestamp = package.KafkaMessage.Timestamp.UtcDateTime.ToUnixNanoseconds(),
                     Id = streamPipeline.StreamId,
                     Tags = new Dictionary<string, string>(),
                     Value = Encoding.UTF8.GetString((byte[])package.Value)

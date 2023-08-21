@@ -110,8 +110,6 @@ namespace QuixStreams.Telemetry.Kafka
                 return false;
 
             this.kafkaConsumer.ErrorOccurred += ReadingExceptionHandler;
-            this.kafkaConsumer.Open();
-
             this.kafkaTransportConsumer = new KafkaTransportConsumer(kafkaConsumer, (o) =>
             { 
                 this.configureCommitOptions?.Invoke(o.CommitOptions);
@@ -145,7 +143,6 @@ namespace QuixStreams.Telemetry.Kafka
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
             if (!this.InitializeTransport()) return;
-
             // Transport layer -> Streaming layer
             ContextCache = new StreamContextCache();
             this.streamPipelineFactory = new StreamPipelineFactory(this.kafkaTransportConsumer, streamPipelineFactoryHandler, ContextCache);
@@ -153,7 +150,8 @@ namespace QuixStreams.Telemetry.Kafka
             this.kafkaTransportConsumer.Revoking += RevokingHandler;
             this.kafkaTransportConsumer.Committed += CommittedHandler;
             this.kafkaTransportConsumer.Committing += CommitingHandler;
-            this.streamPipelineFactory.Open();
+            this.streamPipelineFactory.Open(); 
+            this.kafkaConsumer.Open();
         }
 
         private void CommittedHandler(object sender, CommittedEventArgs e)

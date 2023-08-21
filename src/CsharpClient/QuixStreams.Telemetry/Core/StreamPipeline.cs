@@ -20,7 +20,7 @@ namespace QuixStreams.Telemetry
         private readonly CancellationToken cancellationToken;
         private readonly List<StreamComponent> componentsList = new List<StreamComponent>();
         private bool isClosed = false;
-        
+
         /// <summary>
         /// Stream id to use when message key has not been set.
         /// </summary>
@@ -46,7 +46,7 @@ namespace QuixStreams.Telemetry
                 streamId = Guid.NewGuid().ToString();
                 if (isEmpty)
                 {
-                    logger.LogWarning("StreamId was set to empty string. As this is invalid, generating new streamId '{0}'.", streamId);
+                    streamId = DefaultStreamIdWhenMissing;
                 }
             }
             else if (streamId.IndexOfAny(new char[] {'/', '\\'}) > -1)

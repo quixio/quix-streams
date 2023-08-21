@@ -146,14 +146,18 @@ namespace QuixStreams.Telemetry
                 var streamContexts = this.contextCache.GetAll();
                 var affectedStreamContexts = streamContexts.Where(kvp =>
                 {
-                    var lutpo = kvp.Value.LastUncommittedTopicPartitionOffset;
-                    if (lutpo == null) return false;
-                    var matchingTopicPartition = args.Revoked.FirstOrDefault(co => co.TopicPartition == lutpo.TopicPartition);
+                    var ltpo = kvp.Value.LastTopicPartitionOffset;
+                    if (ltpo == null) return false;
+                    var matchingTopicPartition = args.Revoked.FirstOrDefault(co => co.TopicPartition == ltpo.TopicPartition);
                     if (matchingTopicPartition == null) return false;
-                    return matchingTopicPartition.Offset >= lutpo.Offset;
+                    return matchingTopicPartition.Offset >= ltpo.Offset;
                 }).ToList();
                 
-                OnStreamsRevoked?.Invoke(affectedStreamContexts.Select(y=> y.Value.StreamPipeline).ToArray());
+                if (affectedStreamContexts.Count == 0) return;
+
+                var pipelines = affectedStreamContexts.Select(y => y.Value.StreamPipeline).ToArray();
+                
+                OnStreamsRevoked?.Invoke(pipelines);
                 
                 foreach (var affectedContext in affectedStreamContexts)
                 {

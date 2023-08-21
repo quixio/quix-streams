@@ -40,7 +40,7 @@ namespace QuixStreams.Transport.Kafka.Tests
             {
                 this.output.WriteLine($"--------------- TEST {testCount} ---------------");
                 var topic = nameof(ReadAndWriteMessage_MessagesReceivedInOrder) + testCount;
-                await EnsureTopic(topic, 1);
+                await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
                 var messagesReceived = new List<KafkaMessage>();
                 var messagesToSend = new List<KafkaMessage>();
                 for (int i = 0; i < messageCount; i++)
@@ -115,7 +115,7 @@ namespace QuixStreams.Transport.Kafka.Tests
         public async Task Commit_LastReadShouldBeCommitted()
         {
             var topic = nameof(Commit_LastReadShouldBeCommitted);
-            await EnsureTopic(topic, 1);
+            await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
             KafkaMessage lastMessageReceived = null;
             var messagesToSend = new List<KafkaMessage>();
             for (int i = 0; i < 1000; i++)
@@ -196,49 +196,12 @@ namespace QuixStreams.Transport.Kafka.Tests
         public async Task CreateProducer_ShouldHaveMaxMessageSizeSet()
         {
             var topic = nameof(CreateProducer_ShouldHaveMaxMessageSizeSet);
-            await EnsureTopic(topic, 1);
+            await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
             using (var producer = new KafkaProducer(new ProducerConfiguration(this.kafkaDockerTestFixture.BrokerList), new ProducerTopicConfiguration(topic)))
             {
                 this.output.WriteLine("Max message size is {0}", producer.MaxMessageSizeBytes);
                 producer.MaxMessageSizeBytes.Should().BeGreaterThan(0);
             }
         }
-
-        private async Task EnsureTopic(string topic, int partitionCount)
-        {
-            try
-            {
-                await kafkaDockerTestFixture.AdminClient.CreateTopicsAsync(new TopicSpecification[] { new TopicSpecification() { Name = topic, NumPartitions = partitionCount } });
-                this.output.WriteLine($"Created topic {topic} with desired {partitionCount} partitions");
-            }
-            catch (Exception ex)
-            {
-                // it exists
-            }
-
-            var metadata = kafkaDockerTestFixture.AdminClient.GetMetadata(topic, TimeSpan.FromSeconds(5));
-            var existingTopic = metadata.Topics.First();
-
-            if (existingTopic.Partitions.Count == partitionCount)
-            {
-                this.output.WriteLine($"Found topic {topic} with desired {partitionCount} partitions");
-                return;
-            }
-            
-            if (existingTopic.Partitions.Count > partitionCount) throw new InvalidOperationException("The topic has more partitions than required, you need to manually delete it first");
-            
-            try
-            {
-                this.output.WriteLine($"Found topic {topic} with less than desired {partitionCount} partitions, creating up to {partitionCount}");
-                await kafkaDockerTestFixture.AdminClient.CreatePartitionsAsync(new PartitionsSpecification[] { new PartitionsSpecification() { Topic = topic, IncreaseTo = partitionCount } });
-                await Task.Delay(100); // apparently waiting for the task above is not enough, so introducing some artificial delay
-            }
-            catch (CreatePartitionsException ex)
-            {
-                if (!ex.Message.Contains($"Topic already has {partitionCount} partitions")) throw;
-            }
-            await EnsureTopic(topic, partitionCount);
-        }
-
     }
 }
