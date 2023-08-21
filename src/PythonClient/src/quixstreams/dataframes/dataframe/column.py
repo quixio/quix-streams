@@ -1,7 +1,6 @@
 import logging
 import operator
 import uuid
-from functools import partial
 from typing import Self, Optional, Any, Callable, TypeAlias, Union
 
 from ..models import Row
@@ -10,57 +9,45 @@ logger = logging.getLogger(__name__)
 
 OpValue: TypeAlias = Union[int, float, bool]
 ColumnValue: TypeAlias = Union[int, float, bool, list, dict]
-ColumnApplier: TypeAlias = Callable[[dict], OpValue]
+ColumnApplier: TypeAlias = Callable[[ColumnValue], OpValue]
 
-__all__ = (
-    'Column',
-    'OpValue',
-    'ColumnValue',
-    'ColumnApplier'
-)
-
-
-def primitive_to_column(value: Any) -> 'Column':
-    if not isinstance(value, Column):
-        return Column(_eval_func=lambda row: value, _ops='to_column')
-    return value
+__all__ = ("Column", "OpValue", "ColumnValue", "ColumnApplier")
 
 
 # TODO: Docstrings
 class Column:
     def __init__(
-        self, col_name: Optional[str] = None,
-        _eval_func: Optional[ColumnApplier] = None, _ops: str = None
+        self,
+        col_name: Optional[str] = None,
+        _eval_func: Optional[ColumnApplier] = None,
+        _ops: str = None,
     ):
         self.col_name = col_name
         self._id = str(uuid.uuid4())
         self._ops = _ops
         self._eval_func = _eval_func if _eval_func else lambda row: row[self.col_name]
-        logger.debug(f'Created column {self._id}, ops={self.name}')
+        logger.debug(f"Created column {self._id}, ops={self.name}")
 
     @property
     def name(self) -> str:
         return self.col_name or self._ops
 
-    def _do_op(self, other, op, row):
-        return op(self.eval(row), primitive_to_column(other).eval(row))
-
     def _operation(self, other: Any, op: Callable[[OpValue, OpValue], OpValue]) -> Self:
         other_name = other.name if isinstance(other, Column) else "to_column({other})"
         return Column(
-            _eval_func=partial(self._do_op, other, op),
-            _ops=f'{op.__name__}({self.name},{other_name})'
+            _eval_func=lambda row: op(
+                self.eval(row), other.eval(row) if isinstance(other, Column) else other
+            ),
+            _ops=f"{op.__name__}({self.name},{other_name})",
         )
 
     def eval(self, row: Row) -> ColumnValue:
-        result = self._eval_func(row)
-        logger.debug(f'{self._id} eval: {row}, column {self.name}; result: {result}')
-        return result
+        return self._eval_func(row)
 
     def apply(self, func: ColumnApplier) -> Self:
         return Column(
             _eval_func=lambda row: func(self.eval(row)),
-            _ops=f'apply:{func.__name__}({self.name})'
+            _ops=f"apply:{func.__name__}({self.name})",
         )
 
     def __and__(self, other):

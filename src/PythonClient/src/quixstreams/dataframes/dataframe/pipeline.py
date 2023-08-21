@@ -7,23 +7,18 @@ from ..models import Row
 
 logger = logging.getLogger(__name__)
 
-__all__ = (
-    "InvalidPipelineBranching",
-    "PipelineFunction",
-    "Pipeline",
-    "get_func_name"
-)
+__all__ = ("InvalidPipelineBranching", "PipelineFunction", "Pipeline", "get_func_name")
 
 
 def get_attrs(obj, attrs):
-    attrs = attrs.split('.')
+    attrs = attrs.split(".")
     for a in attrs:
         obj = obj.__getattribute__(a)
     return obj
 
 
 def get_func_name(func):
-    for item in ['__name__', 'func.__name__', '__class__.__name__']:
+    for item in ["__name__", "func.__name__", "__class__.__name__"]:
         try:
             return get_attrs(func, item)
         except AttributeError:
@@ -42,7 +37,10 @@ class PipelineFunction:
         self._pipeline_name = pipeline_name
         self._func = func
         self._name = name or get_func_name(self._func)
-        logger.debug(f'Generated PipelineFunction {self.full_id}')
+        logger.debug(f"Generated PipelineFunction {self.full_id}")
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} "{repr(self._func)}">'
 
     def __call__(self, row: Row):
         return self._func(row)
@@ -64,19 +62,13 @@ class PipelineFunction:
         return f"[P:{self.pipeline_name}];[F:{self.name}];[ID:{self.id}]"
 
 
-def process_function(
-        func: PipelineFunction, data: Any
-) -> Optional[Union[Any, list[Any]]]:
-    if isinstance(data, list):
-        return [fd for fd in (func(d) for d in data) if fd is not None] or None
-    else:
-        return func(data)
-
-
 class Pipeline:
     def __init__(
-            self, name: str = None, functions: list[PipelineFunction] = None,
-            graph: dict = None, parent: str = None
+        self,
+        name: str = None,
+        functions: list[PipelineFunction] = None,
+        graph: dict = None,
+        parent: str = None,
     ):
         self._functions = functions or []
         self._name = name or str(uuid.uuid4())
@@ -122,8 +114,8 @@ class Pipeline:
     def remove_redundant_functions(self, parent: Self) -> Self:
         self._check_child_contains_parent(parent)
         self._functions = self.functions[
-                          -(len(self.functions) - len(parent.functions)):
-                          ]
+            -(len(self.functions) - len(parent.functions)) :
+        ]
         return self
 
     def apply(self, func: Callable, func_name: str = None) -> Self:
@@ -135,14 +127,16 @@ class Pipeline:
     def process(self, data: Any) -> Optional[Any]:
         result = data
         for func in self.functions:
-            logger.debug(
-                f'Pipeline {self.name} processing func {func.name} with value {result}')
-            result = process_function(func, result)
-            logger.debug(f'Pipeline {self.name} result of {func.name} is: {result}')
+            if isinstance(result, list):
+                result = [
+                    fd for fd in (func(d) for d in result) if fd is not None
+                ] or None
+            else:
+                result = func(result)
             if result is None:
-                logger.info(
-                    f'Pipeline {self.name} processing step returned a None; \
-                    terminating processing')
+                logger.debug(
+                    f"Pipeline {self.name} processing step returned a None; "
+                    f"terminating processing"
+                )
                 break
-        logger.debug(f'Pipeline {self.name} finished; result is {result}')
         return result
