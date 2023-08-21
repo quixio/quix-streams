@@ -5,7 +5,7 @@ VisualStudioVersion = 17.3.32901.215
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming", "QuixStreams.Streaming\QuixStreams.Streaming.csproj", "{E317338C-BD9B-455A-82AC-81400D7F1C68}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming.Samples", "QuixStreams.Streaming.Samples\QuixStreams.Streaming.Samples.csproj", "{350E3A07-A7F5-4ED0-8328-059CC80F07E9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Tester", "QuixStreams.Tester\QuixStreams.Tester.csproj", "{350E3A07-A7F5-4ED0-8328-059CC80F07E9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming.UnitTests", "QuixStreams.Streaming.UnitTests\QuixStreams.Streaming.UnitTests.csproj", "{6EAC0582-35C1-45F8-B214-99217D52806D}"
 EndProject

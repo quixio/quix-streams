@@ -17,6 +17,11 @@ namespace QuixStreams.Streaming.Utils
         public static CodecType CurrentCodec;
 
         /// <summary>
+        /// Used to avoid marking CurrentCodec nullable or adding unused enum to it
+        /// </summary>
+        private static bool codecSet = false;
+
+        /// <summary>
         /// The logger for the class
         /// </summary>
         private static Lazy<ILogger> logger = new Lazy<ILogger>(() => QuixStreams.Logging.CreateLogger(typeof(CodecSettings)));
@@ -33,6 +38,7 @@ namespace QuixStreams.Streaming.Utils
         /// <param name="codecType"></param>
         public static void SetGlobalCodecType(CodecType codecType)
         {
+            if (CurrentCodec == codecType && codecSet) return;
             CodecRegistry.Register(producerCodec: codecType);
             
             if (codecType == CodecType.Protobuf)
@@ -44,6 +50,7 @@ namespace QuixStreams.Streaming.Utils
                 QuixStreams.Kafka.Transport.SerDes.PackageSerializationSettings.LegacyValueCodecType = TransportPackageValueCodecType.Json;
             }
             CurrentCodec = codecType;
+            codecSet = true;
             logger.Value.LogDebug("Codecs are configured to publish using {0} with {1} package codec.", codecType, QuixStreams.Kafka.Transport.SerDes.PackageSerializationSettings.LegacyValueCodecType);
         }
     }
