@@ -8,10 +8,12 @@ from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
 from src.quixstreams.dataframes.error_callbacks import (
     ConsumerErrorCallback,
     ProducerErrorCallback,
+    ProcessingErrorCallback,
 )
 from src.quixstreams.dataframes.kafka import Partitioner, AutoOffsetReset
 from src.quixstreams.dataframes.rowconsumer import RowConsumer
 from src.quixstreams.dataframes.rowproducer import RowProducer
+from src.quixstreams.dataframes.runner import MessageProcessedCallback, Runner
 
 
 @pytest.fixture()
@@ -99,6 +101,32 @@ def row_producer_factory(kafka_container):
             partitioner=partitioner,
             extra_config=extra_config,
             on_error=on_error,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def runner_factory(kafka_container):
+    def factory(
+        auto_offset_reset: AutoOffsetReset = "latest",
+        consumer_extra_config: Optional[dict] = None,
+        producer_extra_config: Optional[dict] = None,
+        on_consumer_error: Optional[ConsumerErrorCallback] = None,
+        on_producer_error: Optional[ProducerErrorCallback] = None,
+        on_processing_error: Optional[ProcessingErrorCallback] = None,
+        on_message_processed: Optional[MessageProcessedCallback] = None,
+    ) -> Runner:
+        return Runner(
+            broker_address=kafka_container.broker_address,
+            consumer_group="tests",
+            auto_offset_reset=auto_offset_reset,
+            consumer_extra_config=consumer_extra_config,
+            producer_extra_config=producer_extra_config,
+            on_consumer_error=on_consumer_error,
+            on_producer_error=on_producer_error,
+            on_processing_error=on_processing_error,
+            on_message_processed=on_message_processed,
         )
 
     return factory
