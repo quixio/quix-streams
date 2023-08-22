@@ -190,7 +190,6 @@ class RowConsumer(Consumer, RowConsumerProto):
             return
         except Exception as exc:
             to_suppress = self._on_error(exc, msg, logger)
-            if not to_suppress:
-                raise
-            else:
+            if to_suppress:
                 return
+            raise

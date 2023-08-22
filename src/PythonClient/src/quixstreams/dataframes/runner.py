@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from typing import Optional, Callable
 
@@ -13,10 +14,23 @@ from .error_callbacks import (
 from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
+from .exceptions import QuixException
+
 
 logger = logging.getLogger(__name__)
 
 MessageProcessedCallback = Callable[[str, int, int], None]
+
+__all__ = (
+    "Runner",
+    "RunnerNotStarted",
+)
+
+
+class RunnerNotStarted(QuixException):
+    """
+    Runner is not started yet
+    """
 
 
 class Runner:
@@ -49,7 +63,9 @@ class Runner:
         ```
             runner = Runner(broker_address='localhost:9092', consumer_group='group')
             df = StreamingDataFrame()
-            runner.run(dataframe=df)
+
+            with runner:
+                runner.run(dataframe=df)
         ```
 
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
@@ -84,24 +100,36 @@ class Runner:
             or to produce a message to Kafka.
 
         """
-        self._broker_address = broker_address
-        self._consumer_group = consumer_group
-        self._auto_offset_reset = auto_offset_reset
-        self._auto_commit_enable = auto_commit_enable
-        self._assignment_strategy = assignment_strategy
-        self._partitioner = partitioner
-        self._consumer_extra_config = consumer_extra_config
-        self._producer_extra_config = producer_extra_config
+        self.consumer = RowConsumer(
+            broker_address=broker_address,
+            consumer_group=consumer_group,
+            auto_offset_reset=auto_offset_reset,
+            auto_commit_enable=auto_commit_enable,
+            assignment_strategy=assignment_strategy,
+            extra_config=consumer_extra_config,
+            on_error=on_consumer_error,
+        )
+        self.producer = RowProducer(
+            broker_address=broker_address,
+            partitioner=partitioner,
+            extra_config=producer_extra_config,
+            on_error=on_producer_error,
+        )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._running = False
-        self._on_consumer_error = on_consumer_error
-        self._on_producer_error = on_producer_error
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
+        self._exit_stack = contextlib.ExitStack()
+
+    def start(self):
+        self._exit_stack.enter_context(self.producer)
+        self._exit_stack.enter_context(self.consumer)
+        self._running = True
 
     def stop(self):
         self._running = False
+        self._exit_stack.close()
 
     def run(
         self,
@@ -112,77 +140,69 @@ class Runner:
 
         :param dataframe: StreamingDataFrame instance
         """
+        if not self._running:
+            raise RunnerNotStarted("Runner is not yet started")
+
         logger.info("Start processing of the streaming dataframe")
-        self._running = True
-        # Initialize consumer and producer instances
-        consumer = RowConsumer(
-            broker_address=self._broker_address,
-            consumer_group=self._consumer_group,
-            auto_offset_reset=self._auto_offset_reset,
-            auto_commit_enable=self._auto_commit_enable,
-            assignment_strategy=self._assignment_strategy,
-            extra_config=self._consumer_extra_config,
-            on_error=self._on_consumer_error,
-        )
-        producer = RowProducer(
-            broker_address=self._broker_address,
-            partitioner=self._partitioner,
-            extra_config=self._producer_extra_config,
-            on_error=self._on_producer_error,
-        )
 
-        with producer, consumer:
-            # Provide Consumer and Producer instances to StreamingDataFrame
-            dataframe.producer = producer
-            dataframe.consumer = consumer
+        # Provide Consumer and Producer instances to StreamingDataFrame
+        dataframe.producer = self.producer
+        dataframe.consumer = self.consumer
 
-            # Get a list of input topics for this Dataframe
-            topics = list(dataframe.topics.values())
-            # Subscribe to topics in Kafka and start polling
-            consumer.subscribe(topics)
-            # Start polling Kafka for messages and callbacks
-            while self._running:
-                # Serve producer callbacks
-                producer.poll(self._producer_poll_timeout)
-                rows = consumer.poll_row(timeout=self._consumer_poll_timeout)
+        # Get a list of input topics for this Dataframe
+        topics = list(dataframe.topics.values())
+        # Subscribe to topics in Kafka and start polling
+        self.consumer.subscribe(topics)
+        # Start polling Kafka for messages and callbacks
+        while self._running:
+            # Serve producer callbacks
+            self.producer.poll(self._producer_poll_timeout)
+            rows = self.consumer.poll_row(timeout=self._consumer_poll_timeout)
 
-                if rows is None:
-                    continue
+            if rows is None:
+                continue
 
-                # Deserializer may return multiple rows for a single message
-                rows = rows if isinstance(rows, list) else [rows]
-                if not rows:
-                    continue
+            # Deserializer may return multiple rows for a single message
+            rows = rows if isinstance(rows, list) else [rows]
+            if not rows:
+                continue
 
-                first_row = rows[0]
+            first_row = rows[0]
 
-                for row in rows:
-                    try:
-                        dataframe.process(row=row)
-                    except Exception as exc:
-                        # TODO: This callback might be triggered because of Producer
-                        #  errors too because they happen within ".process()"
-                        to_suppress = self._on_processing_error(exc, row, logger)
-                        if not to_suppress:
-                            raise
+            for row in rows:
+                try:
+                    dataframe.process(row=row)
+                except Exception as exc:
+                    # TODO: This callback might be triggered because of Producer
+                    #  errors too because they happen within ".process()"
+                    to_suppress = self._on_processing_error(exc, row, logger)
+                    if not to_suppress:
+                        raise
 
-                topic_name, partition, offset = (
-                    first_row.topic,
-                    first_row.partition,
-                    first_row.offset,
-                )
-                # Store the message offset after it's successfully processed
-                consumer.store_offsets(
-                    offsets=[
-                        TopicPartition(
-                            topic=topic_name,
-                            partition=partition,
-                            offset=offset,
-                        )
-                    ]
-                )
+            topic_name, partition, offset = (
+                first_row.topic,
+                first_row.partition,
+                first_row.offset,
+            )
+            # Store the message offset after it's successfully processed
+            self.consumer.store_offsets(
+                offsets=[
+                    TopicPartition(
+                        topic=topic_name,
+                        partition=partition,
+                        offset=offset,
+                    )
+                ]
+            )
 
-                if self._on_message_processed is not None:
-                    self._on_message_processed(topic_name, partition, offset)
+            if self._on_message_processed is not None:
+                self._on_message_processed(topic_name, partition, offset)
 
-            logger.info("Stop processing of the streaming dataframe")
+        logger.info("Stop processing of the streaming dataframe")
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
