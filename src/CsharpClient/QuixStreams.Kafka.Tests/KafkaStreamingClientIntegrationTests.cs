@@ -168,12 +168,12 @@ namespace QuixStreams.Transport.Kafka.Tests
 
                 CommittingEventArgs committingEventArgs = null;
                 CommittedEventArgs committedEventArgs = null;
-                consumer.Committing += (sender, args) =>
+                consumer.OnCommitting += (sender, args) =>
                 {
                     committingEventArgs = args;
                 };
                 
-                consumer.Committed += (sender, args) =>
+                consumer.OnCommitted += (sender, args) =>
                 {
                     committedEventArgs = args;
                 };

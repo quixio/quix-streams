@@ -55,7 +55,7 @@ namespace QuixStreams.Speedtest
             var consConfig = new ConsumerConfiguration(Configuration.Config.BrokerList, "Debug", config);
             var topicConfig = new ConsumerTopicConfiguration(Configuration.Config.Topic);
             var kafkaOutput = new KafkaConsumer(consConfig, topicConfig);
-            kafkaOutput.ErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
+            kafkaOutput.OnErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
             kafkaOutput.Open();
             var consumer = new KafkaTransportConsumer(kafkaOutput);
             consumer.PackageReceived = (package) =>

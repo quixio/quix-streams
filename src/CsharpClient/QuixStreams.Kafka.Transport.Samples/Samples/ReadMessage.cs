@@ -30,7 +30,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
                 new ConsumerTopicConfiguration(TopicName, offset.Value) :
                 new ConsumerTopicConfiguration(TopicName);
             var kafkaConsumer = new KafkaConsumer(consConfig, topicConfig);
-            kafkaConsumer.ErrorOccurred += (s, e) =>
+            kafkaConsumer.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");
             };

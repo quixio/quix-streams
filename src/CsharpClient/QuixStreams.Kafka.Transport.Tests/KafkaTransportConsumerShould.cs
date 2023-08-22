@@ -35,7 +35,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             // Arrange
             var broker = new TestBroker();
             CommittedEventArgs committed = null;
-            broker.Committed += (sender, args) => committed = args;
+            broker.OnCommitted += (sender, args) => committed = args;
             var transportConsumer = new KafkaTransportConsumer(broker, o=> o.CommitOptions.CommitEvery = 1);
             
             var message = ModelFactory.CreateKafkaMessage("SomeKey", new { Some = "Value" });
@@ -63,7 +63,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             
             // Act
             var expectedArgs = new RevokingEventArgs(new List<TopicPartitionOffset>() {revokingOffset});
-            consumer.Revoking += Raise.EventWith(expectedArgs);
+            consumer.OnRevoking += Raise.EventWith(expectedArgs);
 
             // Assert
             revokingInvokes.Should().BeEquivalentTo(new[] {expectedArgs});
@@ -87,7 +87,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             
             // Act
             var expectedArgs = new RevokedEventArgs(new List<TopicPartitionOffset>() { revokedOffset});
-            consumer.Revoked += Raise.EventWith(expectedArgs);
+            consumer.OnRevoked += Raise.EventWith(expectedArgs);
 
             // Assert
             revokedInvokes.Should().BeEquivalentTo(new[] {expectedArgs});
@@ -107,7 +107,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             
             // Act
             var expectedArgs = new CommittedEventArgs(new CommittedOffsets(new List<TopicPartitionOffsetError>() {new TopicPartitionOffsetError(committedOffset, new Error(ErrorCode.NoError))},new Error(ErrorCode.NoError)));
-            consumer.Committed += Raise.EventWith(expectedArgs);
+            consumer.OnCommitted += Raise.EventWith(expectedArgs);
 
             // Assert
             committed.Should().BeEquivalentTo(expectedArgs);
@@ -128,7 +128,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             
             // Act
             var expectedArgs = new CommittingEventArgs(new List<TopicPartitionOffset>() { committingOffset});
-            consumer.Committing += Raise.EventWith(expectedArgs);
+            consumer.OnCommitting += Raise.EventWith(expectedArgs);
 
             // Assert
             committingEventArgs.Should().BeEquivalentTo(expectedArgs);

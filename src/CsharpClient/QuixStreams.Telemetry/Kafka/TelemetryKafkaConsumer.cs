@@ -109,7 +109,7 @@ namespace QuixStreams.Telemetry.Kafka
             if (kafkaTransportConsumer != null)
                 return false;
 
-            this.kafkaConsumer.ErrorOccurred += ReadingExceptionHandler;
+            this.kafkaConsumer.OnErrorOccurred += ReadingExceptionHandler;
             this.kafkaTransportConsumer = new KafkaTransportConsumer(kafkaConsumer, (o) =>
             { 
                 this.configureCommitOptions?.Invoke(o.CommitOptions);

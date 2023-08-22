@@ -24,11 +24,11 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         private readonly Func<KafkaMessage, Task> onPublish;
 
         public Func<KafkaMessage, Task> MessageReceived { get; set; }
-        public event EventHandler<Exception> ErrorOccurred;
+        public event EventHandler<Exception> OnErrorOccurred;
         public void Commit(ICollection<TopicPartitionOffset> partitionOffsets)
         {
-            this.Committing?.Invoke(this, new CommittingEventArgs(partitionOffsets));
-            this.Committed?.Invoke(this, new CommittedEventArgs(new CommittedOffsets(partitionOffsets.Select(y=> 
+            this.OnCommitting?.Invoke(this, new CommittingEventArgs(partitionOffsets));
+            this.OnCommitted?.Invoke(this, new CommittedEventArgs(new CommittedOffsets(partitionOffsets.Select(y=> 
                 new TopicPartitionOffsetError(y.TopicPartition, y.Offset, new Error(ErrorCode.NoError))).ToList(), new Error(ErrorCode.NoError))));    }
 
         public void Commit()
@@ -36,20 +36,20 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
             var offset = Interlocked.Read(ref msgCount);
             if (offset == 0) return;
             var topicPartitionOffset = CreateTopicPartitionOffset(offset);
-            this.Committing?.Invoke(this, new CommittingEventArgs(new List<TopicPartitionOffset>()
+            this.OnCommitting?.Invoke(this, new CommittingEventArgs(new List<TopicPartitionOffset>()
             {
                 topicPartitionOffset
             }));
-            this.Committed?.Invoke(this, new CommittedEventArgs(new CommittedOffsets(new List<TopicPartitionOffsetError>()
+            this.OnCommitted?.Invoke(this, new CommittedEventArgs(new CommittedOffsets(new List<TopicPartitionOffsetError>()
             {
                 new TopicPartitionOffsetError(topicPartitionOffset.TopicPartition, topicPartitionOffset.Offset, new Error(ErrorCode.NoError))
             }, new Error(ErrorCode.NoError))));
         }
 
-        public event EventHandler<CommittedEventArgs> Committed;
-        public event EventHandler<CommittingEventArgs> Committing;
-        public event EventHandler<RevokingEventArgs> Revoking;
-        public event EventHandler<RevokedEventArgs> Revoked;
+        public event EventHandler<CommittedEventArgs> OnCommitted;
+        public event EventHandler<CommittingEventArgs> OnCommitting;
+        public event EventHandler<RevokingEventArgs> OnRevoking;
+        public event EventHandler<RevokedEventArgs> OnRevoked;
     
         public async Task Publish(KafkaMessage message, CancellationToken cancellationToken = default)
         {
@@ -107,12 +107,12 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         {
             var offset = Interlocked.Read(ref msgCount);
             var topicPartitionOffset = CreateTopicPartitionOffset(offset);
-            this.Revoking?.Invoke(this, new RevokingEventArgs(new List<TopicPartitionOffset>()
+            this.OnRevoking?.Invoke(this, new RevokingEventArgs(new List<TopicPartitionOffset>()
             {
                 topicPartitionOffset
             }));
         
-            this.Revoked?.Invoke(this, new RevokedEventArgs(new List<TopicPartitionOffset>()
+            this.OnRevoked?.Invoke(this, new RevokedEventArgs(new List<TopicPartitionOffset>()
             {
                 topicPartitionOffset
             }));

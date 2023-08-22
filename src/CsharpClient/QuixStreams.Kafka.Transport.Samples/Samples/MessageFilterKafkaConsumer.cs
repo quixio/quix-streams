@@ -22,25 +22,25 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             this.filter = filter;
             this.kafkaConsumer = kafkaConsumer;
             kafkaConsumer.MessageReceived = FilterNewPackage;
-            kafkaConsumer.Committed += (s, e) =>
+            kafkaConsumer.OnCommitted += (s, e) =>
             {
-                this.Committed?.Invoke(s, e);
+                this.OnCommitted?.Invoke(s, e);
             };
-            kafkaConsumer.Committing += (s, e) =>
+            kafkaConsumer.OnCommitting += (s, e) =>
             {
-                this.Committing?.Invoke(s, e);
+                this.OnCommitting?.Invoke(s, e);
             };
-            kafkaConsumer.Revoked += (s, e) =>
+            kafkaConsumer.OnRevoked += (s, e) =>
             {
-                this.Revoked?.Invoke(s, e);
+                this.OnRevoked?.Invoke(s, e);
             };
-            kafkaConsumer.Revoking += (s, e) =>
+            kafkaConsumer.OnRevoking += (s, e) =>
             {
-                this.Revoking?.Invoke(s, e);
+                this.OnRevoking?.Invoke(s, e);
             };
-            kafkaConsumer.ErrorOccurred += (s, e) =>
+            kafkaConsumer.OnErrorOccurred += (s, e) =>
             {
-                this.ErrorOccurred?.Invoke(s, e);
+                this.OnErrorOccurred?.Invoke(s, e);
             };
         }
 
@@ -56,7 +56,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         }
 
         public Func<KafkaMessage, Task> MessageReceived { get; set; }
-        public event EventHandler<Exception> ErrorOccurred;
+        public event EventHandler<Exception> OnErrorOccurred;
         public void Commit(ICollection<TopicPartitionOffset> partitionOffsets)
         {
             this.kafkaConsumer.Commit(partitionOffsets);
@@ -67,10 +67,10 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             this.kafkaConsumer.Commit();
         }
 
-        public event EventHandler<CommittedEventArgs> Committed;
-        public event EventHandler<CommittingEventArgs> Committing;
-        public event EventHandler<RevokingEventArgs> Revoking;
-        public event EventHandler<RevokedEventArgs> Revoked;
+        public event EventHandler<CommittedEventArgs> OnCommitted;
+        public event EventHandler<CommittingEventArgs> OnCommitting;
+        public event EventHandler<RevokingEventArgs> OnRevoking;
+        public event EventHandler<RevokedEventArgs> OnRevoked;
         public void Open()
         {
             this.kafkaConsumer.Open();

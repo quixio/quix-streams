@@ -19,7 +19,7 @@ namespace QuixStreams.Kafka
         /// Raised when <see cref="Exception"/> occurred.
         /// Kafka exceptions are raised as <see cref="KafkaException"/>. See <see cref="KafkaException.Error"/> for exception details.
         /// </summary>
-        event EventHandler<Exception> ErrorOccurred;
+        event EventHandler<Exception> OnErrorOccurred;
 
         /// <summary>
         /// Commits the offsets to the consumer.
@@ -35,24 +35,24 @@ namespace QuixStreams.Kafka
         /// <summary>
         /// Event is raised when the transport context finished committing
         /// </summary>
-        event EventHandler<CommittedEventArgs> Committed;
+        event EventHandler<CommittedEventArgs> OnCommitted;
         
         /// <summary>
         /// Event is raised when the transport context starts committing. It is not guaranteed to be raised if underlying broker initiates commit on its own
         /// </summary>
-        event EventHandler<CommittingEventArgs> Committing;
+        event EventHandler<CommittingEventArgs> OnCommitting;
         
         /// <summary>
         /// Raised when losing access to source depending on implementation
         /// Argument is the state which describes what is being revoked, depending on implementation
         /// </summary>
-        event EventHandler<RevokingEventArgs> Revoking;
+        event EventHandler<RevokingEventArgs> OnRevoking;
 
         /// <summary>
         /// Raised when lost access to source depending on implementation
         /// Argument is the state which describes what got revoked, depending on implementation
         /// </summary>
-        event EventHandler<RevokedEventArgs> Revoked;
+        event EventHandler<RevokedEventArgs> OnRevoked;
 
         /// <summary>
         /// Open connection to Kafka

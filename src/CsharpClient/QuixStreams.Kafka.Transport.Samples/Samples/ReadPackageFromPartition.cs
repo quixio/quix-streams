@@ -67,7 +67,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             var consConfig = new ConsumerConfiguration(Const.BrokerList, ConsumerGroup);
             var topicConfig = new ConsumerTopicConfiguration(TopicName, partition, offset);
             var kafkaOutput = new KafkaConsumer(consConfig, topicConfig);
-            kafkaOutput.ErrorOccurred += (s, e) =>
+            kafkaOutput.OnErrorOccurred += (s, e) =>
             {
                 Console.WriteLine($"Exception occurred: {e}");
             };

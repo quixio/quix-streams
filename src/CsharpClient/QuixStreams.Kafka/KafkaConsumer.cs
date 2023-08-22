@@ -58,29 +58,29 @@ namespace QuixStreams.Kafka
         public bool EnableReAssignedLogic { get; set; } = true;
 
         /// <inheritdoc />
-        public event EventHandler<Exception> ErrorOccurred;
+        public event EventHandler<Exception> OnErrorOccurred;
 
         /// <inheritdoc/>
         public Func<KafkaMessage, Task> MessageReceived { get; set; }
 
         /// <inheritdoc/>
-        public event EventHandler<CommittedEventArgs> Committed;
+        public event EventHandler<CommittedEventArgs> OnCommitted;
         
         
         /// <inheritdoc/>
-        public event EventHandler<CommittingEventArgs> Committing;
+        public event EventHandler<CommittingEventArgs> OnCommitting;
         
         /// <summary>
         /// Raised when consumer is losing access to subscribed source depending on implementation
         /// Argument is the state which describes what is being revoked. State is of type <see cref="List{TopicPartitionOffset}"/>
         /// </summary>
-        public event EventHandler<RevokingEventArgs> Revoking;
+        public event EventHandler<RevokingEventArgs> OnRevoking;
         
         /// <summary>
         /// Raised when consumer lost access to subscribed source depending on implementation
         /// Argument is the state which describes what got revoked. State is of type <see cref="List{TopicPartitionOffset}"/>
         /// </summary>
-        public event EventHandler<RevokedEventArgs> Revoked;
+        public event EventHandler<RevokedEventArgs> OnRevoked;
 
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaConsumer"/>
@@ -391,7 +391,7 @@ namespace QuixStreams.Kafka
                 }
 
                 this.logger.LogTrace("[{0}] Calling Revoked event handler", this.configId);
-                this.Revoked?.Invoke(this, new RevokedEventArgs(topicPartitionOffsets));
+                this.OnRevoked?.Invoke(this, new RevokedEventArgs(topicPartitionOffsets));
                 this.logger.LogTrace("[{0}] Called Revoked event handler", this.configId);
             }
             catch (Exception ex)
@@ -413,7 +413,7 @@ namespace QuixStreams.Kafka
                     }
                 }
 
-                this.Revoking?.Invoke(this, new RevokingEventArgs(topicPartitionOffsets));
+                this.OnRevoking?.Invoke(this, new RevokingEventArgs(topicPartitionOffsets));
                 this.lastRevokingState = topicPartitionOffsets;
                 var cts = new CancellationTokenSource();
                 var shouldInvoke = true;
@@ -438,7 +438,7 @@ namespace QuixStreams.Kafka
                         }
                     }
                     this.logger.LogTrace("[{0}] Calling Revoked event handler", this.configId, this.configId);
-                    this.Revoked?.Invoke(this, new RevokedEventArgs(topicPartitionOffsets));
+                    this.OnRevoked?.Invoke(this, new RevokedEventArgs(topicPartitionOffsets));
                     this.logger.LogTrace("[{0}] Called Revoked event handler", this.configId, this.configId);
                 };
                 if (closing || !EnableReAssignedLogic)
@@ -465,7 +465,7 @@ namespace QuixStreams.Kafka
                 this.lastRevokeCancelAction?.Invoke();
 
                 var assignedPartitions = topicPartitions.ToList(); // Just in case source doesn't like us modifying this list
-                if (lrs != null && this.Revoked != null)
+                if (lrs != null && this.OnRevoked != null)
                 {
                     var sameTopicPartitions = topicPartitions
                         .Join(lrs, parti => parti, state => state.TopicPartition, (p, s) => s).ToList();
@@ -521,10 +521,10 @@ namespace QuixStreams.Kafka
                             }
                         }
 
-                        if (this.Revoked != null)
+                        if (this.OnRevoked != null)
                         {
                             this.logger.LogTrace("[{0}] Calling Revoked event handler", this.configId);
-                            this.Revoked?.Invoke(this, new RevokedEventArgs(revoked));
+                            this.OnRevoked?.Invoke(this, new RevokedEventArgs(revoked));
                             this.logger.LogTrace("[{0}] Called Revoked event handler", this.configId);
                         }
                     }
@@ -622,7 +622,7 @@ namespace QuixStreams.Kafka
                 }
             }
             
-            if (this.ErrorOccurred == null)
+            if (this.OnErrorOccurred == null)
             {
                 this.logger.LogError(exception, "[{0}] Exception receiving from Kafka", this.configId);
             }
@@ -630,7 +630,7 @@ namespace QuixStreams.Kafka
             {
                 // wrap error to include configId
                 var wrappedError = new KafkaException(new Error(exception.Error.Code, $"[{this.configId}] {exception.Error.Reason}", exception.Error.IsFatal), exception.InnerException);
-                this.ErrorOccurred?.Invoke(this, wrappedError);
+                this.OnErrorOccurred?.Invoke(this, wrappedError);
             }
         }
 
@@ -795,7 +795,7 @@ namespace QuixStreams.Kafka
             {
                 // While log and throw is an anti-pattern, this is critical enough exception for it.
                 logger.LogCritical(ex, "[{0}] Unexpected exception in kafka message poll thread", this.configId);
-                this.ErrorOccurred?.Invoke(this, ex);
+                this.OnErrorOccurred?.Invoke(this, ex);
             }
         }
 
@@ -825,13 +825,13 @@ namespace QuixStreams.Kafka
                             positions.Add(new TopicPartitionOffset(topicPartition, position));
                         }
                     }
-                    this.Committing?.Invoke(this, new CommittingEventArgs(positions));
+                    this.OnCommitting?.Invoke(this, new CommittingEventArgs(positions));
                     var committed = this.consumer.Commit();
-                    this.Committed?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(committed, null)));
+                    this.OnCommitted?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(committed, null)));
                 }
                 catch (TopicPartitionOffsetException ex)
                 {
-                    this.Committed?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(null, ex)));
+                    this.OnCommitted?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(null, ex)));
                 }
             }
         }
@@ -888,13 +888,13 @@ namespace QuixStreams.Kafka
                 // TODO maybe validation on given partitions? Difficult, but possible once PartitionsAssignedHandler and PartitionsRevokedHandler is properly implemented
                 try
                 {
-                    this.Committing?.Invoke(this, new CommittingEventArgs(latestPartitionOffsets));
+                    this.OnCommitting?.Invoke(this, new CommittingEventArgs(latestPartitionOffsets));
                     this.consumer.Commit(latestPartitionOffsets);
-                    this.Committed?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(latestPartitionOffsets, null)));
+                    this.OnCommitted?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(latestPartitionOffsets, null)));
                 }
                 catch (TopicPartitionOffsetException ex)
                 {
-                    this.Committed?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(null, ex)));
+                    this.OnCommitted?.Invoke(this, new CommittedEventArgs(GetCommittedOffsets(null, ex)));
                 }
             }
         }
@@ -930,13 +930,13 @@ namespace QuixStreams.Kafka
             }
             catch (Exception ex)
             {
-                if (this.ErrorOccurred == null)
+                if (this.OnErrorOccurred == null)
                 {
                     this.logger.LogError(ex, "[{0}] Exception processing message read from Kafka", this.configId);
                 }
                 else
                 {
-                    this.ErrorOccurred?.Invoke(this, ex);
+                    this.OnErrorOccurred?.Invoke(this, ex);
                 }
             }
         }

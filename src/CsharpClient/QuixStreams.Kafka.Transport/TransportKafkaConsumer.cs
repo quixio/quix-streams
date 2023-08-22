@@ -117,7 +117,7 @@ namespace QuixStreams.Kafka.Transport
 
                 commitModifier.PackageAvailable += package => this.PackageReceived?.Invoke(package);
 
-                kafkaConsumer.Revoked += (sender, args) =>
+                kafkaConsumer.OnRevoked += (sender, args) =>
                 {
                     try
                     {
@@ -130,7 +130,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                 };
                 
-                kafkaConsumer.Revoking += (sender, args) =>
+                kafkaConsumer.OnRevoking += (sender, args) =>
                 {
                     try
                     {
@@ -142,7 +142,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                 };
                 
-                kafkaConsumer.Committed += (sender, args) =>
+                kafkaConsumer.OnCommitted += (sender, args) =>
                 {
                     try
                     {
@@ -154,7 +154,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                 };
                 
-                kafkaConsumer.Committing += (sender, args) =>
+                kafkaConsumer.OnCommitting += (sender, args) =>
                 {
                     try
                     {
@@ -174,19 +174,19 @@ namespace QuixStreams.Kafka.Transport
                     return this.PackageReceived?.Invoke(package);
                 };
                 
-                kafkaConsumer.Committed += (sender, args) =>
+                kafkaConsumer.OnCommitted += (sender, args) =>
                 {
                     this.Committed?.Invoke(sender, args);
                         
                 };
                 
-                kafkaConsumer.Committing += (sender, args) =>
+                kafkaConsumer.OnCommitting += (sender, args) =>
                 {
                     this.Committing?.Invoke(sender, args);
                 };
             }
 
-            kafkaConsumer.ErrorOccurred += (sender, exception) =>
+            kafkaConsumer.OnErrorOccurred += (sender, exception) =>
             {
                 this.ErrorOccurred?.Invoke(sender, exception);
             };

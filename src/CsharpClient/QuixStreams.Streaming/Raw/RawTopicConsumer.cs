@@ -35,7 +35,7 @@ namespace QuixStreams.Streaming.Raw
                 {
                     //automatic attaching the handler when noone someone starts listening to the event
                     // internally causing to stop logging messages instead of start throwing them
-                    this.kafkaConsumer.ErrorOccurred += InternalErrorHandler;
+                    this.kafkaConsumer.OnErrorOccurred += InternalErrorHandler;
                     errorHandlerRegistered = true;
                 }
             }
@@ -45,7 +45,7 @@ namespace QuixStreams.Streaming.Raw
                 {
                     //automatic detaching of the handler when noone is listening to the event
                     // internally causing to start logging messages instead of throwing them
-                    this.kafkaConsumer.ErrorOccurred -= InternalErrorHandler;
+                    this.kafkaConsumer.OnErrorOccurred -= InternalErrorHandler;
                     errorHandlerRegistered = false;
                 }
             }
