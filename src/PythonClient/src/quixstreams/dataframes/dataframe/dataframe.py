@@ -1,5 +1,4 @@
 import uuid
-from copy import deepcopy
 from functools import partial
 from typing import Self, Optional, Callable, TypeAlias, Union, List, Mapping
 
@@ -15,18 +14,13 @@ __all__ = ("StreamingDataFrame",)
 
 
 def subset(keys: list[str], row: Row) -> Row:
-    new_row = deepcopy(row)
-    new_row.value = new_row[keys]
-    return new_row
+    row.value = row[keys]
+    return row
 
 
 def setitem(k: str, v: Union[Column, OpValue], row: Row) -> Row:
     row[k] = v.eval(row) if isinstance(v, Column) else v
     return row
-
-
-def column_filter(column: Column, row: Row) -> Optional[Row]:
-    return row if column.eval(row) else None
 
 
 class StreamingDataFrame:
@@ -53,7 +47,8 @@ class StreamingDataFrame:
         :param func: callable that accepts and (usually) returns a QuixStreams Row
         :return: self (StreamingDataFrame)
         """
-        return self._clone()._apply(func=func)
+        self._pipeline.apply(func)
+        return self
 
     def process(self, row: Row) -> Optional[Union[Row, list[Row]]]:
         """
@@ -96,15 +91,15 @@ class StreamingDataFrame:
         self._real_producer = producer
 
     def __setitem__(self, key: str, value: Union[Column, OpValue, str]):
-        self._apply(partial(setitem, key, value))
+        self.apply(partial(setitem, key, value))
 
     def __getitem__(
         self, item: Union[str, list[str], Column, Self]
     ) -> Union[Column, Self]:
         if isinstance(item, Column):
-            return self._apply(partial(column_filter, item))
+            return self.apply(lambda row: row if item.eval(row) else None)
         elif isinstance(item, list):
-            return self._apply(partial(subset, item))
+            return self.apply(partial(subset, item))
         elif isinstance(item, StreamingDataFrame):
             # TODO: Implement filtering based on another SDF
             raise ValueError(
@@ -112,12 +107,3 @@ class StreamingDataFrame:
             )
         else:
             return Column(col_name=item)
-
-    def _clone(self) -> Self:
-        return self.__class__(
-            topics=list(self._topics.values()), _pipeline=self._pipeline.clone()
-        )
-
-    def _apply(self, func: RowApplier):
-        self._pipeline.apply(func)
-        return self

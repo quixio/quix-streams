@@ -64,9 +64,11 @@ class Pipeline:
         Note that if `data` is a list, each function will be called with each element
         in that list rather than the list itself.
 
-        :param data: any object, noting rows
-        :return: Row, list of Rows, or None (if filtered)
+        :param data: any object, but usually a QuixStreams Row
+        :return: an object OR list of objects OR None (if filtered)
         """
+        # TODO: maybe have an arg that allows passing "blacklisted" result types
+        # or SDF inspects each result somehow?
         result = data
         for func in self.functions:
             if isinstance(result, list):
@@ -82,12 +84,3 @@ class Pipeline:
                 )
                 break
         return result
-
-    def clone(self) -> Self:
-        """
-        Creates a clone of this Pipeline, including its function set. A new id will be
-        generated for the clone.
-
-        :return: cloned Pipeline instance
-        """
-        return self.__class__(functions=self._functions[:])

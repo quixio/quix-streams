@@ -7,12 +7,6 @@ class TestPipeline:
     def test_pipeline(self, pipeline_function, pipeline):
         assert pipeline._functions == [pipeline_function]
 
-    def test_clone(self, pipeline):
-        clone = pipeline.clone()
-        assert clone.functions == pipeline.functions
-        assert id(pipeline) != id(clone)
-        assert pipeline.id != clone.id
-
     def test_apply(self, pipeline):
         def throwaway_func(data):
             return data

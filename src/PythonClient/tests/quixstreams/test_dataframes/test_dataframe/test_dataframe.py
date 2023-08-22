@@ -10,18 +10,6 @@ class TestDataframe:
         assert isinstance(dataframe._pipeline, Pipeline)
         assert dataframe._pipeline.id == dataframe.id
 
-    def test__clone(self, dataframe):
-        cloned_df = dataframe._clone()
-        assert id(cloned_df) != id(dataframe)
-        assert cloned_df._pipeline.id != dataframe._pipeline.id
-
-    def test_apply(self, dataframe):
-        def test_func(row):
-            return row
-
-        dataframe2 = dataframe.apply(test_func)
-        assert id(dataframe) != id(dataframe2)
-
 
 class TestDataframeProcess:
     def test_apply(self, dataframe, row_msg_value_factory, row_plus_n_func):
