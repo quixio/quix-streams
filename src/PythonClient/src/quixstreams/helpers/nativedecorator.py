@@ -15,6 +15,7 @@ def nativedecorator(cls):
 
     def new_init(self, *args, **kwargs):
         self._nativedecorator_finalized = False
+        self._nativedecorator_disposed = False
         orig_init(self, *args, **kwargs)
 
     def new_finalizerfunc(self):
