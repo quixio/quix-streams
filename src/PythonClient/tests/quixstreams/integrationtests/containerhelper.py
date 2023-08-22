@@ -12,7 +12,7 @@ class ContainerHelper:
     @staticmethod
     def create_kafka_container() -> Tuple[DockerContainer, str, int, int]:
         """
-        Returns (kafka container, broker list, kafka port, zookeper port) tuple
+        Returns (kafka container, broker list, kafka port, zookeeper port) tuple
         """
         kafka_address = "127.0.0.1"
         zookeeper_port = random.randint(12000, 15000)

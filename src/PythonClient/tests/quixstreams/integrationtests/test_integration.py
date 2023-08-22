@@ -1690,12 +1690,12 @@ class TestRawData(BaseIntegrationTest):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
 
-        received_messages: List[qx.RawMessage] = []
+        received_messages: List[qx.KafkaMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 
         def on_message_received_handler(topic: qx.RawTopicConsumer,
-                                        message: qx.RawMessage):
+                                        message: qx.KafkaMessage):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
@@ -1710,7 +1710,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         self.wait_for_result(event)
@@ -1734,12 +1734,12 @@ class TestRawData(BaseIntegrationTest):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
 
-        received_messages: List[qx.RawMessage] = []
+        received_messages: List[qx.KafkaMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 
         def on_message_received_handler(topic: qx.RawTopicConsumer,
-                                        message: qx.RawMessage):
+                                        message: qx.KafkaMessage):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
@@ -1754,7 +1754,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         raw_topic_producer.dispose()
@@ -1768,12 +1768,12 @@ class TestRawData(BaseIntegrationTest):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
 
-        received_messages: List[qx.RawMessage] = []
+        received_messages: List[qx.KafkaMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 
         def on_message_received_handler(topic: qx.RawTopicConsumer,
-                                        message: qx.RawMessage):
+                                        message: qx.KafkaMessage):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
@@ -1788,7 +1788,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         raw_topic_producer.flush()

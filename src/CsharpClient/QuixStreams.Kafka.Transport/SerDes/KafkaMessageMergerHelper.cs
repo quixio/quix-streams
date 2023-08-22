@@ -124,7 +124,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
                 messageHeaders.Add(new KafkaHeader(header.Key, header.Value));
             }
 
-            convertedMessage = new KafkaMessage(message.Key, msgData, messageHeaders, message.Timestamp, message.TopicPartitionOffset);
+            convertedMessage = new KafkaMessage(message.Key, msgData, messageHeaders.ToArray(), message.Timestamp, message.TopicPartitionOffset);
 
             return true;
         }
@@ -199,7 +199,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
                     .ToList();
             }
             
-            return new MergedKafkaMessage(sourceMessages, firstMessage.Key, msgBuffer, headers, firstMessage.TopicPartitionOffset);
+            return new MergedKafkaMessage(sourceMessages, firstMessage.Key, msgBuffer, headers?.ToArray(), firstMessage.TopicPartitionOffset);
         }
     }
     

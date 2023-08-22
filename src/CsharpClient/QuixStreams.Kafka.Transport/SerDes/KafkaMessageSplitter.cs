@@ -119,7 +119,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
                     messageHeaders.Add(new KafkaHeader(header.Key, header.Value));
                 }
 
-                var segmentMessage = new KafkaMessage(message.Key, segment, messageHeaders);
+                var segmentMessage = new KafkaMessage(message.Key, segment, messageHeaders.ToArray());
                 yield return segmentMessage;
                 start = end;
             }

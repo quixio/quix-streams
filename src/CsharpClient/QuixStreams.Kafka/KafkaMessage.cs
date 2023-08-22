@@ -23,7 +23,7 @@ namespace QuixStreams.Kafka
         /// <summary>
         /// The headers of the message. Can be null.
         /// </summary>
-        public ICollection<KafkaHeader> Headers { get; protected set; }
+        public KafkaHeader[] Headers { get; protected set; }
 
         /// <summary>
         /// Kafka headers
@@ -58,7 +58,7 @@ namespace QuixStreams.Kafka
         /// <param name="headers">The headers of the message. Specify null for no </param>
         /// <param name="messageTime">The optional message time. Defaults to utc now</param>
         /// <param name="topicPartitionOffset">The topic and partition with the specified offset this message is representing</param>
-        public KafkaMessage(byte[] key, byte[] value, ICollection<KafkaHeader> headers = null, Timestamp? messageTime = null, TopicPartitionOffset topicPartitionOffset = null)
+        public KafkaMessage(byte[] key, byte[] value, KafkaHeader[] headers = null, Timestamp? messageTime = null, TopicPartitionOffset topicPartitionOffset = null)
         {
             Key = key;
             MessageSize += key?.Length ?? 0;
@@ -76,7 +76,10 @@ namespace QuixStreams.Kafka
                 }
 
                 MessageSize += HeaderSize;
+            } else {
+                Headers = Array.Empty<KafkaHeader>();
             }
+            
 
             Timestamp = messageTime ?? Timestamp.Default;
 
@@ -93,16 +96,21 @@ namespace QuixStreams.Kafka
             KafkaHeaders = consumeResult.Message.Headers;
             if (KafkaHeaders != null)
             {
-                Headers = new List<KafkaHeader>();
-                foreach (var kvp in KafkaHeaders)
+                Headers = new KafkaHeader[KafkaHeaders.Count];
+                for (var index = 0; index < KafkaHeaders.Count; index++)
                 {
+                    var kvp = KafkaHeaders[index];
                     var kvpValue = kvp.GetValueBytes();
-                    Headers.Add(new KafkaHeader(kvp.Key, kvpValue));
+                    Headers[index] = new KafkaHeader(kvp.Key, kvpValue);
                     HeaderSize += kvp.Key.Length * 4; // UTF-8 chars are between 1-4 bytes, so worst case assumed
                     HeaderSize += kvpValue.Length;
                 }
 
                 MessageSize += HeaderSize;
+            }
+            else
+            {
+                Headers = Array.Empty<KafkaHeader>();
             }
             
             this.TopicPartitionOffset = consumeResult.TopicPartitionOffset;
@@ -129,6 +137,9 @@ namespace QuixStreams.Kafka
         }
     }
 
+    /// <summary>
+    /// Header representing a key-value pair
+    /// </summary>
     public class KafkaHeader
     {
         /// <summary>

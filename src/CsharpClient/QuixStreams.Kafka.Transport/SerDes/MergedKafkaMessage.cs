@@ -18,7 +18,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
         /// <param name="value">The value of the message.</param>
         /// <param name="headers">The headers of the message. Specify null for no </param>
         /// <param name="topicPartitionOffset">The partition and offset to use for the merged message</param>
-        public MergedKafkaMessage(ICollection<KafkaMessage> segments, byte[] key, byte[] value, ICollection<KafkaHeader> headers, TopicPartitionOffset topicPartitionOffset) : base(key, value, headers)
+        public MergedKafkaMessage(ICollection<KafkaMessage> segments, byte[] key, byte[] value, KafkaHeader[] headers, TopicPartitionOffset topicPartitionOffset) : base(key, value, headers)
         {
             this.TopicPartitionOffset = topicPartitionOffset;
             this.MessageSegments = segments;

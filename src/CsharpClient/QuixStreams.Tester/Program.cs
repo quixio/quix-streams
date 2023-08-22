@@ -80,7 +80,7 @@ namespace QuixStreams.Tester
                 });
             }
             
-            if (Configuration.ProducerConfig.Timeseries)
+            if (Configuration.ProducerConfig.Event)
             {
                 Task.Run(() =>
                 {

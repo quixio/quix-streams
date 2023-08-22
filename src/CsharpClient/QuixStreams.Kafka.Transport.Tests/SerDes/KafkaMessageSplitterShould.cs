@@ -169,7 +169,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             random.NextBytes(data);
             var key = new byte[5];
             random.NextBytes(key);
-            var header = new List<KafkaHeader>() { new KafkaHeader("test", new byte[4])};
+            var header = new [] { new KafkaHeader("test", new byte[4])};
             var message = new KafkaMessage(key, data, header);
 
             // Act
