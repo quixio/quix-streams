@@ -4,7 +4,7 @@ from functools import partial
 from typing import Self, Optional, Callable, TypeAlias, Union, List, Mapping
 
 from .column import Column, OpValue
-from .pipeline import Pipeline, get_func_name
+from .pipeline import Pipeline
 from ..models import Row, Topic
 from ..rowconsumer import RowConsumerProto
 from ..rowproducer import RowProducerProto
@@ -29,13 +29,12 @@ def column_filter(column: Column, row: Row) -> Optional[Row]:
     return row if column.eval(row) else None
 
 
-# TODO: make a pipeline merge function to avoid accessing private methods
 class StreamingDataFrame:
     def __init__(
-        self, topics: List[Topic], name: str = None, _pipeline: Pipeline = None
+        self, topics: List[Topic], _pipeline: Pipeline = None, _id: str = None
     ):
-        self.name = name or str(uuid.uuid4())
-        self._pipeline = _pipeline or Pipeline(name=self.name)
+        self._id = _id or str(uuid.uuid4())
+        self._pipeline = _pipeline or Pipeline(_id=self.id)
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
         if not topics:
@@ -46,15 +45,15 @@ class StreamingDataFrame:
         self, func: Callable[[Row], Optional[Union[Row, list[Row], None]]]
     ) -> Self:
         """
-        Add a function to the StreamingDataframe execution list.
-        The provided function should accept a Quixstreams Row as its input.
-        The provided function should operate on and return the same input Row, or None
+        Add a callable to the StreamingDataframe execution list.
+        The provided callable should accept a Quixstreams Row as its input.
+        The provided callable should operate on and return the same input Row, or None
         if its intended to be a "filtering" function.
 
         :param func: callable that accepts and (usually) returns a QuixStreams Row
         :return: self (StreamingDataFrame)
         """
-        return self._clone()._apply(func=func, func_name=f"apply:{get_func_name(func)}")
+        return self._clone()._apply(func=func)
 
     def process(self, row: Row) -> Optional[Union[Row, list[Row]]]:
         """
@@ -63,6 +62,10 @@ class StreamingDataFrame:
         :return: Row, list of Rows, or None (if filtered)
         """
         return self._pipeline.process(row)
+
+    @property
+    def id(self) -> str:
+        return self._id
 
     @property
     def topics(self) -> Mapping[str, Topic]:
@@ -115,6 +118,6 @@ class StreamingDataFrame:
             topics=list(self._topics.values()), _pipeline=self._pipeline.clone()
         )
 
-    def _apply(self, func: RowApplier, func_name=None):
-        self._pipeline.apply(func, func_name=func_name)
+    def _apply(self, func: RowApplier):
+        self._pipeline.apply(func)
         return self
