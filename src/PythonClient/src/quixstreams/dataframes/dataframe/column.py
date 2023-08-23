@@ -1,11 +1,7 @@
-import logging
 import operator
-import uuid
 from typing import Self, Optional, Any, Callable, TypeAlias, Union
 
 from ..models import Row
-
-logger = logging.getLogger(__name__)
 
 OpValue: TypeAlias = Union[int, float, bool]
 ColumnValue: TypeAlias = Union[int, float, bool, list, dict]
@@ -14,41 +10,42 @@ ColumnApplier: TypeAlias = Callable[[ColumnValue], OpValue]
 __all__ = ("Column", "OpValue", "ColumnValue", "ColumnApplier")
 
 
-# TODO: Docstrings
 class Column:
     def __init__(
         self,
         col_name: Optional[str] = None,
         _eval_func: Optional[ColumnApplier] = None,
-        _ops: str = None,
     ):
         self.col_name = col_name
-        self._id = str(uuid.uuid4())
-        self._ops = _ops
         self._eval_func = _eval_func if _eval_func else lambda row: row[self.col_name]
-        logger.debug(f"Created column {self._id}, ops={self.name}")
-
-    @property
-    def name(self) -> str:
-        return self.col_name or self._ops
 
     def _operation(self, other: Any, op: Callable[[OpValue, OpValue], OpValue]) -> Self:
-        other_name = other.name if isinstance(other, Column) else "to_column({other})"
         return Column(
-            _eval_func=lambda row: op(
-                self.eval(row), other.eval(row) if isinstance(other, Column) else other
+            _eval_func=lambda x: op(
+                self.eval(x), other.eval(x) if isinstance(other, Column) else other
             ),
-            _ops=f"{op.__name__}({self.name},{other_name})",
         )
 
     def eval(self, row: Row) -> ColumnValue:
+        """
+        Execute all the functions accumulated on this Column.
+
+        :param row: A Quixstreams Row
+        :return: A primitive type
+        """
         return self._eval_func(row)
 
     def apply(self, func: ColumnApplier) -> Self:
-        return Column(
-            _eval_func=lambda row: func(self.eval(row)),
-            _ops=f"apply:{func.__name__}({self.name})",
-        )
+        """
+        Add a callable to the execution list for this column.
+
+        The provided callable should accept a single argument, which will be its input.
+        The provided callable should similarly return one output, or None
+
+        :param func: a callable with one argument and one output
+        :return: a new Column with the new callable added
+        """
+        return Column(_eval_func=lambda x: func(self.eval(x)))
 
     def __and__(self, other):
         return self._operation(other, operator.and_)
