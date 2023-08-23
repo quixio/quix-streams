@@ -2,6 +2,7 @@ import ctypes
 from typing import Union, List
 
 from .kafkaheader import KafkaHeader
+from .kafkatimestamp import KafkaTimestamp
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
 
@@ -18,6 +19,7 @@ class KafkaMessage(object):
                  key: Union[bytes, bytearray] = None,
                  value: Union[bytes, bytearray] = None,
                  headers: List[KafkaHeader] = None,
+                 timestamp: KafkaTimestamp = None,
                  **kwargs):
         """
         Initializes a new instance of KafkaMessage.
@@ -30,6 +32,7 @@ class KafkaMessage(object):
 
         self._value = None
         self._key = None
+        self._timestamp = None
         self._headers = None
 
         if kwargs is not None and "net_pointer" in kwargs:
@@ -61,13 +64,18 @@ class KafkaMessage(object):
 
             self._headers = headers
 
-        messagetime_ptr = None
+        timestamp_ptr = None
+        if timestamp is not None:
+            if not isinstance(timestamp, KafkaTimestamp):
+                raise TypeError(f"Parameter 'timestamp' has incorrect type '{type(timestamp)}'. Must be KafkaTimestamp.")
+
+            timestamp_ptr = timestamp.get_net_pointer()
+            self._timestamp = timestamp
+
         partition_offset_ptr = None
 
-        net_pointer = kmi.Constructor(key_uptr, value_uptr, headers_ptr, messagetime_ptr, partition_offset_ptr)
+        net_pointer = kmi.Constructor(key_uptr, value_uptr, headers_ptr, timestamp_ptr, partition_offset_ptr)
         self._interop = kmi(net_pointer)
-
-
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         """
@@ -94,7 +102,7 @@ class KafkaMessage(object):
         return self._key
 
     @property
-    def value(self):
+    def value(self) -> bytes:
         """
         Gets the message value (bytes content of the message).
 
@@ -106,6 +114,20 @@ class KafkaMessage(object):
             self._value = ai.ReadBytes(val_uptr)
 
         return self._value
+
+    @property
+    def timestamp(self) -> KafkaTimestamp:
+        """
+        Gets the message timestamp.
+
+        Returns:
+            KafkaTimestamp: The message timestamp
+        """
+        if self._timestamp is None:
+            ts_ptr = self._interop.get_Timestamp()
+            self._timestamp = KafkaTimestamp(net_pointer=ts_ptr)
+
+        return self._timestamp
 
     @property
     def headers(self) -> [KafkaHeader]:

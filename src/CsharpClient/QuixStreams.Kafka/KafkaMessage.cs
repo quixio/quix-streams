@@ -56,9 +56,9 @@ namespace QuixStreams.Kafka
         /// <param name="key">The message key. Specify null for no key.</param>
         /// <param name="value">The value of the message.</param>
         /// <param name="headers">The headers of the message. Specify null for no </param>
-        /// <param name="messageTime">The optional message time. Defaults to utc now</param>
+        /// <param name="timestamp">The optional message time. Defaults to utc now</param>
         /// <param name="topicPartitionOffset">The topic and partition with the specified offset this message is representing</param>
-        public KafkaMessage(byte[] key, byte[] value, KafkaHeader[] headers = null, Timestamp? messageTime = null, TopicPartitionOffset topicPartitionOffset = null)
+        public KafkaMessage(byte[] key, byte[] value, KafkaHeader[] headers = null, Timestamp? timestamp = null, TopicPartitionOffset topicPartitionOffset = null)
         {
             Key = key;
             MessageSize += key?.Length ?? 0;
@@ -81,7 +81,7 @@ namespace QuixStreams.Kafka
             }
             
 
-            Timestamp = messageTime ?? Timestamp.Default;
+            Timestamp = timestamp ?? Timestamp.Default;
 
             TopicPartitionOffset = topicPartitionOffset;
         }
