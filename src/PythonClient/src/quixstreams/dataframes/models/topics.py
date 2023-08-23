@@ -11,7 +11,7 @@ from .serializers import (
     SerializerIsNotProvidedError,
     BytesSerializer,
     BytesDeserializer,
-    IgnoreValueError,
+    IgnoreMessage,
 )
 from .timestamps import MessageTimestamp
 from .types import (
@@ -119,7 +119,7 @@ class Topic:
 
         try:
             value = self._value_deserializer(value=message.value(), ctx=ctx)
-        except IgnoreValueError:
+        except IgnoreMessage:
             # Ignore message completely if the deserializer raised IgnoreValueError.
             logger.debug(
                 "Ignore incoming message",

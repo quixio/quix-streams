@@ -1,18 +1,17 @@
-import asyncio
-import concurrent.futures
 import logging
 from typing import List, Dict, Literal, Tuple
-from typing import Union, Optional, Callable
+from typing import Union, Optional
 
-from confluent_kafka import KafkaException, Producer, KafkaError, Message
-
-from .exceptions import AsyncProducerNotStartedError
-
-__all__ = (
-    "AsyncProducer",
-    "Partitioner",
+from confluent_kafka import (
+    Producer as ConfluentProducer,
+    KafkaError,
+    Message,
 )
 
+__all__ = (
+    "Producer",
+    "Partitioner",
+)
 
 Partitioner = Literal[
     "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
@@ -24,7 +23,7 @@ Headers = Union[
 ]
 
 logger = logging.getLogger(__name__)
-confluent_logger = logging.getLogger("confluent_kafka.producer")
+confluent_logger = logging.getLogger(__name__)
 
 
 def _default_error_cb(error: KafkaError):
@@ -34,34 +33,55 @@ def _default_error_cb(error: KafkaError):
     )
 
 
-class AsyncProducer:
-    """
-    Asyncio-friendly wrapper around `confluent_kafka.Producer`.
-    It replicates the same interface and delegates all IO operations to threads.
+def _on_delivery_cb(err: Optional[KafkaError], msg: Message):
+    if err is not None:
+        logger.error(
+            "Failed to deliver a message",
+            extra={
+                "key": msg.key(),
+                "topic": msg.topic(),
+                "partition": msg.partition(),
+                "error_code": err.code(),
+                "error_desc": err.str(),
+            },
+        )
+    else:
+        logger.debug(
+            "Successfully delivered a message",
+            extra={
+                "key": msg.key(),
+                "topic": msg.topic(),
+                "partition": msg.partition(),
+            },
+        )
 
-    AsyncProducer maintains one background thread to make `poll()` calls
-    and receive `on_delivery()` callbacks.
 
-    :param broker_address: Kafka broker address.
-    :param partitioner: A function to be used to determine the outgoing message
-        partition. Default - 'murmur2'.
-        See `Partitioner` type for available options.
-    :param loop: the instance of `asyncio.AbstractEventLoop` that will be used
-        to schedule callbacks from threads.
-        Default - the result of `asyncio.get_event_loop()`.
-    :param extra_config: The dictionary with additional params for the underlying
-        `confluent_kafka.Producer`. The values of the dictionary don't override
-        the values passed in named parameters.
-    """
-
+class Producer:
     def __init__(
         self,
         broker_address: str,
         partitioner: Partitioner = "murmur2",
         extra_config: dict = None,
-        loop=None,
-        poll_timeout: float = 0.1,
     ):
+        """
+        A wrapper around `confluent_kafka.Producer`.
+
+        It initializes `confluent_kafka.Producer` on demand
+        avoiding network calls during `__init__`, provides typing info for methods
+        and some reasonable defaults.
+
+        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
+            Passed as `bootstrap.servers` to `confluent_kafka.Producer`.
+        :param partitioner: A function to be used to determine the outgoing message
+            partition.
+            Available values: "random", "consistent_random", "murmur2", "murmur2_random",
+            "fnv1a", "fnv1a_random"
+            Default - "murmur2".
+
+        :param extra_config: A dictionary with additional options that
+            will be passed to `confluent_kafka.Producer` as is.
+            Note: values passed as arguments override values in `extra_config`.
+        """
         config = dict(
             **extra_config or {},
             **{
@@ -72,14 +92,9 @@ class AsyncProducer:
             },
         )
         self._producer_config = config
-        self._loop = loop or asyncio.get_event_loop()
-        self._running = False
-        self._sync_producer: Optional[Producer] = None
-        self._poll_executor = concurrent.futures.ThreadPoolExecutor(1)
-        self._poll_timeout = poll_timeout
-        self._poll_task: Optional[asyncio.Task] = None
+        self._inner_producer: Optional[ConfluentProducer] = None
 
-    async def produce(
+    def produce(
         self,
         topic: str,
         value: Union[str, bytes],
@@ -87,95 +102,81 @@ class AsyncProducer:
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
-        blocking: bool = False,
+        flush_timeout: float = 5.0,
+        buffer_error_max_tries: int = 3,
     ):
-        delivery = self._loop.create_future()
+        """
+        Produce message to topic.
+        It also polls Kafka for callbacks before producing in order to minimize
+        the probability of `BufferError`.
+        If `BufferError` happens, the method will flush the buffer
+        and try again (max 3 tries).
 
-        def on_delivery(err: Optional[KafkaError], msg: Message):
-            if err is not None:
-                logger.error(
-                    "Failed to deliver a message",
-                    extra={
-                        "key": msg.key(),
-                        "topic": msg.topic(),
-                        "partition": msg.partition(),
-                        "error_code": err.code(),
-                        "error_desc": err.str(),
-                    },
-                )
-                self._loop.call_soon_threadsafe(
-                    delivery.set_exception, KafkaException(err)
-                )
-            else:
-                logger.debug(
-                    "Successfully delivered a message",
-                    extra={
-                        "key": msg.key(),
-                        "topic": msg.topic(),
-                        "partition": msg.partition(),
-                    },
-                )
-                self._loop.call_soon_threadsafe(delivery.set_result, msg)
+        :param topic: topic name
+        :param value: message value
+        :param key: message key
+        :param headers: message headers
+        :param partition: topic partition
+        :param timestamp: message timestamp
+        :param flush_timeout: timeout for `flush()` call in case of `BufferError`
+        :param buffer_error_max_tries: max retries for `BufferError`.
+            Pass `0` to not retry after `BufferError`.
+
+        """
 
         kwargs = {
-            "on_delivery": on_delivery,
+            "on_delivery": _on_delivery_cb,
             "partition": partition,
             "timestamp": timestamp,
             "headers": headers,
         }
         # confluent_kafka doesn't like None for optional parameters
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        self._producer.produce(topic, value, key, **kwargs)
 
-        if blocking:
-            await delivery
+        # Retry BufferError automatically 3 times before failing
+        tried = 0
+        while True:
+            try:
+                tried += 1
+                # Serve delivery callbacks before each produce to minimize a chance of
+                # BufferError
+                self._producer.poll(0)
+                self._producer.produce(topic, value, key, **kwargs)
+                return
+            except BufferError:
+                if buffer_error_max_tries < 1 or tried == buffer_error_max_tries:
+                    raise
+                # The librdkafka buffer is full. Flush it and try again
+                self._producer.flush(timeout=flush_timeout)
 
-    async def poll(self, timeout: float = None):
-        return await self._run_poll_executor(self._producer.poll, timeout)
+    def poll(self, timeout: float = None):
+        """
+        Polls the producer for events and calls `on_delivery` callbacks.
+        :param timeout: poll timeout seconds
+        """
+        return self._producer.poll(timeout)
 
-    async def flush(self, timeout: float = None) -> int:
+    def flush(self, timeout: float = None) -> int:
+        """
+        Wait for all messages in the Producer queue to be delivered.
+
+        :param timeout: timeout is seconds
+        :return: number of messages delivered
+        """
         args_ = [arg for arg in (timeout,) if arg is not None]
-        return await self._run_poll_executor(self._producer.flush, *args_)
-
-    async def start(self):
-        # Create producer
-        self._sync_producer = await self._create_producer()
-        # Start polling to receive on_delivery callbacks
-        self._running = True
-        self._poll_task = asyncio.create_task(self._poll_forever())
-
-    async def close(self):
-        # Flush the messages to Kafka and handle delivery callbacks
-        await self.flush()
-        # Stop the poll loop
-        self._running = False
-        await self._poll_task
+        return self._producer.flush(*args_)
 
     @property
-    def _producer(self) -> Producer:
-        if not self._sync_producer:
-            raise AsyncProducerNotStartedError("Producer is not started yet")
-        return self._sync_producer
+    def _producer(self) -> ConfluentProducer:
+        if not self._inner_producer:
+            self._inner_producer = ConfluentProducer(self._producer_config)
+        return self._inner_producer
 
     def __len__(self):
         return len(self._producer)
 
-    async def _create_producer(self) -> Producer:
-        producer = await self._run_poll_executor(Producer, self._producer_config)
-        return producer
-
-    async def _poll_forever(self):
-        while self._running:
-            await self.poll(timeout=self._poll_timeout)
-
-    async def _run_poll_executor(self, func: Callable, *args):
-        return await self._loop.run_in_executor(self._poll_executor, func, *args)
-
-    async def __aenter__(self):
-        await self.start()
+    def __enter__(self):
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
-        # Stop the thread pool. Warning: blocking call
-        self._poll_executor.shutdown()
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.flush()
