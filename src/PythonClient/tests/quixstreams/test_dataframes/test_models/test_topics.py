@@ -16,7 +16,7 @@ from src.quixstreams.dataframes.models.serializers import (
     BytesDeserializer,
     SerializationContext,
     DeserializerIsNotProvidedError,
-    IgnoreValueError,
+    IgnoreMessage,
     SerializationError,
 )
 from src.quixstreams.dataframes.models.types import MessageKey, MessageHeaders
@@ -32,7 +32,7 @@ class IgnoreDivisibleBy3Deserializer(IntegerDeserializer):
     def __call__(self, value: bytes, ctx: SerializationContext):
         deserialized = self._deserializer(value=value)
         if not deserialized % 3:
-            raise IgnoreValueError("Ignore numbers divisible by 3")
+            raise IgnoreMessage("Ignore numbers divisible by 3")
         if self.column_name:
             return {self.column_name: deserialized}
         return deserialized

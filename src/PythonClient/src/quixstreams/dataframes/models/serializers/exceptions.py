@@ -16,7 +16,7 @@ __all__ = (
     "ValueDeserializationError",
     "SerializerIsNotProvidedError",
     "DeserializerIsNotProvidedError",
-    "IgnoreValueError",
+    "IgnoreMessage",
 )
 
 
@@ -48,7 +48,7 @@ class DeserializerIsNotProvidedError(exceptions.QuixException):
     ...
 
 
-class IgnoreValueError(exceptions.QuixException):
+class IgnoreMessage(exceptions.QuixException):
     """
     Raise this exception from Deserializer.__call__ in order to ignore the processing
     of the particular message.

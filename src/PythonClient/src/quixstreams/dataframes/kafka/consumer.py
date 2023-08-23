@@ -1,29 +1,29 @@
-import asyncio
-import concurrent.futures
 import functools
 import logging
-import threading
-import time
 import typing
 from typing import List, Optional, Callable, Tuple
 
-from confluent_kafka import TopicPartition, Message, Consumer, KafkaError
+from confluent_kafka import (
+    TopicPartition,
+    Message,
+    Consumer as ConfluentConsumer,
+    KafkaError,
+)
 from confluent_kafka.admin import ClusterMetadata
 
-from .exceptions import AsyncConsumerNotStartedError
-
 __all__ = (
-    "AsyncConsumer",
+    "Consumer",
     "AutoOffsetReset",
     "AssignmentStrategy",
+    "RebalancingCallback",
 )
 
-TopicCallback = Callable[[Consumer, List[TopicPartition]], None]
-AutoOffsetReset = typing.Literal["earliest", "latest"]
+RebalancingCallback = Callable[[ConfluentConsumer, List[TopicPartition]], None]
+OnCommitCallback = Callable[[Optional[KafkaError], List[TopicPartition]], None]
+AutoOffsetReset = typing.Literal["earliest", "latest", "error"]
 AssignmentStrategy = typing.Literal["range", "roundrobin", "cooperative-sticky"]
 
 logger = logging.getLogger(__name__)
-confluent_logger = logging.getLogger("confluent_kafka.consumer")
 
 
 def _default_error_cb(error: KafkaError):
@@ -33,45 +33,58 @@ def _default_error_cb(error: KafkaError):
     )
 
 
-class AsyncConsumer:
-    """
-        Asyncio-friendly wrapper around `confluent_kafka.Consumer`.
-        It replicates the same interface and delegates all IO operations to threads.
+def _default_on_commit_cb(
+    error: Optional[KafkaError],
+    partitions: List[TopicPartition],
+    on_commit: Optional[OnCommitCallback] = None,
+):
+    if error is not None:
+        logger.error(
+            "Kafka commit error",
+            extra={"error_code": error.code(), "error_desc": error.str()},
+        )
+    if on_commit is not None:
+        on_commit(error, partitions)
 
-        AsyncConsumer maintains 2 background threads:
-        - "poll" thread which is used only for `poll()`, `poll_many()` and `close()`.
-        - "common" thread which is used for all other IO-related operations.
 
-        :param broker_address: Kafka broker address.
-        :param consumer_group: The consumer group ID to use for consuming messages.
-        :param auto_offset_reset: The offset to use when there is no saved offset for
-            the consumer group. Default - 'latest'.
-        :param auto_commit_enable: Whether to use the default `confluent_kafka`
-             autocommit behavior. Default - True.
-        :param assignment_strategy: The partition assignment strategy for this consumer.
-             Default - "range".
-    -        on_commit: The callback that will be triggered on each automatic commit
-        :param on_commit: The callback that will be triggered on each automatic commit
-             by underlying consumer. Invoked only if `auto_commit_enable` is `True`.
-        :param loop: the instance of `asyncio.AbstractEventLoop` that will be used
-            to schedule callbacks from threads.
-            Default - the result of `asyncio.get_event_loop()`.
-        :param extra_config: The dictionary with additional params for the underlying
-            `confluent_kafka.Consumer`. The values of the dictionary don't override
-            the values passed in named parameters.
-    """
-
+class Consumer:
     def __init__(
         self,
         broker_address: str,
-        consumer_group: str,
+        consumer_group: Optional[str],
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
         assignment_strategy: AssignmentStrategy = "range",
         on_commit: Callable[[Optional[KafkaError], List[TopicPartition]], None] = None,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
         extra_config: Optional[dict] = None,
     ):
+        """
+        A wrapper around `confluent_kafka.Consumer`.
+
+        It initializes `confluent_kafka.Consumer` on demand
+        avoiding network calls during `__init__`, provides typing info for methods
+        and some reasonable defaults.
+
+        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
+            Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+        :param consumer_group: Kafka consumer group.
+            Passed as `group.id` to `confluent_kafka.Consumer`
+        :param auto_offset_reset: Consumer `auto.offset.reset` setting.
+            Available values:
+              - "earliest" - automatically reset the offset to the smallest offset
+              - "latest" - automatically reset the offset to the largest offset
+              - "error" - trigger an error (ERR__AUTO_OFFSET_RESET) which is retrieved
+                by consuming messages (used for testing)
+        :param auto_commit_enable: If true, periodically commit offset of
+            the last message handed to the application. Default - `True`.
+        :param assignment_strategy: The name of a partition assignment strategy.
+            Available values: "range", "roundrobin", "cooperative-sticky".
+        :param on_commit: Offset commit result propagation callback.
+            Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
+        :param extra_config: A dictionary with additional options that
+            will be passed to `confluent_kafka.Consumer` as is.
+            Note: values passed as arguments override values in `extra_config`.
+        """
         self._consumer_config = dict(
             **extra_config or {},
             **{
@@ -83,25 +96,16 @@ class AsyncConsumer:
                 # Always store offsets manually to avoid committing messages
                 # before they're processed
                 "enable.auto.offset.store": False,
-                "logger": confluent_logger,
+                "logger": logger,
                 "error_cb": _default_error_cb,
+                "on_commit": functools.partial(
+                    _default_on_commit_cb, on_commit=on_commit
+                ),
             },
         )
-        if on_commit is not None:
-            self._consumer_config["on_commit"] = on_commit
+        self._inner_consumer: Optional[ConfluentConsumer] = None
 
-        self._sync_consumer: Optional[Consumer] = None
-        self._poll_executor = concurrent.futures.ThreadPoolExecutor(
-            1, thread_name_prefix="consumer-poll"
-        )
-        self._common_executor = concurrent.futures.ThreadPoolExecutor(
-            1, thread_name_prefix="consumer-common"
-        )
-        self._loop = loop or asyncio.get_event_loop()
-        self._running = False
-        self._callback_lock = threading.Lock()
-
-    async def poll(self, timeout: float = None) -> Optional[Message]:
+    def poll(self, timeout: float = None) -> Optional[Message]:
         """
         Consumes a single message, calls callbacks and returns events.
 
@@ -118,33 +122,14 @@ class AsyncConsumer:
         :raises: RuntimeError if called on a closed consumer
         """
         args = [timeout] if timeout is not None else []
+        return self._consumer.poll(*args)
 
-        return await self._run_poll_executor(self._consumer.poll, *args)
-
-    async def poll_many(
-        self, timeout: float, batch_size: int = 100, poll_timeout: float = 1.0
-    ) -> List[Message]:
-        """
-        Call `.poll()` multiple times in a single thread and accumulate the results
-        in a batch to save time on calls between threads.
-
-        Note: It can return fewer than `batch_size` if timeout happens first.
-
-        :param timeout: timeout to wait before returning the batch
-        :param poll_timeout: timeout of individual `.poll()` call.
-        :param batch_size: the size of a batch.
-        :returns: A list of `Message` (can be empty).
-        """
-        return await self._run_poll_executor(
-            self._poll_many, timeout, batch_size, poll_timeout
-        )
-
-    async def subscribe(
+    def subscribe(
         self,
         topics: List[str],
-        on_assign: Optional[TopicCallback] = None,
-        on_revoke: Optional[TopicCallback] = None,
-        on_lost: Optional[TopicCallback] = None,
+        on_assign: Optional[RebalancingCallback] = None,
+        on_revoke: Optional[RebalancingCallback] = None,
+        on_lost: Optional[RebalancingCallback] = None,
     ):
         """
         Set subscription to supplied list of topics
@@ -164,10 +149,6 @@ class AsyncConsumer:
         :raises KafkaException:
         :raises: RuntimeError if called on a closed consumer
 
-        Note: Each callback is thread-safe and is called in a thread where
-            `.poll()` is called. Underlying `confluent_kafka.Consumer` always receives
-            callbacks which by default log the received partitions.
-
           .. py:function:: on_assign(consumer, partitions)
           .. py:function:: on_revoke(consumer, partitions)
           .. py:function:: on_lost(consumer, partitions)
@@ -184,8 +165,7 @@ class AsyncConsumer:
                     extra={"topic": partition.topic, "partition": partition.partition},
                 )
             if on_assign is not None:
-                with self._callback_lock:
-                    on_assign(consumer, partitions)
+                on_assign(consumer, partitions)
 
         def _on_revoke_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
             for partition in partitions:
@@ -194,8 +174,7 @@ class AsyncConsumer:
                     extra={"topic": partition.topic, "partition": partition.partition},
                 )
             if on_revoke is not None:
-                with self._callback_lock:
-                    on_revoke(consumer, partitions)
+                on_revoke(consumer, partitions)
 
         def _on_lost_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
             for partition in partitions:
@@ -204,27 +183,22 @@ class AsyncConsumer:
                     extra={"topic": partition.topic, "partition": partition.partition},
                 )
             if on_lost is not None:
-                with self._callback_lock:
-                    on_lost(consumer, partitions)
+                on_lost(consumer, partitions)
 
-        return await self._run_common_executor(
-            functools.partial(
-                self._consumer.subscribe,
-                topics=topics,
-                on_assign=_on_assign_wrapper,
-                on_revoke=_on_revoke_wrapper,
-                on_lost=_on_lost_wrapper,
-            )
+        return self._consumer.subscribe(
+            topics=topics,
+            on_assign=_on_assign_wrapper,
+            on_revoke=_on_revoke_wrapper,
+            on_lost=_on_lost_wrapper,
         )
 
-    async def unsubscribe(self):  # real signature unknown
+    def unsubscribe(self):
         """
         Remove current subscription.
-
           :raises: KafkaException
           :raises: RuntimeError if called on a closed consumer
         """
-        return await self._run_common_executor(self._consumer.unsubscribe)
+        return self._consumer.unsubscribe()
 
     def store_offsets(
         self,
@@ -260,7 +234,7 @@ class AsyncConsumer:
         else:
             return self._consumer.store_offsets(offsets=offsets)
 
-    async def commit(
+    def commit(
         self,
         message: Message = None,
         offsets: List[TopicPartition] = None,
@@ -300,14 +274,9 @@ class AsyncConsumer:
             kwargs["offsets"] = offsets
         if message is not None:
             kwargs["message"] = message
-        func = functools.partial(self._consumer.commit, **kwargs)
+        return self._consumer.commit(**kwargs)
 
-        if asynchronous:
-            return func()
-        else:
-            return await self._run_common_executor(func)
-
-    async def committed(
+    def committed(
         self, partitions: List[TopicPartition], timeout: float = None
     ) -> List[TopicPartition]:
         """
@@ -325,10 +294,9 @@ class AsyncConsumer:
         kwargs = {"partitions": partitions}
         if timeout is not None:
             kwargs["timeout"] = timeout
-        func = functools.partial(self._consumer.committed, **kwargs)
-        return await self._run_common_executor(func)
+        return self._consumer.committed(**kwargs)
 
-    async def get_watermark_offsets(
+    def get_watermark_offsets(
         self,
         partition: TopicPartition,
         timeout: float = None,
@@ -352,10 +320,9 @@ class AsyncConsumer:
         kwargs = {"partition": partition, "cached": cached}
         if timeout is not None:
             kwargs["timeout"] = timeout
-        func = functools.partial(self._consumer.get_watermark_offsets, **kwargs)
-        return await self._run_common_executor(func)
+        return self._consumer.get_watermark_offsets(**kwargs)
 
-    async def list_topics(
+    def list_topics(
         self, topic: Optional[str] = None, timeout: float = -1
     ) -> ClusterMetadata:
         """
@@ -374,13 +341,10 @@ class AsyncConsumer:
          :rtype: ClusterMetadata
          :raises: KafkaException
         """
-        return await self._run_common_executor(
-            self._consumer.list_topics, topic, timeout
-        )
+        return self._consumer.list_topics(topic, timeout)
 
-    async def memberid(self) -> str:
+    def memberid(self) -> str:
         """
-
         Return this client's broker-assigned group member id.
 
         The member id is assigned by the group coordinator and is propagated to
@@ -390,9 +354,9 @@ class AsyncConsumer:
          :rtype: string
          :raises: RuntimeError if called on a closed consumer
         """
-        return await self._run_common_executor(self._consumer.memberid)
+        return self._consumer.memberid()
 
-    async def offsets_for_times(
+    def offsets_for_times(
         self, partitions: List[TopicPartition], timeout: float = None
     ) -> List[TopicPartition]:
         """
@@ -418,10 +382,9 @@ class AsyncConsumer:
         }
         if timeout is not None:
             kwargs["timeout"] = timeout
-        func = functools.partial(self._consumer.offsets_for_times, **kwargs)
-        return await self._run_common_executor(func)
+        return self._consumer.offsets_for_times(**kwargs)
 
-    async def pause(self, partitions: List[TopicPartition]):
+    def pause(self, partitions: List[TopicPartition]):
         """
         Pause consumption for the provided list of partitions.
 
@@ -429,12 +392,9 @@ class AsyncConsumer:
         :rtype: None
         :raises: KafkaException
         """
-        return await self._run_common_executor(
-            self._consumer.pause,
-            partitions,
-        )
+        return self._consumer.pause(partitions)
 
-    async def resume(self, partitions: List[TopicPartition]):
+    def resume(self, partitions: List[TopicPartition]):
         """
         .. py:function:: resume(partitions)
 
@@ -444,9 +404,9 @@ class AsyncConsumer:
           :rtype: None
           :raises: KafkaException
         """
-        return await self._run_common_executor(self._consumer.resume, partitions)
+        return self._consumer.resume(partitions)
 
-    async def position(self, partitions: List[TopicPartition]) -> List[TopicPartition]:
+    def position(self, partitions: List[TopicPartition]) -> List[TopicPartition]:
         """
         Retrieve current positions (offsets) for the specified partitions.
 
@@ -458,9 +418,9 @@ class AsyncConsumer:
         :raises: KafkaException
         :raises: RuntimeError if called on a closed consumer
         """
-        return await self._run_common_executor(self._consumer.position, partitions)
+        return self._consumer.position(partitions)
 
-    async def seek(self, partition: TopicPartition):
+    def seek(self, partition: TopicPartition):
         """
         Set consume position for partition to offset.
         The offset may be an absolute (>=0) or a
@@ -475,9 +435,9 @@ class AsyncConsumer:
 
         :raises: KafkaException
         """
-        return await self._run_common_executor(self._consumer.seek, partition)
+        return self._consumer.seek(partition)
 
-    async def assignment(
+    def assignment(
         self,
     ) -> List[TopicPartition]:
         """
@@ -488,9 +448,9 @@ class AsyncConsumer:
         :raises: KafkaException
         :raises: RuntimeError if called on a closed consumer
         """
-        return await self._run_common_executor(self._consumer.assignment)
+        return self._consumer.assignment()
 
-    async def set_sasl_credentials(self, username: str, password: str):
+    def set_sasl_credentials(self, username: str, password: str):
         """
 
         Sets the SASL credentials used for this client.
@@ -500,19 +460,9 @@ class AsyncConsumer:
         established with the old credentials.
         This method is applicable only to SASL PLAIN and SCRAM mechanisms.
         """
-        return await self._run_common_executor(
-            self._consumer.set_sasl_credentials, username, password
-        )
+        return self._consumer.set_sasl_credentials(username, password)
 
-    @property
-    def running(self) -> bool:
-        return self._running
-
-    async def start(self):
-        self._sync_consumer = await self._create_consumer()
-        self._running = True
-
-    async def close(self):
+    def close(self):
         """
         Close down and terminate the Kafka Consumer.
 
@@ -527,70 +477,21 @@ class AsyncConsumer:
 
         :rtype: None
         """
-        await self._run_poll_executor(self._consumer.close)
-
-    def _poll_many(
-        self, timeout: float, batch_size: int, poll_timeout: float
-    ) -> List[Message]:
-        """
-        Call `.poll()` in a loop until the batch is accumulated or the timeout exceeded.
-        The timeout is soft, so the actual time spent in this call may be more.
-        """
-        batch = []
-        start = time.monotonic()
-        # Poll for messages until we have a batch of required size or timeout exceeded
-        while self._running:
-            if len(batch) == batch_size or (time.monotonic() - start) >= timeout:
-                break
-
-            msg = self._consumer.poll(timeout=poll_timeout)
-            if msg is None:
-                continue
-            batch.append(msg)
-
-        return batch
-
-    async def _run_poll_executor(self, func: Callable, *args):
-        """
-        Run a synchronous function in the "poll" thread and return result.
-        :param func: a function object
-        :param args: positional arguments for the function
-        :return: whatever the function returns
-        """
-        return await self._loop.run_in_executor(self._poll_executor, func, *args)
-
-    async def _run_common_executor(self, func: Callable, *args):
-        """
-        Run a synchronous function in the "common" thread and return result.
-        :param func: a function object
-        :param args: positional arguments for the function
-        :return: whatever the function returns
-        """
-        return await self._loop.run_in_executor(self._common_executor, func, *args)
+        return self._consumer.close()
 
     @property
-    def _consumer(self) -> Consumer:
-        if not self._sync_consumer:
-            raise AsyncConsumerNotStartedError("Consumer is not started yet")
-        return self._sync_consumer
-
-    async def _create_consumer(self) -> Consumer:
+    def _consumer(self) -> ConfluentConsumer:
         """
-        Create an instance of `confluent_kafka.Consumer` in a thread and return it.
-        We need threads here because `Consumer` does IO on `__init__`.
-
-        :return: instance of `confluent_kafka.Consumer`
+        Initialize consumer on demand to avoid network calls on object __init__
+        :return: confluent_kafka.Consumer
         """
-        consumer = await self._run_common_executor(Consumer, self._consumer_config)
-        return consumer
+        if self._inner_consumer is None:
+            self._inner_consumer = ConfluentConsumer(self._consumer_config)
 
-    async def __aenter__(self):
-        await self.start()
+        return self._inner_consumer
+
+    def __enter__(self):
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self._running = False
-        await self.close()
-        # Close the threadpools. Warning: blocking call
-        self._poll_executor.shutdown(wait=True)
-        self._common_executor.shutdown(wait=True)
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
