@@ -25,7 +25,7 @@ class Array:
         :return: The converted array to the given type using the mapper
         """
         if array_uptr is None:
-              return None
+            return None
 
         try:
             # c_void_p type is not getting correctly set for the object but others are
@@ -65,7 +65,7 @@ class Array:
         """
 
         if blittables is None:
-              return None
+            return None
 
         blit_len = len(blittables)
         if blit_len == 0:
@@ -101,7 +101,7 @@ class Array:
         """
         Writes an array of any sets (any[][]) into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
-        if array_uptr is None:
+        if values is None:
             return None
 
         return Array.WriteBlittables(values, ctypes.c_void_p, valuemapper)
