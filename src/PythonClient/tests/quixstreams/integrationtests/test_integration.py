@@ -1738,7 +1738,7 @@ class TestRawData(BaseIntegrationTest):
         assert received_messages[4].headers[0].value == headers[0].value
         assert received_messages[4].headers[0].get_value_as_str() == headers[0].get_value_as_str()
 
-        tpo = received_messages[0].topic_partition_offset
+        tpo = received_messages[1].topic_partition_offset
         assert tpo is not None
         assert tpo.partition is not None
         assert tpo.topic is not None
@@ -1747,6 +1747,14 @@ class TestRawData(BaseIntegrationTest):
 
         assert tpo.topic_partition.partition == tpo.partition
         assert tpo.topic_partition.topic == tpo.topic
+        assert tpo.offset.value == 1
+        assert not tpo.offset.is_special
+        assert not tpo.partition.is_special
+
+        assert str(tpo) == "integrationtests.test_integration.TestRawData.test_raw_read_write [[0]] @1"
+        assert str(tpo.topic_partition) == "integrationtests.test_integration.TestRawData.test_raw_read_write [[0]]"
+        assert str(tpo.offset) == "1"
+        assert str(tpo.partition) == "[0]"
 
 
 

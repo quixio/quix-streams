@@ -3,6 +3,8 @@ from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.ConfluentKafka.TopicPartitionOffset import TopicPartitionOffset as tpoi
 from ..native.Python.ConfluentKafka.TopicPartition import TopicPartition as tpi
 from ..native.Python.ConfluentKafka.Partition import Partition as pi
+from ..native.Python.ConfluentKafka.Offset import Offset as oi
+
 
 
 @nativedecorator
@@ -20,7 +22,7 @@ class Offset(object):
 
         if kwargs is not None and "net_pointer" in kwargs:
             net_pointer = kwargs["net_pointer"]
-            self._interop = pi(net_pointer)
+            self._interop = oi(net_pointer)
             return
 
         raise TypeError(f"Offset does not support initialization")
@@ -48,6 +50,21 @@ class Offset(object):
 
         return self._value
 
+    @property
+    def is_special(self) -> bool:
+        return self.value == -1 or self.value == -2 or self.value == -1000 or self.value == -1011
+
+    def __str__(self):
+        if self.is_special:
+            if self.value == -1:
+                return "End [-1]"
+            elif self.value == -2:
+                return "Beginning [-2]"
+            elif self.value == -1000:
+                return "Stored [-1000]"
+            elif self.value == -1001:
+                return "Unset [-1001]"
+        return str(self.value)
 
 @nativedecorator
 class Partition(object):
@@ -92,6 +109,15 @@ class Partition(object):
 
         return self._value
 
+    @property
+    def is_special(self) -> bool:
+        return self.value == -1
+
+    def __str__(self):
+        if self.is_special:
+            return '[Any]'
+        return f'[{self.value}]'
+
 
 @nativedecorator
 class TopicPartition(object):
@@ -106,6 +132,7 @@ class TopicPartition(object):
 
         self._topic = None
         self._partition = None
+        self._as_string = None
 
         if kwargs is not None and "net_pointer" in kwargs:
             net_pointer = kwargs["net_pointer"]
@@ -145,9 +172,13 @@ class TopicPartition(object):
             bytes: The Kafka partition
         """
         if self._partition is None:
-            self._partition = self._interop.get_Partition()
+            self._partition = Partition(net_pointer=self._interop.get_Partition())
         return self._partition
 
+    def __str__(self):
+        if self._as_string is None:
+            self._as_string = self._interop.ToString()
+        return self._as_string
 
 @nativedecorator
 class TopicPartitionOffset(object):
@@ -163,6 +194,7 @@ class TopicPartitionOffset(object):
         self._topic = None
         self._topic_partition = None
         self._offset = None
+        self._as_string = None
 
         if kwargs is not None and "net_pointer" in kwargs:
             net_pointer = kwargs["net_pointer"]
@@ -226,3 +258,8 @@ class TopicPartitionOffset(object):
         if self._offset is None:
             self._offset = Offset(net_pointer=self._interop.get_Offset())
         return self._offset
+
+    def __str__(self):
+        if self._as_string is None:
+            self._as_string = self._interop.ToString()
+        return self._as_string
