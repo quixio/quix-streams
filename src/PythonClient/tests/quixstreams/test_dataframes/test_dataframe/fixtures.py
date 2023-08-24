@@ -5,23 +5,7 @@ import pytest
 
 from src.quixstreams.dataframes.dataframe.dataframe import StreamingDataFrame
 from src.quixstreams.dataframes.dataframe.pipeline import Pipeline, PipelineFunction
-from src.quixstreams.dataframes.models.rows import Row
-from src.quixstreams.dataframes.models.timestamps import MessageTimestamp, TimestampType
 from src.quixstreams.dataframes.models.topics import Topic
-
-
-@pytest.fixture()
-def row_msg_value_factory():
-    def _row_msg_value_factory(message_value):
-        return Row(
-            value=message_value,
-            topic='test_topic',
-            partition=0,
-            offset=0,
-            size=0,
-            timestamp=MessageTimestamp(1234567890, TimestampType(1))
-        )
-    return _row_msg_value_factory
 
 
 @pytest.fixture()

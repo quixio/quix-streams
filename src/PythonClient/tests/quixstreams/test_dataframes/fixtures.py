@@ -10,7 +10,12 @@ from src.quixstreams.dataframes.error_callbacks import (
     ProducerErrorCallback,
     ProcessingErrorCallback,
 )
-from src.quixstreams.dataframes.kafka import Partitioner, AutoOffsetReset
+from src.quixstreams.dataframes.kafka import (
+    Partitioner,
+    AutoOffsetReset,
+    Consumer,
+    Producer
+)
 from src.quixstreams.dataframes.models.rows import Row
 from src.quixstreams.dataframes.models.serializers import (
     JSONSerializer, JSONDeserializer
@@ -28,6 +33,58 @@ def kafka_admin_client(kafka_container) -> AdminClient:
 
 
 @pytest.fixture()
+def consumer_factory(kafka_container):
+    def factory(
+        broker_address: str = kafka_container.broker_address,
+        consumer_group: str = "tests",
+        auto_offset_reset: AutoOffsetReset = "latest",
+        auto_commit_enable: bool = True,
+        extra_config: dict = None,
+    ) -> Consumer:
+        extra_config = extra_config or {}
+
+        # Make consumers to refresh cluster metadata often
+        # to react on re-assignment changes faster
+        extra_config["topic.metadata.refresh.interval.ms"] = 3000
+
+        return Consumer(
+            broker_address=broker_address,
+            consumer_group=consumer_group,
+            auto_commit_enable=auto_commit_enable,
+            auto_offset_reset=auto_offset_reset,
+            extra_config=extra_config,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def consumer(consumer_factory) -> Consumer:
+    return consumer_factory()
+
+
+@pytest.fixture()
+def producer_factory(kafka_container):
+    def factory(
+        broker_address: str = kafka_container.broker_address,
+        extra_config: dict = None,
+    ) -> Producer:
+        extra_config = extra_config or {}
+
+        return Producer(
+            broker_address=broker_address,
+            extra_config=extra_config,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def producer(producer_factory) -> Producer:
+    return producer_factory()
+
+
+@pytest.fixture()
 def executor() -> ThreadPoolExecutor:
     executor = ThreadPoolExecutor(1)
     try:
@@ -39,20 +96,31 @@ def executor() -> ThreadPoolExecutor:
 
 @pytest.fixture()
 def topic_factory(kafka_admin_client):
+    """
+    For when you need to create a topic in Kafka.
+
+    The factory will return the resulting topic name and partition count
+    """
     def factory(
         topic: str = None, num_partitions: int = 1, timeout: float = 10.0
     ) -> (str, int):
-        topic = topic or str(uuid.uuid4())
+        topic_name = topic or str(uuid.uuid4())
         futures = kafka_admin_client.create_topics(
-            [NewTopic(topic=topic, num_partitions=num_partitions)]
+            [NewTopic(topic=topic_name, num_partitions=num_partitions)]
         )
-        futures[topic].result(timeout)
-        return topic, num_partitions
+        futures[topic_name].result(timeout)
+        return topic_name, num_partitions
     return factory
 
 
 @pytest.fixture()
 def topic_json_serdes_factory(topic_factory):
+    """
+    For when you need to create a topic in Kafka and want a `Topic` object afterward.
+    Additionally, uses JSON serdes for message values by default.
+
+    The factory will return the resulting Topic object.
+    """
     def factory(topic: str = None, num_partitions: int = 1, timeout: float = 10.0):
         topic_name, _ = topic_factory(
             topic=topic, num_partitions=num_partitions, timeout=timeout
@@ -126,7 +194,12 @@ def row_producer_factory(kafka_container):
 
 
 @pytest.fixture()
-def producable_row_factory():
+def row_factory():
+    """
+    This factory includes only the fields typically handed to a producer when
+    producing a message; more generally, the fields you would likely
+    need to validate upon producing/consuming.
+    """
     def factory(value, topic='input-topic', key=b"key", headers=None) -> Row:
         headers = headers or {}
         return Row(

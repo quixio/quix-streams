@@ -16,7 +16,7 @@ from src.quixstreams.dataframes.runner import RunnerNotStarted
 class TestRunner:
     def test_run_consume_and_produce(
         self, runner_factory, producer, topic_factory, topic_json_serdes_factory,
-            row_consumer_factory, executor, producable_row_factory
+            row_consumer_factory, executor, row_factory
     ):
         """
         Test that StreamingDataFrame processes 3 messages from Kafka by having the
@@ -115,10 +115,9 @@ class TestRunner:
             assert isinstance(exc, SerializationError)
 
     def test_run_consumer_error_suppressed(
-        self, runner_factory, producer, topic_factory, consumer, executor
+        self, runner_factory, producer, topic_json_serdes_factory, consumer, executor
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
         df = StreamingDataFrame(topics=[topic])
 
         done = Future()
@@ -144,10 +143,9 @@ class TestRunner:
             assert consumed > 1
 
     def test_run_processing_error_raised(
-        self, topic_factory, producer, runner_factory, executor
+        self, topic_json_serdes_factory, producer, runner_factory, executor
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
         df = StreamingDataFrame(topics=[topic])
 
         def fail(*args):
@@ -157,7 +155,7 @@ class TestRunner:
 
         # Produce a string while double is expected
         with producer:
-            producer.produce(topic=topic_name, value=b'{"field":"value"}')
+            producer.produce(topic=topic.name, value=b'{"field":"value"}')
 
         with runner_factory(auto_offset_reset="earliest") as runner:
             # Launch a Runner in a background thread
@@ -168,10 +166,9 @@ class TestRunner:
             assert isinstance(exc, ValueError)
 
     def test_run_processing_error_suppressed(
-        self, topic_factory, producer, runner_factory, executor
+        self, topic_json_serdes_factory, producer, runner_factory, executor
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
         df = StreamingDataFrame(topics=[topic])
 
         def fail(*args):
@@ -185,7 +182,7 @@ class TestRunner:
 
         with producer:
             for i in range(produced):
-                producer.produce(topic=topic_name, value=b'{"field":"value"}')
+                producer.produce(topic=topic.name, value=b'{"field":"value"}')
 
         def on_error(exc, *args):
             nonlocal consumed
