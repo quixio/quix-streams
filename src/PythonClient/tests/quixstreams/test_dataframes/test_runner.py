@@ -45,7 +45,7 @@ class TestRunner:
 
         def on_message_processed(topic_, partition, offset):
             # Set the callback to track total messages processed
-            # The callback is not triggerred if processing fails
+            # The callback is not triggered if processing fails
             nonlocal processed_count, runner
 
             processed_count += 1
@@ -53,7 +53,7 @@ class TestRunner:
             if processed_count == total_messages:
                 done.set_result(True)
 
-        # Setup a runner and run it in background thread
+        # Set up a runner and run it in background thread
         with runner_factory(
             auto_offset_reset="earliest", on_message_processed=on_message_processed
         ) as runner:
