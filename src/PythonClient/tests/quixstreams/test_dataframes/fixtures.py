@@ -11,6 +11,12 @@ from src.quixstreams.dataframes.error_callbacks import (
     ProcessingErrorCallback,
 )
 from src.quixstreams.dataframes.kafka import Partitioner, AutoOffsetReset
+from src.quixstreams.dataframes.models.rows import Row
+from src.quixstreams.dataframes.models.serializers import (
+    JSONSerializer, JSONDeserializer
+)
+from src.quixstreams.dataframes.models.timestamps import TimestampType, MessageTimestamp
+from src.quixstreams.dataframes.models.topics import Topic
 from src.quixstreams.dataframes.rowconsumer import RowConsumer
 from src.quixstreams.dataframes.rowproducer import RowProducer
 from src.quixstreams.dataframes.runner import MessageProcessedCallback, Runner
@@ -42,7 +48,20 @@ def topic_factory(kafka_admin_client):
         )
         futures[topic].result(timeout)
         return topic, num_partitions
+    return factory
 
+
+@pytest.fixture()
+def topic_json_serdes_factory(topic_factory):
+    def factory(topic: str = None, num_partitions: int = 1, timeout: float = 10.0):
+        topic_name, _ = topic_factory(
+            topic=topic, num_partitions=num_partitions, timeout=timeout
+        )
+        return Topic(
+            topic_name,
+            value_deserializer=JSONDeserializer(),
+            value_serializer=JSONSerializer(),
+        )
     return factory
 
 
@@ -103,6 +122,23 @@ def row_producer_factory(kafka_container):
             on_error=on_error,
         )
 
+    return factory
+
+
+@pytest.fixture()
+def producable_row_factory():
+    def factory(value, topic='input-topic', key=b"key", headers=None) -> Row:
+        headers = headers or {}
+        return Row(
+            key=key,
+            value=value,
+            headers=headers,
+            topic=topic,
+            partition=0,
+            offset=0,
+            size=0,
+            timestamp=MessageTimestamp(0, TimestampType.TIMESTAMP_NOT_AVAILABLE),
+        )
     return factory
 
 

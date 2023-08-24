@@ -1,10 +1,12 @@
 from concurrent.futures import Future
+from json import loads, dumps
 from unittest.mock import patch
 
 import pytest
+from confluent_kafka import KafkaException
 
 from src.quixstreams.dataframes import StreamingDataFrame, Topic
-from src.quixstreams.dataframes.models import DoubleDeserializer
+from src.quixstreams.dataframes.models import DoubleDeserializer, DoubleSerializer
 from src.quixstreams.dataframes.models import JSONDeserializer
 from src.quixstreams.dataframes.models import SerializationError
 from src.quixstreams.dataframes.rowconsumer import KafkaMessageError, RowConsumer
@@ -12,24 +14,32 @@ from src.quixstreams.dataframes.runner import RunnerNotStarted
 
 
 class TestRunner:
-    def test_run_success(
-        self, runner_factory, producer, topic_factory, consumer, executor
+    def test_run_consume_and_produce(
+        self, runner_factory, producer, topic_factory, topic_json_serdes_factory,
+            row_consumer_factory, executor, producable_row_factory
     ):
         """
-        Test that StreamingDataFrame processes 3 messages from Kafka and commits
-        the offsets
+        Test that StreamingDataFrame processes 3 messages from Kafka by having the
+        runner produce the consumed messages verbatim to a new topic, and of course
+        committing the respective offsets after handling each message.
         """
+        column_name = "root"
         topic_name, _ = topic_factory()
-        topic = Topic(
-            topic_name, value_deserializer=JSONDeserializer(column_name="root")
+        topic_in = Topic(
+            topic_name, value_deserializer=JSONDeserializer(column_name=column_name)
         )
-        df = StreamingDataFrame(topics=[topic])
+        topic_out = topic_json_serdes_factory()
+
+        df = StreamingDataFrame(topics=[topic_in])
+        df.to_topic(topic_out)
+
         processed_count = 0
         total_messages = 3
         # Produce messages to the topic and flush
+        data = {'key': b"key", 'value': b'"value"'}
         with producer:
             for _ in range(total_messages):
-                producer.produce(topic_name, key=b"key", value=b'"value"')
+                producer.produce(topic_name, **data)
 
         done = Future()
 
@@ -52,6 +62,19 @@ class TestRunner:
             done.result(timeout=10.0)
             # Check that all messages have been processed
             assert processed_count == total_messages
+
+        # confirm messages actually ended up being produced by the runner
+        rows_out = []
+        with row_consumer_factory(auto_offset_reset='earliest') as row_consumer:
+            row_consumer.subscribe([topic_out])
+            while len(rows_out) < total_messages:
+                rows_out.append(row_consumer.poll_row(timeout=5))
+
+        assert len(rows_out) == total_messages
+        for row in rows_out:
+            assert row.topic == topic_out.name
+            assert row.key == data["key"]
+            assert row.value == {column_name: loads(data["value"].decode())}
 
     def test_run_consumer_error_raised(
         self, runner_factory, producer, topic_factory, consumer, executor
@@ -188,17 +211,80 @@ class TestRunner:
             runner.run(df)
 
     def test_run_producer_error_raised(
-        self, runner_factory, producer, topic_factory, consumer, executor
+        self, runner_factory, producer, topic_json_serdes_factory, executor
     ):
-        # TODO: Waiting for .sink() to be implemented
-        ...
 
-    def test_run_serialization_error_raised(self):
-        # TODO: Waiting for .sink() to be implemented
-        ...
+        topic_in = topic_json_serdes_factory()
+        topic_out = topic_json_serdes_factory()
+
+        df = StreamingDataFrame(topics=[topic_in])
+        df.to_topic(topic_out)
+
+        with producer:
+            producer.produce(topic_in.name, dumps({"field": 1001 * "a"}))
+
+        with runner_factory(
+            auto_offset_reset='earliest',
+            producer_extra_config={"message.max.bytes": 1000}
+        ) as runner:
+            fut: Future = executor.submit(runner.run, df)
+            # Wait for exception to fail
+            exc = fut.exception(timeout=10.0)
+            # Ensure the type of the exception
+            assert isinstance(exc, KafkaException)
+
+    def test_run_serialization_error_raised(
+            self, runner_factory, producer, topic_factory, executor
+    ):
+
+        topic_in_name, _ = topic_factory()
+        topic_in = Topic(topic_in_name, value_deserializer=JSONDeserializer())
+        topic_out_name, _ = topic_factory()
+        topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
+
+        df = StreamingDataFrame(topics=[topic_in])
+        df.to_topic(topic_out)
+
+        with producer:
+            producer.produce(topic_in.name, b'{"field":"value"}')
+
+        with runner_factory(auto_offset_reset='earliest') as runner:
+            fut: Future = executor.submit(runner.run, df)
+            # Wait for exception to fail
+            exc = fut.exception(timeout=10.0)
+            # Ensure the type of the exception
+            assert isinstance(exc, SerializationError)
 
     def test_run_producer_error_suppressed(
         self, runner_factory, producer, topic_factory, consumer, executor
     ):
-        # TODO: Waiting for .sink() to be implemented
-        ...
+        topic_in_name, _ = topic_factory()
+        topic_in = Topic(topic_in_name, value_deserializer=JSONDeserializer())
+        topic_out_name, _ = topic_factory()
+        topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
+
+        df = StreamingDataFrame(topics=[topic_in])
+        df.to_topic(topic_out)
+
+        produce_input = 2
+        produce_output_attempts = 0
+        done = Future()
+
+        with producer:
+            for _ in range(produce_input):
+                producer.produce(topic_in.name, b'{"field":"value"}')
+
+        def on_error(exc, *args):
+            nonlocal produce_output_attempts
+            assert isinstance(exc, SerializationError)
+            produce_output_attempts += 1
+            if produce_output_attempts == produce_input:
+                done.set_result(True)
+            return True
+
+        with runner_factory(
+            auto_offset_reset='earliest', on_producer_error=on_error
+        ) as runner:
+            executor.submit(runner.run, df)
+            done.result(timeout=10.0)
+        assert produce_output_attempts == produce_input

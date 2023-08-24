@@ -1,5 +1,4 @@
 import uuid
-from functools import partial
 from typing import Self, Optional, Callable, TypeAlias, Union, List, Mapping
 
 from .column import Column, OpValue
@@ -58,6 +57,18 @@ class StreamingDataFrame:
         """
         return self._pipeline.process(row)
 
+    # TODO: maybe we should just allow list(Topics) as well (in many spots actually)
+    def to_topic(self, topic: Topic):
+        """
+        Produce a row to a desired topic.
+        Note that a producer must be assigned on the StreamingDataFrame if not using
+        a QuixStreams `Runner` class to facilitate the execution of StreamingDataFrame.
+
+        :param topic: A QuixStreams `Topic`
+        :return: self (StreamingDataFrame)
+        """
+        return self.apply(lambda row: self._produce(topic, row))
+
     @property
     def id(self) -> str:
         return self._id
@@ -91,7 +102,7 @@ class StreamingDataFrame:
         self._real_producer = producer
 
     def __setitem__(self, key: str, value: Union[Column, OpValue, str]):
-        self.apply(partial(setitem, key, value))
+        self.apply(lambda row: setitem(key, value, row))
 
     def __getitem__(
         self, item: Union[str, list[str], Column, Self]
@@ -99,7 +110,7 @@ class StreamingDataFrame:
         if isinstance(item, Column):
             return self.apply(lambda row: row if item.eval(row) else None)
         elif isinstance(item, list):
-            return self.apply(partial(subset, item))
+            return self.apply(lambda row: subset(item, row))
         elif isinstance(item, StreamingDataFrame):
             # TODO: Implement filtering based on another SDF
             raise ValueError(
@@ -107,3 +118,7 @@ class StreamingDataFrame:
             )
         else:
             return Column(col_name=item)
+
+    def _produce(self, topic: Topic, row: Row) -> Row:
+        self.producer.produce_row(row, topic)
+        return row

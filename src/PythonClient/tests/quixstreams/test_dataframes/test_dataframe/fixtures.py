@@ -1,12 +1,13 @@
-import pytest
-
-from src.quixstreams.dataframes.models.rows import Row
-from src.quixstreams.dataframes.models.topics import Topic
-from src.quixstreams.dataframes.models.timestamps import MessageTimestamp, TimestampType
-from src.quixstreams.dataframes.dataframe.pipeline import Pipeline, PipelineFunction
-from src.quixstreams.dataframes.dataframe.dataframe import StreamingDataFrame
 from copy import deepcopy
 from functools import partial
+
+import pytest
+
+from src.quixstreams.dataframes.dataframe.dataframe import StreamingDataFrame
+from src.quixstreams.dataframes.dataframe.pipeline import Pipeline, PipelineFunction
+from src.quixstreams.dataframes.models.rows import Row
+from src.quixstreams.dataframes.models.timestamps import MessageTimestamp, TimestampType
+from src.quixstreams.dataframes.models.topics import Topic
 
 
 @pytest.fixture()

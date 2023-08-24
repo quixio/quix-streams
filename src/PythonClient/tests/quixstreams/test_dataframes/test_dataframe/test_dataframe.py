@@ -3,6 +3,7 @@ import pytest
 from src.quixstreams.dataframes.dataframe.pipeline import (
     Pipeline,
 )
+from src.quixstreams.dataframes.models.topics import Topic
 
 
 class TestDataframe:
@@ -143,3 +144,78 @@ class TestDataframeProcess:
         expected = [row_msg_value_factory({'x': 1, 'x_list': i}) for i in range(1, 3)]
         row = row_msg_value_factory({'x': 1, 'x_list': [0, 1, 2]})
         assert dataframe.process(row) == expected
+
+
+class TestDataframeKafka:
+    def test_to_topic(
+            self, dataframe, row_consumer_factory, row_producer_factory,
+            producable_row_factory, topic_json_serdes_factory
+    ):
+        topic = topic_json_serdes_factory()
+        producer = row_producer_factory()
+        dataframe.producer = producer
+
+        dataframe.to_topic(topic)
+
+        row_to_produce = producable_row_factory(
+            topic=topic.name,
+            key=b'test_key',
+            value={'x': '1', 'y': '2'},
+        )
+
+        with producer:
+            dataframe.process(row_to_produce)
+
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic])
+            consumed_row = consumer.poll_row(timeout=5.0)
+
+        assert consumed_row
+        assert consumed_row.topic == topic.name
+        assert row_to_produce.key == consumed_row.key
+        assert row_to_produce.value == consumed_row.value
+
+    def test_to_topic_multiple_topics_out(
+            self, dataframe, row_consumer_factory, row_producer_factory,
+            producable_row_factory, topic_json_serdes_factory
+    ):
+        topic_0 = topic_json_serdes_factory()
+        topic_1 = topic_json_serdes_factory()
+        producer = row_producer_factory()
+        dataframe.producer = producer
+
+        dataframe.to_topic(topic_0)
+        dataframe.to_topic(topic_1)
+
+        row_to_produce = producable_row_factory(
+            key=b'test_key',
+            value={'x': '1', 'y': '2'},
+        )
+
+        with producer:
+            dataframe.process(row_to_produce)
+
+        consumed_rows = []
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic_0, topic_1])
+            while len(consumed_rows) < 2:
+                consumed_rows.append(consumer.poll_row(timeout=5.0))
+
+        assert len(consumed_rows) == 2
+        assert {row.topic for row in consumed_rows} == {t.name for t in [topic_0, topic_1]}
+        for consumed_row in consumed_rows:
+            assert row_to_produce.key == consumed_row.key
+            assert row_to_produce.value == consumed_row.value
+
+    def test_to_topic_no_producer_assigned(self, dataframe, producable_row_factory):
+        topic = Topic('whatever')
+        dataframe.to_topic(topic)
+
+        with pytest.raises(RuntimeError):
+            dataframe.process(
+                producable_row_factory(
+                    topic=topic.name,
+                    key=b'test_key',
+                    value={'x': '1', 'y': '2'}
+                )
+            )
