@@ -25,6 +25,10 @@
         </Assembly>
         <Assembly Name="Confluent.Kafka">
             <Type Name="Confluent.Kafka.ProduceException`2[[System.Byte[], System.Runtime],[System.Byte[], System.Runtime]]" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.TopicPartitionOffset" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.TopicPartition" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.Partition" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.Offset" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="System.Runtime">
             <!-- force inclusion of the type even if not referenced anywhere -->

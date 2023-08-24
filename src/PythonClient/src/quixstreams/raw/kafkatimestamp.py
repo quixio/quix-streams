@@ -68,7 +68,6 @@ class KafkaTimestamp(object):
         self._unix_timestamp_ms = None
         self._datetime = None
         self._timestamp_type = timestamp_type
-        self._created_from = None
 
         if kwargs is not None and "net_pointer" in kwargs:
             net_pointer = kwargs["net_pointer"]
@@ -79,33 +78,27 @@ class KafkaTimestamp(object):
             net_type = self._interop.get_Type()
             python_kafka_timestamp_type = ec.enum_to_another(net_type, KafkaTimestampType)
             self._timestamp_type = python_kafka_timestamp_type
-            self._created_from = "PTR"
             return
 
         if datetime is not None:
             self._datetime = datetime.astimezone(dt.timezone.utc)
             self._unix_timestamp_ns = TimeConverter.to_unix_nanoseconds(self._datetime)
             self._unix_timestamp_ms = round(self._unix_timestamp_ns / 1000000)
-            self._created_from = "DT"
 
         elif unix_timestamp_ms is not None:
             self._unix_timestamp_ms = unix_timestamp_ms
             self._unix_timestamp_ns = self._unix_timestamp_ms * 1000000
             self._datetime = TimeConverter.from_unix_nanoseconds(self._unix_timestamp_ns)
-            self._created_from = "MS"
 
         elif unix_timestamp_ns is not None:
             self._unix_timestamp_ns = unix_timestamp_ns
             self._unix_timestamp_ms = round(self._unix_timestamp_ns / 1000000)
             self._datetime = TimeConverter.from_unix_nanoseconds(self._unix_timestamp_ns)
-            self._created_from = "NS"
 
         else:
             self._datetime = dt.datetime.now(dt.timezone.utc)
             self._unix_timestamp_ns = TimeConverter.to_unix_nanoseconds(self._datetime)
             self._unix_timestamp_ms = round(self._unix_timestamp_ns / 1000000)
-            self._created_from = "NOW"
-
 
         try:
             dt_hptr = DateTimeConverter.datetime_to_dotnet(self._datetime)
@@ -171,5 +164,3 @@ class KafkaTimestamp(object):
             KafkaTimestampType: The timestamp type
         """
         return self._timestamp_type
-
-

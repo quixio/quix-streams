@@ -2,6 +2,7 @@ import ctypes
 from typing import Union, List
 
 from .kafkaheader import KafkaHeader
+from .topicpartitionoffset import TopicPartitionOffset
 from .kafkatimestamp import KafkaTimestamp
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai, Array
@@ -34,6 +35,8 @@ class KafkaMessage(object):
         self._key = None
         self._timestamp = None
         self._headers = None
+        self._topic_partition_offset = None
+
 
         if kwargs is not None and "net_pointer" in kwargs:
             net_pointer = kwargs["net_pointer"]
@@ -147,4 +150,16 @@ class KafkaMessage(object):
 
         return self._headers
 
+    @property
+    def topic_partition_offset(self) -> TopicPartitionOffset:
+        """
+        Gets the message timestamp.
 
+        Returns:
+            KafkaTimestamp: The message timestamp
+        """
+        if self._topic_partition_offset is None:
+            tpo_ptr = self._interop.get_TopicPartitionOffset()
+            self._topic_partition_offset = TopicPartitionOffset(net_pointer=tpo_ptr)
+
+        return self._topic_partition_offset

@@ -1686,6 +1686,7 @@ class TestTimeseriesData(BaseIntegrationTest):
 
 
 class TestRawData(BaseIntegrationTest):
+
     def test_raw_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
@@ -1699,7 +1700,7 @@ class TestRawData(BaseIntegrationTest):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
-            if counter == 3:
+            if counter == 5:
                 event.set()
 
         raw_topic_consumer.on_message_received = on_message_received_handler
@@ -1737,8 +1738,15 @@ class TestRawData(BaseIntegrationTest):
         assert received_messages[4].headers[0].value == headers[0].value
         assert received_messages[4].headers[0].get_value_as_str() == headers[0].get_value_as_str()
 
+        tpo = received_messages[0].topic_partition_offset
+        assert tpo is not None
+        assert tpo.partition is not None
+        assert tpo.topic is not None
+        assert tpo.topic_partition is not None
+        assert tpo.offset is not None
 
-
+        assert tpo.topic_partition.partition == tpo.partition
+        assert tpo.topic_partition.topic == tpo.topic
 
 
 
@@ -1809,6 +1817,7 @@ class TestRawData(BaseIntegrationTest):
 
         # Assert
         assert len(received_messages) == 3
+
 
 class TestStreamState(BaseIntegrationTest):
 
