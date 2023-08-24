@@ -88,6 +88,7 @@ namespace QuixStreams.Kafka
 
             UpdateMaxMessageSize(producerConfiguration);
             MaxMessageSizeBytes = producerConfiguration.MessageMaxBytes!.Value - 1;
+            Open();
         }
         
         private ProducerConfig GetKafkaProducerConfig(ProducerConfiguration producerConfiguration)
@@ -217,8 +218,7 @@ namespace QuixStreams.Kafka
         /// <inheritdoc />
         public int MaxMessageSizeBytes { get; }
 
-        /// <inheritdoc />
-        public void Open()
+        private void Open()
         {
             if (this.producer != null) return;
             lock (this.openLock)
@@ -331,8 +331,7 @@ namespace QuixStreams.Kafka
             this.logger.LogError(ex, "[{0}] Kafka producer exception", this.configId);
         }
 
-        /// <inheritdoc />
-        public void Close()
+        private void Close()
         {
             if (this.producer == null) return;
             lock (this.openLock)

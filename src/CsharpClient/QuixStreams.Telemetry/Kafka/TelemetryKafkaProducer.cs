@@ -2,9 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Kafka;
-using QuixStreams;
 using QuixStreams.Kafka.Transport;
-using QuixStreams.Kafka.Transport.SerDes;
 using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.Telemetry.Kafka
@@ -17,7 +15,7 @@ namespace QuixStreams.Telemetry.Kafka
     {
         private readonly ILogger logger = QuixStreams.Logging.CreateLogger<TelemetryKafkaProducer>();
 
-        private IKafkaTransportProducer kafkaTransportProducer;
+        private readonly IKafkaTransportProducer kafkaTransportProducer;
 
         /// <summary>
         /// The globally unique identifier of the stream.
@@ -33,11 +31,10 @@ namespace QuixStreams.Telemetry.Kafka
         /// Initializes a new instance of <see cref="TelemetryKafkaProducer"/>
         /// </summary>
         /// <param name="producer">A stream package producer. Share this among multiple instances of this class to prevent re-initialization.</param>
-        /// <param name="kafkaMessageSplitter">The kafka message splitter to use. </param>
         /// <param name="streamId">Stream Id to use to generate the new Stream on Kafka. If not specified, it generates a new Guid.</param>
-        public TelemetryKafkaProducer(IKafkaProducer producer, IKafkaMessageSplitter kafkaMessageSplitter, string streamId = null)
+        public TelemetryKafkaProducer(IKafkaProducer producer, string streamId = null)
         {
-            this.kafkaTransportProducer = new QuixStreams.Kafka.Transport.KafkaTransportProducer(producer, kafkaMessageSplitter: kafkaMessageSplitter);
+            this.kafkaTransportProducer = new QuixStreams.Kafka.Transport.KafkaTransportProducer(producer);
 
             this.InitializeStreaming(streamId);
         }
@@ -80,16 +77,10 @@ namespace QuixStreams.Telemetry.Kafka
             }
         }
 
-        private void Stop()
-        {
-            // Transport layer
-            this.kafkaTransportProducer = null;
-        }
-
         /// <inheritdoc />
         public void Dispose()
         {
-            this.Stop();
+            this.kafkaTransportProducer?.Flush();
         }
 
     }

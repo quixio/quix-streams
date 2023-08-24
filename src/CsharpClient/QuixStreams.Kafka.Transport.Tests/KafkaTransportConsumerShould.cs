@@ -54,7 +54,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             var consumer = Substitute.For<IKafkaConsumer>();
             var transportConsumer = new KafkaTransportConsumer(consumer);
             var revokingInvokes = new List<object>();
-            transportConsumer.Revoking += (sender, args) =>
+            transportConsumer.OnRevoking += (sender, args) =>
             {
                 revokingInvokes.Add(args);
             };
@@ -77,7 +77,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             var consumer = Substitute.For<IKafkaConsumer>();
             var transportConsumer = new KafkaTransportConsumer(consumer);
             var revokedInvokes = new List<object>();
-            transportConsumer.Revoked += (sender, args) =>
+            transportConsumer.OnRevoked += (sender, args) =>
             {
                 revokedInvokes.Add(args);
             };
@@ -100,7 +100,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             var consumer = Substitute.For<IKafkaConsumer>();
             CommittedEventArgs committed = null;
             var transportConsumer = new KafkaTransportConsumer(consumer, o=> o.CommitOptions.CommitEvery = 1);
-            transportConsumer.Committed += (sender, args) => committed = args;
+            transportConsumer.OnCommitted += (sender, args) => committed = args;
             
             var committedOffset = new TopicPartitionOffset("SomeTopic", new Partition(0), new Offset(123));
 
@@ -121,7 +121,7 @@ namespace QuixStreams.Kafka.Transport.Tests
             var consumer = Substitute.For<IKafkaConsumer>();
             CommittingEventArgs committingEventArgs = null;
             var transportConsumer = new KafkaTransportConsumer(consumer, o=> o.CommitOptions.CommitEvery = 1);
-            transportConsumer.Committing += (sender, args) => committingEventArgs =args;
+            transportConsumer.OnCommitting += (sender, args) => committingEventArgs =args;
             
             var committingOffset = new TopicPartitionOffset("SomeTopic", new Partition(0), new Offset(123));
 

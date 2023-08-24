@@ -26,10 +26,9 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// <param name="ct"></param>
         public void Run(CancellationToken ct)
         {
-            using (var producer = this.CreateProducer(out var splitter))
+            using (var producer = this.CreateProducer())
             {
-                var transportProducer = new KafkaTransportProducer(producer, kafkaMessageSplitter: splitter);
-                transportProducer.Open();
+                var transportProducer = new KafkaTransportProducer(producer);
                 this.HookUpStatistics();
                 try
                 {
@@ -71,12 +70,11 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             }
         }
 
-        private IKafkaProducer CreateProducer(out IKafkaMessageSplitter messageSplitter)
+        private IKafkaProducer CreateProducer()
         {
             var prodConfig = new ProducerConfiguration(Const.BrokerList);
             var topicConfig = new ProducerTopicConfiguration(TopicName);
             var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
-            messageSplitter = new KafkaMessageSplitter(MaxKafkaKeySize);
             return kafkaProducer;
         }
 

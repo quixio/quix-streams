@@ -33,5 +33,11 @@ namespace QuixStreams.Kafka.Transport.SerDes
         /// This is only used when <see cref="Mode"/> is <see cref="PackageSerializationMode.LegacyValue"/>
         /// </summary>
         public static TransportPackageValueCodecType LegacyValueCodecType = TransportPackageValueCodecType.Json;
+
+        /// <summary>
+        /// Whether message split is enabled.
+        /// Disabled by default
+        /// </summary>
+        public static bool EnableMessageSplit { get; set; } = false;
     }
 }

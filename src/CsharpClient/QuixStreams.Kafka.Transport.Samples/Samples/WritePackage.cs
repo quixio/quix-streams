@@ -29,13 +29,13 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// <param name="ct"></param>
         public void Run(CancellationToken ct)
         {
-            using (var kafkaProducer = this.CreateKafkaProducer(out var splitter))
+            using (var kafkaProducer = this.CreateKafkaProducer())
             {
                 this.HookUpStatistics();
                 // See method comments for differences
-                //var producer = this.CreateSimpleProducer(kafkaProducer, splitter);
-                //var producer = CreateWithUserDefinedCodec(kafkaProducer, splitter);
-                var producer = this.CreateEfficientProducer(kafkaProducer, splitter);
+                //var producer = this.CreateSimpleProducer(kafkaProducer);
+                //var producer = CreateWithUserDefinedCodec(kafkaProducer);
+                var producer = this.CreateEfficientProducer(kafkaProducer);
 
                 // please keep in mind you can use as many outputs as you wish, each of them dealing with a single type
 
@@ -45,7 +45,6 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
 
         private void SendDataUsingProducer(IKafkaTransportProducer producer, CancellationToken ct)
         {
-            producer.Open();
             var counter = 0;
             while (!ct.IsCancellationRequested)
             {
@@ -74,9 +73,9 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// This uses default codec, with default type key
         /// </summary>
         /// <returns></returns>
-        private IKafkaTransportProducer CreateSimpleProducer(IKafkaProducer producer, IKafkaMessageSplitter splitter)
+        private IKafkaTransportProducer CreateSimpleProducer(IKafkaProducer producer)
         {
-            var tProducer = new KafkaTransportProducer(producer, kafkaMessageSplitter: splitter);
+            var tProducer = new KafkaTransportProducer(producer);
             return tProducer;
         }
 
@@ -84,10 +83,10 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// This uses a registered codec
         /// </summary>
         /// <returns></returns>
-        private IKafkaTransportProducer CreateWithUserDefinedCodec(IKafkaProducer producer, IKafkaMessageSplitter splitter)
+        private IKafkaTransportProducer CreateWithUserDefinedCodec(IKafkaProducer producer)
         {
             CodecRegistry.RegisterCodec(typeof(ExampleModel), new DefaultJsonCodec<ExampleModel>());
-            var tProducer = new KafkaTransportProducer(producer, kafkaMessageSplitter: splitter);
+            var tProducer = new KafkaTransportProducer(producer);
             return tProducer;
         }
 
@@ -95,20 +94,19 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// This uses a registered codec with a shortened model key
         /// </summary>
         /// <returns></returns>
-        private IKafkaTransportProducer CreateEfficientProducer(IKafkaProducer producer, IKafkaMessageSplitter splitter)
+        private IKafkaTransportProducer CreateEfficientProducer(IKafkaProducer producer)
         {
             var codec = new DefaultJsonCodec<ExampleModel>();
             CodecRegistry.RegisterCodec(ModelKey, codec);
-            var tProducer = new KafkaTransportProducer(producer, kafkaMessageSplitter: splitter);
+            var tProducer = new KafkaTransportProducer(producer);
             return tProducer;
         }
 
-        private IKafkaProducer CreateKafkaProducer(out IKafkaMessageSplitter messageSplitter)
+        private IKafkaProducer CreateKafkaProducer()
         {
             var prodConfig = new ProducerConfiguration(Const.BrokerList);
             var topicConfig = new ProducerTopicConfiguration(TopicName);
             var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
-            messageSplitter = new KafkaMessageSplitter(kafkaProducer.MaxMessageSizeBytes);
             return kafkaProducer;
         }
 

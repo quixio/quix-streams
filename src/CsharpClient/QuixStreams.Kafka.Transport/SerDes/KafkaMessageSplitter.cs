@@ -17,6 +17,13 @@ namespace QuixStreams.Kafka.Transport.SerDes
         /// <param name="message">The kafka message to split</param>
         /// <returns>The transport packages resulting from the split</returns>
         IEnumerable<KafkaMessage> Split(KafkaMessage message);
+
+        /// <summary>
+        /// Returns whether the message should be split according to implementation logic
+        /// </summary>
+        /// <param name="message">The message to check if needs splitting</param>
+        /// <returns>Whether splitting is required</returns>
+        bool ShouldSplit(KafkaMessage message);
     }
 
     /// <summary>
@@ -64,7 +71,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
         /// <returns>The transport packages resulting from the split</returns>
         public IEnumerable<KafkaMessage> Split(KafkaMessage message)
         {
-            if (message.MessageSize < this.MaximumKafkaMessageSize)
+            if (message.MessageSize <= this.MaximumKafkaMessageSize)
             {
                 yield return message;
                 yield break;
@@ -89,8 +96,15 @@ namespace QuixStreams.Kafka.Transport.SerDes
             }
             WarningCheck(segmentCount, message.Value.Length);
         }
-        
-        
+
+        /// <inheritdoc/>
+        public bool ShouldSplit(KafkaMessage message)
+        {
+            if (message == null) return false;
+            return message.MessageSize > this.MaximumKafkaMessageSize;
+        }
+
+
         private IEnumerable<KafkaMessage> HeaderSplit(KafkaMessage message)
         {
             var valueSizeMax = this.MaximumKafkaMessageSize - message.HeaderSize - (message.Key?.Length ?? 0);

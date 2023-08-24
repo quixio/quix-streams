@@ -48,10 +48,9 @@ namespace QuixStreams.Streaming.UnitTests.Helpers
         public ITopicProducer GetTopicProducer(string topic)
         {
             var broker = GetBroker(topic);
-            this.createKafkaProducer = streamId => new TelemetryKafkaProducer(broker, new KafkaMessageSplitter(broker.MaxMessageSizeBytes), streamId);
+            this.createKafkaProducer = streamId => new TelemetryKafkaProducer(broker, streamId);
 
             var topicProducer = new TopicProducer(this.createKafkaProducer);
-            
 
             return topicProducer;
         }

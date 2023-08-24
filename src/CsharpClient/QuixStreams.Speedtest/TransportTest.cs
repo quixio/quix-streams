@@ -45,7 +45,6 @@ namespace QuixStreams.Speedtest
                 var prodConfig = new ProducerConfiguration(Configuration.Config.BrokerList, config);
                 var topicConfig = new ProducerTopicConfiguration(Configuration.Config.Topic);
                 var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
-                kafkaProducer.Open();
                 return kafkaProducer;
             }
 
@@ -58,7 +57,7 @@ namespace QuixStreams.Speedtest
             kafkaOutput.OnErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
             kafkaOutput.Open();
             var consumer = new KafkaTransportConsumer(kafkaOutput);
-            consumer.PackageReceived = (package) =>
+            consumer.OnPackageReceived = (package) =>
             {
                 lastpackageRead = DateTime.UtcNow;
                 var now = DateTime.UtcNow;

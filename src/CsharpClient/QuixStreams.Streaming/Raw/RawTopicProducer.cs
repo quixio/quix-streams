@@ -35,7 +35,6 @@ namespace QuixStreams.Streaming.Raw
             var topicConfiguration = new QuixStreams.Kafka.ProducerTopicConfiguration(this.topicName);
 
             this.kafkaProducer = new KafkaProducer(publisherConfiguration, topicConfiguration);
-            this.kafkaProducer.Open();
         }
 
         /// <inheritdoc />

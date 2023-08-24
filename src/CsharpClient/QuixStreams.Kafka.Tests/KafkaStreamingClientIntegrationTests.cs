@@ -76,7 +76,6 @@ namespace QuixStreams.Transport.Kafka.Tests
 
                     using (var producer = new KafkaProducer(new ProducerConfiguration(this.kafkaDockerTestFixture.BrokerList), new ProducerTopicConfiguration(topic)))
                     {
-                        producer.Open();
                         for (var index = 0; index < messagesToSend.Count; index++)
                         {
                             var kafkaMessage = messagesToSend[index];
@@ -139,7 +138,6 @@ namespace QuixStreams.Transport.Kafka.Tests
 
                 using (var producer = new KafkaProducer(new ProducerConfiguration(this.kafkaDockerTestFixture.BrokerList), new ProducerTopicConfiguration(topic)))
                 {
-                    producer.Open();
                     for (var index = 0; index < messagesToSend.Count; index++)
                     {
                         var kafkaMessage = messagesToSend[index];

@@ -147,9 +147,9 @@ namespace QuixStreams.Telemetry.Kafka
             ContextCache = new StreamContextCache();
             this.streamPipelineFactory = new StreamPipelineFactory(this.kafkaTransportConsumer, streamPipelineFactoryHandler, ContextCache);
             this.streamPipelineFactory.OnStreamsRevoked += StreamsRevokedHandler;
-            this.kafkaTransportConsumer.Revoking += RevokingHandler;
-            this.kafkaTransportConsumer.Committed += CommittedHandler;
-            this.kafkaTransportConsumer.Committing += CommitingHandler;
+            this.kafkaTransportConsumer.OnRevoking += RevokingHandler;
+            this.kafkaTransportConsumer.OnCommitted += CommittedHandler;
+            this.kafkaTransportConsumer.OnCommitting += CommitingHandler;
             this.streamPipelineFactory.Open(); 
             this.kafkaConsumer.Open();
         }
@@ -200,9 +200,8 @@ namespace QuixStreams.Telemetry.Kafka
             // Transport layer
             if (kafkaTransportConsumer != null)
             {
-                this.kafkaTransportConsumer.Revoking -= RevokingHandler;
-                this.kafkaTransportConsumer.Committed -= CommittedHandler;
-                this.kafkaTransportConsumer.Close();
+                this.kafkaTransportConsumer.OnRevoking -= RevokingHandler;
+                this.kafkaTransportConsumer.OnCommitted -= CommittedHandler;
             }
 
             this.kafkaConsumer?.Close();

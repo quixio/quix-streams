@@ -23,11 +23,11 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// <returns>Disposable output</returns>
         public IKafkaTransportConsumer Start(Partition partition, Offset offset)
         {
-            var consumer = this.CreateKafkaOutput(partition, offset);
+            var (transportConsumer, kafkaConsumer) = this.CreateKafkaOutput(partition, offset);
             this.HookUpStatistics();
-            consumer.PackageReceived = this.NewPackageHandler;
-            consumer.Open();
-            return consumer;
+            transportConsumer.OnPackageReceived = this.NewPackageHandler;
+            kafkaConsumer.Open();
+            return transportConsumer;
         }
 
         private Task NewPackageHandler(TransportPackage obj)
@@ -61,7 +61,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             timer.Start();
         }
 
-        private IKafkaTransportConsumer CreateKafkaOutput(Partition partition, Offset offset)
+        private (IKafkaTransportConsumer, IKafkaConsumer) CreateKafkaOutput(Partition partition, Offset offset)
         {
             Console.WriteLine($"Reading from {TopicName}, partition 2");
             var consConfig = new ConsumerConfiguration(Const.BrokerList, ConsumerGroup);
@@ -72,7 +72,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
                 Console.WriteLine($"Exception occurred: {e}");
             };
             var transportConsumer = new KafkaTransportConsumer(kafkaOutput);
-            return transportConsumer;
+            return (transportConsumer, kafkaOutput);
         }
     }
 }

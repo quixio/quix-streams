@@ -36,7 +36,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             };
             var transportConsumer = new KafkaTransportConsumer(kafkaConsumer);
             this.HookUpStatistics();
-            transportConsumer.PackageReceived = this.NewMessageHandler;
+            transportConsumer.OnPackageReceived = this.NewMessageHandler;
             kafkaConsumer.Open();
 
             return transportConsumer;

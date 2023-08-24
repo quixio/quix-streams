@@ -32,7 +32,7 @@ namespace QuixStreams.Telemetry.UnitTests
 
             // Act
             var package = new TransportPackage(typeof(object), "ABCDE", new object());
-            consumer.PackageReceived(package);
+            consumer.OnPackageReceived(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -60,7 +60,7 @@ namespace QuixStreams.Telemetry.UnitTests
             var package = new  TransportPackage(typeof(object), "somestreamid", new object());
             sw.Restart();
 
-            Action action = () => consumer.PackageReceived(package).GetAwaiter().GetResult();
+            Action action = () => consumer.OnPackageReceived(package).GetAwaiter().GetResult();
 
             // Act & Assert
 
@@ -90,13 +90,13 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new TransportPackage(typeof(object), "ABCDE", new object());
-            consumer.PackageReceived(package);
+            consumer.OnPackageReceived(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
             // Act
             package = new TransportPackage(typeof(object), "ABCDE", new object());
-            consumer.PackageReceived(package);
+            consumer.OnPackageReceived(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -112,7 +112,7 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new TransportPackage(typeof(object), streamPipeline.StreamId, new object());
-            consumer.PackageReceived(package);
+            consumer.OnPackageReceived(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -134,7 +134,7 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
             var package = new TransportPackage(typeof(object), streamPipeline.StreamId, new object());
-            consumer.PackageReceived(package);
+            consumer.OnPackageReceived(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -157,7 +157,7 @@ namespace QuixStreams.Telemetry.UnitTests
 
             // Act
             var package = new TransportPackage(typeof(object), null, new object());
-            consumer.PackageReceived(package);
+            consumer.OnPackageReceived(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);

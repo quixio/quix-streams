@@ -21,6 +21,7 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         }
 
         private long msgCount = 0;
+        public long MessageCount => msgCount;
         private readonly Func<KafkaMessage, Task> onPublish;
 
         public Func<KafkaMessage, Task> MessageReceived { get; set; }
@@ -74,16 +75,6 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         }
 
         public void Flush(CancellationToken cancellationToken)
-        {
-            // do nothing;
-        }
-
-        void IKafkaProducer.Open()
-        {
-            // do nothing;
-        }
-
-        void IKafkaProducer.Close()
         {
             // do nothing;
         }

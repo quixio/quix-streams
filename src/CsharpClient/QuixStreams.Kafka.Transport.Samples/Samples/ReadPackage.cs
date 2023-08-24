@@ -25,11 +25,11 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         public IKafkaTransportConsumer Start()
         {
             this.RegisterCodecs();
-            var consumer = this.CreateConsumer();
+            var (transportConsumer, kafkaConsumer) = this.CreateConsumer();
             this.HookUpStatistics();
-            consumer.PackageReceived = this.NewPackageHandler;
-            consumer.Open();
-            return consumer;
+            transportConsumer.OnPackageReceived = this.NewPackageHandler;
+            kafkaConsumer.Open();
+            return transportConsumer;
         }
 
         private Task NewPackageHandler(TransportPackage package)
@@ -48,7 +48,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             CodecRegistry.RegisterCodec("EM", new DefaultJsonCodec<ExampleModel>());
         }
 
-        private IKafkaTransportConsumer CreateConsumer()
+        private (IKafkaTransportConsumer, IKafkaConsumer) CreateConsumer()
         {
             var consConfig = new ConsumerConfiguration(Const.BrokerList, ConsumerGroup);
             var topicConfig = new ConsumerTopicConfiguration(TopicName);
@@ -58,7 +58,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
                 Console.WriteLine($"Exception occurred: {e}");
             };
             var transportConsumer = new KafkaTransportConsumer(kafkaOutput);
-            return transportConsumer;
+            return (transportConsumer, kafkaOutput);
         }
 
         private void HookUpStatistics()

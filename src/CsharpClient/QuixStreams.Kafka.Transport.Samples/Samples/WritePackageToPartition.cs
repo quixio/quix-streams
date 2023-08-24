@@ -18,10 +18,9 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         public void Run(Partition partition, CancellationToken cancellationToken)
         {
             CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<ExampleModel>());
-            using (var producer = this.CreateKafkaProducer(partition, out var splitter))
+            using (var producer = this.CreateKafkaProducer(partition))
             {
-                var transportProducer = new KafkaTransportProducer(producer, kafkaMessageSplitter: splitter);
-                transportProducer.Open();
+                var transportProducer = new KafkaTransportProducer(producer);
                 this.SendDataUsingProducer(transportProducer, cancellationToken);
 
                 cancellationToken.WaitHandle.WaitOne();
@@ -56,13 +55,12 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             }
         }
 
-        private IKafkaProducer CreateKafkaProducer(Partition partition, out IKafkaMessageSplitter splitter)
+        private IKafkaProducer CreateKafkaProducer(Partition partition)
         {
             Console.WriteLine($"Write to {TopicName}, partition 2");
             var prodConfig = new ProducerConfiguration(Const.BrokerList);
             var topicConfig = new ProducerTopicConfiguration(TopicName, partition);
             var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
-            splitter = new KafkaMessageSplitter(kafkaProducer.MaxMessageSizeBytes);
             return kafkaProducer;
         }
     }

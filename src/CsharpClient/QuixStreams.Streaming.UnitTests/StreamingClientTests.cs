@@ -120,7 +120,7 @@ namespace QuixStreams.Streaming.UnitTests
 
                 (stream as IStreamProducerInternal).Publish(expectedParametersProperties);
 
-                SpinWait.SpinUntil(() => parametersPropertiesChanged);
+                SpinWait.SpinUntil(() => parametersPropertiesChanged, TimeSpan.FromSeconds(10));
                 Assert.True(parametersPropertiesChanged, "Parameter properties event not reached reader.");
 
                 var expectedData = new List<TimeseriesDataRaw>();

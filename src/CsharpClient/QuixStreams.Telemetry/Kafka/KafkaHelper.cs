@@ -21,7 +21,6 @@ namespace QuixStreams.Telemetry.Kafka
             var topicConfig = new ProducerTopicConfiguration(topic);
 
             var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
-            kafkaProducer.Open();
             return kafkaProducer;
         }
 
@@ -39,7 +38,6 @@ namespace QuixStreams.Telemetry.Kafka
             var topicConfig = new ProducerTopicConfiguration(topic);
 
             var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
-            kafkaProducer.Open();
             
             messageSplitter = new KafkaMessageSplitter(kafkaProducer.MaxMessageSizeBytes);
             return kafkaProducer;

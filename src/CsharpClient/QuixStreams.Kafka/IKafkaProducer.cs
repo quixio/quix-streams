@@ -32,16 +32,6 @@ namespace QuixStreams.Kafka
         void Flush(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Open connection to Kafka
-        /// </summary>
-        void Open();
-        
-        /// <summary>
-        /// Close connection to Kafka
-        /// </summary>
-        void Close();
-        
-        /// <summary>
         /// The maximum message size the producer can handle.
         /// Packages above this size will likely throw <see cref="ProduceException{TKey,TValue}"/> with "Message size too large" message
         /// </summary>

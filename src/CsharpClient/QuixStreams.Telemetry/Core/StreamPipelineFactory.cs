@@ -103,14 +103,14 @@ namespace QuixStreams.Telemetry
                     cancellationTokenSource.Cancel();
                 };
 
-                consumer.PackageReceived += this.NewTransportPackageHandler;
-                this.onClose += () => { consumer.PackageReceived -= this.NewTransportPackageHandler; };
+                consumer.OnPackageReceived += this.NewTransportPackageHandler;
+                this.onClose += () => { consumer.OnPackageReceived -= this.NewTransportPackageHandler; };
 
-                consumer.Revoked += this.OutputRevokedHandler;
-                this.onClose += () => { consumer.Revoked -= this.OutputRevokedHandler; };
+                consumer.OnRevoked += this.OutputRevokedHandler;
+                this.onClose += () => { consumer.OnRevoked -= this.OutputRevokedHandler; };
                 
-                consumer.Committed += this.OutputCommittedHandler;
-                this.onClose += () => { consumer.Committed -= this.OutputCommittedHandler; };
+                consumer.OnCommitted += this.OutputCommittedHandler;
+                this.onClose += () => { consumer.OnCommitted -= this.OutputCommittedHandler; };
                 
                 this.isOpen = true;
             }

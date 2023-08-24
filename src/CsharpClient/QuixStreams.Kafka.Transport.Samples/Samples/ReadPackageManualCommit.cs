@@ -21,14 +21,14 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         /// <returns>Disposable output</returns>
         public IKafkaTransportConsumer Start()
         {
-            var consumer = this.CreateConsumer();
+            var (transportConsumer, kafkaConsumer) = this.CreateConsumer();
             this.HookUpStatistics();
 
-            var previousRef = consumer.PackageReceived;
+            var previousRef = transportConsumer.OnPackageReceived;
 
-            consumer.PackageReceived = e => previousRef(e).ContinueWith(t => this.NewPackageHandler(e));
-            consumer.Open();
-            return consumer;
+            transportConsumer.OnPackageReceived = e => previousRef(e).ContinueWith(t => this.NewPackageHandler(e));
+            kafkaConsumer.Open();
+            return transportConsumer;
         }
 
         private Task NewPackageHandler(TransportPackage obj)
@@ -62,7 +62,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             timer.Start();
         }
 
-        private IKafkaTransportConsumer CreateConsumer()
+        private (IKafkaTransportConsumer, IKafkaConsumer) CreateConsumer()
         {
             var consConfig = new ConsumerConfiguration(Const.BrokerList, ConsumerGroup);
             var topicConfig = new ConsumerTopicConfiguration(TopicName);
@@ -72,8 +72,8 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
                 Console.WriteLine($"Exception occurred: {e}");
             };
             var transportConsumer = new KafkaTransportConsumer(kafkaOutput, o=> o.CommitOptions.AutoCommitEnabled = false);
-            transportConsumer.PackageReceived = e => PublishNewPackageOffset(transportConsumer, e);
-            return transportConsumer;
+            transportConsumer.OnPackageReceived = e => PublishNewPackageOffset(transportConsumer, e);
+            return (transportConsumer, kafkaOutput);
         }
         
         public Task PublishNewPackageOffset(IKafkaTransportConsumer consumer, TransportPackage package)

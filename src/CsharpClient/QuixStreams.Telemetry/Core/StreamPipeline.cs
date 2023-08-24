@@ -19,6 +19,11 @@ namespace QuixStreams.Telemetry
         
         private readonly CancellationToken cancellationToken;
         private readonly List<StreamComponent> componentsList = new List<StreamComponent>();
+        private StreamComponent firstComponent = null;
+        private StreamComponent lastComponent = null;
+        private bool defaultPipeline;
+        private bool subscribed = false;
+
         private bool isClosed = false;
 
         /// <summary>
@@ -59,7 +64,13 @@ namespace QuixStreams.Telemetry
 
             // Add a header component of the stream pipeline by default, to be able to operate with
             // it completely from the start, enabling sending messages or chaining it to other streams pipelines
-            this.AddComponent(new StreamComponent());
+            this.firstComponent = new StreamComponent();
+            this.firstComponent.Input.LinkTo(this.firstComponent.Output);
+            this.lastComponent = this.firstComponent;
+            this.firstComponent.StreamPipeline = this;
+            this.firstComponent.CancellationToken = cancellationToken;
+            this.defaultPipeline = true;
+            this.AddComponent(this.firstComponent);
         }
 
         /// <inheritdoc />
@@ -72,10 +83,18 @@ namespace QuixStreams.Telemetry
         public IStreamPipeline AddComponent(StreamComponent component)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to add to a closed {nameof(StreamPipeline)}");
-            if (componentsList.Count > 0)
+            if (subscribed)  throw new InvalidOperationException($"Unable to add to a pipeline {nameof(StreamPipeline)} that is already subscribed to");
+
+            if (this.defaultPipeline)
             {
-                componentsList.Last().Output.LinkTo(component.Input); // Link Output of previous component to Input of added Component
+                componentsList.Clear();
+                this.firstComponent = component;
             }
+            else
+            {
+                lastComponent.Output.LinkTo(component.Input); // Link Output of previous component to Input of added Component
+            }
+            lastComponent = component;
 
             // Assign parent stream pipeline
             component.StreamPipeline = this;
@@ -86,30 +105,27 @@ namespace QuixStreams.Telemetry
             return this;
         }
 
-        // TODO: Implement State management class
-        // public State State { get; }
-
         /// <inheritdoc />
         public Task Send(StreamPackage package)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to send to a closed {nameof(StreamPipeline)}");
-            return this.componentsList.First().Output.Send(package);
+            return this.firstComponent.Input.Send(package);
         }
 
         /// <inheritdoc />
         public Task Send<TModelType>(TModelType model)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to send to a closed {nameof(StreamPipeline)}");
-            return this.componentsList.First().Output.Send(model);
+            return this.firstComponent.Input.Send(model);
         }
 
         /// <inheritdoc />
         public IStreamPipeline Subscribe(Func<IStreamPipeline, StreamPackage, Task> onStreamPackage)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to subscribe to a closed {nameof(StreamPipeline)}");
-            // TODO tech debt, this won't work if component is added after subscription
-            this.componentsList.Last().Output.Subscribe(package => onStreamPackage.Invoke(this, package));
-
+            this.lastComponent.Output.Subscribe(package => onStreamPackage.Invoke(this, package));
+            subscribed = true;
+            
             return this;
         }
 
@@ -117,8 +133,8 @@ namespace QuixStreams.Telemetry
         public IStreamPipeline Subscribe<TModelType>(Func<IStreamPipeline, TModelType, Task> onStreamPackage)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to subscribe to a closed {nameof(StreamPipeline)}");
-            // TODO tech debt, this won't work if component is added after subscription
-            this.componentsList.Last().Output.Subscribe<TModelType>(model => onStreamPackage.Invoke(this, model));
+            this.lastComponent.Output.Subscribe<TModelType>(model => onStreamPackage.Invoke(this, model));
+            subscribed = true;
 
             return this;
         }
@@ -127,8 +143,8 @@ namespace QuixStreams.Telemetry
         public IStreamPipeline Subscribe(Action<IStreamPipeline, StreamPackage> onStreamPackage)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to subscribe to a closed {nameof(StreamPipeline)}");
-            // TODO tech debt, this won't work if component is added after subscription
-            this.componentsList.Last().Output.Subscribe(package => onStreamPackage.Invoke(this, package));
+            this.lastComponent.Output.Subscribe(package => onStreamPackage.Invoke(this, package));
+            subscribed = true;
 
             return this;
         }
@@ -137,8 +153,8 @@ namespace QuixStreams.Telemetry
         public IStreamPipeline Subscribe<TModelType>(Action<IStreamPipeline, TModelType> onStreamPackage)
         {
             if (isClosed) throw new InvalidOperationException($"Unable to subscribe to a closed {nameof(StreamPipeline)}");
-            // TODO tech debt, this won't work if component is added after subscription
-            this.componentsList.Last().Output.Subscribe<TModelType>(model => onStreamPackage.Invoke(this, model));
+            this.lastComponent.Output.Subscribe<TModelType>(model => onStreamPackage.Invoke(this, model));
+            subscribed = true;
 
             return this;
         }

@@ -23,16 +23,6 @@ namespace QuixStreams.Kafka.Transport
         /// </summary>
         /// <param name="cancellationToken">The cancellation token for aborting flushing</param>
         Task Flush(CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// Open connection to Kafka
-        /// </summary>
-        void Open();
-        
-        /// <summary>
-        /// Close connection to Kafka
-        /// </summary>
-        Task Close(CancellationToken cancellationToken = default);
     }
     
     /// <summary>
@@ -41,23 +31,25 @@ namespace QuixStreams.Kafka.Transport
     public class KafkaTransportProducer : IKafkaTransportProducer
     {
         private readonly IPackageSerializer packageSerializer;
-        private readonly IKafkaMessageSplitter kafkaMessageSplitter;
+        private IKafkaMessageSplitter kafkaMessageSplitter;
         private readonly IKafkaProducer producer;
         private Task lastPublishTask = null;
-        private bool closed = false;
-        
 
         /// <summary>
         /// Initializes a new instance of <see cref="KafkaTransportProducer"/> with the specified <see cref="IProducer{TKey,TValue}"/>
         /// </summary>
         /// <param name="producer">The producer to pass the serialized packages into</param>
         /// <param name="packageSerializer">The package serializer to use</param>
-        /// <param name="kafkaMessageSplitter">The optional byte splitter to use. When not provided, producer may receive packages bigger than it can handle</param>
+        /// <param name="kafkaMessageSplitter">The optional byte splitter to use. When not provided, one may be created if splitting is enabled based on producer settings</param>
         public KafkaTransportProducer(IKafkaProducer producer, IPackageSerializer packageSerializer = null, IKafkaMessageSplitter kafkaMessageSplitter = null)
         {
             this.producer = producer ?? throw new ArgumentNullException(nameof(producer));
             this.packageSerializer = packageSerializer ?? new PackageSerializer();
             this.kafkaMessageSplitter = kafkaMessageSplitter;
+            if (this.kafkaMessageSplitter == null && PackageSerializationSettings.EnableMessageSplit)
+            {
+                this.kafkaMessageSplitter = new KafkaMessageSplitter(this.producer.MaxMessageSizeBytes);
+            }
         }
 
         /// <inheritdocs/>
@@ -65,10 +57,11 @@ namespace QuixStreams.Kafka.Transport
         {
             // this -> serializer -?> byteSplitter -> producer
             if (cancellationToken.IsCancellationRequested) return Task.FromCanceled(cancellationToken);
-            if (this.closed) throw new ProducerClosedException();
             var serialized = this.packageSerializer.Serialize(transportPackage);
             
-            if (serialized.MessageSize >= this.producer.MaxMessageSizeBytes && this.kafkaMessageSplitter != null)
+            if (PackageSerializationSettings.EnableMessageSplit && 
+                this.kafkaMessageSplitter != null &&
+                this.kafkaMessageSplitter.ShouldSplit(serialized))
             {
                 var splitMessages = this.kafkaMessageSplitter.Split(serialized);
                 this.lastPublishTask = this.producer.Publish(splitMessages, cancellationToken);
@@ -83,24 +76,7 @@ namespace QuixStreams.Kafka.Transport
         /// <inheritdocs/>
         public Task Flush(CancellationToken cancellationToken = default)
         {
-            if (this.closed) throw new ProducerClosedException();
             return this.lastPublishTask ?? Task.CompletedTask;
-        }
-
-        /// <inheritdocs/>
-        public void Open()
-        {
-            closed = false;
-            this.producer.Open();
-        }
-
-        /// <inheritdocs/>
-        public async Task Close(CancellationToken cancellationToken = default)
-        {
-            if (this.closed) throw new ProducerClosedException();
-            closed = true;
-            await Flush(cancellationToken);
-            this.producer.Close();
         }
 
         /// <inheritdocs/>

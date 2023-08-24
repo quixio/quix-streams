@@ -21,7 +21,7 @@ namespace QuixStreams.Streaming.UnitTests
         {
             streamId = "TestStream";
             var broker = new TestBroker();
-            var ftestKafkaProducer = new TelemetryKafkaProducer(broker, new KafkaMessageSplitter(broker.MaxMessageSizeBytes), streamId);
+            var ftestKafkaProducer = new TelemetryKafkaProducer(broker, streamId);
             testTelemetryKafkaProducer = ftestKafkaProducer;
             Func<string, TelemetryKafkaProducer> func = (string fstreamId) => ftestKafkaProducer;
             streamProducer = new StreamProducer(Substitute.For<ITopicProducerInternal>(), func, streamId);

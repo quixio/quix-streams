@@ -19,11 +19,11 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         public byte[] ByteArray { get; set; }
 
 
-        public static TestModel Create()
+        public static TestModel Create(int size = 15)
         {
             var p = new TestModel()
             {
-                ByteArray = new byte[15]
+                ByteArray = new byte[size]
             };
             var random = new Random();
             random.NextBytes(p.ByteArray);

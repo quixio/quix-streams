@@ -63,11 +63,11 @@ namespace QuixStreams.Telemetry.UnitTests
 
             // Create streams
             var stream1 = new StreamPipeline()
-                .AddComponent(new TelemetryKafkaProducer(testBroker, new KafkaMessageSplitter(testBroker.MaxMessageSizeBytes), "StreamId_1"));
+                .AddComponent(new TelemetryKafkaProducer(testBroker, "StreamId_1"));
             var stream2 = new StreamPipeline()
-                .AddComponent(new TelemetryKafkaProducer(testBroker, new KafkaMessageSplitter(testBroker.MaxMessageSizeBytes), "StreamId_2"));
+                .AddComponent(new TelemetryKafkaProducer(testBroker, "StreamId_2"));
             var stream3 = new StreamPipeline()
-                .AddComponent(new TelemetryKafkaProducer(testBroker, new KafkaMessageSplitter(testBroker.MaxMessageSizeBytes), "StreamId_3"));
+                .AddComponent(new TelemetryKafkaProducer(testBroker, "StreamId_3"));
 
             // ACT
             stream1.Send(testModel1);
@@ -127,7 +127,7 @@ namespace QuixStreams.Telemetry.UnitTests
             });
 
             // Create Kafka producer
-            var telemetryKafkaProducer = new TelemetryKafkaProducer(testBroker, new KafkaMessageSplitter(testBroker.MaxMessageSizeBytes));
+            var telemetryKafkaProducer = new TelemetryKafkaProducer(testBroker);
             var stream1 = new StreamPipeline()
                 .AddComponent(telemetryKafkaProducer);
 
@@ -159,7 +159,7 @@ namespace QuixStreams.Telemetry.UnitTests
             });
 
             // Create Kafka producer
-            TelemetryKafkaProducer telemetryKafkaProducer = new TelemetryKafkaProducer(testBroker, new KafkaMessageSplitter(testBroker.MaxMessageSizeBytes), "StreamId_1");
+            TelemetryKafkaProducer telemetryKafkaProducer = new TelemetryKafkaProducer(testBroker, "StreamId_1");
             var stream1 = new StreamPipeline()
                 .AddComponent(telemetryKafkaProducer);
 

@@ -15,13 +15,13 @@ namespace QuixStreams.Kafka.Transport
         /// <summary>
         /// The callback that is used when the <see cref="IKafkaTransportConsumer"/> has new transportPackage for the listener
         /// </summary>
-        Func<TransportPackage, Task> PackageReceived { get; set; }
+        Func<TransportPackage, Task> OnPackageReceived { get; set; }
         
         /// <summary>
         /// Raised when <see cref="Exception"/> occurred.
         /// Kafka exceptions are raised as <see cref="KafkaException"/>. See <see cref="KafkaException.Error"/> for exception details.
         /// </summary>
-        event EventHandler<Exception> ErrorOccurred;
+        event EventHandler<Exception> OnErrorOccurred;
 
         /// <summary>
         /// Commits the offsets to the consumer.
@@ -37,34 +37,24 @@ namespace QuixStreams.Kafka.Transport
         /// <summary>
         /// Event is raised when the transport context finished committing
         /// </summary>
-        event EventHandler<CommittedEventArgs> Committed;
+        event EventHandler<CommittedEventArgs> OnCommitted;
         
         /// <summary>
         /// Event is raised when the transport context starts committing. It is not guaranteed to be raised if underlying broker initiates commit on its own
         /// </summary>
-        event EventHandler<CommittingEventArgs> Committing;
+        event EventHandler<CommittingEventArgs> OnCommitting;
         
         /// <summary>
         /// Raised when losing access to source depending on implementation
         /// Argument is the state which describes what is being revoked, depending on implementation
         /// </summary>
-        event EventHandler<RevokingEventArgs> Revoking;
+        event EventHandler<RevokingEventArgs> OnRevoking;
 
         /// <summary>
         /// Raised when lost access to source depending on implementation
         /// Argument is the state which describes what got revoked, depending on implementation
         /// </summary>
-        event EventHandler<RevokedEventArgs> Revoked;
-
-        /// <summary>
-        /// Open connection to Kafka
-        /// </summary>
-        void Open();
-        
-        /// <summary>
-        /// Close connection to Kafka
-        /// </summary>
-        void Close();
+        event EventHandler<RevokedEventArgs> OnRevoked;
     }
     
     /// <summary>
@@ -115,7 +105,7 @@ namespace QuixStreams.Kafka.Transport
                 };
                 closeAction = () => commitModifier.Close();
 
-                commitModifier.PackageAvailable += package => this.PackageReceived?.Invoke(package);
+                commitModifier.PackageAvailable += package => this.OnPackageReceived?.Invoke(package);
 
                 kafkaConsumer.OnRevoked += (sender, args) =>
                 {
@@ -126,7 +116,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                     finally
                     {
-                        this.Revoked?.Invoke(sender, args);
+                        this.OnRevoked?.Invoke(sender, args);
                     }
                 };
                 
@@ -138,7 +128,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                     finally
                     {
-                        this.Revoking?.Invoke(sender, args);
+                        this.OnRevoking?.Invoke(sender, args);
                     }
                 };
                 
@@ -150,7 +140,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                     finally
                     {
-                        this.Committed?.Invoke(sender, args);
+                        this.OnCommitted?.Invoke(sender, args);
                     }
                 };
                 
@@ -162,7 +152,7 @@ namespace QuixStreams.Kafka.Transport
                     }
                     finally
                     {
-                        this.Committing?.Invoke(sender, args);
+                        this.OnCommitting?.Invoke(sender, args);
                     }
                 };
             }
@@ -171,32 +161,32 @@ namespace QuixStreams.Kafka.Transport
                 merger.MessageAvailable += message =>
                 {
                     var package = deserializer.Deserialize(message);
-                    return this.PackageReceived?.Invoke(package);
+                    return this.OnPackageReceived?.Invoke(package);
                 };
                 
                 kafkaConsumer.OnCommitted += (sender, args) =>
                 {
-                    this.Committed?.Invoke(sender, args);
+                    this.OnCommitted?.Invoke(sender, args);
                         
                 };
                 
                 kafkaConsumer.OnCommitting += (sender, args) =>
                 {
-                    this.Committing?.Invoke(sender, args);
+                    this.OnCommitting?.Invoke(sender, args);
                 };
             }
 
             kafkaConsumer.OnErrorOccurred += (sender, exception) =>
             {
-                this.ErrorOccurred?.Invoke(sender, exception);
+                this.OnErrorOccurred?.Invoke(sender, exception);
             };
         }
 
         /// <inheritdoc/>
-        public Func<TransportPackage, Task> PackageReceived { get; set; }
+        public Func<TransportPackage, Task> OnPackageReceived { get; set; }
         
         /// <inheritdoc/>
-        public event EventHandler<Exception> ErrorOccurred;
+        public event EventHandler<Exception> OnErrorOccurred;
 
         /// <inheritdoc/>
         public void Commit(ICollection<TopicPartitionOffset> partitionOffsets)
@@ -211,35 +201,21 @@ namespace QuixStreams.Kafka.Transport
         }
 
         /// <inheritdoc/>
-        public event EventHandler<CommittedEventArgs> Committed;
+        public event EventHandler<CommittedEventArgs> OnCommitted;
         
         /// <inheritdoc/>
-        public event EventHandler<CommittingEventArgs> Committing;
+        public event EventHandler<CommittingEventArgs> OnCommitting;
 
         /// <inheritdoc/>
-        public void Open()
-        {
-            this.kafkaConsumer.Open();
-        }
-
-        /// <summary>
-        /// Close transport consumer
-        /// </summary>
-        public void Close()
-        {
-            this.closeAction();
-        }
-
-        /// <inheritdoc/>
-        public event EventHandler<RevokingEventArgs> Revoking;
+        public event EventHandler<RevokingEventArgs> OnRevoking;
         
         /// <inheritdoc/>
-        public event EventHandler<RevokedEventArgs> Revoked;
+        public event EventHandler<RevokedEventArgs> OnRevoked;
         
         /// <inheritdoc/>
         public void Dispose()
         {
-            this.Close();
+            this.closeAction();
         }
     }
 
