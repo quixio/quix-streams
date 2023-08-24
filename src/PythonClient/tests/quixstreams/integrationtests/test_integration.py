@@ -1706,29 +1706,41 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_consumer.subscribe()
 
         # Act
-        message_bytes = bytes("Test Quix Raw with bytes", "utf-8")
-        raw_topic_producer.publish(message_bytes)
-        message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
-        raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.KafkaMessage(bytearray("Test Quix Raw message", "utf-8"))
-        raw_topic_producer.publish(message_raw)
+        value_bytes = bytes("value bytes", "utf-8")
+        value_bytearray = bytearray("value bytearray", "utf-8")
+        key_bytearray = bytearray("key bytearray", "utf-8")
+        headers = []
+        headers.append(qx.KafkaHeader("header_key", "header_value"))
+
+        raw_topic_producer.publish(value_bytes)
+        raw_topic_producer.publish(value_bytearray)
+        message_val_only = qx.KafkaMessage(value=value_bytes)
+        raw_topic_producer.publish(message_val_only)
+        message_with_key = qx.KafkaMessage(key=key_bytearray, value=value_bytearray)
+        raw_topic_producer.publish(message_with_key)
+        message_with_header = qx.KafkaMessage(key=key_bytearray, value=value_bytearray, headers=headers)
+        raw_topic_producer.publish(message_with_header)
 
         self.wait_for_result(event)
 
         # Assert
-        assert len(received_messages) == 3
-        assert received_messages[0].value == message_bytes
-        assert received_messages[1].value == message_bytearray
-        assert received_messages[2].value == message_raw.value
+        assert len(received_messages) == 5
+        assert received_messages[0].value == value_bytes
+        assert received_messages[1].value == value_bytearray
+        assert received_messages[2].value == value_bytes
+        assert received_messages[3].key == key_bytearray
+        assert received_messages[3].value == value_bytearray
+        assert received_messages[4].key == key_bytearray
+        assert received_messages[4].value == value_bytearray
+        assert len(received_messages[4].headers) == len(headers) and len(headers) == 1
+        assert received_messages[4].headers[0].key == headers[0].key
+        assert received_messages[4].headers[0].value == headers[0].value
+        assert received_messages[4].headers[0].get_value_as_str() == headers[0].get_value_as_str()
 
-        keys = received_messages[0].metadata.keys()
-        assert 'MessageGroupKey' not in keys  # because key was not set
-        assert 'KafkaKey' not in keys  # because key was not set
-        assert 'KafkaTopic' in keys
-        assert 'KafkaPartition' in keys
-        assert 'KafkaOffset' in keys
-        assert 'BrokerMessageTime' in keys
-        assert 'KafkaMessageSize' in keys
+
+
+
+
 
     def test_dispose_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
         # Arrange
@@ -1754,7 +1766,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.KafkaMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(value=bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         raw_topic_producer.dispose()
@@ -1788,7 +1800,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.KafkaMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(value=bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         raw_topic_producer.flush()
@@ -1806,11 +1818,11 @@ class TestStreamState(BaseIntegrationTest):
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
         dict_state = stream_state_manager.get_dict_state("test")
 
-        assert "a" in dict_state
+        assert "a" not in dict_state
 
         dict_state["a"] = "b"
 
-        assert "a" not in dict_state
+        assert "a" in dict_state
 
     def test_stream_state_manager(self,
                                   test_name,

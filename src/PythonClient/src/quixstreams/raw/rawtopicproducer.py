@@ -31,7 +31,7 @@ class RawTopicProducer(object):
                 a KafkaMessage instance, bytes, or a bytearray.
         """
         if not isinstance(message, KafkaMessage):
-            message = KafkaMessage(message)
+            message = KafkaMessage(value=message)
         self._interop.Publish(message.get_net_pointer())
 
     def dispose(self):
