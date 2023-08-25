@@ -105,5 +105,5 @@ def install_or_update_brew():
 install_or_update_brew()
 
 print("... checking librdkafka dependency")
-subprocess.run(['brew', 'install', 'librdkafka'], check=True)
+subprocess.run(['brew', 'install', 'librdkafka'], shell=True, check=True)
 print("Dependency check finished")
