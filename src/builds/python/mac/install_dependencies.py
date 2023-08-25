@@ -105,5 +105,12 @@ def install_or_update_brew():
 install_or_update_brew()
 
 print("... checking librdkafka dependency")
-subprocess.run(['brew', 'install', 'librdkafka'], shell=True, check=True)
+try:
+    result = subprocess.run(['brew', 'install', 'librdkafka'], shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print("Command output (stdout):", result.stdout.decode('utf-8'))
+except subprocess.CalledProcessError as e:
+    print("An exception occurred:")
+    print("Return code:", e.returncode)
+    print("Command output (stderr):", e.stderr.decode('utf-8'))
+    raise
 print("Dependency check finished")
