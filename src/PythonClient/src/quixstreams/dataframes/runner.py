@@ -87,14 +87,14 @@ class Runner:
         :param on_message_processed: a callback triggered when message is successfully
             processed.
 
-        To handle errors, `Runner` accepts callbacks triggerred when exceptions occur
+        To handle errors, `Runner` accepts callbacks triggered when exceptions occur
         on different stages of stream processing.
         If the callback returns `True`, the exception will be ignored. Otherwise, the
         exception will be propagated and the processing will eventually stop.
 
-        :param on_consumer_error: triggerred when internal `RowConsumer` fails
+        :param on_consumer_error: triggered when internal `RowConsumer` fails
         to poll Kafka or cannot deserialize a message.
-        :param on_processing_error: triggerred when exception is raised within
+        :param on_processing_error: triggered when exception is raised within
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.

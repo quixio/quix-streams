@@ -193,3 +193,21 @@ class TestColumn:
         result = (Column('x') <= Column('y')) & (Column('x') > Column('z'))
         assert isinstance(result, Column)
         assert result.eval(msg_value) is False
+
+    def test_invert_int(self, row_factory):
+        msg_value = row_factory({'x': 1})
+        result = ~Column('x')
+        assert isinstance(result, Column)
+        assert result.eval(msg_value) == -2
+
+    def test_invert_bool(self, row_factory):
+        msg_value = row_factory({'x': True, 'y': True, 'z': False})
+        result = ~Column('x')
+        assert isinstance(result, Column)
+        assert result.eval(msg_value) is False
+
+    def test_invert_bool_from_inequalities(self, row_factory):
+        msg_value = row_factory({'x': 5, 'y': 20, 'z': 110})
+        result = ~(Column('x') <= Column('y'))
+        assert isinstance(result, Column)
+        assert result.eval(msg_value) is False
