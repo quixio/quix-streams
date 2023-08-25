@@ -5,10 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using QuixStreams.Kafka.Transport.SerDes;
-using QuixStreams.Kafka.Transport.SerDes.Legacy.MessageValue;
 using QuixStreams.Streaming;
 using QuixStreams.Streaming.Models;
-using QuixStreams.Streaming.Models.StreamProducer;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
@@ -42,6 +40,7 @@ namespace QuixStreams.Tester
             if (Configuration.Mode == ClientRunMode.Producer)
             {
                 Produce(client, cts.Token);
+                return;
             }
 
             Consume(client, cts.Token);
@@ -73,6 +72,7 @@ namespace QuixStreams.Tester
 
                         if (random.Next(0, 2) == 1) tsdb.AddTag("Random_Tag", $"tag{random.Next(0, 10)}");
 
+                        Console.WriteLine("Sending timeseries data");
                         tsdb.Publish();
                         
                         Thread.Sleep(250);
@@ -101,6 +101,7 @@ namespace QuixStreams.Tester
 
                         if (random.Next(0, 2) == 1) builder.AddTag("Random_Tag", $"tag{random.Next(0, 10)}");
 
+                        Console.WriteLine("Sending event data");
                         builder.Publish();
                         stream.Events.Flush();
                         
