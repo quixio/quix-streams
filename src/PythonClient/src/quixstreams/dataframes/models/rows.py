@@ -2,7 +2,7 @@ import dataclasses
 from typing import Mapping, Optional, Union, List
 
 from .timestamps import MessageTimestamp
-from .types import MessageKey, MessageHeaders
+from .types import MessageKey, MessageHeadersTuples
 
 
 # TODO: add other dict functions like .get() , __contains__  and .copy()
@@ -19,7 +19,7 @@ class Row:
     size: int
     timestamp: MessageTimestamp
     key: Optional[MessageKey] = None
-    headers: Optional[Union[Mapping, MessageHeaders]] = None
+    headers: Optional[Union[Mapping, MessageHeadersTuples]] = None
     latency: Optional[float] = None
     leader_epoch: Optional[int] = None
 

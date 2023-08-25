@@ -6,7 +6,7 @@ from confluent_kafka.serialization import (
     MessageField,
 )
 
-from ..types import MessageHeaders
+from ..types import MessageHeadersTuples, MessageHeadersMapping
 
 __all__ = (
     "SerializationContext",
@@ -24,7 +24,7 @@ class SerializationContext:
 
     __slots__ = ("topic", "headers")
 
-    def __init__(self, topic: str, headers: Optional[MessageHeaders] = None):
+    def __init__(self, topic: str, headers: Optional[MessageHeadersTuples] = None):
         self.topic = topic
         self.headers = headers
 
@@ -72,6 +72,19 @@ class Serializer(abc.ABC):
     """
     A base class for all Serializers
     """
+
+    @property
+    def extra_headers(self) -> MessageHeadersMapping:
+        """
+        Informs producer to set additional headers
+        for the message it will be serializing
+
+        Must return a dictionary with headers.
+        Keys must be strings, and values must be strings, bytes or None.
+
+        :return: dict with headers
+        """
+        return {}
 
     @abc.abstractmethod
     def __call__(self, *args, **kwargs) -> bytes:

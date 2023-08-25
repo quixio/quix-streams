@@ -18,7 +18,7 @@ from .types import (
     ConfluentKafkaMessageProto,
     MessageKey,
     MessageValue,
-    MessageHeaders,
+    MessageHeadersTuples,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,6 @@ class Topic:
         :param row: Row to serialize
         :return: KafkaMessage object with serialized values
         """
-
         ctx = SerializationContext(topic=row.topic, headers=row.headers)
         if self._key_serializer is None:
             raise SerializerIsNotProvidedError(
@@ -75,7 +74,7 @@ class Topic:
         return KafkaMessage(
             key=self._key_serializer(row.key, ctx=ctx),
             value=self._value_serializer(row.value, ctx=ctx),
-            headers=row.headers,
+            headers=self._value_serializer.extra_headers,
         )
 
     def row_deserialize(
@@ -132,7 +131,7 @@ class Topic:
             return
 
         if self._value_deserializer.split_values:
-            # The expected value from this serializer is iterable and each item
+            # The expected value from this serializer is Iterable and each item
             # should be processed as a separate message
             rows = []
             for item in value:
@@ -141,6 +140,7 @@ class Topic:
                         f"Row value must be a Mapping, but has a type "
                         f'"{type(item).__name__}"'
                     )
+                # TODO: Fix type-hints
                 rows.append(Row(value=item, **row_kwargs))
             return rows
 
@@ -154,10 +154,10 @@ class Topic:
         self,
         key: Optional[MessageKey] = None,
         value: Optional[MessageValue] = None,
-        headers: Optional[Mapping | MessageHeaders] = None,
+        headers: Optional[Mapping | MessageHeadersTuples] = None,
         timestamp_ms: int = None,
     ) -> KafkaMessage:
-        # TODO: Implement SerDes for raw messages
+        # TODO: Implement SerDes for raw messages (also to produce primitive values)
         raise NotImplementedError
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
