@@ -5,7 +5,6 @@ from confluent_kafka import KafkaError, TopicPartition
 
 from src.quixstreams.dataframes import Topic
 from src.quixstreams.dataframes.models import (
-    JSONDeserializer,
     IgnoreMessage,
     Deserializer,
     SerializationError,
@@ -15,14 +14,13 @@ from src.quixstreams.dataframes.rowconsumer import KafkaMessageError
 
 class TestRowConsumer:
     def test_poll_row_success(
-        self, row_consumer_factory, topic_factory, producer, executor
+        self, row_consumer_factory, topic_json_serdes_factory, producer, executor
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
         with row_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer, producer:
-            producer.produce(topic=topic_name, key=b"key", value=b'{"field":"value"}')
+            producer.produce(topic=topic.name, key=b"key", value=b'{"field":"value"}')
             producer.flush()
             consumer.subscribe([topic])
             polled = Future()
@@ -42,14 +40,9 @@ class TestRowConsumer:
         assert row.value == {"field": "value"}
 
     def test_poll_row_multiple_topics(
-        self, row_consumer_factory, topic_factory, producer, executor
+        self, row_consumer_factory, topic_json_serdes_factory, producer, executor
     ):
-        topic_name1, _ = topic_factory()
-        topic_name2, _ = topic_factory()
-        topics = [
-            Topic(topic_name1, value_deserializer=JSONDeserializer()),
-            Topic(topic_name2, value_deserializer=JSONDeserializer()),
-        ]
+        topics = [topic_json_serdes_factory(), topic_json_serdes_factory()]
         with row_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer, producer:
@@ -112,38 +105,35 @@ class TestRowConsumer:
         assert high == 1
 
     def test_poll_row_deserialization_error_raise(
-        self, row_consumer_factory, topic_factory, producer
+        self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
         with row_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer, producer:
-            producer.produce(topic_name, key=b"key", value=b"value")
+            producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
             with pytest.raises(SerializationError):
                 consumer.poll_row(10.0)
 
     def test_poll_row_kafka_error_raise(
-        self, row_consumer_factory, topic_factory, producer
+        self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
         with row_consumer_factory(
             auto_offset_reset="error",
         ) as consumer, producer:
-            producer.produce(topic_name, key=b"key", value=b"value")
+            producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
             with pytest.raises(KafkaMessageError):
                 consumer.poll_row(10.0)
 
     def test_poll_row_deserialization_error_suppress(
-        self, row_consumer_factory, topic_factory, producer
+        self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
 
         suppressed = Future()
 
@@ -156,7 +146,7 @@ class TestRowConsumer:
             auto_offset_reset="earliest",
             on_error=on_error,
         ) as consumer, producer:
-            producer.produce(topic_name, key=b"key", value=b"value")
+            producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
             row = consumer.poll_row(10.0)
@@ -164,10 +154,9 @@ class TestRowConsumer:
             assert suppressed.result(10.0)
 
     def test_poll_row_kafka_error_suppress(
-        self, row_consumer_factory, topic_factory, producer
+        self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = topic_json_serdes_factory()
 
         suppressed = Future()
 
@@ -180,7 +169,7 @@ class TestRowConsumer:
             auto_offset_reset="error",
             on_error=on_error,
         ) as consumer, producer:
-            producer.produce(topic_name, key=b"key", value=b"value")
+            producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
             row = consumer.poll_row(10.0)
