@@ -1,7 +1,7 @@
 import pytest
+
 from src.quixstreams.dataframes.models.serializers import *
 from .utils import int_to_bytes, float_to_bytes
-
 
 dummy_context = SerializationContext(topic="topic")
 
