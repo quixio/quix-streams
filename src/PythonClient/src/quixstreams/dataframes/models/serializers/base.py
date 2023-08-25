@@ -1,5 +1,5 @@
 import abc
-from typing import Optional, Any, Mapping, Union
+from typing import Optional, Any, Union
 
 from confluent_kafka.serialization import (
     SerializationContext as _SerializationContext,
@@ -58,7 +58,7 @@ class Deserializer(abc.ABC):
         """
         return False
 
-    def _to_dict(self, value: Any) -> Union[Any, Mapping]:
+    def _to_dict(self, value: Any) -> Union[Any, dict]:
         if self.column_name:
             return {self.column_name: value}
         return value

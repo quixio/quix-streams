@@ -124,7 +124,7 @@ class TestTopic:
             value_deserializer=value_deserializer,
         )
         message = ConfluentKafkaMessageStub(key=b"key", value=value)
-        with pytest.raises(TypeError, match="Row value must be a Mapping"):
+        with pytest.raises(TypeError, match="Row value must be a dict"):
             topic.row_deserialize(message=message)
 
     def test_row_deserialize_ignorevalueerror_raised(self):
