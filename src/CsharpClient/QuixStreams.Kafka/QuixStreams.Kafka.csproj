@@ -17,8 +17,8 @@
     <InformationalVersion>0.6.0.0</InformationalVersion>
     <Company>Quix Analytics Ltd</Company>
     <Authors>devs@quix.io</Authors>
-    <Product>QuixStreams.Transport</Product>
-    <Description>Kafka implementation of QuixStreams.Transport</Description>
+    <Product>QuixStreams.Kafka</Product>
+    <Description>Kafka implementation of QuixStreams</Description>
     <Copyright>Copyright © Quix Analytics Ltd 2020</Copyright>
   </PropertyGroup>
 

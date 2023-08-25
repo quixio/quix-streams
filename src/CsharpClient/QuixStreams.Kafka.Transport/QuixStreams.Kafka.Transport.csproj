@@ -15,7 +15,7 @@
     <InformationalVersion>0.6.0.0</InformationalVersion>
     <Company>Quix Analytics Ltd</Company>
     <Authors>devs@quix.io</Authors>
-    <Product>QuixStreams.Transport</Product>
+    <Product>QuixStreams.Kafka.Transport</Product>
     <Description>Codec system for QuixStreams dependent on Kafka protocol</Description>
     <Copyright>Copyright © Quix Analytics Ltd 2020</Copyright>
   </PropertyGroup>

@@ -51,19 +51,19 @@ This base library is organized in 3 main layers:
                  │
                  │
    ┌─────────────▼─────────────┐
-   │   Kafka Transport layer   │    /CSharp/QuixStreams.Transport.Kafka
+   │   Kafka Transport layer   │    /CSharp/QuixStreams.Kafka.Transport
    ├───────────────────────────┤
-   │      Transport layer      │    /CSharp/QuixStreams.Transport
+   │    Kafka wrapper layer    │    /CSharp/QuixStreams.Kafka
    └───────────────────────────┘
 
 ```
 
 Each layer has his own responsibilities:
  
-- <b>Streaming layer</b>: This is the main layer of the library that users should use by default. It includes all the <b>syntax sugar</b> needed to have a pleasant experience with the library. Another important responsibility of this layer is the <b>embedded time-series buffer</b> system.
+- <b>Streaming layer</b>: This is the user facing layer of the library. It includes all the <b>syntax sugar</b> needed to have a pleasant experience with the library.
 
-- <b>Telemetry layer</b>: This layer is responsible for implementing the `Codecs` serialization and de-serialization for all the <b>Telemetry messages</b> of Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes responsible for the separation between data coming from different sources. This layer also implements a `Stream Pipeline` system to concatenate different Stream processes that can be used to implement complex low-level Telemetry services.
+- <b>Telemetry layer</b>: This layer implements the `Codecs` to ser/des the <b>Telemetry messages</b> of Quix Streams protocol. This includes time-series and non time-series messages, stream metadata, stream properties messages, parameters definitions, as well as creating the [Stream context](#library-features-) scopes. The layer also implements a `Stream Pipeline` system to concatenate different components that can be used to implement complex low-level Telemetry services.
 
-- <b>Transport layer</b>: This layer is responsible for the <b>communication with the message broker</b> and implementing some features to deal with the message broker's features and limitations. Some of these features are `message splitting`, `checkpointing`, `partition revocation`, `connectivity issues recovering` among others. This layer is also responsible for implementing a `wrapping messages system` to allow different message types of the library Protocol, and to define the base classes for the `Codecs` implementation of each messages of that Protocol on the upper layers of the library. For <b>Kafka</b> support, this base library uses internally [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), which uses the library [librdkafka - the Apache Kafka C/C++ client library](https://github.com/edenhill/librdkafka).
+- <b>Transport layer</b>: This layer is responsible for handling <b>communication with the kafka broker</b>. It introduces additional features to ease the use of Kafka, improves on some of the broker's limitations and contains workarounds to some known issues. The library relies on [Confluent .NET Client for Apache Kafka](https://github.com/confluentinc/confluent-kafka-dotnet).
 
 For more information and general questions about the architecture of the library you can join to our official [Slack channel](https://quix.io/slack-invite).
