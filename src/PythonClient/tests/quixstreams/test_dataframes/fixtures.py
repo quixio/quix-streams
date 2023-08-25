@@ -91,7 +91,7 @@ def executor() -> ThreadPoolExecutor:
         yield executor
     finally:
         # Kill all the threads after leaving the test
-        executor.shutdown(wait=False)
+        executor.shutdown()
 
 
 @pytest.fixture()
