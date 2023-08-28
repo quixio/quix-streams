@@ -187,27 +187,25 @@ class QuixTimeseriesDeserializer(BaseQuixDeserializer):
             raise SerializationError(f'Expected mapping, got type "{type(value)}"')
 
         timestamps = value["Timestamps"]
-        all_params = list(
-            itertools.chain(
-                (
-                    (param, iter(values), False)
-                    for param, values in value.get("NumericValues", {}).items()
-                ),
-                (
-                    (param, iter(values), False)
-                    for param, values in value.get("StringValues", {}).items()
-                ),
-                (
-                    (param, iter(values), True)
-                    for param, values in value.get("BinaryValues", {}).items()
-                ),
+        # Make a list of parameters and iterators with values to get them one by one
+        # and decode values from base64 if they're binary
+        all_params = [
+            (
+                param_name,
+                iter(param_values),
+                True if param_type == "BinaryValues" else False,
             )
-        )
-        tags = list(
+            for param_type in ("NumericValues", "StringValues", "BinaryValues")
+            for param_name, param_values in value.get(param_type, {}).items()
+        ]
+        # Do the same with TagValues
+        tags = [
             (tag, iter(values)) for tag, values in value.get("TagValues", {}).items()
-        )
+        ]
 
-        for i, timestamp_ns in enumerate(timestamps):
+        # Iterate over timestamps and get a corresponding parameter value
+        # for each timestamp
+        for timestamp_ns in timestamps:
             row_value = {
                 param: _b64_decode_or_none(next(values)) if is_binary else next(values)
                 for param, values, is_binary in all_params
