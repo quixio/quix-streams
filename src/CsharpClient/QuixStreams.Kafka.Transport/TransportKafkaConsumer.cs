@@ -91,21 +91,21 @@ namespace QuixStreams.Kafka.Transport
             var buffer = new KafkaMessageBuffer();
             var merger = new KafkaMessageMerger(buffer);
 
-            kafkaConsumer.MessageReceived += message => merger.Merge(message);
+            kafkaConsumer.OnMessageReceived += message => merger.Merge(message);
             
             var deserializer = new PackageDeserializer();
 
             if (options.CommitOptions?.AutoCommitEnabled ?? false)
             {
                 var commitModifier = new AutoCommitter(options.CommitOptions, this.kafkaConsumer.Commit);
-                merger.MessageAvailable += message =>
+                merger.OnMessageAvailable += message =>
                 {
                     var package = deserializer.Deserialize(message);
                     return commitModifier.Publish(package);
                 };
                 closeAction = () => commitModifier.Close();
 
-                commitModifier.PackageAvailable += package => this.OnPackageReceived?.Invoke(package);
+                commitModifier.OnPackageAvailable += package => this.OnPackageReceived?.Invoke(package);
 
                 kafkaConsumer.OnRevoked += (sender, args) =>
                 {
@@ -158,7 +158,7 @@ namespace QuixStreams.Kafka.Transport
             }
             else
             {
-                merger.MessageAvailable += message =>
+                merger.OnMessageAvailable += message =>
                 {
                     var package = deserializer.Deserialize(message);
                     return this.OnPackageReceived?.Invoke(package);

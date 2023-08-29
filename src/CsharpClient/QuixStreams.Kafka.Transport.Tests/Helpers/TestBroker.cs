@@ -24,7 +24,7 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         public long MessageCount => msgCount;
         private readonly Func<KafkaMessage, Task> onPublish;
 
-        public Func<KafkaMessage, Task> MessageReceived { get; set; }
+        public Func<KafkaMessage, Task> OnMessageReceived { get; set; }
         public event EventHandler<Exception> OnErrorOccurred;
         public void Commit(ICollection<TopicPartitionOffset> partitionOffsets)
         {
@@ -58,7 +58,7 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
             var offset = CreateTopicPartitionOffset(count);
             var testMessage = new TestProducedKafkaMessage(message, offset);
             await onPublish(testMessage);
-            await (this.MessageReceived?.Invoke(testMessage) ?? Task.CompletedTask);
+            await (this.OnMessageReceived?.Invoke(testMessage) ?? Task.CompletedTask);
         }
 
         private TopicPartitionOffset CreateTopicPartitionOffset(long index)

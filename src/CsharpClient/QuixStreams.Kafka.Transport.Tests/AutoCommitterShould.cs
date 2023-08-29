@@ -153,7 +153,7 @@ namespace QuixStreams.Kafka.Transport.Tests
 
             var newPackageCallback = new List<(TransportPackage, TaskCompletionSource<object>)>();
             var counter = 0;
-            autoCommitter.PackageAvailable = package =>
+            autoCommitter.OnPackageAvailable = package =>
             {
                 var tcs = new TaskCompletionSource<object>();
                 newPackageCallback.Add((package, tcs));

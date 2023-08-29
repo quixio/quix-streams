@@ -11,7 +11,7 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         {
             CodecRegistry.RegisterCodec(new ModelKey(typeof(object)), DefaultJsonCodec.Instance);
             KafkaMessage result = null;
-            Producer.MessageReceived = async message => result = message;  
+            Producer.OnMessageReceived = async message => result = message;  
             var tProducer = new KafkaTransportProducer(Producer);
             tProducer.Publish(new TransportPackage<object>(key, value));
             return result;
@@ -21,7 +21,7 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         {
             CodecRegistry.RegisterCodec(new ModelKey(package.Type), DefaultJsonCodec.Instance);
             KafkaMessage result = null;
-            Producer.MessageReceived = async message => result = message;  
+            Producer.OnMessageReceived = async message => result = message;  
             var tProducer = new KafkaTransportProducer(Producer);
             tProducer.Publish(package);
             return result;
@@ -31,7 +31,7 @@ namespace QuixStreams.Kafka.Transport.Tests.Helpers
         {
             CodecRegistry.RegisterCodec(new ModelKey(package.Type), DefaultJsonCodec.Instance);
             KafkaMessage result = null;
-            Producer.MessageReceived = async message => result = message;  
+            Producer.OnMessageReceived = async message => result = message;  
             var tProducer = new KafkaTransportProducer(Producer);
             tProducer.Publish(package); 
             return new TransportPackage(package.Type, package.Key, package.Value, result);

@@ -60,7 +60,7 @@ namespace QuixStreams.Kafka.Transport
             if (!autoCommit)
             {
                 // In case there is no auto committing then all we have to do is pass the message up in the chain
-                onPublish = (package, cancellationToken) => this.PackageAvailable?.Invoke(package) ?? Task.CompletedTask;
+                onPublish = (package, cancellationToken) => this.OnPackageAvailable?.Invoke(package) ?? Task.CompletedTask;
                 return;
             }
 
@@ -69,7 +69,7 @@ namespace QuixStreams.Kafka.Transport
                 // if we're committing every single message, then any kind of timer based commit is irrelevant
                 onPublish = async (package, cancellationToken) =>
                 {
-                    await (this.PackageAvailable?.Invoke(package) ?? Task.CompletedTask);
+                    await (this.OnPackageAvailable?.Invoke(package) ?? Task.CompletedTask);
                     if (package == null) return;
                     if (this.closed) return;
                     logger.LogTrace("Committing offsets due to reaching limit {0}", commitEvery);
@@ -135,7 +135,7 @@ namespace QuixStreams.Kafka.Transport
                 // The task here is to simply keep track of every message going through this modifier
                 onPublish = async (package, cancellationToken) =>
                 {
-                    await (this.PackageAvailable?.Invoke(package) ?? Task.CompletedTask);
+                    await (this.OnPackageAvailable?.Invoke(package) ?? Task.CompletedTask);
                     if (package == null) return;
                     if (this.closed) return;
                     lock (this.commitCheckLock) committableOffsets.Add(package.KafkaMessage.TopicPartitionOffset);
@@ -146,7 +146,7 @@ namespace QuixStreams.Kafka.Transport
                 // This is a condition where I want to commit after every N number of messages.
                 onPublish = async (package, cancellationToken) =>
                 {
-                    await (this.PackageAvailable?.Invoke(package) ?? Task.CompletedTask);
+                    await (this.OnPackageAvailable?.Invoke(package) ?? Task.CompletedTask);
                     if (package == null) return;
                     if (this.closed) return;
                     lock (this.commitCheckLock)
@@ -192,7 +192,7 @@ namespace QuixStreams.Kafka.Transport
             return onPublish(transportPackage, cancellationToken);
         }
 
-        public Func<TransportPackage, Task> PackageAvailable { get; set; }
+        public Func<TransportPackage, Task> OnPackageAvailable { get; set; }
         
 
         /// <summary>

@@ -21,7 +21,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
         {
             this.filter = filter;
             this.kafkaConsumer = kafkaConsumer;
-            kafkaConsumer.MessageReceived = FilterNewPackage;
+            kafkaConsumer.OnMessageReceived = FilterNewPackage;
             kafkaConsumer.OnCommitted += (s, e) =>
             {
                 this.OnCommitted?.Invoke(s, e);
@@ -46,8 +46,8 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
 
         private Task FilterNewPackage(KafkaMessage message)
         {
-            if (this.MessageReceived == null || !this.filter(message)) return Task.CompletedTask;
-            return this.MessageReceived(message);
+            if (this.OnMessageReceived == null || !this.filter(message)) return Task.CompletedTask;
+            return this.OnMessageReceived(message);
         }
 
         public void Dispose()
@@ -55,7 +55,7 @@ namespace QuixStreams.Kafka.Transport.Samples.Samples
             this.kafkaConsumer.Dispose();
         }
 
-        public Func<KafkaMessage, Task> MessageReceived { get; set; }
+        public Func<KafkaMessage, Task> OnMessageReceived { get; set; }
         public event EventHandler<Exception> OnErrorOccurred;
         public void Commit(ICollection<TopicPartitionOffset> partitionOffsets)
         {

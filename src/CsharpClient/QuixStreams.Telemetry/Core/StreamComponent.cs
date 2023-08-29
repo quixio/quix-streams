@@ -41,7 +41,7 @@ namespace QuixStreams.Telemetry
         }
 
         /// <summary>
-        /// Handler raised when a Stream pipeline is assigned to the component
+        /// Raised when a Stream pipeline is assigned to the component
         /// </summary>
         public Action OnStreamPipelineAssigned = null;
 

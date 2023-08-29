@@ -41,10 +41,10 @@ namespace QuixStreams.Kafka.Transport.SerDes
         /// <summary>
         /// The callback that is used when new message (merged or not) is available
         /// </summary>
-        public Func<KafkaMessage, Task> MessageAvailable { get; set; }
+        public Func<KafkaMessage, Task> OnMessageAvailable { get; set; }
 
         /// <summary>
-        /// Merges the provided kafka message with previously provided messages, if needed. Merge results are raised via <see cref="MessageAvailable"/>,
+        /// Merges the provided kafka message with previously provided messages, if needed. Merge results are raised via <see cref="OnMessageAvailable"/>,
         /// as there is no direct relation to message merged and message raised due to ordering and other reasons.
         /// </summary>
         /// <param name="kafkaMessage">The kafka message to merge</param>
@@ -91,7 +91,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
             if (this.bufferCounter == 0)
             {
                 RemoveFromBuffer(bufferId);
-                return this.MessageAvailable?.Invoke(messageToRaise) ?? Task.CompletedTask;
+                return this.OnMessageAvailable?.Invoke(messageToRaise) ?? Task.CompletedTask;
             }
             
             // Not empty, check if this is next in line
@@ -137,7 +137,7 @@ namespace QuixStreams.Kafka.Transport.SerDes
                         return;
                     }
 
-                    await (this.MessageAvailable?.Invoke(nextMessage.Message) ?? Task.CompletedTask); 
+                    await (this.OnMessageAvailable?.Invoke(nextMessage.Message) ?? Task.CompletedTask); 
                     RemoveFromBuffer(nextBufferId);
                 }
             }

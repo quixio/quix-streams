@@ -89,7 +89,7 @@ namespace QuixStreams.Streaming.Raw
                 return;
             }
 
-            kafkaConsumer.MessageReceived = message =>
+            kafkaConsumer.OnMessageReceived = message =>
             {
                 this.OnMessageReceived?.Invoke(this, message);
                 return Task.CompletedTask;

@@ -61,7 +61,7 @@ namespace QuixStreams.Kafka
         public event EventHandler<Exception> OnErrorOccurred;
 
         /// <inheritdoc/>
-        public Func<KafkaMessage, Task> MessageReceived { get; set; }
+        public Func<KafkaMessage, Task> OnMessageReceived { get; set; }
 
         /// <inheritdoc/>
         public event EventHandler<CommittedEventArgs> OnCommitted;
@@ -923,7 +923,7 @@ namespace QuixStreams.Kafka
                 }
 
                 this.logger.LogTrace("[{0}] KafkaConsumer: raising MessageReceived", this.configId);
-                var task = this.MessageReceived?.Invoke(args);
+                var task = this.OnMessageReceived?.Invoke(args);
                 if (task == null) return;
                 await task;
                 this.logger.LogTrace("[{0}] KafkaConsumer: raised MessageReceived", this.configId);

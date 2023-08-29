@@ -55,7 +55,7 @@ namespace QuixStreams.Transport.Kafka.Tests
                 {
                     int lastMsgRead = -1;
                     var msgReceivedOutOfOrder = false;
-                    consumer.MessageReceived += message =>
+                    consumer.OnMessageReceived += message =>
                     {
                         messagesReceived.Add(message);
                         var msgKey = Encoding.UTF8.GetString(message.Key).Replace("Key", "");
@@ -128,7 +128,7 @@ namespace QuixStreams.Transport.Kafka.Tests
             using (var consumer = new KafkaConsumer(new ConsumerConfiguration(this.kafkaDockerTestFixture.BrokerList, consumerProperties: new Dictionary<string, string>() {{"enable.auto.commit", "false"}}), new ConsumerTopicConfiguration(topic)))
             {
                 var msgReceived = 0;
-                consumer.MessageReceived += message =>
+                consumer.OnMessageReceived += message =>
                 {
                     lastMessageReceived = message;
                     msgReceived++;

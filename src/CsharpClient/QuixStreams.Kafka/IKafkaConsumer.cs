@@ -13,7 +13,7 @@ namespace QuixStreams.Kafka
         /// <summary>
         /// The callback that is used when the <see cref="IKafkaConsumer"/> has new package for the listener
         /// </summary>
-        Func<KafkaMessage, Task> MessageReceived { get; set; }
+        Func<KafkaMessage, Task> OnMessageReceived { get; set; }
         
         /// <summary>
         /// Raised when <see cref="Exception"/> occurred.

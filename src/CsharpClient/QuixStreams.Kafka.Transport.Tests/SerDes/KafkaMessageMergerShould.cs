@@ -24,7 +24,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             var merger = new KafkaMessageMerger(new KafkaMessageBuffer());
 
             KafkaMessage kafkaMessage = null; 
-            merger.MessageAvailable = (message) =>
+            merger.OnMessageAvailable = (message) =>
             {
                 kafkaMessage = message;
                 return Task.CompletedTask;
@@ -65,7 +65,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             };
 
             var packagesReceived = new List<byte[]>();
-            merger.MessageAvailable = (message) =>
+            merger.OnMessageAvailable = (message) =>
             {
                 packagesReceived.Add(message.Value);
                 return Task.CompletedTask;
@@ -112,7 +112,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             };
 
             var packagesReceived = new List<byte[]>();
-            merger.MessageAvailable = (message) =>
+            merger.OnMessageAvailable = (message) =>
             {
                 packagesReceived.Add(message.Value);
                 return Task.CompletedTask;
@@ -148,7 +148,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             var message1Segments = this.CreateSplitMessage(2, out var message1);
 
             KafkaMessage receivedMessage = null;
-            merger.MessageAvailable = (message) =>
+            merger.OnMessageAvailable = (message) =>
             {
                 receivedMessage = message;
                 return Task.CompletedTask;
@@ -185,7 +185,7 @@ namespace QuixStreams.Kafka.Transport.Tests.SerDes
             };
 
             var packagesReceived = new List<byte[]>();
-            merger.MessageAvailable = (message) =>
+            merger.OnMessageAvailable = (message) =>
             {
                 packagesReceived.Add(message.Value);
                 return Task.CompletedTask;
