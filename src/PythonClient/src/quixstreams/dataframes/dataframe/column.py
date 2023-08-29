@@ -10,6 +10,13 @@ ColumnApplier: TypeAlias = Callable[[ColumnValue], OpValue]
 __all__ = ("Column", "OpValue", "ColumnValue", "ColumnApplier")
 
 
+def invert(value):
+    if isinstance(value, bool):
+        return operator.not_(value)
+    else:
+        return operator.invert(value)
+
+
 class Column:
     def __init__(
         self,
@@ -85,3 +92,6 @@ class Column:
 
     def __ge__(self, other):
         return self._operation(other, operator.ge)
+
+    def __invert__(self):
+        return Column(_eval_func=lambda x: invert(self.eval(x)))
