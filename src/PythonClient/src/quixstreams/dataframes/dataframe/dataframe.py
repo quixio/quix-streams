@@ -23,6 +23,52 @@ def setitem(k: str, v: Union[Column, OpValue], row: Row) -> Row:
 
 
 class StreamingDataFrame:
+    """
+    Allows you to define transformations on a kafka message as if it were a Pandas
+    DataFrame. Currently implements a small subset of the Pandas interface, along with
+    some differences/accommodations for kafka-specific functionality.
+
+    A `StreamingDataFrame` expects to interact with a QuixStreams `Row`, which is
+    interacted with like a dictionary.
+
+    Unlike pandas, you will not get an immediate output from any given operation;
+    instead, the command is permanently added to the `StreamingDataFrame`'s
+    "pipeline". You can then execute this pipeline indefinitely on a `Row` like so:
+
+    df = StreamingDataframe()
+    df = df.apply(lambda row: row) # do stuff; must return the row back!
+    for row_obj in [row_0, row_1]:
+        print(df.process(row_obj))
+
+    Note that just like Pandas, you can "filter" out rows with your operations, like:
+
+    df = df[df['column_b'] >= 5]
+
+    If a processing step nulls the Row in some way, all further processing on that
+    row (including kafka operations, besides committing) will be skipped.
+
+    There is a `Runner` class that can manage the kafka-specific dependencies of
+    `StreamingDataFrame`; it is recommended you hand your `StreamingDataFrame`
+    instance to a `Runner` instance when interacting with kafka.
+
+    Below is a larger example of a `StreamingDataFrame` (that you'd hand to a runner):
+
+    # Define your processing steps
+    # Remove column_a, add 1 to columns b and c, skip row if b+1 >= 5, else publish row
+    df = StreamingDataframe()
+    df = df[['column_b', 'column_c']]
+    df = df.apply(lambda row: row[key] + 1 if key in ['column_b', 'column_c'])
+    df = df[df['column_b'] + 1] >= 5]
+    df.to_topic('my_output_topic')
+
+    # Incomplete Rows to showcase what data you are actually interacting with
+    record_0 = Row(value={'column_a': 'a_string', 'column_b': 3, 'column_c': 5})
+    record_1 = Row(value={'column_a': 'a_string', 'column_b': 1, 'column_c': 10})
+
+    # process records
+    df.process(record_0) -> produces {'column_b': 4, 'column_c': 6} to "my_output_topic"
+    df.process(record_1) -> filters row, does NOT produce to "my_output_topic"
+    """
     def __init__(
         self, topics: List[Topic], _pipeline: Pipeline = None, _id: str = None
     ):
