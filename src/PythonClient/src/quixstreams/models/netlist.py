@@ -28,7 +28,7 @@ class NetReadOnlyList(object):
         self._finalizer.detach()
         InteropUtils.free_hptr(self._pointer)
 
-    def dispose(self):
+    def dispose(self) -> None:
         self._finalizer()
 
     def _get_actual_from(self, value):
@@ -82,7 +82,7 @@ class NetList(NetReadOnlyList):
     """
 
     def __init__(self, net_pointer, converter_to_python=None, converter_from_python=None):
-        NetReadOnlyList.__init__(self, net_pointer, converter_to_python, converter_from_python)
+        super().__init__(net_pointer, converter_to_python, converter_from_python)
 
     @staticmethod
     def constructor_for_string(net_pointer=None):

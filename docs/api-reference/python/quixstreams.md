@@ -7,6 +7,7 @@
     * [datetime\_to\_dotnet](#quixstreams.helpers.dotnet.datetimeconverter.DateTimeConverter.datetime_to_dotnet)
     * [timespan\_to\_python](#quixstreams.helpers.dotnet.datetimeconverter.DateTimeConverter.timespan_to_python)
     * [timedelta\_to\_dotnet](#quixstreams.helpers.dotnet.datetimeconverter.DateTimeConverter.timedelta_to_dotnet)
+* [quixstreams.helpers.defaultdictkeyed](#quixstreams.helpers.defaultdictkeyed)
 * [quixstreams.helpers.timeconverter](#quixstreams.helpers.timeconverter)
   * [TimeConverter](#quixstreams.helpers.timeconverter.TimeConverter)
     * [offset\_from\_utc](#quixstreams.helpers.timeconverter.TimeConverter.offset_from_utc)
@@ -587,6 +588,10 @@ def timedelta_to_dotnet(value: datetime.timedelta) -> ctypes.c_void_p
 
   ctypes.c_void_p:
   Pointer to unmanaged memory containing TimeSpan
+
+<a id="quixstreams.helpers.defaultdictkeyed"></a>
+
+# quixstreams.helpers.defaultdictkeyed
 
 <a id="quixstreams.helpers.timeconverter"></a>
 
@@ -1470,7 +1475,7 @@ NOTE: Do not initialize this class manually, use KafkaStreamingClient.get_topic_
 #### dispose
 
 ```python
-def dispose()
+def dispose() -> None
 ```
 
 Flushes pending data to the broker and disposes underlying resources
@@ -6261,6 +6266,7 @@ Initializes the InMemoryStorage instance.
 ## StateValue Objects
 
 ```python
+@nativedecorator
 class StateValue(object)
 ```
 

@@ -60,6 +60,10 @@ class StreamConsumer(object):
         self._stream_state_manager = None
 
     def _finalizerfunc(self):
+        self._on_stream_closed_dispose()
+        self._on_package_received_dispose()
+
+    def dispose(self):
         if self._streamTimeseriesConsumer is not None:
             self._streamTimeseriesConsumer.dispose()
         if self._streamEventsConsumer is not None:
@@ -106,7 +110,7 @@ class StreamConsumer(object):
         self._on_stream_closed_dispose()
 
         if self._on_stream_closed is None and self._on_stream_closed_internal is None:
-            return # there is nothing to subscribe for
+            return  # there is nothing to subscribe for
 
         self._on_stream_closed_refs = self._interop.add_OnStreamClosed(self._on_stream_closed_wrapper)
 

@@ -28,7 +28,7 @@ class TimeseriesBufferConsumer(TimeseriesBuffer):
             raise Exception("TimeseriesBufferConsumer is none")
 
         self._interop = tsbci(net_pointer)
-        TimeseriesBuffer.__init__(self, stream_consumer, net_pointer)
+        super().__init__(stream_consumer, net_pointer)
 
     def get_net_pointer(self) -> ctypes.c_void_p:
         """

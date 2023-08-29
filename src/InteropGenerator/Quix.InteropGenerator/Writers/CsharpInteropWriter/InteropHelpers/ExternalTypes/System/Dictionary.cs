@@ -239,6 +239,39 @@ public class DictionaryInterop
         }
     }
     
+    [UnmanagedCallersOnly(EntryPoint = "dictionary_contains")]
+    public static bool Contains(IntPtr dictionaryHPtr, IntPtr keyPtr)
+    {
+        object key = null;
+        Type keyType = null;
+        Type dictType = null;
+        try
+        {
+            var target = InteropUtils.FromHPtr<IDictionary>(dictionaryHPtr);
+            var targetType = target.GetType();
+            dictType = (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+                ? targetType
+                : targetType.GetInterfaces().FirstOrDefault(y => y.IsGenericType && y.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+            if (dictType == null)
+            {
+                throw new InvalidOperationException($"Type {targetType} does not implement dictionary with types nor is a dictionary with types");
+            }
+            keyType = dictType.GetGenericArguments()[0];
+
+            key = InteropUtils.PtrToObject(keyPtr, keyType);
+
+            return target.Contains(key);
+        }
+        catch (Exception ex)
+        {
+            InteropUtils.LogDebug("Exception in dictionary_get_value");
+            InteropUtils.LogDebug($"Arg dictionaryHPtr (IntPtr) has value: {dictionaryHPtr}, converted to dict type {dictType}");
+            InteropUtils.LogDebug($"Arg keyPtr (IntPtr) has value: {key}, type {keyType}, converted {key}");
+            InteropUtils.RaiseException(ex);
+            return default;
+        }
+    }
+    
     [UnmanagedCallersOnly(EntryPoint = "dictionary_get_value")]
     public static IntPtr GetValue(IntPtr dictionaryHPtr, IntPtr keyHPtr)
     {

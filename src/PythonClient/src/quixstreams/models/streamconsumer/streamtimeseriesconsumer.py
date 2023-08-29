@@ -56,6 +56,12 @@ class StreamTimeseriesConsumer(object):
         self._on_definitions_changed_refs = None  # Keeping references to avoid GC.
 
     def _finalizerfunc(self):
+        self._on_data_received_dispose()
+        self._on_raw_received_dispose()
+        self._on_dataframe_received_dispose()
+        self._on_definitions_changed_dispose()
+
+    def dispose(self) -> None:
         [buffer.dispose() for buffer in self._buffers]
         self._on_data_received_dispose()
         self._on_raw_received_dispose()

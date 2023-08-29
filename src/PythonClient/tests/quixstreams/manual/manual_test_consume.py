@@ -19,7 +19,7 @@ commit_settings = qx.CommitOptions()
 commit_settings.commit_every = 10000
 commit_settings.commit_interval = None
 commit_settings.auto_commit_enabled = False
-topic_consumer = client.get_topic_consumer('generated-data', 'whateva', auto_offset_reset=AutoOffsetReset.Latest)
+topic_consumer = client.get_topic_consumer('generated-data', 'whateva', auto_offset_reset=AutoOffsetReset.Earliest)
 
 
 def on_streams_revoked_handler(topic_consumer: qx.TopicConsumer, readers: [qx.StreamConsumer]):
@@ -54,7 +54,6 @@ storage.set("objval", {"dic": "tionary"})
 
 topic_consumer.on_streams_revoked = on_streams_revoked_handler
 topic_consumer.on_committed = on_committed_handler
-topic_consumer.on_committing = storage.flush
 topic_consumer.on_revoking = on_revoking_handler
 
 #read streams
