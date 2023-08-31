@@ -18,7 +18,7 @@ from .types import (
     ConfluentKafkaMessageProto,
     MessageKey,
     MessageValue,
-    MessageHeaders,
+    MessageHeadersTuples,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,6 @@ class Topic:
         :param row: Row to serialize
         :return: KafkaMessage object with serialized values
         """
-
         ctx = SerializationContext(topic=row.topic, headers=row.headers)
         if self._key_serializer is None:
             raise SerializerIsNotProvidedError(
@@ -75,7 +74,7 @@ class Topic:
         return KafkaMessage(
             key=self._key_serializer(row.key, ctx=ctx),
             value=self._value_serializer(row.value, ctx=ctx),
-            headers=row.headers,
+            headers=self._value_serializer.extra_headers,
         )
 
     def row_deserialize(
@@ -132,32 +131,27 @@ class Topic:
             return
 
         if self._value_deserializer.split_values:
-            # The expected value from this serializer is iterable and each item
+            # The expected value from this serializer is Iterable and each item
             # should be processed as a separate message
             rows = []
             for item in value:
-                if not isinstance(item, Mapping):
-                    raise TypeError(
-                        f"Row value must be a Mapping, but has a type "
-                        f'"{type(item).__name__}"'
-                    )
+                if not isinstance(item, dict):
+                    raise TypeError(f'Row value must be a dict, but got "{type(item)}"')
                 rows.append(Row(value=item, **row_kwargs))
             return rows
 
-        if not isinstance(value, Mapping):
-            raise TypeError(
-                f'Row value must be a Mapping, but has a type "{type(value).__name__}"'
-            )
+        if not isinstance(value, dict):
+            raise TypeError(f'Row value must be a dict, but got "{type(value)}"')
         return Row(value=value, **row_kwargs)
 
     def serialize(
         self,
         key: Optional[MessageKey] = None,
         value: Optional[MessageValue] = None,
-        headers: Optional[Mapping | MessageHeaders] = None,
+        headers: Optional[Mapping | MessageHeadersTuples] = None,
         timestamp_ms: int = None,
     ) -> KafkaMessage:
-        # TODO: Implement SerDes for raw messages
+        # TODO: Implement SerDes for raw messages (also to produce primitive values)
         raise NotImplementedError
 
     def deserialize(self, message: ConfluentKafkaMessageProto):

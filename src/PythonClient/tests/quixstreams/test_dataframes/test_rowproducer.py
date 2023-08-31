@@ -36,7 +36,8 @@ class TestRowProducer:
         assert row
         assert row.key == key
         assert row.value == value
-        assert row.headers == headers
+        # We don't forward row headers for now
+        assert not row.headers
 
     def test_produce_row_serialization_error_raise(
             self, row_producer_factory, row_factory
