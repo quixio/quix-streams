@@ -124,7 +124,7 @@ class TestTopic:
             value_deserializer=value_deserializer,
         )
         message = ConfluentKafkaMessageStub(key=b"key", value=value)
-        with pytest.raises(TypeError, match="Row value must be a Mapping"):
+        with pytest.raises(TypeError, match="Row value must be a dict"):
             topic.row_deserialize(message=message)
 
     def test_row_deserialize_ignorevalueerror_raised(self):
@@ -220,7 +220,25 @@ class TestTopic:
         message = topic.row_serialize(row=row)
         assert message.key == expected_key
         assert message.value == expected_value
-        assert message.headers == row.headers
+        assert not message.headers
+
+    def test_row_serialize_extra_headers(self, row_factory: pytest.fixture):
+        class BytesSerializerWithHeaders(BytesSerializer):
+            extra_headers = {"header": b"value"}
+
+        key_serializer = BytesSerializer()
+        value_serializer = BytesSerializerWithHeaders()
+
+        topic = Topic(
+            "topic",
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
+        )
+        row = row_factory(key=b"key", value=b"value")  # noqa
+        message = topic.row_serialize(row=row)
+        assert message.key == b"key"
+        assert message.value == b"value"
+        assert message.headers == value_serializer.extra_headers
 
     @pytest.mark.parametrize(
         "key_serializer, value_serializer, key, value",

@@ -4,11 +4,13 @@ from typing import (
     List,
     Tuple,
     Optional,
+    Mapping,
 )
 
 MessageKey = Union[str, bytes]
 MessageValue = Union[str, bytes]
-MessageHeaders = List[Tuple[str, bytes]]
+MessageHeadersTuples = List[Tuple[str, bytes]]
+MessageHeadersMapping = Mapping[str, Union[str, bytes, None]]
 
 
 class ConfluentKafkaMessageProto(Protocol):
