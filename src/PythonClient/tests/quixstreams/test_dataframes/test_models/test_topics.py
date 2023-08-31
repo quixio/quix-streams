@@ -222,7 +222,7 @@ class TestTopic:
         assert message.value == expected_value
         assert not message.headers
 
-    def test_row_serialize_extra_headers(self):
+    def test_row_serialize_extra_headers(self, row_factory: pytest.fixture):
         class BytesSerializerWithHeaders(BytesSerializer):
             extra_headers = {"header": b"value"}
 
