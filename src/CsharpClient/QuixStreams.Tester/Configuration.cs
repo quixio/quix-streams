@@ -12,6 +12,9 @@ namespace QuixStreams.Tester
         public static ClientRunMode Mode;
 
         public static ProducerConfig ProducerConfig;
+        
+        public static ConsumerConfig ConsumerConfig;
+
 
         static Configuration()
         {
@@ -32,14 +35,40 @@ namespace QuixStreams.Tester
             
             ProducerConfig = new ProducerConfig();
             appConfig.Bind("ProducerConfig", ProducerConfig);
+            
+            
+            ConsumerConfig = new ConsumerConfig();
+            appConfig.Bind("ConsumerConfig", ConsumerConfig);
         }
+    }
+    
+    public class ConsumerConfig
+    {
+        public bool PrintAverage { get; set; }
+        
+        public bool PrintEvents { get; set; }
+        
+        public bool PrintTimeseries { get; set; }
+        
+        public bool PrintStreams { get; set; }
+
     }
 
     public class ProducerConfig
     {
-        public bool Timeseries { get; set; }
+        public int NumberOfStreams { get; set; }
         
-        public bool Event { get; set; }
+        public bool TimeseriesEnabled => TimeseriesRate > 0;
+
+        public bool EventsEnabled => EventRate > 0;
+        
+
+        public double EventRate { get; set; }
+        
+        public double TimeseriesRate { get; set; }
+        
+        public int RowPerTimeseries { get; set; }
+
     }
 
     public enum ClientRunMode

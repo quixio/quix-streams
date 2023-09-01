@@ -50,64 +50,22 @@ namespace QuixStreams.Tester
         {
             using var topicProducer = client.GetTopicProducer(Configuration.Config.Topic);
 
-            using var stream = topicProducer.CreateStream();
-
-            if (Configuration.ProducerConfig.Timeseries)
+            var streams = new IStreamProducer[Configuration.ProducerConfig.NumberOfStreams];
+            for (int ii = 0; ii < streams.Length; ii++)
             {
-                Task.Run(() =>
-                {
-                    stream.Timeseries.Buffer.TimeSpanInMilliseconds = 1000;
-                    while (!cancellationToken.IsCancellationRequested)
-                    {
-                        var tsdb = stream.Timeseries.Buffer.AddTimestamp(DateTime.UtcNow);
+                streams[ii] = topicProducer.CreateStream();
+            }
 
-                        var random = new Random();
-                        for (var ii = 1; ii <= 10; ii++)
-                        {
-                            if (random.Next(0, 3) == 1) tsdb.AddValue($"numeric_parameter_{ii}", ii);
-                            if (random.Next(0, 3) == 1) tsdb.AddValue($"string_parameter_{ii}", $"value_{ii}");
-                            if (random.Next(0, 3) == 1)
-                                tsdb.AddValue($"binary_parameter_{ii}", Encoding.UTF8.GetBytes($"binary_value_{ii}"));
-                        }
-
-                        if (random.Next(0, 2) == 1) tsdb.AddTag("Random_Tag", $"tag{random.Next(0, 10)}");
-
-                        Console.WriteLine("Sending timeseries data");
-                        tsdb.Publish();
-                        
-                        Thread.Sleep(250);
-                    }
-                });
+            if (Configuration.ProducerConfig.TimeseriesEnabled)
+            {
+                Console.WriteLine("Will produce Timeseries data");
+                Task.Run(() => GenerateTimeseriesData(streams, cancellationToken));
             }
             
-            if (Configuration.ProducerConfig.Event)
+            if (Configuration.ProducerConfig.EventsEnabled)
             {
-                Task.Run(() =>
-                {
-                    while (!cancellationToken.IsCancellationRequested)
-                    {
-
-                        var random = new Random();
-                        var obj = new
-                        {
-                            PropOne = "Value " + random.Next(10, 99999),
-                            PropTwo = random.NextDouble() * 10000,
-                            PropThree = random.Next(0, 2) == 1
-                        };
-                        
-                        var builder = stream.Events.AddTimestamp(DateTime.UtcNow);
-                            
-                        builder.AddValue("an_event", Newtonsoft.Json.JsonConvert.SerializeObject(obj));
-
-                        if (random.Next(0, 2) == 1) builder.AddTag("Random_Tag", $"tag{random.Next(0, 10)}");
-
-                        Console.WriteLine("Sending event data");
-                        builder.Publish();
-                        stream.Events.Flush();
-                        
-                        Thread.Sleep(1000);
-                    }
-                });
+                Console.WriteLine("Will produce Event data");
+                Task.Run(() => GenerateEventData(streams, cancellationToken));
             }
 
             try
@@ -116,7 +74,110 @@ namespace QuixStreams.Tester
             }
             catch
             {
+
+            }
+            finally
+            {
+                Console.WriteLine("Finished producing");
+            }
+        }
+
+        private static void GenerateEventData(IStreamProducer[] streams, CancellationToken cancellationToken)
+        {
+            var start = DateTime.UtcNow;
+            var counter = 0;
+            var sleep = (int)(counter / Configuration.ProducerConfig.EventRate);
+            if (sleep < 21) sleep = 21;
+            var expectedCounter = 0;
+            var printAfter = start.Add(TimeSpan.FromSeconds(1));
+            
+            var streamIndex = 0;
+            while (!cancellationToken.IsCancellationRequested)
+            {
                 
+                var now = DateTime.UtcNow;
+                var elapsed = (now - start).TotalSeconds;
+                expectedCounter = (int)Math.Ceiling(elapsed * Configuration.ProducerConfig.EventRate);
+                while (counter < expectedCounter && !cancellationToken.IsCancellationRequested)
+                {
+                    var stream = streams[streamIndex % streams.Length];
+                    streamIndex++;
+                    var random = new Random();
+                    var obj = new
+                    {
+                        PropOne = "Value " + random.Next(10, 99999),
+                        PropTwo = random.NextDouble() * 10000,
+                        PropThree = random.Next(0, 2) == 1
+                    };
+
+                    var builder = stream.Events.AddTimestamp(DateTime.UtcNow);
+
+                    builder.AddValue("an_event", Newtonsoft.Json.JsonConvert.SerializeObject(obj));
+
+                    if (random.Next(0, 2) == 1) builder.AddTag("Random_Tag", $"tag{random.Next(0, 10)}");
+                    builder.Publish();
+                    counter++;
+
+                    if (printAfter < DateTime.UtcNow)
+                    {
+                        printAfter = DateTime.UtcNow.Add(TimeSpan.FromSeconds(1));
+                        Console.WriteLine($"Sent {counter} event messages, expected {expectedCounter}");
+                    }
+                }
+
+                Thread.Sleep(sleep);
+                
+            }
+        }
+
+        private static void GenerateTimeseriesData(IStreamProducer[] streams, CancellationToken cancellationToken)
+        {
+            var start = DateTime.UtcNow;
+            var counter = 0;
+            var sleep = (int)(counter / Configuration.ProducerConfig.TimeseriesRate);
+            if (sleep < 21) sleep = 21;
+            var expectedCounter = 0;
+            var printAfter = start.Add(TimeSpan.FromSeconds(1));
+
+            var streamIndex = 0;
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var now = DateTime.UtcNow;
+                var elapsed = (now - start).TotalSeconds;
+                expectedCounter = (int)Math.Ceiling(elapsed * Configuration.ProducerConfig.TimeseriesRate);
+                while (counter < expectedCounter && !cancellationToken.IsCancellationRequested)
+                {
+                    var stream = streams[streamIndex % streams.Length];
+                    streamIndex++;
+                    var tsd = new TimeseriesData(Configuration.ProducerConfig.RowPerTimeseries);
+                    for (var ii = 0; ii < Configuration.ProducerConfig.RowPerTimeseries; ii++)
+                    {
+                        var expectedTime = start + TimeSpan.FromSeconds(counter).Add(TimeSpan.FromMilliseconds(ii));
+                        var tsdb = tsd.AddTimestamp(expectedTime);
+
+                        var random = new Random();
+                        for (var jj = 1; jj <= 10; jj++)
+                        {
+                            if (random.Next(0, 3) == 1) tsdb.AddValue($"numeric_parameter_{jj}", jj);
+                            if (random.Next(0, 3) == 1) tsdb.AddValue($"string_parameter_{jj}", $"value_{jj}");
+                            if (random.Next(0, 3) == 1)
+                                tsdb.AddValue($"binary_parameter_{jj}", Encoding.UTF8.GetBytes($"binary_value_{jj}"));
+                        }
+
+                        if (random.Next(0, 2) == 1) tsdb.AddTag("Random_Tag", $"tag{random.Next(0, 10)}");
+                    }
+
+                    stream.Timeseries.Publish(tsd);
+
+                    counter++;
+
+                    if (printAfter < DateTime.UtcNow)
+                    {
+                        printAfter = DateTime.UtcNow.Add(TimeSpan.FromSeconds(1));
+                        Console.WriteLine($"Sent {counter} timeseries messages, expected {expectedCounter}");
+                    }
+                }
+                Thread.Sleep(sleep);
             }
         }
         
@@ -124,23 +185,55 @@ namespace QuixStreams.Tester
         {
             using var topicConsumer = client.GetTopicConsumer(Configuration.Config.Topic, Configuration.Config.ConsumerGroup, CommitMode.Automatic, AutoOffsetReset.Earliest);
 
+            long totalTimeSeriesMessagesRead = 0;
+            long totalEventMessagesRead = 0;
+            long totalStreamsRead = 0;
+
             topicConsumer.OnStreamReceived += (sender, consumer) =>
             {
-                Console.WriteLine($"Received new stream {consumer.StreamId}");
+                Interlocked.Increment(ref totalStreamsRead);
+
+                if (Configuration.ConsumerConfig.PrintStreams)
+                {
+                    Console.WriteLine($"Received new stream {consumer.StreamId}");
+                }
+
                 consumer.Timeseries.OnRawReceived += (o, args) =>
                 {
-                    Console.WriteLine($"Received new timeseries data for {consumer.StreamId}");
-                    var asJson = Newtonsoft.Json.JsonConvert.SerializeObject(args.Data, Formatting.Indented);
-                    Console.WriteLine(asJson);
+                    Interlocked.Increment(ref totalTimeSeriesMessagesRead);
+                    if (Configuration.ConsumerConfig.PrintTimeseries)
+                    {
+                        Console.WriteLine($"Received new timeseries data for {consumer.StreamId}");
+                        var asJson = Newtonsoft.Json.JsonConvert.SerializeObject(args.Data, Formatting.Indented);
+                        Console.WriteLine(asJson);
+                    }
                 };
 
                 consumer.Events.OnDataReceived += (o, args) =>
                 {
-                    Console.WriteLine($"Received new event data for {consumer.StreamId}");
-                    var asJson = Newtonsoft.Json.JsonConvert.SerializeObject(args.Data, Formatting.Indented);
-                    Console.WriteLine(asJson);
+                    Interlocked.Increment(ref totalEventMessagesRead);
+                    if (Configuration.ConsumerConfig.PrintEvents)
+                    {
+                        Console.WriteLine($"Received new event data for {consumer.StreamId}");
+                        var asJson = Newtonsoft.Json.JsonConvert.SerializeObject(args.Data, Formatting.Indented);
+                        Console.WriteLine(asJson);
+                    }
                 };
             };
+
+            
+            if (Configuration.ConsumerConfig.PrintAverage)
+            {
+                Task.Run(async () =>
+                {
+                    while (!cancellationToken.IsCancellationRequested)
+                    {
+                        Console.WriteLine("Read {0} streams, {1} timestamps, {2} events", totalStreamsRead, totalTimeSeriesMessagesRead, totalEventMessagesRead);
+                        await Task.Delay(1000);
+                    }
+                });
+            }
+
             
             topicConsumer.Subscribe();
 

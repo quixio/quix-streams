@@ -108,7 +108,33 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
                                 timestamps = ParseArray(reader, ref size, o => (long)o);
                                 break;
                             case "NumericValues":
-                                numericValues = ParseDict(reader, ref size, o => (double?)o);
+                                bool optimist = true;
+                                numericValues = ParseDict(reader, ref size, o =>
+                                {
+                                    // optimist
+                                    if (optimist)
+                                    {
+                                        try
+                                        {
+                                            return (double?)o;
+                                        }
+                                        catch (InvalidCastException)
+                                        {
+                                            optimist = false;
+                                            return (long?)o;
+                                        }
+                                    }
+                                    // pesssimist
+                                    try
+                                    {
+                                        return (long?)o;
+                                    }
+                                    catch (InvalidCastException)
+                                    {
+                                        optimist = true;
+                                        return (double?)o;
+                                    }
+                                });
                                 break;
                             case "StringValues":
                                 stringValues = ParseDict(reader, ref size, o => (string)o);

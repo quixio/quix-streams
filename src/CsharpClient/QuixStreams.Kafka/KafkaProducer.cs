@@ -163,7 +163,7 @@ namespace QuixStreams.Kafka
                         if (maxBrokerMessageBytesNumeric < maxTopicMessageBytesNumeric)
                         {
                             this.logger.LogDebug(
-                                "[{0}] Broker max message size {1} is less than topic max message size {1}, using broker at upper limit",
+                                "[{0}] Broker max message size {1} is less than topic max message size {2}, using broker at upper limit",
                                 this.configId,
                                 maxBrokerMessageBytesNumeric, maxTopicMessageBytesNumeric);
                             producerConfiguration.MessageMaxBytes = maxBrokerMessageBytesNumeric;
