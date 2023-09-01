@@ -37,6 +37,7 @@ namespace QuixStreams.Telemetry.Models
             RegisterType<StreamEnd>(codec);
             RegisterType<TimeseriesDataRaw>(codec);
             RegisterType<ParameterDefinitions>(codec);
+            RegisterType<EventDataRaw>(codec);
             RegisterType<EventDataRaw[]>(codec);
             RegisterType<List<EventDataRaw>>(codec);
             RegisterType<EventDefinitions>(codec);

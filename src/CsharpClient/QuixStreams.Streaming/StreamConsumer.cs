@@ -116,6 +116,7 @@ namespace QuixStreams.Streaming
             this.Subscribe<QuixStreams.Telemetry.Models.TimeseriesDataRaw>(OnTimeseriesDataReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.ParameterDefinitions>(OnParameterDefinitionsReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.EventDataRaw[]>(OnEventDataReceived);
+            this.Subscribe<QuixStreams.Telemetry.Models.EventDataRaw>(OnEventDataReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.EventDefinitions>(OnEventDefinitionsReceived);
             this.Subscribe<QuixStreams.Telemetry.Models.StreamEnd>(OnStreamEndReceived);
             this.Subscribe(OnStreamPackageReceived);
@@ -164,6 +165,12 @@ namespace QuixStreams.Streaming
         {
             this.logger.LogTrace("StreamConsumer: OnParameterDefinitionsReceived");
             this.OnParameterDefinitionsChanged?.Invoke(this, obj);
+        }
+        
+        private void OnEventDataReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.EventDataRaw @event)
+        {
+            this.logger.LogTrace("StreamConsumer: OnEventDataReceived");
+            this.OnEventData?.Invoke(this, @event);
         }
 
         private void OnEventDataReceived(IStreamPipeline streamPipeline, QuixStreams.Telemetry.Models.EventDataRaw[] events)
