@@ -1,7 +1,7 @@
 import ctypes
 from typing import Union
 
-from .rawmessage import RawMessage
+from .kafkamessage import KafkaMessage
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.QuixStreamsStreaming.Raw.RawTopicProducer import \
     RawTopicProducer as rtpi
@@ -22,16 +22,16 @@ class RawTopicProducer(object):
         """
         self._interop = rtpi(net_pointer)
 
-    def publish(self, message: Union[RawMessage, bytes, bytearray]):
+    def publish(self, message: Union[KafkaMessage, bytes, bytearray]):
         """
         Publishes the given message to the associated topic producer.
 
         Args:
             message: The message to be published, which can be either
-                a RawMessage instance, bytes, or a bytearray.
+                a KafkaMessage instance, bytes, or a bytearray.
         """
-        if not isinstance(message, RawMessage):
-            message = RawMessage(message)
+        if not isinstance(message, KafkaMessage):
+            message = KafkaMessage(value=message)
         self._interop.Publish(message.get_net_pointer())
 
     def dispose(self):

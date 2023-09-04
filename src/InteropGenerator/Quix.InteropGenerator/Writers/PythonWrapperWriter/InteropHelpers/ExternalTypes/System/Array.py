@@ -91,6 +91,9 @@ class Array:
         """
         Reads from unmanaged memory, returning list of any sets (any[][])
         """
+        if array_uptr is None:
+            return None
+          
         return Array.ReadBlittables(array_uptr, ctypes.c_void_p, valuemapper)
 
     @staticmethod
@@ -98,6 +101,8 @@ class Array:
         """
         Writes an array of any sets (any[][]) into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if values is None:
+            return None
 
         return Array.WriteBlittables(values, ctypes.c_void_p, valuemapper)
 
@@ -118,6 +123,8 @@ class Array:
         []:
            array of underlying type with possible None values
         """
+        if array_uptr is None:
+            return None
 
         nullables = Array.ReadBlittables(array_uptr, nullable_type)
 
@@ -136,6 +143,9 @@ class Array:
         """
         Reads from unmanaged memory, returning list of int64
         """
+        if array_uptr is None:
+            return None
+          
         return Array.ReadBlittables(array_uptr, ctypes.c_int64)
 
     @staticmethod
@@ -143,6 +153,8 @@ class Array:
         """
         Reads from unmanaged memory, returning list of int64 lists
         """
+        if array_uptr is None:
+            return None
 
         return Array.ReadArray(array_uptr, Array.ReadLongs)
 
@@ -151,6 +163,9 @@ class Array:
         """
         Writes list of int64 into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        
+        if longs is None:
+            return None
 
         return Array.WriteBlittables(longs, ctypes.c_int64)
 
@@ -159,6 +174,8 @@ class Array:
         """
         Writes list of int64 lists into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if longs_array is None:
+            return None
 
         return Array.WriteArray(longs_array, Array.WriteLongs)
 
@@ -170,6 +187,9 @@ class Array:
         """
         Reads from unmanaged memory, returning list of str
         """
+        if array_uptr is None:
+            return None
+          
         return Array.ReadBlittables(array_uptr, ctypes.c_void_p, lambda x: InteropUtils.uptr_to_utf8(x))
 
     @staticmethod
@@ -177,6 +197,8 @@ class Array:
         """
         Reads from unmanaged memory, returning list of str lists
         """
+        if array_uptr is None:
+            return None
 
         return Array.ReadArray(array_uptr, Array.ReadStrings)
 
@@ -185,6 +207,8 @@ class Array:
         """
         Writes list of str into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if strings is None:
+            return None
 
         return Array.WriteBlittables(strings, ctypes.c_void_p, lambda x: InteropUtils.utf8_to_uptr(x))
 
@@ -193,6 +217,8 @@ class Array:
         """
         Writes list of str lists into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if strings_array is None:
+            return None
 
         return Array.WriteArray(strings_array, Array.WriteStrings)
     # endregion
@@ -202,7 +228,10 @@ class Array:
     def ReadDoubles(array_uptr: ctypes.c_void_p) -> [float]:
         """
         Reads from unmanaged memory, returning list of double (float)
-        """
+        """        
+        if array_uptr is None:
+            return None
+          
         return Array.ReadBlittables(array_uptr, ctypes.c_double)
 
     @staticmethod
@@ -210,6 +239,8 @@ class Array:
         """
         Reads from unmanaged memory, returning list of double (float) lists
         """
+        if array_uptr is None:
+            return None
 
         return Array.ReadArray(array_uptr, Array.ReadDoubles)
 
@@ -218,6 +249,8 @@ class Array:
         """
         Writes list of double (float) into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if doubles is None:
+            return None
 
         return Array.WriteBlittables(doubles, ctypes.c_double)
 
@@ -226,6 +259,8 @@ class Array:
         """
         Writes list of double (float) lists into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if doubles_array is None:
+            return None
 
         return Array.WriteArray(doubles_array, Array.WriteDoubles)
     # endregion
@@ -236,6 +271,8 @@ class Array:
         """
         Reads from unmanaged memory, returning list of pointers
         """
+        if pointers is None:
+            return None
 
         return Array.ReadBlittables(pointers, ctypes.c_void_p)
 
@@ -244,6 +281,8 @@ class Array:
         """
         Reads from unmanaged memory, returning list of pointer lists
         """
+        if array_uptr is None:
+            return None
 
         return Array.ReadArray(array_uptr, Array.ReadPointers)
 
@@ -252,6 +291,8 @@ class Array:
         """
         Writes list of pointer into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if pointers is None:
+            return None
 
         return Array.WriteBlittables(pointers, ctypes.c_void_p)
 
@@ -260,6 +301,8 @@ class Array:
         """
         Writes list of pointer lists into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if pointers_array is None:
+            return None
 
         return Array.WriteArray(pointers_array, Array.WritePointers)
     # endregion
@@ -270,6 +313,9 @@ class Array:
         """
         Reads from unmanaged memory, returning bytes
         """
+        if array_uptr is None:
+            return None
+          
         return bytes(Array.ReadBlittables(array_uptr, ctypes.c_ubyte))
 
     @staticmethod
@@ -277,6 +323,9 @@ class Array:
         """
         Reads from unmanaged memory, returning list of bytes
         """
+        if array_uptr is None:
+            return None
+          
         return Array.ReadArray(array_uptr, Array.ReadBytes)
 
     @staticmethod
@@ -284,6 +333,8 @@ class Array:
         """
         Writes list of bytes into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if bytes_value is None:
+            return None        
 
         return Array.WriteBlittables(bytes_value, ctypes.c_ubyte)
 
@@ -292,6 +343,9 @@ class Array:
         """
         Writes list of bytes into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if bytes_array is None:
+            return None
+          
         return Array.WriteArray(bytes_array, Array.WriteBytes)
     # endregion
 
@@ -301,6 +355,9 @@ class Array:
         """
         Reads from unmanaged memory, returning list of Optional[float]
         """
+        if array_uptr is None:
+            return None
+          
         return Array.ReadNullables(array_uptr, Array._nullable_double)
 
 
@@ -309,6 +366,8 @@ class Array:
         """
         Reads from unmanaged memory, returning list of Optional[float] lists
         """
+        if array_uptr is None:
+            return None
 
         return Array.ReadArray(array_uptr, Array.ReadNullableDoubles)
 
@@ -318,6 +377,8 @@ class Array:
         """
         Writes list of Optional[float] into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if nullable_doubles is None:
+            return None
 
         return Array.WriteBlittables(nullable_doubles, Array._nullable_double, lambda x: Array._nullable_double(x))
 
@@ -326,6 +387,8 @@ class Array:
         """
         Writes list of int64 lists into unmanaged memory, returning a pointer to the array, where first 4 bytes is the length
         """
+        if nullable_doubles_array is None:
+            return None
 
         return Array.WriteArray(nullable_doubles_array, Array.WriteNullableDoubles)
     # endregion

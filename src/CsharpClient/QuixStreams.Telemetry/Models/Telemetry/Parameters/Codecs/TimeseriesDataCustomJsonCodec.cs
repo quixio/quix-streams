@@ -5,19 +5,19 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using QuixStreams.Transport.Codec;
-using QuixStreams.Transport.Fw.Codecs;
+using QuixStreams.Kafka.Transport.SerDes.Codecs;
+using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
 
 namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
 {
     /// <summary>
     /// TimeseriesData Json Codec implementation
     /// </summary>
-    public class TimeseriesDataJsonCodec : Codec<TimeseriesDataRaw>
+    public class TimeseriesDataCustomJsonCodec : Codec<TimeseriesDataRaw>
     {
-        private static readonly DefaultJsonCodec<TimeseriesDataRaw> BaseCodec =
-            new DefaultJsonCodec<TimeseriesDataRaw>();
-
+        private static readonly DefaultJsonCodec<TimeseriesDataRaw> BaseCodec = new DefaultJsonCodec<TimeseriesDataRaw>();
+        private static UTF8Encoding UTF8NoBom = new UTF8Encoding(false, false);
+        
         /// <inheritdoc />
         public override CodecId Id => BaseCodec.Id; // this is only a serialization codec, still valid JSON
 
@@ -60,7 +60,7 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
         {
             using (var memoryStream = new MemoryStream())
             {
-                using (var streamWriter = new StreamWriter(memoryStream, Encoding.UTF8, 4096, true))
+                using (var streamWriter = new StreamWriter(memoryStream, UTF8NoBom, 4096, true))
                 {
                     using (var jsonWriter = new JsonTextWriter(streamWriter))
                     {
@@ -108,7 +108,33 @@ namespace QuixStreams.Telemetry.Models.Telemetry.Parameters.Codecs
                                 timestamps = ParseArray(reader, ref size, o => (long)o);
                                 break;
                             case "NumericValues":
-                                numericValues = ParseDict(reader, ref size, o => (double?)o);
+                                bool optimist = true;
+                                numericValues = ParseDict(reader, ref size, o =>
+                                {
+                                    // optimist
+                                    if (optimist)
+                                    {
+                                        try
+                                        {
+                                            return (double?)o;
+                                        }
+                                        catch (InvalidCastException)
+                                        {
+                                            optimist = false;
+                                            return (long?)o;
+                                        }
+                                    }
+                                    // pesssimist
+                                    try
+                                    {
+                                        return (long?)o;
+                                    }
+                                    catch (InvalidCastException)
+                                    {
+                                        optimist = true;
+                                        return (double?)o;
+                                    }
+                                });
                                 break;
                             case "StringValues":
                                 stringValues = ParseDict(reader, ref size, o => (string)o);

@@ -2,11 +2,13 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using FluentAssertions;
 using NSubstitute;
 using Quix.TestBase.Extensions;
+using QuixStreams;
+using QuixStreams.Kafka.Transport;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport.IO;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -16,24 +18,21 @@ namespace QuixStreams.Telemetry.UnitTests
     {
         public StreamPipelineFactoryShould(ITestOutputHelper outputHelper)
         {
-            Logging.Factory = outputHelper.CreateLoggerFactory();
+            QuixStreams.Logging.Factory = outputHelper.CreateLoggerFactory();
         }
         
         [Fact]
         public void StreamPackageReceived_NoPreviousStream_ShouldBeTrackedAsActiveStream()
         {
             // Arrange
-            var consumer = Substitute.For<IConsumer>();
+            var consumer = Substitute.For<IKafkaTransportConsumer>();
             var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
 
             // Act
-            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
-            }));
-            consumer.OnNewPackage(package);
+            var package = new TransportPackage(typeof(object), "ABCDE", new object());
+            consumer.OnPackageReceived(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -44,7 +43,7 @@ namespace QuixStreams.Telemetry.UnitTests
         public void StreamPackageReceived_NoPreviousStreamAndStreamCreateThrowsException_ShouldDoRetryLogic()
         {
             // Arrange
-            var consumer = Substitute.For<IConsumer>();
+            var consumer = Substitute.For<IKafkaTransportConsumer>();
             var elapsedTimes = new List<long>();
             var sw = new Stopwatch();
             var factory = new TestStreamPipelineFactory(consumer, (s) =>
@@ -58,13 +57,10 @@ namespace QuixStreams.Telemetry.UnitTests
             factory.MaxRetries = 10;
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                {TestStreamPipelineFactory.TransportContextStreamIdKey, "somestreamid"}
-            }));
+            var package = new  TransportPackage(typeof(object), "somestreamid", new object());
             sw.Restart();
 
-            Action action = () => consumer.OnNewPackage(package).GetAwaiter().GetResult();
+            Action action = () => consumer.OnPackageReceived(package).GetAwaiter().GetResult();
 
             // Act & Assert
 
@@ -89,24 +85,18 @@ namespace QuixStreams.Telemetry.UnitTests
         public void StreamPackageReceived_PrevioslyActiveStream_ShouldNotAddAnotherTrackedAsActiveStream()
         {
             // Arrange
-            var consumer = Substitute.For<IConsumer>();
+            var consumer = Substitute.For<IKafkaTransportConsumer>();
             var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
-            }));
-            consumer.OnNewPackage(package);
+            var package = new TransportPackage(typeof(object), "ABCDE", new object());
+            consumer.OnPackageReceived(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
             // Act
-            package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                {TestStreamPipelineFactory.TransportContextStreamIdKey, "ABCDE"}
-            }));
-            consumer.OnNewPackage(package);
+            package = new TransportPackage(typeof(object), "ABCDE", new object());
+            consumer.OnPackageReceived(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -116,16 +106,13 @@ namespace QuixStreams.Telemetry.UnitTests
         public void StreamPipelineCloses_TrackedAsActiveStream_ShouldNoLongerBeTrackedAsActiveStream()
         {
             // Arrange
-            var consumer = Substitute.For<IConsumer>();
+            var consumer = Substitute.For<IKafkaTransportConsumer>();
             var streamPipeline = new StreamPipeline();
             var factory = new TestStreamPipelineFactory(consumer, (s) => streamPipeline);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                {TestStreamPipelineFactory.TransportContextStreamIdKey, streamPipeline.StreamId}
-            }));
-            consumer.OnNewPackage(package);
+            var package = new TransportPackage(typeof(object), streamPipeline.StreamId, new object());
+            consumer.OnPackageReceived(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -141,16 +128,13 @@ namespace QuixStreams.Telemetry.UnitTests
         public void StreamEndReceived_TrackedAsActiveStream_ShouldNoLongerBeTrackedAsActiveStream()
         {
             // Arrange
-            var consumer = Substitute.For<IConsumer>();
+            var consumer = Substitute.For<IKafkaTransportConsumer>();
             var streamPipeline = new StreamPipeline();
             var factory = new TestStreamPipelineFactory(consumer, (s) => streamPipeline);
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
-            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                {TestStreamPipelineFactory.TransportContextStreamIdKey, streamPipeline.StreamId}
-            }));
-            consumer.OnNewPackage(package);
+            var package = new TransportPackage(typeof(object), streamPipeline.StreamId, new object());
+            consumer.OnPackageReceived(package);
 
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
 
@@ -166,17 +150,14 @@ namespace QuixStreams.Telemetry.UnitTests
         public void StreamPackageReceived_WithoutStreamId_ShouldUseDefaultStreamId()
         {
             // Arrange
-            var consumer = Substitute.For<IConsumer>();
+            var consumer = Substitute.For<IKafkaTransportConsumer>();
             var factory = new TestStreamPipelineFactory(consumer, (s) => new StreamPipeline());
             factory.ContextCache.GetAll().Keys.Count.Should().Be(0);
             factory.Open();
 
             // Act
-            var package = new Package(typeof(object), new object(), null, new TransportContext(new Dictionary<string, object>
-            {
-                // empty transport context (no stream id)   
-            }));
-            consumer.OnNewPackage(package);
+            var package = new TransportPackage(typeof(object), null, new object());
+            consumer.OnPackageReceived(package);
 
             // Assert
             factory.ContextCache.GetAll().Keys.Count.Should().Be(1);
@@ -187,23 +168,18 @@ namespace QuixStreams.Telemetry.UnitTests
         {
             public const string TransportContextStreamIdKey = "StreamId";
             
-            public TestStreamPipelineFactory(Transport.IO.IConsumer transportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler) : this(transportConsumer, streamPipelineFactoryHandler, new StreamContextCache())
+            public TestStreamPipelineFactory(IKafkaTransportConsumer kafkaTransportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler) : this(kafkaTransportConsumer, streamPipelineFactoryHandler, new StreamContextCache())
             {
             }
 
-            public TestStreamPipelineFactory(Transport.IO.IConsumer transportConsumer,
+            public TestStreamPipelineFactory(IKafkaTransportConsumer transportKafkaConsumer,
                 Func<string, IStreamPipeline> streamPipelineFactoryHandler, IStreamContextCache cache) : base(
-                transportConsumer, streamPipelineFactoryHandler, cache)
+                transportKafkaConsumer, streamPipelineFactoryHandler, cache)
             {
                 this.ContextCache = cache;
             }
 
             public readonly IStreamContextCache ContextCache;
-
-            protected override bool TryGetStreamId(TransportContext transportContext, out string streamId)
-            {
-                return transportContext.TryGetTypedValue(TransportContextStreamIdKey, out streamId);
-            }
         }
 
     }

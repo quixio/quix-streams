@@ -1,13 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using QuixStreams.Kafka;
+using QuixStreams;
+using QuixStreams.Kafka.Transport;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport.Fw;
-using QuixStreams.Transport.IO;
+
 
 namespace QuixStreams.Telemetry
 {
@@ -15,12 +16,12 @@ namespace QuixStreams.Telemetry
     /// The factory detects new streams from the transport layer and creates new <see cref="IStreamPipeline"/>es.
     /// It also maintains a list of active stream pipelines and the components associated to them.
     /// </summary>
-    internal abstract class StreamPipelineFactory
+    internal class StreamPipelineFactory
     {
-        private readonly ILogger logger = Logging.CreateLogger<StreamPipelineFactory>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamPipelineFactory>();
         private readonly object openCloseLock = new object();
         private bool isOpen;
-        private IConsumer transportConsumer;
+        private IKafkaTransportConsumer kafkaTransportConsumer;
         private Func<string, IStreamPipeline> streamPipelineFactoryHandler;
         private readonly IStreamContextCache contextCache;
         private Action onClose = () => { };
@@ -74,13 +75,13 @@ namespace QuixStreams.Telemetry
         /// <summary>
         /// Initializes a new instance of <see cref="StreamPipelineFactory"/>
         /// </summary>
-        /// <param name="transportConsumer">Transport layer to read from</param>
+        /// <param name="kafkaTransportConsumer">Transport layer to read from</param>
         /// <param name="streamPipelineFactoryHandler">Handler factory to execute for each Stream detected in the incoming messages in order to create a new <see cref="StreamPipeline"/> for each stream. 
         /// The handler function receives a StreamId and has to return a <see cref="StreamPipeline"/>.</param>
         /// <param name="contextCache">The cache to store created stream contexts</param>
-        public StreamPipelineFactory(QuixStreams.Transport.IO.IConsumer transportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler, IStreamContextCache contextCache)
+        public StreamPipelineFactory(IKafkaTransportConsumer kafkaTransportConsumer, Func<string, IStreamPipeline> streamPipelineFactoryHandler, IStreamContextCache contextCache)
         {
-            this.transportConsumer = transportConsumer ?? throw new ArgumentNullException(nameof(transportConsumer));
+            this.kafkaTransportConsumer = kafkaTransportConsumer ?? throw new ArgumentNullException(nameof(kafkaTransportConsumer));
             this.streamPipelineFactoryHandler = streamPipelineFactoryHandler ?? throw new ArgumentNullException(nameof(streamPipelineFactoryHandler));
             this.contextCache = contextCache ?? throw new ArgumentNullException(nameof(contextCache));
         }
@@ -95,70 +96,68 @@ namespace QuixStreams.Telemetry
             {
                 if (this.isOpen) return;
                 this.cancellationTokenSource = new CancellationTokenSource();
-                var consumer = this.transportConsumer;
+                var consumer = this.kafkaTransportConsumer;
                 if (consumer == null) return;
                 this.onClose = () =>
                 {
                     cancellationTokenSource.Cancel();
                 };
 
-                consumer.OnNewPackage += this.NewTransportPackageHandler;
-                this.onClose += () => { consumer.OnNewPackage -= this.NewTransportPackageHandler; };
+                consumer.OnPackageReceived += this.NewTransportPackageHandler;
+                this.onClose += () => { consumer.OnPackageReceived -= this.NewTransportPackageHandler; };
 
-                if (consumer is IRevocationPublisher revocationPublisher)
-                {
-                    revocationPublisher.OnRevoked += this.OutputRevokedHandler;
-                    this.onClose += () => { revocationPublisher.OnRevoked -= this.OutputRevokedHandler; };
-                }
-                if (consumer is ICanCommit canCommit)
-                {
-                    canCommit.OnCommitted += this.OutputCommittedHandler;
-                    this.onClose += () => { canCommit.OnCommitted -= this.OutputCommittedHandler; };
-                }
+                consumer.OnRevoked += this.OutputRevokedHandler;
+                this.onClose += () => { consumer.OnRevoked -= this.OutputRevokedHandler; };
+                
+                consumer.OnCommitted += this.OutputCommittedHandler;
+                this.onClose += () => { consumer.OnCommitted -= this.OutputCommittedHandler; };
+                
                 this.isOpen = true;
             }
         }
 
-        private void OutputCommittedHandler(object sender, OnCommittedEventArgs args)
+        private void OutputCommittedHandler(object sender, CommittedEventArgs args)
         {
-            var committer = (ICanCommit) sender;
             lock (this.contextCache.Sync)
             {
                 var streamContexts = this.contextCache.GetAll();
-                var transportContext = streamContexts.Select(y => y.Value.LastUncommittedTransportContext).Where(x => x != null).ToList();
-                var affectedContexts = committer.FilterCommittedContexts(args.State, transportContext).ToList();
-                if (affectedContexts.Count == 0) return;
-
-                var affectedStreamContexts = affectedContexts.Join(streamContexts,
-                    tContext => tContext,
-                    sContext => sContext.Value.LastUncommittedTransportContext,
-                    (tContext, sContext) => sContext).ToList();
-                
-                Debug.Assert(affectedStreamContexts.Count == affectedContexts.Count);
-                
-                foreach (var affectedStreamContext in affectedStreamContexts)
+                var affectedStreamContexts = streamContexts.Where(kvp =>
                 {
-                    affectedStreamContext.Value.LastUncommittedTransportContext = null;
+                    var lutpo = kvp.Value.LastUncommittedTopicPartitionOffset;
+                    if (lutpo == null) return false;
+                    var matchingTopicPartition = args.Committed.Offsets.FirstOrDefault(co => co.TopicPartition == lutpo.TopicPartition);
+                    if (matchingTopicPartition == null) return false;
+                    return matchingTopicPartition.Offset >= lutpo.Offset;
+                }).ToList();
+                    
+                if (affectedStreamContexts.Count == 0) return;
+                
+                foreach (var kvp in affectedStreamContexts)
+                {
+                    kvp.Value.LastUncommittedTopicPartitionOffset = null;
                 }
             }
         }
 
-        protected virtual void OutputRevokedHandler(object sender, OnRevokedEventArgs args)
+        protected virtual void OutputRevokedHandler(object sender, RevokedEventArgs args)
         {
-            var publisher = (IRevocationPublisher) sender;
             lock (this.contextCache.Sync)
             {
                 var streamContexts = this.contextCache.GetAll();
-                var transportContext = streamContexts.Select(y => y.Value.LastTransportContext).Where(x => x != null).ToList();
-                var affectedContexts = publisher.FilterRevokedContexts(args.State, transportContext).ToList();
-                if (affectedContexts.Count == 0) return;
-
-                var affectedStreamContexts = affectedContexts.Join(streamContexts,
-                    tContext => tContext,
-                    sContext => sContext.Value.LastTransportContext,
-                    (tContext, sContext) => sContext).ToList();
+                var affectedStreamContexts = streamContexts.Where(kvp =>
+                {
+                    var ltpo = kvp.Value.LastTopicPartitionOffset;
+                    if (ltpo == null) return false;
+                    var matchingTopicPartition = args.Revoked.FirstOrDefault(co => co.TopicPartition == ltpo.TopicPartition);
+                    if (matchingTopicPartition == null) return false;
+                    return matchingTopicPartition.Offset >= ltpo.Offset;
+                }).ToList();
                 
-                OnStreamsRevoked?.Invoke(affectedStreamContexts.Select(y=> y.Value.StreamPipeline).ToArray());
+                if (affectedStreamContexts.Count == 0) return;
+
+                var pipelines = affectedStreamContexts.Select(y => y.Value.StreamPipeline).ToArray();
+                
+                OnStreamsRevoked?.Invoke(pipelines);
                 
                 foreach (var affectedContext in affectedStreamContexts)
                 {
@@ -175,15 +174,7 @@ namespace QuixStreams.Telemetry
             }
         }
 
-        /// <summary>
-        /// Attempts to retrieve the streamId from the package
-        /// </summary>
-        /// <param name="package">The package to retrieve the streamId from</param>
-        /// <param name="streamId">The streamId retrieved</param>
-        /// <returns>Whether retrieval was successful</returns>
-        protected abstract bool TryGetStreamId(TransportContext package, out string streamId);
-
-        private Task NewTransportPackageHandler(Package package)
+        private Task NewTransportPackageHandler(TransportPackage package)
         {
             if (package == null)
             {
@@ -191,12 +182,9 @@ namespace QuixStreams.Telemetry
                 return Task.CompletedTask;
             }
             
-            if (package.TransportContext == null)
-            {
-                this.logger.LogWarning("StreamPipelineFactory: failed to get stream id from message due to lack of transport context. Malformed package?");
-                return Task.CompletedTask;;
-            }
-            if (!this.TryGetStreamId(package.TransportContext, out var streamId))
+            var streamId = package.Key;
+            
+            if (package.Key == null)
             {
                 streamId = StreamPipeline.DefaultStreamIdWhenMissing;
             }
@@ -246,10 +234,6 @@ namespace QuixStreams.Telemetry
                         }
                     } while (true); // the inner breaks/throws will deal with this
                     
-                    // Saving Transport metadata for discretionary usings by Stream Components
-                    streamContext.StreamPipeline.SourceMetadata = new Dictionary<string, string>(package.TransportContext.ToDictionary(kv => kv.Key, kv => kv.Value?.ToString()));
-
-
                     // Close the stream pipeline if we received an StreamEnd message
                     this.logger.LogTrace("StreamPipelineFactory: subscribing to StreamEnd for the new stream. {0}", streamContext.StreamId);
                     streamContext.StreamPipeline.OnClosing += () =>
@@ -260,8 +244,8 @@ namespace QuixStreams.Telemetry
                     streamContext.StreamPipeline.Subscribe<StreamEnd>(OnStreamFinished);
                 }
 
-                streamContext.LastUncommittedTransportContext = package.TransportContext;
-                streamContext.LastTransportContext = package.TransportContext;
+                streamContext.LastUncommittedTopicPartitionOffset = package.KafkaMessage?.TopicPartitionOffset;
+                streamContext.LastTopicPartitionOffset = package.KafkaMessage?.TopicPartitionOffset;
             }
 
             // Convert Transport Package to Stream Package
@@ -282,7 +266,7 @@ namespace QuixStreams.Telemetry
                 if (!this.isOpen) return;
                 this.isOpen = false;
 
-                this.transportConsumer = null;
+                this.kafkaTransportConsumer = null;
 
                 lock (this.contextCache.Sync)
                 {

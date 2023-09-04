@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Streaming.Exceptions;
 using QuixStreams.Telemetry.Managers;
 using QuixStreams.Telemetry.Models.Utility;
@@ -15,7 +16,7 @@ namespace QuixStreams.Streaming.Models.StreamProducer
     {
         private readonly IStreamProducerInternal streamProducer;
 
-        private readonly ILogger logger = Logging.CreateLogger<StreamTimeseriesProducer>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamTimeseriesProducer>();
 
         private string location;
         private readonly ParameterDefinitionsManager parameterDefinitionsManager = new ParameterDefinitionsManager();

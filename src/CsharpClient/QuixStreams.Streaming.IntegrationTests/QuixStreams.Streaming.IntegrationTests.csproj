@@ -1,10 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
+    <LangVersion>8.0</LangVersion>
+    
     <IsPackable>false</IsPackable>
-    <Configurations>Debug;Release;Python</Configurations>
-    <Platforms>AnyCPU</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\QuixStreams.IntegrationTestBase\QuixStreams.IntegrationTestBase.csproj" />
     <ProjectReference Include="..\QuixStreams.Telemetry\QuixStreams.Telemetry.csproj" />
     <ProjectReference Include="..\QuixStreams.Streaming\QuixStreams.Streaming.csproj" />
     <ProjectReference Include="..\Quix.TestBase\Quix.TestBase.csproj" />

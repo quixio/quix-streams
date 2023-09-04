@@ -4,11 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
+using QuixStreams.Kafka;
+using QuixStreams.Kafka.Transport;
 using QuixStreams.Telemetry.Configuration;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport;
-using QuixStreams.Transport.IO;
-using QuixStreams.Transport.Kafka;
 
 namespace QuixStreams.Speedtest
 {
@@ -43,10 +42,9 @@ namespace QuixStreams.Speedtest
 
             IKafkaProducer CreateProducer()
             {
-                var pubConfig = new PublisherConfiguration(Configuration.Config.BrokerList, config);
+                var prodConfig = new ProducerConfiguration(Configuration.Config.BrokerList, config);
                 var topicConfig = new ProducerTopicConfiguration(Configuration.Config.Topic);
-                var kafkaProducer = new KafkaProducer(pubConfig, topicConfig);
-                kafkaProducer.Open();
+                var kafkaProducer = new KafkaProducer(prodConfig, topicConfig);
                 return kafkaProducer;
             }
 
@@ -58,14 +56,14 @@ namespace QuixStreams.Speedtest
             var kafkaOutput = new KafkaConsumer(consConfig, topicConfig);
             kafkaOutput.OnErrorOccurred += (s, e) => { Console.WriteLine($"Exception occurred: {e}"); };
             kafkaOutput.Open();
-            var consumer = new TransportConsumer(kafkaOutput);
-            consumer.OnNewPackage = (package) =>
+            var consumer = new KafkaTransportConsumer(kafkaOutput);
+            consumer.OnPackageReceived = (package) =>
             {
                 lastpackageRead = DateTime.UtcNow;
                 var now = DateTime.UtcNow;
                 if (!package.TryConvertTo<byte[]>(out var converted) || converted.Value.Length != 9 || converted.Value[0] != magicMarker)
                 {
-                    Console.WriteLine("Ignoring package, Partition: " + package.TransportContext[KnownKafkaTransportContextKeys.Partition] + ", OffSet: " +package.TransportContext[KnownKafkaTransportContextKeys.Offset]);
+                    Console.WriteLine("Ignoring package, PartitionOffset: " + package.KafkaMessage.TopicPartitionOffset);
                     return Task.CompletedTask; // not our package 
                 };
 
@@ -79,7 +77,7 @@ namespace QuixStreams.Speedtest
                 {
                     times.Add(elapsed);
                     timesTotal++;
-                    times = times.TakeLast(50).ToList();
+                    times = times.Skip(Math.Min(0,times.Count-50)).ToList();
 
                     Console.WriteLine("Avg: " + Math.Round(times.Average(), 2) + ", Max: " + Math.Round(times.Max(), 2) + ", Min: " + Math.Round(times.Min(), 2) + ", over last " + times.Count + " out of " + timesTotal);
                 }
@@ -94,7 +92,7 @@ namespace QuixStreams.Speedtest
             }
             using (var kafkaProducer = CreateProducer())
             {
-                var transportProducer = new TransportProducer(kafkaProducer);
+                var transportProducer = new KafkaTransportProducer(kafkaProducer);
                 while (!ct.IsCancellationRequested)
                 {
                     try
@@ -103,7 +101,7 @@ namespace QuixStreams.Speedtest
                         bytes[0] = magicMarker; //just a marker
                         var binary = DateTime.UtcNow.ToBinary();
                         Array.Copy(BitConverter.GetBytes(binary), 0, bytes, 1, 8);
-                        var msg = new Package<byte[]>(bytes, null);
+                        var msg = new TransportPackage<byte[]>("someKey", bytes, null);
                         transportProducer.Publish(msg, ct);
                         Thread.Sleep(100);
                     }

@@ -15,6 +15,7 @@ def nativedecorator(cls):
 
     def new_init(self, *args, **kwargs):
         self._nativedecorator_finalized = False
+        self._nativedecorator_disposed = False
         orig_init(self, *args, **kwargs)
 
     def new_finalizerfunc(self):
@@ -59,14 +60,16 @@ def nativedecorator(cls):
         de-references
         """
 
+        if self._nativedecorator_disposed:
+            new_finalizerfunc(self)
+            return
+
         ptr = getattr(self, "_interop").get_interop_ptr__()
 
         InteropUtils.log_debug(f"Disposing {cls.__name__} ({ptr.value}) of object {id(self)}")
         InteropUtils.log_debug_indent_increment()
 
-        if self._nativedecorator_finalized:
-            return
-
+        self._nativedecorator_disposed = True
         orig_dispose(self, *args, **kwargs)
         new_finalizerfunc(self)
 

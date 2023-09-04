@@ -7,33 +7,34 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Xunit;
 
-namespace QuixStreams.Streaming.UnitTests;
-
-public class StreamingClientShould
+namespace QuixStreams.Streaming.UnitTests
 {
-    [Theory]
-    [InlineData("confluent-testTopic")]
-    [InlineData("quixdev-secondTest")]
-    [InlineData("different-topic")]
-    public void GetTopicConsumer_ShouldUseClientId(string topicName)
+
+    public class StreamingClientShould
     {
-        // Arrange
-        var messageHandler = new MockHttpMessageHandler(new Dictionary<string, string>()
+        [Theory]
+        [InlineData("confluent-testTopic")]
+        [InlineData("quixdev-secondTest")]
+        [InlineData("different-topic")]
+        public void GetTopicConsumer_ShouldUseClientId(string topicName)
         {
-            { "/workspaces", workspaces },
-            { "/topics", topics }
-        });
-        var client = new HttpClient(messageHandler);
-        var streamingClient = new QuixStreamingClient(httpClient: client, token: "faketoken");
+            // Arrange
+            var messageHandler = new MockHttpMessageHandler(new Dictionary<string, string>()
+            {
+                { "/workspaces", workspaces },
+                { "/topics", topics }
+            });
+            var client = new HttpClient(messageHandler);
+            var streamingClient = new QuixStreamingClient(httpClient: client, token: "faketoken");
 
-        // Act
-        var topicConsumer = streamingClient.GetTopicConsumer(topicName);
+            // Act
+            var topicConsumer = streamingClient.GetTopicConsumer(topicName);
 
-        // Assert
-        topicConsumer.Should().NotBeNull();
-    }
+            // Assert
+            topicConsumer.Should().NotBeNull();
+        }
 
-    private string topics = @"
+        private string topics = @"
 [
     {
         ""id"": ""confluent-testTopic"",
@@ -55,7 +56,7 @@ public class StreamingClientShould
     }
 ]";
 
-    private string workspaces = @"
+        private string workspaces = @"
 [
     {
         ""workspaceId"": ""confluent""
@@ -114,31 +115,32 @@ public class StreamingClientShould
     }
 ]";
 
-    private class MockHttpMessageHandler : HttpMessageHandler
-    {
-        private readonly Dictionary<string, string> responses;
-
-        public MockHttpMessageHandler(Dictionary<string, string> responses)
+        private class MockHttpMessageHandler : HttpMessageHandler
         {
-            this.responses = responses;
-        }
+            private readonly Dictionary<string, string> responses;
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            foreach (var keyValuePair in responses)
+            public MockHttpMessageHandler(Dictionary<string, string> responses)
             {
-                if (request.RequestUri != null && request.RequestUri.ToString().Contains(keyValuePair.Key))
-                {
-                    return new HttpResponseMessage
-                    {
-                        StatusCode = HttpStatusCode.OK,
-                        Content = new StringContent(keyValuePair.Value)
-                    };
-                }
+                this.responses = responses;
             }
 
-            throw new Exception("URL not found");
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                foreach (var keyValuePair in responses)
+                {
+                    if (request.RequestUri != null && request.RequestUri.ToString().Contains(keyValuePair.Key))
+                    {
+                        return new HttpResponseMessage
+                        {
+                            StatusCode = HttpStatusCode.OK,
+                            Content = new StringContent(keyValuePair.Value)
+                        };
+                    }
+                }
+
+                throw new Exception("URL not found");
+            }
         }
     }
 }

@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport.IO;
 
 namespace QuixStreams.Telemetry
 {
@@ -13,7 +12,7 @@ namespace QuixStreams.Telemetry
     /// </summary>
     public sealed class IOComponentConnection : IIOComponentConnection
     {
-        private readonly ILogger logger = Logging.CreateLogger<IOComponentConnection>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<IOComponentConnection>();
 
         private readonly List<Func<StreamPackage, Task>> packageSubscriptions = new List<Func<StreamPackage, Task>>();
         private readonly Dictionary<Type, List<Func<object, Task>>> modelSubscriptions = new Dictionary<Type, List<Func<object, Task>>>();

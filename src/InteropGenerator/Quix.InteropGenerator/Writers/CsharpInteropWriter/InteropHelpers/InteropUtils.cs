@@ -116,6 +116,28 @@ public class InteropUtils
         if (elementType == null)
         {
             LogDebug(new System.Diagnostics.StackTrace().ToString());
+            throw new Exception("Type not set");
+        }
+
+        if (array == null)
+        {
+            return IntPtr.Zero;
+        }
+
+        if (!elementType.IsValueType)
+        {
+            LogDebug($"Converting non-value array to pointer array for type: {elementType}");
+
+            var pointerArray = new IntPtr[array.Length];
+            var arrayIndex = 0;
+            foreach (var element in array)
+            {
+                pointerArray[arrayIndex] = ToHPtr(element);
+                arrayIndex++;
+            }
+
+            elementType = typeof(IntPtr);
+            array = pointerArray;
         }
         LogDebug($"Array UPtr attempt for type: {elementType}");
 

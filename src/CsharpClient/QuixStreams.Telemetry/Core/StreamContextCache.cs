@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using QuixStreams.Transport.IO;
+using Confluent.Kafka;
 
 namespace QuixStreams.Telemetry
 {
@@ -113,13 +113,13 @@ namespace QuixStreams.Telemetry
         public IStreamPipeline StreamPipeline;
 
         /// <summary>
-        /// Last uncommitted Transport Context received
+        /// Last uncommitted topic partition offset received
         /// </summary>
-        public TransportContext LastUncommittedTransportContext;
+        public TopicPartitionOffset LastUncommittedTopicPartitionOffset;
 
         /// <summary>
-        /// Last Transport Context received
+        /// Last topic partition offset received
         /// </summary>
-        public TransportContext LastTransportContext;
+        public TopicPartitionOffset LastTopicPartitionOffset;
     }
 }

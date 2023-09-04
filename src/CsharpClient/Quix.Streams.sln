@@ -5,7 +5,7 @@ VisualStudioVersion = 17.3.32901.215
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming", "QuixStreams.Streaming\QuixStreams.Streaming.csproj", "{E317338C-BD9B-455A-82AC-81400D7F1C68}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming.Samples", "QuixStreams.Streaming.Samples\QuixStreams.Streaming.Samples.csproj", "{350E3A07-A7F5-4ED0-8328-059CC80F07E9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Tester", "QuixStreams.Tester\QuixStreams.Tester.csproj", "{350E3A07-A7F5-4ED0-8328-059CC80F07E9}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming.UnitTests", "QuixStreams.Streaming.UnitTests\QuixStreams.Streaming.UnitTests.csproj", "{6EAC0582-35C1-45F8-B214-99217D52806D}"
 EndProject
@@ -13,15 +13,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Telemetry", "Qu
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Streaming.IntegrationTests", "QuixStreams.Streaming.IntegrationTests\QuixStreams.Streaming.IntegrationTests.csproj", "{F3FA5616-9E34-4B8D-9DB9-29C05D223EA4}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Telemetry.Common.Test", "QuixStreams.Telemetry.Common.Test\QuixStreams.Telemetry.Common.Test.csproj", "{AA9570F5-8275-431B-8955-CFEE282FCBA4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Kafka.Transport", "QuixStreams.Kafka.Transport\QuixStreams.Kafka.Transport.csproj", "{34864168-27E3-4C6A-94BA-0A7E51EFC5BD}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Transport", "QuixStreams.Transport\QuixStreams.Transport.csproj", "{34864168-27E3-4C6A-94BA-0A7E51EFC5BD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Kafka", "QuixStreams.Kafka\QuixStreams.Kafka.csproj", "{CE41D85F-063B-4E3E-955C-8424E0FFB872}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Transport.Kafka", "QuixStreams.Transport.Kafka\QuixStreams.Transport.Kafka.csproj", "{CE41D85F-063B-4E3E-955C-8424E0FFB872}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Transport.UnitTests", "QuixStreams.Transport.UnitTests\QuixStreams.Transport.UnitTests.csproj", "{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Transport.Samples", "QuixStreams.Transport.Samples\QuixStreams.Transport.Samples.csproj", "{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Kafka.Transport.Samples", "QuixStreams.Kafka.Transport.Samples\QuixStreams.Kafka.Transport.Samples.csproj", "{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.Telemetry.UnitTests", "QuixStreams.Telemetry.UnitTests\QuixStreams.Telemetry.UnitTests.csproj", "{73D77A25-E684-4825-8884-722D9F667F6D}"
 EndProject
@@ -48,6 +44,12 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.RawReadSamples", "QuixStreams.RawReadSamples\QuixStreams.RawReadSamples.csproj", "{A7F9ABF7-7F62-4955-8171-E25912DC2213}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QuixStreams.State.ParallelWriteTest", "QuixStreams.State.ParallelWriteTest\QuixStreams.State.ParallelWriteTest.csproj", "{F7B02B1D-BE54-4A7A-9FD1-EDE059B2FC28}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuixStreams.Kafka.Tests", "QuixStreams.Kafka.Tests\QuixStreams.Kafka.Tests.csproj", "{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuixStreams.IntegrationTestBase", "QuixStreams.IntegrationTestBase\QuixStreams.IntegrationTestBase.csproj", "{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuixStreams.Kafka.Transport.Tests", "QuixStreams.Kafka.Transport.Tests\QuixStreams.Kafka.Transport.Tests.csproj", "{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -86,12 +88,6 @@ Global
 		{F3FA5616-9E34-4B8D-9DB9-29C05D223EA4}.Python|Any CPU.Build.0 = Python|Any CPU
 		{F3FA5616-9E34-4B8D-9DB9-29C05D223EA4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F3FA5616-9E34-4B8D-9DB9-29C05D223EA4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4}.Python|Any CPU.ActiveCfg = Python|Any CPU
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4}.Python|Any CPU.Build.0 = Python|Any CPU
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4}.Release|Any CPU.Build.0 = Release|Any CPU
 		{34864168-27E3-4C6A-94BA-0A7E51EFC5BD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{34864168-27E3-4C6A-94BA-0A7E51EFC5BD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{34864168-27E3-4C6A-94BA-0A7E51EFC5BD}.Python|Any CPU.ActiveCfg = Release|Any CPU
@@ -104,12 +100,6 @@ Global
 		{CE41D85F-063B-4E3E-955C-8424E0FFB872}.Python|Any CPU.Build.0 = Release|Any CPU
 		{CE41D85F-063B-4E3E-955C-8424E0FFB872}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CE41D85F-063B-4E3E-955C-8424E0FFB872}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}.Python|Any CPU.ActiveCfg = Python|Any CPU
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}.Python|Any CPU.Build.0 = Python|Any CPU
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2}.Release|Any CPU.Build.0 = Release|Any CPU
 		{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43}.Python|Any CPU.ActiveCfg = Python|Any CPU
@@ -181,6 +171,24 @@ Global
 		{F7B02B1D-BE54-4A7A-9FD1-EDE059B2FC28}.Python|Any CPU.ActiveCfg = Debug|Any CPU
 		{F7B02B1D-BE54-4A7A-9FD1-EDE059B2FC28}.Python|Any CPU.Build.0 = Debug|Any CPU
 		{F7B02B1D-BE54-4A7A-9FD1-EDE059B2FC28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}.Python|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}.Python|Any CPU.Build.0 = Debug|Any CPU
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}.Python|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}.Python|Any CPU.Build.0 = Debug|Any CPU
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}.Python|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}.Python|Any CPU.Build.0 = Debug|Any CPU
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -189,8 +197,6 @@ Global
 		{350E3A07-A7F5-4ED0-8328-059CC80F07E9} = {A017302E-839F-4D1C-AD50-5C6AF5F7DE3F}
 		{6EAC0582-35C1-45F8-B214-99217D52806D} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
 		{F3FA5616-9E34-4B8D-9DB9-29C05D223EA4} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
-		{AA9570F5-8275-431B-8955-CFEE282FCBA4} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
-		{DAFD6128-ACF8-41F3-BF36-A46EFC1545E2} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
 		{6BB99FD3-0353-4BC3-A940-7D1E6FFF6E43} = {A017302E-839F-4D1C-AD50-5C6AF5F7DE3F}
 		{73D77A25-E684-4825-8884-722D9F667F6D} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
 		{E85B2995-C540-440A-B5AD-7E950117AE8D} = {A017302E-839F-4D1C-AD50-5C6AF5F7DE3F}
@@ -202,6 +208,9 @@ Global
 		{E6B67F17-A420-4361-93FA-D93E6E67D838} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
 		{A7F9ABF7-7F62-4955-8171-E25912DC2213} = {A017302E-839F-4D1C-AD50-5C6AF5F7DE3F}
 		{F7B02B1D-BE54-4A7A-9FD1-EDE059B2FC28} = {A017302E-839F-4D1C-AD50-5C6AF5F7DE3F}
+		{4A3B1B05-F64E-4BE7-9C27-53340CD4D6E5} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
+		{1F88D7A0-5F93-4816-B314-7D26DA3F8FA1} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
+		{AC3B6BC9-822B-4D21-951E-846B5C15EE2B} = {F1EDBE48-54DD-4ABE-A6FB-2ECC9C96F260}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C6290472-9588-465F-889C-D5CA8A845449}

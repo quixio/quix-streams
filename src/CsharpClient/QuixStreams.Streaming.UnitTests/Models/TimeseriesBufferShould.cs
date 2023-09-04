@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
+using QuixStreams;
 using QuixStreams.Streaming.Models;
 using Xunit;
 using Xunit.Abstractions;
@@ -315,9 +316,9 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 CustomTrigger = null,
                 CustomTriggerBeforeEnqueue = null
             };
-            if (initialConfig) bufferConfiguration.CustomTrigger = (data) => data.Timestamps.Count == 2;
+            if (initialConfig) bufferConfiguration.CustomTrigger = (fdata) => fdata.Timestamps.Count == 2;
             var buffer = new TimeseriesBuffer(bufferConfiguration);
-            if (!initialConfig) buffer.CustomTrigger = (data) => data.Timestamps.Count == 2;
+            if (!initialConfig) buffer.CustomTrigger = (fdata) => fdata.Timestamps.Count == 2;
             var receivedData = new List<QuixStreams.Streaming.Models.TimeseriesData>();
 
             buffer.OnDataReleased += (sender, args) =>

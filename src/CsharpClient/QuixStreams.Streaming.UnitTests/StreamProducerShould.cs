@@ -3,24 +3,27 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using FluentAssertions;
 using NSubstitute;
+using QuixStreams.Kafka.Transport.SerDes;
+using QuixStreams.Kafka.Transport.Tests.Helpers;
 using QuixStreams.Streaming.Models;
-using QuixStreams.Telemetry.Common.Test;
+using QuixStreams.Streaming.UnitTests.Helpers;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using Xunit;
 using EventDefinition = QuixStreams.Telemetry.Models.EventDefinition;
 using ParameterDefinition = QuixStreams.Telemetry.Models.ParameterDefinition;
 
-namespace QuixStreams.Streaming.UnitTests.Telemetry
+namespace QuixStreams.Streaming.UnitTests
 {
     public class StreamProducerShould
     {
-        private void CreateRequirements(out string streamId, out TestTelemetryKafkaProducer testTelemetryKafkaProducer, out StreamProducer streamProducer)
+        private void CreateRequirements(out string streamId, out TelemetryKafkaProducer testTelemetryKafkaProducer, out StreamProducer streamProducer)
         {
             streamId = "TestStream";
-            var ftestKafkaProducer = new TestTelemetryKafkaProducer(new TestBroker(), streamId);
+            var broker = new TestBroker();
+            var ftestKafkaProducer = new TelemetryKafkaProducer(broker, streamId);
             testTelemetryKafkaProducer = ftestKafkaProducer;
-            Func<string, TelemetryKafkaProducer> func = (string streamId) => ftestKafkaProducer;
+            Func<string, TelemetryKafkaProducer> func = (string fstreamId) => ftestKafkaProducer;
             streamProducer = new StreamProducer(Substitute.For<ITopicProducerInternal>(), func, streamId);
         }
         
@@ -368,7 +371,7 @@ namespace QuixStreams.Streaming.UnitTests.Telemetry
             topicConsumer.OnStreamReceived += (_, streamConsumer) =>
             {
                 var buffer = streamConsumer.Timeseries.CreateBuffer();
-                buffer.OnDataReleased += (_, args) =>
+                buffer.OnDataReleased += (_2, args) =>
                 {
                     releasedData.Add(args.Data);
                 };

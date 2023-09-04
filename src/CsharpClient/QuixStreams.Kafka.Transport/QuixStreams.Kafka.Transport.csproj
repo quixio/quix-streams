@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
+    <Configurations>Debug;Release;Python</Configurations>
+    <TargetFramework Condition=" '$(Configuration)' == 'Python' ">net8.0</TargetFramework>
+    <TargetFrameworks Condition=" '$(Configuration)' != 'Python' ">net7.0;netstandard2.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>QuixStreams.Kafka.Transport</PackageId>
+    <Version>0.6.0.0</Version>
+    <AssemblyVersion>0.6.0.0</AssemblyVersion>
+    <FileVersion>0.6.0.0</FileVersion>
+    <InformationalVersion>0.6.0.0</InformationalVersion>
+    <Company>Quix Analytics Ltd</Company>
+    <Authors>devs@quix.io</Authors>
+    <Product>QuixStreams.Kafka.Transport</Product>
+    <Description>Codec system for QuixStreams dependent on Kafka protocol</Description>
+    <Copyright>Copyright © Quix Analytics Ltd 2020</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.0" />
+    <PackageReference Include="Serilog" Version="2.12.0" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="3.0.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\QuixStreams.Kafka\QuixStreams.Kafka.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>QuixStreams.Kafka.Transport.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

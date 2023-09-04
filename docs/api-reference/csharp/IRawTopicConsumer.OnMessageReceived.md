@@ -6,8 +6,8 @@
 Event raised when a message is received from the topic
 
 ```csharp
-event EventHandler<RawMessage> OnMessageReceived;
+event EventHandler<KafkaMessage> OnMessageReceived;
 ```
 
 #### Event Type
-[System.EventHandler&lt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')[RawMessage](RawMessage.md 'QuixStreams.Streaming.Raw.RawMessage')[&gt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')
+[System.EventHandler&lt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')[QuixStreams.Kafka.KafkaMessage](https://docs.microsoft.com/en-us/dotnet/api/QuixStreams.Kafka.KafkaMessage 'QuixStreams.Kafka.KafkaMessage')[&gt;](https://docs.microsoft.com/en-us/dotnet/api/System.EventHandler-1 'System.EventHandler`1')

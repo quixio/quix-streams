@@ -3,6 +3,8 @@ import datetime
 
 from ...native.Python.SystemPrivateCoreLib.System.DateTime import DateTime as dti
 from ...native.Python.SystemPrivateCoreLib.System.TimeSpan import TimeSpan as tsi
+from ...native.Python.SystemPrivateCoreLib.System.DateTimeKind import DateTimeKind as DateTimeKindInterop
+
 
 
 class DateTimeConverter:
@@ -45,8 +47,22 @@ class DateTimeConverter:
         if value is None:
             return None
 
+        orig_value = value
+        datetime_kind = DateTimeKindInterop.Local
+        if orig_value.tzinfo is not None:
+            value = value.astimezone(datetime.timezone.utc)
+            datetime_kind = DateTimeKindInterop.Utc
+
         ms = int((value.microsecond - value.microsecond % 1000) / 1000)
-        result_hptr = dti.Constructor14(value.year, value.month, value.day, value.hour, value.minute, value.second, ms, value.microsecond % 1000)
+        result_hptr = dti.Constructor15(value.year,
+                                        value.month,
+                                        value.day,
+                                        value.hour,
+                                        value.minute,
+                                        value.second,
+                                        ms,
+                                        value.microsecond % 1000,
+                                        datetime_kind)
         return result_hptr
 
     @staticmethod

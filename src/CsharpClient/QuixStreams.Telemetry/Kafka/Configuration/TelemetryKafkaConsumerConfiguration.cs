@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using QuixStreams.Transport.Fw;
+using QuixStreams.Kafka.Transport;
 
 namespace QuixStreams.Telemetry.Kafka
 {

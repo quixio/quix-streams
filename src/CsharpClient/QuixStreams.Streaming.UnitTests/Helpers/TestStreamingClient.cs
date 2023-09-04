@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using QuixStreams.Kafka.Transport;
+using QuixStreams.Kafka.Transport.SerDes;
+using QuixStreams.Kafka.Transport.Tests.Helpers;
 using QuixStreams.Streaming.Raw;
 using QuixStreams.Streaming.Utils;
-using QuixStreams.Telemetry.Common.Test;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
-using QuixStreams.Transport.Fw;
 
-namespace QuixStreams.Streaming.UnitTests
+namespace QuixStreams.Streaming.UnitTests.Helpers
 {
     public class TestStreamingClient : IQuixStreamingClient, IKafkaStreamingClient
     {
@@ -31,7 +33,7 @@ namespace QuixStreams.Streaming.UnitTests
         public ITopicConsumer GetTopicConsumer(string topic)
         {
             var broker = GetBroker(topic);
-            this.telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(broker);
+            this.telemetryKafkaConsumer = new TelemetryKafkaConsumer(broker, null);
 
             var topicConsumer = new TopicConsumer(this.telemetryKafkaConsumer);
 
@@ -46,10 +48,9 @@ namespace QuixStreams.Streaming.UnitTests
         public ITopicProducer GetTopicProducer(string topic)
         {
             var broker = GetBroker(topic);
-            this.createKafkaProducer = streamId => new TestTelemetryKafkaProducer(broker, streamId);
+            this.createKafkaProducer = streamId => new TelemetryKafkaProducer(broker, streamId);
 
             var topicProducer = new TopicProducer(this.createKafkaProducer);
-            
 
             return topicProducer;
         }
@@ -57,7 +58,7 @@ namespace QuixStreams.Streaming.UnitTests
         private TestBroker GetBroker(string topic)
         {
             if (this.brokers.TryGetValue(topic, out var broker)) return broker;
-            broker = new TestBroker(publishDelay: publishDelay);
+            broker = new TestBroker((msg) => Task.Delay(publishDelay));
             this.brokers[topic] = broker;
             return broker;
         }

@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Streaming.Models.StreamConsumer;
 using QuixStreams.Telemetry.Models;
 
@@ -17,7 +18,7 @@ namespace QuixStreams.Streaming.Models
     public class TimeseriesBuffer: IDisposable
     {
         private bool isDisposed = false;
-        private ILogger logger = Logging.CreateLogger(typeof(TimeseriesDataRaw));
+        private ILogger logger = QuixStreams.Logging.CreateLogger(typeof(TimeseriesDataRaw));
 
         // Configuration of the buffer
         private int? bufferTimeout = null;

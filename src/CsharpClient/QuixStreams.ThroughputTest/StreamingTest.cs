@@ -9,6 +9,7 @@ using QuixStreams.Telemetry.Models;
 
 namespace QuixStreams.ThroughputTest
 {
+    /*
     public class StreamingTest
     {
         public void Run(CancellationToken ct)
@@ -151,4 +152,5 @@ namespace QuixStreams.ThroughputTest
             public long Amount;
         }
     }
+    */
 }

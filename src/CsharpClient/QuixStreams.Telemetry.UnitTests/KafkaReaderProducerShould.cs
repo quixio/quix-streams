@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using Quix.TestBase.Extensions;
-using QuixStreams.Telemetry.Common.Test;
+using QuixStreams;
+using QuixStreams.Kafka.Transport.SerDes;
+using QuixStreams.Kafka.Transport.SerDes.Codecs;
+using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
+using QuixStreams.Kafka.Transport.Tests.Helpers;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.UnitTests.Helpers;
@@ -34,8 +38,8 @@ namespace QuixStreams.Telemetry.UnitTests
             bool streamStarted = false;
 
             // Create Kafka consumer
-            var kafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
-            kafkaConsumer.ForEach(streamId =>
+            var telemetryKafkaConsumer = new TelemetryKafkaConsumer(testBroker, null);
+            telemetryKafkaConsumer.ForEach(streamId =>
             {
                 streamStarted = true;
 
@@ -55,15 +59,15 @@ namespace QuixStreams.Telemetry.UnitTests
                 return s;
             });
 
-            kafkaConsumer.Start();
+            telemetryKafkaConsumer.Start();
 
             // Create streams
             var stream1 = new StreamPipeline()
-                .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_1"));
+                .AddComponent(new TelemetryKafkaProducer(testBroker, "StreamId_1"));
             var stream2 = new StreamPipeline()
-                .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_2"));
+                .AddComponent(new TelemetryKafkaProducer(testBroker, "StreamId_2"));
             var stream3 = new StreamPipeline()
-                .AddComponent(new TestTelemetryKafkaProducer(testBroker, "StreamId_3"));
+                .AddComponent(new TelemetryKafkaProducer(testBroker, "StreamId_3"));
 
             // ACT
             stream1.Send(testModel1);
@@ -72,7 +76,7 @@ namespace QuixStreams.Telemetry.UnitTests
             stream3.Send(testModel2);
 
             // ASSERT
-            Assert.Equal(3, kafkaConsumer.ContextCache.GetAll().Count);
+            Assert.Equal(3, telemetryKafkaConsumer.ContextCache.GetAll().Count);
             Assert.Contains(("StreamId_1", typeof(TestModel1)), results);
             Assert.DoesNotContain(("StreamId_1", typeof(TestModel2)), results);
             Assert.Contains(("StreamId_2", typeof(TestModel1)), results);
@@ -93,7 +97,7 @@ namespace QuixStreams.Telemetry.UnitTests
             stream1.Send(streamEnd);
 
             // ASSERT
-            Assert.Equal(2, kafkaConsumer.ContextCache.GetAll().Count);
+            Assert.Equal(2, telemetryKafkaConsumer.ContextCache.GetAll().Count);
 
             // ACT - RE-OPEN TEST
             streamStarted = false;
@@ -101,7 +105,7 @@ namespace QuixStreams.Telemetry.UnitTests
 
             // ASSERT RE-OPEN TEST
             Assert.True(streamStarted);
-            Assert.Equal(3, kafkaConsumer.ContextCache.GetAll().Count);
+            Assert.Equal(3, telemetryKafkaConsumer.ContextCache.GetAll().Count);
         }
 
         [Fact]
@@ -115,7 +119,7 @@ namespace QuixStreams.Telemetry.UnitTests
             bool raised = false;
 
             // Create Kafka consumer
-            TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
+            TelemetryKafkaConsumer telemetryKafkaConsumer = new TelemetryKafkaConsumer(testBroker, null);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var s = new StreamPipeline(streamId);
@@ -123,7 +127,7 @@ namespace QuixStreams.Telemetry.UnitTests
             });
 
             // Create Kafka producer
-            TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
+            var telemetryKafkaProducer = new TelemetryKafkaProducer(testBroker);
             var stream1 = new StreamPipeline()
                 .AddComponent(telemetryKafkaProducer);
 
@@ -142,12 +146,12 @@ namespace QuixStreams.Telemetry.UnitTests
             RegisterTestCodecs();
 
             // ARRANGE
-            TestBroker testBroker = new TestBroker(true);
+            TestBroker testBroker = new TestBroker((m) => throw new Exception());
             TestModel1 testModel1 = new TestModel1();
             bool raised = false;
 
             // Create Kafka consumer
-            TelemetryKafkaConsumer telemetryKafkaConsumer = new TestTelemetryKafkaConsumer(testBroker);
+            TelemetryKafkaConsumer telemetryKafkaConsumer = new TelemetryKafkaConsumer(testBroker, null);
             telemetryKafkaConsumer.ForEach(streamId =>
             {
                 var s = new StreamPipeline(streamId);
@@ -155,7 +159,7 @@ namespace QuixStreams.Telemetry.UnitTests
             });
 
             // Create Kafka producer
-            TelemetryKafkaProducer telemetryKafkaProducer = new TestTelemetryKafkaProducer(testBroker, "StreamId_1");
+            TelemetryKafkaProducer telemetryKafkaProducer = new TelemetryKafkaProducer(testBroker, "StreamId_1");
             var stream1 = new StreamPipeline()
                 .AddComponent(telemetryKafkaProducer);
 
@@ -170,16 +174,16 @@ namespace QuixStreams.Telemetry.UnitTests
 
         private static void RegisterTestCodecs()
         {
-            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(typeof(StreamEnd).Name, new QuixStreams.Transport.Fw.Codecs.DefaultJsonCodec<StreamEnd>());
-            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(new QuixStreams.Transport.Fw.ModelKey(typeof(TestModel1)), new QuixStreams.Transport.Fw.Codecs.DefaultJsonCodec<TestModel1>());
-            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(new QuixStreams.Transport.Fw.ModelKey(typeof(TestModel2)), new QuixStreams.Transport.Fw.Codecs.DefaultJsonCodec<TestModel2>());
+            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RegisterCodec(typeof(StreamEnd).Name, new DefaultJsonCodec<StreamEnd>());
+            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RegisterCodec(new ModelKey(typeof(TestModel1)), new DefaultJsonCodec<TestModel1>());
+            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RegisterCodec(new ModelKey(typeof(TestModel2)), new DefaultJsonCodec<TestModel2>());
         }
 
         private static void UnregisterTestCodecs()
         {
-            QuixStreams.Transport.Registry.CodecRegistry.ClearCodecs(typeof(StreamEnd).Name);
-            QuixStreams.Transport.Registry.CodecRegistry.ClearCodecs(new QuixStreams.Transport.Fw.ModelKey(typeof(TestModel1)));
-            QuixStreams.Transport.Registry.CodecRegistry.ClearCodecs(new QuixStreams.Transport.Fw.ModelKey(typeof(TestModel2)));
+            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.ClearCodecs(typeof(StreamEnd).Name);
+            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.ClearCodecs(new ModelKey(typeof(TestModel1)));
+            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.ClearCodecs(new ModelKey(typeof(TestModel2)));
         }
 
     }

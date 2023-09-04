@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.State.Storage;
 
 namespace QuixStreams.Streaming.States
@@ -26,7 +27,7 @@ namespace QuixStreams.Streaming.States
         /// <param name="loggerFactory">The logger factory to use</param>
         public AppStateManager(IStateStorage storage, ILoggerFactory loggerFactory = null)
         {
-            this.loggerFactory = loggerFactory ?? Logging.Factory;
+            this.loggerFactory = loggerFactory ?? QuixStreams.Logging.Factory;
             this.storage = storage;
             this.logger = this.loggerFactory.CreateLogger<AppStateManager>();
         }

@@ -2,7 +2,7 @@ import ctypes
 from typing import Optional
 
 from ..helpers.nativedecorator import nativedecorator
-from ..native.Python.QuixStreamsTransport.Fw.CommitOptions import CommitOptions as coi
+from ..native.Python.QuixStreamsKafkaTransport.CommitOptions import CommitOptions as coi
 
 
 @nativedecorator

@@ -1686,60 +1686,88 @@ class TestTimeseriesData(BaseIntegrationTest):
 
 
 class TestRawData(BaseIntegrationTest):
+
     def test_raw_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
 
-        received_messages: List[qx.RawMessage] = []
+        received_messages: List[qx.KafkaMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 
         def on_message_received_handler(topic: qx.RawTopicConsumer,
-                                        message: qx.RawMessage):
+                                        message: qx.KafkaMessage):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
-            if counter == 3:
+            if counter == 5:
                 event.set()
 
         raw_topic_consumer.on_message_received = on_message_received_handler
         raw_topic_consumer.subscribe()
 
         # Act
-        message_bytes = bytes("Test Quix Raw with bytes", "utf-8")
-        raw_topic_producer.publish(message_bytes)
-        message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
-        raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
-        raw_topic_producer.publish(message_raw)
+        value_bytes = bytes("value bytes", "utf-8")
+        value_bytearray = bytearray("value bytearray", "utf-8")
+        key_bytearray = bytearray("key bytearray", "utf-8")
+        headers = []
+        headers.append(qx.KafkaHeader("header_key", "header_value"))
+
+        raw_topic_producer.publish(value_bytes)
+        raw_topic_producer.publish(value_bytearray)
+        message_val_only = qx.KafkaMessage(value=value_bytes)
+        raw_topic_producer.publish(message_val_only)
+        message_with_key = qx.KafkaMessage(key=key_bytearray, value=value_bytearray)
+        raw_topic_producer.publish(message_with_key)
+        message_with_header = qx.KafkaMessage(key=key_bytearray, value=value_bytearray, headers=headers)
+        raw_topic_producer.publish(message_with_header)
 
         self.wait_for_result(event)
 
         # Assert
-        assert len(received_messages) == 3
-        assert received_messages[0].value == message_bytes
-        assert received_messages[1].value == message_bytearray
-        assert received_messages[2].value == message_raw.value
+        assert len(received_messages) == 5
+        assert received_messages[0].value == value_bytes
+        assert received_messages[1].value == value_bytearray
+        assert received_messages[2].value == value_bytes
+        assert received_messages[3].key == key_bytearray
+        assert received_messages[3].value == value_bytearray
+        assert received_messages[4].key == key_bytearray
+        assert received_messages[4].value == value_bytearray
+        assert len(received_messages[4].headers) == len(headers) and len(headers) == 1
+        assert received_messages[4].headers[0].key == headers[0].key
+        assert received_messages[4].headers[0].value == headers[0].value
+        assert received_messages[4].headers[0].get_value_as_str() == headers[0].get_value_as_str()
 
-        keys = received_messages[0].metadata.keys()
-        assert 'MessageGroupKey' not in keys  # because key was not set
-        assert 'KafkaKey' not in keys  # because key was not set
-        assert 'KafkaTopic' in keys
-        assert 'KafkaPartition' in keys
-        assert 'KafkaOffset' in keys
-        assert 'BrokerMessageTime' in keys
-        assert 'KafkaMessageSize' in keys
+        tpo = received_messages[1].topic_partition_offset
+        assert tpo is not None
+        assert tpo.partition is not None
+        assert tpo.topic is not None
+        assert tpo.topic_partition is not None
+        assert tpo.offset is not None
+
+        assert tpo.topic_partition.partition == tpo.partition
+        assert tpo.topic_partition.topic == tpo.topic
+        assert tpo.offset.value == 1
+        assert not tpo.offset.is_special
+        assert not tpo.partition.is_special
+
+        assert str(tpo) == "integrationtests.test_integration.TestRawData.test_raw_read_write [[0]] @1"
+        assert str(tpo.topic_partition) == "integrationtests.test_integration.TestRawData.test_raw_read_write [[0]]"
+        assert str(tpo.offset) == "1"
+        assert str(tpo.partition) == "[0]"
+
+
 
     def test_dispose_read_write(self, test_name, raw_topic_consumer, raw_topic_producer):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
 
-        received_messages: List[qx.RawMessage] = []
+        received_messages: List[qx.KafkaMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 
         def on_message_received_handler(topic: qx.RawTopicConsumer,
-                                        message: qx.RawMessage):
+                                        message: qx.KafkaMessage):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
@@ -1754,7 +1782,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(value=bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         raw_topic_producer.dispose()
@@ -1768,12 +1796,12 @@ class TestRawData(BaseIntegrationTest):
         # Arrange
         print(f'Starting Integration test "{test_name}"')
 
-        received_messages: List[qx.RawMessage] = []
+        received_messages: List[qx.KafkaMessage] = []
         event = threading.Event()  # used for assertion
         counter = 0
 
         def on_message_received_handler(topic: qx.RawTopicConsumer,
-                                        message: qx.RawMessage):
+                                        message: qx.KafkaMessage):
             nonlocal received_messages, counter
             received_messages.append(message)
             counter = counter + 1
@@ -1788,7 +1816,7 @@ class TestRawData(BaseIntegrationTest):
         raw_topic_producer.publish(message_bytes)
         message_bytearray = bytearray("Test Quix Raw with bytearray", "utf-8")
         raw_topic_producer.publish(message_bytearray)
-        message_raw = qx.RawMessage(bytearray("Test Quix Raw message", "utf-8"))
+        message_raw = qx.KafkaMessage(value=bytearray("Test Quix Raw message", "utf-8"))
         raw_topic_producer.publish(message_raw)
 
         raw_topic_producer.flush()
@@ -1798,6 +1826,7 @@ class TestRawData(BaseIntegrationTest):
         # Assert
         assert len(received_messages) == 3
 
+
 class TestStreamState(BaseIntegrationTest):
 
     def test_in_dict_state(self):
@@ -1806,11 +1835,11 @@ class TestStreamState(BaseIntegrationTest):
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
         dict_state = stream_state_manager.get_dict_state("test")
 
-        assert "a" in dict_state
+        assert "a" not in dict_state
 
         dict_state["a"] = "b"
 
-        assert "a" not in dict_state
+        assert "a" in dict_state
 
     def test_stream_state_manager(self,
                                   test_name,

@@ -1,23 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
+    <LangVersion>8.0</LangVersion>
     <IsPackable>false</IsPackable>
-    <Configurations>Debug;Release;Python</Configurations>
-    <Platforms>AnyCPU</Platforms>
   </PropertyGroup>
   
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.2.0" />
     <PackageReference Include="FluentAssertions" Version="5.10.2" />
     <PackageReference Include="NSubstitute" Version="4.2.1" />
-    <PackageReference Include="xunit" Version="2.4.0" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+    <PackageReference Include="xunit" Version="2.4.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.1" />
     <PackageReference Include="coverlet.collector" Version="1.0.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\QuixStreams.Telemetry.Common.Test\QuixStreams.Telemetry.Common.Test.csproj" />
+    <ProjectReference Include="..\QuixStreams.Kafka.Transport.Tests\QuixStreams.Kafka.Transport.Tests.csproj" />
     <ProjectReference Include="..\QuixStreams.Streaming\QuixStreams.Streaming.csproj" />
     <ProjectReference Include="..\Quix.TestBase\Quix.TestBase.csproj" />
   </ItemGroup>

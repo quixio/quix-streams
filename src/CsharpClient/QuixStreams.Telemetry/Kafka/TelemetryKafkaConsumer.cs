@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.Linq;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
-using QuixStreams.Transport.Fw;
-using QuixStreams.Transport.Kafka;
+using QuixStreams.Kafka;
+using QuixStreams.Kafka.Transport;
 
 namespace QuixStreams.Telemetry.Kafka
 {
@@ -19,8 +19,8 @@ namespace QuixStreams.Telemetry.Kafka
         /// </summary>
         public readonly string Topic = "Unknown";
         
-        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<TelemetryKafkaConsumer>();
-        private QuixStreams.Transport.TransportConsumer transportConsumer;
+        private readonly ILogger logger = Logging.CreateLogger<TelemetryKafkaConsumer>();
+        private IKafkaTransportConsumer kafkaTransportConsumer;
         private bool isDisposed = false;
 
         private StreamPipelineFactory streamPipelineFactory;
@@ -56,7 +56,7 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Stream Context cache for all the streams of the topic
         /// </summary>
-        protected IStreamContextCache ContextCache;
+        internal IStreamContextCache ContextCache;
 
         /// <summary>
         /// Initializes a new instance of <see cref="TelemetryKafkaConsumer"/>
@@ -75,7 +75,7 @@ namespace QuixStreams.Telemetry.Kafka
                 commitOptions.AutoCommitEnabled = false;
             }
 
-            configureCommitOptions = o =>
+            this.configureCommitOptions = o =>
             {
                 o.CommitEvery = commitOptions.CommitEvery;
                 o.CommitInterval = commitOptions.CommitInterval;
@@ -87,23 +87,30 @@ namespace QuixStreams.Telemetry.Kafka
         }
 
         /// <summary>
-        /// Protected CTOR for testing purposes. We can simulate a Kafka broker instead of using a real broker.
+        /// Initializes a new instance of <see cref="TelemetryKafkaConsumer"/>
         /// </summary>
-        /// <param name="consumer">Simulated message broker ingoing endpoint of transport layer</param>
-        protected TelemetryKafkaConsumer(IKafkaConsumer consumer)
+        /// <param name="consumer">The consumer to use</param>
+        /// <param name="commitOptions">The commit options to use</param>
+        public TelemetryKafkaConsumer(IKafkaConsumer consumer, CommitOptions commitOptions)
         {
             this.kafkaConsumer = consumer;
+
+            if (commitOptions == null) commitOptions = new CommitOptions();
+            this.configureCommitOptions = o =>
+            {
+                o.CommitEvery = commitOptions.CommitEvery;
+                o.CommitInterval = commitOptions.CommitInterval;
+                o.AutoCommitEnabled = commitOptions.AutoCommitEnabled;
+            };
         }
 
         private bool InitializeTransport()
         {
-            if (transportConsumer != null)
+            if (kafkaTransportConsumer != null)
                 return false;
 
             this.kafkaConsumer.OnErrorOccurred += ReadingExceptionHandler;
-            this.kafkaConsumer.Open();
-
-            this.transportConsumer = new QuixStreams.Transport.TransportConsumer(kafkaConsumer, (o) =>
+            this.kafkaTransportConsumer = new KafkaTransportConsumer(kafkaConsumer, (o) =>
             { 
                 this.configureCommitOptions?.Invoke(o.CommitOptions);
             });
@@ -136,28 +143,28 @@ namespace QuixStreams.Telemetry.Kafka
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
             if (!this.InitializeTransport()) return;
-
             // Transport layer -> Streaming layer
             ContextCache = new StreamContextCache();
-            this.streamPipelineFactory = new KafkaStreamPipelineFactory(this.transportConsumer, streamPipelineFactoryHandler, ContextCache);
+            this.streamPipelineFactory = new StreamPipelineFactory(this.kafkaTransportConsumer, streamPipelineFactoryHandler, ContextCache);
             this.streamPipelineFactory.OnStreamsRevoked += StreamsRevokedHandler;
-            this.transportConsumer.OnRevoking += RevokingHandler;
-            this.transportConsumer.OnCommitted += CommittedHandler;
-            this.transportConsumer.OnCommitting += CommitingHandler;
-            this.streamPipelineFactory.Open();
+            this.kafkaTransportConsumer.OnRevoking += RevokingHandler;
+            this.kafkaTransportConsumer.OnCommitted += CommittedHandler;
+            this.kafkaTransportConsumer.OnCommitting += CommitingHandler;
+            this.streamPipelineFactory.Open(); 
+            this.kafkaConsumer.Open();
         }
 
-        private void CommittedHandler(object sender, OnCommittedEventArgs e)
+        private void CommittedHandler(object sender, CommittedEventArgs e)
         {
             this.OnCommitted?.Invoke(this, EventArgs.Empty);
         }
         
-        private void CommitingHandler(object sender, OnCommittingEventArgs e)
+        private void CommitingHandler(object sender, CommittingEventArgs e)
         {
             this.OnCommitting?.Invoke(this, EventArgs.Empty);
         }
 
-        private void RevokingHandler(object sender, OnRevokingEventArgs e)
+        private void RevokingHandler(object sender, RevokingEventArgs e)
         {
             this.OnRevoking?.Invoke(this, EventArgs.Empty);
         }
@@ -191,11 +198,10 @@ namespace QuixStreams.Telemetry.Kafka
         private void StopHelper()
         {
             // Transport layer
-            if (transportConsumer != null)
+            if (kafkaTransportConsumer != null)
             {
-                this.transportConsumer.OnRevoking -= RevokingHandler;
-                this.transportConsumer.OnCommitted -= CommittedHandler;
-                this.transportConsumer.Close();
+                this.kafkaTransportConsumer.OnRevoking -= RevokingHandler;
+                this.kafkaTransportConsumer.OnCommitted -= CommittedHandler;
             }
 
             this.kafkaConsumer?.Close();
@@ -216,7 +222,7 @@ namespace QuixStreams.Telemetry.Kafka
             this.StopHelper();
 
             this.kafkaConsumer = null;
-            this.transportConsumer = null;
+            this.kafkaTransportConsumer = null;
             this.streamPipelineFactory = null;
         }
 
@@ -226,19 +232,19 @@ namespace QuixStreams.Telemetry.Kafka
         public void Commit()
         {
             if (isDisposed) throw new ObjectDisposedException(nameof(TelemetryKafkaConsumer));
-            if (transportConsumer == null) throw new InvalidOperationException("Not able to commit to inactive reader");
+            if (kafkaTransportConsumer == null) throw new InvalidOperationException("Not able to commit to inactive reader");
             Debug.Assert(ContextCache != null);
             lock (this.ContextCache.Sync)
             {
                 this.logger.LogTrace("Starting manual commit");
                 var all = this.ContextCache.GetAll();
-                var contexts = all.Select(y => y.Value.LastUncommittedTransportContext).Where(y => y != null).ToArray();
+                var contexts = all.Select(y => y.Value.LastUncommittedTopicPartitionOffset).Where(y => y != null).ToArray();
                 if (contexts.Length == 0)
                 {
                     this.logger.LogTrace("Finished manual commit (nothing to commit)");
                     return; // there is nothing to commit
                 }
-                this.transportConsumer.Commit(contexts);
+                this.kafkaTransportConsumer.Commit(contexts);
                 this.logger.LogTrace("Finished manual commit");
             }
         }

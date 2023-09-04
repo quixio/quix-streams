@@ -4,8 +4,10 @@
 		<DocumentationFile>bin\$(OutputDir)\$(Configuration)\$(TargetFramework)\$(AssemblyName).xml</DocumentationFile>
 		<Configurations>Debug;Release;Python</Configurations>
 		<Platforms>AnyCPU</Platforms>
+
+		<TargetFramework Condition=" '$(Configuration)' == 'Python' ">net8.0</TargetFramework>
+		<TargetFrameworks Condition=" '$(Configuration)' != 'Python' ">net7.0;netstandard2.0</TargetFrameworks>
 		<LangVersion>8.0</LangVersion>
-		<TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
 	</PropertyGroup>
 
 	<PropertyGroup>

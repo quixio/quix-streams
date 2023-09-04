@@ -4,7 +4,6 @@
 
 | Classes | |
 | :--- | :--- |
-| [RawMessage](RawMessage.md 'QuixStreams.Streaming.Raw.RawMessage') | The message read from topic without any transformation |
 | [RawTopicConsumer](RawTopicConsumer.md 'QuixStreams.Streaming.Raw.RawTopicConsumer') | Topic class to read incoming raw messages (capable to read non-quixstreams messages) |
 | [RawTopicProducer](RawTopicProducer.md 'QuixStreams.Streaming.Raw.RawTopicProducer') | Class to produce raw messages into a Topic (capable to producing non-quixstreams messages) |
 
