@@ -34,6 +34,7 @@ namespace QuixStreams.Kafka.Transport
         /// Initializes a new instance of <see cref="AutoCommitter"/>
         /// </summary>
         /// <param name="commitOptions">Auto commit options</param>
+        /// <param name="commitCallback">The callback to invoke when conditions occur for a commit</param>
         public AutoCommitter(CommitOptions commitOptions, Action<ICollection<TopicPartitionOffset>> commitCallback)
         {
             if (commitOptions == null) throw new ArgumentNullException(nameof(commitOptions));
