@@ -3,7 +3,8 @@
 
 ## StreamTimeseriesProducer.CreateLeadingEdgeBuffer(int) Method
 
-Creates a new [LeadingEdgeBuffer](LeadingEdgeBuffer.md 'QuixStreams.Streaming.Models.LeadingEdgeBuffer') using this producer
+Creates a new [LeadingEdgeBuffer](LeadingEdgeBuffer.md 'QuixStreams.Streaming.Models.LeadingEdgeBuffer') using this producer where tags form part of the row's key  
+and can't be modified after initial values
 
 ```csharp
 public QuixStreams.Streaming.Models.LeadingEdgeBuffer CreateLeadingEdgeBuffer(int leadingEdgeDelayMs);

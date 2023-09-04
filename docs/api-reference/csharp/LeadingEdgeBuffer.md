@@ -3,6 +3,8 @@
 
 ## LeadingEdgeBuffer Class
 
+Leading edge buffer where time and tag are treated as a compound key
+
 ```csharp
 public class LeadingEdgeBuffer
 ```
