@@ -1,8 +1,7 @@
 import math
 import unittest
 
-from quixstreams.statestorages.statevalue import StateValue
-from quixstreams.statestorages.inmemorystorage import InMemoryStorage
+from quixstreams.statestorages import StateValue, InMemoryStorage
 
 
 class InMemoryStorageTests(unittest.TestCase):

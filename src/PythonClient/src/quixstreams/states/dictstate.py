@@ -1,12 +1,16 @@
 from collections.abc import MutableMapping
 from enum import Enum
 
-from ..statestorages.istatestorage import IStateStorage
+from ..statestorages import IStateStorage
 
 
 class DictState(MutableMapping):
 
     def __init__(self, storage: IStateStorage, logger_factory=None):
+
+        if storage is None:
+            raise ValueError("storage must not be None")
+
         self.logger = logger_factory.getLogger("DictionaryState") if logger_factory else None
         self.storage = storage
         self.in_memory_state = {}
@@ -62,32 +66,32 @@ class DictState(MutableMapping):
             self.logger.info("Flushing state.")
         for callback in self.flushing_callbacks:
             callback(self)
-        tasks = []
+
         if self.clear_before_flush:
             self.storage.clear()
             self.clear_before_flush = False
         for key, change_type in self.changes.items():
             if change_type == ChangeType.REMOVED:
                 self.last_flush_hash.pop(key, None)
-                tasks.append(self.storage.remove_async(key))
+                self.storage.remove(key)
             else:
                 value = self.in_memory_state[key]
-                if value is None:
+                if value is None or value.is_null():
                     self.last_flush_hash.pop(key, None)
-                    tasks.append(self.storage.remove_async(key))
+                    self.storage.remove(key)
                 else:
                     hash_value = hash(value)
                     if self.last_flush_hash.get(key) == hash_value:
                         continue
                     self.last_flush_hash[key] = hash_value
-                    tasks.append(self.storage.set_async(key, value))
-        for task in tasks:
-            task.wait()
+                    self.storage.set(key, value)
+
+        if self.logger:
+            self.logger.info("Flushed {0} state changes.".format(len(self.changes)))
+
         self.changes.clear()
         for callback in self.flushed_callbacks:
             callback(self)
-        if self.logger:
-            self.logger.info("Flushed {0} state changes.".format(len(tasks)))
 
     def reset(self):
         if len(self.changes) == 0 and self.logger:
@@ -95,18 +99,16 @@ class DictState(MutableMapping):
             return
         if self.logger:
             self.logger.info("Resetting state")
-        tasks = []
+
         for key in self.changes.keys():
             del self.in_memory_state[key]
-            tasks.append(self.storage.get_async(key))
-        for task in tasks:
-            key, value = task.result()
+            value = self.storage.get(key)
             if value is not None:
                 self.in_memory_state[key] = value
-        self.changes.clear()
-        if self.logger:
-            self.logger.info("Reset {0} state changes.".format(len(tasks)))
 
+        if self.logger:
+            self.logger.info("Reset {0} state changes.".format(len(self.changes)))
+        self.changes.clear()
 
 class ChangeType(Enum):
     REMOVED = 1

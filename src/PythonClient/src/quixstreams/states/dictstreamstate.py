@@ -2,9 +2,8 @@ from collections.abc import MutableMapping
 from typing import Generic, Callable
 
 from .istreamstate import IStreamState
-from ..states.dictstate import DictState
-from ..statestorages.istatestorage import IStateStorage
-from ..statestorages.statetype import StreamStateType
+from .dictstate import DictState
+from ..statestorages import IStateStorage, StreamStateType
 
 
 class DictStreamState(Generic[StreamStateType], MutableMapping, IStreamState):
@@ -30,16 +29,13 @@ class DictStreamState(Generic[StreamStateType], MutableMapping, IStreamState):
         self._dictionary_state = DictState(storage, None)
         self._type = state_type
         self._default_value_factory = default_value_factory or (lambda _: raise_key_error())
-        self.on_flushing = None
-        self.on_flushed = None
+        self._flushing_callbacks = []
+        self._flushed_callbacks = []
 
     def __getitem__(self, key: str) -> StreamStateType:
         if not self.is_case_sensitive:
             key = key.lower()
 
-        print("PRINTING KEYS")
-        print(list(self._dictionary_state.keys()))
-        print(key in self._dictionary_state)
         if key in self._dictionary_state:
             return self._dictionary_state[key]
 
@@ -59,6 +55,12 @@ class DictStreamState(Generic[StreamStateType], MutableMapping, IStreamState):
     def __len__(self):
         return len(self._dictionary_state)
 
+    def add_flushing_callback(self, callback):
+        self._flushing_callbacks.append(callback)
+
+    def add_flushed_callback(self, callback):
+        self._flushed_callbacks.append(callback)
+
     @property
     def type(self) -> type:
         """
@@ -77,13 +79,6 @@ class DictStreamState(Generic[StreamStateType], MutableMapping, IStreamState):
         """Check if the key exists in the dictionary_state."""
         return key in self._dictionary_state
 
-    # def clear(self):
-    #     self.dictionary_state.clear()
-
-    # def copy_to(self, array, array_index):
-    #     for index, item in enumerate(self.dictionary_state.items()):
-    #         array[array_index + index] = item
-
     @property
     def is_case_sensitive(self) -> bool:
         return self._dictionary_state.is_case_sensitive
@@ -91,10 +86,6 @@ class DictStreamState(Generic[StreamStateType], MutableMapping, IStreamState):
     @property
     def is_synchronized(self) -> bool:
         return self._dictionary_state.is_synchronized
-
-    # @property
-    # def sync_root(self):
-    #     return self._dictionary_state.sync_root
 
     @property
     def is_read_only(self):
@@ -107,21 +98,15 @@ class DictStreamState(Generic[StreamStateType], MutableMapping, IStreamState):
         except KeyError:
             return None
 
-    # @property
-    # def keys(self):
-    #     return self.dictionary_state.keys()
-    #
-    # @property
-    # def values(self):
-    #     return self.dictionary_state.values()
-
     def flush(self):
         """Trigger flush operations."""
-        if self.on_flushing:
-            self.on_flushing()
+        # log
+        for callback in self._flushing_callbacks:
+            callback(self)
         self._dictionary_state.flush()
-        if self.on_flushed:
-            self.on_flushed()
+        # log
+        for callback in self._flushed_callbacks:
+            callback(self)
 
     def reset(self):
         self._dictionary_state.reset()

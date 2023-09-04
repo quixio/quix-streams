@@ -1,10 +1,11 @@
 import ctypes
+
 import logging
 import traceback
 import signal
 from typing import Callable
 
-from .statestorages.inmemorystorage import InMemoryStorage
+from .statestorages import InMemoryStorage
 from .native.Python.QuixStreamsStreaming.App import App as ai
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationToken import CancellationToken as cti
 from .native.Python.SystemPrivateCoreLib.System.Threading.CancellationTokenSource import CancellationTokenSource as ctsi

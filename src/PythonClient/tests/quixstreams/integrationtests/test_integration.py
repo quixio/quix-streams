@@ -1806,11 +1806,11 @@ class TestStreamState(BaseIntegrationTest):
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
         dict_state = stream_state_manager.get_dict_state("test")
 
-        assert "a" in dict_state
+        assert "a" not in dict_state
 
         dict_state["a"] = "b"
 
-        assert "a" not in dict_state
+        assert "a" in dict_state
 
     def test_stream_state_manager(self,
                                   test_name,
@@ -2181,8 +2181,8 @@ class TestUseCases(BaseIntegrationTest):
 
             InteropUtils.log_debug("Getting Dict State")
             dict_state = received_stream.get_dict_state("dict_stuff")
-            dict_state.on_flushed = lambda : InteropUtils.log_debug(f"Flushed {received_stream.stream_id}")
-            dict_state.on_flushing = lambda: InteropUtils.log_debug(f"Flushing {received_stream.stream_id}")
+            dict_state._on_flushed_handlers = lambda : InteropUtils.log_debug(f"Flushed {received_stream.stream_id}")
+            dict_state._on_flushing_handlers = lambda: InteropUtils.log_debug(f"Flushing {received_stream.stream_id}")
             InteropUtils.log_debug("Setting Dict State value")
             dict_state["someKey"] = "somevalue"
             InteropUtils.log_debug("Done Setting Dict State value")

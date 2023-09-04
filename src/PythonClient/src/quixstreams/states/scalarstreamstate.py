@@ -1,4 +1,4 @@
-from typing import TypeVar, Callable, Generic
+from typing import Callable, Generic
 import logging
 
 from quixstreams.states.istreamstate import IStreamState
@@ -12,8 +12,7 @@ class ScalarStreamState(Generic[StreamStateType], IStreamState):
     Represents a state container that stores a scalar value with the ability to flush changes to a specified storage.
     """
 
-    def __init__(self, storage: IStateStorage, state_type: StreamStateType,
-                 default_value_factory: Callable[[], StreamStateType]):
+    def __init__(self, storage: IStateStorage, state_type: StreamStateType, default_value_factory: Callable[[], StreamStateType]):
         """
         Initializes a new instance of ScalarStreamState.
 
@@ -21,7 +20,6 @@ class ScalarStreamState(Generic[StreamStateType], IStreamState):
 
         Args:
             storage: The storage to flush the state to
-            state_type: The type of the state
             default_value_factory: A function that returns a default value of type T when the value has not been set yet
         """
 
@@ -32,8 +30,14 @@ class ScalarStreamState(Generic[StreamStateType], IStreamState):
         self._default_value_factory = default_value_factory or (lambda _: raise_key_error())
         self._type = state_type
 
-        self._on_flushing = []
-        self._on_flushed = []
+        self._flushing_callbacks = []
+        self._flushed_callbacks = []
+
+    def add_flushing_callback(self, callback):
+        self._flushing_callbacks.append(callback)
+
+    def add_flushed_callback(self, callback):
+        self._flushed_callbacks.append(callback)
 
     @property
     def type(self) -> type:
@@ -73,11 +77,16 @@ class ScalarStreamState(Generic[StreamStateType], IStreamState):
         self._scalar_state.value = new_value
 
     def flush(self):
-        for handler in self._on_flushing:
-            handler(self, None)
+        """Trigger flush operations."""
+        # log
+        for callback in self._flushing_callbacks:
+            callback(self)
+
         self._scalar_state.flush()
-        for handler in self._on_flushed:
-            handler(self, None)
+
+        # log
+        for callback in self._flushed_callbacks:
+            callback(self)
 
     def clear(self):
         self._scalar_state.clear()

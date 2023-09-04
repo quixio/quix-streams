@@ -1,6 +1,6 @@
 import pickle
 from typing import Any
-from ..statestorages.statetype import StateType
+from .statetype import StateType
 
 
 class StateValue:
@@ -67,5 +67,10 @@ class StateValue:
 
     def __hash__(self) -> int:
         if self._type == StateType.Object:
-            return hash(pickle.loads(self._value))
+            byte_array = pickle.dumps(self._value)
+            return hash(byte_array)
+
+        if isinstance(self._value, bytearray):
+            return hash(bytes(self._value))
+
         return hash(self._value)

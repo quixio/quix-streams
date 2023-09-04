@@ -1,7 +1,7 @@
 from typing import Dict, Type
 from collections import defaultdict
 
-from ..states.topicstatemanager import IStateStorage, TopicStateManager
+from .topicstatemanager import IStateStorage, TopicStateManager
 
 
 class AppStateManager:

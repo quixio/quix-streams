@@ -3,8 +3,8 @@ from collections import defaultdict
 import threading
 
 from ..native.Python.QuixStreamsStreaming.ITopicConsumer import ITopicConsumer
-from ..states.streamstatemanager import StreamStateManager
-from ..statestorages.istatestorage import IStateStorage
+from .streamstatemanager import StreamStateManager
+from ..statestorages import IStateStorage
 
 
 class TopicStateManager:
@@ -99,7 +99,8 @@ class TopicStateManager:
             # self.logger.trace(f"Creating Stream state manager for {stream_id}")
             self.stream_state_managers[stream_id] = StreamStateManager(stream_id=stream_id,
                                                                        state_storage=self.state_storage.get_or_create_sub_storage(
-                                                                           self.get_sub_storage_name(stream_id)),
+                                                                           sub_storage_name=self.get_sub_storage_name(stream_id),
+                                                                           db_name="TOPIC PARTITION"),
                                                                        log_prefix=self.topic_name + " ",
                                                                        topic_consumer=self.topic_consumer)
         return self.stream_state_managers[stream_id]

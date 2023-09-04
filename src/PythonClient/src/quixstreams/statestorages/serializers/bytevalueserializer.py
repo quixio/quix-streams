@@ -2,8 +2,8 @@ import io
 import pickle
 import struct
 
-from ...statestorages.statetype import StateType
-from ...statestorages.statevalue import StateValue
+from quixstreams.statestorages.statetype import StateType
+from quixstreams.statestorages.statevalue import StateValue
 
 
 class ByteValueSerializer:
@@ -13,8 +13,8 @@ class ByteValueSerializer:
     CodecId = 'b'
 
     @staticmethod
-    def Serialize(state_value: StateValue) -> bytes:
-        # Serialize State value
+    def serialize(state_value: StateValue) -> bytes:
+        """Serializes StateValue into byte array"""
         with io.BytesIO() as stream:
             stream.write(struct.pack('c', ByteValueSerializer.CodecId.encode()))
             stream.write(struct.pack('c', state_value.type.value.encode()))
@@ -51,8 +51,8 @@ class ByteValueSerializer:
             return stream.getvalue()
 
     @staticmethod
-    def Deserialize(data: bytes) -> StateValue:
-        # Deserialize byte array into a State value
+    def deserialize(data: bytes) -> StateValue:
+        """Deserializes byte array into StateValue"""
         with io.BytesIO(data) as stream:
             codec_id = stream.read(1).decode()
             if codec_id != ByteValueSerializer.CodecId:

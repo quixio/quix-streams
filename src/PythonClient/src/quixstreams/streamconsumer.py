@@ -258,7 +258,7 @@ class StreamConsumer(object):
 
         return self.get_state_manager().get_dict_state(state_name, default_value_factory, state_type)
 
-    def get_scalar_state(self, state_name: str, default_value_factory: Callable[[], StreamStateType] = None, state_type: StreamStateType = None) -> ScalarStreamState[StreamStateType]:
+    def get_scalar_state(self, state_name: str, default_value_factory: Callable[[], Any] = None, state_type: StreamStateType = None) -> ScalarStreamState[StreamStateType]:
         """
         Creates a new application state of scalar type with automatically managed lifecycle for the stream
 

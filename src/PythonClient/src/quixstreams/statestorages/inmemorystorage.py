@@ -1,7 +1,7 @@
 import threading
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from ..statestorages.istatestorage import IStateStorage
+from .istatestorage import IStateStorage
 
 
 class InMemoryStorage(IStateStorage):
@@ -46,8 +46,8 @@ class InMemoryStorage(IStateStorage):
         """Returns whether the storage is case-sensitive"""
         return True
 
-    def get_or_create_sub_storage(self, sub_storage_name: str) -> 'InMemoryStorage':
-        """Creates or retrieves the existing storage under this in hierarchy."""
+    def get_or_create_sub_storage(self, sub_storage_name: str, db_name: Optional[str] = None) -> 'InMemoryStorage':
+        """Gets an existing sub-storage with the specified name or creates a new one if it does not already exist."""
         with self._sub_state_lock:
             if sub_storage_name in self._sub_states:
                 return self._sub_states[sub_storage_name]
@@ -69,3 +69,25 @@ class InMemoryStorage(IStateStorage):
     def get_sub_storages(self) -> List[str]:
         """Gets the storages under this in hierarchy."""
         return list(self._sub_states.keys())
+
+    @property
+    def can_perform_transactions(self) -> bool:
+        """Return True if transactions are supported, False otherwise."""
+        return False
+
+    def start_transaction(self) -> None:
+        """Starts a transaction.
+
+        Raises:
+            NotImplementedError: Always thrown as this method is not supported.
+        """
+        raise NotImplementedError("Transactions are not supported.")
+
+    def commit_transaction(self) -> None:
+        """Commits a transaction.
+
+        Raises:
+            NotImplementedError: Always thrown as this method is not supported.
+        """
+        raise NotImplementedError("Transactions are not supported.")
+

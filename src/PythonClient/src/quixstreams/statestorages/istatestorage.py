@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Any
+from typing import List, Any, Optional
 
-from ..states.serializers.bytevalueserializer import ByteValueSerializer
-from ..statestorages.statevalue import StateValue
+from .statevalue import StateValue
+from .serializers.bytevalueserializer import ByteValueSerializer
 
 
 class IStateStorage(ABC):
@@ -50,8 +50,20 @@ class IStateStorage(ABC):
         ...
 
     @abstractmethod
-    def get_or_create_sub_storage(self, sub_storage_name: str) -> 'IStateStorage':
-        """Creates or retrieves the existing storage under this in hierarchy."""
+    def get_or_create_sub_storage(self, sub_storage_name: str, db_name: Optional[str] = None) -> 'IStateStorage':
+        """Gets an existing sub-storage with the specified name or creates a new one if it does not already exist.
+
+        Args:
+            sub_storage_name: The name of the sub-storage to retrieve or create.
+            db_name: The name of the database under which the storage will be created.
+                     If this parameter is not specified, the storage will be created under the parent's database.
+
+        Returns:
+            IStateStorage: The state storage associated with the given sub-storage name.
+
+        Raises:
+            ValueError: Thrown when sub_storage_name is null or empty.
+        """
         ...
 
     @abstractmethod
@@ -69,11 +81,29 @@ class IStateStorage(ABC):
         """Gets the storages under this in hierarchy."""
         ...
 
+    @property
+    @abstractmethod
+    def can_perform_transactions(self) -> bool:
+        """Return True if transactions are supported, False otherwise."""
+        ...
+
+    def start_transaction(self) -> None:
+        """Starts a transaction."""
+        ...
+
+    def commit_transaction(self) -> None:
+        """Commits a transaction.
+
+        Raises:
+            Exception: Thrown if the transaction fails.
+        """
+        ...
+
     def set(self, key: str, value: Any) -> None:
         """Save value into the key"""
         state_value = value if isinstance(value, StateValue) else StateValue(value)
-        self.save_raw(key, ByteValueSerializer.Serialize(state_value))
+        self.save_raw(key, ByteValueSerializer.serialize(state_value))
 
     def get(self, key: str) -> Any:
         """Load value from the key"""
-        return ByteValueSerializer.Deserialize(self.load_raw(key)).value
+        return ByteValueSerializer.deserialize(self.load_raw(key)).value

@@ -2,10 +2,10 @@ import threading
 import logging
 from typing import Dict, Callable, Any
 
-from ..states.dictstreamstate import DictStreamState
-from ..states.scalarstreamstate import ScalarStreamState
-from ..statestorages.istatestorage import IStateStorage
-from ..statestorages.statetype import StreamStateType
+from .dictstreamstate import DictStreamState
+from .scalarstreamstate import ScalarStreamState
+from ..statestorages import IStateStorage
+from ..statestorages import StreamStateType
 
 
 class StreamStateManager:
@@ -119,7 +119,7 @@ class StreamStateManager:
             return instance
 
         instance = self._get_stream_state(state_name, lambda name: DictStreamState[StreamStateType](
-            storage=self._state_storage.get_or_create_sub_storage(name), default_value_factory=default_value_factory, state_type=state_type))
+            storage=self._state_storage.get_or_create_sub_storage(name), state_type=state_type, default_value_factory=default_value_factory))
         self._states[state_name] = instance
         return instance
 
@@ -136,11 +136,11 @@ class StreamStateManager:
             >>> stream_consumer.get_scalar_state('some_state')
             This will return a state where type is 'Any'
 
-            >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 1)
+            >>> stream_consumer.get_scalar_state('some_state', lambda: return 1)
             this will return a state where type is 'Any', with an integer 1 (zero) as default when
             value has not been set yet. The lambda function will be invoked with 'get_state_type_check' key to determine type
 
-            >>> stream_consumer.get_scalar_state('some_state', lambda missing_key: return 0, float)
+            >>> stream_consumer.get_scalar_state('some_state', lambda: return 0, float)
             this will return a state where type is a specific type, with default value
 
             >>> stream_consumer.get_scalar_state('some_state', state_type=float)
@@ -165,7 +165,7 @@ class StreamStateManager:
             return instance
 
         instance = self._get_stream_state(state_name, lambda name: ScalarStreamState[StreamStateType](
-            self._state_storage.get_or_create_sub_storage(name), default_value_factory))
+            storage=self._state_storage.get_or_create_sub_storage(name), state_type=state_type, default_value_factory=default_value_factory))
         self._states[state_name] = instance
         return instance
 

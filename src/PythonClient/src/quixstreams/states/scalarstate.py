@@ -5,6 +5,10 @@ class ScalarState:
     STORAGE_KEY = "SCALAR"
 
     def __init__(self, storage: IStateStorage, logger=None):
+
+        if storage is None:
+            raise ValueError("storage must not be None")
+
         self.storage = storage
         self.logger = logger
         self.clear_before_flush = False
@@ -45,10 +49,9 @@ class ScalarState:
             self.storage.clear()
             self.clear_before_flush = False
 
-        if self.in_memory_value is None:
+        if self.in_memory_value is None or self.in_memory_value.is_null():
             self.last_flush_hash = None
-            if self.STORAGE_KEY in self.storage:
-                del self.storage[self.STORAGE_KEY]
+            self.storage.remove(self.STORAGE_KEY)
         else:
             new_hash = self.compute_hash(self.in_memory_value)
             if self.last_flush_hash != new_hash:
