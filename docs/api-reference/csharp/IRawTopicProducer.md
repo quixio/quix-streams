@@ -18,7 +18,7 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 | Methods | |
 | :--- | :--- |
 | [Flush()](IRawTopicProducer.Flush().md 'QuixStreams.Streaming.Raw.IRawTopicProducer.Flush()') | Flushes pending messages to the broker |
-| [Publish(RawMessage)](IRawTopicProducer.Publish(RawMessage).md 'QuixStreams.Streaming.Raw.IRawTopicProducer.Publish(QuixStreams.Streaming.Raw.RawMessage)') | Publish data to the topic |
+| [Publish(KafkaMessage)](IRawTopicProducer.Publish(KafkaMessage).md 'QuixStreams.Streaming.Raw.IRawTopicProducer.Publish(QuixStreams.Kafka.KafkaMessage)') | Publish message to the topic |
 
 | Events | |
 | :--- | :--- |
