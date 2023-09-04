@@ -26,9 +26,9 @@ namespace QuixStreams.Kafka
         public KafkaHeader[] Headers { get; protected set; }
 
         /// <summary>
-        /// Kafka headers
+        /// Confluent kafka headers
         /// </summary>
-        protected internal Headers KafkaHeaders { get; protected set; }
+        protected internal Headers ConfluentHeaders { get; protected set; }
         
         /// <summary>
         /// The estimated message size including header, key, value
@@ -67,10 +67,10 @@ namespace QuixStreams.Kafka
             Headers = headers;
             if (headers != null)
             {
-                KafkaHeaders = new Headers();
+                ConfluentHeaders = new Headers();
                 foreach (var kvp in headers)
                 {
-                    KafkaHeaders.Add(kvp.Key, kvp.Value);
+                    ConfluentHeaders.Add(kvp.Key, kvp.Value);
                     HeaderSize += kvp.Key.Length * 4; // UTF-8 chars are between 1-4 bytes, so worst case assumed
                     HeaderSize += kvp.Value.Length;
                 }
@@ -93,13 +93,13 @@ namespace QuixStreams.Kafka
             MessageSize += Key?.Length ?? 0;
             Value = consumeResult.Message.Value;
             MessageSize += Value.Length;
-            KafkaHeaders = consumeResult.Message.Headers;
-            if (KafkaHeaders != null)
+            ConfluentHeaders = consumeResult.Message.Headers;
+            if (ConfluentHeaders != null)
             {
-                Headers = new KafkaHeader[KafkaHeaders.Count];
-                for (var index = 0; index < KafkaHeaders.Count; index++)
+                Headers = new KafkaHeader[ConfluentHeaders.Count];
+                for (var index = 0; index < ConfluentHeaders.Count; index++)
                 {
-                    var kvp = KafkaHeaders[index];
+                    var kvp = ConfluentHeaders[index];
                     var kvpValue = kvp.GetValueBytes();
                     Headers[index] = new KafkaHeader(kvp.Key, kvpValue);
                     HeaderSize += kvp.Key.Length * 4; // UTF-8 chars are between 1-4 bytes, so worst case assumed
