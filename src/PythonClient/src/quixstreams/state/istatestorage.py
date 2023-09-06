@@ -101,7 +101,9 @@ class IStateStorage(object):
                 StateValue, str, int, float, bool, bytes, bytearray, or object (via pickle).
         """
 
-        se.Set6(self._pointer, key, StateValue(value).get_net_pointer())
+        sv = StateValue(value)
+        sv_pointer = sv.get_net_pointer()
+        se.Set6(self._pointer, key, sv_pointer)
 
     def contains_key(self, key: str) -> bool:
         """

@@ -104,7 +104,7 @@ class ScalarStreamState(Generic[StreamStateType]):
 
     def _on_flushed_wrapper(self, sender_hptr, args_hptr):
         try:
-            self._on_flushed(self._stream_consumer)
+            self._on_flushed()
         except:
             traceback.print_exc()
         finally:
@@ -192,9 +192,9 @@ class ScalarStreamState(Generic[StreamStateType]):
     def _underlying_value(self, python_value: StreamStateType):
         if python_value is None:
             return None
-        net_value = StateValue(python_value).get_net_pointer()
+        sv = StateValue(python_value)
+        net_value = sv.get_net_pointer()
         self._interop.set_Value(net_value)
-
 
     @property
     def value(self):
@@ -207,18 +207,16 @@ class ScalarStreamState(Generic[StreamStateType]):
 
         if self._in_memory_value is not None:
             return self._in_memory_value
-        else:
-            if self._underlying_value is not None:
-                _value = self._underlying_value
-            else:
-                if self._default_value_factory is None:
-                    raise
 
-                value = self._default_value_factory()
-                return value
+        if self._underlying_value is None:
+            if self._default_value_factory is None:
+                return None
 
-            self._in_memory_value = _value
-            return _value
+            value = self._default_value_factory()
+            return value
+
+        self._in_memory_value = self._underlying_value
+        return self._in_memory_value
 
     @value.setter
     def value(self, val: StreamStateType):

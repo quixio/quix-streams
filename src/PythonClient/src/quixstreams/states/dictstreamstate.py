@@ -5,6 +5,7 @@ from typing import List, Tuple
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
+from ..native.Python.InteropHelpers.ExternalTypes.System.Dictionary import Dictionary as di
 from ..native.Python.QuixStreamsStreaming.States.StreamDictionaryState import StreamDictionaryState as sdsi
 
 from ..models.netdict import NetDict
@@ -14,6 +15,43 @@ from typing import TypeVar, Generic, Callable
 
 StreamStateType = TypeVar('StreamStateType')
 
+class _UnderlyingNetDict(NetDict):
+    def __init__(self, net_pointer):
+
+        def value_converter(val):
+            return StateValue(val)
+
+        def convert_val_to_python(val_hptr: ctypes.c_void_p) -> StreamStateType:
+            if val_hptr is None:
+                return None
+            return StateValue(val_hptr).value
+
+        def convert_val_from_python(val: StreamStateType) -> ctypes.c_void_p:
+            if val is None:
+                return None
+            return value_converter(val)
+
+        def convert_val_to_python_list(arr_uptr: ctypes.c_void_p) -> List[StateValue]:
+            hptrs = ai.ReadPointers(arr_uptr)
+            return [StateValue(hptr) for hptr in hptrs]
+
+        super().__init__(net_pointer=net_pointer,
+                         key_converter_to_python=InteropUtils.ptr_to_utf8,
+                         key_converter_from_python=InteropUtils.utf8_to_ptr,
+                         val_converter_to_python=convert_val_to_python,
+                         val_converter_from_python=convert_val_from_python,
+                         key_converter_to_python_list=ai.ReadStrings,
+                         val_converter_to_python_list=convert_val_to_python_list,
+                         self_dispose=False)
+
+    def __setitem__(self, key, value):
+        actual_key = self._get_actual_key_from(key)
+        intermediate_val = self._get_actual_value_from(value)
+        if intermediate_val is None:
+            di.SetValue(self._pointer, actual_key, None)
+        else:
+            actual_value = intermediate_val.get_net_pointer()
+            di.SetValue(self._pointer, actual_key, actual_value)
 
 @nativedecorator
 class DictStreamState(Generic[StreamStateType]):
@@ -43,31 +81,9 @@ class DictStreamState(Generic[StreamStateType]):
         self._default_value_factory = default_value_factory
         self._type = state_type
 
-        def value_converter(val):
-            return StateValue(val)
-
-        def convert_val_to_python(val_hptr : ctypes.c_void_p) -> StreamStateType:
-            if val_hptr is None:
-                return None
-            return StateValue(val_hptr).value
-
-        def convert_val_from_python(val: StreamStateType) -> ctypes.c_void_p:
-            if val is None:
-                return None
-            return value_converter(val).get_net_pointer()
-
-        def convert_val_to_python_list(arr_uptr: ctypes.c_void_p) -> List[StateValue]:
-            hptrs = ai.ReadPointers(arr_uptr)
-            return [StateValue(hptr) for hptr in hptrs]
 
         self._in_memory = {}
-        self._underlying = NetDict(net_pointer=net_pointer,
-                                   key_converter_to_python=InteropUtils.ptr_to_utf8,
-                                   key_converter_from_python=InteropUtils.utf8_to_ptr,
-                                   val_converter_to_python=convert_val_to_python,
-                                   val_converter_from_python=convert_val_from_python,
-                                   key_converter_to_python_list=ai.ReadStrings,
-                                   val_converter_to_python_list=convert_val_to_python_list)
+        self._underlying = _UnderlyingNetDict(net_pointer=net_pointer)
 
         # Define events and their reference holders
         self._on_flushed = None

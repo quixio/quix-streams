@@ -9,6 +9,10 @@ Represents a single parameter value of either numeric, string or binary type
 public readonly struct ParameterValue
 ```
 
+| Constructors | |
+| :--- | :--- |
+| [ParameterValue(long, TimeseriesDataParameter)](ParameterValue.ParameterValue(long,TimeseriesDataParameter).md 'QuixStreams.Streaming.Models.ParameterValue.ParameterValue(long, QuixStreams.Streaming.Models.TimeseriesDataParameter)') | Initializes a new instance with the of [ParameterValue](ParameterValue.md 'QuixStreams.Streaming.Models.ParameterValue') with the specified index and parameter |
+
 | Fields | |
 | :--- | :--- |
 | [Type](ParameterValue.Type.md 'QuixStreams.Streaming.Models.ParameterValue.Type') | Gets the type of value, which is numeric, string or binary if set, else empty |

@@ -42,6 +42,9 @@ class StreamPropertiesConsumer(object):
         self._parents = None
 
     def _finalizerfunc(self):
+        self._on_changed_dispose()
+
+    def dispose(self) -> None:
         if self._metadata is not None:
             self._metadata.dispose()
         if self._parents is not None:

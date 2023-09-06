@@ -18,12 +18,17 @@ def nativedecorator(cls):
         orig_init(self, *args, **kwargs)
 
     def new_finalizerfunc(self):
+        """
+        Finalizes the underlying object
+        Finalize is implementation specific but generally de-references the underlying objects which
+        may or may not result in garbage collection of the de-referenced objects
+        """
         if self._nativedecorator_finalized:
             return
 
         ptr = getattr(self, "_interop").get_interop_ptr__()
 
-        InteropUtils.log_debug(f"Finalizing {cls.__name__} ({ptr.value})")
+        InteropUtils.log_debug(f"Finalizing {cls.__name__} ({ptr.value}) of object {id(self)}")
         InteropUtils.log_debug_indent_increment()
 
         self._nativedecorator_finalized = True
@@ -32,7 +37,7 @@ def nativedecorator(cls):
         getattr(self, "_interop").dispose_ptr__()
 
         InteropUtils.log_debug_indent_decrement()
-        InteropUtils.log_debug(f"Finalized {cls.__name__} ({ptr.value})")
+        InteropUtils.log_debug(f"Finalized {cls.__name__} ({ptr.value}) of object {id(self)}")
 
 
     def new_del(self):
@@ -47,11 +52,16 @@ def nativedecorator(cls):
         new_dispose(self)
         return result
 
-    def new_dispose(self, *args, **kwargs):
+    def new_dispose(self, *args, **kwargs) -> None:
+        """
+        Disposes the underlying object in addition to finalizing it
+        Dispose is implementation specific but it generally frees underlying resources rather than just
+        de-references
+        """
 
         ptr = getattr(self, "_interop").get_interop_ptr__()
 
-        InteropUtils.log_debug(f"Disposing {cls.__name__} ({ptr.value})")
+        InteropUtils.log_debug(f"Disposing {cls.__name__} ({ptr.value}) of object {id(self)}")
         InteropUtils.log_debug_indent_increment()
 
         if self._nativedecorator_finalized:
@@ -61,7 +71,7 @@ def nativedecorator(cls):
         new_finalizerfunc(self)
 
         InteropUtils.log_debug_indent_decrement()
-        InteropUtils.log_debug(f"Disposed {cls.__name__} ({ptr.value})")
+        InteropUtils.log_debug(f"Disposed {cls.__name__} ({ptr.value}) of object {id(self)}")
 
     cls.__init__ = new_init
     cls._finalizerfunc = new_finalizerfunc

@@ -212,6 +212,14 @@ class Dictionary:
     def GetValue(dictionary_hptr: c_void_p, key_hptr: c_void_p) -> Any:
         ptr = InteropUtils.invoke("dictionary_get_value", dictionary_hptr, key_hptr)
         return c_void_p(ptr) if ptr is not None else None
+    
+    # ctypes function return type//parameter fix
+    interop_func = InteropUtils.get_function("dictionary_contains")
+    interop_func.argtypes = [c_void_p, c_void_p]
+    interop_func.restype = c_bool
+    @staticmethod
+    def Contains(dictionary_hptr: c_void_p, key_hptr: c_void_p) -> Any:
+        return InteropUtils.invoke("dictionary_contains", dictionary_hptr, key_hptr)
         
     # ctypes function return type//parameter fix
     interop_func = InteropUtils.get_function("dictionary_get_keys")

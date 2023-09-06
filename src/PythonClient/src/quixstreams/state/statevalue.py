@@ -5,11 +5,13 @@ from typing import Any
 
 from .statetype import StateType
 from ..helpers.enumconverter import EnumConverter as ec
+from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.InteropHelpers.ExternalTypes.System.Array import Array as ai
 from ..native.Python.QuixStreamsState.StateValue import StateValue as svi
 from ..native.Python.QuixStreamsState.StateValue_StateType import StateType as StateTypeInterop
 
 
+@nativedecorator
 class StateValue(object):
     """
     A wrapper class for values that can be stored inside the storage.

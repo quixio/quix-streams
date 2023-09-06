@@ -10,19 +10,24 @@ namespace QuixStreams.Streaming.Models
     public readonly struct ParameterValue
     {
         private readonly long timestampRawIndex;
-        private readonly Parameter parameter;
+        private readonly TimeseriesDataParameter timeseriesDataParameter;
 
-        internal ParameterValue(long timestampRawIndex, Parameter parameter)
+        /// <summary>
+        /// Initializes a new instance with the of <see cref="ParameterValue"/> with the specified index and parameter
+        /// </summary>
+        /// <param name="timestampRawIndex">The index to reference to in the parameter</param>
+        /// <param name="timeseriesDataParameter">The parameter the value will be derived from</param>
+        public ParameterValue(long timestampRawIndex, TimeseriesDataParameter timeseriesDataParameter)
         {
             this.timestampRawIndex = timestampRawIndex;
-            this.parameter = parameter;
-            this.Type = this.parameter.ValueType;
+            this.timeseriesDataParameter = timeseriesDataParameter;
+            this.Type = this.timeseriesDataParameter.ValueType;
         }
 
         /// <summary>
         /// Gets the Parameter Id of the parameter
         /// </summary>
-        public readonly string ParameterId => this.parameter.ParameterId;
+        public readonly string ParameterId => this.timeseriesDataParameter.ParameterId;
 
         /// <summary>
         /// Gets the type of value, which is numeric, string or binary if set, else empty
@@ -36,16 +41,17 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return this.parameter.NumericValues?[this.timestampRawIndex];
+                if (this.Type != ParameterValueType.Numeric) return null;
+                return this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.parameter.NumericValues == null)
+                if (this.Type != ParameterValueType.Numeric)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of Numeric type.");
                 }
 
-                this.parameter.NumericValues[this.timestampRawIndex] = value;
+                this.timeseriesDataParameter.NumericValues[this.timestampRawIndex] = value;
             }
         }
 
@@ -56,16 +62,17 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return this.parameter.StringValues?[this.timestampRawIndex];
+                if (this.Type != ParameterValueType.String) return null;
+                return this.timeseriesDataParameter.StringValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.parameter.StringValues == null)
+                if (this.Type != ParameterValueType.String)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of String type.");
                 }
 
-                this.parameter.StringValues[this.timestampRawIndex] = value;
+                this.timeseriesDataParameter.StringValues[this.timestampRawIndex] = value;
             }
         }
 
@@ -76,16 +83,17 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return this.parameter.BinaryValues?[this.timestampRawIndex];
+                if (this.Type != ParameterValueType.Binary) return null;
+                return this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
             }
             set
             {
-                if (this.parameter.BinaryValues == null)
+                if (this.Type != ParameterValueType.Binary)
                 {
                     throw new InvalidOperationException($"The parameter '{this.ParameterId}' is not of Binary type.");
                 }
 
-                this.parameter.BinaryValues[this.timestampRawIndex] = value;
+                this.timeseriesDataParameter.BinaryValues[this.timestampRawIndex] = value;
             }
         }
 
@@ -96,9 +104,19 @@ namespace QuixStreams.Streaming.Models
         {
             get
             {
-                return (object)this.parameter.NumericValues?[this.timestampRawIndex]
-                    ?? (object)this.parameter.StringValues?[this.timestampRawIndex]
-                    ?? (object)this.parameter.BinaryValues?[this.timestampRawIndex];
+                switch (Type)
+                {
+                    case ParameterValueType.Empty:
+                        return null;
+                    case ParameterValueType.Numeric:
+                        return this.timeseriesDataParameter.NumericValues?[this.timestampRawIndex];
+                    case ParameterValueType.String:
+                        return this.timeseriesDataParameter.StringValues?[this.timestampRawIndex];
+                    case ParameterValueType.Binary:
+                        return this.timeseriesDataParameter.BinaryValues?[this.timestampRawIndex];
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
             }
         }
 
@@ -113,7 +131,7 @@ namespace QuixStreams.Streaming.Models
             var lhsValue = lhs.Value;
             var rhsValue = rhs.Value;
 
-            if (lhsValue?.GetType() != rhsValue?.GetType())
+            if (lhs.Type != rhs.Type)
             {
                 return false;
             }
@@ -165,7 +183,7 @@ namespace QuixStreams.Streaming.Models
             {
                 var hash = 397;
                 hash ^= this.timestampRawIndex.GetHashCode();
-                hash ^= this.parameter.GetHashCode();
+                hash ^= this.timeseriesDataParameter.GetHashCode();
 
                 return hash;
             }
