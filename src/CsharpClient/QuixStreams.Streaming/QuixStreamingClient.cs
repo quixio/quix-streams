@@ -242,7 +242,7 @@ namespace QuixStreams.Streaming
             return (consumerGroup, newCommitOptions);
         }
 
-        private async f<(KafkaStreamingClient client, string topicId, Workspace ws)> ValidateTopicAndCreateClient(string topicIdOrName)
+        private async Task<(KafkaStreamingClient client, string topicId, Workspace ws)> ValidateTopicAndCreateClient(string topicIdOrName)
         {
             CheckToken(token);
             topicIdOrName = topicIdOrName.Trim();

@@ -42,7 +42,7 @@ namespace QuixStreams.Streaming
         /// <summary>
         /// Gets a topic producer capable of publishing stream messages. 
         /// </summary>
-        /// <param name="topic"GetTopicConsumer>Name of the topic.</param>
+        /// <param name="topic">Name of the topic.</param>
         /// <returns>Instance of <see cref="ITopicProducer"/></returns>
         ITopicProducer GetTopicProducer(string topic);
     }
