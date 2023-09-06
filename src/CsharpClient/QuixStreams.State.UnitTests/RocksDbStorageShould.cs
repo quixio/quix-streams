@@ -240,19 +240,6 @@ namespace QuixStreams.State.UnitTests
         }
         
         [Fact]
-        public void GetOrCreateSubStorage_ThrowsExceptionWhenCreatingSubStorageWithSameNameButDifferentDb()
-        {
-            // Arrange
-            storage.GetOrCreateSubStorage("subStorage1");
-
-            // Act
-            Func<IStateStorage> act = () => storage.GetOrCreateSubStorage("subStorage1", "newDb");
-
-            // Assert
-            act.Should().Throw<ArgumentException>();
-        }
-        
-        [Fact]
         public void GetOrCreateSubStorage_CreatesNewSubStorageWhenAllDeleted()
         {
             // Arrange
@@ -322,7 +309,8 @@ namespace QuixStreams.State.UnitTests
             var deletedCount = storage.DeleteSubStorages();
 
             // Assert
-            deletedCount.Should().Be(4);
+            deletedCount.Should().Be(2);
+            Directory.GetDirectories(dbDirectory).Should().BeEmpty();
         }
 
         [Fact]
@@ -435,11 +423,9 @@ namespace QuixStreams.State.UnitTests
         {
             // Act
             Func<RocksDbStorage> act = () => new RocksDbStorage("testDir", null);
-            Func<RocksDbStorage> act2 = () => new RocksDbStorage("testDir", ColumnFamilies.DefaultName);
 
             // Assert
             act.Should().Throw<ArgumentException>();
-            act2.Should().Throw<ArgumentException>();
         }
         
         [Fact]

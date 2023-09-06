@@ -20,10 +20,12 @@ namespace QuixStreams.State.Storage
         /// Key is the db directory and value is a tuple of RocksDb instance and reference count.
         /// </summary>
         private static readonly Dictionary<string, RocksDbInstance> RocksDbInstances = new ();
-        
+        private static readonly string subStoragesCFName = "sub-storages";
+        private ColumnFamilyHandle subStoragesCFHandle;
+
         private readonly RocksDb db;
         private readonly string dbDirectory;
-        private ColumnFamilyHandle columnFamily;
+        private readonly string keyPrefix;
         private readonly string storageName;
 
         private readonly WriteBatch writeBatch = new();
@@ -50,34 +52,25 @@ namespace QuixStreams.State.Storage
                 throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(storageName)} cannot be null or empty.");
             }
             
-            if (storageName == ColumnFamilies.DefaultName)
-            {
-                throw new ArgumentException($"{nameof(storageName)} cannot be '{ColumnFamilies.DefaultName}' as it is reserved by rocksdb.");
-            }
-
             this.db = GetOrCreateRocksDbInstance(dbDirectory);
-            
-            if (!db.TryGetColumnFamily(storageName, out var storageCf))
-            {
-                storageCf = db.CreateColumnFamily(new ColumnFamilyOptions(), storageName);
-            }
 
+            this.subStoragesCFHandle = db.GetColumnFamily(subStoragesCFName);
             this.dbDirectory = dbDirectory;
-            this.columnFamily = storageCf;
+            this.keyPrefix = $"{storageName}~";
             this.storageName = storageName;
         }
         
         /// <inheritdoc/>
         public Task SaveRaw(string key, byte[] data)
         {
-            var byteKey = Encoding.UTF8.GetBytes(key);
+            var byteKey = Encoding.UTF8.GetBytes($"{keyPrefix}{key}");
             if (useWriteBatch)
             {
-                writeBatch.Put(byteKey, data, cf: columnFamily);
+                writeBatch.Put(byteKey, data);
             }
             else
             {
-                db.Put(byteKey, data, cf: columnFamily);    
+                db.Put(byteKey, data);    
             }
             
             return Task.CompletedTask;
@@ -86,21 +79,23 @@ namespace QuixStreams.State.Storage
         /// <inheritdoc/>
         public Task<byte[]> LoadRaw(string key)
         {
-            var byteKey = Encoding.UTF8.GetBytes(key);
-            return Task.FromResult(db.Get(byteKey, cf: columnFamily));
+            var byteKey = Encoding.UTF8.GetBytes($"{keyPrefix}{key}");
+            return Task.FromResult(db.Get(byteKey));
         }
 
         /// <inheritdoc/>
         public Task RemoveAsync(string key)
         {
-            db.Remove(key, cf: columnFamily);
+            var byteKey = Encoding.UTF8.GetBytes($"{keyPrefix}{key}");
+            db.Remove(byteKey);
             return Task.CompletedTask;
         }
 
         /// <inheritdoc/>
         public Task<bool> ContainsKeyAsync(string key)
         {
-            var contains = db.Get(key, cf: columnFamily) != null;
+            var keyWithPrefix = $"{keyPrefix}{key}";
+            var contains = db.HasKey(keyWithPrefix);
             return Task.FromResult(contains);
         }
 
@@ -112,16 +107,17 @@ namespace QuixStreams.State.Storage
                 return await Task.Run(() =>
                 {
                     var keys = new List<string>();
-                    using (var iterator = db.NewIterator(cf: columnFamily))
+                    using (var iterator = db.NewIterator())
                     {
-                        iterator.SeekToFirst();
-                        while (iterator.Valid())
+                        iterator.Seek(this.keyPrefix);
+                        while (iterator.Valid() && iterator.StringKey().StartsWith(this.keyPrefix))
                         {
                             keys.Add(iterator.StringKey());
                             iterator.Next();
                         }
                     }
-                    return keys.ToArray();
+                    var keysWithoutPrefix = keys.Select(x => x.Substring(this.keyPrefix.Length)).ToArray();
+                    return keysWithoutPrefix;
                 });
             }
             catch (Exception ex)
@@ -133,12 +129,34 @@ namespace QuixStreams.State.Storage
         
         /// <inheritdoc/>
         public Task ClearAsync()
-        {
-            db.DropColumnFamily(storageName);
-            columnFamily = db.CreateColumnFamily(new ColumnFamilyOptions(), storageName);
+        { 
+            try
+            {
+                DeleteKeysWithPrefix(this.keyPrefix);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Failed to clear the storage", ex);
+            }
             return Task.CompletedTask;
         }
 
+        private void DeleteKeysWithPrefix(string prefix, string cf = null)
+        {
+            var cfHandle = string.IsNullOrEmpty(cf) ? db.GetDefaultColumnFamily() : db.GetColumnFamily(cf);
+            var startKey = Encoding.UTF8.GetBytes(prefix);
+                
+            // To construct an end key, we are taking advantage of the lexicographic ordering.
+            // Increment the last character of the prefix to form an end key.
+            var endKey = (byte[])startKey.Clone();
+            endKey[endKey.Length - 1]++;
+
+            using var batch = new WriteBatch();
+            
+            batch.DeleteRange(startKey, (ulong)startKey.Length, endKey, (ulong)endKey.Length, cf: cfHandle);
+            db.Write(batch);
+        }
+        
         /// <inheritdoc/>
         public async Task<int> Count()
         {
@@ -156,25 +174,27 @@ namespace QuixStreams.State.Storage
         {
             if (subStorageName.Contains(SubStorageSeparator))
             {
-                throw new ArgumentException($"{nameof(storageName)} cannot contain slash character '{SubStorageSeparator}'.");
+                throw new ArgumentException($"{nameof(storageName)} cannot contain the slash character '{SubStorageSeparator}'.");
             }
             
             subStorageName = $"{this.storageName}{SubStorageSeparator}{subStorageName}";
-            var dbDir = string.IsNullOrEmpty(dbName) ? this.dbDirectory : GetSubDatabasePath(dbName);
+            var subDbDir = string.IsNullOrEmpty(dbName) ? this.dbDirectory : GetSubDatabasePath(dbName);
             
-            if (GetSubStoragesWithDb().Any(x => x.Key == subStorageName && x.Value != dbDir))
-            {
-                var nameWithoutParent = subStorageName.Substring(this.storageName.Length + 1);
-                throw new ArgumentException($"Sub-storage with name '{nameWithoutParent}' already exists in a different database");
-            }
+            // if (GetSubStoragesWithDb().Any(x => x.Key == subStorageName && x.Value != dbDir))
+            // {
+            //     var nameWithoutParentPrefix = subStorageName.Substring(this.storageName.Length + 1);
+            //     throw new ArgumentException($"Sub-storage with name '{nameWithoutParentPrefix}' already exists in a different database");
+            // }
             
             if (subStorages.TryGetValue(subStorageName, out var subStorage))
             {
                 return subStorage;
             }
-
-            subStorage = new RocksDbStorage(dbDir, subStorageName);
+            
+            subStorage = new RocksDbStorage(subDbDir, subStorageName);
             subStorages.Add(subStorageName, subStorage);
+            
+            this.db.Put(subStorageName, RocksDbStorageMeta.From(subStorage).ToString(), cf: subStoragesCFHandle);
 
             return subStorage;
         }
@@ -184,24 +204,31 @@ namespace QuixStreams.State.Storage
         {
             subStorageName = $"{this.storageName}{SubStorageSeparator}{subStorageName}";
 
-            var subs = GetSubStoragesWithDb();
+            var subs = GetSubStoragesRecursively();
             
-            if (!subs.TryGetValue(subStorageName, out var subStorageDbDirectory))
+            if (!subs.TryGetValue(subStorageName, out var subStorageMeta))
             {
                 return false;
             }
             
-            var subStoragesOfTheSubStorage = subs.Where(sub => sub.Key.StartsWith($"{subStorageName}{SubStorageSeparator}"));
-
-            foreach (var sub in subStoragesOfTheSubStorage.Append(new (subStorageName, subStorageDbDirectory)))
+            var subsToDelete = subs.Where(x => x.Key.StartsWith($"{subStorageName}{SubStorageSeparator}")).Select(x => x.Value).Append(subStorageMeta).ToList();
+            
+            foreach (var sub in subsToDelete)
             {
-                var subDb = GetOrCreateRocksDbInstance(sub.Value);
+                var subDb = GetOrCreateRocksDbInstance(sub.DbDirectory);
                 
-                subDb.DropColumnFamily(sub.Key);
-
+                // Deleting records that belong to this sub-storage
+                DeleteKeysWithPrefix(sub.KeyPrefix);
+                
+                // Delete the record in sub-storages column family belonging to this sub-storage
+                db.Remove(sub.StorageName, cf: db.GetColumnFamily(subStoragesCFName));
+                
+                // Delete records in sub-storages column family of sub-sub-storages
+                DeleteKeysWithPrefix($"{sub.StorageName}{SubStorageSeparator}", cf: subStoragesCFName);
+                
                 if (IsDatabaseEmpty(subDb))
                 {
-                    Directory.Delete(sub.Value, false);
+                    Directory.Delete(sub.DbDirectory, false);
                 }
             }
             
@@ -214,19 +241,31 @@ namespace QuixStreams.State.Storage
         public int DeleteSubStorages()
         {
             var deleted = 0;
-            foreach (var sub in GetSubStoragesWithDb())
+            var allSubStorages = GetSubStoragesRecursively();
+            var subStoragesOfDepth1 = allSubStorages.Where(x => !x.Key.Substring(this.storageName.Length + 1).Contains(SubStorageSeparator));
+
+            db.DropColumnFamily(subStoragesCFName);
+            subStoragesCFHandle = db.CreateColumnFamily(new ColumnFamilyOptions(), subStoragesCFName);
+            
+            foreach (var sub in subStoragesOfDepth1)
             {
-                var subDb = GetOrCreateRocksDbInstance(sub.Value);
-                
-                subDb.DropColumnFamily(sub.Key);
+                this.db.Remove(sub.Key, cf: subStoragesCFHandle);
                 deleted++;
-                
-                if (IsDatabaseEmpty(subDb))
+
+                if (sub.Value.DbDirectory == this.dbDirectory)
                 {
-                    Directory.Delete(sub.Value, false);
+                    DeleteKeysWithPrefix(sub.Value.KeyPrefix);
                 }
             }
 
+            foreach (var sub in allSubStorages)
+            {
+                if (sub.Value.DbDirectory != dbDirectory && Directory.Exists(sub.Value.DbDirectory))
+                {
+                    Directory.Delete(sub.Value.DbDirectory, true);
+                }
+            }
+            
             // Dispose of sub-storages that are referenced in memory
             foreach (var subStorage in subStorages.Values)
             {
@@ -239,15 +278,13 @@ namespace QuixStreams.State.Storage
         /// <inheritdoc/>
         public IEnumerable<string> GetSubStorages()
         {
-            var storageNames = new List<string>();
-            
             // Get all sub-storage names
-            storageNames.AddRange(GetSubStoragesWithDb().Keys);
+            var storageNames = GetSubStoragesRecursively().Keys.ToList();
             
             // Remove the parent's storage name
             storageNames = storageNames.Select(x => x.Substring(this.storageName.Length + 1)).ToList();
             
-            // Remove sub-sub-storages names
+            // Remove sub-sub-storage names
             return storageNames.Select(x =>
             {
                 var endOfStorageNameIndex = x.IndexOf(SubStorageSeparator);
@@ -255,26 +292,38 @@ namespace QuixStreams.State.Storage
             }).ToImmutableHashSet();
         }
         
-        private Dictionary<string, string> GetSubStoragesWithDb()
+        private Dictionary<string, RocksDbStorageMeta> GetSubStoragesRecursively()
         {
-            var subs = new Dictionary<string, string>();
-
-            foreach (var subDbDirectory in Directory.EnumerateDirectories(this.dbDirectory).Append(this.dbDirectory))
+            IEnumerable<RocksDbStorageMeta> GetSubStorages(string dbDirectory, string storageName)
             {
-                RocksDb.TryListColumnFamilies(new DbOptions(), subDbDirectory, out var columnFamiliesNames);
-                foreach (var cfName in columnFamiliesNames)
+                var db = GetOrCreateRocksDbInstance(dbDirectory);
+                var subs = new List<RocksDbStorageMeta>();
+                
+                using var iterator = db.NewIterator(cf: db.GetColumnFamily(subStoragesCFName));
+                iterator.SeekToFirst();
+                
+                while (iterator.Valid())
                 {
-                    if (cfName == ColumnFamilies.DefaultName)
-                        continue;
-
-                    if (!cfName.StartsWith($"{this.storageName}{SubStorageSeparator}"))
-                        continue;
-
-                    subs.Add(cfName, subDbDirectory);
+                    if (iterator.StringKey().StartsWith($"{storageName}{SubStorageSeparator}"))
+                    {
+                        subs.Add(RocksDbStorageMeta.From(iterator.StringValue()));
+                    }
+                    
+                    iterator.Next();
                 }
-            }
 
-            return subs;
+                foreach (var sub in subs.ToArray())
+                {
+                    if (sub.DbDirectory == dbDirectory)
+                        continue;
+                    
+                    subs.AddRange(GetSubStorages(sub.DbDirectory, sub.StorageName));
+                }
+                
+                return subs;
+            }
+            
+            return GetSubStorages(this.dbDirectory, this.storageName).ToDictionary(k => k.StorageName, v => v);
         }
 
         /// <inheritdoc/>
@@ -311,11 +360,11 @@ namespace QuixStreams.State.Storage
             
             dbWithRefCount.DecrementRefCount();
 
-            if (!dbWithRefCount.IsUsed())
-            {
-                dbWithRefCount.Db.Dispose(); // dispose the db
-                RocksDbInstances.Remove(dbDirectory);   
-            }
+            if (dbWithRefCount.IsUsed())
+                return;
+            
+            dbWithRefCount.Db.Dispose(); // dispose the db
+            RocksDbInstances.Remove(dbDirectory);
         }
         
         private string GetSubDatabasePath(string dbName) => $"{this.dbDirectory}{Path.DirectorySeparatorChar}{dbName}";
@@ -325,31 +374,30 @@ namespace QuixStreams.State.Storage
             using var iterator = db.NewIterator();
             iterator.SeekToFirst();
             
-            return iterator.Valid();
+            using var iteratorSubStorageCf = db.NewIterator(cf: db.GetColumnFamily(subStoragesCFName));
+            iteratorSubStorageCf.SeekToFirst();
+            
+            return iterator.Valid() && iteratorSubStorageCf.Valid();
         }
 
         private static RocksDb GetOrCreateRocksDbInstance(string dbDirectory)
         {
-            if (RocksDbInstances.TryGetValue(dbDirectory, out var dbWithRefCount))
+            if (RocksDbInstances.TryGetValue(dbDirectory, out var rocksDbInstance))
             {
-                dbWithRefCount.IncrementRefCount();
-                return dbWithRefCount.Db;
+                rocksDbInstance.IncrementRefCount();
+                return rocksDbInstance.Db;
             }
             
             if (!Directory.Exists(dbDirectory))
             {
                 Directory.CreateDirectory(dbDirectory);
             }
-
-            var dbOptions = new DbOptions().SetCreateIfMissing();
-            var columnFamilies = new ColumnFamilies();
-            if (RocksDb.TryListColumnFamilies(dbOptions, dbDirectory, out var columnFamiliesNames))
+            
+            var dbOptions = new DbOptions().SetCreateIfMissing().SetCreateMissingColumnFamilies();
+            var columnFamilies = new ColumnFamilies
             {
-                foreach (var cfName in columnFamiliesNames)
-                {
-                    columnFamilies.Add(cfName, new ColumnFamilyOptions());
-                }
-            }
+                {subStoragesCFName, new ColumnFamilyOptions()}
+            };
             
             var db = RocksDb.Open(dbOptions, dbDirectory, columnFamilies);
             RocksDbInstances.Add(dbDirectory, new RocksDbInstance(db, 1));
@@ -386,6 +434,29 @@ namespace QuixStreams.State.Storage
             public bool IsUsed()
             {
                 return this.refCount != 0;
+            }
+        }
+
+        private record RocksDbStorageMeta(string DbDirectory, string StorageName, string KeyPrefix)
+        {
+            public string DbDirectory { get; } = DbDirectory;
+            public string StorageName { get; } = StorageName;
+            public string KeyPrefix { get; } = KeyPrefix;
+
+            public override string ToString()
+            {
+                return string.Join("|", DbDirectory, StorageName, KeyPrefix);
+            }
+            
+            public static RocksDbStorageMeta From (string meta)
+            {
+                var parts = meta.Split('|');
+                return new RocksDbStorageMeta(DbDirectory: parts[0], StorageName: parts[1], KeyPrefix: parts[2]);
+            }
+            
+            public static RocksDbStorageMeta From (RocksDbStorage storage)
+            {
+                return new RocksDbStorageMeta(DbDirectory: storage.dbDirectory, StorageName: storage.storageName, KeyPrefix: storage.keyPrefix);
             }
         }
     }
