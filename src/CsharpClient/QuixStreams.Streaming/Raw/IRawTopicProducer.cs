@@ -1,4 +1,5 @@
 ﻿using System;
+using QuixStreams.Kafka;
 
 namespace QuixStreams.Streaming.Raw
 {
@@ -8,9 +9,9 @@ namespace QuixStreams.Streaming.Raw
     public interface IRawTopicProducer : IDisposable
     {
         /// <summary>
-        /// Publish data to the topic
+        /// Publish message to the topic
         /// </summary>
-        public void Publish(RawMessage data);
+        public void Publish(KafkaMessage message);
         
         /// <summary>
         /// Flushes pending messages to the broker

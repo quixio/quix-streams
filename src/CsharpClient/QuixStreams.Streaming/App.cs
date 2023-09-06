@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Mono.Unix;
 using Mono.Unix.Native;
+using QuixStreams;
 using QuixStreams.State.Storage;
 using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
 using QuixStreams.Streaming.Raw;
@@ -49,7 +50,7 @@ namespace QuixStreams.Streaming
         /// <param name="beforeShutdown">The callback to invoke before shutting down</param>
         public static void Run(CancellationToken cancellationToken = default, Action beforeShutdown = null)
         {
-            var logger = Logging.CreateLogger<object>();
+            var logger = QuixStreams.Logging.CreateLogger<object>();
             var waitForProcessShutdownStart = new ManualResetEventSlim();
             var waitForMainExit = new ManualResetEventSlim();
             Action actualBeforeShutdown = () =>

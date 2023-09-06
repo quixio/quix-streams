@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using System.Threading;
+using QuixStreams.Kafka;
 using QuixStreams.Streaming;
 
 namespace QuixStreams.RawReadSamples
@@ -20,9 +21,9 @@ namespace QuixStreams.RawReadSamples
                 var data = Encoding.ASCII.GetBytes($"current time is {thisDay.ToString()}");
 
                 Console.WriteLine("Wrote 1 package");
-                rawWriter.Publish(new QuixStreams.Streaming.Raw.RawMessage(
+                rawWriter.Publish(new KafkaMessage(
                     Encoding.UTF8.GetBytes($"{nanos+i}"),
-                    data
+                    data, null
                 ));
 
                 Thread.Sleep(1000);

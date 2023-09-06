@@ -191,7 +191,7 @@ class ScalarStreamState(Generic[StreamStateType]):
     @_underlying_value.setter
     def _underlying_value(self, python_value: StreamStateType):
         if python_value is None:
-            return None
+            return
         sv = StateValue(python_value)
         net_value = sv.get_net_pointer()
         self._interop.set_Value(net_value)

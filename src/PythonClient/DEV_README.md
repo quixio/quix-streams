@@ -7,7 +7,7 @@ We tested with minimum of 3.8.6 installed up to 3.11. Latest 3.x is probably fin
 
 # Build from source
 Our builds are done using python, and you will find the builds in ../builds/python. Generally you will find 4 python scripts.
-- one to install dependencies (for windows is is manual step of installing .net SDK)
+- one to install dependencies (for windows it is manual step of installing .net SDK)
 - one to build the native code
 - one to build the wheel
 - one to build all
@@ -18,7 +18,7 @@ The native build takes several parameters. These can be found in each script, bu
 Windows build does not yet have a docker to run it in, therefor you will need a Windows x86_64 machine to build it.
 
 ## Linux (x86_64 and arm64)
-These use docker images to build, so as long as you have docker, the build scripts should work. There is no native linux build if youre OS is already that, but feel free to contribute one.
+These use docker images to build, so as long as you have docker, the build scripts should work. There is no native linux build if your OS is already that, but feel free to contribute one.
 
 ### WSL approach
 If you have windows and having issues, there are some common fixes described below:

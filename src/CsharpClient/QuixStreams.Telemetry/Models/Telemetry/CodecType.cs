@@ -1,6 +1,4 @@
-﻿using QuixStreams.Transport.Fw.Codecs;
-
-namespace QuixStreams.Telemetry.Models
+﻿namespace QuixStreams.Telemetry.Models
 {
     /// <summary>
     /// Codecs available for serialization and deserialization of streams. 

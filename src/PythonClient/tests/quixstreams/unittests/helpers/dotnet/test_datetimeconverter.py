@@ -37,6 +37,24 @@ class DateTimeConverterTests(unittest.TestCase):
         self.assertEqual(8, pydt.second)
         self.assertEqual(1000, pydt.microsecond)
 
+    def test_datetime_to_and_back(self):
+        # Arrange
+        python_local = datetime.datetime(2018, 1, 2, 3, 4, 5, 6)
+        gmt_plus_2_offset = datetime.timedelta(hours=2)
+        custom_timezone = datetime.timezone(gmt_plus_2_offset)
+        python_with_tz = datetime.datetime(2018, 1, 2, 3, 4, 5, 6, tzinfo=custom_timezone)
+
+        # Act
+        dotnet_local = DateTimeConverter.datetime_to_dotnet(python_local)
+        dotnet_with_tz = DateTimeConverter.datetime_to_dotnet(python_with_tz)
+        python_back_local = DateTimeConverter.datetime_to_python(dotnet_local)
+        python_back_tz = DateTimeConverter.datetime_to_python(dotnet_with_tz)
+
+        # Assert
+        self.assertEqual(python_local, python_back_local)
+        self.assertEqual(python_with_tz.astimezone(datetime.timezone.utc), python_back_tz.astimezone(datetime.timezone.utc))
+
+
 
     def test_timespan_to_dotnet(self):
         # Arrange
@@ -53,7 +71,7 @@ class DateTimeConverterTests(unittest.TestCase):
 
     def test_datetime_to_dotnet(self):
         # Arrange
-        pydt = datetime.datetime(2023, 1, 20, 23, 17, 8, 9873)  # precision loss can be an issue, so going for accuracy by adding 0
+        pydt = datetime.datetime(2023, 1, 20, 23, 17, 8, 9873, tzinfo=datetime.timezone.utc)  # precision loss can be an issue, so going for accuracy by adding 0
 
         # Act
         netdt_hptr = DateTimeConverter.datetime_to_dotnet(pydt)

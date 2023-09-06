@@ -1,6 +1,7 @@
 ﻿using System;
 using Newtonsoft.Json;
-using QuixStreams.Transport.IO;
+using QuixStreams.Kafka;
+using QuixStreams.Kafka.Transport;
 
 namespace QuixStreams.Telemetry.Models
 {
@@ -14,11 +15,11 @@ namespace QuixStreams.Telemetry.Models
         /// Initializes a new instance of <see cref="StreamPackage"/>
         /// </summary>
         /// <param name="transportPackage">The source transport package</param>
-        internal StreamPackage(Package transportPackage)
+        internal StreamPackage(TransportPackage transportPackage)
         {
             this.Type = transportPackage.Type;
             this.Value = transportPackage.Value;
-            this.TransportContext = transportPackage.TransportContext;
+            this.KafkaMessage = transportPackage.KafkaMessage;
         }
 
         /// <summary>
@@ -30,23 +31,23 @@ namespace QuixStreams.Telemetry.Models
         {
             this.Type = type;
             this.Value = value;
-            this.TransportContext = new TransportContext();
         }
 
         /// <summary>
         /// Type of the content value
         /// </summary>
-        public Type Type { get; set; }
-        
-        /// <summary>
-        /// Context holder for package when transporting through the pipeline
-        /// </summary>
-        public TransportContext TransportContext { get; set; }
+        public Type Type { get; }
 
         /// <summary>
         /// Content value of the package
         /// </summary>
-        public object Value { get; set; }
+        public object Value { get; }
+        
+        /// <summary>
+        /// The Kafka message this stream package derives from
+        /// Can be null if not consumed from broker
+        /// </summary>
+        public KafkaMessage KafkaMessage { get; }
 
         /// <summary>
         /// Serialize the package into Json

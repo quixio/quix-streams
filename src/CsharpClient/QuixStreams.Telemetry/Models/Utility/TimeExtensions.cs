@@ -7,7 +7,7 @@ namespace QuixStreams.Telemetry.Models.Utility
     /// </summary>
     public static class TimeExtensions
     {
-        private static readonly DateTime epoch = new DateTime(1970, 01, 01);
+        public static readonly DateTime UnixEpoch = new DateTime(1970, 01, 01);
 
         /// <summary>
         /// Converts datetime to nanoseconds since unix epoch (01/01/1970)
@@ -16,7 +16,7 @@ namespace QuixStreams.Telemetry.Models.Utility
         /// <returns>Datetime in nanoseconds since unix epoch</returns>
         public static long ToUnixNanoseconds(this DateTime dateTime)
         {
-            return (dateTime - epoch).ToNanoseconds();
+            return (dateTime - UnixEpoch).ToNanoseconds();
         }
 
 
@@ -47,7 +47,7 @@ namespace QuixStreams.Telemetry.Models.Utility
         /// <returns>Converted datetime</returns>
         public static DateTime FromUnixNanoseconds(this long timestamp)
         {
-            return epoch + timestamp.FromNanoseconds();
+            return UnixEpoch + timestamp.FromNanoseconds();
         }
     }
 }

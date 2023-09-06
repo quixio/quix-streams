@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
+using QuixStreams.Kafka.Transport;
 using QuixStreams.Streaming.Configuration;
 using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.Raw;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Configuration;
 using QuixStreams.Telemetry.Kafka;
-using QuixStreams.Transport.Fw;
 
 namespace QuixStreams.Streaming
 {
@@ -52,7 +53,7 @@ namespace QuixStreams.Streaming
     /// </summary>
     public class KafkaStreamingClient : IKafkaStreamingClient
     {
-        private readonly ILogger logger = Logging.CreateLogger<KafkaStreamingClient>();
+        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<KafkaStreamingClient>();
         private readonly string brokerAddress;
         private readonly Dictionary<string, string> brokerProperties;
         

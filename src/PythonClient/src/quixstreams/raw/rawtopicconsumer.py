@@ -3,7 +3,7 @@ import traceback
 from typing import Callable
 
 from ..native.Python.InteropHelpers.InteropUtils import InteropUtils
-from .rawmessage import RawMessage
+from .kafkamessage import KafkaMessage
 from ..helpers.nativedecorator import nativedecorator
 from ..native.Python.QuixStreamsStreaming.Raw.RawTopicConsumer import RawTopicConsumer as rtpi
 
@@ -45,25 +45,25 @@ class RawTopicConsumer(object):
 
     # region on_message_received
     @property
-    def on_message_received(self) -> Callable[['RawTopicConsumer', RawMessage], None]:
+    def on_message_received(self) -> Callable[['RawTopicConsumer', KafkaMessage], None]:
         """
         Gets the handler for when a topic receives a message.
 
         Returns:
-            Callable[[RawTopicConsumer, RawMessage], None]: The event handler for when a topic receives a message.
-                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
+            Callable[[RawTopicConsumer, KafkaMessage], None]: The event handler for when a topic receives a message.
+                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the KafkaMessage.
         """
 
         return self._on_message_received
 
     @on_message_received.setter
-    def on_message_received(self, value: Callable[['RawTopicConsumer', RawMessage], None]) -> None:
+    def on_message_received(self, value: Callable[['RawTopicConsumer', KafkaMessage], None]) -> None:
         """
         Sets the handler for when a topic receives a message.
 
         Args:
             value: The new event handler for when a topic receives a message.
-                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
+                The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the KafkaMessage.
         """
         self._on_message_received = value
         if self._on_message_received_refs is None:
@@ -72,7 +72,7 @@ class RawTopicConsumer(object):
     def _on_message_received_wrapper(self, topic_hptr, message_hptr):
         # To avoid unnecessary overhead and complication, we're using the topic instance we already have
         try:
-            self._on_message_received(self, RawMessage(message_hptr))
+            self._on_message_received(self, KafkaMessage(net_pointer=message_hptr))
             InteropUtils.free_hptr(topic_hptr)
         except:
             traceback.print_exc()

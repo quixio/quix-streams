@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using QuixStreams;
 using QuixStreams.Streaming.Utils;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
@@ -13,7 +14,7 @@ namespace QuixStreams.Streaming.Models
     /// </summary>
     public class TimeseriesData
     {
-        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => Logging.CreateLogger<TimeseriesData>());
+        private static Lazy<ILogger> logger = new Lazy<ILogger>(() => QuixStreams.Logging.CreateLogger<TimeseriesData>());
         internal QuixStreams.Telemetry.Models.TimeseriesDataRaw rawData;
         internal Dictionary<string, TimeseriesDataParameter> parameterList;
         internal List<int> timestampsList;

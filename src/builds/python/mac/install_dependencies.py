@@ -60,15 +60,15 @@ def install_dotnet(version, channel):
     subprocess.run(curl_cmd, check=True)
 
     os.chmod('dotnet-install.sh', 0o755)
-
-    dotnet_install_cmd = ['./dotnet-install.sh', '--version', version, '--channel', channel]
+    install_dir = os.path.join(os.getcwd(), '.dotnet')
+    dotnet_install_cmd = ['./dotnet-install.sh', '--version', version, '--channel', channel, '--install-dir', install_dir]
     subprocess.run(dotnet_install_cmd, check=True)
 
     os.remove('dotnet-install.sh')
 
     statements_to_export = [
-        "export DOTNET_ROOT=$HOME/.dotnet\n",
-        "export PATH=$PATH:$HOME/.dotnet:$HOME/.dotnet/tools\n"
+        f"export DOTNET_ROOT={install_dir}\n",
+        f"export PATH=$PATH:{install_dir}:{install_dir}/tools\n"
     ]
 
     export_statements(statements_to_export)
@@ -80,10 +80,16 @@ expected_version = f'{dotnet_major_version}.0.100-preview.2.23157.25'
 expected_version_channel = f'{dotnet_major_version}.0.1xx'
 exact_version_pattern = rf'^{re.escape(expected_version)}$'
 similar_version_pattern = rf'^{dotnet_major_version}\.\d+\.\d+$'
-if not check_installed_program_version('dotnet', exact_version_pattern):
-    if not check_installed_program_version('dotnet', similar_version_pattern):
-        print(f"Installing dotnet")
-        install_dotnet(expected_version, expected_version_channel)
+if os.path.exists("./.dotnet"):
+    if not check_installed_program_version('./.dotnet/dotnet', exact_version_pattern):
+        if not check_installed_program_version('./.dotnet/dotnet', similar_version_pattern):
+            print(f"Installing dotnet")
+            install_dotnet(expected_version, expected_version_channel)
+else:
+    if not check_installed_program_version('dotnet', exact_version_pattern):
+        if not check_installed_program_version('dotnet', similar_version_pattern):
+            print(f"Installing dotnet")
+            install_dotnet(expected_version, expected_version_channel)
 
 def install_or_update_brew():
     print("... checking brew dependency")

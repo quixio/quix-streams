@@ -26,6 +26,53 @@
     * [publish](#quixstreams.raw.rawtopicproducer.RawTopicProducer.publish)
     * [dispose](#quixstreams.raw.rawtopicproducer.RawTopicProducer.dispose)
     * [flush](#quixstreams.raw.rawtopicproducer.RawTopicProducer.flush)
+* [quixstreams.raw.kafkaheader](#quixstreams.raw.kafkaheader)
+  * [KafkaHeader](#quixstreams.raw.kafkaheader.KafkaHeader)
+    * [\_\_init\_\_](#quixstreams.raw.kafkaheader.KafkaHeader.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.kafkaheader.KafkaHeader.get_net_pointer)
+    * [key](#quixstreams.raw.kafkaheader.KafkaHeader.key)
+    * [value](#quixstreams.raw.kafkaheader.KafkaHeader.value)
+    * [get\_value\_as\_str](#quixstreams.raw.kafkaheader.KafkaHeader.get_value_as_str)
+* [quixstreams.raw.kafkatimestamp](#quixstreams.raw.kafkatimestamp)
+  * [KafkaTimestampType](#quixstreams.raw.kafkatimestamp.KafkaTimestampType)
+  * [KafkaTimestamp](#quixstreams.raw.kafkatimestamp.KafkaTimestamp)
+    * [\_\_init\_\_](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.get_net_pointer)
+    * [default](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.default)
+    * [utc\_datetime](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.utc_datetime)
+    * [unix\_timestamp\_ns](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.unix_timestamp_ns)
+    * [unix\_timestamp\_ms](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.unix_timestamp_ms)
+    * [type](#quixstreams.raw.kafkatimestamp.KafkaTimestamp.type)
+* [quixstreams.raw.topicpartitionoffset](#quixstreams.raw.topicpartitionoffset)
+  * [Offset](#quixstreams.raw.topicpartitionoffset.Offset)
+    * [\_\_init\_\_](#quixstreams.raw.topicpartitionoffset.Offset.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.topicpartitionoffset.Offset.get_net_pointer)
+    * [value](#quixstreams.raw.topicpartitionoffset.Offset.value)
+  * [Partition](#quixstreams.raw.topicpartitionoffset.Partition)
+    * [\_\_init\_\_](#quixstreams.raw.topicpartitionoffset.Partition.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.topicpartitionoffset.Partition.get_net_pointer)
+    * [value](#quixstreams.raw.topicpartitionoffset.Partition.value)
+  * [TopicPartition](#quixstreams.raw.topicpartitionoffset.TopicPartition)
+    * [\_\_init\_\_](#quixstreams.raw.topicpartitionoffset.TopicPartition.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.topicpartitionoffset.TopicPartition.get_net_pointer)
+    * [topic](#quixstreams.raw.topicpartitionoffset.TopicPartition.topic)
+    * [partition](#quixstreams.raw.topicpartitionoffset.TopicPartition.partition)
+  * [TopicPartitionOffset](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset)
+    * [\_\_init\_\_](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.get_net_pointer)
+    * [topic](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.topic)
+    * [topic\_partition](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.topic_partition)
+    * [partition](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.partition)
+    * [offset](#quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.offset)
+* [quixstreams.raw.kafkamessage](#quixstreams.raw.kafkamessage)
+  * [KafkaMessage](#quixstreams.raw.kafkamessage.KafkaMessage)
+    * [\_\_init\_\_](#quixstreams.raw.kafkamessage.KafkaMessage.__init__)
+    * [get\_net\_pointer](#quixstreams.raw.kafkamessage.KafkaMessage.get_net_pointer)
+    * [key](#quixstreams.raw.kafkamessage.KafkaMessage.key)
+    * [value](#quixstreams.raw.kafkamessage.KafkaMessage.value)
+    * [timestamp](#quixstreams.raw.kafkamessage.KafkaMessage.timestamp)
+    * [headers](#quixstreams.raw.kafkamessage.KafkaMessage.headers)
+    * [topic\_partition\_offset](#quixstreams.raw.kafkamessage.KafkaMessage.topic_partition_offset)
 * [quixstreams.raw.rawtopicconsumer](#quixstreams.raw.rawtopicconsumer)
   * [RawTopicConsumer](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer)
     * [\_\_init\_\_](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.__init__)
@@ -34,15 +81,6 @@
     * [on\_error\_occurred](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.on_error_occurred)
     * [on\_error\_occurred](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.on_error_occurred)
     * [subscribe](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.subscribe)
-* [quixstreams.raw.rawmessage](#quixstreams.raw.rawmessage)
-  * [RawMessage](#quixstreams.raw.rawmessage.RawMessage)
-    * [\_\_init\_\_](#quixstreams.raw.rawmessage.RawMessage.__init__)
-    * [get\_net\_pointer](#quixstreams.raw.rawmessage.RawMessage.get_net_pointer)
-    * [key](#quixstreams.raw.rawmessage.RawMessage.key)
-    * [key](#quixstreams.raw.rawmessage.RawMessage.key)
-    * [value](#quixstreams.raw.rawmessage.RawMessage.value)
-    * [value](#quixstreams.raw.rawmessage.RawMessage.value)
-    * [metadata](#quixstreams.raw.rawmessage.RawMessage.metadata)
 * [quixstreams.raw](#quixstreams.raw)
 * [quixstreams.configuration.securityoptions](#quixstreams.configuration.securityoptions)
   * [SecurityOptions](#quixstreams.configuration.securityoptions.SecurityOptions)
@@ -763,7 +801,7 @@ Initializes a new instance of the RawTopicProducer class.
 #### publish
 
 ```python
-def publish(message: Union[RawMessage, bytes, bytearray])
+def publish(message: Union[KafkaMessage, bytes, bytearray])
 ```
 
 Publishes the given message to the associated topic producer.
@@ -771,7 +809,7 @@ Publishes the given message to the associated topic producer.
 **Arguments**:
 
 - `message` - The message to be published, which can be either
-  a RawMessage instance, bytes, or a bytearray.
+  a KafkaMessage instance, bytes, or a bytearray.
 
 <a id="quixstreams.raw.rawtopicproducer.RawTopicProducer.dispose"></a>
 
@@ -792,6 +830,642 @@ def flush()
 ```
 
 Flushes pending messages to the broker
+
+<a id="quixstreams.raw.kafkaheader"></a>
+
+# quixstreams.raw.kafkaheader
+
+<a id="quixstreams.raw.kafkaheader.KafkaHeader"></a>
+
+## KafkaHeader Objects
+
+```python
+@nativedecorator
+class KafkaHeader(object)
+```
+
+The key-value pair kafka header
+
+<a id="quixstreams.raw.kafkaheader.KafkaHeader.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(key: str = None,
+             value: Union[str, bytes, bytearray] = None,
+             **kwargs)
+```
+
+Initializes a new instance of KafkaHeader.
+
+**Arguments**:
+
+- `key` - The string key of the header
+- `value` - The string or bytes value of the header
+
+<a id="quixstreams.raw.kafkaheader.KafkaHeader.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the KafkaHeader instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the KafkaHeader instance.
+
+<a id="quixstreams.raw.kafkaheader.KafkaHeader.key"></a>
+
+#### key
+
+```python
+@property
+def key() -> bytes
+```
+
+Gets the key of the header
+
+**Returns**:
+
+- `bytes` - The key of the message.
+
+<a id="quixstreams.raw.kafkaheader.KafkaHeader.value"></a>
+
+#### value
+
+```python
+@property
+def value() -> Union[bytearray, bytes]
+```
+
+Gets the value of the header as bytes.
+
+**Returns**:
+
+  Union[bytearray, bytes]: The value of the header.
+
+<a id="quixstreams.raw.kafkaheader.KafkaHeader.get_value_as_str"></a>
+
+#### get\_value\_as\_str
+
+```python
+def get_value_as_str() -> str
+```
+
+Gets the value of the header as string
+
+**Returns**:
+
+- `str` - The value of the header.
+
+<a id="quixstreams.raw.kafkatimestamp"></a>
+
+# quixstreams.raw.kafkatimestamp
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestampType"></a>
+
+## KafkaTimestampType Objects
+
+```python
+class KafkaTimestampType(Enum)
+```
+
+Represents the type of timestamp
+
+**Attributes**:
+
+- `NotAvailable` - Timestamp type is unknown.
+- `CreateTime` - Timestamp relates to message creation time as set by a Kafka client.
+- `LogAppendTime` - Timestamp relates to the time a message was appended to a Kafka log.
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp"></a>
+
+## KafkaTimestamp Objects
+
+```python
+@nativedecorator
+class KafkaTimestamp(object)
+```
+
+Encapsulates a Kafka timestamp and its type.
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(
+        datetime: dt.datetime = None,
+        unix_timestamp_ms: int = None,
+        unix_timestamp_ns: int = None,
+        timestamp_type: KafkaTimestampType = KafkaTimestampType.CreateTime,
+        **kwargs)
+```
+
+Initialize a new instance of KafkaTimestamp.
+
+This constructor allows you to create a KafkaTimestamp instance using different timestamp representations.
+
+**Arguments**:
+
+- `datetime` _datetime, optional_ - The timestamp of the message as a datetime object. Takes precedence over other options.
+- `unix_timestamp_ms` _int, optional_ - The timestamp of the message in milliseconds since the epoch. Takes precedence over unix_timestamp_ns.
+- `unix_timestamp_ns` _int, optional_ - The timestamp of the message in nanoseconds since the epoch. Precision loss may occur.
+- `timestamp_type` _KafkaTimestampType, optional_ - The type of timestamp to associate with the message.
+  
+
+**Example**:
+
+  To create a KafkaTimestamp instance with the current time and default type:
+  >>> kts = KafkaTimestamp()
+  
+  To create a KafkaTimestamp instance with a specified datetime:
+  >>> kts = KafkaTimestamp(datetime=datetime(2000, 7, 8))
+  
+  To create a KafkaTimestamp instance with a nanosecond timestamp:
+  >>> kts = KafkaTimestamp(unix_timestamp_ns=1692808881000000085)
+  
+  To create a KafkaTimestamp instance with a millisecond timestamp:
+  >>> kts = KafkaTimestamp(unix_timestamp_ms=1692808881788)
+  
+  To create a KafkaTimestamp instance with log append time:
+  >>> kts = KafkaTimestamp(unix_timestamp_ms=1692808881788, timestamp_type=KafkaTimestampType.LogAppendTime)
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the KafkaMessage instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the KafkaMessage instance.
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.default"></a>
+
+#### default
+
+```python
+@staticmethod
+def default()
+```
+
+Returns an unspecified timestamp.
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.utc_datetime"></a>
+
+#### utc\_datetime
+
+```python
+@property
+def utc_datetime() -> dt
+```
+
+Gets the time as utc date time
+
+**Returns**:
+
+- `datetime` - The time component of the timestamp in UTC time zone
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.unix_timestamp_ns"></a>
+
+#### unix\_timestamp\_ns
+
+```python
+@property
+def unix_timestamp_ns() -> int
+```
+
+Gets the time as unix timestamp in nanoseconds
+
+**Returns**:
+
+- `int` - The time component of the timestamp in nanoseconds
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.unix_timestamp_ms"></a>
+
+#### unix\_timestamp\_ms
+
+```python
+@property
+def unix_timestamp_ms() -> int
+```
+
+Gets the time as unix timestamp in milliseconds
+
+**Returns**:
+
+- `int` - The time component of the timestamp in milliseconds
+
+<a id="quixstreams.raw.kafkatimestamp.KafkaTimestamp.type"></a>
+
+#### type
+
+```python
+@property
+def type() -> KafkaTimestampType
+```
+
+Gets the timestamp type
+
+**Returns**:
+
+- `KafkaTimestampType` - The timestamp type
+
+<a id="quixstreams.raw.topicpartitionoffset"></a>
+
+# quixstreams.raw.topicpartitionoffset
+
+<a id="quixstreams.raw.topicpartitionoffset.Offset"></a>
+
+## Offset Objects
+
+```python
+@nativedecorator
+class Offset(object)
+```
+
+Represents a Kafka partition offset value.
+
+<a id="quixstreams.raw.topicpartitionoffset.Offset.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(**kwargs)
+```
+
+Initializes a new instance of Offset.
+
+<a id="quixstreams.raw.topicpartitionoffset.Offset.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the offset instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the offset instance.
+
+<a id="quixstreams.raw.topicpartitionoffset.Offset.value"></a>
+
+#### value
+
+```python
+@property
+def value() -> int
+```
+
+Gets the int value corresponding to this offset.
+
+**Returns**:
+
+- `int` - The int value corresponding to this offset.
+
+<a id="quixstreams.raw.topicpartitionoffset.Partition"></a>
+
+## Partition Objects
+
+```python
+@nativedecorator
+class Partition(object)
+```
+
+Represents a Kafka partition.
+
+<a id="quixstreams.raw.topicpartitionoffset.Partition.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(**kwargs)
+```
+
+Initializes a new instance of Partition.
+
+<a id="quixstreams.raw.topicpartitionoffset.Partition.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the partition instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the partition instance.
+
+<a id="quixstreams.raw.topicpartitionoffset.Partition.value"></a>
+
+#### value
+
+```python
+@property
+def value() -> int
+```
+
+Gets the int value corresponding to this partition.
+
+**Returns**:
+
+- `int` - The int value corresponding to this partition.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartition"></a>
+
+## TopicPartition Objects
+
+```python
+@nativedecorator
+class TopicPartition(object)
+```
+
+Represents a Kafka (topic, partition) tuple.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartition.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(**kwargs)
+```
+
+Initializes a new instance of TopicPartition.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartition.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the TopicPartition instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the TopicPartition instance.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartition.topic"></a>
+
+#### topic
+
+```python
+@property
+def topic() -> str
+```
+
+Gets the Kafka topic name
+
+**Returns**:
+
+- `bytes` - The Kafka topic name
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartition.partition"></a>
+
+#### partition
+
+```python
+@property
+def partition() -> Partition
+```
+
+Gets the Kafka partition
+
+**Returns**:
+
+- `bytes` - The Kafka partition
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset"></a>
+
+## TopicPartitionOffset Objects
+
+```python
+@nativedecorator
+class TopicPartitionOffset(object)
+```
+
+Represents a Kafka (topic, partition, offset) tuple.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(**kwargs)
+```
+
+Initializes a new instance of TopicPartitionOffset.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the TopicPartitionOffset instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the TopicPartitionOffset instance.
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.topic"></a>
+
+#### topic
+
+```python
+@property
+def topic() -> str
+```
+
+Gets the Kafka topic name
+
+**Returns**:
+
+- `bytes` - The Kafka topic name
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.topic_partition"></a>
+
+#### topic\_partition
+
+```python
+@property
+def topic_partition() -> TopicPartition
+```
+
+Gets the Kafka (topic, partition) tuple
+
+**Returns**:
+
+- `Partition` - The Kafka partition
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.partition"></a>
+
+#### partition
+
+```python
+@property
+def partition() -> Partition
+```
+
+Gets the Kafka partition
+
+**Returns**:
+
+- `Partition` - The Kafka partition
+
+<a id="quixstreams.raw.topicpartitionoffset.TopicPartitionOffset.offset"></a>
+
+#### offset
+
+```python
+@property
+def offset() -> Offset
+```
+
+Gets the Kafka partition offset
+
+**Returns**:
+
+- `Partition` - The Kafka partition offset
+
+<a id="quixstreams.raw.kafkamessage"></a>
+
+# quixstreams.raw.kafkamessage
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage"></a>
+
+## KafkaMessage Objects
+
+```python
+@nativedecorator
+class KafkaMessage(object)
+```
+
+The message consumed from topic without any transformation.
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.__init__"></a>
+
+#### \_\_init\_\_
+
+```python
+def __init__(key: Union[bytes, bytearray] = None,
+             value: Union[bytes, bytearray] = None,
+             headers: List[KafkaHeader] = None,
+             timestamp: KafkaTimestamp = None,
+             **kwargs)
+```
+
+Initializes a new instance of KafkaMessage.
+
+**Arguments**:
+
+- `key` - The key of the message as bytes
+- `value` - The value of the message as bytes
+- `headers` - The optional headers of the message
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.get_net_pointer"></a>
+
+#### get\_net\_pointer
+
+```python
+def get_net_pointer() -> ctypes.c_void_p
+```
+
+Gets the associated .net object pointer of the KafkaMessage instance.
+
+**Returns**:
+
+- `ctypes.c_void_p` - The .net object pointer of the KafkaMessage instance.
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.key"></a>
+
+#### key
+
+```python
+@property
+def key() -> bytes
+```
+
+Gets the optional key of the message. Depending on the broker and message, it is not guaranteed.
+
+**Returns**:
+
+- `bytes` - The optional key of the message.
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.value"></a>
+
+#### value
+
+```python
+@property
+def value() -> bytes
+```
+
+Gets the message value (bytes content of the message).
+
+**Returns**:
+
+  Union[bytearray, bytes]: The message value (bytes content of the message).
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.timestamp"></a>
+
+#### timestamp
+
+```python
+@property
+def timestamp() -> KafkaTimestamp
+```
+
+Gets the message timestamp.
+
+**Returns**:
+
+- `KafkaTimestamp` - The message timestamp
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.headers"></a>
+
+#### headers
+
+```python
+@property
+def headers() -> [KafkaHeader]
+```
+
+Gets the read only message headers. Modification won't reflect, init new KafkaMessage for that
+
+**Returns**:
+
+- `[KafkaHeader]` - The message headers. Read only, modification won't reflect, init new KafkaMessage for that
+
+<a id="quixstreams.raw.kafkamessage.KafkaMessage.topic_partition_offset"></a>
+
+#### topic\_partition\_offset
+
+```python
+@property
+def topic_partition_offset() -> TopicPartitionOffset
+```
+
+Gets the message timestamp.
+
+**Returns**:
+
+- `KafkaTimestamp` - The message timestamp
 
 <a id="quixstreams.raw.rawtopicconsumer"></a>
 
@@ -833,15 +1507,16 @@ Initializes a new instance of RawTopicConsumer.
 
 ```python
 @property
-def on_message_received() -> Callable[['RawTopicConsumer', RawMessage], None]
+def on_message_received(
+) -> Callable[['RawTopicConsumer', KafkaMessage], None]
 ```
 
 Gets the handler for when a topic receives a message.
 
 **Returns**:
 
-  Callable[[RawTopicConsumer, RawMessage], None]: The event handler for when a topic receives a message.
-  The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
+  Callable[[RawTopicConsumer, KafkaMessage], None]: The event handler for when a topic receives a message.
+  The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the KafkaMessage.
 
 <a id="quixstreams.raw.rawtopicconsumer.RawTopicConsumer.on_message_received"></a>
 
@@ -850,7 +1525,7 @@ Gets the handler for when a topic receives a message.
 ```python
 @on_message_received.setter
 def on_message_received(
-        value: Callable[['RawTopicConsumer', RawMessage], None]) -> None
+        value: Callable[['RawTopicConsumer', KafkaMessage], None]) -> None
 ```
 
 Sets the handler for when a topic receives a message.
@@ -858,7 +1533,7 @@ Sets the handler for when a topic receives a message.
 **Arguments**:
 
 - `value` - The new event handler for when a topic receives a message.
-  The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the RawMessage.
+  The first parameter is the RawTopicConsumer instance for which the message is received, and the second is the KafkaMessage.
 
 <a id="quixstreams.raw.rawtopicconsumer.RawTopicConsumer.on_error_occurred"></a>
 
@@ -902,124 +1577,6 @@ def subscribe()
 ```
 
 Starts subscribing to the streams.
-
-<a id="quixstreams.raw.rawmessage"></a>
-
-# quixstreams.raw.rawmessage
-
-<a id="quixstreams.raw.rawmessage.RawMessage"></a>
-
-## RawMessage Objects
-
-```python
-@nativedecorator
-class RawMessage(object)
-```
-
-The message consumed from topic without any transformation.
-
-<a id="quixstreams.raw.rawmessage.RawMessage.__init__"></a>
-
-#### \_\_init\_\_
-
-```python
-def __init__(data: Union[ctypes.c_void_p, bytes, bytearray])
-```
-
-Initializes a new instance of RawMessage.
-
-**Arguments**:
-
-- `data` - The raw data to be stored in the message. Must be one of ctypes_c.void_p, bytes, or bytearray.
-
-<a id="quixstreams.raw.rawmessage.RawMessage.get_net_pointer"></a>
-
-#### get\_net\_pointer
-
-```python
-def get_net_pointer() -> ctypes.c_void_p
-```
-
-Gets the associated .net object pointer of the RawMessage instance.
-
-**Returns**:
-
-- `ctypes.c_void_p` - The .net object pointer of the RawMessage instance.
-
-<a id="quixstreams.raw.rawmessage.RawMessage.key"></a>
-
-#### key
-
-```python
-@property
-def key() -> bytes
-```
-
-Gets the optional key of the message. Depending on the broker and message, it is not guaranteed.
-
-**Returns**:
-
-- `bytes` - The optional key of the message.
-
-<a id="quixstreams.raw.rawmessage.RawMessage.key"></a>
-
-#### key
-
-```python
-@key.setter
-def key(value: Union[bytearray, bytes])
-```
-
-Sets the message key.
-
-**Arguments**:
-
-- `value` - The key to set for the message.
-
-<a id="quixstreams.raw.rawmessage.RawMessage.value"></a>
-
-#### value
-
-```python
-@property
-def value()
-```
-
-Gets the message value (bytes content of the message).
-
-**Returns**:
-
-  Union[bytearray, bytes]: The message value (bytes content of the message).
-
-<a id="quixstreams.raw.rawmessage.RawMessage.value"></a>
-
-#### value
-
-```python
-@value.setter
-def value(value: Union[bytearray, bytes])
-```
-
-Sets the message value (bytes content of the message).
-
-**Arguments**:
-
-- `value` - The value to set for the message.
-
-<a id="quixstreams.raw.rawmessage.RawMessage.metadata"></a>
-
-#### metadata
-
-```python
-@property
-def metadata() -> Dict[str, str]
-```
-
-Gets the wrapped message metadata.
-
-**Returns**:
-
-  Dict[str, str]: The wrapped message metadata.
 
 <a id="quixstreams.raw"></a>
 
@@ -4954,7 +5511,7 @@ Checks if a cancellation has been requested.
 #### cancel
 
 ```python
-def cancel() -> 'CancellationToken'
+def cancel() -> None
 ```
 
 Signals a cancellation to the CancellationToken.

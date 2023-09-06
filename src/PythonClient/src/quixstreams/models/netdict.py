@@ -53,7 +53,7 @@ class ReadOnlyNetDict(object):
         if self_dispose:
             self._finalizer = weakref.finalize(self, self._finalizerfunc)
         else:
-            self._finalizer = lambda x: None
+            self._finalizer = lambda: None
 
     def _finalizerfunc(self):
         self._finalizer.detach()

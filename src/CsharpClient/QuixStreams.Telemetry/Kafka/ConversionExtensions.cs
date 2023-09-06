@@ -1,4 +1,4 @@
-using QuixStreams.Transport.Kafka;
+using QuixStreams.Kafka;
 
 namespace QuixStreams.Telemetry.Kafka
 {

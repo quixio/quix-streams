@@ -31,7 +31,7 @@ class CancellationTokenSource:
         """
         return self._interop.get_IsCancellationRequested()
 
-    def cancel(self) -> 'CancellationToken':
+    def cancel(self) -> None:
         """
         Signals a cancellation to the CancellationToken.
         """

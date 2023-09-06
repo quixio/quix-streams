@@ -41,7 +41,7 @@ def build_streaming_project(csharpfolder, framework, streamingoutpath):
         f"dotnet publish "
         f"{csharpfolder}/QuixStreams.Streaming/QuixStreams.Streaming.csproj "
         f"{framework} "
-        f"-c release "
+        f"-c Python "
         f"-o {streamingoutpath}",
         shell=True,
         check=True,

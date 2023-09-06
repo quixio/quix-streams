@@ -17,16 +17,23 @@
             <Type Name="QuixStreams.State.StateValue" Dynamic="Required All" />
             <Type Name="QuixStreams.State.StateValue+StateType" Dynamic="Required All" />
         </Assembly>
-        <Assembly Name="Confluent.Kafka" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All" />
-        <Assembly Name="QuixStreams.Transport">
+        <Assembly Name="Confluent.Kafka" Dynamic="Required All" Serialize="Required All" XmlSerializer="Required All">
+            <Type Name="Confluent.Kafka.TimestampType" Dynamic="Required All" />
+        </Assembly>
+        <Assembly Name="QuixStreams.Kafka">
             <Type Name="QuixStreams.Logging" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="Confluent.Kafka">
             <Type Name="Confluent.Kafka.ProduceException`2[[System.Byte[], System.Runtime],[System.Byte[], System.Runtime]]" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.TopicPartitionOffset" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.TopicPartition" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.Partition" Dynamic="Required All" />
+            <Type Name="Confluent.Kafka.Offset" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="System.Runtime">
             <!-- force inclusion of the type even if not referenced anywhere -->
             <Type Name="System.Threading.CancellationTokenSource" Dynamic="Required All" />
+            <Type Name="System.DateTimeKind" Dynamic="Required All" />
         </Assembly>
         <Assembly Name="Microsoft.Extensions.Logging.Abstractions">
             <Type Name="Microsoft.Extensions.Logging.LogLevel" Dynamic="Required All" />

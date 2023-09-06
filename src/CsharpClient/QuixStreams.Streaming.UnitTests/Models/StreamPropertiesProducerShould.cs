@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using Quix.TestBase.Extensions;
+using QuixStreams;
 using QuixStreams.Streaming.Models.StreamProducer;
 using Xunit;
 using Xunit.Abstractions;
@@ -24,7 +25,7 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 outputHelper.WriteLine(ci.Arg<string>(), ci.Arg<object[]>());
             });
             
-            Logging.Factory = outputHelper.CreateLoggerFactory();
+            QuixStreams.Logging.Factory = outputHelper.CreateLoggerFactory();
         }
         
         [Fact]

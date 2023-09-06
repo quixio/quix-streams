@@ -6,9 +6,9 @@ import shutil
 import fileinput
 from typing import List
 
-version = "0.5.5.0"
-informal_version = "0.5.5.0"
-nuget_version = "0.5.5.0"
+version = "0.6.0.0"
+informal_version = "0.6.0.0-dev1"
+nuget_version = "0.6.0.0-dev1"
 
 
 def updatecsproj(projfilepath):
@@ -71,8 +71,8 @@ result_root_path = get_output_path()
 projects = [
     os.path.join(source_root_path, "QuixStreams.Streaming/QuixStreams.Streaming.csproj"),
     os.path.join(source_root_path, "QuixStreams.Telemetry/QuixStreams.Telemetry.csproj"),
-    os.path.join(source_root_path, "QuixStreams.Transport/QuixStreams.Transport.csproj"),
-    os.path.join(source_root_path, "QuixStreams.Transport.Kafka/QuixStreams.Transport.Kafka.csproj"),
+    os.path.join(source_root_path, "QuixStreams.Kafka/QuixStreams.Kafka.csproj"),
+    os.path.join(source_root_path, "QuixStreams.Kafka.Transport/QuixStreams.Kafka.Transport.csproj"),
     os.path.join(source_root_path, "QuixStreams.State/QuixStreams.State.csproj")
 ]
 

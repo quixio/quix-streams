@@ -47,7 +47,7 @@ namespace QuixStreams.Speedtest
                     {
                         times.Add(elapsed);
                         timesTotal++;
-                        times = times.TakeLast(50).ToList();
+                        times = times.Skip(Math.Min(0,times.Count-50)).ToList();
 
                         Console.WriteLine("Avg: " + Math.Round(times.Average(), 2) + ", Max: " +
                                           Math.Round(times.Max(), 2) + ", Min: " + Math.Round(times.Min(), 2) +

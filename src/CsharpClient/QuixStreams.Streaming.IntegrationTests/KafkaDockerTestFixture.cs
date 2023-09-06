@@ -1,77 +1,57 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+using Confluent.Kafka.Admin;
 using Ductus.FluentDocker.Builders;
 using Ductus.FluentDocker.Extensions;
 using Ductus.FluentDocker.Services;
+using QuixStreams.IntegrationTestBase;
 using QuixStreams.Streaming.Configuration;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace QuixStreams.Streaming.IntegrationTests
 {
     
-    public class KafkaDockerTestFixture : IDisposable
+    public class KafkaDockerTestFixture : KafkaDockerTestFixtureBase
     {
-        private readonly IContainerService kafkaContainer;
-        public readonly int ZookeeperPort;
-        public readonly int KafkaPort;
-        public readonly string BrokerList;
-        public SecurityOptions SecurityOptions = null;
-
-        public KafkaDockerTestFixture()
+        
+        public async Task EnsureTopic(string topic, int partitionCount)
         {
-            var random = new Random();
-            var host = "127.0.0.1";
-            this.ZookeeperPort = random.Next(1324,23457);
-            this.KafkaPort = random.Next(23458,58787);
-            this.BrokerList = $"{host}:{KafkaPort}";
-            Console.WriteLine("Creating Kafka container");
-            var sw = Stopwatch.StartNew();
             try
             {
-                var builder = new Builder().UseContainer();
-                
-                if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
-                {
-                    builder = builder.UseImage("dougdonohoe/fast-data-dev:latest");
-                }
-                else if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64)
-                {
-                    builder = builder.UseImage("lensesio/fast-data-dev:3.3.1");
-                }
-                
-                builder.ExposePort(ZookeeperPort, ZookeeperPort)
-                .ExposePort(KafkaPort, KafkaPort)
-                .WithEnvironment(
-                    $"BROKER_PORT={KafkaPort}", 
-                    $"ZK_PORT={ZookeeperPort}",
-                    $"ADV_HOST={host}",
-                    "REST_PORT=0",
-                    "WEB_PORT=0",
-                    "CONNECT_PORT=0",
-                    "REGISTRY_PORT=0",
-                    "RUNTESTS=0",
-                    "SAMPLEDATA=0",
-                    "FORWARDLOGS=0",
-                    "SUPERVISORWEB=0");
-                this.kafkaContainer = builder.Build().Start();
-                this.kafkaContainer.WaitForRunning();
+                await this.AdminClient.CreateTopicsAsync(new TopicSpecification[] { new TopicSpecification() { Name = topic, NumPartitions = partitionCount } });
+                Console.WriteLine($"Created topic {topic} with desired {partitionCount} partitions");
             }
-            catch
+            catch (Exception ex)
             {
-                this.kafkaContainer?.Dispose();
-                throw;
+                // it exists
             }
 
-            Console.WriteLine("Created Kafka container in {0:g}", sw.Elapsed);
-        }
+            var metadata = this.AdminClient.GetMetadata(topic, TimeSpan.FromSeconds(5));
+            var existingTopic = metadata.Topics.First();
 
-        public void Dispose()
-        {
-            Console.WriteLine("Disposing Kafka container");
-            kafkaContainer.Dispose();
-            Console.WriteLine("Disposed Kafka container");
+            if (existingTopic.Partitions.Count == partitionCount)
+            {
+                Console.WriteLine($"Found topic {topic} with desired {partitionCount} partitions");
+                return;
+            }
+            
+            if (existingTopic.Partitions.Count > partitionCount) throw new InvalidOperationException("The topic has more partitions than required, you need to manually delete it first");
+            
+            try
+            {
+                Console.WriteLine($"Found topic {topic} with less than desired {partitionCount} partitions, creating up to {partitionCount}");
+                await this.AdminClient.CreatePartitionsAsync(new PartitionsSpecification[] { new PartitionsSpecification() { Topic = topic, IncreaseTo = partitionCount } });
+                await Task.Delay(100); // apparently waiting for the task above is not enough, so introducing some artificial delay
+            }
+            catch (CreatePartitionsException ex)
+            {
+                if (!ex.Message.Contains($"Topic already has {partitionCount} partitions")) throw;
+            }
+            await EnsureTopic(topic, partitionCount);
         }
-
     }
 
     [CollectionDefinition("Kafka Container Collection")]

@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
-using QuixStreams.Transport.IO;
-using QuixStreams.Transport.Kafka;
+using QuixStreams.Kafka;
 
 namespace QuixStreams.Streaming.Raw
 {
@@ -32,19 +31,16 @@ namespace QuixStreams.Streaming.Raw
 
             this.topicName = topicName;
 
-            var publisherConfiguration = new Transport.Kafka.PublisherConfiguration(brokerAddress, brokerProperties);
-            var topicConfiguration = new Transport.Kafka.ProducerTopicConfiguration(this.topicName);
+            var publisherConfiguration = new QuixStreams.Kafka.ProducerConfiguration(brokerAddress, brokerProperties);
+            var topicConfiguration = new QuixStreams.Kafka.ProducerTopicConfiguration(this.topicName);
 
-            this.kafkaProducer = new Transport.Kafka.KafkaProducer(publisherConfiguration, topicConfiguration);
-            this.kafkaProducer.Open();
+            this.kafkaProducer = new KafkaProducer(publisherConfiguration, topicConfiguration);
         }
 
         /// <inheritdoc />
-        public void Publish(RawMessage message)
+        public void Publish(KafkaMessage message)
         {
-            var data = new Package<byte[]>(message.Value);
-            data.SetKey(message.Key);
-            kafkaProducer.Publish(data);
+            kafkaProducer.Publish(message);
         }
         
         /// <inheritdoc />

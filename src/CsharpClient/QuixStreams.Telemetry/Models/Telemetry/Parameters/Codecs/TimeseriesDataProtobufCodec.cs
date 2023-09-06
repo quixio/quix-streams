@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
-using QuixStreams.Transport.Codec;
+using QuixStreams.Kafka.Transport.SerDes.Codecs;
 
 namespace QuixStreams.Telemetry.Models.Codecs
 {

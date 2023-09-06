@@ -24,7 +24,7 @@ class TimeConverter:
         _localTZInfo = datetime.now().astimezone().tzinfo
         offset_from_utc = (_epoch - datetime(1970, 1, 1, tzinfo=_localTZInfo)) / _microsecond * 1000
     except:
-        logging.warning("Timezone can't be determined, treating as UTC", exc_info=sys.exc_info())
+        logging.warning("Local timezone can't be determined, treating as UTC", exc_info=sys.exc_info())
 
     @staticmethod
     def to_unix_nanoseconds(value: datetime) -> int:

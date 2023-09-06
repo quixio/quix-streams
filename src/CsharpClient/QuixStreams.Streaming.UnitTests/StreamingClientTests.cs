@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Quix.TestBase.Extensions;
+using QuixStreams;
+using QuixStreams.Streaming.UnitTests.Helpers;
 using QuixStreams.Telemetry.Models;
 using Xunit;
 using Xunit.Abstractions;
@@ -118,7 +120,7 @@ namespace QuixStreams.Streaming.UnitTests
 
                 (stream as IStreamProducerInternal).Publish(expectedParametersProperties);
 
-                SpinWait.SpinUntil(() => parametersPropertiesChanged);
+                SpinWait.SpinUntil(() => parametersPropertiesChanged, TimeSpan.FromSeconds(10));
                 Assert.True(parametersPropertiesChanged, "Parameter properties event not reached reader.");
 
                 var expectedData = new List<TimeseriesDataRaw>();
