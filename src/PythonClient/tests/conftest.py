@@ -3,4 +3,5 @@ pytest_plugins = [
     "tests.quixstreams.test_dataframes.test_dataframe.fixtures",
     "tests.quixstreams.test_dataframes.fixtures",
     "tests.quixstreams.test_dataframes.test_models.fixtures",
+    "tests.quixstreams.test_dataframes.test_kafka.fixtures",
 ]
