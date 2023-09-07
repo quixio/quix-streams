@@ -3,7 +3,7 @@ from json import loads, dumps
 from unittest.mock import patch
 
 import pytest
-from confluent_kafka import KafkaException
+from confluent_kafka import KafkaException, TopicPartition
 
 from src.quixstreams.dataframes import StreamingDataFrame, Topic
 from src.quixstreams.dataframes.models import DoubleDeserializer, DoubleSerializer
@@ -15,8 +15,14 @@ from src.quixstreams.dataframes.runner import RunnerNotStarted
 
 class TestRunner:
     def test_run_consume_and_produce(
-        self, runner_factory, producer, topic_factory, topic_json_serdes_factory,
-            row_consumer_factory, executor, row_factory
+        self,
+        runner_factory,
+        producer,
+        topic_factory,
+        topic_json_serdes_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
     ):
         """
         Test that StreamingDataFrame processes 3 messages from Kafka by having the
@@ -36,7 +42,7 @@ class TestRunner:
         processed_count = 0
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {'key': b"key", 'value': b'"value"'}
+        data = {"key": b"key", "value": b'"value"'}
         with producer:
             for _ in range(total_messages):
                 producer.produce(topic_name, **data)
@@ -63,9 +69,14 @@ class TestRunner:
             # Check that all messages have been processed
             assert processed_count == total_messages
 
+        # Ensure that the right offset is committed
+        with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
+            committed, *_ = row_consumer.committed([TopicPartition(topic_in.name, 0)])
+            assert committed.offset == total_messages
+
         # confirm messages actually ended up being produced by the runner
         rows_out = []
-        with row_consumer_factory(auto_offset_reset='earliest') as row_consumer:
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
             row_consumer.subscribe([topic_out])
             while len(rows_out) < total_messages:
                 rows_out.append(row_consumer.poll_row(timeout=5))
@@ -210,7 +221,6 @@ class TestRunner:
     def test_run_producer_error_raised(
         self, runner_factory, producer, topic_json_serdes_factory, executor
     ):
-
         topic_in = topic_json_serdes_factory()
         topic_out = topic_json_serdes_factory()
 
@@ -221,8 +231,8 @@ class TestRunner:
             producer.produce(topic_in.name, dumps({"field": 1001 * "a"}))
 
         with runner_factory(
-            auto_offset_reset='earliest',
-            producer_extra_config={"message.max.bytes": 1000}
+            auto_offset_reset="earliest",
+            producer_extra_config={"message.max.bytes": 1000},
         ) as runner:
             fut: Future = executor.submit(runner.run, df)
             # Wait for exception to fail
@@ -231,9 +241,8 @@ class TestRunner:
             assert isinstance(exc, KafkaException)
 
     def test_run_serialization_error_raised(
-            self, runner_factory, producer, topic_factory, executor
+        self, runner_factory, producer, topic_factory, executor
     ):
-
         topic_in_name, _ = topic_factory()
         topic_in = Topic(topic_in_name, value_deserializer=JSONDeserializer())
         topic_out_name, _ = topic_factory()
@@ -245,7 +254,7 @@ class TestRunner:
         with producer:
             producer.produce(topic_in.name, b'{"field":"value"}')
 
-        with runner_factory(auto_offset_reset='earliest') as runner:
+        with runner_factory(auto_offset_reset="earliest") as runner:
             fut: Future = executor.submit(runner.run, df)
             # Wait for exception to fail
             exc = fut.exception(timeout=10.0)
@@ -280,7 +289,7 @@ class TestRunner:
             return True
 
         with runner_factory(
-            auto_offset_reset='earliest', on_producer_error=on_error
+            auto_offset_reset="earliest", on_producer_error=on_error
         ) as runner:
             executor.submit(runner.run, df)
             done.result(timeout=10.0)
