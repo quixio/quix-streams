@@ -93,6 +93,7 @@ class QuixPortalApiService:
         return self.session.get(f"/workspaces/{workspace_id}").json()
 
     def get_workspaces(self) -> list[dict]:
+        # TODO: This seems only return [] with Personal Access Tokens as of Sept 7 '23
         return self.session.get("/workspaces").json()
 
     def get_topics(self, workspace_id: Optional[str] = None) -> list[dict]:
@@ -109,7 +110,6 @@ class QuixPortalApiService:
         topic_ret_minutes: int = 10080,
         topic_ret_bytes: int = 52428800,
     ) -> dict:
-        # TODO: check to see if topic creation is fixed later...getting 403"s in v2
         if not workspace_id:
             workspace_id = self.default_workspace_id
         d = {
