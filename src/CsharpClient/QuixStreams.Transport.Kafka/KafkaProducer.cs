@@ -28,7 +28,7 @@ namespace QuixStreams.Transport.Kafka
         private bool checkBrokerStateBeforeSend = false;
         private bool logOnNextBrokerStateUp = false;
         private bool disableKafkaLogsByBrokerLogWorkaround = false; // if enabled, no actual kafka logs should be shown
-
+        private string lastReportedBrokerDownMessage = string.Empty;
 
         private readonly ProduceDelegate produce;
 
@@ -185,8 +185,13 @@ namespace QuixStreams.Transport.Kafka
 
             if (ex.Message.Contains("brokers are down"))
             {
-                checkBrokerStateBeforeSend = true;
-                this.logger.LogDebug("[{0}] {1}, but delaying reporting until next message, in case reconnect happens before.", this.configId, ex.Message); // Excessive error reporting
+                if (!checkBrokerStateBeforeSend ||
+                    ex.Message != lastReportedBrokerDownMessage)
+                {
+                    checkBrokerStateBeforeSend = true;
+                    lastReportedBrokerDownMessage = ex.Message;
+                    this.logger.LogDebug("[{0}] {1}, but delaying reporting until next message, in case reconnect happens before.", this.configId, ex.Message); // Excessive error reporting
+                }
                 return;
             }
             
