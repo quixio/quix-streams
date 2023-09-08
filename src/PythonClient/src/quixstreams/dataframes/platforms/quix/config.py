@@ -3,6 +3,7 @@ from pathlib import Path
 from os import getcwd
 from requests import HTTPError
 from typing import Optional
+from tempfile import gettempdir
 
 
 __all__ = ("QuixKafkaConfigsBuilder",)
@@ -75,42 +76,42 @@ class QuixKafkaConfigsBuilder:
         values = {"ScramSha256": "SCRAM-SHA-256", "SaslSsl": "SASL_SSL"}
 
     @property
-    def workspace_id(self):
+    def workspace_id(self) -> str:
         if not self._workspace_id:
             self.get_workspace_info()
         return self._workspace_id
 
     @property
-    def quix_broker_config(self):
+    def quix_broker_config(self) -> dict:
         if not self._quix_broker_config:
             self.get_workspace_info()
         return self._quix_broker_config
 
     @property
-    def quix_broker_settings(self):
+    def quix_broker_settings(self) -> dict:
         if not self._quix_broker_settings:
             self.get_workspace_info()
         return self._quix_broker_settings
 
     @property
-    def confluent_broker_config(self):
+    def confluent_broker_config(self) -> dict:
         if not self._confluent_broker_config:
             self.get_confluent_broker_config()
         return self._confluent_broker_config
 
     @property
-    def workspace_cert_path(self):
+    def workspace_cert_path(self) -> str:
         if not self._workspace_cert_path:
             self._set_workspace_cert()
         return self._workspace_cert_path
 
     @property
-    def workspace_meta(self):
+    def workspace_meta(self) -> dict:
         if not self._workspace_meta:
             self.get_workspace_info()
         return self._workspace_meta
 
-    def append_workspace_id(self, s: str):
+    def append_workspace_id(self, s: str) -> str:
         """
         Add the workspace ID to a given string, typically a topic or consumer group id
 
@@ -119,7 +120,9 @@ class QuixKafkaConfigsBuilder:
         """
         return f"{self.workspace_id}-{s}" if not s.startswith(self.workspace_id) else s
 
-    def search_for_workspace(self, workspace_name_or_id: Optional[str] = None):
+    def search_for_workspace(
+            self, workspace_name_or_id: Optional[str] = None
+    ) -> Optional[dict]:
         # TODO: there is more to do here to accommodate the new "environments" in v2
         # as it stands now, the search wont work with Quix v2 platform correctly if
         # it's not a workspace_id
@@ -139,7 +142,6 @@ class QuixKafkaConfigsBuilder:
             for ws in ws_list:
                 if ws["name"] == workspace_name_or_id:
                     return ws
-            return None
 
     def get_workspace_info(self, known_workspace_topic: Optional[str] = None):
         """
@@ -162,7 +164,9 @@ class QuixKafkaConfigsBuilder:
         self._quix_broker_settings = ws_data.pop("brokerSettings")
         self._workspace_meta = ws_data
 
-    def search_workspace_for_topic(self, workspace_id: str, topic: str):
+    def search_workspace_for_topic(
+            self, workspace_id: str, topic: str
+    ) -> Optional[str]:
         """
         Search through all the topics in the given workspace id to see if there is a
         match with the provided topic.
@@ -175,9 +179,8 @@ class QuixKafkaConfigsBuilder:
         for t in topics:
             if t["name"] == topic or t["id"] == topic:
                 return workspace_id
-        return None
 
-    def search_for_topic_workspace(self, topic: str):
+    def search_for_topic_workspace(self, topic: str) -> Optional[dict]:
         """
         Find what workspace a topic belongs to.
         If there is only one workspace altogether, it is assumed to be the workspace.
@@ -187,19 +190,16 @@ class QuixKafkaConfigsBuilder:
         :return: workspace data dict if topic search success, else None
         """
         ws_list = self.api.get_workspaces()
-        if len(ws_list) > 1:
-            if topic is None:
-                raise self.MultipleWorkspaces(
-                    "More than 1 workspace was found, so you must provide a topic name "
-                    "to find the correct workspace"
-                )
-            print(ws_list)
-            for ws in ws_list:
-                if self.search_workspace_for_topic(ws["workspaceId"], topic):
-                    return ws
-            return None
-        else:
+        if len(ws_list) == 1:
             return ws_list[0]
+        if topic is None:
+            raise self.MultipleWorkspaces(
+                "More than 1 workspace was found, so you must provide a topic name "
+                "to find the correct workspace"
+            )
+        for ws in ws_list:
+            if self.search_workspace_for_topic(ws["workspaceId"], topic):
+                return ws
 
     def get_workspace_ssl_cert(self, extract_to_folder: Optional[Path] = None) -> str:
         """
@@ -209,18 +209,17 @@ class QuixKafkaConfigsBuilder:
         :param extract_to_folder: path to folder to dump zipped cert file to
         :return: full cert filepath as string
         """
-        if not extract_to_folder:
-            extract_to_folder = Path("/tmp")
-        filename = "ca.cert"
-        full_path = extract_to_folder / filename
+        extract_to_folder = extract_to_folder or Path(gettempdir())
+        full_path = extract_to_folder / "ca.cert"
         if not full_path.is_file():
             extract_to_folder.mkdir(parents=True, exist_ok=True)
-            self.api.get_workspace_certificate(workspace_id=self._workspace_id).extract(
-                "ca.cert", extract_to_folder
-            )
+            with open(full_path, 'wb') as f:
+                f.write(
+                    self.api.get_workspace_certificate(workspace_id=self._workspace_id)
+                )
         return full_path.as_posix()
 
-    def _set_workspace_cert(self):
+    def _set_workspace_cert(self) -> str:
         """
         Will create a cert and assigns it to the workspace_cert_path property.
         If there was no path provided at init, one is generated based on the cwd and
@@ -265,7 +264,7 @@ class QuixKafkaConfigsBuilder:
 
     def get_confluent_client_configs(
         self, topics: list, consumer_group_id: Optional[str] = None
-    ):
+    ) -> tuple:
         """
         Get all the values you need in order to use a confluent_kafka-based client
         with a topic on a Quix platform broker/workspace.

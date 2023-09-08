@@ -1,6 +1,4 @@
-import zipfile
 from copy import deepcopy
-from io import BytesIO
 from os import getcwd
 from pathlib import Path
 from unittest.mock import patch, call
@@ -294,13 +292,9 @@ class TestQuixKafkaConfigsBuilder:
         assert result is None
 
     def test_get_workspace_ssl_cert(self, quix_kafka_config_factory, tmp_path):
-        zip_in_mem = BytesIO()
-        with zipfile.ZipFile(zip_in_mem, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-            zip_file.writestr("ca.cert", BytesIO(b"my cool cert stuff").getvalue())
-
         cfg_factory = quix_kafka_config_factory(
             workspace_id="12345",
-            api_responses={"get_workspace_certificate": zipfile.ZipFile(zip_in_mem)},
+            api_responses={"get_workspace_certificate": b"my cool cert stuff"},
         )
         cfg_factory.get_workspace_ssl_cert(extract_to_folder=tmp_path)
 

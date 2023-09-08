@@ -75,14 +75,16 @@ class QuixPortalApiService:
         )
         return s
 
-    def get_workspace_certificate(self, workspace_id: Optional[str] = None) -> ZipFile:
+    def get_workspace_certificate(self, workspace_id: Optional[str] = None) -> bytes:
         if not workspace_id:
             workspace_id = self.default_workspace_id
-        return ZipFile(
+        with ZipFile(
             BytesIO(
                 self.session.get(f"/workspaces/{workspace_id}/certificates").content
             )
-        )
+        ) as z:
+            with z.open('ca.cert') as f:
+                return f.read()
 
     def get_auth_token_details(self) -> dict:
         return self.session.get(f"/auth/token/details").json()
