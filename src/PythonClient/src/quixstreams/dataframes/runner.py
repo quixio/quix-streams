@@ -190,7 +190,7 @@ class Runner:
                     TopicPartition(
                         topic=topic_name,
                         partition=partition,
-                        offset=offset,
+                        offset=offset + 1,
                     )
                 ]
             )
