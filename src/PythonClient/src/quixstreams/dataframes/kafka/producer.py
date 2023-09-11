@@ -62,6 +62,7 @@ class Producer:
         broker_address: str,
         partitioner: Partitioner = "murmur2",
         extra_config: dict = None,
+        debug: bool = False,
     ):
         """
         A wrapper around `confluent_kafka.Producer`.
@@ -77,10 +78,11 @@ class Producer:
             Available values: "random", "consistent_random", "murmur2", "murmur2_random",
             "fnv1a", "fnv1a_random"
             Default - "murmur2".
-
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
+        :param debug: if True, the Producer will log the data from the delivery callbacks.
+            Note: enabling the debug mode may reduce the throughput.
         """
         config = dict(
             **extra_config or {},
@@ -92,6 +94,7 @@ class Producer:
             },
         )
         self._producer_config = config
+        self._debug = debug
         self._inner_producer: Optional[ConfluentProducer] = None
 
     def produce(
@@ -102,15 +105,15 @@ class Producer:
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
-        flush_timeout: float = 5.0,
+        poll_timeout: float = 5.0,
         buffer_error_max_tries: int = 3,
     ):
         """
         Produce message to topic.
         It also polls Kafka for callbacks before producing in order to minimize
         the probability of `BufferError`.
-        If `BufferError` happens, the method will flush the buffer
-        and try again (max 3 tries).
+        If `BufferError` still happens, the method will poll Kafka with timeout
+        to free up the buffer and try again.
 
         :param topic: topic name
         :param value: message value
@@ -118,18 +121,22 @@ class Producer:
         :param headers: message headers
         :param partition: topic partition
         :param timestamp: message timestamp
-        :param flush_timeout: timeout for `flush()` call in case of `BufferError`
+        :param poll_timeout: timeout for `poll()` call in case of `BufferError`
         :param buffer_error_max_tries: max retries for `BufferError`.
             Pass `0` to not retry after `BufferError`.
 
         """
 
         kwargs = {
-            "on_delivery": _on_delivery_cb,
             "partition": partition,
             "timestamp": timestamp,
             "headers": headers,
         }
+        if self._debug:
+            # Trigger `on_delivery` callbacks only in "debug" mode, otherwise
+            # it reduces throughput because of additional function calls
+            kwargs["on_delivery"] = _on_delivery_cb
+
         # confluent_kafka doesn't like None for optional parameters
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
@@ -138,16 +145,17 @@ class Producer:
         while True:
             try:
                 tried += 1
-                # Serve delivery callbacks before each produce to minimize a chance of
+                self._producer.produce(topic, value, key, **kwargs)
+                # Serve delivery callbacks after each produce to minimize a chance of
                 # BufferError
                 self._producer.poll(0)
-                self._producer.produce(topic, value, key, **kwargs)
                 return
             except BufferError:
                 if buffer_error_max_tries < 1 or tried == buffer_error_max_tries:
                     raise
-                # The librdkafka buffer is full. Flush it and try again
-                self._producer.flush(timeout=flush_timeout)
+                # The librdkafka buffer is full
+                # Poll for delivery callbacks and try again
+                self._producer.poll(timeout=poll_timeout)
 
     def poll(self, timeout: float = None):
         """
