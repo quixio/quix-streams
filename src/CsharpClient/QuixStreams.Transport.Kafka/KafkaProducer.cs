@@ -104,6 +104,8 @@ namespace QuixStreams.Transport.Kafka
             lock (this.openLock)
             {
                 if (this.producer != null) return;
+                lastReportedBrokerDownMessage = string.Empty;
+                checkBrokerStateBeforeSend = false;
 
                 this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
