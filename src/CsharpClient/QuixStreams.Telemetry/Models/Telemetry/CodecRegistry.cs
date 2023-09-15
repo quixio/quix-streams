@@ -71,8 +71,9 @@ namespace QuixStreams.Telemetry.Models
                     {
                         if (typeof(TimeseriesDataRaw) == modelType)
                         {
-                            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataJsonCodec());
-                            continue;
+                            // Disable for now to avoid a bug
+                            //QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataJsonCodec());
+                            //continue;
                         }
 
                         QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());   
