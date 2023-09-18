@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace QuixStreams.State.Storage.FileStorage
@@ -16,7 +15,10 @@ namespace QuixStreams.State.Storage.FileStorage
         private readonly string storageDirectory;
 
         private static readonly string DefaultDir = Path.Combine(".", "state");
-        private static readonly string FileNameSpecialCharacter = "~";
+        private const string FileNameSpecialCharacter = "~";
+        private const string TempFileSuffix = ".tmpf";
+        private const string BackupFileSuffix = ".bckf";
+
 
         /// <summary>
         /// Initializes a new instance of <see cref="BaseFileStorage"/>
@@ -34,6 +36,8 @@ namespace QuixStreams.State.Storage.FileStorage
                     Directory.CreateDirectory(this.storageDirectory);
                 }
             }
+
+            CleanTempFiles(this.storageDirectory);
         }
 
         /// <summary>
@@ -91,19 +95,41 @@ namespace QuixStreams.State.Storage.FileStorage
         public async Task SaveRaw(string key, byte[] data)
         {
             key = key.ToLower();
+            var tempKey = $"{key}{TempFileSuffix}";
+            var tempKeyFilePath = GetFilePath(tempKey);
             // lock on the directory
             using (await this.LockInternalKey("", LockType.Reader))
             {
                 // lock on the key
                 using (await this.LockInternalKey(key, LockType.Writer))
                 {
-                    using (FileStream sourceStream = File.Open(GetFilePath(key), FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (FileStream sourceStream = File.Open(tempKeyFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         await sourceStream.WriteAsync(data, 0, data.Length);
                         await sourceStream.FlushAsync();
-                        sourceStream.Close();
+                        sourceStream.Close(); 
                         sourceStream.Dispose();
                     }
+                    
+                    var keyFilePath = GetFilePath(key);
+#if NETSTANDARD2_0
+                    var backupKey = $"{key}{BackupFileSuffix}";
+                    var backupFilePath = GetFilePath(backupKey);
+                    var fileExists = false;
+                    try
+                    {
+                        File.Move(keyFilePath, backupFilePath);
+                        fileExists = true;
+                    }
+                    catch (FileNotFoundException ex)
+                    {
+                    }
+
+                    File.Move(tempKeyFilePath, keyFilePath);
+                    if (fileExists) File.Delete(backupFilePath);
+#else
+                    File.Move(tempKeyFilePath, keyFilePath, true);
+#endif
                 }
             }
         }
@@ -170,6 +196,44 @@ namespace QuixStreams.State.Storage.FileStorage
             return Task.FromResult(
                 File.Exists(GetFilePath(key))
             );
+        }
+        
+        /// <summary>
+        /// Recursively cleans up temp/backup files
+        /// </summary>
+        /// <param name="folderName">Directory path to clean</param>
+        private void CleanTempFiles(string folderName)
+        {
+            DirectoryInfo dir = new DirectoryInfo(folderName);
+
+            var cutoff = DateTime.UtcNow.AddMinutes(-1);
+            var files = dir.GetFiles();
+            foreach (FileInfo fi in files)
+            {
+#if NETSTANDARD2_0
+                if (fi.FullName.EndsWith(BackupFileSuffix))
+                {
+                    var originalFile = fi.FullName.Substring(0, fi.FullName.Length-BackupFileSuffix.Length);
+                    if (files.Any(y => y.FullName == originalFile))
+                    {
+                        fi.Delete(); // delete of a backup file failed as temp file successfully replaced it
+                    }
+                    else
+                    {
+                        fi.MoveTo(originalFile); // restore from backup file
+                    }
+                }
+#endif
+                
+                if (fi.LastWriteTimeUtc > cutoff) continue;
+                if (!fi.FullName.EndsWith(TempFileSuffix)) continue;
+                fi.Delete();
+            }
+
+            foreach (DirectoryInfo di in dir.GetDirectories())
+            {
+                CleanTempFiles(di.FullName);
+            }
         }
 
         /// <summary>
