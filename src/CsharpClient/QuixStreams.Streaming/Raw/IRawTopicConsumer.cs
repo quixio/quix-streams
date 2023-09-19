@@ -8,10 +8,15 @@ namespace QuixStreams.Streaming.Raw
     public interface IRawTopicConsumer : IDisposable
     {
         /// <summary>
-        /// Start reading streams.
+        /// Start reading data from the topic.
         /// Use 'OnMessageReceived' event to read messages after executing this method
         /// </summary>
         void Subscribe();
+        
+        /// <summary>
+        /// Stops reading data from the topic.
+        /// </summary>
+        void Unsubscribe();
 
         /// <summary>
         /// Event raised when a message is received from the topic

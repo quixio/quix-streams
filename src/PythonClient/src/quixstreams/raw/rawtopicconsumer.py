@@ -128,6 +128,12 @@ class RawTopicConsumer(object):
 
     def subscribe(self):
         """
-        Starts subscribing to the streams.
+        Starts subscribing to the topic data.
         """
         self._interop.Subscribe()
+
+    def unsubscribe(self):
+        """
+        Unsubscribes from the topic data.
+        """
+        self._interop.Unsubscribe()

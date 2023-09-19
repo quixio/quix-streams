@@ -2111,7 +2111,7 @@ class TestApp(BaseIntegrationTest):
             shutdown_callback_value = True
 
         # Assert
-        qx.App.run(cts.token, before_shutdown=before_shutdown)
+        qx.App.run(cts.token, before_shutdown=before_shutdown, subscribe=True)
         event_thread.join()
         assert read_data is not None
         assert shutdown_callback_value

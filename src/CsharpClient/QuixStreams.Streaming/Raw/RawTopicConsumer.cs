@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Telemetry.Kafka;
+using QuixStreams.Transport.IO;
 using QuixStreams.Transport.Kafka;
 
 namespace QuixStreams.Streaming.Raw
@@ -89,32 +90,44 @@ namespace QuixStreams.Streaming.Raw
                 return;
             }
 
-            kafkaConsumer.OnNewPackage = package =>
-            {
-                byte[] message = (byte[])package.Value;
-
-                Dictionary<string, string> vals = new Dictionary<string, string>();
-                foreach (var el in package.TransportContext)
-                {
-                    var value = el.Value;
-                    if (value == null)
-                    {
-                        vals[el.Key] = "";
-                    }
-                    else
-                    {
-                        vals[el.Key] = value.ToString();
-                    }
-                }
-
-                var meta = new ReadOnlyDictionary<string, string>(vals);
-                this.OnMessageReceived?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
-                return Task.CompletedTask;
-            };
+            kafkaConsumer.OnNewPackage = OnNewPackageHandler;
 
             kafkaConsumer.Open();
             connectionStarted = true;
         }
+
+        private Task OnNewPackageHandler(Package package)
+        {
+            byte[] message = (byte[])package.Value;
+
+            Dictionary<string, string> vals = new Dictionary<string, string>();
+            foreach (var el in package.TransportContext)
+            {
+                var value = el.Value;
+                if (value == null)
+                {
+                    vals[el.Key] = "";
+                }
+                else
+                {
+                    vals[el.Key] = value.ToString();
+                }
+            }
+
+            var meta = new ReadOnlyDictionary<string, string>(vals);
+            this.OnMessageReceived?.Invoke(this, new RawMessage(package.GetKey(), message, meta));
+            return Task.CompletedTask;
+        }
+        
+        /// <inheritdoc />
+        public void Unsubscribe()
+        {
+            if (!connectionStarted) return;
+
+            kafkaConsumer.Close();
+            kafkaConsumer.OnNewPackage = null;
+            connectionStarted = false;
+        } 
 
         /// <summary>
         /// Internal handler for handing Error event from the kafkaOutput
