@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
+using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using QuixStreams;
 using QuixStreams.Streaming.Models.StreamConsumer;
@@ -23,19 +25,32 @@ namespace QuixStreams.Streaming
         private readonly StreamEventsConsumer streamEventsConsumer;
         private bool isClosed = false;
         private volatile StreamStateManager stateManager;
-        private readonly object stateLock = new object();
+        private readonly string consumerGroup;
+        private readonly string topicName;
+        private readonly int topicPartition;
+        
+        private static readonly ConcurrentDictionary<string, StreamStateManager> streamStateManagers = new ConcurrentDictionary<string, StreamStateManager>();
+
 
         /// <summary>
         /// Initializes a new instance of <see cref="StreamConsumer"/>
         /// This constructor is called internally by the <see cref="StreamPipelineFactory"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the reader belongs to</param>
-        /// <param name="streamId">Stream Id of the source that has generated this Stream Consumer. 
+        /// <param name="streamId">Stream Id of the source that has generated this Stream Consumer.</param>
         /// Commonly the Stream Id will be coming from the protocol. 
-        /// If no stream Id is passed, like when a new stream is created for producing data, a Guid is generated automatically.</param>
-        internal StreamConsumer(ITopicConsumer topicConsumer, string streamId): base(streamId)
+        /// If no stream Id is passed, like when a new stream is created for producing data, a Guid is generated automatically.
+        /// <param name="consumerGroup">The Consumer group name.</param>
+        /// /// <param name="topicName">The name of the topic.</param>
+        /// <param name="topicPartition">Topic partition.</param>
+        
+        internal StreamConsumer(ITopicConsumer topicConsumer, string streamId, string consumerGroup, string topicName, int topicPartition): base(streamId)
         {
             this.topicConsumer = topicConsumer;
+            this.consumerGroup = consumerGroup;
+            this.topicPartition = topicPartition;
+            this.topicName = topicName;
+            
             // Managed readers
             this.streamPropertiesConsumer = new StreamPropertiesConsumer(this.topicConsumer, this);
             this.streamTimeseriesConsumer = new StreamTimeseriesConsumer(this.topicConsumer, this);
@@ -80,18 +95,15 @@ namespace QuixStreams.Streaming
         /// <inheritdoc />
         public StreamStateManager GetStateManager()
         {
-            if (this.stateManager != null) return this.stateManager;
-            lock (stateLock)
-            {
-                if (this.stateManager != null) return this.stateManager;
-
-                this.stateManager = this.topicConsumer.GetStateManager().GetStreamStateManager(this.StreamId);
-            }
-
-            return this.stateManager;
+            return streamStateManagers.GetOrAdd(this.StreamId, 
+                key =>
+                {
+                    this.logger.LogTrace("Creating Stream state manager for {0}", key);
+                    return new StreamStateManager(this.topicConsumer, this.StreamId,
+                        this.consumerGroup, this.topicName, this.topicPartition, QuixStreams.Logging.Factory);
+                });
         }
-
-
+        
         /// <inheritdoc />
         public virtual event Action<IStreamConsumer, QuixStreams.Telemetry.Models.StreamProperties> OnStreamPropertiesChanged;
 

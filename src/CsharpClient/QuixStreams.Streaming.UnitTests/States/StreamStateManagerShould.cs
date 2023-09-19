@@ -1,8 +1,8 @@
 using System;
+using System.IO;
 using System.Linq;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using QuixStreams.State.Storage;
 using QuixStreams.Streaming.States;
 using Xunit;
 
@@ -10,38 +10,19 @@ namespace QuixStreams.Streaming.UnitTests.States
 {
     public class StreamStateManagerShould
     {
-        private StreamStateManager CreateStreamStateManager()
-        {
-            return new StreamStateManager("myStream", new InMemoryStorage(), NullLoggerFactory.Instance, "TEST - ");
-        }
-    
-        [Fact]
-        public void GetDictionaryState_ShouldReturnExcepted()
-        {
-            // Arrange
-            var manager = CreateStreamStateManager();
-
-            // Assert
-            var states = manager.GetStates().ToArray();
-            states.Length.Should().Be(0);
+        private readonly StreamStateManager stateManager;
         
-            // Act
-            manager.GetDictionaryState("test");
-            manager.GetDictionaryState("test2");
-            manager.GetDictionaryState("test2"); // get it twice
-            manager.GetDictionaryState("test3");
-            manager.DeleteState("test3");
-        
-            // Assert
-            states = manager.GetStates().ToArray();
-            states.Should().BeEquivalentTo(new[] { "test", "test2" });
+        public StreamStateManagerShould()
+        {
+            // Use a unique name for each test run to avoid conflicting with other tests
+            stateManager = new StreamStateManager("myStream", Guid.NewGuid().ToString(), "myTopic",1, NullLoggerFactory.Instance);
         }
-    
+        
         [Fact]
         public void GetDictionaryState_ShouldReturnSameManagerAlways()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
+            var manager = this.stateManager;
         
             // Act
             var testStreamState = manager.GetDictionaryState("test");
@@ -56,7 +37,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void GetDictionaryState_StateNameUsedByDifferentStateType_ShouldThrow()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
+            var manager = this.stateManager;
             manager.GetDictionaryState("test");
         
             // Assert
@@ -74,7 +55,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void GetDictionaryStateGeneric_StateNameUsedByDifferentStateType_ShouldThrow()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
+            var manager = this.stateManager;
             manager.GetDictionaryState<bool>("test");
         
             // Assert
@@ -92,7 +73,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void GetScalarState_StateNameUsedByDifferentStateType_ShouldThrow()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
+            var manager = this.stateManager;
             manager.GetScalarState("test");
         
             // Assert
@@ -111,7 +92,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void GetScalarStateGeneric_StateNameUsedByDifferentStateType_ShouldThrow()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
+            var manager = this.stateManager;
             manager.GetScalarState<bool>("test");
         
             // Assert
@@ -129,12 +110,12 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void DeleteState_ShouldReturnExpected()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
+            var manager = this.stateManager;
         
             // Act & Assert
-            manager.DeleteState("test").Should().BeFalse();
+            manager.DeleteState("test");
             var testStreamState = manager.GetDictionaryState("test");
-            manager.DeleteState("test").Should().BeTrue();
+            manager.DeleteState("test");
             var testStreamState2 = manager.GetDictionaryState("test");
         
             testStreamState2.Should().NotBeNull();
@@ -145,17 +126,17 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void DeleteStates_ShouldReturnExpected()
         {
             // Arrange
-            var manager = CreateStreamStateManager();
-            var testStreamState = manager.GetDictionaryState("test");
-            var testStreamState2 = manager.GetDictionaryState("test2");
-        
+            var manager = this.stateManager;
+            var testStreamState = manager.GetDictionaryState<string>("testState", key => null);
+            
             // Act 
-            var count = manager.DeleteStates();
-        
-            // Arrange
-            count.Should().Be(2);
-            manager.GetStates().Should().BeEmpty();
-            manager.GetDictionaryState("test").Should().NotBeSameAs(testStreamState);
+            testStreamState["key"] = "val";
+            manager.DeleteStates();
+            
+            // Assert
+            var testStreamStateAfterDelete = manager.GetDictionaryState<string>("testState", key => null);
+            testStreamStateAfterDelete.Values.Should().BeEmpty();
+            testStreamStateAfterDelete["key"].Should().BeNull();
         }
     }
 }

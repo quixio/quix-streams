@@ -1,13 +1,17 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
 
 namespace QuixStreams.Streaming.States
 {
+    
+    //consumer_group/topic/<partition_num>.db
     /// <summary>
-    /// Manages the states of a stream.
+    /// Manages the states.
     /// </summary>
     public class StreamStateManager
     {
@@ -18,8 +22,9 @@ namespace QuixStreams.Streaming.States
 
         private readonly object stateLock = new object();
         private readonly Dictionary<string, IStreamState> states = new Dictionary<string, IStreamState>();
-        private readonly IStateStorage stateStorage;
         private readonly string streamId;
+        private readonly string storageDir;
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="StreamStateManager"/> class with the specified parameters.
@@ -29,14 +34,15 @@ namespace QuixStreams.Streaming.States
         /// <param name="stateStorage">The state storage to use.</param>
         /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
         /// <param name="logPrefix">The prefix to be used in log messages.</param>
-        internal StreamStateManager(ITopicConsumer topicConsumer, string streamId, IStateStorage stateStorage, ILoggerFactory loggerFactory, string logPrefix)
+        internal StreamStateManager(ITopicConsumer topicConsumer, string streamId, string consumerGroup, string topicName,
+            int topicPartition, ILoggerFactory loggerFactory)
         {
             this.topicConsumer = topicConsumer;
             this.loggerFactory = loggerFactory;
-            this.logPrefix = $"{logPrefix}{streamId}";
-            this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
+            this.logPrefix = $"{consumerGroup}-{topicName}{topicPartition}-{streamId}";
             this.streamId = streamId;
-            this.stateStorage = stateStorage;
+            this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
+            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), consumerGroup, topicName, topicPartition.ToString());
         }
 
         /// <summary>
@@ -46,48 +52,110 @@ namespace QuixStreams.Streaming.States
         /// <param name="stateStorage">The state storage to use.</param>
         /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
         /// <param name="logPrefix">The prefix to be used in log messages.</param>
-        public StreamStateManager(string streamId, IStateStorage stateStorage, ILoggerFactory loggerFactory, string logPrefix)
+        public StreamStateManager(string streamId, string consumerGroup, string topicName, int topicPartition,
+            ILoggerFactory loggerFactory)
         {
             this.topicConsumer = null;
+            this.topicConsumer = topicConsumer;
             this.loggerFactory = loggerFactory;
-            this.logPrefix = $"{logPrefix}{streamId}";
-            this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
+            this.logPrefix = $"{consumerGroup}-{topicName}-{topicPartition}-{streamId}";
             this.streamId = streamId;
-            this.stateStorage = stateStorage;
-        }
-
-        /// <summary>
-        /// Returns an enumerable collection of all available state names for the current stream.
-        /// </summary>
-        /// <returns>An enumerable collection of string values representing the names of the stream states.</returns>
-        public IEnumerable<string> GetStates()
-        {
-            return this.stateStorage.GetSubStorages();
+            this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
+            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), consumerGroup, topicName, topicPartition.ToString());
         }
         
         /// <summary>
         /// Deletes all states for the current stream.
         /// </summary>
-        /// <returns>The number of states that were deleted.</returns>
-        public int DeleteStates()
+        public void DeleteStates()
         {
             this.logger.LogTrace("Deleting Stream states for {0}", streamId);
-            var count = this.stateStorage.DeleteSubStorages();
+            var storage = GetStreamStorage(this.storageDir, this.streamId);
+            storage.Clear();
             this.states.Clear();
-            return count;
         }
-        
+
         /// <summary>
         /// Deletes the state with the specified name
         /// </summary>
         /// <param name="stateName">The state to delete</param>
-        /// <returns>Whether the state was deleted</returns>
-        public bool DeleteState(string stateName)
+        public void DeleteState(string stateName)
         {
             this.logger.LogTrace("Deleting Stream state {0} for {1}", stateName, streamId);
-            if (!this.stateStorage.DeleteSubStorage(stateName)) return false;
+            var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+            storage.Clear();
             this.states.Remove(stateName);
-            return true;
+        }
+
+        /// <summary>
+        /// Creates a new application state of dictionary type with automatically managed lifecycle for the stream
+        /// </summary>
+        /// <param name="stateName">The name of the state</param>
+        /// <returns>Dictionary stream state</returns>
+        public StreamDictionaryState GetDictionaryState(string stateName)
+        {
+            return GetStreamState(stateName, (stateName) =>
+            {
+                this.logger.LogTrace("Creating Stream state for {0}", stateName);
+                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var state = new StreamDictionaryState(storage, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
+                return state;
+            });
+        }
+
+        /// <summary>
+        /// Creates a new application state of dictionary type with automatically managed lifecycle for the stream
+        /// </summary>
+        /// <param name="stateName">The name of the state</param>
+        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
+        /// <returns>Dictionary stream state</returns>
+        public StreamDictionaryState<T> GetDictionaryState<T>(string stateName,
+            StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        {
+            return GetStreamState(stateName, (stateName) =>
+            {
+                this.logger.LogTrace("Creating Stream state for {0}", stateName);
+                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var state = new StreamDictionaryState<T>(storage,
+                    defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
+                return state;
+            });
+        }
+
+        /// <summary>
+        /// Creates a new application state of scalar type with automatically managed lifecycle for the stream
+        /// </summary>
+        /// <param name="stateName">The name of the state</param>
+        /// <returns>Dictionary stream state</returns>
+        public StreamScalarState GetScalarState(string stateName)
+        {
+            return GetStreamState(stateName, (stateName) =>
+            {
+                this.logger.LogTrace("Creating Stream state for {0}", stateName);
+                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var state = new StreamScalarState(storage,
+                    new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
+                return state;
+            });
+        }
+
+        /// <summary>
+        /// Creates a new application state of scalar type with automatically managed lifecycle for the stream
+        /// </summary>
+        /// <param name="stateName">The name of the state</param>
+        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
+        /// <returns>Dictionary stream state</returns>
+        public StreamScalarState<T> GetScalarState<T>(string stateName,
+            StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        {
+            return GetStreamState(stateName, (stateName) =>
+            {
+                this.logger.LogTrace("Creating Stream state for {0}", stateName);
+                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var state = new StreamScalarState<T>(storage,
+                    defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
+                return state;
+            });
         }
 
         /// <summary>
@@ -97,27 +165,30 @@ namespace QuixStreams.Streaming.States
         /// <param name="createState">The function to create the state</param>
         /// <typeparam name="TState">The type of the stream state</typeparam>
         /// <returns>Stream state</returns>
-        private TState GetStreamState<TState>(string stateName, Func<string, TState> createState) where TState : IStreamState
+        private TState GetStreamState<TState>(string stateName, Func<string, TState> createState)
+            where TState : IStreamState
         {
             if (this.states.TryGetValue(stateName, out var existingState))
             {
                 if (!(existingState is TState castedExistingState))
                 {
-                    throw new ArgumentException($"{logPrefix}, State '{stateName}' already exists as different stream state type.");
+                    throw new ArgumentException(
+                        $"{logPrefix}, State '{stateName}' already exists as different stream state type.");
                 }
-                
+
                 return castedExistingState;
             }
-            
+
             lock (stateLock)
             {
                 if (this.states.TryGetValue(stateName, out existingState))
                 {
                     if (!(existingState is TState castedExistingState))
                     {
-                        throw new ArgumentException($"{logPrefix}, State '{stateName}' already exists as different stream state type.");
+                        throw new ArgumentException(
+                            $"{logPrefix}, State '{stateName}' already exists as different stream state type.");
                     }
-                
+
                     return castedExistingState;
                 }
 
@@ -126,7 +197,7 @@ namespace QuixStreams.Streaming.States
                 this.states.Add(stateName, state);
                 if (this.topicConsumer == null) return state;
                 var prefix = $"{logPrefix} - {stateName} | ";
-                
+
                 void CommittedHandler(object sender, EventArgs args)
                 {
                     try
@@ -153,67 +224,36 @@ namespace QuixStreams.Streaming.States
                 return state;
             }
         }
-        
-        /// <summary>
-        /// Creates a new application state of dictionary type with automatically managed lifecycle for the stream
-        /// </summary>
-        /// <param name="stateName">The name of the state</param>
-        /// <returns>Dictionary stream state</returns>
-        public StreamDictionaryState GetDictionaryState(string stateName)
+        private static IStateStorage GetStateStorage(string dbDirectory, string streamId, string stateName)
         {
-            return GetStreamState(stateName, (stateName) =>
+            if (App.GetStateStorageType() == App.StateStorageTypes.RocksDb)
             {
-                this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var state = new StreamDictionaryState(this.stateStorage.GetOrCreateSubStorage(stateName), new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
-                return state;
-            });
+                return RocksDbStorage.GetStateStorage(dbDirectory, streamId, stateName);
+            }
+            else if (App.GetStateStorageType() == App.StateStorageTypes.InMemory)
+            {
+                return InMemoryStorage.GetStateStorage(streamId, stateName);
+            }
+            else
+            {
+                throw new ArgumentException("Invalid state storage type");
+            }
         }
         
-        /// <summary>
-        /// Creates a new application state of dictionary type with automatically managed lifecycle for the stream
-        /// </summary>
-        /// <param name="stateName">The name of the state</param>
-        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
-        /// <returns>Dictionary stream state</returns>
-        public StreamDictionaryState<T> GetDictionaryState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
+        private static IStateStorage GetStreamStorage(string dbDirectory, string streamId)
         {
-            return GetStreamState(stateName, (stateName) =>
+            if (App.GetStateStorageType() == App.StateStorageTypes.RocksDb)
             {
-                this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var state = new StreamDictionaryState<T>(this.stateStorage.GetOrCreateSubStorage(stateName), defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
-                return state;
-            });
-        }
-        
-         /// <summary>
-        /// Creates a new application state of scalar type with automatically managed lifecycle for the stream
-        /// </summary>
-        /// <param name="stateName">The name of the state</param>
-        /// <returns>Dictionary stream state</returns>
-        public StreamScalarState GetScalarState(string stateName)
-        {
-            return GetStreamState(stateName, (stateName) =>
+                return RocksDbStorage.GetStreamStorage(dbDirectory, streamId);
+            }
+            else if (App.GetStateStorageType() == App.StateStorageTypes.InMemory)
             {
-                this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var state = new StreamScalarState(this.stateStorage.GetOrCreateSubStorage(stateName), new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
-                return state;
-            });
-        }
-        
-        /// <summary>
-        /// Creates a new application state of scalar type with automatically managed lifecycle for the stream
-        /// </summary>
-        /// <param name="stateName">The name of the state</param>
-        /// <param name="defaultValueFactory">The value factory for the state when the state has no value for the key</param>
-        /// <returns>Dictionary stream state</returns>
-        public StreamScalarState<T> GetScalarState<T>(string stateName, StreamStateDefaultValueDelegate<T> defaultValueFactory = null)
-        {
-            return GetStreamState(stateName, (stateName) =>
+                return InMemoryStorage.GetStreamStorage(streamId);
+            }
+            else
             {
-                this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var state = new StreamScalarState<T>(this.stateStorage.GetOrCreateSubStorage(stateName), defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
-                return state;
-            });
+                throw new ArgumentException("Invalid state storage type");
+            }
         }
     }
 }

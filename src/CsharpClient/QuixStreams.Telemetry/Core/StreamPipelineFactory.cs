@@ -188,13 +188,17 @@ namespace QuixStreams.Telemetry
             {
                 streamId = StreamPipeline.DefaultStreamIdWhenMissing;
             }
-
+            
             StreamContext streamContext;
             lock (this.contextCache.Sync) // Locking due to updating a streamContext
             {
                 if (!this.contextCache.TryGet(streamId, out streamContext))
                 {
                     streamContext = new StreamContext(streamId);
+                    
+                    streamContext.LastUncommittedTopicPartitionOffset = package.KafkaMessage?.TopicPartitionOffset;
+                    streamContext.LastTopicPartitionOffset = package.KafkaMessage?.TopicPartitionOffset;
+
                     if (!this.contextCache.TryAdd(streamContext))
                     {
                         this.logger.LogError("StreamPipelineFactory: failed to cache stream context. {0}", streamContext.StreamId);

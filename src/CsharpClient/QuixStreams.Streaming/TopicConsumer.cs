@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams;
@@ -17,7 +18,9 @@ namespace QuixStreams.Streaming
         private readonly TelemetryKafkaConsumer telemetryKafkaConsumer;
         private bool isDisposed = false;
         private readonly object stateLock = new object();
-        private volatile TopicStateManager stateManager = null;
+        
+        private static readonly ConcurrentDictionary<string, StreamStateManager> streamStateManagers = new ConcurrentDictionary<string, StreamStateManager>();
+
 
         /// <inheritdoc />
         public event EventHandler<IStreamConsumer> OnStreamReceived;
@@ -51,8 +54,14 @@ namespace QuixStreams.Streaming
         public TopicConsumer(TelemetryKafkaConsumer telemetryKafkaConsumer)
         {
             telemetryKafkaConsumer.ForEach(streamId =>
-            {
-                var stream = new StreamConsumer(this, streamId);
+            { 
+                if (!telemetryKafkaConsumer.ContextCache.TryGet(streamId, out var streamContext))
+                {
+                    throw new ArgumentException($"Stream context not found for streamId: {streamId}");
+                }
+
+                var topicPartition = streamContext.LastTopicPartitionOffset.Partition.Value;
+                var stream = new StreamConsumer(this, streamId, telemetryKafkaConsumer.GroupId, telemetryKafkaConsumer.Topic, topicPartition);
                 try
                 {
                     this.OnStreamReceived?.Invoke(this, stream);
@@ -108,23 +117,24 @@ namespace QuixStreams.Streaming
         }
 
         /// <inheritdoc />
-        public TopicStateManager GetStateManager()
+        public StreamStateManager GetStreamStateManager(string streamId)
         {
-            if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
-
-            if (this.stateManager != null) return this.stateManager;
-            lock (stateLock)
+            if (!this.telemetryKafkaConsumer.ContextCache.TryGet(streamId, out var streamContext))
             {
-                if (this.stateManager != null) return this.stateManager;
-                var topic = this.telemetryKafkaConsumer.Topic;
-
-                this.stateManager = App.GetStateManager().GetTopicStateManager(this, topic);
+                throw new ArgumentException($"Stream context not found for streamId: {streamId}");
             }
 
-            return this.stateManager;
+            var topicPartition = streamContext.LastTopicPartitionOffset.Partition.Value;
+            
+            return streamStateManagers.GetOrAdd(streamId, 
+                key =>
+                {
+                    this.logger.LogTrace("Creating Stream state manager for {0}", key);
+                    return new StreamStateManager(this, streamId,
+                        telemetryKafkaConsumer.Topic, telemetryKafkaConsumer.GroupId, topicPartition, Logging.Factory);
+                });
         }
-
-
+        
         /// <inheritdoc />
         public void Dispose()
         {
@@ -138,5 +148,4 @@ namespace QuixStreams.Streaming
             this.OnDisposed?.Invoke(this, EventArgs.Empty);
         }
     }
-
 }

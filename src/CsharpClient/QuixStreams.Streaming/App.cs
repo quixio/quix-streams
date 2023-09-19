@@ -1,19 +1,16 @@
 using System;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Mono.Unix;
 using Mono.Unix.Native;
-using QuixStreams;
 using QuixStreams.State.Storage;
-using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
 using QuixStreams.Streaming.Raw;
-using QuixStreams.Streaming.States;
 
 namespace QuixStreams.Streaming
 {
@@ -22,7 +19,8 @@ namespace QuixStreams.Streaming
     /// </summary>
     public static class App
     {
-        private static AppStateManager stateManager;
+        private static StateStorageTypes? stateStorageType;
+        private static string stateStorageRootDir;
         private static readonly ConcurrentDictionary<ITopicConsumer, bool> topicConsumers = new ConcurrentDictionary<ITopicConsumer, bool>();
         private static readonly ConcurrentDictionary<IRawTopicConsumer, bool> rawTopicConsumers = new ConcurrentDictionary<IRawTopicConsumer, bool>();
         private static readonly ConcurrentDictionary<ITopicProducer, bool> topicProducers = new ConcurrentDictionary<ITopicProducer, bool>();
@@ -226,24 +224,54 @@ namespace QuixStreams.Streaming
             waitForMainExit.Set();
         }
 
+        public enum StateStorageTypes
+        {
+            RocksDb,
+            InMemory
+        }
+        
         /// <summary>
         /// Sets the state storage for the app
         /// </summary>
         /// <param name="stateStorage">The state storage to use for app's state manager</param>
-        public static void SetStateStorage(IStateStorage stateStorage)
+        public static void SetStateStorageType(StateStorageTypes type)
         {
-            if (App.stateManager != null) throw new InvalidOperationException("App state manager may only be set once");
-            App.stateManager = new AppStateManager(stateStorage);
+            if (App.stateStorageType != null) throw new InvalidOperationException("State storage type may only be set once");
+
+            if (type == StateStorageTypes.RocksDb || type == StateStorageTypes.InMemory)
+            {
+                App.stateStorageType = type;
+            }
+            else
+            {
+                throw new InvalidEnumArgumentException(nameof(type), (int) type, typeof(StateStorageTypes));    
+            }
+        }
+        
+        public static StateStorageTypes GetStateStorageType()
+        {
+            if (App.stateStorageType == null) SetStateStorageType(StateStorageTypes.RocksDb);
+            return App.stateStorageType.Value;
+        }
+        
+        /// <summary>
+        /// Sets the state storage for the app
+        /// </summary>
+        /// <param name="path">The state storage path to use for states</param>
+        public static void SetStateStorageRootDir(string path)
+        {
+            if (App.stateStorageRootDir != null) throw new InvalidOperationException("State storage root dir is already set");
+            App.stateStorageRootDir = path;
         }
 
         /// <summary>
-        /// Retrieves the state manager for the application
+        /// Retrieves the root directory for state storages
         /// </summary>
         /// <returns></returns>
-        public static AppStateManager GetStateManager()
+        public static string GetStateStorageRootDir()
         {
-            if (App.stateManager == null) SetStateStorage(new RocksDbStorage(Path.Combine(".", "state"), "app-state"));
-            return App.stateManager;
+            if (App.stateStorageRootDir == null) SetStateStorageRootDir(Path.Combine(".", "state"));
+            return App.stateStorageRootDir;
         }
 
         internal static void Register(TopicConsumer topicConsumer)

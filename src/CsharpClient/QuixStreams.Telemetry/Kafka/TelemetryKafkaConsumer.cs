@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Transactions;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using QuixStreams.Kafka;
@@ -56,8 +57,13 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Stream Context cache for all the streams of the topic
         /// </summary>
-        internal IStreamContextCache ContextCache;
+        public IStreamContextCache ContextCache;
 
+        /// <summary>
+        /// Group id
+        /// </summary>
+        public readonly string GroupId;
+        
         /// <summary>
         /// Initializes a new instance of <see cref="TelemetryKafkaConsumer"/>
         /// </summary>
@@ -84,6 +90,7 @@ namespace QuixStreams.Telemetry.Kafka
             
             var topicConfig = new ConsumerTopicConfiguration(topic);
             this.kafkaConsumer = new KafkaConsumer(subConfig, topicConfig);
+            this.GroupId = subConfig.GroupId;
         }
 
         /// <summary>

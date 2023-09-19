@@ -75,12 +75,6 @@ namespace QuixStreams.State
             {
                 inMemoryState[key] = this.storage.Get(key);
             }
-
-            if (this.storage.CanPerformTransactions)
-            {
-                OnFlushing += (sender, args) => this.storage.StartTransaction();
-                OnFlushed += (sender, args) => this.storage.CommitTransaction();
-            }
         }
 
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
@@ -309,6 +303,11 @@ namespace QuixStreams.State
             
             this.changes.Clear();
             Task.WaitAll(tasks.ToArray());
+
+            if (this.storage.CanPerformTransactions)
+            {
+                this.storage.Flush();
+            }
             
             OnFlushed?.Invoke(this, EventArgs.Empty);
             this.logger.LogTrace("Flushed {0} state changes.", tasks.Count());

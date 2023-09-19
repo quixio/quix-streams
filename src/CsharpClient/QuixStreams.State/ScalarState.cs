@@ -116,6 +116,11 @@ namespace QuixStreams.State
                 }
             }
 
+            if (storage.CanPerformTransactions)
+            {
+                storage.Flush();
+            }
+            
             OnFlushed?.Invoke(this, EventArgs.Empty);
             this.logger.LogTrace("Flushed.");
         }

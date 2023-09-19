@@ -106,7 +106,7 @@ namespace QuixStreams.Telemetry
         /// Stream Id
         /// </summary>
         public readonly string StreamId;
-
+        
         /// <summary>
         /// Stream pipeline of the Stream
         /// </summary>

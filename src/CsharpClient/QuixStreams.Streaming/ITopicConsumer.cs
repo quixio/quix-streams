@@ -50,11 +50,10 @@ namespace QuixStreams.Streaming
         /// Raised when the resource is disposed
         /// </summary>
         public event EventHandler OnDisposed;
-
+        
         /// <summary>
-        /// Gets the manager for the topic states
+        /// Get stream state manager
         /// </summary>
-        /// <returns>Topic state manager</returns>
-        TopicStateManager GetStateManager();
+        StreamStateManager GetStreamStateManager(string streamId);
     }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using QuixStreams.State.Storage;
-using QuixStreams.State.Storage.FileStorage.LocalFileStorage;
 
 namespace QuixStreams.State.ParallelWriteTest
 {
@@ -15,9 +14,8 @@ namespace QuixStreams.State.ParallelWriteTest
 
             var storages = new List<IStateStorage>()
             {
-                new RocksDbStorage("./state/paraleltest"),
-                new LocalFileStorage(),
-                new InMemoryStorage()
+                RocksDbStorage.GetStateStorage("./state/parallel_test", "myStream", "parallel"),
+                InMemoryStorage.GetStateStorage("myStream", "parallel"),
             };
             
             foreach (var storage in storages)

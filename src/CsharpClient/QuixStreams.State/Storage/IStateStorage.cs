@@ -63,48 +63,14 @@ namespace QuixStreams.State.Storage
         public bool IsCaseSensitive { get; }
         
         /// <summary>
-        /// Gets an existing sub-storage with the specified name or creates a new one if it does not already exist.
-        /// </summary>
-        /// <param name="subStorageName">The name of the sub-storage to retrieve or create.</param>
-        /// <param name="dbName">The name of the database under which the storage will be created. 
-        /// If this parameter is not specified, the storage will be created under the parent's database.</param>
-        /// <returns>Returns the state storage associated with the given sub-storage name.</returns>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="subStorageName"/> is null or empty.</exception>
-        public IStateStorage GetOrCreateSubStorage(string subStorageName, string dbName = null);
-
-        /// <summary>
-        /// Deletes a storage under this in hierarchy.
-        /// </summary>
-        /// <param name="subStorageName">The name of the sub storage</param>
-        /// <returns>Whether the state storage for the given storage name was deleted</returns>
-        public bool DeleteSubStorage(string subStorageName);
-
-        /// <summary>
-        /// Deletes the storages under this in hierarchy.
-        /// </summary>
-        /// <returns>The number of state storage deleted</returns>
-        public int DeleteSubStorages();
-
-        /// <summary>
-        /// Gets the storages under this in hierarchy.
-        /// </summary>
-        /// <returns>The enumerable storage names this store contains</returns>
-        public IEnumerable<string> GetSubStorages();
-        
-        /// <summary>
         /// Returns whether the transactions are supported
         /// </summary>
         public bool CanPerformTransactions { get; }
         
         /// <summary>
-        /// Starts a transaction
-        /// </summary>
-        public void StartTransaction();
-        
-        /// <summary>
-        /// Commits a transaction
+        /// Flush data to the storage
         /// </summary>
         /// <exception>Throws exception if the transaction fails</exception>
-        public void CommitTransaction();
+        public void Flush();
     }
 }
