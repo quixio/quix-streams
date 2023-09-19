@@ -5,7 +5,7 @@ import os.path
 import re
 import fileinput
 
-package_version = "0.5.6.dev5"
+package_version = "0.5.6.dev6"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -23,7 +23,7 @@ QUIXSTREAMS_PACKAGE_DATA = []
 def rec_incl_with_filter(directory, filters, trim):
     trimfirstn=len(trim) + 1
     for (path, directories, filenames) in os.walk(directory):
-        for filename in filenames:
+        for filename in filenames:  
             for filter in filters:
                 match = re.match(filter, filename)
                 if match is not None:
