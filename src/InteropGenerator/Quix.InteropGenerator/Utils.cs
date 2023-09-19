@@ -447,11 +447,11 @@ public class Utils
         // The type will not be inferrable without some magic of replacing the method signature with the type it is getting created for
         if (methodInfo.IsGenericMethod && (methodInfo.DeclaringType?.IsAbstract ?? true) && methodInfo.GetParameters().All(y=> y.ParameterType.IsAbstract))
         {
-            logger.LogDebug("Method {0} is not supported because involved types would not be inferrable (as of now)", methodInfo.ToString());
+            logger.LogDebug("Type {0} Method {1} is not supported because involved types would not be inferrable (as of now)", methodInfo.DeclaringType?.FullName, methodInfo.ToString());
             return false;
         }
 
-        logger.LogTrace("Method {0} is supported", methodInfo.ToString());
+        logger.LogTrace("Type {0} Method {1} is supported", methodInfo.DeclaringType?.FullName, methodInfo.ToString());
         return true;
     }
 }
