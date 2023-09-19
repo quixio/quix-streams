@@ -328,9 +328,7 @@ class TestQuixKafkaConfigsBuilder:
         assert cfg_factory.workspace_cert_path == r == expected
 
     def test_get_confluent_broker_config(self, quix_kafka_config_factory):
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345", workspace_cert_path="/mock/dir/ca.cert"
-        )
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
         cfg_factory._quix_broker_config = {
             "address": "address1,address2",
             "securityMode": "SaslSsl",
@@ -342,9 +340,12 @@ class TestQuixKafkaConfigsBuilder:
         }
 
         with patch.object(cfg_factory, "get_workspace_info") as get_ws:
-            cfg_factory.get_confluent_broker_config(known_topic="topic")
-            get_ws.assert_called_with(known_workspace_topic="topic")
+            with patch.object(cfg_factory, "_set_workspace_cert") as set_cert:
+                set_cert.return_value = "/mock/dir/ca.cert"
+                cfg_factory.get_confluent_broker_config(known_topic="topic")
 
+        get_ws.assert_called_with(known_workspace_topic="topic")
+        set_cert.assert_called()
         assert cfg_factory.confluent_broker_config == {
             "sasl.mechanisms": "SCRAM-SHA-256",
             "security.protocol": "SASL_SSL",

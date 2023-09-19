@@ -2,7 +2,7 @@ from .api import QuixPortalApiService
 from pathlib import Path
 from os import getcwd
 from requests import HTTPError
-from typing import Optional
+from typing import Optional, Tuple
 from tempfile import gettempdir
 
 
@@ -161,7 +161,13 @@ class QuixKafkaConfigsBuilder:
             )
         self._workspace_id = ws_data.pop("workspaceId")
         self._quix_broker_config = ws_data.pop("broker")
-        self._quix_broker_settings = ws_data.pop("brokerSettings")
+        try:
+            self._quix_broker_settings = ws_data.pop("brokerSettings")
+        except KeyError:  # hold-over for platform v1
+            self._quix_broker_settings = {
+                "brokerType": ws_data.pop('brokerType'),
+                "syncTopics": False
+            }
         self._workspace_meta = ws_data
 
     def search_workspace_for_topic(
@@ -258,19 +264,21 @@ class QuixKafkaConfigsBuilder:
             value = self.quix_broker_config[q_cfg]
             cfg_out[c_cfg] = self.QuixApiKafkaAuthConfigMap.values.get(value, value)
         cfg_out["ssl.endpoint.identification.algorithm"] = "none"
-        cfg_out["ssl.ca.location"] = self.workspace_cert_path
+        cfg_out["ssl.ca.location"] = self._set_workspace_cert()
         self._confluent_broker_config = cfg_out
         return self._confluent_broker_config
 
     def get_confluent_client_configs(
         self, topics: list, consumer_group_id: Optional[str] = None
-    ) -> tuple:
+    ) -> Tuple[dict, list[str], Optional[str]]:
         """
         Get all the values you need in order to use a confluent_kafka-based client
         with a topic on a Quix platform broker/workspace.
 
         The returned config can be used directly by any confluent-kafka-python consumer/
         producer (add your producer/consumer-specific configs afterward).
+
+        The topics and consumer group are appended with any necessary values.
 
         :param topics: list of topics
         :param consumer_group_id: consumer group id, if needed
