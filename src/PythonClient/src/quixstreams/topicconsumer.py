@@ -302,6 +302,12 @@ class TopicConsumer(object):
         """
         self._interop.Subscribe()
 
+    def unsubscribe(self):
+        """
+        Unsubscribes from streams in the topic.
+        """
+        self._interop.Unsubscribe()
+
     def commit(self):
         """
         Commit packages consumed up until now

@@ -13,6 +13,11 @@ namespace QuixStreams.Streaming
         /// Use 'OnStreamReceived' event to read stream after executing this method
         /// </summary>
         void Subscribe();
+        
+        /// <summary>
+        /// Stops subscribing to streams.
+        /// </summary>
+        void Unsubscribe();
 
         /// <summary>
         /// Event raised when a new stream has been received for reading.

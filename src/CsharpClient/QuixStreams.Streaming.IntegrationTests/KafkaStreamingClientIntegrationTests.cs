@@ -50,6 +50,86 @@ namespace QuixStreams.Streaming.IntegrationTests
                 BinaryValues = binaryVals
             };
         }
+        
+        
+
+        [Fact]
+        public void TopicSubUnSub_ShouldWorkAsExpected()
+        {
+            var topic = nameof(StreamReadAndWrite);
+            RunTest(() =>
+            {
+                // using Earliest as auto offset reset, because if the topic doesn't exist (should be as we're using docker for integration test with new topic)
+                // using latest (the default) auto offset reset would assign us partitions after they were written, making us miss all messages.
+                // therefore earliest is the best option, as the moment the partitions are created, we start reading from earliest messages, even though they were
+                // created before our consumer tried to connect.
+                var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+                var topicProducer = client.GetTopicProducer(topic);
+
+                IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
+                IList<EventDataRaw> events = new List<EventDataRaw>();
+                var streamStarted = false;
+                var streamEnded = false;
+                StreamProperties streamProperties = null;
+                var parameterDefinitionsChanged = false;
+                var eventDefinitionsChanged = false;
+                string streamId = null;
+
+                topicConsumer.OnStreamReceived += (s, e) =>
+                {
+                    if (e.StreamId != streamId)
+                    {
+                        this.output.WriteLine("Ignoring stream {0}", e.StreamId);
+                        return;
+                    }
+
+                    streamStarted = true;
+                };
+
+                topicConsumer.Subscribe();
+                this.output.WriteLine("Subscribed");
+
+                using (var stream = topicProducer.CreateStream())
+                {
+                    streamId = stream.StreamId;
+                    this.output.WriteLine("First stream id is {0}", streamId);
+
+                    stream.Properties.Name = "Volvo car telemetry";
+                    stream.Properties.Flush();
+                    this.output.WriteLine("Flushing stream properties");
+                }
+                
+                SpinWait.SpinUntil(() => streamStarted, 20000);
+                streamStarted.Should().BeTrue();
+
+                
+                topicConsumer.Unsubscribe();
+                this.output.WriteLine("Unsubscribed");
+
+                streamStarted = false;
+                using (var stream2 = topicProducer.CreateStream())
+                {
+                    streamId = stream2.StreamId;
+                    this.output.WriteLine("Second stream id is {0}", streamId);
+
+                    stream2.Properties.Name = "Volvo car telemetry";
+                    stream2.Properties.Flush();
+                    this.output.WriteLine("Flushing stream properties");
+                }
+
+                SpinWait.SpinUntil(() => streamStarted, 5000);
+                streamStarted.Should().BeFalse();
+                
+
+                topicConsumer.Subscribe();
+                this.output.WriteLine("Subscribed (again)");
+                SpinWait.SpinUntil(() => streamStarted, 20000);
+                streamStarted.Should().BeTrue();
+
+
+                topicConsumer.Dispose();
+            });
+        }
 
         [Fact]
         public void StreamReadAndWrite()
@@ -493,7 +573,13 @@ namespace QuixStreams.Streaming.IntegrationTests
                     consumedRawMessages.Add(rawMessage);
                 };
 
+                this.output.WriteLine("Subscribing");
                 rawTopicConsumer.Subscribe();
+                this.output.WriteLine("Unsubscribing");
+                rawTopicConsumer.Unsubscribe(); // Cheap test for now to test unsub/sub
+                this.output.WriteLine("Subscribing (again)");
+                rawTopicConsumer.Subscribe(); // Cheap test for now to test unsub/sub
+
 
                 rawTopicProducer.Publish(new RawMessage(messageContentInBytes));
                 

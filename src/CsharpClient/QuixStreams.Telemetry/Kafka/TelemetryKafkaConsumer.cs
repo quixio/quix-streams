@@ -196,6 +196,7 @@ namespace QuixStreams.Telemetry.Kafka
                 this.transportConsumer.OnRevoking -= RevokingHandler;
                 this.transportConsumer.OnCommitted -= CommittedHandler;
                 this.transportConsumer.Close();
+                this.transportConsumer = null;
             }
 
             this.kafkaConsumer?.Close();
