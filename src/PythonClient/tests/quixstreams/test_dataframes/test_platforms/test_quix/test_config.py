@@ -87,7 +87,7 @@ class TestQuixKafkaConfigsBuilder:
             "branchProtected": False,
         }
 
-    def test_get_workspace_info_no_wid(self, quix_kafka_config_factory):
+    def test_get_workspace_info_no_wid_not_found(self, quix_kafka_config_factory):
         api_response = []
         cfg_factory = quix_kafka_config_factory(
             workspace_id="12345",
@@ -144,6 +144,53 @@ class TestQuixKafkaConfigsBuilder:
             "branch": "dev",
             "environmentName": "dev",
             "version": 2,
+            "branchProtected": False,
+        }
+
+    def test_get_workspace_info_no_wid_one_ws_v1(self, quix_kafka_config_factory):
+        """Confirm a workspace v1 response is handled correctly"""
+        api_response = {
+            "workspaceId": "12345",
+            "name": "12345",
+            "status": "Ready",
+            "brokerType": "SharedKafka",
+            "broker": {
+                "address": "address1,address2",
+                "securityMode": "SaslSsl",
+                "sslPassword": "",
+                "saslMechanism": "ScramSha256",
+                "username": "my-username",
+                "password": "my-password",
+                "hasCertificate": True,
+            },
+            "workspaceClassId": "Standard",
+            "storageClassId": "Standard",
+            "createdAt": "2023-08-29T17:10:57.969Z",
+            "version": 1,
+            "branchProtected": False,
+        }
+        cfg_factory = quix_kafka_config_factory()
+        with patch.object(
+            cfg_factory,
+            "search_for_topic_workspace",
+            return_value=deepcopy(api_response),
+        ) as search:
+            cfg_factory.get_workspace_info(known_workspace_topic="a_topic")
+            search.assert_called_with("a_topic")
+        assert cfg_factory.workspace_id == api_response["workspaceId"]
+        assert cfg_factory.quix_broker_config == api_response["broker"]
+        assert cfg_factory.quix_broker_settings == {
+            "brokerType": "SharedKafka",
+            "syncTopics": False
+        }
+        assert cfg_factory.workspace_meta == {
+            "name": "12345",
+            "status": "Ready",
+            "brokerType": "SharedKafka",
+            "workspaceClassId": "Standard",
+            "storageClassId": "Standard",
+            "createdAt": "2023-08-29T17:10:57.969Z",
+            "version": 1,
             "branchProtected": False,
         }
 

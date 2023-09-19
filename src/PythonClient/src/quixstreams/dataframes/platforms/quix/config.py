@@ -165,7 +165,7 @@ class QuixKafkaConfigsBuilder:
             self._quix_broker_settings = ws_data.pop("brokerSettings")
         except KeyError:  # hold-over for platform v1
             self._quix_broker_settings = {
-                "brokerType": ws_data.pop('brokerType'),
+                "brokerType": ws_data['brokerType'],
                 "syncTopics": False
             }
         self._workspace_meta = ws_data
