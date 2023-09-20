@@ -120,7 +120,7 @@ class TestConsumerSubscribe:
 
 class TestConsumerOnAssign:
     def test_consumer_on_assign_callback_single_consumer(
-        self, consumer, topic_factory, event_loop, executor
+        self, consumer, topic_factory, executor
     ):
         topic_name, num_partitions = topic_factory()
 

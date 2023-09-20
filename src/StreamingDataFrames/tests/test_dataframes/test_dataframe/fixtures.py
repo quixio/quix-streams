@@ -3,15 +3,16 @@ from functools import partial
 
 import pytest
 
-from src.quixstreams.dataframes.dataframe.dataframe import StreamingDataFrame
-from src.quixstreams.dataframes.dataframe.pipeline import Pipeline, PipelineFunction
-from src.quixstreams.dataframes.models.topics import Topic
+from streamingdataframes.dataframe.dataframe import StreamingDataFrame
+from streamingdataframes.dataframe.pipeline import Pipeline, PipelineFunction
+from streamingdataframes.models.topics import Topic
 
 
 @pytest.fixture()
 def pipeline_function():
     def test_func(data):
         return {k: v + 1 for k, v in data.items()}
+
     return PipelineFunction(func=test_func)
 
 
@@ -29,11 +30,12 @@ def dataframe():
 def more_rows_func():
     def more_rows(row):
         rows_out = []
-        for item in row['x_list']:
+        for item in row["x_list"]:
             row_out = deepcopy(row)
-            row_out['x_list'] = item
+            row_out["x_list"] = item
             rows_out.append(row_out)
         return rows_out
+
     return more_rows
 
 
@@ -48,6 +50,8 @@ def row_plus_n_func():
     """
     This generally will be used alongside "row_plus_n"
     """
+
     def _row_values_plus_n(n=None):
         return partial(row_values_plus_n, n)
+
     return _row_values_plus_n

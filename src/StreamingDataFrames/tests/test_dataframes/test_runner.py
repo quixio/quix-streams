@@ -5,12 +5,18 @@ from unittest.mock import patch
 import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
-from src.quixstreams.dataframes import StreamingDataFrame, Topic
-from src.quixstreams.dataframes.models import DoubleDeserializer, DoubleSerializer
-from src.quixstreams.dataframes.models import JSONDeserializer
-from src.quixstreams.dataframes.models import SerializationError
-from src.quixstreams.dataframes.rowconsumer import KafkaMessageError, RowConsumer
-from src.quixstreams.dataframes.runner import RunnerNotStarted
+from streamingdataframes import StreamingDataFrame, Topic
+from streamingdataframes.models import (
+    DoubleDeserializer,
+    DoubleSerializer,
+)
+from streamingdataframes.models import JSONDeserializer
+from streamingdataframes.models import SerializationError
+from streamingdataframes.rowconsumer import (
+    KafkaMessageError,
+    RowConsumer,
+)
+from streamingdataframes.runner import RunnerNotStarted
 
 
 class TestRunner:

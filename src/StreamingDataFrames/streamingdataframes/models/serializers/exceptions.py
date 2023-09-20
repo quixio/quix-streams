@@ -6,7 +6,7 @@ from confluent_kafka.error import (
     SerializationError as _SerializationError,
 )
 
-from src.quixstreams.dataframes import exceptions
+from streamingdataframes import exceptions
 
 __all__ = (
     "SerializationError",

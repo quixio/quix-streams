@@ -3,7 +3,7 @@ from concurrent.futures import Future
 import pytest
 from confluent_kafka import KafkaException
 
-from src.quixstreams.dataframes.models import (
+from streamingdataframes.models import (
     Topic,
     JSONSerializer,
     SerializationError,
@@ -12,8 +12,11 @@ from src.quixstreams.dataframes.models import (
 
 class TestRowProducer:
     def test_produce_row_success(
-        self, row_consumer_factory, row_producer_factory,
-        topic_json_serdes_factory, row_factory
+        self,
+        row_consumer_factory,
+        row_producer_factory,
+        topic_json_serdes_factory,
+        row_factory,
     ):
         topic = topic_json_serdes_factory()
 
@@ -40,7 +43,7 @@ class TestRowProducer:
         assert not row.headers
 
     def test_produce_row_serialization_error_raise(
-            self, row_producer_factory, row_factory
+        self, row_producer_factory, row_factory
     ):
         topic = Topic(
             "test",
@@ -55,9 +58,7 @@ class TestRowProducer:
             with pytest.raises(SerializationError):
                 producer.produce_row(topic=topic, row=row)
 
-    def test_produce_row_produce_error_raise(
-            self, row_producer_factory, row_factory
-    ):
+    def test_produce_row_produce_error_raise(self, row_producer_factory, row_factory):
         topic = Topic(
             "test",
             value_serializer=JSONSerializer(),

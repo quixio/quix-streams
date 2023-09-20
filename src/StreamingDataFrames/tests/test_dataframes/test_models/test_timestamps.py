@@ -1,6 +1,6 @@
 import pytest
 
-from src.quixstreams.dataframes.models import MessageTimestamp, TimestampType
+from streamingdataframes.models import MessageTimestamp, TimestampType
 
 
 @pytest.mark.parametrize(

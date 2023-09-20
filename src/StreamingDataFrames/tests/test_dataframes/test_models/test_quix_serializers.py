@@ -4,12 +4,12 @@ import time
 
 import pytest
 
-from src.quixstreams.dataframes.models.serializers import (
+from streamingdataframes.models.serializers import (
     SerializationError,
     SerializationContext,
     IgnoreMessage,
 )
-from src.quixstreams.dataframes.models.serializers.quix import (
+from streamingdataframes.models.serializers.quix import (
     QuixTimeseriesDeserializer,
     QuixEventsDeserializer,
     QuixTimeseriesSerializer,

@@ -1,6 +1,21 @@
 import pytest
 
-from src.quixstreams.dataframes.models.serializers import *
+from streamingdataframes.models import (
+    IntegerSerializer,
+    SerializationContext,
+    DoubleSerializer,
+    StringSerializer,
+    BytesDeserializer,
+    JSONDeserializer,
+    JSONSerializer,
+    BytesSerializer,
+    Serializer,
+    SerializationError,
+    IntegerDeserializer,
+    Deserializer,
+    DoubleDeserializer,
+    StringDeserializer,
+)
 from .utils import int_to_bytes, float_to_bytes
 
 dummy_context = SerializationContext(topic="topic")

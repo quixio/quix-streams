@@ -5,26 +5,30 @@ from typing import Optional
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
 
-from src.quixstreams.dataframes.error_callbacks import (
+from streamingdataframes.error_callbacks import (
     ConsumerErrorCallback,
     ProducerErrorCallback,
     ProcessingErrorCallback,
 )
-from src.quixstreams.dataframes.kafka import (
+from streamingdataframes.kafka import (
     Partitioner,
     AutoOffsetReset,
     Consumer,
-    Producer
+    Producer,
 )
-from src.quixstreams.dataframes.models.rows import Row
-from src.quixstreams.dataframes.models.serializers import (
-    JSONSerializer, JSONDeserializer
+from streamingdataframes.models.rows import Row
+from streamingdataframes.models.serializers import (
+    JSONSerializer,
+    JSONDeserializer,
 )
-from src.quixstreams.dataframes.models.timestamps import TimestampType, MessageTimestamp
-from src.quixstreams.dataframes.models.topics import Topic
-from src.quixstreams.dataframes.rowconsumer import RowConsumer
-from src.quixstreams.dataframes.rowproducer import RowProducer
-from src.quixstreams.dataframes.runner import MessageProcessedCallback, Runner
+from streamingdataframes.models.timestamps import (
+    TimestampType,
+    MessageTimestamp,
+)
+from streamingdataframes.models.topics import Topic
+from streamingdataframes.rowconsumer import RowConsumer
+from streamingdataframes.rowproducer import RowProducer
+from streamingdataframes.runner import MessageProcessedCallback, Runner
 
 
 @pytest.fixture()
@@ -101,6 +105,7 @@ def topic_factory(kafka_admin_client):
 
     The factory will return the resulting topic name and partition count
     """
+
     def factory(
         topic: str = None, num_partitions: int = 1, timeout: float = 10.0
     ) -> (str, int):
@@ -110,6 +115,7 @@ def topic_factory(kafka_admin_client):
         )
         futures[topic_name].result(timeout)
         return topic_name, num_partitions
+
     return factory
 
 
@@ -121,6 +127,7 @@ def topic_json_serdes_factory(topic_factory):
 
     The factory will return the resulting Topic object.
     """
+
     def factory(topic: str = None, num_partitions: int = 1, timeout: float = 10.0):
         topic_name, _ = topic_factory(
             topic=topic, num_partitions=num_partitions, timeout=timeout
@@ -130,6 +137,7 @@ def topic_json_serdes_factory(topic_factory):
             value_deserializer=JSONDeserializer(),
             value_serializer=JSONSerializer(),
         )
+
     return factory
 
 
@@ -200,7 +208,8 @@ def row_factory():
     producing a message; more generally, the fields you would likely
     need to validate upon producing/consuming.
     """
-    def factory(value, topic='input-topic', key=b"key", headers=None) -> Row:
+
+    def factory(value, topic="input-topic", key=b"key", headers=None) -> Row:
         headers = headers or {}
         return Row(
             key=key,
@@ -212,6 +221,7 @@ def row_factory():
             size=0,
             timestamp=MessageTimestamp(0, TimestampType.TIMESTAMP_NOT_AVAILABLE),
         )
+
     return factory
 
 

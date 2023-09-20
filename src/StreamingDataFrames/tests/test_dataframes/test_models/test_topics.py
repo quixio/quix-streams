@@ -3,8 +3,8 @@ from typing import Optional, Any
 
 import pytest
 
-from src.quixstreams.dataframes.models import Topic
-from src.quixstreams.dataframes.models.serializers import (
+from streamingdataframes.models import Topic
+from streamingdataframes.models.serializers import (
     Deserializer,
     Serializer,
     IntegerDeserializer,

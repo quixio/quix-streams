@@ -3,13 +3,13 @@ from concurrent.futures import Future
 import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
-from src.quixstreams.dataframes import Topic
-from src.quixstreams.dataframes.models import (
+from streamingdataframes import Topic
+from streamingdataframes.models import (
     IgnoreMessage,
     Deserializer,
     SerializationError,
 )
-from src.quixstreams.dataframes.rowconsumer import KafkaMessageError
+from streamingdataframes.rowconsumer import KafkaMessageError
 
 
 class TestRowConsumer:
