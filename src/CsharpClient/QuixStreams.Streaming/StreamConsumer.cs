@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -23,25 +22,18 @@ namespace QuixStreams.Streaming
         private readonly StreamTimeseriesConsumer streamTimeseriesConsumer;
         private readonly StreamEventsConsumer streamEventsConsumer;
         private bool isClosed = false;
-        private volatile StreamStateManager stateManager;
-        private readonly TopicConsumerPartition topicPartition;
+        private readonly StreamConsumerId streamConsumerId;
         
-        private static readonly ConcurrentDictionary<string, StreamStateManager> streamStateManagers = new ConcurrentDictionary<string, StreamStateManager>();
-
-
         /// <summary>
         /// Initializes a new instance of <see cref="StreamConsumer"/>
         /// This constructor is called internally by the <see cref="StreamPipelineFactory"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the reader belongs to</param>
-        /// <param name="streamId">Stream Id of the source that has generated this Stream Consumer.</param>
-        /// Commonly the Stream Id will be coming from the protocol. 
-        /// If no stream Id is passed, like when a new stream is created for producing data, a Guid is generated automatically.
-        /// <param name="topicPartition">Topic consumer partition information to use.</param>
-        internal StreamConsumer(ITopicConsumer topicConsumer, string streamId, TopicConsumerPartition topicPartition): base(streamId)
+        /// <param name="streamConsumerId">Stream consumer identifier</param>
+        internal StreamConsumer(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId): base(streamConsumerId.StreamId)
         {
             this.topicConsumer = topicConsumer;
-            this.topicPartition = topicPartition;
+            this.streamConsumerId = streamConsumerId;
             
             // Managed readers
             this.streamPropertiesConsumer = new StreamPropertiesConsumer(this.topicConsumer, this);
@@ -87,16 +79,12 @@ namespace QuixStreams.Streaming
         /// <inheritdoc />
         public StreamStateManager GetStateManager()
         {
-            return streamStateManagers.GetOrAdd(this.StreamId, 
-                key =>
-                {
-                    this.logger.LogTrace("Creating Stream state manager for {0}", key);
-                    return new StreamStateManager(
-                        this.topicConsumer,
-                        this.StreamId,
-                        new TopicConsumerPartition(topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition),
-                        Logging.Factory);
-                });
+            this.logger.LogTrace("Creating Stream state manager for {0}", StreamId);
+            return StreamStateManager.GetOrCreate(
+                this.topicConsumer,
+                new StreamConsumerId(streamConsumerId.ConsumerGroup, streamConsumerId.TopicName, streamConsumerId.Partition, StreamId),
+                Logging.Factory);
+            
         }
         
         /// <inheritdoc />

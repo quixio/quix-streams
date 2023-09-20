@@ -12,8 +12,7 @@ namespace QuixStreams.Streaming.UnitTests
         {
             return new StreamConsumer(
                 new TestStreamingClient().GetTopicConsumer(),
-                "myStream",
-                new TopicConsumerPartition("myCGroup", "myTopic",0));
+                new StreamConsumerId("myCGroup", "myTopic",0, "myStream"));
         }
         
         [Fact]

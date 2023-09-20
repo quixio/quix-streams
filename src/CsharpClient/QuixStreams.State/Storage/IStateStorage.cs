@@ -74,9 +74,19 @@ namespace QuixStreams.State.Storage
         public void Flush();
     }
     
+    /// <summary>
+    /// State storage types
+    /// </summary>
     public enum StateStorageTypes
     {
+        /// <summary>
+        /// RocksDB storage
+        /// </summary>
         RocksDb,
+        
+        /// <summary>
+        /// In-memory storage
+        /// </summary>
         InMemory
     }
 }

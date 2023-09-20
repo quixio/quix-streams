@@ -16,7 +16,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public StreamStateManagerShould()
         {
             // Use a unique name for each test run to avoid conflicting with other tests
-            stateManager = new StreamStateManager("myStream", new TopicConsumerPartition(Guid.NewGuid().ToString(), "myTopic", 1), NullLoggerFactory.Instance);
+            stateManager = StreamStateManager.GetOrCreate(null, new StreamConsumerId(Guid.NewGuid().ToString(), "myTopic", 1, "myStream"), NullLoggerFactory.Instance);
         }
         
         [Fact]

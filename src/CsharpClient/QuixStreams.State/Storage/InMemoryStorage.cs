@@ -21,9 +21,8 @@ namespace QuixStreams.State.Storage
         private const char Separator = '/';
         
         /// <summary>
-        /// Instantiates a new instance of <see cref="RocksDbStorage"/>
+        /// Instantiates a new instance of <see cref="InMemoryStorage"/>
         /// </summary>
-        /// <param name="dbDirectory">The directory to open the database</param>
         /// <param name="streamId">Stream id of the storage</param>
         /// <param name="stateName">Stream id of the storage</param>
         public static InMemoryStorage GetStateStorage(string streamId, string stateName)
@@ -38,9 +37,8 @@ namespace QuixStreams.State.Storage
         }
         
         /// <summary>
-        /// Instantiates a new instance of <see cref="RocksDbStorage"/>
+        /// Instantiates a new instance of <see cref="InMemoryStorage"/>
         /// </summary>
-        /// <param name="dbDirectory">The directory to open the database</param>
         /// <param name="storageName">Name of the storage. Used as a prefix to separate data of other states when they use the same db</param>
         private InMemoryStorage(string storageName)
         {

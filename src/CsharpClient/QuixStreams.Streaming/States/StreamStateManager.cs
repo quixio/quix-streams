@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,8 +9,6 @@ using QuixStreams.Streaming.Models;
 
 namespace QuixStreams.Streaming.States
 {
-    
-    //consumer_group/topic/<partition_num>.db
     /// <summary>
     /// Manages the states.
     /// </summary>
@@ -25,38 +24,36 @@ namespace QuixStreams.Streaming.States
         private readonly string streamId;
         private readonly string storageDir;
 
-
+        private static readonly ConcurrentDictionary<StreamConsumerId, StreamStateManager> StreamStateManagers = new ConcurrentDictionary<StreamConsumerId, StreamStateManager>();
+        
         /// <summary>
-        /// Initializes a new instance of the <see cref="StreamStateManager"/> class with the specified parameters.
+        /// Initializes or gets an existing instance of the <see cref="StreamStateManager"/> class with the specified parameters.
         /// </summary>
         /// <param name="topicConsumer">The topic consumer used for committing state changes.</param>
-        /// <param name="streamId">The ID of the stream.</param>
-        /// <param name="topicPartition">Topic consumer partition information to use.</param>
+        /// <param name="streamConsumerId">Topic consumer partition information to use.</param>
         /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
-        internal StreamStateManager(ITopicConsumer topicConsumer, string streamId, TopicConsumerPartition topicPartition, ILoggerFactory loggerFactory)
+        public static StreamStateManager GetOrCreate(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId, ILoggerFactory loggerFactory)
+        {
+            return StreamStateManagers.GetOrAdd(streamConsumerId,
+                (key) => new StreamStateManager(topicConsumer, key, loggerFactory));
+        }
+
+        public static void Revoke(StreamConsumerId streamConsumerId)
+        {
+            if (!StreamStateManagers.TryRemove(streamConsumerId, out _))
+            {
+                throw new ArgumentException($"StreamStateManager not found, consumerGroup: {streamConsumerId.ConsumerGroup}, topicName: {streamConsumerId.TopicName}, partition: {streamConsumerId.Partition}, streamId: {streamConsumerId.StreamId}");
+            }
+        }
+        
+        private StreamStateManager(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId, ILoggerFactory loggerFactory)
         {
             this.topicConsumer = topicConsumer;
             this.loggerFactory = loggerFactory;
-            this.logPrefix = $"{topicPartition.ConsumerGroup}-{topicPartition.TopicName}-{topicPartition.Partition}-{streamId}";
-            this.streamId = streamId;
+            this.streamId = streamConsumerId.StreamId;
+            this.logPrefix = $"{streamConsumerId.ConsumerGroup}-{streamConsumerId.TopicName}-{streamConsumerId.Partition}-{streamId}";
             this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
-            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition.ToString());
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="StreamStateManager"/> class with the specified parameters.
-        /// </summary>
-        /// <param name="streamId">The ID of the stream.</param>
-        /// <param name="topicPartition">Topic consumer partition information to use.</param>
-        /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
-        public StreamStateManager(string streamId, TopicConsumerPartition topicPartition, ILoggerFactory loggerFactory)
-        {
-            this.topicConsumer = null;
-            this.loggerFactory = loggerFactory;
-            this.logPrefix = $"{topicPartition.ConsumerGroup}-{topicPartition.TopicName}-{topicPartition.Partition}-{streamId}";
-            this.streamId = streamId;
-            this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
-            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition.ToString());
+            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), streamConsumerId.ConsumerGroup, streamConsumerId.TopicName, streamConsumerId.Partition.ToString());
         }
         
         /// <summary>
@@ -89,7 +86,7 @@ namespace QuixStreams.Streaming.States
         public void DeleteState(string stateName)
         {
             this.logger.LogTrace("Deleting Stream state {0} for {1}", stateName, streamId);
-            var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+            var storage = GetStateStorage(stateName);
             storage.Clear();
             this.states.Remove(stateName);
         }
@@ -104,7 +101,7 @@ namespace QuixStreams.Streaming.States
             return GetStreamState(stateName, (stateName) =>
             {
                 this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var storage = GetStateStorage(stateName);
                 var state = new StreamDictionaryState(storage, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
                 return state;
             });
@@ -122,7 +119,7 @@ namespace QuixStreams.Streaming.States
             return GetStreamState(stateName, (stateName) =>
             {
                 this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var storage = GetStateStorage(stateName);
                 var state = new StreamDictionaryState<T>(storage,
                     defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
                 return state;
@@ -139,7 +136,7 @@ namespace QuixStreams.Streaming.States
             return GetStreamState(stateName, (stateName) =>
             {
                 this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var storage = GetStateStorage(stateName);
                 var state = new StreamScalarState(storage,
                     new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
                 return state;
@@ -158,7 +155,7 @@ namespace QuixStreams.Streaming.States
             return GetStreamState(stateName, (stateName) =>
             {
                 this.logger.LogTrace("Creating Stream state for {0}", stateName);
-                var storage = GetStateStorage(this.storageDir, this.streamId, stateName);
+                var storage = GetStateStorage(stateName);
                 var state = new StreamScalarState<T>(storage,
                     defaultValueFactory, new PrefixedLoggerFactory(this.loggerFactory, $"{logPrefix} - {stateName}"));
                 return state;
@@ -227,15 +224,16 @@ namespace QuixStreams.Streaming.States
                     this.logger.LogDebug($"{prefix} | Stream revoked, discarding state.");
                     this.topicConsumer.OnCommitted -= CommittedHandler;
                     state.Reset();
+                    states.Remove(stateName); // Disposes the storage
                 };
                 return state;
             }
         }
-        private static IStateStorage GetStateStorage(string dbDirectory, string streamId, string stateName)
+        private IStateStorage GetStateStorage(string stateName)
         {
             if (App.GetStateStorageType() == StateStorageTypes.RocksDb)
             {
-                return RocksDbStorage.GetStateStorage(dbDirectory, streamId, stateName);
+                return RocksDbStorage.GetStateStorage(storageDir, streamId, stateName);
             }
             else if (App.GetStateStorageType() == StateStorageTypes.InMemory)
             {

@@ -2,10 +2,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-
-    <TargetFrameworks>net7.0;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks>net7.0;netstandard2.1</TargetFrameworks>
     <LangVersion>8.0</LangVersion>
-
     <Configurations>Debug;Release</Configurations>
     <Platforms>AnyCPU</Platforms>
   </PropertyGroup>
