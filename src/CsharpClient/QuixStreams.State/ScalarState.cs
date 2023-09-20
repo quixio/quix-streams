@@ -328,7 +328,9 @@ namespace QuixStreams.State
         /// <returns>Returns the value</returns>
         public T Value
         {
-            get => genericConverter(this.inMemoryValue);
+            get => this.inMemoryValue == null
+                ? default 
+                : genericConverter(this.inMemoryValue);
             set => this.inMemoryValue = stateValueConverter(value);
         }
         

@@ -42,7 +42,7 @@ namespace QuixStreams.Telemetry.UnitTests.Models.Telemetry
             var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));
             codecs.Count().Should().Be(3);
             codecs.Should().Contain(x => x is TimeseriesDataReadableCodec); // for reading
-            codecs.Should().Contain(x => x is TimeseriesDataJsonCodec); // for reading
+            codecs.Should().Contain(x => x is DefaultJsonCodec<TimeseriesDataRaw>); // for reading
             codecs.Should().Contain(x => x is TimeseriesDataProtobufCodec); // for reading
             codecs.First().GetType().Should().Be(typeof(TimeseriesDataReadableCodec)); // for writing
         }
@@ -57,9 +57,9 @@ namespace QuixStreams.Telemetry.UnitTests.Models.Telemetry
             var codecs = Transport.Registry.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));
             codecs.Count().Should().Be(3);
             codecs.Should().Contain(x => x is TimeseriesDataReadableCodec); // for reading
-            codecs.Should().Contain(x => x is TimeseriesDataJsonCodec); // for reading
+            codecs.Should().Contain(x => x is DefaultJsonCodec<TimeseriesDataRaw>); // for reading
             codecs.Should().Contain(x => x is TimeseriesDataProtobufCodec); // for reading
-            codecs.First().GetType().Should().Be(typeof(TimeseriesDataJsonCodec)); // for writing
+            codecs.First().GetType().Should().Be(typeof(DefaultJsonCodec<TimeseriesDataRaw>)); // for writing
         }
         
         [Fact]
