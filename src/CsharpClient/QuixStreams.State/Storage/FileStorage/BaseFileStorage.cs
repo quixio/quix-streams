@@ -146,9 +146,9 @@ namespace QuixStreams.State.Storage.FileStorage
 
             var end = DateTime.UtcNow;
 #if NETSTANDARD2_0
-            this.logger.LogDebug("Saved state {0} in {1:g}, temp taking {2:g} (NetStandard).", key, end-start, tempTimeEnd-tempTimeStart);
+            this.logger.LogTrace("Saved state {0} in {1:g}, temp taking {2:g} (Move/Del).", key, end-start, tempTimeEnd-tempTimeStart);
 #else
-            this.logger.LogDebug("Saved state {0} in {1:g}, temp taking {2:g} (Net).", key, end-start, tempTimeEnd-tempTimeStart);
+            this.logger.LogTrace("Saved state {0} in {1:g}, temp taking {2:g} (Move).", key, end-start, tempTimeEnd-tempTimeStart);
 #endif
         }
 
