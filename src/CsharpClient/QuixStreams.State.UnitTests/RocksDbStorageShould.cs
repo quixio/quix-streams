@@ -206,7 +206,7 @@ namespace QuixStreams.State.UnitTests
         public void Constructor_ThrowsException_WhenDbDirectoryIsNull()
         {
             // Act
-            Func<RocksDbStorage> act = () => RocksDbStorage.GetStreamStorage(null, "test");
+            Func<RocksDbStorage> act = () => RocksDbStorage.GetStateStorage(null, "test", "stateName");
 
             // Assert
             act.Should().Throw<ArgumentException>();
@@ -216,7 +216,7 @@ namespace QuixStreams.State.UnitTests
         public void Constructor_ThrowsException_WhenStorageNameIsNullOrDefault()
         {
             // Act
-            Func<RocksDbStorage> act = () => RocksDbStorage.GetStreamStorage("testDir", null);
+            Func<RocksDbStorage> act = () => RocksDbStorage.GetStateStorage("testDir", null, "stateName");
 
             // Assert
             act.Should().Throw<ArgumentException>();

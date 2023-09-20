@@ -49,22 +49,6 @@ namespace QuixStreams.State.Storage
         /// Instantiates a new instance of <see cref="RocksDbStorage"/>
         /// </summary>
         /// <param name="dbDirectory">The directory to open the database</param>
-        /// <param name="streamId">Stream id of the storage</param>
-        public static RocksDbStorage GetStreamStorage(string dbDirectory, string streamId)
-        {
-            if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(streamId))
-            {
-                throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(streamId)} cannot be null or empty.");
-            }
-            
-            var storageName = $"{streamId}";
-            return new RocksDbStorage(dbDirectory, storageName);
-        }
-        
-        /// <summary>
-        /// Instantiates a new instance of <see cref="RocksDbStorage"/>
-        /// </summary>
-        /// <param name="dbDirectory">The directory to open the database</param>
         /// <param name="storageName">Name of the storage. Used as a prefix to separate data of other states when they use the same db</param>
         private RocksDbStorage(string dbDirectory, string storageName)
         {
@@ -219,7 +203,22 @@ namespace QuixStreams.State.Storage
             RocksDbInstances.Remove(dbDirectory);
         }
         
-        private string GetSubDatabasePath(string dbName) => $"{this.dbDirectory}{Path.DirectorySeparatorChar}{dbName}";
+        /// <summary>
+        /// Deletes all the states of a stream
+        /// </summary>
+        /// <param name="dbDirectory">The directory to open the database</param>
+        /// <param name="streamId">Stream id of the storage</param>
+        public static void DeleteStreamStates(string dbDirectory, string streamId)
+        {
+            if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(streamId))
+            {
+                throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(streamId)} cannot be null or empty.");
+            }
+            
+            var streamStorage = new RocksDbStorage(dbDirectory, storageName: streamId);
+            
+            streamStorage.Clear();
+        }
 
         private static RocksDb GetOrCreateRocksDbInstance(string dbDirectory)
         {
@@ -245,7 +244,7 @@ namespace QuixStreams.State.Storage
 
             return db;
         }
-
+        
         private class RocksDbInstance
         {
             public RocksDb Db { get; }

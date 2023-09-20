@@ -134,8 +134,10 @@ namespace QuixStreams.Streaming
                 key =>
                 {
                     this.logger.LogTrace("Creating Stream state manager for {0}", key);
-                    return new StreamStateManager(this, streamId,
-                        telemetryKafkaConsumer.GroupId, telemetryKafkaConsumer.Topic, topicPartition, Logging.Factory);
+                    return new StreamStateManager(this,
+                        streamId,
+                        new TopicConsumerPartition(telemetryKafkaConsumer.GroupId, telemetryKafkaConsumer.Topic, topicPartition),
+                        Logging.Factory);
                 });
         }
         

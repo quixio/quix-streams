@@ -12,7 +12,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         [Fact]
         public void Constructor_ShouldCreateStreamState()
         {
-            var streamState = new StreamDictionaryState<int>(InMemoryStorage.GetStreamStorage("myStream"), missingStateKey => -1, NullLoggerFactory.Instance);
+            var streamState = new StreamDictionaryState<int>(InMemoryStorage.GetStateStorage("myStream", "stateName"), missingStateKey => -1, NullLoggerFactory.Instance);
 
             streamState.Should().NotBeNull();
 

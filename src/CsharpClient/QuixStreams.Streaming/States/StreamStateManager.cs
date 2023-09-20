@@ -1,10 +1,10 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams.State.Storage;
+using QuixStreams.Streaming.Models;
 
 namespace QuixStreams.Streaming.States
 {
@@ -31,37 +31,32 @@ namespace QuixStreams.Streaming.States
         /// </summary>
         /// <param name="topicConsumer">The topic consumer used for committing state changes.</param>
         /// <param name="streamId">The ID of the stream.</param>
-        /// <param name="stateStorage">The state storage to use.</param>
+        /// <param name="topicPartition">Topic consumer partition information to use.</param>
         /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
-        /// <param name="logPrefix">The prefix to be used in log messages.</param>
-        internal StreamStateManager(ITopicConsumer topicConsumer, string streamId, string consumerGroup, string topicName,
-            int topicPartition, ILoggerFactory loggerFactory)
+        internal StreamStateManager(ITopicConsumer topicConsumer, string streamId, TopicConsumerPartition topicPartition, ILoggerFactory loggerFactory)
         {
             this.topicConsumer = topicConsumer;
             this.loggerFactory = loggerFactory;
-            this.logPrefix = $"{consumerGroup}-{topicName}{topicPartition}-{streamId}";
+            this.logPrefix = $"{topicPartition.ConsumerGroup}-{topicPartition.TopicName}-{topicPartition.Partition}-{streamId}";
             this.streamId = streamId;
             this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
-            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), consumerGroup, topicName, topicPartition.ToString());
+            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition.ToString());
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="StreamStateManager"/> class with the specified parameters.
         /// </summary>
         /// <param name="streamId">The ID of the stream.</param>
-        /// <param name="stateStorage">The state storage to use.</param>
+        /// <param name="topicPartition">Topic consumer partition information to use.</param>
         /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
-        /// <param name="logPrefix">The prefix to be used in log messages.</param>
-        public StreamStateManager(string streamId, string consumerGroup, string topicName, int topicPartition,
-            ILoggerFactory loggerFactory)
+        public StreamStateManager(string streamId, TopicConsumerPartition topicPartition, ILoggerFactory loggerFactory)
         {
             this.topicConsumer = null;
-            this.topicConsumer = topicConsumer;
             this.loggerFactory = loggerFactory;
-            this.logPrefix = $"{consumerGroup}-{topicName}-{topicPartition}-{streamId}";
+            this.logPrefix = $"{topicPartition.ConsumerGroup}-{topicPartition.TopicName}-{topicPartition.Partition}-{streamId}";
             this.streamId = streamId;
             this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
-            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), consumerGroup, topicName, topicPartition.ToString());
+            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition.ToString());
         }
         
         /// <summary>
@@ -70,8 +65,20 @@ namespace QuixStreams.Streaming.States
         public void DeleteStates()
         {
             this.logger.LogTrace("Deleting Stream states for {0}", streamId);
-            var storage = GetStreamStorage(this.storageDir, this.streamId);
-            storage.Clear();
+            
+            if (App.GetStateStorageType() == StateStorageTypes.RocksDb)
+            {
+                RocksDbStorage.DeleteStreamStates(storageDir, streamId);
+            }
+            else if (App.GetStateStorageType() == StateStorageTypes.InMemory)
+            {
+                InMemoryStorage.DeleteStreamStates(streamId);
+            }
+            else
+            {
+                throw new ArgumentException("Invalid state storage type");
+            }
+            
             this.states.Clear();
         }
 
@@ -226,29 +233,13 @@ namespace QuixStreams.Streaming.States
         }
         private static IStateStorage GetStateStorage(string dbDirectory, string streamId, string stateName)
         {
-            if (App.GetStateStorageType() == App.StateStorageTypes.RocksDb)
+            if (App.GetStateStorageType() == StateStorageTypes.RocksDb)
             {
                 return RocksDbStorage.GetStateStorage(dbDirectory, streamId, stateName);
             }
-            else if (App.GetStateStorageType() == App.StateStorageTypes.InMemory)
+            else if (App.GetStateStorageType() == StateStorageTypes.InMemory)
             {
                 return InMemoryStorage.GetStateStorage(streamId, stateName);
-            }
-            else
-            {
-                throw new ArgumentException("Invalid state storage type");
-            }
-        }
-        
-        private static IStateStorage GetStreamStorage(string dbDirectory, string streamId)
-        {
-            if (App.GetStateStorageType() == App.StateStorageTypes.RocksDb)
-            {
-                return RocksDbStorage.GetStreamStorage(dbDirectory, streamId);
-            }
-            else if (App.GetStateStorageType() == App.StateStorageTypes.InMemory)
-            {
-                return InMemoryStorage.GetStreamStorage(streamId);
             }
             else
             {

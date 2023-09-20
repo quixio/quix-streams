@@ -223,12 +223,6 @@ namespace QuixStreams.Streaming
             // Now we're done with main, tell the shutdown handler
             waitForMainExit.Set();
         }
-
-        public enum StateStorageTypes
-        {
-            RocksDb,
-            InMemory
-        }
         
         /// <summary>
         /// Sets the state storage for the app

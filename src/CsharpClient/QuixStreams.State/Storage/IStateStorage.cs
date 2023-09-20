@@ -73,4 +73,10 @@ namespace QuixStreams.State.Storage
         /// <exception>Throws exception if the transaction fails</exception>
         public void Flush();
     }
+    
+    public enum StateStorageTypes
+    {
+        RocksDb,
+        InMemory
+    }
 }

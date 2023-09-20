@@ -38,21 +38,6 @@ namespace QuixStreams.State.Storage
         }
         
         /// <summary>
-        /// Instantiates a new instance of <see cref="InMemoryStorage"/>
-        /// </summary>
-        /// <param name="streamId">Stream id of the storage</param>
-        public static InMemoryStorage GetStreamStorage(string streamId)
-        {
-            if (string.IsNullOrEmpty(streamId))
-            {
-                throw new ArgumentException($"{nameof(streamId)} cannot be null or empty.");
-            }
-            
-            var storageName = $"{streamId}";
-            return new InMemoryStorage(storageName);
-        }
-        
-        /// <summary>
         /// Instantiates a new instance of <see cref="RocksDbStorage"/>
         /// </summary>
         /// <param name="dbDirectory">The directory to open the database</param>
@@ -127,5 +112,20 @@ namespace QuixStreams.State.Storage
         
         /// <inheritdoc/>
         public bool CanPerformTransactions => false;
+        
+        /// <summary>
+        /// Deletes all the states of a stream
+        /// </summary>
+        /// <param name="streamId">Stream id of the storage</param>
+        public static void DeleteStreamStates(string streamId)
+        {
+            if (string.IsNullOrEmpty(streamId))
+            {
+                throw new ArgumentException($"{nameof(streamId)} cannot be null or empty.");
+            }
+            
+            var streamStorage = new InMemoryStorage(storageName: streamId);
+            streamStorage.Clear();
+        }
     }
 }

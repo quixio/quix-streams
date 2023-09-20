@@ -18,7 +18,7 @@ namespace QuixStreams.Streaming
     internal class StreamConsumer : StreamPipeline, IStreamConsumerInternal
     {
         private readonly ITopicConsumer topicConsumer;
-        private readonly ILogger logger = QuixStreams.Logging.CreateLogger<StreamConsumer>();
+        private readonly ILogger logger = Logging.CreateLogger<StreamConsumer>();
         private readonly StreamPropertiesConsumer streamPropertiesConsumer;
         private readonly StreamTimeseriesConsumer streamTimeseriesConsumer;
         private readonly StreamEventsConsumer streamEventsConsumer;
@@ -37,7 +37,7 @@ namespace QuixStreams.Streaming
         /// <param name="streamId">Stream Id of the source that has generated this Stream Consumer.</param>
         /// Commonly the Stream Id will be coming from the protocol. 
         /// If no stream Id is passed, like when a new stream is created for producing data, a Guid is generated automatically.
-        /// <param name="topicPartition">The Topic consumer partition information.</param>
+        /// <param name="topicPartition">Topic consumer partition information to use.</param>
         internal StreamConsumer(ITopicConsumer topicConsumer, string streamId, TopicConsumerPartition topicPartition): base(streamId)
         {
             this.topicConsumer = topicConsumer;
@@ -91,8 +91,11 @@ namespace QuixStreams.Streaming
                 key =>
                 {
                     this.logger.LogTrace("Creating Stream state manager for {0}", key);
-                    return new StreamStateManager(this.topicConsumer, this.StreamId,
-                        topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition, Logging.Factory);
+                    return new StreamStateManager(
+                        this.topicConsumer,
+                        this.StreamId,
+                        new TopicConsumerPartition(topicPartition.ConsumerGroup, topicPartition.TopicName, topicPartition.Partition),
+                        Logging.Factory);
                 });
         }
         

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.States;
 using Xunit;
 
@@ -15,7 +16,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public StreamStateManagerShould()
         {
             // Use a unique name for each test run to avoid conflicting with other tests
-            stateManager = new StreamStateManager("myStream", Guid.NewGuid().ToString(), "myTopic",1, NullLoggerFactory.Instance);
+            stateManager = new StreamStateManager("myStream", new TopicConsumerPartition(Guid.NewGuid().ToString(), "myTopic", 1), NullLoggerFactory.Instance);
         }
         
         [Fact]
