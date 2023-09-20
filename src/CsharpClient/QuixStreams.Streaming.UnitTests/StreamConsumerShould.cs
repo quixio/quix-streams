@@ -1,4 +1,5 @@
 using FluentAssertions;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.UnitTests.Helpers;
 using QuixStreams.Telemetry.Models;
 using Xunit;
@@ -9,7 +10,10 @@ namespace QuixStreams.Streaming.UnitTests
     {
         private StreamConsumer GetTestStreamConsumer()
         {
-            return new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "sId", "myCGroup", "myTopic",0);
+            return new StreamConsumer(
+                new TestStreamingClient().GetTopicConsumer(),
+                "myStream",
+                new TopicConsumerPartition("myCGroup", "myTopic",0));
         }
         
         [Fact]

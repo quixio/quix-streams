@@ -57,7 +57,11 @@ namespace QuixStreams.Telemetry.Kafka
         /// <summary>
         /// Stream Context cache for all the streams of the topic
         /// </summary>
-        public IStreamContextCache ContextCache;
+        public IStreamContextCache ContextCache
+        {
+            get;
+            private set;
+        }
 
         /// <summary>
         /// Group id

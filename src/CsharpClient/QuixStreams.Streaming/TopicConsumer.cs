@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using QuixStreams;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.States;
 using QuixStreams.Telemetry;
 using QuixStreams.Telemetry.Kafka;
@@ -61,7 +62,7 @@ namespace QuixStreams.Streaming
                 }
 
                 var topicPartition = streamContext.LastTopicPartitionOffset.Partition.Value;
-                var stream = new StreamConsumer(this, streamId, telemetryKafkaConsumer.GroupId, telemetryKafkaConsumer.Topic, topicPartition);
+                var stream = new StreamConsumer(this, streamId, new TopicConsumerPartition(telemetryKafkaConsumer.GroupId, telemetryKafkaConsumer.Topic, topicPartition));
                 try
                 {
                     this.OnStreamReceived?.Invoke(this, stream);
@@ -102,6 +103,8 @@ namespace QuixStreams.Streaming
             if (this.OnStreamsRevoked == null) return;
             if (obj == null || obj.Length == 0) return;
             
+            //TODO: Get rid of rocksdb connection for revoked partition
+            
             // This is relying on the assumption that the StreamConsumer that we've created in the StreamPipelineFactoryHandler (see kafkareader.foreach)
             // is being returned here.
             var readers = obj.Select(y => y as IStreamConsumer).Where(y => y != null).ToArray();
@@ -119,9 +122,10 @@ namespace QuixStreams.Streaming
         /// <inheritdoc />
         public StreamStateManager GetStreamStateManager(string streamId)
         {
+            //TODO: improve error
             if (!this.telemetryKafkaConsumer.ContextCache.TryGet(streamId, out var streamContext))
             {
-                throw new ArgumentException($"Stream context not found for streamId: {streamId}");
+                throw new ArgumentException($"Stream {streamId} not found. It hasn't been consumed by this consumer.");
             }
 
             var topicPartition = streamContext.LastTopicPartitionOffset.Partition.Value;
@@ -131,7 +135,7 @@ namespace QuixStreams.Streaming
                 {
                     this.logger.LogTrace("Creating Stream state manager for {0}", key);
                     return new StreamStateManager(this, streamId,
-                        telemetryKafkaConsumer.Topic, telemetryKafkaConsumer.GroupId, topicPartition, Logging.Factory);
+                        telemetryKafkaConsumer.GroupId, telemetryKafkaConsumer.Topic, topicPartition, Logging.Factory);
                 });
         }
         

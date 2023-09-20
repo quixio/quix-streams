@@ -732,18 +732,17 @@ namespace QuixStreams.Streaming.IntegrationTests
 
             topicProducer.Dispose();
             output.WriteLine("Closed Producer");
-            
+
             // Wait for enough messages to be received
             
             output.WriteLine("Waiting for messages");
             SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10000));
             output.WriteLine($"Waited for messages, got {msgCounter}");
-
-
+            
             msgCounter.Should().Be(7);
             output.WriteLine($"Got expected number of messages");
             topicConsumer.Commit();
-            
+
             output.WriteLine($"Checking Stream 1 Rolling sum for params");
             var stream1StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
             var stream1StateRollingSumPerParam = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
@@ -758,7 +757,6 @@ namespace QuixStreams.Streaming.IntegrationTests
             stream2StateRollingSumPerParam["param2"].Should().Be(10);
             stream2StateRollingSum.Value.Should().Be(19);
             output.WriteLine($"Checked Stream 2 Rolling sum for params");
-
             topicConsumer.Dispose();
         }
         
@@ -878,42 +876,43 @@ namespace QuixStreams.Streaming.IntegrationTests
             var topic = nameof(StreamState_ShouldWorkWithMultiplePartitions);
             await this.kafkaDockerTestFixture.EnsureTopic(topic, 2);
 
-            var topicConsumer1 = client.GetTopicConsumer(topic, "sameConsumerGroup", autoOffset: AutoOffsetReset.Latest);
-            var topicConsumer2 = client.GetTopicConsumer(topic, "sameConsumerGroup", autoOffset: AutoOffsetReset.Latest);
+            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
+            var topicConsumer2 = client.GetTopicConsumer(topic, "somerandomgroup2", autoOffset: AutoOffsetReset.Latest);
             
             var topicProducer = client.GetTopicProducer(topic);
-
+            
             var msgCounter = 0;
 
-            // void OnTopicConsumer1OnOnStreamReceived(object sender, IStreamConsumer stream)
-            // {
-            //     // Clean previous run
-            //     stream.GetStateManager().DeleteStates();
-            //
-            //     var rollingSum = stream.GetScalarState("RollingSumTotal", (sid) => 0d);
-            //
-            //     stream.Timeseries.OnDataReceived += (o, args) =>
-            //     {
-            //         foreach (var data in args.Data.Timestamps)
-            //         {
-            //             foreach (var parameter in data.Parameters)
-            //             {
-            //                 if (parameter.Value.Type == ParameterValueType.Numeric)
-            //                 {
-            //                     rollingSum.Value += parameter.Value.NumericValue ?? 0;
-            //                     this.output.WriteLine($"Rolling sum for is rollingSum.Value");
-            //                 }
-            //             }
-            //         }
-            //
-            //         msgCounter++;
-            //     };
-            // }
-            //
-            // topicConsumer1.OnStreamReceived += OnTopicConsumer1OnOnStreamReceived;
-            // topicConsumer2.OnStreamReceived += OnTopicConsumer1OnOnStreamReceived;
+            void OnStreamReceived(object sender, IStreamConsumer stream)
+            {
+                // Clean previous run
+                stream.GetStateManager().DeleteStates();
 
-            topicConsumer1.Subscribe();
+                var rollingSum = stream.GetScalarState("RollingSumTotal", (sid) => 0d);
+
+                stream.Timeseries.OnDataReceived += (o, args) =>
+                {
+                    foreach (var data in args.Data.Timestamps)
+                    {
+                        foreach (var parameter in data.Parameters)
+                        {
+                            if (parameter.Value.Type == ParameterValueType.Numeric)
+                            {
+                                rollingSum.Value += parameter.Value.NumericValue ?? 0;
+
+                                this.output.WriteLine($"Rolling sum is {rollingSum.Value}");
+                            }
+                        }
+                    }
+
+                    msgCounter++;
+                };
+            }
+
+            topicConsumer.OnStreamReceived += OnStreamReceived;
+            topicConsumer2.OnStreamReceived += OnStreamReceived;
+
+            topicConsumer.Subscribe();
             topicConsumer2.Subscribe();
 
             var start = DateTime.UtcNow;
@@ -925,38 +924,36 @@ namespace QuixStreams.Streaming.IntegrationTests
             //streamProducer.Close();
             
             var streamProducer2 = topicProducer.GetOrCreateStream("stream2");
-            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 6).Publish();
-            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 11).Publish();
-            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(3)).AddValue("param1", 10).Publish();
-            streamProducer.Timeseries.Flush();
-            //streamProducer.Close();
-            
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 5).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 7).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(3)).AddValue("param1", 4).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(4)).AddValue("param2", 3).Publish();
+            streamProducer2.Timeseries.Flush();
+            //streamProducer2.Close();
+
             topicProducer.Dispose();
             output.WriteLine("Closed Producer");
-            
+
             // Wait for enough messages to be received
             
             output.WriteLine("Waiting for messages");
-            SpinWait.SpinUntil(() => msgCounter == 6, TimeSpan.FromSeconds(10000));
+            SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10000));
             output.WriteLine($"Waited for messages, got {msgCounter}");
-
-
-            msgCounter.Should().Be(6);
-            output.WriteLine($"Got expected number of messages");
-            topicConsumer1.Commit();
-            topicConsumer2.Commit();
             
+            msgCounter.Should().Be(7);
+            output.WriteLine($"Got expected number of messages");
+            
+            topicConsumer.Commit();
+
             output.WriteLine($"Checking Stream 1 Rolling sum for params");
-            var stream1StateRollingSum = topicConsumer1.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
+            var stream1StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
             stream1StateRollingSum.Value.Should().Be(24);
             output.WriteLine($"Checked Stream 1 Rolling sum for params");
             output.WriteLine($"Checking Stream 2 Rolling sum for params");
-            var stream2StateRollingSum = topicConsumer2.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
-            stream2StateRollingSum.Value.Should().Be(27);
+            var stream2StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
+            stream2StateRollingSum.Value.Should().Be(19);
             output.WriteLine($"Checked Stream 2 Rolling sum for params");
-
-            topicConsumer1.Dispose();
-            topicConsumer2.Dispose();
+            topicConsumer.Dispose();
         }
     }
 }

@@ -158,6 +158,7 @@ namespace QuixStreams.State.Storage
             var cfHandle = string.IsNullOrEmpty(cf) ? db.GetDefaultColumnFamily() : db.GetColumnFamily(cf);
             var startKey = Encoding.UTF8.GetBytes(prefix);
             
+            using var batch = new WriteBatch();
             using (var iterator = db.NewIterator())
             {
                 iterator.Seek(prefix);
@@ -274,29 +275,6 @@ namespace QuixStreams.State.Storage
             public bool IsUsed()
             {
                 return this.refCount != 0;
-            }
-        }
-
-        private record RocksDbStorageMeta(string DbDirectory, string StorageName, string KeyPrefix)
-        {
-            public string DbDirectory { get; } = DbDirectory;
-            public string StorageName { get; } = StorageName;
-            public string KeyPrefix { get; } = KeyPrefix;
-
-            public override string ToString()
-            {
-                return string.Join("|", DbDirectory, StorageName, KeyPrefix);
-            }
-            
-            public static RocksDbStorageMeta From (string meta)
-            {
-                var parts = meta.Split('|');
-                return new RocksDbStorageMeta(DbDirectory: parts[0], StorageName: parts[1], KeyPrefix: parts[2]);
-            }
-            
-            public static RocksDbStorageMeta From (RocksDbStorage storage)
-            {
-                return new RocksDbStorageMeta(DbDirectory: storage.dbDirectory, StorageName: storage.storageName, KeyPrefix: storage.keyPrefix);
             }
         }
     }
