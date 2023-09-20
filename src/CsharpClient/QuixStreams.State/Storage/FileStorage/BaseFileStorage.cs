@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Murmur;
 
 namespace QuixStreams.State.Storage.FileStorage
 {
@@ -22,8 +21,6 @@ namespace QuixStreams.State.Storage.FileStorage
         private const string FileNameSpecialCharacter = "~";
         private const string TempFileSuffix = ".tmpf";
         private const string BackupFileSuffix = ".bckf";
-        private Dictionary<string, byte[]> contentHashes = new Dictionary<string, byte[]>();
-        private static Murmur128 murmurHash = MurmurHash.Create128(823746123);
 
 
         /// <summary>
@@ -105,13 +102,6 @@ namespace QuixStreams.State.Storage.FileStorage
         {
             key = key.ToLower();
             
-            // check hash of existing value
-            var hash = murmurHash.ComputeHash(data);
-            if (this.contentHashes.TryGetValue(key, out var existingHash))
-            {
-                if (existingHash.SequenceEqual(hash)) return;
-            }
-            
             var tempKey = $"{key}{TempFileSuffix}";
             var tempKeyFilePath = GetFilePath(tempKey);
             var start = DateTime.UtcNow;
@@ -151,8 +141,6 @@ namespace QuixStreams.State.Storage.FileStorage
                     File.Move(tempKeyFilePath, keyFilePath, true);
 #endif
                     tempTimeEnd = DateTime.UtcNow;
-            
-                    this.contentHashes[key] = hash;
                 }
             }
 
@@ -190,11 +178,6 @@ namespace QuixStreams.State.Storage.FileStorage
                         sourceStream.Close();
                         sourceStream.Dispose();
                     }
-                    
-            
-                    // check hash of existing value
-                    var hash = murmurHash.ComputeHash(result);
-                    this.contentHashes[key] = hash;
                 }
             }
             return result;
@@ -215,9 +198,6 @@ namespace QuixStreams.State.Storage.FileStorage
                 {
                     File.Delete(path);
                 }
-
-
-                this.contentHashes.Remove(key);
             }
         }
 
@@ -323,7 +303,6 @@ namespace QuixStreams.State.Storage.FileStorage
             using ( await this.LockInternalKey("", LockType.Writer) )
             {
                 ClearFolder(this.storageDirectory);
-                this.contentHashes.Clear();
             }
         }
 

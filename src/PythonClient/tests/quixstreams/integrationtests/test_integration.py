@@ -1806,11 +1806,11 @@ class TestStreamState(BaseIntegrationTest):
         stream_state_manager = topic_state_manager.get_stream_state_manager("test-stream")
         dict_state = stream_state_manager.get_dict_state("test")
 
-        assert "a" in dict_state
+        assert "a" not in dict_state
 
         dict_state["a"] = "b"
 
-        assert "a" not in dict_state
+        assert "a" in dict_state
 
     def test_stream_state_manager(self,
                                   test_name,
@@ -1831,7 +1831,11 @@ class TestStreamState(BaseIntegrationTest):
             rolling_sum_state['somevalue'] = 5
             object_state = stream_consumer.get_dict_state("objectstate",
                                                           lambda key: {})
-            object_state['somevalue']['key'] = 'value'
+
+            dict = {}
+            dict['key'] = 'value'
+            object_state['somevalue'] = dict
+            object_state['somevalue']['someotherkey'] = 'thatshouldntsave'
             event.set()
 
         topic_consumer_earliest.on_stream_received = on_stream_received_handler
