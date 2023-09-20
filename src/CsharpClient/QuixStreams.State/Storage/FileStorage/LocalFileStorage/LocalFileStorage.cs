@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace QuixStreams.State.Storage.FileStorage.LocalFileStorage
 {
@@ -34,13 +35,17 @@ namespace QuixStreams.State.Storage.FileStorage.LocalFileStorage
         /// </summary>
         private readonly ConcurrentDictionary<string, CountedLock> internalLocks = new ConcurrentDictionary<string, CountedLock>();
 
+        private readonly ILoggerFactory loggerFactory;
+
         /// <summary>
         /// Instantiates a new instance of <see cref="LocalFileStorage"/>
         /// </summary>
         /// <param name="storageDirectory">The directory for storing the states</param>
         /// <param name="autoCreateDir">Whether the directory should be automatically created if does not exist already</param>
-        public LocalFileStorage(string storageDirectory = null, bool autoCreateDir = true) : base(storageDirectory, autoCreateDir)
+        /// <param name="loggerFactory">The optional logger factory to create logger with</param>
+        public LocalFileStorage(string storageDirectory = null, bool autoCreateDir = true, ILoggerFactory loggerFactory = null) : base(storageDirectory, autoCreateDir, loggerFactory)
         {
+            this.loggerFactory = loggerFactory;
         }
 
         /// <inheritdoc />
@@ -51,7 +56,7 @@ namespace QuixStreams.State.Storage.FileStorage.LocalFileStorage
         /// <inheritdoc />
         protected override IStateStorage CreateNewStorageInstance(string path)
         {
-            return new LocalFileStorage(path, true);
+            return new LocalFileStorage(path, true, this.loggerFactory);
         }
 
         /// <inheritdoc />

@@ -244,7 +244,7 @@ namespace QuixStreams.Streaming
         /// <returns></returns>
         public static AppStateManager GetStateManager()
         {
-            if (App.stateManager == null) SetStateStorage(new LocalFileStorage(autoCreateDir: true));
+            if (App.stateManager == null) SetStateStorage(new LocalFileStorage(autoCreateDir: true, loggerFactory: Logging.Factory));
             return App.stateManager;
         }
 

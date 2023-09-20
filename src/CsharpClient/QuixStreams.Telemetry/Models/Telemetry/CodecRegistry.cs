@@ -69,12 +69,6 @@ namespace QuixStreams.Telemetry.Models
                 case CodecType.Json:
                     foreach (var modelKey in modelKeys)
                     {
-                        if (typeof(TimeseriesDataRaw) == modelType)
-                        {
-                            QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataJsonCodec());
-                            continue;
-                        }
-
                         QuixStreams.Transport.Registry.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());   
                     }
                     break;

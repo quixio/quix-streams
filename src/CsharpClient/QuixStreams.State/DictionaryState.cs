@@ -86,7 +86,10 @@ namespace QuixStreams.State
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
         IDictionaryEnumerator IDictionary.GetEnumerator()
         {
-            return this.inMemoryState.GetEnumerator();
+            lock (this.SyncRoot)
+            {
+                return this.inMemoryState.ToDictionary(y=> y.Key, y=> y.Value).GetEnumerator();
+            }
         }
 
         /// <inheritdoc />
@@ -104,7 +107,10 @@ namespace QuixStreams.State
         /// <returns>An enumerator for the in-memory state.</returns>
         public IEnumerator<KeyValuePair<string, StateValue>> GetEnumerator()
         {
-            return inMemoryState.GetEnumerator();
+            lock (this.SyncRoot)
+            {
+                return inMemoryState.ToDictionary(y => y.Key, y => y.Value).GetEnumerator();
+            }
         }
 
         /// <inheritdoc />
@@ -118,9 +124,12 @@ namespace QuixStreams.State
         /// </summary>
         public void Clear()
         {
-            inMemoryState.Clear();
-            changes.Clear();
-            clearBeforeFlush = true;
+            lock (this.SyncRoot)
+            {
+                inMemoryState.Clear();
+                changes.Clear();
+                clearBeforeFlush = true;
+            }
         }
         
         /// <inheritdoc/>
@@ -132,19 +141,28 @@ namespace QuixStreams.State
         /// <inheritdoc/>
         public bool Contains(KeyValuePair<string, StateValue> item)
         {
-            return this.inMemoryState.TryGetValue(item.Key, out var existing) && existing.Equals(item.Value);
+            lock (this.SyncRoot)
+            {
+                return this.inMemoryState.TryGetValue(item.Key, out var existing) && existing.Equals(item.Value);
+            }
         }
 
         /// <inheritdoc/>
         public void CopyTo(KeyValuePair<string, StateValue>[] array, int arrayIndex)
         {
-            ((IDictionary<string, StateValue>)this.inMemoryState).CopyTo(array, arrayIndex);
+            lock (this.SyncRoot)
+            {
+                ((IDictionary<string, StateValue>)this.inMemoryState).CopyTo(array, arrayIndex);
+            }
         }
 
         /// <inheritdoc/>
         public bool Remove(KeyValuePair<string, StateValue> item)
         {
-            return this.Contains(item) && this.Remove(item.Key);
+            lock (this.SyncRoot)
+            {
+                return this.Contains(item) && this.Remove(item.Key);
+            }
         }
 
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
@@ -153,8 +171,20 @@ namespace QuixStreams.State
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
         public object this[object key]
         {
-            get => this[(string)key];
-            set => this[(string)key] = (StateValue)value;
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this[(string)key];
+                }
+            }
+            set
+            {
+                lock (this.SyncRoot)
+                {
+                    this[(string)key] = (StateValue)value;
+                }
+            }
         }
 
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
@@ -168,10 +198,10 @@ namespace QuixStreams.State
         /// </summary>
         public int Count => inMemoryState.Count;
 
-        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        /// <inheritdoc cref="IDictionary.IsSynchronized" />
         public bool IsSynchronized => ((IDictionary)this.inMemoryState).IsSynchronized;
         
-        /// <inheritdoc cref="IDictionary.IsReadOnly" />
+        /// <inheritdoc cref="IDictionary.SyncRoot" />
         public object SyncRoot => ((IDictionary)this.inMemoryState).SyncRoot;
 
         /// <summary>
@@ -182,10 +212,13 @@ namespace QuixStreams.State
         public void Add(string key, StateValue value)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            inMemoryState.Add(key, value);
-            this.changes[key] = value == null || value.IsNull() 
-                ? ChangeType.Removed
-                : ChangeType.AddedOrUpdated;
+            lock (this.SyncRoot)
+            {
+                inMemoryState.Add(key, value);
+                this.changes[key] = value == null || value.IsNull()
+                    ? ChangeType.Removed
+                    : ChangeType.AddedOrUpdated;
+            }
         }
 
         /// <summary>
@@ -196,7 +229,10 @@ namespace QuixStreams.State
         public bool ContainsKey(string key)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            return inMemoryState.ContainsKey(key);
+            lock (this.SyncRoot)
+            {
+                return inMemoryState.ContainsKey(key);
+            }
         }
 
         /// <summary>
@@ -207,9 +243,12 @@ namespace QuixStreams.State
         public bool Remove(string key)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            var success = inMemoryState.Remove(key);
-            if (success) this.changes[key] = ChangeType.Removed;
-            return success;
+            lock (this.SyncRoot)
+            {
+                var success = inMemoryState.Remove(key);
+                if (success) this.changes[key] = ChangeType.Removed;
+                return success;
+            }
         }
 
         /// <summary>
@@ -221,7 +260,10 @@ namespace QuixStreams.State
         public bool TryGetValue(string key, out StateValue value)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            return inMemoryState.TryGetValue(key, out value);
+            lock (this.SyncRoot)
+            {
+                return inMemoryState.TryGetValue(key, out value);
+            }
         }
 
         /// <summary>
@@ -234,78 +276,124 @@ namespace QuixStreams.State
             get
             {
                 if (!this.IsCaseSensitive) key = key.ToLower();
-                return this.inMemoryState[key];
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryState[key];
+                }
             }
             set
             {
                 if (!this.IsCaseSensitive) key = key.ToLower();
-                if (value == null || value.IsNull()) this.changes[key] = ChangeType.Removed;
-                else this.changes[key] = ChangeType.AddedOrUpdated;
-                this.inMemoryState[key] = value;
+                lock (this.SyncRoot)
+                {
+                    if (value == null || value.IsNull()) this.changes[key] = ChangeType.Removed;
+                    else this.changes[key] = ChangeType.AddedOrUpdated;
+                    this.inMemoryState[key] = value;
+                }
             }
         }
 
         /// <summary>
         /// Gets an ICollection containing the keys of the in-memory state.
         /// </summary>
-        public ICollection<string> Keys => this.inMemoryState.Keys;
+        public ICollection<string> Keys
+        {
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryState.Keys.ToArray();
+                }
+            }
+        }
 
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
-        ICollection IDictionary.Values => this.inMemoryState.Values;
+        ICollection IDictionary.Values
+        {
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryState.Values.ToArray();
+                }
+            }
+        }
 
         /// <inheritdoc cref="IDictionary.IsReadOnly" />
-        ICollection IDictionary.Keys => this.inMemoryState.Keys;
+        ICollection IDictionary.Keys
+        {
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryState.Keys.ToArray();
+                }
+            }
+        }
 
         /// <summary>
         /// Gets an ICollection containing the values of the in-memory state.
         /// </summary>
-        public ICollection<StateValue> Values => this.inMemoryState.Values;
+        public ICollection<StateValue> Values
+        {
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryState.Values.ToArray();
+                }
+            }
+        }
 
         /// <summary>
         /// Flushes the changes made to the in-memory state to the specified storage.
         /// </summary>
         public void Flush()
         {
-            this.logger.LogTrace("Flushing state.");
-            OnFlushing?.Invoke(this, EventArgs.Empty);
-            
-            if (this.clearBeforeFlush)
+            lock (this.SyncRoot)
             {
-                this.storage.Clear();
-                this.clearBeforeFlush = false;
-            }
+                this.logger.LogTrace("Flushing state.");
+                OnFlushing?.Invoke(this, EventArgs.Empty);
 
-            var tasks = new List<Task>();
-            foreach (var changeType in changes)
-            {
-                if (changeType.Value == ChangeType.Removed)
+                if (this.clearBeforeFlush)
                 {
-                    this.lastFlushHash.Remove(changeType.Key);
-                    tasks.Add(this.storage.RemoveAsync(changeType.Key));
+                    this.storage.Clear();
+                    this.clearBeforeFlush = false;
                 }
-                else
+
+                var tasks = new List<Task>();
+                foreach (var changeType in changes)
                 {
-                    var value = inMemoryState[changeType.Key];
-                    if (value == null || value.IsNull())
+                    if (changeType.Value == ChangeType.Removed)
                     {
                         this.lastFlushHash.Remove(changeType.Key);
                         tasks.Add(this.storage.RemoveAsync(changeType.Key));
                     }
                     else
                     {
-                        var hash = value.GetHashCode();
-                        if (lastFlushHash.TryGetValue(changeType.Key, out var existingHash) && existingHash == hash) continue;
-                        this.lastFlushHash[changeType.Key] = hash;
-                        tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+                        var value = inMemoryState[changeType.Key];
+                        if (value == null || value.IsNull())
+                        {
+                            this.lastFlushHash.Remove(changeType.Key);
+                            tasks.Add(this.storage.RemoveAsync(changeType.Key));
+                        }
+                        else
+                        {
+                            var hash = value.GetHashCode();
+                            if (lastFlushHash.TryGetValue(changeType.Key, out var existingHash) && existingHash == hash)
+                                continue;
+                            this.lastFlushHash[changeType.Key] = hash;
+                            tasks.Add(this.storage.SetAsync(changeType.Key, inMemoryState[changeType.Key]));
+                        }
                     }
                 }
+
+                this.changes.Clear();
+                Task.WaitAll(tasks.ToArray());
+
+                OnFlushed?.Invoke(this, EventArgs.Empty);
+                this.logger.LogTrace("Flushed {0} state changes.", tasks.Count());
             }
-            
-            this.changes.Clear();
-            Task.WaitAll(tasks.ToArray());
-            
-            OnFlushed?.Invoke(this, EventArgs.Empty);
-            this.logger.LogTrace("Flushed {0} state changes.", tasks.Count());
         }
 
         /// <summary>
@@ -313,47 +401,51 @@ namespace QuixStreams.State
         /// </summary>
         public void Reset()
         {
-            if (this.changes.Count == 0)
+            lock (this.SyncRoot)
             {
-                this.logger.LogTrace("Resetting state not needed, empty");
-                return;
-            }
-            this.logger.LogTrace("Resetting state");
-            // Remove current values
-            foreach (var changeType in this.changes)
-            {
-                this.inMemoryState.Remove(changeType.Key);
-            }
-
-            // Retrieve values from storage
-            var tasks = this.changes.Select(async y =>
-            {
-                try
+                if (this.changes.Count == 0)
                 {
-                    var value = await this.storage.GetAsync(y.Key);
-                    return (y.Key, value);
+                    this.logger.LogTrace("Resetting state not needed, empty");
+                    return;
                 }
-                catch
+
+                this.logger.LogTrace("Resetting state");
+                // Remove current values
+                foreach (var changeType in this.changes)
                 {
-                    // was added
-                    return (y.Key, null);
+                    this.inMemoryState.Remove(changeType.Key);
                 }
-            }).ToArray();
 
-            Task.WaitAll(tasks);
+                // Retrieve values from storage
+                var tasks = this.changes.Select(async y =>
+                {
+                    try
+                    {
+                        var value = await this.storage.GetAsync(y.Key);
+                        return (y.Key, value);
+                    }
+                    catch
+                    {
+                        // was added
+                        return (y.Key, null);
+                    }
+                }).ToArray();
 
-            // Assign result to inmemory
-            foreach (var task in tasks)
-            {
-                var (key, value) = task.Result;
-                if (value == null) continue;
-                this.inMemoryState[key] = value;
+                Task.WaitAll(tasks);
+
+                // Assign result to inmemory
+                foreach (var task in tasks)
+                {
+                    var (key, value) = task.Result;
+                    if (value == null) continue;
+                    this.inMemoryState[key] = value;
+                }
+
+                // Reset changes
+                var count = this.changes.Count;
+                this.changes.Clear();
+                this.logger.LogTrace($"Reset {count} state");
             }
-            
-            // Reset changes
-            var count = this.changes.Count;
-            this.changes.Clear();
-            this.logger.LogTrace($"Reset {count} state");
         }
 
         /// <summary>
@@ -380,11 +472,6 @@ namespace QuixStreams.State
         /// The logger for the class
         /// </summary>
         private readonly ILogger logger;
-        
-        /// <summary>
-        /// Returns whether the type is passed by reference
-        /// </summary>
-        private readonly bool isTypeByRef = typeof(T).IsByRef;
 
         /// <summary>
         /// Indicates whether the state should be cleared before flushing the changes.
@@ -409,7 +496,7 @@ namespace QuixStreams.State
         /// <summary>
         /// The in-memory cache to avoid conversions between State and T whenever possible
         /// </summary>
-        private readonly IDictionary<string, T> inMemoryCache = new Dictionary<string, T>();
+        private readonly IDictionary<string, StateValue> inMemoryCache = new Dictionary<string, StateValue>();
         
         /// <summary>
         /// Represents the changes made to the in-memory state, tracking additions, updates, and removals.
@@ -463,10 +550,12 @@ namespace QuixStreams.State
                     {
                         Formatting = Formatting.None
                     };
-                    genericConverter = value => JsonConvert.DeserializeObject<T>(value.StringValue);
+                    genericConverter = value => value.Type == StateValue.StateType.Object 
+                        ? default
+                        : JsonConvert.DeserializeObject<T>(value.StringValue);
                     stateValueConverter = value => value == null 
                         ? new StateValue(null, StateValue.StateType.Object) 
-                        : new StateValue(JsonConvert.SerializeObject(value, options)); // must be evaluated lazily as internal references can change whenever
+                        : new StateValue(JsonConvert.SerializeObject(value, options));
                     break;
                 case TypeCode.Boolean:
                     genericConverter = value => (T)(object)value.BoolValue;
@@ -556,14 +645,21 @@ namespace QuixStreams.State
 
             foreach (var pair in this.underlyingDictionaryState)
             {
-                this.inMemoryCache[pair.Key] = genericConverter(pair.Value);
+                this.inMemoryCache[pair.Key] = pair.Value;
             }
         }
+        
+        /// <inheritdoc cref="IDictionary.SyncRoot" />
+        public object SyncRoot => ((IDictionary)this.inMemoryCache).SyncRoot;
 
         /// <inheritdoc/>
         public IEnumerator<KeyValuePair<string, T>> GetEnumerator()
         {
-            return this.inMemoryCache.GetEnumerator();
+            lock (this.SyncRoot)
+            {
+                var enumerable = this.inMemoryCache.ToDictionary(y=> y.Key, y=> genericConverter(y.Value));
+                return enumerable.GetEnumerator();
+            }
         }
 
         /// <inheritdoc/>
@@ -581,27 +677,36 @@ namespace QuixStreams.State
         /// <inheritdoc/>
         public void Clear()
         {
-            this.inMemoryCache.Clear();
-            this.clearBeforeFlush = true;
-            this.changes.Clear();
+            lock (this.SyncRoot)
+            {
+                this.inMemoryCache.Clear();
+                this.clearBeforeFlush = true;
+                this.changes.Clear();
+            }
         }
 
         /// <inheritdoc/>
         public bool Contains(KeyValuePair<string, T> item)
         {
-            return this.inMemoryCache.TryGetValue(item.Key, out var existing) && existing.Equals(item.Value);
+            lock (this.SyncRoot)
+            {
+                return this.inMemoryCache.TryGetValue(item.Key, out var existing) && existing.Equals(item.Value);
+            }
         }
 
         /// <inheritdoc/>
         public void CopyTo(KeyValuePair<string, T>[] array, int arrayIndex)
         {
-            this.inMemoryCache.CopyTo(array, arrayIndex);
+            throw new NotImplementedException();
         }
 
         /// <inheritdoc/>
         public bool Remove(KeyValuePair<string, T> item)
         {
-            return this.Contains(item) && this.Remove(item.Key);
+            lock (this.SyncRoot)
+            {
+                return this.Contains(item) && this.Remove(item.Key);
+            }
         }
 
         /// <inheritdoc/>
@@ -614,32 +719,51 @@ namespace QuixStreams.State
         public void Add(string key, T value)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            inMemoryCache.Add(key, value);
-            this.changes[key] = value == null 
-                ? ChangeType.Removed
-                : ChangeType.AddedOrUpdated;
+            lock (this.SyncRoot)
+            {
+                inMemoryCache.Add(key, stateValueConverter(value));
+                this.changes[key] = value == null
+                    ? ChangeType.Removed
+                    : ChangeType.AddedOrUpdated;
+            }
         }
 
         /// <inheritdoc/>
         public bool ContainsKey(string key)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            return this.inMemoryCache.ContainsKey(key);
+            lock (this.SyncRoot)
+            {
+                return this.inMemoryCache.ContainsKey(key);
+            }
         }
 
         /// <inheritdoc/>
         public bool Remove(string key)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            this.changes[key] = ChangeType.Removed;
-            return this.inMemoryCache.Remove(key);
+            lock (this.SyncRoot)
+            {
+                this.changes[key] = ChangeType.Removed;
+                return this.inMemoryCache.Remove(key);
+            }
         }
 
         /// <inheritdoc/>
         public bool TryGetValue(string key, out T value)
         {
             if (!this.IsCaseSensitive) key = key.ToLower();
-            return inMemoryCache.TryGetValue(key, out value);
+            lock (this.SyncRoot)
+            {
+                if (!inMemoryCache.TryGetValue(key, out var stateValue))
+                {
+                    value = default;
+                    return false;
+                }
+
+                value = genericConverter(stateValue);
+                return true;
+            }
         }
 
         /// <inheritdoc/>
@@ -648,67 +772,68 @@ namespace QuixStreams.State
             get
             {
                 if (!this.IsCaseSensitive) key = key.ToLower();
-                if (this.TryGetValue(key, out T val)) return val;
-                this.inMemoryCache[key] = val;
-                this.changes[key] = ChangeType.AddedOrUpdated;
-                return val;
+                lock (this.SyncRoot)
+                {
+                    if (this.TryGetValue(key, out T val)) return val;
+                    this.inMemoryCache[key] = stateValueConverter(val);
+                    this.changes[key] = ChangeType.AddedOrUpdated;
+                    return val;
+                }
             }
             set
             {
                 if (!this.IsCaseSensitive) key = key.ToLower();
-                this.changes[key] = value == null
-                    ? ChangeType.Removed
-                    : ChangeType.AddedOrUpdated;
-                this.inMemoryCache[key] = value;
+                lock (this.SyncRoot)
+                {
+                    this.changes[key] = value == null
+                        ? ChangeType.Removed
+                        : ChangeType.AddedOrUpdated;
+                    this.inMemoryCache[key] = stateValueConverter(value);
+                }
             }
         }
 
         /// <inheritdoc/>
-        public ICollection<string> Keys => this.inMemoryCache.Keys;
+        public ICollection<string> Keys
+        {
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryCache.Keys.ToArray();
+                }
+            }
+        }
 
         /// <inheritdoc/>
-        public ICollection<T> Values => this.inMemoryCache.Values;
+        public ICollection<T> Values
+        {
+            get
+            {
+                lock (this.SyncRoot)
+                {
+                    return this.inMemoryCache.Values.Select(y => genericConverter(y)).ToArray();
+                }
+            }
+        }
 
         /// <summary>
         /// Flushes the changes made to the in-memory state to the specified storage.
         /// </summary>
         public void Flush()
         {
-            this.logger.LogTrace("Flushing state");
-            OnFlushing?.Invoke(this, EventArgs.Empty);
-            
-            if (this.clearBeforeFlush)
+            lock (this.SyncRoot)
             {
-                logger.LogTrace("Clearing state before flush as clear was requested");
-                this.underlyingDictionaryState.Clear();
-                this.clearBeforeFlush = false;
-            }
+                this.logger.LogTrace("Flushing state");
+                OnFlushing?.Invoke(this, EventArgs.Empty);
 
-            // Check if the current instance is type by reference
-            if (this.isTypeByRef)
-            {
-                // If it is, loop through each change in the list of changes
-                foreach (var changeType in changes)
+                if (this.clearBeforeFlush)
                 {
-                    // For any change that has a value of "Removed", remove the corresponding key from the internal state
-                    if (changeType.Value == ChangeType.Removed)
-                    {
-                        logger.LogTrace("Removing key '{0}' from state as part of flush", changeType.Key);
-                        this.underlyingDictionaryState.Remove(changeType.Key);
-                    }
+                    logger.LogTrace("Clearing state before flush as clear was requested");
+                    this.underlyingDictionaryState.Clear();
+                    this.clearBeforeFlush = false;
                 }
 
-                // After all removals are complete, loop through each item in an in-memory cache
-                foreach (var pair in this.inMemoryCache)
-                {
-                    // Update the internal state by applying a state value converter to each value and storing the result in the state with the same key
-                    // this is necessary because reference types might have changed without this instance knowing
-                    this.underlyingDictionaryState[pair.Key] = stateValueConverter(pair.Value);
-                    logger.LogTrace("Updating key '{0}' from state as part of flush", pair.Key);
-                }
-            }
-            else
-            {
                 // If the instance is not type by reference, loop through each change in the list of changes
                 foreach (var changeType in changes)
                 {
@@ -722,19 +847,19 @@ namespace QuixStreams.State
                     {
                         // For any change that is not "Removed", look up the corresponding value in the in-memory cache
                         // Apply the state value converter to the value and store the result in the internal state with the same key
-                        this.underlyingDictionaryState[changeType.Key] = stateValueConverter(inMemoryCache[changeType.Key]);
+                        this.underlyingDictionaryState[changeType.Key] = inMemoryCache[changeType.Key];
                         logger.LogTrace("Updating key '{0}' from state as part of flush", changeType.Key);
                     }
                 }
-            }
-            
-            this.changes.Clear();
 
-            logger.LogTrace("Flushing underlying state as part of flush");
-            this.underlyingDictionaryState.Flush();
-            logger.LogTrace("Flushed underlying state as part of flush");
-            OnFlushed?.Invoke(this, EventArgs.Empty);
-            this.logger.LogTrace("Flushed state.");
+                this.changes.Clear();
+
+                logger.LogTrace("Flushing underlying state as part of flush");
+                this.underlyingDictionaryState.Flush();
+                logger.LogTrace("Flushed underlying state as part of flush");
+                OnFlushed?.Invoke(this, EventArgs.Empty);
+                this.logger.LogTrace("Flushed state.");
+            }
         }
         
         /// <summary>
@@ -742,33 +867,37 @@ namespace QuixStreams.State
         /// </summary>
         public void Reset()
         {
-            if (this.changes.Count == 0)
+            lock (this.SyncRoot)
             {
-                this.logger.LogTrace("Resetting state not needed, empty");
-                return;
+                if (this.changes.Count == 0)
+                {
+                    this.logger.LogTrace("Resetting state not needed, empty");
+                    return;
+                }
+
+                this.logger.LogTrace("Resetting state");
+
+                // Retrieve values from storage
+                foreach (var change in this.changes)
+                {
+                    try
+                    {
+                        this.inMemoryCache.Remove(change.Key); // Remove current value
+                        var value = this.underlyingDictionaryState[change.Key];
+                        if (value == null) continue;
+                        this.inMemoryCache[change.Key] = value; // set original value
+                    }
+                    catch
+                    {
+                        // was added, missing key
+                    }
+                }
+
+                // Reset changes
+                var count = this.changes.Count;
+                this.changes.Clear();
+                this.logger.LogTrace($"Reset {count} state");
             }
-            this.logger.LogTrace("Resetting state");
-
-            // Retrieve values from storage
-            foreach (var change in this.changes)
-            {
-                try
-                {
-                    this.inMemoryCache.Remove(change.Key); // Remove current value
-                    var value = this.underlyingDictionaryState[change.Key];
-                    if (value == null) continue;
-                    this.inMemoryCache[change.Key] = genericConverter(value); // set original value
-                }
-                catch
-                {
-                    // was added, missing key
-                }
-            };
-
-            // Reset changes
-            var count = this.changes.Count;
-            this.changes.Clear();
-            this.logger.LogTrace($"Reset {count} state");
         }
         
         

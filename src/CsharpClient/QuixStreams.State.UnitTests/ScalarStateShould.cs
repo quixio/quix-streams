@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using FluentAssertions;
 using QuixStreams.State.Storage;
 using Xunit;
@@ -62,6 +63,36 @@ namespace QuixStreams.State.UnitTests
 
             // Assert
             storage.Get(ScalarState.StorageKey).StringValue.Should().BeEquivalentTo("value");
+        }
+        
+        [Fact]
+        public void ListConversion_ShouldStoreAndRetrieveCorrectly()
+        {
+            var storage = new InMemoryStorage();
+            var key = "TestKey";
+            var state = new DictionaryState<List<int>>(storage);
+            state.Clear();
+
+            var list = new List<int>();
+            state[key] = list;
+            state[key].Add(1);
+            list.Add(2);
+            list.Add(3);
+
+            // No change is expected!
+            state[key].Should().BeEquivalentTo(new List<StateTemplatedShould.CustomClass>());
+
+            state[key] = list;
+
+            state[key].Count.Should().Be(2);
+            state[key].Should().BeEquivalentTo(list, o => o.WithStrictOrdering());
+
+            state.Flush();
+
+            var state2 = new DictionaryState<List<int>>(storage);
+
+            state2[key].Count.Should().Be(2);
+            state2[key].Should().BeEquivalentTo(list, o => o.WithStrictOrdering());
         }
         
         [Fact]

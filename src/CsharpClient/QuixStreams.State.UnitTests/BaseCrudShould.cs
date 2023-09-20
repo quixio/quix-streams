@@ -4,11 +4,19 @@ using FluentAssertions;
 using QuixStreams.State.Storage;
 using QuixStreams.State.Storage.FileStorage;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace QuixStreams.State.UnitTests
 {
     public abstract class BaseCRUDShould
     {
+        protected readonly ITestOutputHelper output;
+
+        public BaseCRUDShould(ITestOutputHelper output)
+        {
+            this.output = output;
+        }
+        
         protected abstract BaseFileStorage GetStorage();
 
         protected async Task testLong(BaseFileStorage storage, string key, long inp)
@@ -188,6 +196,37 @@ namespace QuixStreams.State.UnitTests
 
             await storage.ClearAsync();
             (await storage.GetAllKeysAsync()).Length.Should().Be(0);
+        }
+
+        [Theory(Skip = "Intended for local use only")]
+        [InlineData(100, 512)]
+        [InlineData(1000, 512)]
+
+        [InlineData(100, 1024*1024)]
+        [InlineData(1000, 1024*1024)]
+        
+        [InlineData(10, 1024*1024*1024)]
+        [InlineData(100, 1024*1024*1024)]
+        public async Task PerfTest(int count, int size)
+        {
+            var start = DateTime.UtcNow;
+
+            var storage = this.GetStorage();
+            
+            var bytes = new byte[size];
+            var random = new Random();
+
+            for (int i = 0; i < count; i++)
+            {
+                random.NextBytes(bytes);
+                await storage.SaveRaw($"KEY_{i}", bytes);
+                await storage.SaveRaw($"KEY_{i}", bytes);
+            }
+
+
+            var end = DateTime.UtcNow;
+            this.output.WriteLine($"Took {end-start:g}");
+
         }
 
     }

@@ -300,7 +300,7 @@ namespace QuixStreams.Transport.Kafka
                     }
                     else
                     {
-                        this.logger.LogDebug("[{0}] {1}/{2} brokers are up (after all being marked down)", this.configId, upBrokerCount, this.brokerStates.Count);
+                        this.logger.LogDebug("[{0}] At least {1}/{2} brokers are up (after all being marked down).", this.configId, upBrokerCount, this.brokerStates.Count);
                     }
                 } 
                 do

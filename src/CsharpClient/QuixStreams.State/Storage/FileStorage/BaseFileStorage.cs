@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace QuixStreams.State.Storage.FileStorage
 {
@@ -16,24 +17,33 @@ namespace QuixStreams.State.Storage.FileStorage
         private readonly string storageDirectory;
 
         private static readonly string DefaultDir = Path.Combine(".", "state");
-        private static readonly string FileNameSpecialCharacter = "~";
+        private readonly ILogger<BaseFileStorage> logger;
+        private const string FileNameSpecialCharacter = "~";
+        private const string TempFileSuffix = ".tmpf";
+        private const string BackupFileSuffix = ".bckf";
+
 
         /// <summary>
         /// Initializes a new instance of <see cref="BaseFileStorage"/>
         /// </summary>
         /// <param name="storageDirectory">Directory where to store the state</param>
         /// <param name="autoCreateDir">Create the directory if it doesn't exist</param>
-        protected BaseFileStorage(string storageDirectory = null, bool autoCreateDir = true)
+        /// <param name="loggerFactory">The optional logger factory to create logger with</param>
+        protected BaseFileStorage(string storageDirectory = null, bool autoCreateDir = true, ILoggerFactory loggerFactory = null)
         {
-            this.storageDirectory = storageDirectory != null ? storageDirectory : DefaultDir;
+            this.storageDirectory = storageDirectory ?? DefaultDir;
+            this.logger = loggerFactory?.CreateLogger<BaseFileStorage>() ?? NullLogger<BaseFileStorage>.Instance;
 
             if (autoCreateDir)
             {
                 if (!Directory.Exists(this.storageDirectory))
                 {
+                    logger.LogTrace("Creating storage directory {0}", this.storageDirectory);
                     Directory.CreateDirectory(this.storageDirectory);
                 }
             }
+
+            CleanTempFiles(this.storageDirectory);
         }
 
         /// <summary>
@@ -91,21 +101,55 @@ namespace QuixStreams.State.Storage.FileStorage
         public async Task SaveRaw(string key, byte[] data)
         {
             key = key.ToLower();
+            
+            var tempKey = $"{key}{TempFileSuffix}";
+            var tempKeyFilePath = GetFilePath(tempKey);
+            var start = DateTime.UtcNow;
+            DateTime tempTimeStart, tempTimeEnd;
             // lock on the directory
             using (await this.LockInternalKey("", LockType.Reader))
             {
                 // lock on the key
                 using (await this.LockInternalKey(key, LockType.Writer))
                 {
-                    using (FileStream sourceStream = File.Open(GetFilePath(key), FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (FileStream sourceStream = File.Open(tempKeyFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         await sourceStream.WriteAsync(data, 0, data.Length);
                         await sourceStream.FlushAsync();
-                        sourceStream.Close();
+                        sourceStream.Close(); 
                         sourceStream.Dispose();
                     }
+                    
+                    var keyFilePath = GetFilePath(key);
+                    tempTimeStart = DateTime.UtcNow;
+#if NETSTANDARD2_0
+                    var backupKey = $"{key}{BackupFileSuffix}";
+                    var backupFilePath = GetFilePath(backupKey);
+                    var fileExists = false;
+                    try
+                    {
+                        File.Move(keyFilePath, backupFilePath);
+                        fileExists = true;
+                    }
+                    catch (FileNotFoundException ex)
+                    {
+                    }
+
+                    File.Move(tempKeyFilePath, keyFilePath);
+                    if (fileExists) File.Delete(backupFilePath);
+#else
+                    File.Move(tempKeyFilePath, keyFilePath, true);
+#endif
+                    tempTimeEnd = DateTime.UtcNow;
                 }
             }
+
+            var end = DateTime.UtcNow;
+#if NETSTANDARD2_0
+            this.logger.LogTrace("Saved state {0} in {1:g}, temp taking {2:g} (Move/Del).", key, end-start, tempTimeEnd-tempTimeStart);
+#else
+            this.logger.LogTrace("Saved state {0} in {1:g}, temp taking {2:g} (Move).", key, end-start, tempTimeEnd-tempTimeStart);
+#endif
         }
 
         /// <summary>
@@ -136,7 +180,6 @@ namespace QuixStreams.State.Storage.FileStorage
                     }
                 }
             }
-
             return result;
         }
 
@@ -171,6 +214,55 @@ namespace QuixStreams.State.Storage.FileStorage
                 File.Exists(GetFilePath(key))
             );
         }
+        
+        /// <summary>
+        /// Recursively cleans up temp/backup files
+        /// </summary>
+        /// <param name="folderName">Directory path to clean</param>
+        private void CleanTempFiles(string folderName)
+        {
+            var start = DateTime.UtcNow;
+            logger.LogTrace("Cleaning temp files");
+
+            void Helper(string folderToClean)
+            {
+                DirectoryInfo dir = new DirectoryInfo(folderToClean);
+
+                var cutoff = DateTime.UtcNow.AddMinutes(-1);
+                var files = dir.GetFiles();
+                foreach (FileInfo fi in files)
+                {
+#if NETSTANDARD2_0
+                    if (fi.FullName.EndsWith(BackupFileSuffix))
+                    {
+                        var originalFile = fi.FullName.Substring(0, fi.FullName.Length - BackupFileSuffix.Length);
+                        if (files.Any(y => y.FullName == originalFile))
+                        {
+                            fi.Delete(); // delete of a backup file failed as temp file successfully replaced it
+                        }
+                        else
+                        {
+                            fi.MoveTo(originalFile); // restore from backup file
+                        }
+                    }
+#endif
+
+                    if (fi.LastWriteTimeUtc > cutoff) continue;
+                    if (!fi.FullName.EndsWith(TempFileSuffix)) continue;
+                    fi.Delete();
+                }
+
+                foreach (DirectoryInfo di in dir.GetDirectories())
+                {
+                    Helper(di.FullName);
+                }
+            }
+            
+            Helper(folderName);
+            
+            var end = DateTime.UtcNow;
+            logger.LogTrace("Cleaned temp files in {0:g}", end-start);
+        }
 
         /// <summary>
         /// Recursively delete content of directory
@@ -178,18 +270,28 @@ namespace QuixStreams.State.Storage.FileStorage
         /// <param name="folderName">Directory path to remove</param>
         private void ClearFolder(string folderName)
         {
-            DirectoryInfo dir = new DirectoryInfo(folderName);
+            var start = DateTime.UtcNow;
+            logger.LogTrace("Cleaning folders");
 
-            foreach (FileInfo fi in dir.GetFiles())
+            void Helper(string folderToClean)
             {
-                fi.Delete();
-            }
+                DirectoryInfo dir = new DirectoryInfo(folderToClean);
 
-            foreach (DirectoryInfo di in dir.GetDirectories())
-            {
-                ClearFolder(di.FullName);
-                di.Delete();
+                foreach (FileInfo fi in dir.GetFiles())
+                {
+                    fi.Delete();
+                }
+
+                foreach (DirectoryInfo di in dir.GetDirectories())
+                {
+                    ClearFolder(di.FullName);
+                    di.Delete();
+                }
             }
+            Helper(folderName);
+
+            var end = DateTime.UtcNow;
+            logger.LogTrace("Cleaned folders in {0:g}", end-start);
         }
 
         /// <summary>
@@ -282,6 +384,9 @@ namespace QuixStreams.State.Storage.FileStorage
                         //is internal ( special ) file
                         continue;
                     }
+
+                    if (filePath.EndsWith(TempFileSuffix)) continue;
+                    if (filePath.EndsWith(BackupFileSuffix)) continue;
 
                     // Migrate from potentially different cases to lower case only
                     var key = GetKeyFromPath(filePath);

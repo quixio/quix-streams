@@ -4,6 +4,9 @@ import unittest
 from src.quixstreams.state.statevalue import StateValue
 from src.quixstreams.state.localfilestorage import LocalFileStorage
 
+#from src.quixstreams.logging import Logging, LogLevel
+#Logging.update_factory(LogLevel.Trace)
+
 
 class LocalFileStorageTests(unittest.TestCase):
 
