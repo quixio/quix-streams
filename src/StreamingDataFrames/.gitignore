@@ -1,0 +1,25 @@
+#Ignore PyCharm files
+.idea/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# pytest cache
+.pytest_cache
+
+# coverage reports
+.coverage
+
+#ignore environment
+env/
+
+#ignore build results
+build/
+dist/
+*egg-info
+**/__pycache__/**
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
