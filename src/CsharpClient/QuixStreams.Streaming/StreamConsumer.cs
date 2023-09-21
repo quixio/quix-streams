@@ -22,18 +22,17 @@ namespace QuixStreams.Streaming
         private readonly StreamTimeseriesConsumer streamTimeseriesConsumer;
         private readonly StreamEventsConsumer streamEventsConsumer;
         private bool isClosed = false;
-        private readonly StreamConsumerId streamConsumerId;
-        
+
         /// <summary>
         /// Initializes a new instance of <see cref="StreamConsumer"/>
         /// This constructor is called internally by the <see cref="StreamPipelineFactory"/>
         /// </summary>
         /// <param name="topicConsumer">The topic the reader belongs to</param>
-        /// <param name="streamConsumerId">Stream consumer identifier</param>
-        internal StreamConsumer(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId): base(streamConsumerId.StreamId)
+        /// <param name="id">Stream consumer identifier</param>
+        internal StreamConsumer(ITopicConsumer topicConsumer, StreamConsumerId id): base(id.StreamId)
         {
             this.topicConsumer = topicConsumer;
-            this.streamConsumerId = streamConsumerId;
+            this.Id = id;
             
             // Managed readers
             this.streamPropertiesConsumer = new StreamPropertiesConsumer(this.topicConsumer, this);
@@ -50,7 +49,10 @@ namespace QuixStreams.Streaming
         {
             
         }
-
+        
+        /// <inheritdoc />
+        public StreamConsumerId Id { get; }
+        
         /// <inheritdoc />
         public StreamPropertiesConsumer Properties => streamPropertiesConsumer;
 
@@ -82,7 +84,7 @@ namespace QuixStreams.Streaming
             this.logger.LogTrace("Creating Stream state manager for {0}", StreamId);
             return StreamStateManager.GetOrCreate(
                 this.topicConsumer,
-                new StreamConsumerId(streamConsumerId.ConsumerGroup, streamConsumerId.TopicName, streamConsumerId.Partition, StreamId),
+                new StreamConsumerId(Id.ConsumerGroup, Id.TopicName, Id.Partition, StreamId),
                 Logging.Factory);
             
         }

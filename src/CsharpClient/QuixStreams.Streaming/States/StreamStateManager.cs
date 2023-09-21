@@ -30,7 +30,7 @@ namespace QuixStreams.Streaming.States
         /// Initializes or gets an existing instance of the <see cref="StreamStateManager"/> class with the specified parameters.
         /// </summary>
         /// <param name="topicConsumer">The topic consumer used for committing state changes.</param>
-        /// <param name="streamConsumerId">Topic consumer partition information to use.</param>
+        /// <param name="streamConsumerId">Stream consumer identifier information.</param>
         /// <param name="loggerFactory">The logger factory used for creating loggers.</param>
         public static StreamStateManager GetOrCreate(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId, ILoggerFactory loggerFactory)
         {
@@ -40,10 +40,7 @@ namespace QuixStreams.Streaming.States
 
         public static void Revoke(StreamConsumerId streamConsumerId)
         {
-            if (!StreamStateManagers.TryRemove(streamConsumerId, out _))
-            {
-                throw new ArgumentException($"StreamStateManager not found, consumerGroup: {streamConsumerId.ConsumerGroup}, topicName: {streamConsumerId.TopicName}, partition: {streamConsumerId.Partition}, streamId: {streamConsumerId.StreamId}");
-            }
+            StreamStateManagers.TryRemove(streamConsumerId, out _);
         }
         
         private StreamStateManager(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId, ILoggerFactory loggerFactory)

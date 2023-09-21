@@ -16,6 +16,11 @@ namespace QuixStreams.Streaming
         /// Gets the stream Id of the stream.
         /// </summary>
         string StreamId { get; }
+        
+        /// <summary>
+        /// Stream consumer identifier information.
+        /// </summary>
+        StreamConsumerId Id { get; } 
 
         /// <summary>
         /// Gets the consumer for accessing the properties and metadata of the stream.
