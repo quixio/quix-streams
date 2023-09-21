@@ -2,8 +2,8 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from src.quixstreams.dataframes.platforms.quix.api import QuixPortalApiService
-from src.quixstreams.dataframes.platforms.quix.config import QuixKafkaConfigsBuilder
+from streamingdataframes.platforms.quix.api import QuixPortalApiService
+from streamingdataframes.platforms.quix.config import QuixKafkaConfigsBuilder
 
 
 @pytest.fixture()

@@ -11,6 +11,7 @@ pytest_plugins = [
     "tests.test_dataframes.test_dataframe.fixtures",
     "tests.test_dataframes.fixtures",
     "tests.test_dataframes.test_models.fixtures",
+    "tests.test_dataframes.test_platforms.test_quix.fixtures",
 ]
 
 KafkaContainer = namedtuple("KafkaContainer", ("broker_address",))

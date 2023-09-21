@@ -1,4 +1,4 @@
-from src.quixstreams.dataframes.platforms.quix.api import QuixPortalApiService
+from streamingdataframes.platforms.quix.api import QuixPortalApiService
 from io import BytesIO
 import zipfile
 from unittest.mock import create_autospec
