@@ -871,19 +871,19 @@ namespace QuixStreams.Streaming.IntegrationTests
         }
 
         [Fact]
-        public async Task StreamState_ShouldWorkWithMultiplePartitions()
+        public async Task StreamState_ShouldWorkOnRebalancing()
         {
-            var topic = nameof(StreamState_ShouldWorkWithMultiplePartitions);
+            var topic = nameof(StreamState_ShouldWorkOnRebalancing);
             await this.kafkaDockerTestFixture.EnsureTopic(topic, 2);
 
-            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
-            var topicConsumer2 = client.GetTopicConsumer(topic, "somerandomgroup2", autoOffset: AutoOffsetReset.Latest);
+            var topicConsumer = client.GetTopicConsumer(topic, "same_group", autoOffset: AutoOffsetReset.Latest);
+            var topicConsumer2 = client.GetTopicConsumer(topic, "same_group", autoOffset: AutoOffsetReset.Latest);
             
             var topicProducer = client.GetTopicProducer(topic);
             
             var msgCounter = 0;
 
-            void OnStreamReceived(object sender, IStreamConsumer stream)
+            void StreamReceived(object sender, IStreamConsumer stream)
             {
                 // Clean previous run
                 stream.GetStateManager().DeleteStates();
@@ -909,51 +909,54 @@ namespace QuixStreams.Streaming.IntegrationTests
                 };
             }
 
-            topicConsumer.OnStreamReceived += OnStreamReceived;
-            topicConsumer2.OnStreamReceived += OnStreamReceived;
+            topicConsumer.OnStreamReceived += StreamReceived;
+            topicConsumer2.OnStreamReceived += StreamReceived;
 
             topicConsumer.Subscribe();
-            topicConsumer2.Subscribe();
 
             var start = DateTime.UtcNow;
             var streamProducer = topicProducer.GetOrCreateStream("stream1");
-            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 5).Publish();
-            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 10).Publish();
-            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(3)).AddValue("param1", 9).Publish();
+            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 1).Publish();
+            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 1).Publish();
             streamProducer.Timeseries.Flush();
             //streamProducer.Close();
             
             var streamProducer2 = topicProducer.GetOrCreateStream("stream2");
             streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 5).Publish();
-            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 7).Publish();
-            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(3)).AddValue("param1", 4).Publish();
-            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(4)).AddValue("param2", 3).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 5).Publish();
             streamProducer2.Timeseries.Flush();
             //streamProducer2.Close();
 
+            topicConsumer2.Subscribe();
+            
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 10).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 10).Publish();
+            streamProducer2.Timeseries.Flush();
+            
             topicProducer.Dispose();
             output.WriteLine("Closed Producer");
-
-            // Wait for enough messages to be received
             
+            // Wait for enough messages to be received
             output.WriteLine("Waiting for messages");
-            SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10000));
+            SpinWait.SpinUntil(() => msgCounter == 6, TimeSpan.FromSeconds(10000));
             output.WriteLine($"Waited for messages, got {msgCounter}");
             
-            msgCounter.Should().Be(7);
+            msgCounter.Should().Be(6);
             output.WriteLine($"Got expected number of messages");
             
             topicConsumer.Commit();
 
             output.WriteLine($"Checking Stream 1 Rolling sum for params");
             var stream1StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
-            stream1StateRollingSum.Value.Should().Be(24);
+            stream1StateRollingSum.Value.Should().Be(2);
             output.WriteLine($"Checked Stream 1 Rolling sum for params");
             output.WriteLine($"Checking Stream 2 Rolling sum for params");
             var stream2StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
-            stream2StateRollingSum.Value.Should().Be(19);
+            stream2StateRollingSum.Value.Should().Be(30);
             output.WriteLine($"Checked Stream 2 Rolling sum for params");
+            
             topicConsumer.Dispose();
+            topicConsumer2.Dispose();
         }
     }
 }

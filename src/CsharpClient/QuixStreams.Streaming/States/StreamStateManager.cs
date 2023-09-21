@@ -38,7 +38,7 @@ namespace QuixStreams.Streaming.States
                 (key) => new StreamStateManager(topicConsumer, key, loggerFactory));
         }
 
-        public static void Revoke(StreamConsumerId streamConsumerId)
+        internal static void Revoke(StreamConsumerId streamConsumerId)
         {
             StreamStateManagers.TryRemove(streamConsumerId, out _);
         }
