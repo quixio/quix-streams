@@ -81,7 +81,7 @@ class App:
     @staticmethod
     def run(cancellation_token: CancellationToken = None,
             before_shutdown: Callable[[], None] = None,
-            subscribe: bool = False):
+            subscribe: bool = True):
         """
         Runs the application, managing streaming behaviors and automatic resource cleanup on shutdown.
 
