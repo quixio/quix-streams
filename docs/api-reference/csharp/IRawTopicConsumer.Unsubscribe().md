@@ -1,11 +1,10 @@
 #### [QuixStreams.Streaming](index.md 'index')
 ### [QuixStreams.Streaming.Raw](QuixStreams.Streaming.Raw.md 'QuixStreams.Streaming.Raw').[IRawTopicConsumer](IRawTopicConsumer.md 'QuixStreams.Streaming.Raw.IRawTopicConsumer')
 
-## IRawTopicConsumer.Subscribe() Method
+## IRawTopicConsumer.Unsubscribe() Method
 
-Start reading data from the topic.  
-Use 'OnMessageReceived' event to read messages after executing this method
+Stops reading data from the topic.
 
 ```csharp
-void Subscribe();
+void Unsubscribe();
 ```

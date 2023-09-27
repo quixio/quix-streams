@@ -34,6 +34,7 @@
     * [on\_error\_occurred](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.on_error_occurred)
     * [on\_error\_occurred](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.on_error_occurred)
     * [subscribe](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.subscribe)
+    * [unsubscribe](#quixstreams.raw.rawtopicconsumer.RawTopicConsumer.unsubscribe)
 * [quixstreams.raw.rawmessage](#quixstreams.raw.rawmessage)
   * [RawMessage](#quixstreams.raw.rawmessage.RawMessage)
     * [\_\_init\_\_](#quixstreams.raw.rawmessage.RawMessage.__init__)
@@ -393,6 +394,7 @@
     * [on\_committing](#quixstreams.topicconsumer.TopicConsumer.on_committing)
     * [on\_committing](#quixstreams.topicconsumer.TopicConsumer.on_committing)
     * [subscribe](#quixstreams.topicconsumer.TopicConsumer.subscribe)
+    * [unsubscribe](#quixstreams.topicconsumer.TopicConsumer.unsubscribe)
     * [commit](#quixstreams.topicconsumer.TopicConsumer.commit)
     * [get\_state\_manager](#quixstreams.topicconsumer.TopicConsumer.get_state_manager)
     * [get\_net\_pointer](#quixstreams.topicconsumer.TopicConsumer.get_net_pointer)
@@ -901,7 +903,17 @@ Sets the handler for when a stream experiences an exception during the asynchron
 def subscribe()
 ```
 
-Starts subscribing to the streams.
+Starts subscribing to the topic data.
+
+<a id="quixstreams.raw.rawtopicconsumer.RawTopicConsumer.unsubscribe"></a>
+
+#### unsubscribe
+
+```python
+def unsubscribe()
+```
+
+Unsubscribes from the topic data.
 
 <a id="quixstreams.raw.rawmessage"></a>
 
@@ -5005,7 +5017,8 @@ Provides utilities to handle default streaming behaviors and automatic resource 
 ```python
 @staticmethod
 def run(cancellation_token: CancellationToken = None,
-        before_shutdown: Callable[[], None] = None)
+        before_shutdown: Callable[[], None] = None,
+        subscribe: bool = True)
 ```
 
 Runs the application, managing streaming behaviors and automatic resource cleanup on shutdown.
@@ -5014,6 +5027,7 @@ Runs the application, managing streaming behaviors and automatic resource cleanu
 
 - `cancellation_token` - An optional CancellationToken to abort the application run with.
 - `before_shutdown` - An optional function to call before shutting down the application.
+- `subscribe` - Whether the consumer defined should be automatically subscribed to start receiving messages
 
 <a id="quixstreams.app.App.get_state_manager"></a>
 
@@ -5875,6 +5889,16 @@ def subscribe()
 
 Subscribes to streams in the topic.
 Use 'on_stream_received' event to consume incoming streams.
+
+<a id="quixstreams.topicconsumer.TopicConsumer.unsubscribe"></a>
+
+#### unsubscribe
+
+```python
+def unsubscribe()
+```
+
+Unsubscribes from streams in the topic.
 
 <a id="quixstreams.topicconsumer.TopicConsumer.commit"></a>
 

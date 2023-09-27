@@ -17,7 +17,8 @@ Implements [System.IDisposable](https://docs.microsoft.com/en-us/dotnet/api/Syst
 
 | Methods | |
 | :--- | :--- |
-| [Subscribe()](IRawTopicConsumer.Subscribe().md 'QuixStreams.Streaming.Raw.IRawTopicConsumer.Subscribe()') | Start reading streams.<br/>Use 'OnMessageReceived' event to read messages after executing this method |
+| [Subscribe()](IRawTopicConsumer.Subscribe().md 'QuixStreams.Streaming.Raw.IRawTopicConsumer.Subscribe()') | Start reading data from the topic.<br/>Use 'OnMessageReceived' event to read messages after executing this method |
+| [Unsubscribe()](IRawTopicConsumer.Unsubscribe().md 'QuixStreams.Streaming.Raw.IRawTopicConsumer.Unsubscribe()') | Stops reading data from the topic. |
 
 | Events | |
 | :--- | :--- |
