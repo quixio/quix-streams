@@ -1,18 +1,13 @@
+import contextlib
 import time
 import uuid
-from concurrent.futures import Future
 from typing import List
 
 import confluent_kafka
 import pytest
 from confluent_kafka import TopicPartition
 from confluent_kafka.error import KafkaError
-
-DEFAULT_TIMEOUT = 15.0
-
-
-def wait_for_future(fut: Future, timeout: float = DEFAULT_TIMEOUT):
-    return fut.result(timeout=timeout)
+from tests.utils import Timeout, DEFAULT_TIMEOUT
 
 
 def test_consumer_start_close(
@@ -79,15 +74,16 @@ class TestConsumerSubscribe:
         topic1, _ = topic_factory()
         topic2, _ = topic_factory()
 
-        assigned_partitions = Future()
+        assigned_partitions = []
 
         def on_assign(_, partitions: List[TopicPartition]):
-            assigned_partitions.set_result(partitions)
+            nonlocal assigned_partitions
+            assigned_partitions = partitions
 
         with consumer:
             consumer.subscribe(topics=[topic1, topic2], on_assign=on_assign)
             consumer.poll(timeout=5)
-            assigned_partitions = wait_for_future(assigned_partitions)
+
         assert len(assigned_partitions) == 2
         for partition in assigned_partitions:
             assert partition.topic in (topic1, topic2)
@@ -100,122 +96,79 @@ class TestConsumerSubscribe:
         topic1, _ = topic_factory()
         topic2, _ = topic_factory()
 
-        assigned_partitions = Future()
+        assigned_partitions = []
 
         def on_assign(_, partitions: List[TopicPartition]):
-            assigned_partitions.set_result(partitions)
+            nonlocal assigned_partitions
+            assigned_partitions = partitions
 
         with consumer:
             consumer.subscribe(topics=[topic1], on_assign=on_assign)
             consumer.poll(timeout=5)
-            partitions = wait_for_future(assigned_partitions)
-            assert len(partitions) == 1
+            assert len(assigned_partitions) == 1
 
-            assigned_partitions = Future()
+            assigned_partitions = []
             consumer.subscribe(topics=[topic1, topic2], on_assign=on_assign)
             consumer.poll(timeout=5)
-            partitions = wait_for_future(assigned_partitions)
-            assert len(partitions) == 2
+            assert len(assigned_partitions) == 2
 
 
 class TestConsumerOnAssign:
-    def test_consumer_on_assign_callback_single_consumer(
-        self, consumer, topic_factory, executor
-    ):
+    def test_consumer_on_assign_callback_single_consumer(self, consumer, topic_factory):
         topic_name, num_partitions = topic_factory()
 
-        num_partitions_assigned = Future()
+        num_partitions_assigned = 0
 
         def on_assign(
             _: confluent_kafka.Consumer,
             partitions: List[confluent_kafka.TopicPartition],
         ):
-            num_partitions_assigned.set_result(len(partitions))
+            nonlocal num_partitions_assigned
+            num_partitions_assigned = len(partitions)
 
         with consumer:
             consumer.subscribe(topics=[topic_name], on_assign=on_assign)
 
-            def poll():
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    assert msg is None
-
-            executor.submit(poll)
-            num_partitions_assigned = wait_for_future(num_partitions_assigned)
-            assert num_partitions == num_partitions_assigned
+            while Timeout():
+                msg = consumer.poll(timeout=0.1)
+                assert msg is None
+                if num_partitions == num_partitions_assigned:
+                    return
 
     def test_consumer_on_assign_callback_new_partition_added(
-        self, consumer, topic_factory, set_topic_partitions, executor
+        self, consumer, topic_factory, set_topic_partitions
     ):
         topic_name, num_partitions = topic_factory()
 
-        num_partitions_assigned = Future()
+        num_partitions_assigned = 0
 
         def on_assign(
             _: confluent_kafka.Consumer,
             partitions: List[confluent_kafka.TopicPartition],
         ):
-            num_partitions_assigned.set_result(len(partitions))
+            nonlocal num_partitions_assigned
+            num_partitions_assigned = len(partitions)
 
         with consumer:
             consumer.subscribe(topics=[topic_name], on_assign=on_assign)
 
-            def poll():
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    assert msg is None
-
-            executor.submit(poll)
-            # Wait for the initial partition assignment
-            assert wait_for_future(num_partitions_assigned) == 1
-            num_partitions_assigned = Future()
-            # Increase topic partitions count to 10
-            set_topic_partitions(topic=topic_name, num_partitions=10)
-            # Validate that new partitions are assigned to a consumer
-            assert wait_for_future(num_partitions_assigned) == 10
+            while Timeout():
+                msg = consumer.poll(timeout=0.1)
+                assert msg is None
+                # Wait for the initial partition assignment
+                if num_partitions_assigned == 1:
+                    # Increase topic partitions count to 10
+                    set_topic_partitions(topic=topic_name, num_partitions=10)
+                    # Reset variable back to 0
+                    num_partitions_assigned = 0
+                # Validate that new partitions are assigned to a consumer
+                if num_partitions_assigned == 10:
+                    return
 
 
 class TestConsumerOnRevoke:
-    def test_consumer_on_revoke_callback_consumer_closed(
-        self, consumer, topic_factory, executor
-    ):
-        """
-        Validate that Consumer handles on_revoke callback
-        """
-        topic_name, num_partitions = topic_factory()
-
-        num_partitions_assigned = Future()
-        num_partitions_revoked = Future()
-
-        def on_assign(
-            _: confluent_kafka.Consumer,
-            partitions: List[confluent_kafka.TopicPartition],
-        ):
-            num_partitions_assigned.set_result(len(partitions))
-
-        def on_revoke(
-            _: confluent_kafka.Consumer,
-            partitions: List[confluent_kafka.TopicPartition],
-        ):
-            num_partitions_revoked.set_result(len(partitions))
-
-        with consumer:
-            consumer.subscribe(
-                topics=[topic_name], on_assign=on_assign, on_revoke=on_revoke
-            )
-
-            def poll():
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    assert msg is None
-
-            executor.submit(poll)
-            wait_for_future(num_partitions_assigned)
-        num_partitions_revoked = wait_for_future(num_partitions_revoked)
-        assert num_partitions_revoked == num_partitions
-
     def test_consumer_on_revoke_callback_new_consumer_joined(
-        self, consumer_factory, topic_factory, executor
+        self, consumer_factory, topic_factory
     ):
         """
         Validate that Consumer handles on_revoke callback on new consumer
@@ -223,44 +176,48 @@ class TestConsumerOnRevoke:
         """
         topic_name, num_partitions = topic_factory(num_partitions=2)
 
-        num_partitions_assigned = Future()
-        num_partitions_revoked = Future()
+        num_partitions_assigned = 0
+        num_partitions_revoked = 0
 
         def on_assign(
             _: confluent_kafka.Consumer,
             partitions: List[confluent_kafka.TopicPartition],
         ):
-            num_partitions_assigned.set_result(len(partitions))
+            nonlocal num_partitions_assigned
+            num_partitions_assigned = len(partitions)
 
         def on_revoke(
             _: confluent_kafka.Consumer,
             partitions: List[confluent_kafka.TopicPartition],
         ):
-            num_partitions_revoked.set_result(len(partitions))
+            nonlocal num_partitions_revoked
+            num_partitions_revoked = len(partitions)
+
+        exit_stack = contextlib.ExitStack()
 
         # Start first consumer
-        with consumer_factory() as consumer1:
+        consumer1 = consumer_factory()
+        exit_stack.enter_context(consumer1)
+        with exit_stack:
             consumer1.subscribe(
                 topics=[topic_name], on_assign=on_assign, on_revoke=on_revoke
             )
 
-            def poll():
-                while True:
-                    msg = consumer1.poll(timeout=0.1)
-                    assert msg is None
+            while Timeout():
+                msg = consumer1.poll(timeout=0.1)
+                assert msg is None
 
-            executor.submit(poll)
-            # Wait until consumer has partitions assigned
-            wait_for_future(num_partitions_assigned)
+                # Wait until consumer has partitions assigned
+                if num_partitions_assigned > 0:
+                    # Start second consumer
+                    consumer2 = consumer_factory()
+                    exit_stack.enter_context(consumer2)
+                    consumer2.subscribe(topics=[topic_name])
+                    num_partitions_assigned = 0
 
-            # Start second consumer
-            with consumer_factory() as consumer2:
-                consumer2.subscribe(topics=[topic_name])
-                # Wait until partitions are revoked from the first consumer
-                num_partitions_revoked = wait_for_future(num_partitions_revoked)
-
-        # Make sure some partitions are revoked
-        assert num_partitions_revoked
+                # Make sure some partitions are revoked
+                if num_partitions_revoked > 0:
+                    return
 
 
 class TestConsumerPoll:
@@ -538,51 +495,60 @@ class TestConsumerAssignment:
             topics = consumer.assignment()
             assert not topics
 
-    def test_assignment_assigned(self, consumer, topic_factory, executor):
+    def test_assignment_assigned(self, consumer, topic_factory):
         topic, _ = topic_factory()
 
-        assigned = Future()
+        assigned = False
+
+        def on_assign(*args):
+            nonlocal assigned
+            assigned = True
+
         with consumer:
-            consumer.subscribe(
-                [topic], on_assign=lambda *args: assigned.set_result(True)
-            )
+            consumer.subscribe([topic], on_assign=on_assign)
 
-            def poll():
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    assert msg is None
+            while Timeout():
+                msg = consumer.poll(timeout=0.1)
+                assert msg is None
 
-            executor.submit(poll)
-            wait_for_future(assigned)
-            topics = consumer.assignment()
-            assert topics
-            assert topics[0].topic == topic
+                if assigned:
+                    topics = consumer.assignment()
+                    assert topics
+                    assert topics[0].topic == topic
+                    return
 
 
 class TestConsumerUnsubscribe:
-    def test_subscribe_assign_unsubscribe(self, topic_factory, consumer, executor):
+    def test_subscribe_assign_unsubscribe(self, topic_factory, consumer):
         topic, _ = topic_factory()
 
-        assigned = Future()
-        revoked = Future()
+        assigned = False
+        revoked = False
+
+        def on_assign(*args):
+            nonlocal assigned
+            assigned = True
+
+        def on_revoke(*args):
+            nonlocal revoked
+            revoked = True
 
         with consumer:
             consumer.subscribe(
                 [topic],
-                on_assign=lambda *args: assigned.set_result(True),
-                on_revoke=lambda *args: revoked.set_result(True),
+                on_assign=on_assign,
+                on_revoke=on_revoke,
             )
 
-            def poll():
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    assert msg is None
+            while Timeout():
+                msg = consumer.poll(timeout=0.1)
+                assert msg is None
 
-            executor.submit(poll)
-            wait_for_future(assigned)
-
-            consumer.unsubscribe()
-            wait_for_future(revoked)
+                if assigned:
+                    consumer.unsubscribe()
+                    assigned = False
+                if revoked:
+                    return
 
     def test_unsubscribe_not_subscribed(self, consumer):
         with consumer:
@@ -654,20 +620,14 @@ class TestConsumerPauseResume:
 
 
 class TestConsumerGetWatermarkOffsets:
-    def test_get_watermark_offsets_empty_topic(self, topic_factory, consumer, executor):
+    def test_get_watermark_offsets_empty_topic(self, topic_factory, consumer):
         topic, _ = topic_factory()
-        assigned = Future()
         with consumer:
-            consumer.subscribe(
-                topics=[topic], on_assign=lambda *args: assigned.set_result(True)
-            )
+            consumer.subscribe(topics=[topic])
 
-            def poll():
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    assert msg is None
+            msg = consumer.poll(timeout=5.0)
+            assert msg is None
 
-            executor.submit(poll)
             low, high = consumer.get_watermark_offsets(
                 partition=TopicPartition(topic=topic, partition=0)
             )
@@ -678,11 +638,8 @@ class TestConsumerGetWatermarkOffsets:
         self, topic_factory, consumer, producer
     ):
         topic, _ = topic_factory()
-        assigned = Future()
         with consumer, producer:
-            consumer.subscribe(
-                topics=[topic], on_assign=lambda *args: assigned.set_result(True)
-            )
+            consumer.subscribe(topics=[topic])
 
             consumer.poll(timeout=5.0)
             producer.produce(topic=topic, key="key", value="value")
@@ -700,13 +657,9 @@ class TestConsumerPositionSeek:
     def test_position_empty_topic(self, consumer, topic_factory):
         topic, _ = topic_factory(num_partitions=2)
 
-        assigned = Future()
         with consumer:
-            consumer.subscribe(
-                topics=[topic], on_assign=lambda *args: assigned.set_result(True)
-            )
+            consumer.subscribe(topics=[topic])
             consumer.poll(timeout=5.0)
-            wait_for_future(assigned)
 
             partitions = consumer.position(
                 partitions=[
@@ -734,7 +687,7 @@ class TestConsumerPositionSeek:
         assert partitions[0].offset == 1
 
     def test_position_with_committed_seek_to_beginning(
-        self, consumer_factory, producer, topic_factory, executor
+        self, consumer_factory, producer, topic_factory
     ):
         topic, _ = topic_factory()
 
@@ -747,21 +700,15 @@ class TestConsumerPositionSeek:
             producer.flush()
 
             # Consume and commit 3 messages
-            committed = Future()
-
-            def poll():
-                messages_count = 0
-                while True:
-                    msg = consumer.poll(timeout=0.1)
-                    if msg is None:
-                        continue
-                    consumer.commit(message=msg, asynchronous=False)
-                    messages_count += 1
-                    if messages_count == 3:
-                        committed.set_result(messages_count)
-
-            executor.submit(poll)
-            assert wait_for_future(committed) == 3
+            messages_count = 0
+            while Timeout():
+                msg = consumer.poll(timeout=0.1)
+                if msg is None:
+                    continue
+                consumer.commit(message=msg, asynchronous=False)
+                messages_count += 1
+                if messages_count == 3:
+                    break
 
             # Check that current position is 3
             partitions = consumer.position(

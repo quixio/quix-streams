@@ -37,14 +37,20 @@ def kafka_admin_client(kafka_container) -> AdminClient:
 
 
 @pytest.fixture()
-def consumer_factory(kafka_container):
+def random_consumer_group() -> str:
+    return str(uuid.uuid4())
+
+
+@pytest.fixture()
+def consumer_factory(kafka_container, random_consumer_group):
     def factory(
         broker_address: str = kafka_container.broker_address,
-        consumer_group: str = "tests",
+        consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         extra_config: dict = None,
     ) -> Consumer:
+        consumer_group = consumer_group or random_consumer_group
         extra_config = extra_config or {}
 
         # Make consumers to refresh cluster metadata often
@@ -91,11 +97,9 @@ def producer(producer_factory) -> Producer:
 @pytest.fixture()
 def executor() -> ThreadPoolExecutor:
     executor = ThreadPoolExecutor(1)
-    try:
-        yield executor
-    finally:
-        # Kill all the threads after leaving the test
-        executor.shutdown()
+    yield executor
+    # Kill all the threads after leaving the test
+    executor.shutdown(wait=False)
 
 
 @pytest.fixture()
@@ -157,16 +161,17 @@ def set_topic_partitions(kafka_admin_client):
 
 
 @pytest.fixture()
-def row_consumer_factory(kafka_container):
+def row_consumer_factory(kafka_container, random_consumer_group):
     def factory(
         broker_address: str = kafka_container.broker_address,
-        consumer_group: str = "tests",
+        consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         extra_config: dict = None,
         on_error: Optional[ConsumerErrorCallback] = None,
     ) -> RowConsumer:
         extra_config = extra_config or {}
+        consumer_group = consumer_group or random_consumer_group
 
         # Make consumers to refresh cluster metadata often
         # to react on re-assignment changes faster
@@ -226,7 +231,7 @@ def row_factory():
 
 
 @pytest.fixture()
-def runner_factory(kafka_container):
+def runner_factory(kafka_container, random_consumer_group):
     def factory(
         auto_offset_reset: AutoOffsetReset = "latest",
         consumer_extra_config: Optional[dict] = None,
@@ -238,7 +243,7 @@ def runner_factory(kafka_container):
     ) -> Runner:
         return Runner(
             broker_address=kafka_container.broker_address,
-            consumer_group="tests",
+            consumer_group=random_consumer_group,
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,

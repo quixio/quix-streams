@@ -1,3 +1,4 @@
+import time
 from concurrent.futures import Future
 from json import loads, dumps
 from unittest.mock import patch
@@ -16,7 +17,25 @@ from streamingdataframes.rowconsumer import (
     KafkaMessageError,
     RowConsumer,
 )
-from streamingdataframes.runner import RunnerNotStarted
+from streamingdataframes.runner import RunnerNotStarted, Runner
+
+
+def _stop_runner_on_future(runner: Runner, future: Future, timeout: float):
+    """
+    Call "Runner.stop" after the future is resolved to stop the poll loop
+    """
+    try:
+        future.result(timeout)
+    finally:
+        runner.stop()
+
+
+def _stop_runner_on_timeout(runner: Runner, timeout: float):
+    """
+    Call "Runner.stop" after the timeout expires to stop the poll loop
+    """
+    time.sleep(timeout)
+    runner.stop()
 
 
 class TestRunner:
@@ -58,22 +77,23 @@ class TestRunner:
         def on_message_processed(topic_, partition, offset):
             # Set the callback to track total messages processed
             # The callback is not triggered if processing fails
-            nonlocal processed_count, runner
+            nonlocal processed_count
 
             processed_count += 1
             # Stop processing after consuming all the messages
             if processed_count == total_messages:
                 done.set_result(True)
 
-        # Set up a runner and run it in background thread
         with runner_factory(
-            auto_offset_reset="earliest", on_message_processed=on_message_processed
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
         ) as runner:
-            executor.submit(runner.run, df)
+            # Stop runner when the future is resolved
+            executor.submit(_stop_runner_on_future, runner, done, 10.0)
+            runner.run(df)
 
-            done.result(timeout=10.0)
-            # Check that all messages have been processed
-            assert processed_count == total_messages
+        # Check that all messages have been processed
+        assert processed_count == total_messages
 
         # Ensure that the right offset is committed
         with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
@@ -102,14 +122,12 @@ class TestRunner:
         )
         df = StreamingDataFrame(topics=[topic])
 
-        # Launch a Runner in a background thread
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         with runner_factory(auto_offset_reset="error") as runner:
-            fut: Future = executor.submit(runner.run, df)
-            # Wait for exception to fail
-            exc = fut.exception(timeout=10.0)
-            # Ensure the type of the exception
-            assert isinstance(exc, KafkaMessageError)
+            # Stop runner after 10s if nothing failed
+            executor.submit(_stop_runner_on_timeout, runner, 10.0)
+            with pytest.raises(KafkaMessageError):
+                runner.run(df)
 
     def test_run_deserialization_error_raised(
         self, runner_factory, producer, topic_factory, consumer, executor
@@ -122,14 +140,12 @@ class TestRunner:
             producer.produce(topic=topic_name, value=b"abc")
 
         df = StreamingDataFrame(topics=[topic])
-        # Launch a Runner in a background thread
-        # Set "auto_offset_reset" to "error" to simulate errors in Consumer
+
         with runner_factory(auto_offset_reset="earliest") as runner:
-            fut: Future = executor.submit(runner.run, df)
-            # Wait for exception to fail
-            exc = fut.exception(timeout=10.0)
-            # Ensure the type of the exception
-            assert isinstance(exc, SerializationError)
+            with pytest.raises(SerializationError):
+                # Stop runner after 10s if nothing failed
+                executor.submit(_stop_runner_on_timeout, runner, 10.0)
+                runner.run(df)
 
     def test_run_consumer_error_suppressed(
         self, runner_factory, producer, topic_json_serdes_factory, consumer, executor
@@ -138,26 +154,25 @@ class TestRunner:
         df = StreamingDataFrame(topics=[topic])
 
         done = Future()
-        consumed = 0
+        polled = 0
 
         def on_error(exc, *args):
-            nonlocal consumed
+            nonlocal polled
             assert isinstance(exc, ValueError)
-            consumed += 1
-            if consumed > 1:
+            polled += 1
+            if polled > 1 and not done.done():
                 done.set_result(True)
             return True
 
-        # Launch a Runner in a background thread
-        # Patch RowConsumer.poll to simulate failures
         with runner_factory(on_consumer_error=on_error) as runner, patch.object(
             RowConsumer, "poll"
         ) as mocked:
+            # Patch RowConsumer.poll to simulate failures
             mocked.side_effect = ValueError("test")
-            executor.submit(runner.run, df)
-
-            assert done.result(10.0)
-            assert consumed > 1
+            # Stop runner when the future is resolved
+            executor.submit(_stop_runner_on_future, runner, done, 10.0)
+            runner.run(df)
+        assert polled > 1
 
     def test_run_processing_error_raised(
         self, topic_json_serdes_factory, producer, runner_factory, executor
@@ -175,12 +190,9 @@ class TestRunner:
             producer.produce(topic=topic.name, value=b'{"field":"value"}')
 
         with runner_factory(auto_offset_reset="earliest") as runner:
-            # Launch a Runner in a background thread
-            fut: Future = executor.submit(runner.run, df)
-            # Wait for exception to fail
-            exc = fut.exception(timeout=10.0)
-            # Ensure the type of the exception
-            assert isinstance(exc, ValueError)
+            with pytest.raises(ValueError):
+                executor.submit(_stop_runner_on_timeout, runner, 10.0)
+                runner.run(df)
 
     def test_run_processing_error_suppressed(
         self, topic_json_serdes_factory, producer, runner_factory, executor
@@ -209,13 +221,13 @@ class TestRunner:
                 done.set_result(True)
             return True
 
-        # Launch a Runner in a background thread
         with runner_factory(
             auto_offset_reset="earliest", on_processing_error=on_error
         ) as runner:
-            executor.submit(runner.run, df)
-            assert done.result(10.0)
-            assert produced == consumed
+            # Stop runner from the background thread when the future is resolved
+            executor.submit(_stop_runner_on_future, runner, done, 10.0)
+            runner.run(df)
+        assert produced == consumed
 
     def test_run_runner_isnot_started(self, runner_factory):
         topic = Topic("abc", value_deserializer=JSONDeserializer())
@@ -240,11 +252,9 @@ class TestRunner:
             auto_offset_reset="earliest",
             producer_extra_config={"message.max.bytes": 1000},
         ) as runner:
-            fut: Future = executor.submit(runner.run, df)
-            # Wait for exception to fail
-            exc = fut.exception(timeout=10.0)
-            # Ensure the type of the exception
-            assert isinstance(exc, KafkaException)
+            with pytest.raises(KafkaException):
+                executor.submit(_stop_runner_on_timeout, runner, 10.0)
+                runner.run(df)
 
     def test_run_serialization_error_raised(
         self, runner_factory, producer, topic_factory, executor
@@ -261,11 +271,9 @@ class TestRunner:
             producer.produce(topic_in.name, b'{"field":"value"}')
 
         with runner_factory(auto_offset_reset="earliest") as runner:
-            fut: Future = executor.submit(runner.run, df)
-            # Wait for exception to fail
-            exc = fut.exception(timeout=10.0)
-            # Ensure the type of the exception
-            assert isinstance(exc, SerializationError)
+            with pytest.raises(SerializationError):
+                executor.submit(_stop_runner_on_timeout, runner, 10.0)
+                runner.run(df)
 
     def test_run_producer_error_suppressed(
         self, runner_factory, producer, topic_factory, consumer, executor
@@ -297,6 +305,6 @@ class TestRunner:
         with runner_factory(
             auto_offset_reset="earliest", on_producer_error=on_error
         ) as runner:
-            executor.submit(runner.run, df)
-            done.result(timeout=10.0)
+            executor.submit(_stop_runner_on_future, runner, done, 10.0)
+            runner.run(df)
         assert produce_output_attempts == produce_input
