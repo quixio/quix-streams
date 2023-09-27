@@ -187,4 +187,5 @@ class Producer:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        logger.debug("Flushing Kafka Producer")
         self.flush()
