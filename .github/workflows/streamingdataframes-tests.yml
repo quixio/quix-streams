@@ -1,4 +1,4 @@
-name: [Streaming DataFrames] Tests
+name: '[Streaming DataFrames] Tests'
 
 on:
   push:
