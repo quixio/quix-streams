@@ -26,11 +26,7 @@ class PipelineFunction:
 
 
 class Pipeline:
-    def __init__(
-        self,
-        functions: list[PipelineFunction] = None,
-        _id: str = None
-    ):
+    def __init__(self, functions: list[PipelineFunction] = None, _id: str = None):
         self._id = _id or str(uuid.uuid4())
         self._functions = functions or []
 

@@ -181,7 +181,7 @@ class TestQuixKafkaConfigsBuilder:
         assert cfg_factory.quix_broker_config == api_response["broker"]
         assert cfg_factory.quix_broker_settings == {
             "brokerType": "SharedKafka",
-            "syncTopics": False
+            "syncTopics": False,
         }
         assert cfg_factory.workspace_meta == {
             "name": "12345",
