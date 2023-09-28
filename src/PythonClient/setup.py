@@ -82,7 +82,7 @@ try:
         ],
         python_requires='>=3.6, <4',
         install_requires=[
-            'pandas>=1.0.0,<2',
+            'pandas>=1.0.0,<3',
             'Deprecated>=1.1,<2'
         ]
     )
