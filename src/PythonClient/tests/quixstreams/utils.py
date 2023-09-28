@@ -1,4 +1,4 @@
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
 import src.quixstreams as qx
 from src.quixstreams import TimeseriesData, TimeseriesDataTimestamp, ParameterValueType
