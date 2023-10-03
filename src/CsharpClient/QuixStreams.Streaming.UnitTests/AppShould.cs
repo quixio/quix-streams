@@ -10,10 +10,19 @@ namespace QuixStreams.Streaming.UnitTests
     {
     
         [Fact]
-        public void GetStateManager_WithoutSetStateStorage_ShouldNotThrowException()
+        public void GetStateStorageRootDir_WithoutSetStateStorageRootDir_ShouldNotThrowException()
         {
             // Act
-            var manager = App.GetStateStorageRootDir();
+            var defaultStorageRootDir = App.GetStateStorageRootDir();
+            defaultStorageRootDir.Should().Be(Path.Combine(".", "state"));
+        }
+        
+        [Fact]
+        public void GetStateStorageType_WithoutSetStateStorageType_ShouldNotThrowException()
+        {
+            // Act
+            var defaultStorageType = App.GetStateStorageType();
+            defaultStorageType.Should().Be(StateStorageTypes.RocksDb);
         }
     
         [Fact(Skip = "Until reworked to use non-singleton only one of these tests will pass")]
