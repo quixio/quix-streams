@@ -36,9 +36,7 @@ namespace QuixStreams.Streaming.States
             this.scalarState = new State.ScalarState(storage, loggerFactory);
         }
         
-        /// <summary>
-        /// Sets the value of in-memory state to null and marks the state for clearing when flushed.
-        /// </summary>
+        /// <inheritdoc cref="IStreamState"/>
         public void Clear()
         {
             this.scalarState.Clear();
@@ -70,6 +68,12 @@ namespace QuixStreams.Streaming.States
         public void Reset()
         {
             this.scalarState.Reset();
+        }
+        
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            this.scalarState.Dispose();
         }
     }
     
@@ -136,6 +140,12 @@ namespace QuixStreams.Streaming.States
             this.scalarState.Flush();
             OnFlushed?.Invoke(this, EventArgs.Empty);
         }
+        
+        /// <inheritdoc cref="IStreamState"/>
+        public void Clear()
+        {
+            this.scalarState.Clear();
+        }
 
         /// <summary>
         /// Reset the state to before in-memory modifications
@@ -143,6 +153,12 @@ namespace QuixStreams.Streaming.States
         public void Reset()
         {
             this.scalarState.Reset();
+        }
+        
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            this.scalarState.Dispose();
         }
     }
 }

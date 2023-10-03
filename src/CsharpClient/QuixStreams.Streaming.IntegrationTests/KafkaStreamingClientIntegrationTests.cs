@@ -14,6 +14,7 @@ using QuixStreams.Streaming.Models;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
+using RocksDbSharp;
 using Xunit;
 using Xunit.Abstractions;
 using EventDefinition = QuixStreams.Telemetry.Models.EventDefinition;
@@ -958,5 +959,77 @@ namespace QuixStreams.Streaming.IntegrationTests
             topicConsumer.Dispose();
             topicConsumer2.Dispose();
         }
+        
+        [Fact]
+        public async Task StreamState_RocksDbDatabaseDisposedOnStreamRevoke()
+        {
+            var topic = nameof(StreamState_RocksDbDatabaseDisposedOnStreamRevoke);
+            await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
+
+            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
+            var topicProducer = client.GetTopicProducer(topic);
+            
+            var msgCounter = 0;
+            topicConsumer.OnStreamReceived += (sender, stream) =>
+            {
+                // Clean previous run
+                stream.GetStateManager().DeleteStates();
+                stream.GetScalarState("RandomScalar", (sid) => 0d);
+
+                stream.Timeseries.OnDataReceived += (o, args) =>
+                {
+                    msgCounter++;
+                };
+            };
+            
+            topicConsumer.Subscribe();
+
+            var start = DateTime.UtcNow;
+            var streamName = "stream1";
+            var streamProducer = topicProducer.GetOrCreateStream(streamName);
+            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 5).Publish();
+            streamProducer.Timeseries.Flush();
+
+            topicProducer.Dispose();
+            output.WriteLine("Closed Producer");
+
+            // Wait for enough messages to be received
+            
+            output.WriteLine("Waiting for messages");
+            SpinWait.SpinUntil(() => msgCounter == 1, TimeSpan.FromSeconds(10000));
+            output.WriteLine($"Waited for messages, got {msgCounter}");
+            
+            topicConsumer.Commit();
+            var storageDir = topicConsumer.GetStreamStateManager(streamName).StorageDir;
+            var openRocksDBinSecondProcessTask = Task.Run(() => AttemptToOpenRocksDb(storageDir));
+            
+            openRocksDBinSecondProcessTask.Result.Should().BeFalse("because the second process shouldn't be able to open a RocksDB connection, as one is already open at the same location.");
+            
+            topicConsumer.Dispose();
+            
+            openRocksDBinSecondProcessTask = Task.Run(() => AttemptToOpenRocksDb(storageDir));
+
+            openRocksDBinSecondProcessTask.Result.Should().BeTrue("because the second process should be able to open a RocksDB connection, as the connection of the first db was disposed.");
+
+            
+            bool AttemptToOpenRocksDb(string dbPath)
+            {
+                try
+                {
+                    using (RocksDb.Open(new DbOptions(), dbPath))
+                    {
+                        // This code path means that it was able to access the DB
+                        return true;
+                    }
+                }
+                catch (RocksDbException ex)
+                {
+                    // Returns false if the exception message contains the keyword "lock".
+                    return !ex.Message.Contains("lock");
+                }
+            }
+        }
+        
+        
     }
 }

@@ -125,5 +125,11 @@ namespace QuixStreams.State.Storage
             var streamStorage = new InMemoryStorage(storageName: streamId);
             streamStorage.Clear();
         }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+            // Nothing to dispose
+        }
     }
 }

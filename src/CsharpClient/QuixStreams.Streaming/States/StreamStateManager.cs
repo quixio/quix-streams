@@ -22,9 +22,13 @@ namespace QuixStreams.Streaming.States
         private readonly object stateLock = new object();
         private readonly Dictionary<string, IStreamState> states = new Dictionary<string, IStreamState>();
         private readonly string streamId;
-        private readonly string storageDir;
-
+        
         private static readonly ConcurrentDictionary<StreamConsumerId, StreamStateManager> StreamStateManagers = new ConcurrentDictionary<StreamConsumerId, StreamStateManager>();
+        
+        /// <summary>
+        /// The directory where the states are stored on disk. 
+        /// </summary>
+        public readonly string StorageDir;
         
         /// <summary>
         /// Initializes or gets an existing instance of the <see cref="StreamStateManager"/> class with the specified parameters.
@@ -38,9 +42,24 @@ namespace QuixStreams.Streaming.States
                 (key) => new StreamStateManager(topicConsumer, key, loggerFactory));
         }
 
-        internal static void Revoke(StreamConsumerId streamConsumerId)
+        /// <summary>
+        /// Tries to revoke the stream state manager for the specified stream consumer id.
+        /// </summary>
+        /// <param name="streamConsumerId"></param>
+        /// <returns></returns>
+        public static bool TryRevoke(StreamConsumerId streamConsumerId)
         {
-            StreamStateManagers.TryRemove(streamConsumerId, out _);
+            if (StreamStateManagers.TryRemove(streamConsumerId, out var stateManager))
+            {
+                foreach (var stateName in stateManager.states.Keys)
+                {
+                    stateManager.TryDisposeStreamState(stateName);
+                }
+
+                return true;
+            }
+
+            return false;
         }
         
         private StreamStateManager(ITopicConsumer topicConsumer, StreamConsumerId streamConsumerId, ILoggerFactory loggerFactory)
@@ -50,7 +69,12 @@ namespace QuixStreams.Streaming.States
             this.streamId = streamConsumerId.StreamId;
             this.logPrefix = $"{streamConsumerId.ConsumerGroup}-{streamConsumerId.TopicName}-{streamConsumerId.Partition}-{streamId}";
             this.logger = this.loggerFactory.CreateLogger<StreamStateManager>();
-            this.storageDir = Path.Combine(App.GetStateStorageRootDir(), streamConsumerId.ConsumerGroup, streamConsumerId.TopicName, streamConsumerId.Partition.ToString());
+            this.StorageDir = Path.Combine(App.GetStateStorageRootDir(), streamConsumerId.ConsumerGroup, streamConsumerId.TopicName, streamConsumerId.Partition.ToString());
+
+            if (this.topicConsumer != null)
+            {
+                topicConsumer.OnDisposed += (sender, args) => { TryRevoke(streamConsumerId); };
+            }
         }
         
         /// <summary>
@@ -62,7 +86,7 @@ namespace QuixStreams.Streaming.States
             
             if (App.GetStateStorageType() == StateStorageTypes.RocksDb)
             {
-                RocksDbStorage.DeleteStreamStates(storageDir, streamId);
+                RocksDbStorage.DeleteStreamStates(StorageDir, streamId);
             }
             else if (App.GetStateStorageType() == StateStorageTypes.InMemory)
             {
@@ -72,8 +96,11 @@ namespace QuixStreams.Streaming.States
             {
                 throw new ArgumentException("Invalid state storage type");
             }
-            
-            this.states.Clear();
+
+            foreach (var stateName in this.states.Keys)
+            {
+                TryDisposeStreamState(stateName);
+            }
         }
 
         /// <summary>
@@ -83,9 +110,10 @@ namespace QuixStreams.Streaming.States
         public void DeleteState(string stateName)
         {
             this.logger.LogTrace("Deleting Stream state {0} for {1}", stateName, streamId);
+            TryDisposeStreamState(stateName);
             var storage = GetStateStorage(stateName);
             storage.Clear();
-            this.states.Remove(stateName);
+            storage.Dispose();
         }
 
         /// <summary>
@@ -160,7 +188,7 @@ namespace QuixStreams.Streaming.States
         }
 
         /// <summary>
-        /// Creates a new application state of given type with automatically managed lifecycle for the stream
+        /// Creates a new stream state of given type with automatically managed lifecycle for the stream
         /// </summary>
         /// <param name="stateName">The name of the state</param>
         /// <param name="createState">The function to create the state</param>
@@ -221,16 +249,28 @@ namespace QuixStreams.Streaming.States
                     this.logger.LogDebug($"{prefix} | Stream revoked, discarding state.");
                     this.topicConsumer.OnCommitted -= CommittedHandler;
                     state.Reset();
-                    states.Remove(stateName); // Disposes the storage
+                    TryDisposeStreamState(stateName);
                 };
                 return state;
             }
         }
+        
+        private bool TryDisposeStreamState(string stateName)
+        {
+            if (this.states.Remove(stateName, out var state))
+            {
+                state.Dispose(); // Disposes the storage
+                return true;
+            }
+
+            return false;
+        }
+        
         private IStateStorage GetStateStorage(string stateName)
         {
             if (App.GetStateStorageType() == StateStorageTypes.RocksDb)
             {
-                return RocksDbStorage.GetStateStorage(storageDir, streamId, stateName);
+                return RocksDbStorage.GetStateStorage(StorageDir, streamId, stateName);
             }
             else if (App.GetStateStorageType() == StateStorageTypes.InMemory)
             {

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System;
 using System.Threading.Tasks;
 
 namespace QuixStreams.State.Storage
@@ -6,7 +6,7 @@ namespace QuixStreams.State.Storage
     /// <summary>
     /// The minimum definition for a state storage
     /// </summary>
-    public interface IStateStorage
+    public interface IStateStorage: IDisposable
     {
         /// <summary>
         /// Save raw data into the key

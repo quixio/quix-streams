@@ -11,7 +11,7 @@ namespace QuixStreams.State.Storage
     /// <summary>
     /// Key/Value storage using RocksDB that implements <see cref="IStateStorage"/> interface.
     /// </summary>
-    public class RocksDbStorage : IStateStorage, IDisposable
+    public class RocksDbStorage : IStateStorage
     {
         /// <summary>
         /// Holds references of RocksDb instances to ensure only one exists and avoid IO lock issue.
@@ -24,7 +24,7 @@ namespace QuixStreams.State.Storage
         private readonly string keyPrefix;
         private readonly string storageName;
 
-        private readonly WriteBatch writeBatch = new();
+        private WriteBatch writeBatch = new();
 
         private const char Separator = '/';
         
@@ -33,7 +33,7 @@ namespace QuixStreams.State.Storage
         /// </summary>
         /// <param name="dbDirectory">The directory to open the database</param>
         /// <param name="streamId">Stream id of the storage</param>
-        /// <param name="stateName">Stream id of the storage</param>
+        /// <param name="stateName">Stream name of the storage</param>
         public static RocksDbStorage GetStateStorage(string dbDirectory, string streamId, string stateName)
         {
             if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(streamId) || string.IsNullOrEmpty(stateName))
@@ -43,6 +43,23 @@ namespace QuixStreams.State.Storage
             
             var storageName = $"{streamId}{Separator}{stateName}";
             return new RocksDbStorage(dbDirectory, storageName);
+        }
+        
+        /// <summary>
+        /// Deletes all the states of a stream
+        /// </summary>
+        /// <param name="dbDirectory">The directory to open the database</param>
+        /// <param name="streamId">Stream id of the storage</param>
+        public static void DeleteStreamStates(string dbDirectory, string streamId)
+        {
+            if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(streamId))
+            {
+                throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(streamId)} cannot be null or empty.");
+            }
+            
+            using var streamStorage = new RocksDbStorage(dbDirectory, storageName: streamId);
+            
+            streamStorage.Clear();
         }
         
         /// <summary>
@@ -178,7 +195,7 @@ namespace QuixStreams.State.Storage
             }
             finally
             {
-                writeBatch.Clear();
+                writeBatch = new WriteBatch(); //As per documentation, creating a new object is recommended
             }
         }
         
@@ -199,27 +216,10 @@ namespace QuixStreams.State.Storage
             if (dbWithRefCount.IsUsed())
                 return;
             
-            dbWithRefCount.Db.Dispose(); // dispose the db
+            dbWithRefCount.Db.Dispose(); // closes and disposes the db
             RocksDbInstances.Remove(dbDirectory);
         }
         
-        /// <summary>
-        /// Deletes all the states of a stream
-        /// </summary>
-        /// <param name="dbDirectory">The directory to open the database</param>
-        /// <param name="streamId">Stream id of the storage</param>
-        public static void DeleteStreamStates(string dbDirectory, string streamId)
-        {
-            if (string.IsNullOrEmpty(dbDirectory) || string.IsNullOrEmpty(streamId))
-            {
-                throw new ArgumentException($"{nameof(dbDirectory)} and {nameof(streamId)} cannot be null or empty.");
-            }
-            
-            var streamStorage = new RocksDbStorage(dbDirectory, storageName: streamId);
-            
-            streamStorage.Clear();
-        }
-
         private static RocksDb GetOrCreateRocksDbInstance(string dbDirectory)
         {
             if (RocksDbInstances.TryGetValue(dbDirectory, out var rocksDbInstance))

@@ -222,6 +222,43 @@ namespace QuixStreams.State.UnitTests
             act.Should().Throw<ArgumentException>();
         }
         
+        [Fact]
+        public void Dipose_SecondProcessesShouldBeAbleToAccessTheDbAfterDisposed()
+        { 
+            // Act
+            var openRocksDBinSecondProcessTask = Task.Run(() => AttemptToOpenRocksDb(dbDirectory));
+
+            // Assert
+            openRocksDBinSecondProcessTask.Result.Should().BeFalse("because the second process shouldn't be able to open a RocksDB connection, as one is already open at the same location.");
+            
+            // Act
+            storage.Dispose();
+            openRocksDBinSecondProcessTask = Task.Run(() => AttemptToOpenRocksDb(dbDirectory));
+            
+            // Assert
+            openRocksDBinSecondProcessTask.Result.Should().BeTrue("because the second process should be able to open a RocksDB connection, as the connection of the first db was disposed.");
+        }
+        
+        /// <summary>
+        /// Attempts to open a RocksDB instance. Returns true if successful, and false if an exception with "lock" keyword is encountered.
+        /// </summary>
+        private bool AttemptToOpenRocksDb(string dbPath)
+        {
+            try
+            {
+                using (RocksDb.Open(new DbOptions(), dbPath))
+                {
+                    // This code path means that it was able to access the DB
+                    return true;
+                }
+            }
+            catch (RocksDbException ex)
+            {
+                // Returns false if the exception message contains the keyword "lock".
+                return !ex.Message.Contains("lock");
+            }
+        }
+        
         public void Dispose()
         {
             // Cleanup

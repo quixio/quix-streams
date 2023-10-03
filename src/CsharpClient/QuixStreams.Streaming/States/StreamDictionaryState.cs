@@ -191,6 +191,11 @@ namespace QuixStreams.Streaming.States
         {
             this.dictionaryState.Reset();
         }
+        
+        public void Dispose()
+        {
+            this.dictionaryState.Dispose();
+        }
     }
     
     /// <summary>
@@ -343,6 +348,11 @@ namespace QuixStreams.Streaming.States
         public void Reset()
         {
             this.dictionaryState.Reset();
+        }
+        
+        public void Dispose()
+        {
+            this.dictionaryState.Dispose();
         }
     }
 }

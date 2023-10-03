@@ -113,9 +113,7 @@ namespace QuixStreams.State
             this.Add((string)key, (StateValue)value);
         }
 
-        /// <summary>
-        /// Removes all key-value pairs from the in-memory state and marks the state for clearing when flushed.
-        /// </summary>
+        /// <inheritdoc cref="IState"/>
         public void Clear()
         {
             inMemoryState.Clear();
@@ -359,6 +357,14 @@ namespace QuixStreams.State
             var count = this.changes.Count;
             this.changes.Clear();
             this.logger.LogTrace($"Reset {count} state");
+        }
+        
+        /// <summary>
+        /// Releases storage resources used by the state.
+        /// </summary>
+        public void Dispose()
+        {
+            this.storage.Dispose();
         }
 
         /// <summary>
@@ -776,6 +782,13 @@ namespace QuixStreams.State
             this.logger.LogTrace($"Reset {count} state");
         }
         
+        /// <summary>
+        /// Releases storage resources used by the state.
+        /// </summary>
+        public void Dispose()
+        {
+            this.underlyingDictionaryState.Dispose();
+        }
         
         /// <summary>
         /// Represents the types of changes made to the state.

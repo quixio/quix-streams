@@ -142,6 +142,14 @@ namespace QuixStreams.State
             
             this.logger.LogTrace($"Reset state completed.");
         }
+        
+        /// <summary>
+        /// Releases storage resources used by the state.
+        /// </summary>
+        public void Dispose()
+        {
+            this.storage.Dispose();
+        }
     }
     
     /// <summary>
@@ -368,6 +376,14 @@ namespace QuixStreams.State
             this.inMemoryValue = genericConverter(this.underlyingScalarState.Value);
             
             this.logger.LogTrace($"Reset state completed.");
+        }
+        
+        /// <summary>
+        /// Releases storage resources used by the state.
+        /// </summary>
+        public void Dispose()
+        {
+            this.underlyingScalarState.Dispose();
         }
     }
 }

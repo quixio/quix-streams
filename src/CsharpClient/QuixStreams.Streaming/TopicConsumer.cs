@@ -104,7 +104,7 @@ namespace QuixStreams.Streaming
             {
                 if (iStreamPipeline is IStreamConsumer streamConsumer)
                 {
-                    StreamStateManager.Revoke(streamConsumer.Id);
+                    StreamStateManager.TryRevoke(streamConsumer.Id);
                 }
             }
             
