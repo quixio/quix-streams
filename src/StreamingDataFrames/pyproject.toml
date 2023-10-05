@@ -1,0 +1,24 @@
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  env
+)/
+'''
+
+[tool.isort]
+atomic = true
+profile = "black"
+line_length = 88
+
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+# Ignore manual tests by and some loggers by default
+addopts = "--log-disable=urllib3.connectionpool --log-disable=parso --log-disable=docker"
+
+# Print debug logs to the console in tests
+log_cli = true
+log_cli_level = "DEBUG"

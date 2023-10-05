@@ -83,7 +83,7 @@ class QuixPortalApiService:
                 self.session.get(f"/workspaces/{workspace_id}/certificates").content
             )
         ) as z:
-            with z.open('ca.cert') as f:
+            with z.open("ca.cert") as f:
                 return f.read()
 
     def get_auth_token_details(self) -> dict:

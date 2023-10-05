@@ -123,12 +123,25 @@ class Runner:
         self._exit_stack = contextlib.ExitStack()
 
     def start(self):
+        logger.debug("Initializing Runner")
         self._exit_stack.enter_context(self.producer)
         self._exit_stack.enter_context(self.consumer)
         self._running = True
 
     def stop(self):
+        """
+        Stop the internal poll loop and the message processing.
+
+        To close Kafka consumers and producers, call `close()`.
+        """
+        logger.debug("Stopping Runner")
         self._running = False
+
+    def close(self):
+        """
+        Close Kafka consumers and producers
+        """
+        logger.debug("Closing Runner and its Kafka consumers & producers")
         self._exit_stack.close()
 
     def run(
@@ -206,3 +219,4 @@ class Runner:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+        self.close()

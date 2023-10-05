@@ -1,20 +1,15 @@
-from concurrent.futures import Future
-
 import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
 from streamingdataframes import Topic
-from streamingdataframes.models import (
-    IgnoreMessage,
-    Deserializer,
-    SerializationError,
-)
+from streamingdataframes.models import Deserializer, IgnoreMessage, SerializationError
 from streamingdataframes.rowconsumer import KafkaMessageError
+from tests.utils import Timeout
 
 
 class TestRowConsumer:
     def test_poll_row_success(
-        self, row_consumer_factory, topic_json_serdes_factory, producer, executor
+        self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
         with row_consumer_factory(
@@ -23,24 +18,17 @@ class TestRowConsumer:
             producer.produce(topic=topic.name, key=b"key", value=b'{"field":"value"}')
             producer.flush()
             consumer.subscribe([topic])
-            polled = Future()
 
-            def poll():
-                while True:
-                    row = consumer.poll_row(0.1)
-                    if row is not None:
-                        polled.set_result(row)
-                        return
-
-            executor.submit(poll)
-            row = polled.result(10.0)
-
-        assert row
-        assert row.key == b"key"
-        assert row.value == {"field": "value"}
+            while Timeout():
+                row = consumer.poll_row(0.1)
+                if row is not None:
+                    assert row
+                    assert row.key == b"key"
+                    assert row.value == {"field": "value"}
+                    return
 
     def test_poll_row_multiple_topics(
-        self, row_consumer_factory, topic_json_serdes_factory, producer, executor
+        self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topics = [topic_json_serdes_factory(), topic_json_serdes_factory()]
         with row_consumer_factory(
@@ -52,21 +40,14 @@ class TestRowConsumer:
                 )
             producer.flush()
             consumer.subscribe(topics)
-            rows = Future()
 
-            def poll():
-                _rows = []
-                while True:
-                    row = consumer.poll_row(0.1)
-                    if row is not None:
-                        _rows.append(_rows)
-                        if len(_rows) == 2:
-                            rows.set_result(_rows)
-
-            executor.submit(poll)
-            rows = rows.result(10.0)
-
-        assert len(rows) == 2
+            rows = []
+            while Timeout():
+                row = consumer.poll_row(0.1)
+                if row is not None:
+                    rows.append(row)
+                    if len(rows) == 2:
+                        return
 
     def test_poll_row_kafka_error(self, row_consumer_factory):
         topic = Topic("123")
@@ -135,11 +116,12 @@ class TestRowConsumer:
     ):
         topic = topic_json_serdes_factory()
 
-        suppressed = Future()
+        suppressed = False
 
         def on_error(exc, *args):
             assert isinstance(exc, SerializationError)
-            suppressed.set_result(True)
+            nonlocal suppressed
+            suppressed = True
             return True
 
         with row_consumer_factory(
@@ -151,18 +133,19 @@ class TestRowConsumer:
             consumer.subscribe([topic])
             row = consumer.poll_row(10.0)
             assert row is None
-            assert suppressed.result(10.0)
+            assert suppressed
 
     def test_poll_row_kafka_error_suppress(
         self, row_consumer_factory, topic_json_serdes_factory, producer
     ):
         topic = topic_json_serdes_factory()
 
-        suppressed = Future()
+        suppressed = False
 
         def on_error(exc, *args):
             assert isinstance(exc, KafkaMessageError)
-            suppressed.set_result(True)
+            nonlocal suppressed
+            suppressed = True
             return True
 
         with row_consumer_factory(
@@ -174,4 +157,4 @@ class TestRowConsumer:
             consumer.subscribe([topic])
             row = consumer.poll_row(10.0)
             assert row is None
-            assert suppressed.result(10.0)
+            assert suppressed

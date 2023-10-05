@@ -1,10 +1,11 @@
-from .api import QuixPortalApiService
-from pathlib import Path
 from os import getcwd
-from requests import HTTPError
-from typing import Optional, Tuple
+from pathlib import Path
 from tempfile import gettempdir
+from typing import Optional, Tuple
 
+from requests import HTTPError
+
+from .api import QuixPortalApiService
 
 __all__ = ("QuixKafkaConfigsBuilder",)
 
@@ -121,7 +122,7 @@ class QuixKafkaConfigsBuilder:
         return f"{self.workspace_id}-{s}" if not s.startswith(self.workspace_id) else s
 
     def search_for_workspace(
-            self, workspace_name_or_id: Optional[str] = None
+        self, workspace_name_or_id: Optional[str] = None
     ) -> Optional[dict]:
         # TODO: there is more to do here to accommodate the new "environments" in v2
         # as it stands now, the search wont work with Quix v2 platform correctly if
@@ -165,13 +166,13 @@ class QuixKafkaConfigsBuilder:
             self._quix_broker_settings = ws_data.pop("brokerSettings")
         except KeyError:  # hold-over for platform v1
             self._quix_broker_settings = {
-                "brokerType": ws_data['brokerType'],
-                "syncTopics": False
+                "brokerType": ws_data["brokerType"],
+                "syncTopics": False,
             }
         self._workspace_meta = ws_data
 
     def search_workspace_for_topic(
-            self, workspace_id: str, topic: str
+        self, workspace_id: str, topic: str
     ) -> Optional[str]:
         """
         Search through all the topics in the given workspace id to see if there is a
@@ -219,7 +220,7 @@ class QuixKafkaConfigsBuilder:
         full_path = extract_to_folder / "ca.cert"
         if not full_path.is_file():
             extract_to_folder.mkdir(parents=True, exist_ok=True)
-            with open(full_path, 'wb') as f:
+            with open(full_path, "wb") as f:
                 f.write(
                     self.api.get_workspace_certificate(workspace_id=self._workspace_id)
                 )

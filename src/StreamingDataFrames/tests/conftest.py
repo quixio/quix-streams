@@ -16,11 +16,18 @@ pytest_plugins = [
 
 KafkaContainer = namedtuple("KafkaContainer", ("broker_address",))
 
+test_logger = logging.getLogger("streamingdataframes.tests")
 
-@pytest.fixture(autouse=True)
+
+@pytest.fixture(autouse=True, scope="session")
 def configure_logging():
     logging.config.dictConfig(LOGGING_CONFIG)
     patch_logger_class()
+
+
+@pytest.fixture(autouse=True)
+def log_test_progress(request: pytest.FixtureRequest):
+    test_logger.debug("Starting test %s", request.node.nodeid)
 
 
 @pytest.fixture(scope="session")

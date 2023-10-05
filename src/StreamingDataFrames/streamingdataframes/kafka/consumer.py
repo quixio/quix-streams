@@ -477,7 +477,9 @@ class Consumer:
 
         :rtype: None
         """
-        return self._consumer.close()
+        logger.debug("Closing Kafka consumer")
+        self._consumer.close()
+        logger.debug("Kafka consumer closed")
 
     @property
     def _consumer(self) -> ConfluentConsumer:
