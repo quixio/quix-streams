@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,41 +14,78 @@ namespace QuixStreams.State.Storage
         /// Represents the in-memory state holding the key-value pairs.
         /// </summary>
         private readonly IDictionary<string, byte[]> inMemoryState = new Dictionary<string, byte[]>();
-
-        private readonly object subStateLock = new object();
-        private readonly IDictionary<string, IStateStorage> subStates = new ConcurrentDictionary<string, IStateStorage>();
-
+        
+        private readonly string keyPrefix;
+        private readonly string storageName;
+        
+        private const char Separator = '/';
+        
+        /// <summary>
+        /// Instantiates a new instance of <see cref="InMemoryStorage"/>
+        /// </summary>
+        /// <param name="streamId">Stream id of the storage</param>
+        /// <param name="stateName">Stream id of the storage</param>
+        public static InMemoryStorage GetStateStorage(string streamId, string stateName)
+        {
+            if (string.IsNullOrEmpty(streamId) || string.IsNullOrEmpty(stateName))
+            {
+                throw new ArgumentException($"{nameof(streamId)} and {nameof(stateName)} cannot be null or empty.");
+            }
+            
+            var storageName = $"{streamId}{Separator}{stateName}";
+            return new InMemoryStorage(storageName);
+        }
+        
+        /// <summary>
+        /// Instantiates a new instance of <see cref="InMemoryStorage"/>
+        /// </summary>
+        /// <param name="storageName">Name of the storage. Used as a prefix to separate data of other states when they use the same db</param>
+        private InMemoryStorage(string storageName)
+        {
+            if (string.IsNullOrEmpty(storageName))
+            {
+                throw new ArgumentException($"{nameof(storageName)} cannot be null or empty.");
+            }
+            
+            this.keyPrefix = $"{storageName}{Separator}";
+            this.storageName = storageName;
+        }
+        
         /// <inheritdoc/>
         public Task SaveRaw(string key, byte[] data)
         {
-            this.inMemoryState[key] = data;
+            var prefixedKey = this.keyPrefix + key;
+            this.inMemoryState[prefixedKey] = data;
             return Task.CompletedTask;
         }
 
         /// <inheritdoc/>
         public Task<byte[]> LoadRaw(string key)
         {
-            return Task.FromResult(this.inMemoryState[key]);
+            var prefixedKey = this.keyPrefix + key;
+            return Task.FromResult(this.inMemoryState[prefixedKey]);
         }
 
         /// <inheritdoc/>
         public Task RemoveAsync(string key)
         {
-            this.inMemoryState.Remove(key);
+            var prefixedKey = this.keyPrefix + key;
+            this.inMemoryState.Remove(prefixedKey);
             return Task.CompletedTask;
         }
 
         /// <inheritdoc/>
         public Task<bool> ContainsKeyAsync(string key)
         {
-            var contains = this.inMemoryState.ContainsKey(key);
+            var prefixedKey = this.keyPrefix + key;
+            var contains = this.inMemoryState.ContainsKey(prefixedKey);
             return Task.FromResult(contains);
         }
 
         /// <inheritdoc/>
         public Task<string[]> GetAllKeysAsync()
         {
-            var keys = inMemoryState.Keys.ToArray();
+            var keys = inMemoryState.Keys.Select(x => x.Substring(this.keyPrefix.Length)).ToArray();
             return Task.FromResult(keys);
         }
 
@@ -58,7 +95,7 @@ namespace QuixStreams.State.Storage
             this.inMemoryState.Clear();
             return Task.CompletedTask;
         }
-
+        
         /// <inheritdoc/>
         public Task<int> Count()
         {
@@ -67,47 +104,32 @@ namespace QuixStreams.State.Storage
 
         /// <inheritdoc/>
         public bool IsCaseSensitive => true;
-
+        
         /// <inheritdoc/>
-        public IStateStorage GetOrCreateSubStorage(string subStorageName)
+        public void Flush() => throw new NotSupportedException();
+        
+        /// <inheritdoc/>
+        public bool CanPerformTransactions => false;
+        
+        /// <summary>
+        /// Deletes all the states of a stream
+        /// </summary>
+        /// <param name="streamId">Stream id of the storage</param>
+        public static void DeleteStreamStates(string streamId)
         {
-            if (this.subStates.TryGetValue(subStorageName, out var existing)) return existing;
-            lock (this.subStateLock)
+            if (string.IsNullOrEmpty(streamId))
             {
-                if (this.subStates.TryGetValue(subStorageName, out existing)) return existing;
-                var storage = new InMemoryStorage();
-                this.subStates[subStorageName] = storage;
-                return storage;
+                throw new ArgumentException($"{nameof(streamId)} cannot be null or empty.");
             }
             
+            var streamStorage = new InMemoryStorage(storageName: streamId);
+            streamStorage.Clear();
         }
 
-        /// <inheritdoc/>
-        public bool DeleteSubStorage(string subStorageName)
+        /// <inheritdoc />
+        public void Dispose()
         {
-            return this.subStates.Remove(subStorageName);
-        }
-
-        /// <inheritdoc/>
-        public int DeleteSubStorages()
-        {
-            int count = 0;
-            lock (this.subStateLock)
-            {
-                foreach (var sub in this.GetSubStorages())
-                {
-                    this.subStates.Remove(sub);
-                    count++;
-                }
-            }
-
-            return count;
-        }
-
-        /// <inheritdoc/>
-        public IEnumerable<string> GetSubStorages()
-        {
-            return this.subStates.Keys.ToArray();
+            // Nothing to dispose
         }
     }
 }

@@ -212,6 +212,7 @@ namespace QuixStreams.State
             }
         }
 
+        /// <inheritdoc/>
         public override int GetHashCode()
         {
             switch (this.Type)

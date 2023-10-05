@@ -7,12 +7,16 @@ namespace QuixStreams.State.UnitTests
 {
     public class ScalarStateShould
     {
+        private IStateStorage GetStateStorage()
+        {
+            return InMemoryStorage.GetStateStorage("testStream", "testState");
+        }
         
         [Fact]
         public void Constructor_UsingNonEmptyState_ShouldLoadState()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             storage.Set(ScalarState.StorageKey, new StateValue("whatever"));
             var state = new ScalarState(storage);
 
@@ -24,7 +28,7 @@ namespace QuixStreams.State.UnitTests
         public void SetValue_ShouldChangeValue()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
 
             // Act
@@ -38,7 +42,7 @@ namespace QuixStreams.State.UnitTests
         public void Clear_Value_ShouldSetToNull()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue("value");
 
@@ -53,7 +57,7 @@ namespace QuixStreams.State.UnitTests
         public void Flush_Value_ShouldPersistChangesToStorage()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue("value");
 
@@ -68,7 +72,7 @@ namespace QuixStreams.State.UnitTests
         public void Flush_ClearBeforeFlush_ShouldClearStorage()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue("value");
             state.Flush();
@@ -95,7 +99,7 @@ namespace QuixStreams.State.UnitTests
         public void Reset_Modified_ShouldResetToSaved()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue("value");
             state.Flush();
@@ -112,7 +116,7 @@ namespace QuixStreams.State.UnitTests
         public void Update_WithNullByteValue_ShouldBeRemovedFromState()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue(new byte[] {1,2,3});
             state.Flush();
@@ -130,7 +134,7 @@ namespace QuixStreams.State.UnitTests
         public void Update_WithNullObjectValue_ShouldBeRemovedFromState()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue(new byte[] {1,2,3}, StateValue.StateType.Object);
             state.Flush();
@@ -148,7 +152,7 @@ namespace QuixStreams.State.UnitTests
         public void Update_WithNullStringValue_ShouldBeRemovedFromState()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new ScalarState(storage);
             state.Value = new StateValue("something");
             state.Flush();

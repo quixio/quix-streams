@@ -116,6 +116,11 @@ namespace QuixStreams.State
                 }
             }
 
+            if (storage.CanPerformTransactions)
+            {
+                storage.Flush();
+            }
+            
             OnFlushed?.Invoke(this, EventArgs.Empty);
             this.logger.LogTrace("Flushed.");
         }
@@ -136,6 +141,14 @@ namespace QuixStreams.State
             this.inMemoryValue = this.storage.Get(StorageKey);
             
             this.logger.LogTrace($"Reset state completed.");
+        }
+        
+        /// <summary>
+        /// Releases storage resources used by the state.
+        /// </summary>
+        public void Dispose()
+        {
+            this.storage.Dispose();
         }
     }
     
@@ -363,6 +376,14 @@ namespace QuixStreams.State
             this.inMemoryValue = genericConverter(this.underlyingScalarState.Value);
             
             this.logger.LogTrace($"Reset state completed.");
+        }
+        
+        /// <summary>
+        /// Releases storage resources used by the state.
+        /// </summary>
+        public void Dispose()
+        {
+            this.underlyingScalarState.Dispose();
         }
     }
 }

@@ -8,11 +8,16 @@ namespace QuixStreams.State.UnitTests
 {
     public class DictionaryStateShould
     {
+        private IStateStorage GetStateStorage()
+        {
+            return InMemoryStorage.GetStateStorage("testStream", "testState");
+        }
+        
         [Fact]
         public void Constructor_UsingNonEmptyState_ShouldLoadState()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             storage.SetAsync("existing", new StateValue("whatever"));
             var state = new DictionaryState(storage);
 
@@ -25,7 +30,7 @@ namespace QuixStreams.State.UnitTests
         public void Add_StateValue_ShouldIncreaseCount()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
 
             // Act
@@ -39,7 +44,7 @@ namespace QuixStreams.State.UnitTests
         public void Remove_StateValue_ShouldDecreaseCount()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
@@ -54,7 +59,7 @@ namespace QuixStreams.State.UnitTests
         public void Clear_State_ShouldRemoveAllItems()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
@@ -70,7 +75,7 @@ namespace QuixStreams.State.UnitTests
         public async Task Flush_State_ShouldPersistChangesToStorage()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
@@ -86,7 +91,7 @@ namespace QuixStreams.State.UnitTests
         public async Task Flush_ClearBeforeFlush_ShouldClearStorage()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key1", new StateValue("value1"));
             state.Add("key2", new StateValue("value2"));
@@ -114,7 +119,7 @@ namespace QuixStreams.State.UnitTests
         public void ContainsKey_KeyExists_ShouldReturnTrue()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
@@ -129,7 +134,7 @@ namespace QuixStreams.State.UnitTests
         public void ContainsKey_KeyDoesNotExist_ShouldReturnFalse()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
 
             // Act
@@ -143,7 +148,7 @@ namespace QuixStreams.State.UnitTests
         public void TryGetValue_KeyExists_ShouldReturnTrueAndValue()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
@@ -159,7 +164,7 @@ namespace QuixStreams.State.UnitTests
         public void TryGetValue_KeyDoesNotExist_ShouldReturnFalseAndDefaultValue()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
 
             // Act
@@ -174,7 +179,7 @@ namespace QuixStreams.State.UnitTests
         public void Indexer_GetAndSet_ShouldWorkCorrectly()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
 
@@ -190,7 +195,7 @@ namespace QuixStreams.State.UnitTests
         public void Reset_Modified_ShouldResetToSaved()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue("value"));
             state.Flush();
@@ -208,7 +213,7 @@ namespace QuixStreams.State.UnitTests
         public void Update_WithNullValue_ShouldNotBeInStorage()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue(new byte[] {1,2,3}));
             state.Flush();
@@ -226,7 +231,7 @@ namespace QuixStreams.State.UnitTests
         public void Update_WithNull_ShouldNotBeInStorage()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState(storage);
             state.Add("key", new StateValue(new byte[] {1,2,3}));
             state.Flush();

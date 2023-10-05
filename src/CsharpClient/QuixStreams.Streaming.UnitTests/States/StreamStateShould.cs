@@ -12,7 +12,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         [Fact]
         public void Constructor_ShouldCreateStreamState()
         {
-            var streamState = new StreamDictionaryState<int>(new InMemoryStorage(), missingStateKey => -1, NullLoggerFactory.Instance);
+            var streamState = new StreamDictionaryState<int>(InMemoryStorage.GetStateStorage("myStream", "stateName"), missingStateKey => -1, NullLoggerFactory.Instance);
 
             streamState.Should().NotBeNull();
 
@@ -33,7 +33,7 @@ namespace QuixStreams.Streaming.UnitTests.States
         public void ComplexModifications_ShouldHaveExpectedValues()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = InMemoryStorage.GetStateStorage("myStream", "myState");
             var streamState = new StreamDictionaryState<string>(storage, null, NullLoggerFactory.Instance);
 
             // Act 1

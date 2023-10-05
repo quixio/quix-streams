@@ -14,6 +14,7 @@ using QuixStreams.Streaming.Models;
 using QuixStreams.Telemetry.Kafka;
 using QuixStreams.Telemetry.Models;
 using QuixStreams.Telemetry.Models.Utility;
+using RocksDbSharp;
 using Xunit;
 using Xunit.Abstractions;
 using EventDefinition = QuixStreams.Telemetry.Models.EventDefinition;
@@ -683,14 +684,12 @@ namespace QuixStreams.Streaming.IntegrationTests
             var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
             var topicProducer = client.GetTopicProducer(topic);
             
-            // Clean previous run
-            var topicStateManager = topicConsumer.GetStateManager();
-            topicStateManager.DeleteStreamStates();
-            topicStateManager.GetStreamStates().Should().BeEmpty();
-
             var msgCounter = 0;
             topicConsumer.OnStreamReceived += (sender, stream) =>
             {
+                // Clean previous run
+                stream.GetStateManager().DeleteStates();
+
                 var rollingSum = stream.GetScalarState("RollingSumTotal", (sid) => 0d);
                 var rollingSumPerParameter = stream.GetDictionaryState("RollingSum", (sid) => 0d);
 
@@ -734,39 +733,32 @@ namespace QuixStreams.Streaming.IntegrationTests
 
             topicProducer.Dispose();
             output.WriteLine("Closed Producer");
-            
+
             // Wait for enough messages to be received
             
             output.WriteLine("Waiting for messages");
             SpinWait.SpinUntil(() => msgCounter == 7, TimeSpan.FromSeconds(10000));
             output.WriteLine($"Waited for messages, got {msgCounter}");
-
-
+            
             msgCounter.Should().Be(7);
             output.WriteLine($"Got expected number of messages");
             topicConsumer.Commit();
-            topicConsumer.Dispose();
 
-            output.WriteLine($"Checking if topic state manager returns the expected stream states");
-            var manager = App.GetStateManager().GetTopicStateManager(topic);
-            manager.GetStreamStates().Should().BeEquivalentTo(new List<string>() { "stream1", "stream2" });
-            
             output.WriteLine($"Checking Stream 1 Rolling sum for params");
-            var stream1StateRollingSum = manager.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
-            var stream1StateRollingSumPerParam = manager.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
+            var stream1StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
+            var stream1StateRollingSumPerParam = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetDictionaryState<double>("RollingSum");
             stream1StateRollingSumPerParam["param1"].Should().Be(14);
             stream1StateRollingSumPerParam["param2"].Should().Be(10);
             stream1StateRollingSum.Value.Should().Be(24);
             output.WriteLine($"Checked Stream 1 Rolling sum for params");
             output.WriteLine($"Checking Stream 2 Rolling sum for params");
-            var stream2StateRollingSum = manager.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
-            var stream2StateRollingSumPerParam = manager.GetStreamStateManager(streamProducer2.StreamId).GetDictionaryState<double>("RollingSum");
+            var stream2StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
+            var stream2StateRollingSumPerParam = topicConsumer.GetStreamStateManager(streamProducer2.StreamId).GetDictionaryState<double>("RollingSum");
             stream2StateRollingSumPerParam["param1"].Should().Be(9);
             stream2StateRollingSumPerParam["param2"].Should().Be(10);
             stream2StateRollingSum.Value.Should().Be(19);
             output.WriteLine($"Checked Stream 2 Rolling sum for params");
-
-            topicStateManager.DeleteStreamStates().Should().Be(2);
+            topicConsumer.Dispose();
         }
         
         [Fact]
@@ -779,11 +771,6 @@ namespace QuixStreams.Streaming.IntegrationTests
             var topicProducer = client.GetTopicProducer(topic);
 
             var testLength = TimeSpan.FromSeconds(10);
-            // Clean previous run
-            var topicStateManager = topicConsumer.GetStateManager();
-            topicStateManager.DeleteStreamStates();
-            topicStateManager.GetStreamStates().Should().BeEmpty();
-
             var mre = new ManualResetEvent(false);
 
             var exceptionOccurred = false;
@@ -791,11 +778,13 @@ namespace QuixStreams.Streaming.IntegrationTests
             var msgCounter = 0;
             topicConsumer.OnStreamReceived += (sender, stream) =>
             {
+                // Clean previous run
+                stream.GetStateManager().DeleteStates();
+                
                 mre.Set();
                 stream.Timeseries.OnDataReceived += (o, args) =>
                 {
                     var rollingSum = stream.GetDictionaryState("RollingSum", (sid) => 0d);
-
                     try
                     {
                         foreach (var data in args.Data.Timestamps)
@@ -881,5 +870,166 @@ namespace QuixStreams.Streaming.IntegrationTests
             this.output.WriteLine($"Wrote {iteration} iteration");
             exceptionOccurred.Should().BeFalse();
         }
+
+        [Fact]
+        public async Task StreamState_ShouldWorkOnRebalancing()
+        {
+            var topic = nameof(StreamState_ShouldWorkOnRebalancing);
+            await this.kafkaDockerTestFixture.EnsureTopic(topic, 2);
+
+            var topicConsumer = client.GetTopicConsumer(topic, "same_group", autoOffset: AutoOffsetReset.Latest);
+            var topicConsumer2 = client.GetTopicConsumer(topic, "same_group", autoOffset: AutoOffsetReset.Latest);
+            
+            var topicProducer = client.GetTopicProducer(topic);
+            
+            var msgCounter = 0;
+
+            void StreamReceived(object sender, IStreamConsumer stream)
+            {
+                // Clean previous run
+                stream.GetStateManager().DeleteStates();
+
+                var rollingSum = stream.GetScalarState("RollingSumTotal", (sid) => 0d);
+
+                stream.Timeseries.OnDataReceived += (o, args) =>
+                {
+                    foreach (var data in args.Data.Timestamps)
+                    {
+                        foreach (var parameter in data.Parameters)
+                        {
+                            if (parameter.Value.Type == ParameterValueType.Numeric)
+                            {
+                                rollingSum.Value += parameter.Value.NumericValue ?? 0;
+
+                                this.output.WriteLine($"Rolling sum is {rollingSum.Value}");
+                            }
+                        }
+                    }
+
+                    msgCounter++;
+                };
+            }
+
+            topicConsumer.OnStreamReceived += StreamReceived;
+            topicConsumer2.OnStreamReceived += StreamReceived;
+
+            topicConsumer.Subscribe();
+
+            var start = DateTime.UtcNow;
+            var streamProducer = topicProducer.GetOrCreateStream("stream1");
+            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 1).Publish();
+            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 1).Publish();
+            streamProducer.Timeseries.Flush();
+            //streamProducer.Close();
+            
+            var streamProducer2 = topicProducer.GetOrCreateStream("stream2");
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 5).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 5).Publish();
+            streamProducer2.Timeseries.Flush();
+            //streamProducer2.Close();
+
+            topicConsumer2.Subscribe();
+            
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 10).Publish();
+            streamProducer2.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(2)).AddValue("param2", 10).Publish();
+            streamProducer2.Timeseries.Flush();
+            
+            topicProducer.Dispose();
+            output.WriteLine("Closed Producer");
+            
+            // Wait for enough messages to be received
+            output.WriteLine("Waiting for messages");
+            SpinWait.SpinUntil(() => msgCounter == 6, TimeSpan.FromSeconds(10000));
+            output.WriteLine($"Waited for messages, got {msgCounter}");
+            
+            msgCounter.Should().Be(6);
+            output.WriteLine($"Got expected number of messages");
+            
+            topicConsumer.Commit();
+
+            output.WriteLine($"Checking Stream 1 Rolling sum for params");
+            var stream1StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer.StreamId).GetScalarState<double>("RollingSumTotal");
+            stream1StateRollingSum.Value.Should().Be(2);
+            output.WriteLine($"Checked Stream 1 Rolling sum for params");
+            output.WriteLine($"Checking Stream 2 Rolling sum for params");
+            var stream2StateRollingSum = topicConsumer.GetStreamStateManager(streamProducer2.StreamId).GetScalarState<double>("RollingSumTotal");
+            stream2StateRollingSum.Value.Should().Be(30);
+            output.WriteLine($"Checked Stream 2 Rolling sum for params");
+            
+            topicConsumer.Dispose();
+            topicConsumer2.Dispose();
+        }
+        
+        [Fact]
+        public async Task StreamState_RocksDbDatabaseDisposedOnStreamRevoke()
+        {
+            var topic = nameof(StreamState_RocksDbDatabaseDisposedOnStreamRevoke);
+            await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
+
+            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
+            var topicProducer = client.GetTopicProducer(topic);
+            
+            var msgCounter = 0;
+            topicConsumer.OnStreamReceived += (sender, stream) =>
+            {
+                // Clean previous run
+                stream.GetStateManager().DeleteStates();
+                stream.GetScalarState("RandomScalar", (sid) => 0d);
+
+                stream.Timeseries.OnDataReceived += (o, args) =>
+                {
+                    msgCounter++;
+                };
+            };
+            
+            topicConsumer.Subscribe();
+
+            var start = DateTime.UtcNow;
+            var streamName = "stream1";
+            var streamProducer = topicProducer.GetOrCreateStream(streamName);
+            streamProducer.Timeseries.Buffer.AddTimestamp(start.AddMicroseconds(1)).AddValue("param1", 5).Publish();
+            streamProducer.Timeseries.Flush();
+
+            topicProducer.Dispose();
+            output.WriteLine("Closed Producer");
+
+            // Wait for enough messages to be received
+            
+            output.WriteLine("Waiting for messages");
+            SpinWait.SpinUntil(() => msgCounter == 1, TimeSpan.FromSeconds(10000));
+            output.WriteLine($"Waited for messages, got {msgCounter}");
+            
+            topicConsumer.Commit();
+            var storageDir = topicConsumer.GetStreamStateManager(streamName).StorageDir;
+            var openRocksDBinSecondProcessTask = Task.Run(() => AttemptToOpenRocksDb(storageDir));
+            
+            openRocksDBinSecondProcessTask.Result.Should().BeFalse("because the second process shouldn't be able to open a RocksDB connection, as one is already open at the same location.");
+            
+            topicConsumer.Dispose();
+            
+            openRocksDBinSecondProcessTask = Task.Run(() => AttemptToOpenRocksDb(storageDir));
+
+            openRocksDBinSecondProcessTask.Result.Should().BeTrue("because the second process should be able to open a RocksDB connection, as the connection of the first db was disposed.");
+
+            
+            bool AttemptToOpenRocksDb(string dbPath)
+            {
+                try
+                {
+                    using (RocksDb.Open(new DbOptions(), dbPath))
+                    {
+                        // This code path means that it was able to access the DB
+                        return true;
+                    }
+                }
+                catch (RocksDbException ex)
+                {
+                    // Returns false if the exception message contains the keyword "lock".
+                    return !ex.Message.Contains("lock");
+                }
+            }
+        }
+        
+        
     }
 }

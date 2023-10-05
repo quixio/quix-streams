@@ -33,6 +33,5 @@ namespace QuixStreams.Streaming
         /// Event raised when a new package of <see cref="EventDataRaw"/> values have been received.
         /// </summary>
         event Action<IStreamConsumer, QuixStreams.Telemetry.Models.EventDataRaw> OnEventData;
-
     }
 }

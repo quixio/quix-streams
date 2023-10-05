@@ -5,7 +5,7 @@ namespace QuixStreams.Streaming.States
     /// <summary>
     /// Interface for a stream state
     /// </summary>
-    public interface IStreamState
+    public interface IStreamState: IDisposable
     {
         /// <summary>
         /// Raised immediately before a flush operation is performed.
@@ -16,6 +16,11 @@ namespace QuixStreams.Streaming.States
         /// Raised immediately after a flush operation is completed.
         /// </summary>
         event EventHandler OnFlushed;
+        
+        /// <summary>
+        /// Clears the value of in-memory state and marks the state for clearing when flushed.
+        /// </summary>
+        void Clear();
 
         /// <summary>
         /// Flushes the changes made to the in-memory state to the specified storage.

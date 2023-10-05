@@ -11,10 +11,15 @@ namespace QuixStreams.State.UnitTests
 
     public class StateTemplatedShould
     {
+        private IStateStorage GetStateStorage()
+        {
+            return InMemoryStorage.GetStateStorage("testStream", "testState");
+        }
+        
         [Fact]
         public void Constructor_ShouldCreateState()
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<int>(storage);
 
             state.Should().NotBeNull();
@@ -33,7 +38,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", "TestValue")]
         public void StringConversion_ShouldStoreAndRetrieveCorrectly(string key, string value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<string>(storage);
 
             state[key] = value;
@@ -51,7 +56,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 3.14)]
         public void DoubleConversion_ShouldStoreAndRetrieveCorrectly(string key, double value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<double>(storage);
 
             state[key] = value;
@@ -69,7 +74,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 3.146546597897)]
         public void DecimalConversion_ShouldStoreAndRetrieveCorrectly(string key, decimal value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<decimal>(storage);
 
             state[key] = value;
@@ -87,7 +92,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 42.0f)]
         public void FloatConversion_ShouldStoreAndRetrieveCorrectly(string key, float value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<float>(storage);
 
             state[key] = value;
@@ -106,7 +111,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", false)]
         public void BoolConversion_ShouldStoreAndRetrieveCorrectly(string key, bool value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<bool>(storage);
 
             state[key] = value;
@@ -125,7 +130,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 'A')]
         public void CharConversion_ShouldStoreAndRetrieveCorrectly(string key, char value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<char>(storage);
 
             state[key] = value;
@@ -143,7 +148,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 1234567890123456789L)]
         public void LongConversion_ShouldStoreAndRetrieveCorrectly(string key, long value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<long>(storage);
 
             state[key] = value;
@@ -161,7 +166,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 1234567890123456789UL)]
         public void UlongConversion_ShouldStoreAndRetrieveCorrectly(string key, ulong value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<ulong>(storage);
 
             state[key] = value;
@@ -180,7 +185,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 42)]
         public void IntConversion_ShouldStoreAndRetrieveCorrectly(string key, int value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<int>(storage);
 
             state[key] = value;
@@ -198,7 +203,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", 42u)]
         public void UintConversion_ShouldStoreAndRetrieveCorrectly(string key, uint value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<uint>(storage);
 
             state[key] = value;
@@ -216,7 +221,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", (short)42)]
         public void ShortConversion_ShouldStoreAndRetrieveCorrectly(string key, short value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<short>(storage);
 
             state[key] = value;
@@ -234,7 +239,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", (ushort)42u)]
         public void UshortConversion_ShouldStoreAndRetrieveCorrectly(string key, ushort value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<ushort>(storage);
 
             state[key] = value;
@@ -252,7 +257,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", (byte)42)]
         public void ByteConversion_ShouldStoreAndRetrieveCorrectly(string key, byte value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<byte>(storage);
 
             state[key] = value;
@@ -270,7 +275,7 @@ namespace QuixStreams.State.UnitTests
         [InlineData("TestKey", (sbyte)42u)]
         public void SbyteConversion_ShouldStoreAndRetrieveCorrectly(string key, sbyte value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<sbyte>(storage);
 
             state[key] = value;
@@ -288,7 +293,7 @@ namespace QuixStreams.State.UnitTests
         [MemberData(nameof(GetDateTimeValues))]
         public void DatetimeConversion_ShouldStoreAndRetrieveCorrectly(string key, DateTime value)
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<DateTime>(storage);
 
             state[key] = value;
@@ -310,7 +315,7 @@ namespace QuixStreams.State.UnitTests
         [Fact]
         public void CustomClassConversion_ShouldStoreAndRetrieveCorrectly()
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var key = "TestKey";
             var state = new DictionaryState<CustomClass>(storage);
 
@@ -329,7 +334,7 @@ namespace QuixStreams.State.UnitTests
         [Fact]
         public void ListCustomClassConversion_ShouldStoreAndRetrieveCorrectly()
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var key = "TestKey";
             var state = new DictionaryState<List<CustomClass>>(storage);
             state.Clear();
@@ -353,7 +358,7 @@ namespace QuixStreams.State.UnitTests
         [Fact]
         public void OperationWithElement_ShouldStoreAndRetrieveCorrectly()
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var key = "TestKey";
             var state = new DictionaryState<int>(storage);
 
@@ -368,7 +373,7 @@ namespace QuixStreams.State.UnitTests
         [Fact]
         public void Clear_ShouldRemoveAllValues()
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             // Arrange
             var state = new DictionaryState<string>(storage);
             state.Add("Key1", "Value1");
@@ -387,7 +392,7 @@ namespace QuixStreams.State.UnitTests
         [Fact]
         public void ComplexModifications_ShouldHaveExpectedValues()
         {
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             // Arrange
             var state = new DictionaryState<string>(storage);
 
@@ -437,7 +442,7 @@ namespace QuixStreams.State.UnitTests
         public void Reset_Modified_ShouldResetToSaved()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<string>(storage);
             state.Add("key", "value");
             state.Flush();
@@ -455,7 +460,7 @@ namespace QuixStreams.State.UnitTests
         public void Add_WithNullValue_ShouldRemoveFromState()
         {
             // Arrange
-            var storage = new InMemoryStorage();
+            var storage = GetStateStorage();
             var state = new DictionaryState<object>(storage);
             state.Add("key", "value");
             state.Flush();

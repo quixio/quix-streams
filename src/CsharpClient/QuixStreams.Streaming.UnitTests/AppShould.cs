@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using FluentAssertions;
 using QuixStreams.State.Storage;
 using Xunit;
@@ -9,27 +10,36 @@ namespace QuixStreams.Streaming.UnitTests
     {
     
         [Fact]
-        public void GetStateManager_WithoutSetStateStorage_ShouldNotThrowException()
+        public void GetStateStorageRootDir_WithoutSetStateStorageRootDir_ShouldNotThrowException()
         {
             // Act
-            var manager = App.GetStateManager();
+            var defaultStorageRootDir = App.GetStateStorageRootDir();
+            defaultStorageRootDir.Should().Be(Path.Combine(".", "state"));
+        }
+        
+        [Fact]
+        public void GetStateStorageType_WithoutSetStateStorageType_ShouldNotThrowException()
+        {
+            // Act
+            var defaultStorageType = App.GetStateStorageType();
+            defaultStorageType.Should().Be(StateStorageTypes.RocksDb);
         }
     
         [Fact(Skip = "Until reworked to use non-singleton only one of these tests will pass")]
-        public void SetStateStorage_ShouldNotThrowException()
+        public void SetStateStorageRootDir_ShouldNotThrowException()
         {
             // Act
-            App.SetStateStorage(new InMemoryStorage());
+            App.SetStateStorageRootDir(Path.Combine(".", "state"));
         }
     
         [Fact(Skip = "Until reworked to use non-singleton only one of these tests will pass")]
-        public void SetStateStorage_CalledTwice_ShouldThrowException()
+        public void SetStateStorageRootDir_CalledTwice_ShouldThrowException()
         {
             // Arrange
-            App.SetStateStorage(new InMemoryStorage());
+            App.SetStateStorageRootDir(Path.Combine(".", "state"));
         
             // Act
-            Action action = () => App.SetStateStorage(new InMemoryStorage());
+            Action action = () => App.SetStateStorageRootDir(Path.Combine(".", "otherLocation"));
         
             // Assert
             action.Should().Throw<InvalidOperationException>();

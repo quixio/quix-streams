@@ -141,6 +141,9 @@ namespace QuixStreams.State.Serializers
         /// <returns>Deserialized State value</returns>
         public static StateValue Deserialize(byte[] data)
         {
+            if (data == null)
+                return null;
+            
             ValidateChecksum(data);
 
             using (MemoryStream stream = new MemoryStream(data))

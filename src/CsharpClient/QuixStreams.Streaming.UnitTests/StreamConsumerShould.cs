@@ -1,4 +1,5 @@
 using FluentAssertions;
+using QuixStreams.Streaming.Models;
 using QuixStreams.Streaming.UnitTests.Helpers;
 using QuixStreams.Telemetry.Models;
 using Xunit;
@@ -7,11 +8,18 @@ namespace QuixStreams.Streaming.UnitTests
 {
     public class StreamConsumerShould
     {
+        private StreamConsumer GetTestStreamConsumer()
+        {
+            return new StreamConsumer(
+                new TestStreamingClient().GetTopicConsumer(),
+                new StreamConsumerId("myCGroup", "myTopic",0, "myStream"));
+        }
+        
         [Fact]
         public void Close_ShouldRaiseTerminatedCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
+            var streamConsumer = GetTestStreamConsumer();
             StreamEndType? endType = null;
             streamConsumer.OnStreamClosed += (sender, args) =>
             {
@@ -29,7 +37,7 @@ namespace QuixStreams.Streaming.UnitTests
         public void Dispose_ShouldRaiseTerminatedCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
+            var streamConsumer = GetTestStreamConsumer();
             StreamEndType? endType = null;
             streamConsumer.OnStreamClosed += (sender, args) =>
             {
@@ -47,7 +55,7 @@ namespace QuixStreams.Streaming.UnitTests
         public void SendStreamEnd_ShouldRaiseExpectedCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
+            var streamConsumer = GetTestStreamConsumer();
             StreamEndType? endType = null;
             streamConsumer.OnStreamClosed += (sender, args) =>
             {
@@ -65,7 +73,7 @@ namespace QuixStreams.Streaming.UnitTests
         public void SendStreamEndAndClose_ShouldRaiseOnlyStreamEndCloseType()
         {
             // Arrange
-            var streamConsumer = new StreamConsumer(new TestStreamingClient().GetTopicConsumer(), "asdf");
+            var streamConsumer = GetTestStreamConsumer();
             StreamEndType? endType = null;
             var closeCount = 0;
             streamConsumer.OnStreamClosed += (sender, args) =>

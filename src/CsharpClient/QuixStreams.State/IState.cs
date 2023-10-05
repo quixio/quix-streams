@@ -5,7 +5,7 @@ namespace QuixStreams.State
     /// <summary>
     /// Interface for a state
     /// </summary>
-    public interface IState
+    public interface IState: IDisposable
     {
         /// <summary>
         /// Raised immediately before a flush operation is performed.

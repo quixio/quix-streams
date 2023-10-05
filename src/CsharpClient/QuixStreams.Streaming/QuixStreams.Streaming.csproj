@@ -5,9 +5,9 @@
     <Configurations>Debug;Release;Python</Configurations>
     <Platforms>AnyCPU</Platforms>
     <LangVersion>8.0</LangVersion>
-
+    
     <TargetFramework Condition=" '$(Configuration)' == 'Python' ">net8.0</TargetFramework>
-    <TargetFrameworks Condition=" '$(Configuration)' != 'Python' ">net7.0;netstandard2.0</TargetFrameworks>
+    <TargetFrameworks Condition=" '$(Configuration)' != 'Python' ">net7.0;netstandard2.1</TargetFrameworks>
   </PropertyGroup>
 
   <PropertyGroup>
