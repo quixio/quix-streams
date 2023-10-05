@@ -69,6 +69,7 @@ class StreamingDataFrame:
     df.process(record_0) -> produces {'column_b': 4, 'column_c': 6} to "my_output_topic"
     df.process(record_1) -> filters row, does NOT produce to "my_output_topic"
     """
+
     def __init__(
         self, topics: List[Topic], _pipeline: Pipeline = None, _id: str = None
     ):
