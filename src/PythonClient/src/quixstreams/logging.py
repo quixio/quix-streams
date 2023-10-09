@@ -21,3 +21,4 @@ class Logging:
     def update_factory(level: LogLevel):
         net_loglevel = ec.enum_to_another(level, LogLevelInterop)
         LoggingInterop.UpdateFactory(net_loglevel)
+

@@ -79,13 +79,16 @@ class App:
     """
 
     @staticmethod
-    def run(cancellation_token: CancellationToken = None, before_shutdown: Callable[[], None] = None):
+    def run(cancellation_token: CancellationToken = None,
+            before_shutdown: Callable[[], None] = None,
+            subscribe: bool = True):
         """
         Runs the application, managing streaming behaviors and automatic resource cleanup on shutdown.
 
         Args:
             cancellation_token: An optional CancellationToken to abort the application run with.
             before_shutdown: An optional function to call before shutting down the application.
+            subscribe: Whether the consumer defined should be automatically subscribed to start receiving messages
         """
 
         def wrapper():
@@ -114,9 +117,9 @@ class App:
 
         try:
             if cancellation_token is not None:
-                ai.Run(cancellationToken=cancellation_token.get_net_pointer(), beforeShutdown=wrapper)
+                ai.Run(cancellationToken=cancellation_token.get_net_pointer(), beforeShutdown=wrapper, subscribe=subscribe)
             else:
-                ai.Run(beforeShutdown=wrapper)
+                ai.Run(beforeShutdown=wrapper, subscribe=subscribe)
         except KeyboardInterrupt:
             pass
 

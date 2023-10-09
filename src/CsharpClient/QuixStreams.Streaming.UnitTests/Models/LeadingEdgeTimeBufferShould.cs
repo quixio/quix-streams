@@ -12,9 +12,9 @@ using Xunit.Abstractions;
 
 namespace QuixStreams.Streaming.UnitTests.Models
 {
-    public class LeadingEdgeBufferShould
+    public class LeadingEdgeTimeBufferShould
     {
-        public LeadingEdgeBufferShould(ITestOutputHelper helper)
+        public LeadingEdgeTimeBufferShould(ITestOutputHelper helper)
         {
             QuixStreams.Logging.Factory = helper.CreateLoggerFactory();
         }
@@ -25,11 +25,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
 
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(5000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(5000);
             
             var publishedData = new List<TimeseriesDataRaw>();
             streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
@@ -56,11 +56,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
 
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(1000);
             
             var publishedData = new List<TimeseriesDataRaw>();
             streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
@@ -89,11 +89,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
 
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(1000);
             
             var backfilledData = new List<TimeseriesData>();
             buffer.OnBackfill += (sender, data) =>
@@ -138,11 +138,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
 
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(1000);
             
             var backfilledData = new List<TimeseriesData>();
             buffer.OnBackfill += (sender, data) =>
@@ -158,24 +158,25 @@ namespace QuixStreams.Streaming.UnitTests.Models
             
             
             //Act
-            var tag1 = new Dictionary<string, string>()
-            {
-                { "a", "b" }
-            };
-            
-            buffer.GetOrCreateTimestamp(40 * (long)1e6, tag1).AddValue("ms_value", 789); 
+            // First value and tag should preserve
+            buffer.GetOrCreateTimestamp(40 * (long)1e6)
+                .AddValue("ms_value", 123)
+                .AddTag("tag_1", "value_1"); 
 
-            Dictionary<string, string> tag2 = null;
-            foreach (var timestampInMs in new []{40})
-            {
-                buffer.GetOrCreateTimestamp(40 * (long)1e6, tag2).AddValue("ms_value", 456); 
-            }
+            buffer.GetOrCreateTimestamp(40 * (long)1e6)
+                .AddValue("ms_value", 456)
+                .AddTag("tag_1", "value_2");
+
+            // new value and tag should happen
+            buffer.GetOrCreateTimestamp(50 * (long)1e6)
+                .AddValue("ms_value", 123)
+                .AddTag("tag_1", "value_1"); 
+
+            buffer.GetOrCreateTimestamp(50 * (long)1e6)
+                .AddValue("ms_value", 456, true)
+                .AddTag("tag_1", "value_2", true);
             
-            var tag3 = new Dictionary<string, string>()
-            {
-                { "a", "c" }
-            };
-            buffer.GetOrCreateTimestamp(40 * (long)1e6, tag3).AddValue("ms_value", 123);
+            
             buffer.GetOrCreateTimestamp(5000 * (long)1e6).AddValue("ms_value", 123);
 
             buffer.Publish();
@@ -189,14 +190,14 @@ namespace QuixStreams.Streaming.UnitTests.Models
                 Epoch = 0,
                 BinaryValues = new Dictionary<string, byte[][]>(),
                 StringValues = new Dictionary<string, string[]>(),
-                Timestamps = new long[] {40* (long)1e6, 40* (long)1e6, 40* (long)1e6},
+                Timestamps = new long[] {40* (long)1e6, 50* (long)1e6},
                 NumericValues = new Dictionary<string, double?[]>()
                 {
-                    {"ms_value", new double?[] {789, 456, 123}}
+                    {"ms_value", new double?[] {123, 456}}
                 },
                 TagValues = new Dictionary<string, string[]>()
                 {
-                    {"a", new [] {"b", null, "c"}}
+                    {"tag_1", new [] {"value_1", "value_2"}}
                 }
             });
         }
@@ -208,11 +209,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch);
             
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(1000);
             
             var publishedData = new List<TimeseriesDataRaw>();
             streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
@@ -242,11 +243,11 @@ namespace QuixStreams.Streaming.UnitTests.Models
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
             var offsetTs = TimeSpan.FromSeconds(1);
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch + offsetTs);
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch + offsetTs);
             
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(1000);
             
             var publishedData = new List<TimeseriesDataRaw>();
             streamProducer.Publish(Arg.Do<TimeseriesDataRaw>(x=>
@@ -269,17 +270,17 @@ namespace QuixStreams.Streaming.UnitTests.Models
         }
         
         [Fact]
-        public void Flush_WithEpochInLeadingEdgeBuffer_ShouldFlushExpected()
+        public void Flush_WithEpochInLeadingEdgeTimeBuffer_ShouldFlushExpected()
         {
             // Arrange
             var topicProducer = Substitute.For<ITopicProducer>();
             var streamProducer = Substitute.For<IStreamProducerInternal>();
             var offsetTs = TimeSpan.FromSeconds(1);
-            streamProducer.Epoch.Returns(TimeExtensions.UnixEpoch.AddTicks(offsetTs.ToNanoseconds() * 10000 / 1000)); // this should be totally ignored
+            streamProducer.Epoch.Returns(DateTime.UnixEpoch.AddTicks(offsetTs.ToNanoseconds() * 10000 / 1000)); // this should be totally ignored
             
             var timeseriesProducer = new QuixStreams.Streaming.Models.StreamProducer.StreamTimeseriesProducer(topicProducer, streamProducer);
 
-            var buffer = timeseriesProducer.CreateLeadingEdgeBuffer(1000);
+            var buffer = timeseriesProducer.CreateLeadingEdgeTimeBuffer(1000);
             buffer.Epoch = (int)(offsetTs.TotalMilliseconds * 1e6); // this should not be ignored
             
             var publishedData = new List<TimeseriesDataRaw>();

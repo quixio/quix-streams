@@ -1,28 +1,28 @@
 #### [QuixStreams.Streaming](index.md 'index')
-### [QuixStreams.Streaming.Models](QuixStreams.Streaming.Models.md 'QuixStreams.Streaming.Models').[LeadingEdgeTimestamp](LeadingEdgeTimestamp.md 'QuixStreams.Streaming.Models.LeadingEdgeTimestamp')
+### [QuixStreams.Streaming.Models](QuixStreams.Streaming.Models.md 'QuixStreams.Streaming.Models').[LeadingEdgeTimeRow](LeadingEdgeTimeRow.md 'QuixStreams.Streaming.Models.LeadingEdgeTimeRow')
 
-## LeadingEdgeTimestamp.AddValue(string, byte[], bool) Method
+## LeadingEdgeTimeRow.AddValue(string, byte[], bool) Method
 
 Adds a value to the row
 
 ```csharp
-public QuixStreams.Streaming.Models.LeadingEdgeTimestamp AddValue(string parameter, byte[] value, bool overwrite=false);
+public QuixStreams.Streaming.Models.LeadingEdgeTimeRow AddValue(string parameter, byte[] value, bool overwrite=false);
 ```
 #### Parameters
 
-<a name='QuixStreams.Streaming.Models.LeadingEdgeTimestamp.AddValue(string,byte[],bool).parameter'></a>
+<a name='QuixStreams.Streaming.Models.LeadingEdgeTimeRow.AddValue(string,byte[],bool).parameter'></a>
 
 `parameter` [System.String](https://docs.microsoft.com/en-us/dotnet/api/System.String 'System.String')
 
 Parameter name
 
-<a name='QuixStreams.Streaming.Models.LeadingEdgeTimestamp.AddValue(string,byte[],bool).value'></a>
+<a name='QuixStreams.Streaming.Models.LeadingEdgeTimeRow.AddValue(string,byte[],bool).value'></a>
 
 `value` [System.Byte](https://docs.microsoft.com/en-us/dotnet/api/System.Byte 'System.Byte')[[]](https://docs.microsoft.com/en-us/dotnet/api/System.Array 'System.Array')
 
 Value of the parameter
 
-<a name='QuixStreams.Streaming.Models.LeadingEdgeTimestamp.AddValue(string,byte[],bool).overwrite'></a>
+<a name='QuixStreams.Streaming.Models.LeadingEdgeTimeRow.AddValue(string,byte[],bool).overwrite'></a>
 
 `overwrite` [System.Boolean](https://docs.microsoft.com/en-us/dotnet/api/System.Boolean 'System.Boolean')
 
@@ -30,4 +30,4 @@ If set to true, it will overwrite an existing value for the specified parameter 
             If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current LeadingEdgeTimestamp instance.
 
 #### Returns
-[LeadingEdgeTimestamp](LeadingEdgeTimestamp.md 'QuixStreams.Streaming.Models.LeadingEdgeTimestamp')
+[LeadingEdgeTimeRow](LeadingEdgeTimeRow.md 'QuixStreams.Streaming.Models.LeadingEdgeTimeRow')

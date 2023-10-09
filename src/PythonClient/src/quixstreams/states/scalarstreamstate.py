@@ -46,17 +46,6 @@ class ScalarStreamState(Generic[StreamStateType]):
         self._on_flushing = None
         self._on_flushing_refs = None  # Keeping reference to avoid garbage collection
 
-        # Check if type is immutable, because it needs special handling. Content could change without ScalarStreamState being
-        # notified
-        self._immutable = self._type in (int, float, bool, complex, str, bytes, bytearray, range)
-        self._on_flushing_internal = None
-        if not self._immutable:
-            def on_flushing_internal():
-                self._underlying_value = self._in_memory_value
-
-            self._on_flushing_internal = on_flushing_internal
-            self.on_flushing = None  # this will subscribe to the event and invoke the internal
-
     def _finalizerfunc(self):
         self._on_flushed_dispose()
         self._on_flushing_dispose()
@@ -143,7 +132,7 @@ class ScalarStreamState(Generic[StreamStateType]):
             self._interop.remove_OnFlushing(self._on_flushing_refs[0])
             self._on_flushing_refs = None
 
-        if self.on_flushing is None and self._on_flushing_internal is None:
+        if self.on_flushing is None:
             return
 
         if self._on_flushing_refs is None:
@@ -153,8 +142,6 @@ class ScalarStreamState(Generic[StreamStateType]):
         try:
             if self._on_flushing is not None:
                 self._on_flushing()
-            if self._on_flushing_internal is not None:
-                self._on_flushing_internal()
         except:
             traceback.print_exc()
         finally:

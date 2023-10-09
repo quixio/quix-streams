@@ -6,7 +6,7 @@
 Gets an already buffered row based on timestamp and tags that can be modified or creates a new one if it doesn't exist.
 
 ```csharp
-public QuixStreams.Streaming.Models.LeadingEdgeTimestamp GetOrCreateTimestamp(long timestampInNanoseconds, System.Collections.Generic.Dictionary<string,string> tags=null);
+public QuixStreams.Streaming.Models.LeadingEdgeRow GetOrCreateTimestamp(long timestampInNanoseconds, System.Collections.Generic.Dictionary<string,string> tags=null);
 ```
 #### Parameters
 
@@ -23,4 +23,4 @@ Timestamp in nanoseconds
 Optional Tags
 
 #### Returns
-[LeadingEdgeTimestamp](LeadingEdgeTimestamp.md 'QuixStreams.Streaming.Models.LeadingEdgeTimestamp')
+[LeadingEdgeRow](LeadingEdgeRow.md 'QuixStreams.Streaming.Models.LeadingEdgeRow')

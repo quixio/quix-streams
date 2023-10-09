@@ -5,13 +5,16 @@ using QuixStreams.Streaming.Models.StreamProducer;
 
 namespace QuixStreams.Streaming.Models
 {
+    /// <summary>
+    /// Leading edge buffer where time and tag are treated as a compound key
+    /// </summary>
     public class LeadingEdgeBuffer
     {
         
         /// <summary>
         /// Sorted dictionary of rows in the buffer
         /// </summary>
-        private readonly SortedDictionary<TimestampKey, LeadingEdgeTimestamp> rows;
+        private readonly SortedDictionary<LeadingEdgeRowKey, LeadingEdgeRow> rows;
 
         private readonly StreamTimeseriesProducer producer;
         private readonly long leadingEdgeDelayInNanoseconds;
@@ -43,7 +46,7 @@ namespace QuixStreams.Streaming.Models
         {
             this.producer = producer;
             this.leadingEdgeDelayInNanoseconds = leadingEdgeDelayMs * (long)1e6;
-            this.rows = new SortedDictionary<TimestampKey, LeadingEdgeTimestamp>();
+            this.rows = new SortedDictionary<LeadingEdgeRowKey, LeadingEdgeRow>();
         }
 
 
@@ -53,13 +56,13 @@ namespace QuixStreams.Streaming.Models
         /// <param name="timestampInNanoseconds">Timestamp in nanoseconds</param>
         /// <param name="tags">Optional Tags</param>
         /// <returns></returns>
-        public LeadingEdgeTimestamp GetOrCreateTimestamp(long timestampInNanoseconds, Dictionary<string, string> tags = null)
+        public LeadingEdgeRow GetOrCreateTimestamp(long timestampInNanoseconds, Dictionary<string, string> tags = null)
         {
             var ts = timestampInNanoseconds + (this.Epoch ?? 0);
-            var key = new TimestampKey(ts, tags);
+            var key = new LeadingEdgeRowKey(ts, tags);
             if (!rows.TryGetValue(key, out var row))
             {
-                row = new LeadingEdgeTimestamp(this, ts, this.Epoch != null, tags);
+                row = new LeadingEdgeRow(ts, this.Epoch != null, tags);
                 this.rows.Add(key, row);
                 leadingEdgeInNanoseconds = Math.Max(this.leadingEdgeInNanoseconds, ts);
             }
@@ -87,8 +90,8 @@ namespace QuixStreams.Streaming.Models
         {
             if (rows.Count == 0) return;
             
-            var itemsToPublish = new List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>>(rows.Count); // prep for worst case to avoid constant resizing
-            var itemsToBackFill = new List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>>(rows.Count); // prep for worst case to avoid constant resizing
+            var itemsToPublish = new List<KeyValuePair<LeadingEdgeRowKey, LeadingEdgeRow>>(rows.Count); // prep for worst case to avoid constant resizing
+            var itemsToBackFill = new List<KeyValuePair<LeadingEdgeRowKey, LeadingEdgeRow>>(rows.Count); // prep for worst case to avoid constant resizing
 
             foreach (var row in rows)
             {
@@ -116,7 +119,7 @@ namespace QuixStreams.Streaming.Models
             PublishLeadingEdgeData(itemsToPublish);
         }
         
-        private void RaiseBackfillData(List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>> itemsToBackFill)
+        private void RaiseBackfillData(List<KeyValuePair<LeadingEdgeRowKey, LeadingEdgeRow>> itemsToBackFill)
         {
             if (itemsToBackFill.Count == 0) return;
 
@@ -130,7 +133,7 @@ namespace QuixStreams.Streaming.Models
             this.OnBackfill?.Invoke(this, timeseriesData);
         }
 
-        private void PublishLeadingEdgeData(List<KeyValuePair<TimestampKey, LeadingEdgeTimestamp>> itemsToPublish)
+        private void PublishLeadingEdgeData(List<KeyValuePair<LeadingEdgeRowKey, LeadingEdgeRow>> itemsToPublish)
         {
             if (itemsToPublish.Count == 0) return;
 
@@ -152,7 +155,7 @@ namespace QuixStreams.Streaming.Models
         /// Implements IComparable and IEquatable interfaces for comparison functionality.
         /// </summary>
         [DebuggerDisplay("{Timestamp}:{TagHash}")]
-        private class TimestampKey : IComparable<TimestampKey>, IEquatable<TimestampKey>
+        private class LeadingEdgeRowKey : IComparable<LeadingEdgeRowKey>, IEquatable<LeadingEdgeRowKey>
         {
             /// <summary>
             /// The timestamp part of the compound key.
@@ -169,7 +172,7 @@ namespace QuixStreams.Streaming.Models
             /// </summary>
             /// <param name="timestamp">The timestamp.</param>
             /// <param name="tags">A dictionary of tags to generate the tag hash.</param>
-            public TimestampKey(long timestamp, IDictionary<string, string> tags)
+            public LeadingEdgeRowKey(long timestamp, IDictionary<string, string> tags)
             {
                 this.Timestamp = timestamp;
                 this.TagHash = HashTags(tags);
@@ -201,7 +204,7 @@ namespace QuixStreams.Streaming.Models
             /// </summary>
             /// <param name="other">The instance to compare with the current instance.</param>
             /// <returns>A value indicating the relative order of the instances.</returns>
-            public int CompareTo(TimestampKey other)
+            public int CompareTo(LeadingEdgeRowKey other)
             {
                 if (other == null) return -1;
                 var tsCompare = other.Timestamp.CompareTo(this.Timestamp);
@@ -213,7 +216,7 @@ namespace QuixStreams.Streaming.Models
             /// </summary>
             /// <param name="other">An instance of TimestampKey to compare with the current instance.</param>
             /// <returns>True if the current instance is equal to the other instance; otherwise, false.</returns>
-            public bool Equals(TimestampKey other)
+            public bool Equals(LeadingEdgeRowKey other)
             {
                 if (other == null) return false;
                 if (this.Timestamp != other.Timestamp) return false;
@@ -226,7 +229,7 @@ namespace QuixStreams.Streaming.Models
     /// <summary>
     /// Represents a single row of data in the <see cref="LeadingEdgeBuffer"/>
     /// </summary>
-    public class LeadingEdgeTimestamp
+    public class LeadingEdgeRow
     {
         /// <summary>
         /// The timestamp in nanoseconds
@@ -253,18 +256,15 @@ namespace QuixStreams.Streaming.Models
         /// <summary>
         /// This can't be edited externally, as it would mess the sorted dictionary implementation
         /// </summary>
-        internal Dictionary<string, string> Tags { get; }
-
-        private readonly LeadingEdgeBuffer buffer;
+        internal Dictionary<string, string> Tags { get; set; }
         
         /// <summary>
         /// Whether an epoch is included in the timestamp
         /// </summary>
         public readonly bool EpochIncluded = false;
 
-        internal LeadingEdgeTimestamp(LeadingEdgeBuffer buffer, long timestamp, bool epochIncluded, Dictionary<string, string> tags)
+        internal LeadingEdgeRow(long timestamp, bool epochIncluded, Dictionary<string, string> tags)
         {
-            this.buffer = buffer;
             this.Timestamp = timestamp;
             this.EpochIncluded = epochIncluded;
             this.Tags = tags;
@@ -278,7 +278,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
         /// <returns>Returns the current LeadingEdgeTimestamp instance. This allows for method chaining</returns>
-        public LeadingEdgeTimestamp AddValue(string parameter, double value, bool overwrite = false)
+        public LeadingEdgeRow AddValue(string parameter, double value, bool overwrite = false)
         {
             NumericValues ??= new Dictionary<string, double>();
             if (overwrite || !NumericValues.ContainsKey(parameter))
@@ -297,7 +297,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current TimeseriesDataRow instance.</param>
         /// <returns>Returns the current LeadingEdgeTimestamp instance. This allows for method chaining</returns>
-        public LeadingEdgeTimestamp AddValue(string parameter, string value, bool overwrite = false)
+        public LeadingEdgeRow AddValue(string parameter, string value, bool overwrite = false)
         {
             StringValues ??= new Dictionary<string, string>();
             if (overwrite || !StringValues.ContainsKey(parameter))
@@ -315,7 +315,7 @@ namespace QuixStreams.Streaming.Models
         /// <param name="value">Value of the parameter</param>
         /// <param name="overwrite">If set to true, it will overwrite an existing value for the specified parameter if one already exists.
         /// If set to false and a value for the specified parameter already exists, the method ignore the new value and just return the current LeadingEdgeTimestamp instance.</param>
-        public LeadingEdgeTimestamp AddValue(string parameter, byte[] value, bool overwrite = false)
+        public LeadingEdgeRow AddValue(string parameter, byte[] value, bool overwrite = false)
         {
             BinaryValues ??= new Dictionary<string, byte[]>();
             if (overwrite || !BinaryValues.ContainsKey(parameter))

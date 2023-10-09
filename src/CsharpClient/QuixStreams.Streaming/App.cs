@@ -42,11 +42,11 @@ namespace QuixStreams.Streaming
 
         /// <summary>
         /// Helper method to handle default streaming behaviors and handle automatic resource cleanup on shutdown
-        /// It also ensures topic consumers defined at the time of invocation are subscribed to receive messages.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token to abort. Use when you wish to manually stop streaming for other reason that shutdown.</param>
         /// <param name="beforeShutdown">The callback to invoke before shutting down</param>
-        public static void Run(CancellationToken cancellationToken = default, Action beforeShutdown = null)
+        /// <param name="subscribe">Whether the consumer defined should be automatically subscribed to start receiving messages</param>
+        public static void Run(CancellationToken cancellationToken = default, Action beforeShutdown = null, bool subscribe = true)
         {
             var logger = QuixStreams.Logging.CreateLogger<object>();
             var waitForProcessShutdownStart = new ManualResetEventSlim();
@@ -141,23 +141,27 @@ namespace QuixStreams.Streaming
                     waitForMainExit.Wait();
                 });
             }
-
-            var opened = 0;
             
             // Init
-            foreach (var topicConsumer in topicConsumers)
+            if (subscribe)
             {
-                topicConsumer.Key.Subscribe();
-                opened++;
+                var opened = 0;
+
+                foreach (var topicConsumer in topicConsumers)
+                {
+                    topicConsumer.Key.Subscribe();
+                    opened++;
+                }
+
+                foreach (var topicConsumer in rawTopicConsumers)
+                {
+                    topicConsumer.Key.Subscribe();
+                    opened++;
+                }
+
+                if (opened > 0) logger.LogDebug("Opened {0} topics for reading", opened);
+                else logger.LogDebug("There were no topics top open for reading");
             }
-            
-            foreach (var topicConsumer in rawTopicConsumers)
-            {
-                topicConsumer.Key.Subscribe();
-                opened++;
-            }
-            if (opened > 0) logger.LogDebug("Opened {0} topics for reading", opened);
-            else logger.LogDebug("There were no topics top open for reading");
 
             // Wait for shutdown to start
             waitForProcessShutdownStart.Wait();

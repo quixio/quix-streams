@@ -3,7 +3,7 @@
 
 ## RawTopicConsumer.Subscribe() Method
 
-Start reading streams.  
+Start reading data from the topic.  
 Use 'OnMessageReceived' event to read messages after executing this method
 
 ```csharp

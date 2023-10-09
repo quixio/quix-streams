@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -98,6 +98,16 @@ namespace QuixStreams.Streaming.Raw
             kafkaConsumer.Open();
             connectionStarted = true;
         }
+        
+        /// <inheritdoc />
+        public void Unsubscribe()
+        {
+            if (!connectionStarted) return;
+
+            kafkaConsumer.Close();
+            kafkaConsumer.OnMessageReceived = null;
+            connectionStarted = false;
+        } 
 
         /// <summary>
         /// Internal handler for handing Error event from the kafkaOutput

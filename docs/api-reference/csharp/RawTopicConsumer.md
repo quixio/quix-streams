@@ -21,7 +21,8 @@ Implements [IRawTopicConsumer](IRawTopicConsumer.md 'QuixStreams.Streaming.Raw.I
 
 | Methods | |
 | :--- | :--- |
-| [Subscribe()](RawTopicConsumer.Subscribe().md 'QuixStreams.Streaming.Raw.RawTopicConsumer.Subscribe()') | Start reading streams.<br/>Use 'OnMessageReceived' event to read messages after executing this method |
+| [Subscribe()](RawTopicConsumer.Subscribe().md 'QuixStreams.Streaming.Raw.RawTopicConsumer.Subscribe()') | Start reading data from the topic.<br/>Use 'OnMessageReceived' event to read messages after executing this method |
+| [Unsubscribe()](RawTopicConsumer.Unsubscribe().md 'QuixStreams.Streaming.Raw.RawTopicConsumer.Unsubscribe()') | Stops reading data from the topic. |
 
 | Events | |
 | :--- | :--- |

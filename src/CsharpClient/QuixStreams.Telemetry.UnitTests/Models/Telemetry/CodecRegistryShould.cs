@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using FluentAssertions;
 using QuixStreams.Kafka.Transport.SerDes.Codecs;
 using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
@@ -43,7 +43,7 @@ namespace QuixStreams.Telemetry.UnitTests.Models.Telemetry
             var codecs = QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));
             codecs.Count().Should().Be(3, $"{string.Join(", ", codecs.Select(y=> y.Id))} should contain 3");
             codecs.Should().Contain(x => x is TimeseriesDataReadableCodec); // for reading
-            codecs.Should().Contain(x => x is TimeseriesDataCustomJsonCodec); // for reading
+            codecs.Should().Contain(x => x is DefaultJsonCodec<TimeseriesDataRaw>); // for reading
             codecs.Should().Contain(x => x is TimeseriesDataProtobufCodec); // for reading
             codecs.First().GetType().Should().Be(typeof(TimeseriesDataReadableCodec)); // for writing
         }
@@ -58,9 +58,9 @@ namespace QuixStreams.Telemetry.UnitTests.Models.Telemetry
             var codecs = QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RetrieveCodecs(new ModelKey("TimeseriesData"));
             codecs.Count().Should().Be(3);
             codecs.Should().Contain(x => x is TimeseriesDataReadableCodec); // for reading
-            codecs.Should().Contain(x => x is TimeseriesDataCustomJsonCodec); // for reading
+            codecs.Should().Contain(x => x is DefaultJsonCodec<TimeseriesDataRaw>); // for reading
             codecs.Should().Contain(x => x is TimeseriesDataProtobufCodec); // for reading
-            codecs.First().GetType().Should().Be(typeof(TimeseriesDataCustomJsonCodec)); // for writing
+            codecs.First().GetType().Should().Be(typeof(DefaultJsonCodec<TimeseriesDataRaw>)); // for writing
         }
         
         [Fact]

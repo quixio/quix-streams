@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Transactions;
@@ -213,6 +213,8 @@ namespace QuixStreams.Telemetry.Kafka
             {
                 this.kafkaTransportConsumer.OnRevoking -= RevokingHandler;
                 this.kafkaTransportConsumer.OnCommitted -= CommittedHandler;
+                this.kafkaTransportConsumer.Dispose();
+                this.kafkaTransportConsumer = null;
             }
 
             this.kafkaConsumer?.Close();

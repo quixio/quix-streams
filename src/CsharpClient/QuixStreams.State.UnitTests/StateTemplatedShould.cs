@@ -340,12 +340,19 @@ namespace QuixStreams.State.UnitTests
             state.Clear();
 
             var customObject = new CustomClass { Id = 1, Name = "TestObject" };
-            state[key] = new List<CustomClass>();
+            var list = new List<CustomClass>();
+            state[key] = list;
             state[key].Add(customObject);
-            state[key].Add(customObject);
+            list.Add(customObject);
+            list.Add(customObject);
+
+            // No change is expected!
+            state[key].Should().BeEquivalentTo(new List<CustomClass>());
+
+            state[key] = list;
 
             state[key].Count.Should().Be(2);
-            state[key].All(y => y == customObject).Should().BeTrue();
+            state[key].All(y => y.Equals(customObject)).Should().BeTrue();
 
             state.Flush();
 
@@ -368,7 +375,6 @@ namespace QuixStreams.State.UnitTests
 
             state[key].Should().Be(8);
         }
-
 
         [Fact]
         public void Clear_ShouldRemoveAllValues()
