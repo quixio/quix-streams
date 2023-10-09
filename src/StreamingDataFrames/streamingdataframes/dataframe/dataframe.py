@@ -83,9 +83,9 @@ class StreamingDataFrame:
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
         if not topics_in:
-            raise ValueError("Topic list cannot be empty")
-        self._topics_in = {t.real_name: t for t in topics_in}
-        self._topics_out = {t.real_name: t for t in topics_out or []}
+            raise ValueError("Topic Input list cannot be empty")
+        self._topics_in = {t.name: t for t in topics_in}
+        self._topics_out = {t.name: t for t in topics_out or []}
 
     def apply(self, func: Callable[[Row], Optional[Union[Row, List[Row]]]]) -> Self:
         """
@@ -131,7 +131,7 @@ class StreamingDataFrame:
         Get a mapping with Topics for the StreamingDataFrame input topics
         :return: dict of {<topic_name>: <Topic>}
         """
-        return {t.name: t for t in self._topics_in.values()}
+        return self._topics_in
 
     @property
     def topics_out(self) -> Mapping[str, Topic]:
@@ -139,7 +139,7 @@ class StreamingDataFrame:
         Get a mapping with Topics for the StreamingDataFrame output topics
         :return: dict of {<topic_name>: <Topic>}
         """
-        return {t.name: t for t in self._topics_out.values()}
+        return self._topics_out
 
     @property
     def consumer(self) -> RowConsumerProto:
