@@ -44,7 +44,7 @@ namespace QuixStreams.Kafka
         private const int RevokeTimeoutPeriodInMs = 5000; // higher number should only mean up to this seconds of delay if you are never going to get new assignments,
                                                           // but should not prove to cause any other issue
         
-        private ManualResetEvent connectionEstablishedEvent = new ManualResetEvent(false);
+        private ManualResetEventSlim connectionEstablishedEvent = new ManualResetEventSlim(false);
 
         
         private readonly bool checkForKeepAlivePackets;   // Enables the check for keep alive messages from Quix
@@ -317,7 +317,7 @@ namespace QuixStreams.Kafka
                 connectionEstablishedEvent.Reset();
                 var connectSw = Stopwatch.StartNew();
                 this.StartWorkerThread();
-                if (connectionEstablishedEvent.WaitOne(TimeSpan.FromSeconds(5)))
+                if (connectionEstablishedEvent.Wait(TimeSpan.FromSeconds(5)))
                 { 
                     connectSw.Stop();
                     this.logger.LogTrace("[{0}] Connected to broker in {1}", this.configId, connectSw.Elapsed);
@@ -343,7 +343,7 @@ namespace QuixStreams.Kafka
 
         private void ConsumerLogHandler(IConsumer<byte[], byte[]> consumer, LogMessage msg)
         {
-            if (KafkaHelper.TryParseWakeup(msg, out var ready) && ready)
+            if (!this.connectionEstablishedEvent.IsSet && KafkaHelper.TryParseWakeup(msg, out var ready) && ready)
             {
                 this.connectionEstablishedEvent.Set();
             }
@@ -465,6 +465,10 @@ namespace QuixStreams.Kafka
                 this.lastRevokeCancelAction?.Invoke();
 
                 var assignedPartitions = topicPartitions.ToList(); // Just in case source doesn't like us modifying this list
+                if (!this.connectionEstablishedEvent.IsSet && assignedPartitions.Count > 0)
+                {
+                    this.connectionEstablishedEvent.Set();
+                }
                 if (lrs != null && this.OnRevoked != null)
                 {
                     var sameTopicPartitions = topicPartitions
