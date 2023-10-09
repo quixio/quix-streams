@@ -7,7 +7,7 @@
 
 
     <ItemGroup>
-        <PackageReference Include="Confluent.Kafka" Version="1.9.2" />
+        <PackageReference Include="Confluent.Kafka" Version="2.2.0" />
         <PackageReference Include="Ductus.FluentDocker" Version="2.10.57" />
     </ItemGroup>
 
