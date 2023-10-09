@@ -44,7 +44,7 @@ class RowConsumerProto(Protocol):
         offsets: List[TopicPartition] = None,
         asynchronous: bool = True,
     ) -> Optional[List[TopicPartition]]:
-        ...
+        pass
 
     def subscribe(
         self,
@@ -53,7 +53,7 @@ class RowConsumerProto(Protocol):
         on_revoke: Optional[RebalancingCallback] = None,
         on_lost: Optional[RebalancingCallback] = None,
     ):
-        ...
+        pass
 
 
 class RowConsumer(Consumer, RowConsumerProto):

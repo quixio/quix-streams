@@ -4,7 +4,7 @@ import pytest
 class TestProducer:
     def test_producer_start_close(self, producer):
         with producer:
-            ...
+            pass
 
     def test_produce(self, producer, topic_factory):
         topic_name, _ = topic_factory()

@@ -65,7 +65,7 @@ class Deserializer(abc.ABC):
 
     @abc.abstractmethod
     def __call__(self, *args, **kwargs) -> Any:
-        ...
+        pass
 
 
 class Serializer(abc.ABC):
@@ -88,4 +88,4 @@ class Serializer(abc.ABC):
 
     @abc.abstractmethod
     def __call__(self, *args, **kwargs) -> bytes:
-        ...
+        pass

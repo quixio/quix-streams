@@ -179,5 +179,6 @@ class StreamingDataFrame:
             return Column(col_name=item)
 
     def _produce(self, topic: Topic, row: Row) -> Row:
+        topic.real_name = self.topics_out[topic.name].real_name
         self.producer.produce_row(row, topic)
         return row
