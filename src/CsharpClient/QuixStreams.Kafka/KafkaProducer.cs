@@ -27,7 +27,8 @@ namespace QuixStreams.Kafka
         private bool checkBrokerStateBeforeSend = false;
         private bool logOnNextBrokerStateUp = false;
         private bool disableKafkaLogsByBrokerLogWorkaround = false; // if enabled, no actual kafka logs should be shown
-
+        private string lastReportedBrokerDownMessage = string.Empty;
+        
         /// <summary>
         /// Due to differing framing overhead between protocol versions the producer is unable
         /// to reliably enforce a strict max message limit at produce time.
@@ -224,6 +225,8 @@ namespace QuixStreams.Kafka
             lock (this.openLock)
             {
                 if (this.producer != null) return;
+                lastReportedBrokerDownMessage = string.Empty;
+                checkBrokerStateBeforeSend = false;
 
                 this.producer = new ProducerBuilder<byte[], byte[]>(this.config)
                     .SetErrorHandler(this.ErrorHandler)
@@ -305,8 +308,16 @@ namespace QuixStreams.Kafka
 
             if (ex.Message.Contains("brokers are down"))
             {
-                checkBrokerStateBeforeSend = true;
-                this.logger.LogDebug("[{0}] {1}, but delaying reporting until next message, in case reconnect happens before.", this.configId, ex.Message); // Excessive error reporting
+                if (!checkBrokerStateBeforeSend ||
+                    ex.Message != lastReportedBrokerDownMessage)
+                {
+                    checkBrokerStateBeforeSend = true;
+                    lastReportedBrokerDownMessage = ex.Message;
+                    this.logger.LogDebug(
+                        "[{0}] {1}, but delaying reporting until next message, in case reconnect happens before.",
+                        this.configId, ex.Message); // Excessive error reporting
+                }
+
                 return;
             }
             
@@ -423,7 +434,7 @@ namespace QuixStreams.Kafka
                     }
                     else
                     {
-                        this.logger.LogDebug("[{0}] {1}/{2} brokers are up (after all being marked down)", this.configId, upBrokerCount, this.brokerStates.Count);
+                        this.logger.LogDebug("[{0}] At least {1}/{2} brokers are up (after all being marked down).", this.configId, upBrokerCount, this.brokerStates.Count);
                     }
                 } 
                 do
