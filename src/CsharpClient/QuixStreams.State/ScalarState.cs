@@ -186,7 +186,7 @@ namespace QuixStreams.State
         /// <summary>
         /// The in-memory cache to avoid conversions between State and T whenever possible
         /// </summary>
-        private T inMemoryValue = default;
+        private StateValue inMemoryValue = default;
 
         /// <summary>
         /// Raised immediately before a flush operation is performed.
@@ -230,8 +230,12 @@ namespace QuixStreams.State
                     {
                         Formatting = Formatting.None
                     };
-                    genericConverter = value => JsonConvert.DeserializeObject<T>(value.StringValue);
-                    stateValueConverter = value => new StateValue(JsonConvert.SerializeObject(value, options)); // must be evaluated lazily as internal references can change whenever
+                    genericConverter = value => value.Type == StateValue.StateType.Object 
+                        ? default
+                        : JsonConvert.DeserializeObject<T>(value.StringValue);
+                    stateValueConverter = value => value == null 
+                        ? new StateValue(null, StateValue.StateType.Object) 
+                        : new StateValue(JsonConvert.SerializeObject(value, options));
                     break;
                 case TypeCode.Boolean:
                     genericConverter = value => (T)(object)value.BoolValue;
@@ -319,7 +323,7 @@ namespace QuixStreams.State
                     throw new ArgumentOutOfRangeException();
             }
             
-            this.inMemoryValue = underlyingScalarState.Value != null ? genericConverter(underlyingScalarState.Value) : default;
+            this.inMemoryValue = underlyingScalarState.Value;
         }
         
         /// <summary>
@@ -337,8 +341,10 @@ namespace QuixStreams.State
         /// <returns>Returns the value</returns>
         public T Value
         {
-            get => this.inMemoryValue;
-            set => this.inMemoryValue = value;
+            get => this.inMemoryValue == null
+                ? default 
+                : genericConverter(this.inMemoryValue);
+            set => this.inMemoryValue = stateValueConverter(value);
         }
         
         /// <summary>
@@ -357,7 +363,7 @@ namespace QuixStreams.State
             }
             
             logger.LogTrace("Updating value from state as part of flush");
-            this.underlyingScalarState.Value = stateValueConverter(inMemoryValue);
+            this.underlyingScalarState.Value = inMemoryValue;
 
             logger.LogTrace("Flushing underlying state as part of flush");
             this.underlyingScalarState.Flush();
@@ -373,7 +379,7 @@ namespace QuixStreams.State
         {
             this.logger.LogTrace("Resetting state");
             
-            this.inMemoryValue = genericConverter(this.underlyingScalarState.Value);
+            this.inMemoryValue = this.underlyingScalarState.Value;
             
             this.logger.LogTrace($"Reset state completed.");
         }

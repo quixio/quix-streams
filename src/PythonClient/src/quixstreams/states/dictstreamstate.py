@@ -92,18 +92,6 @@ class DictStreamState(Generic[StreamStateType]):
         self._on_flushing = None
         self._on_flushing_refs = None  # Keeping references to avoid garbage collection
 
-        # Check if type is immutable, because it needs special handling. Content could change without StreamState being
-        # notified
-        self._immutable = self._type in (int, float, bool, complex, str, bytes, bytearray, range)
-        self._on_flushing_internal = None
-        if not self._immutable:
-            def on_flushing_internal():
-                for index, (key, val) in enumerate(self._in_memory.items()):
-                    self._underlying[key] = val
-
-            self._on_flushing_internal = on_flushing_internal
-            self.on_flushing = None  # this will subscribe to the event and invoke the internal
-
     def _finalizerfunc(self):
         self._on_flushed_dispose()
         self._on_flushing_dispose()
@@ -185,7 +173,7 @@ class DictStreamState(Generic[StreamStateType]):
         self._on_flushing = value
         self._on_flushing_dispose()
 
-        if self._on_flushing is None and self._on_flushing_internal is None:
+        if self._on_flushing is None:
             return
 
         self._on_flushing_refs = self._interop.add_OnFlushing(self._on_flushing_wrapper)
@@ -194,8 +182,6 @@ class DictStreamState(Generic[StreamStateType]):
         try:
             if self._on_flushing is not None:
                 self._on_flushing()
-            if self._on_flushing_internal is not None:
-                self._on_flushing_internal()
         except:
             traceback.print_exc()
         finally:

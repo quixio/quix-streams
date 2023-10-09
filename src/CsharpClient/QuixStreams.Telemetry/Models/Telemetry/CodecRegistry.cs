@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuixStreams.Kafka.Transport.SerDes.Codecs.DefaultCodecs;
@@ -70,13 +70,7 @@ namespace QuixStreams.Telemetry.Models
                 case CodecType.Json:
                     foreach (var modelKey in modelKeys)
                     {
-                        if (typeof(TimeseriesDataRaw) == modelType)
-                        {
-                            QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RegisterCodec(modelKey, new TimeseriesDataCustomJsonCodec());
-                            continue;
-                        }
-
-                        QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());  
+                        QuixStreams.Kafka.Transport.SerDes.Codecs.CodecRegistry.RegisterCodec(modelKey, new DefaultJsonCodec<TType>());   
                     }
                     break;
                 case CodecType.CompactJsonForBetterPerformance:

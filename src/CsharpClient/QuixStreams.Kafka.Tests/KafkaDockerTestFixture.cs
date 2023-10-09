@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Confluent.Kafka.Admin;
 using QuixStreams.IntegrationTestBase;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace QuixStreams.Transport.Kafka.Tests
 {

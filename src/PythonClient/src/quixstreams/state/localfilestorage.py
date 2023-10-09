@@ -1,5 +1,6 @@
 from .istatestorage import IStateStorage
 from ..native.Python.QuixStreamsState.Storage.FileStorage.LocalFileStorage.LocalFileStorage import LocalFileStorage as lfsi
+from ..native.Python.QuixStreamsTransport.QuixStreams.Logging import Logging as LoggingInterop
 
 
 class LocalFileStorage(IStateStorage):
@@ -16,4 +17,4 @@ class LocalFileStorage(IStateStorage):
             storage_directory: The path to the storage directory.
             auto_create_dir: If True, automatically creates the storage directory if it doesn't exist.
         """
-        super().__init__(lfsi.Constructor(storage_directory, auto_create_dir))
+        super().__init__(lfsi.Constructor(storage_directory, auto_create_dir, LoggingInterop.get_Factory()))

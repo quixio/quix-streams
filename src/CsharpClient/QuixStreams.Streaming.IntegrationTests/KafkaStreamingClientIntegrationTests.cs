@@ -54,6 +54,81 @@ namespace QuixStreams.Streaming.IntegrationTests
                 BinaryValues = binaryVals
             };
         }
+        
+        
+
+        [Fact]
+        public async Task TopicSubUnSub_ShouldWorkAsExpected()
+        {
+            var topic = nameof(TopicSubUnSub_ShouldWorkAsExpected);
+            await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
+
+            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
+            var topicProducer = client.GetTopicProducer(topic);
+
+            IList<TimeseriesDataRaw> data = new List<TimeseriesDataRaw>();
+            IList<EventDataRaw> events = new List<EventDataRaw>();
+            var streamStarted = false;
+            var streamEnded = false;
+            StreamProperties streamProperties = null;
+            var parameterDefinitionsChanged = false;
+            var eventDefinitionsChanged = false;
+            string streamId = null;
+
+            topicConsumer.OnStreamReceived += (s, e) =>
+            {
+                if (e.StreamId != streamId)
+                {
+                    this.output.WriteLine("Ignoring stream {0}", e.StreamId);
+                    return;
+                }
+
+                streamStarted = true;
+            };
+
+            topicConsumer.Subscribe();
+            this.output.WriteLine("Subscribed");
+
+            using (var stream = topicProducer.CreateStream())
+            {
+                streamId = stream.StreamId;
+                this.output.WriteLine("First stream id is {0}", streamId);
+
+                stream.Properties.Name = "Volvo car telemetry";
+                stream.Properties.Flush();
+                this.output.WriteLine("Flushing stream properties");
+            }
+            
+            SpinWait.SpinUntil(() => streamStarted, 20000);
+            streamStarted.Should().BeTrue();
+
+            
+            topicConsumer.Unsubscribe();
+            this.output.WriteLine("Unsubscribed");
+
+            streamStarted = false;
+            using (var stream2 = topicProducer.CreateStream())
+            {
+                streamId = stream2.StreamId;
+                this.output.WriteLine("Second stream id is {0}", streamId);
+
+                stream2.Properties.Name = "Volvo car telemetry";
+                stream2.Properties.Flush();
+                this.output.WriteLine("Flushing stream properties");
+            }
+
+            SpinWait.SpinUntil(() => streamStarted, 5000);
+            streamStarted.Should().BeFalse();
+            
+
+            topicConsumer.Subscribe();
+            this.output.WriteLine("Subscribed (again)");
+            SpinWait.SpinUntil(() => streamStarted, 20000);
+            streamStarted.Should().BeTrue();
+
+
+            topicConsumer.Dispose();
+        }
 
         [Fact]
         public async Task StreamPublishAndConsume_ShouldReceiveExpectedMessages()
@@ -459,50 +534,99 @@ namespace QuixStreams.Streaming.IntegrationTests
         [Fact]
         public async Task StreamRawReadAsQuix_ShouldReadMessageAsExpected()
         {
-            // Arrange
             var topic = nameof(StreamRawReadAsQuix_ShouldReadMessageAsExpected);
 
             await this.kafkaDockerTestFixture.EnsureTopic(topic, 1);
+            
+            // ** Consuming messages with Raw topic consumer
+            var rawTopicConsumer = client.GetRawTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Earliest);
             using var rawTopicProducer = client.GetRawTopicProducer(topic);
-
+            
+            var consumedKafkaMessages = new List<KafkaMessage>();
+            
             var messageContent = $"lorem ipsum - event";
             var messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
 
-            using var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
+            rawTopicConsumer.OnMessageReceived += (s, rawMessage) =>
+            {
+                this.output.WriteLine($"Raw consumer received: {Encoding.UTF8.GetString(rawMessage.Value)}");
+                if (!rawMessage.Value.SequenceEqual(messageContentInBytes))
+                {
+                    this.output.WriteLine("Ignoring message");
+                    return;
+                }
+                consumedKafkaMessages.Add(rawMessage);
+            };
+
+            this.output.WriteLine("Subscribing");
+            rawTopicConsumer.Subscribe();
+            this.output.WriteLine("Unsubscribing");
+            rawTopicConsumer.Unsubscribe(); // Cheap test for now to test unsub/sub
+            this.output.WriteLine("Subscribing (again)");
+            rawTopicConsumer.Subscribe(); // Cheap test for now to test unsub/sub
+
+
+            rawTopicProducer.Publish(new KafkaMessage(null, messageContentInBytes));
             
-            var consumedEvents = new List<EventData>();
+            SpinWait.SpinUntil(() => consumedKafkaMessages.Count >= 1, 10000);
+            try
+            {
+                consumedKafkaMessages.Should().ContainSingle();
+                consumedKafkaMessages.Where(x => x.Key == null).Should().ContainSingle();
+            }
+            finally
+            {
+                // To make sure the consumer disconnects and doesn't fight with next attempt for partition
+                rawTopicConsumer.Dispose();
+            }
+
+
+            // ** Consuming messages with Event topic consumer
+            messageContent = $"lorem ipsum - event";
+            messageContentInBytes = Encoding.UTF8.GetBytes(messageContent);
+
+            var topicConsumer = client.GetTopicConsumer(topic, "somerandomgroup", autoOffset: AutoOffsetReset.Latest);
+            
+            var consumedEvents = new List<EventDataRaw>();
 
             topicConsumer.OnStreamReceived += (s, e) =>
             {
-                this.output.WriteLine($"Subscribed to stream {e.StreamId}");
-                e.Events.OnDataReceived += (s, args) =>
+                (e as IStreamConsumerInternal).OnEventData += (s, eventData) =>
                 {
-                    var data = args.Data;
-                    this.output.WriteLine($"Event consumer received message: {data.Value}");
-                    if (data.Value != messageContent)
+                    this.output.WriteLine($"Event consumer received message: {eventData.Value}");
+                    if (eventData.Value != messageContent)
                     {
                         this.output.WriteLine("Ignoring message");
                         return;
                     }
 
-                    consumedEvents.Add(data);
+                    consumedEvents.Add(eventData);
                 };
             };
 
+            this.output.WriteLine("Subscribing");
             topicConsumer.Subscribe();
-
-            // Act
-            rawTopicProducer.Publish(new KafkaMessage(Encoding.UTF8.GetBytes("some key"), messageContentInBytes, null));
-            rawTopicProducer.Publish(new KafkaMessage(key: null, value: messageContentInBytes, null));
-            rawTopicProducer.Flush();
-
-            SpinWait.SpinUntil(() => consumedEvents.Count >= 2, 20000);
+            this.output.WriteLine("Unsubscribing");
+            topicConsumer.Unsubscribe(); // Cheap test for now to test unsub/sub
+            this.output.WriteLine("Subscribing (again)");
+            topicConsumer.Subscribe(); // Cheap test for now to test unsub/sub
             
-            // Assert
-            consumedEvents.Count.Should().Be(2);
-            consumedEvents.Where(x => x.Id == "some key").Should().ContainSingle();
-            consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamIdWhenMissing).Should().ContainSingle();
-            consumedEvents.All(x => x.Value == messageContent).Should().BeTrue();
+            rawTopicProducer.Publish(new KafkaMessage(key: Encoding.UTF8.GetBytes("some key"), value: messageContentInBytes));
+            rawTopicProducer.Publish(new KafkaMessage(key: null, value: messageContentInBytes));
+
+            SpinWait.SpinUntil(() => consumedEvents.Count >= 2, 10000);
+            try
+            {
+                consumedEvents.Count.Should().Be(2);
+                consumedEvents.Where(x => x.Id == "some key").Should().ContainSingle();
+                consumedEvents.Where(x => x.Id == StreamPipeline.DefaultStreamIdWhenMissing).Should().ContainSingle();
+            }
+            finally
+            {
+                // To make sure the consumer disconnects and doesn't fight with next attempt for partition
+                topicConsumer.Dispose();   
+            }
+            
         }
 
         [Fact]

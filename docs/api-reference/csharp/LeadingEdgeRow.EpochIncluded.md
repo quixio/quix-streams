@@ -1,7 +1,7 @@
 #### [QuixStreams.Streaming](index.md 'index')
-### [QuixStreams.Streaming.Models](QuixStreams.Streaming.Models.md 'QuixStreams.Streaming.Models').[LeadingEdgeTimestamp](LeadingEdgeTimestamp.md 'QuixStreams.Streaming.Models.LeadingEdgeTimestamp')
+### [QuixStreams.Streaming.Models](QuixStreams.Streaming.Models.md 'QuixStreams.Streaming.Models').[LeadingEdgeRow](LeadingEdgeRow.md 'QuixStreams.Streaming.Models.LeadingEdgeRow')
 
-## LeadingEdgeTimestamp.EpochIncluded Field
+## LeadingEdgeRow.EpochIncluded Field
 
 Whether an epoch is included in the timestamp
 

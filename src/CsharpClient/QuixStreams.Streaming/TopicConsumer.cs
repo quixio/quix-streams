@@ -121,6 +121,13 @@ namespace QuixStreams.Streaming
             if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
             telemetryKafkaConsumer.Start();
         }
+        
+        /// <inheritdoc />
+        public void Unsubscribe()
+        {
+            if (isDisposed) throw new ObjectDisposedException(nameof(TopicConsumer));
+            telemetryKafkaConsumer.Stop();
+        }
 
         /// <inheritdoc />
         public StreamStateManager GetStreamStateManager(string streamId)

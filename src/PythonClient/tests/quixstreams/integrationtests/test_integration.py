@@ -1860,7 +1860,11 @@ class TestStreamState(BaseIntegrationTest):
             rolling_sum_state['somevalue'] = 5
             object_state = stream_consumer.get_dict_state("objectstate",
                                                           lambda key: {})
-            object_state['somevalue']['key'] = 'value'
+
+            dict = {}
+            dict['key'] = 'value'
+            object_state['somevalue'] = dict
+            object_state['somevalue']['someotherkey'] = 'thatshouldntsave'
             event.set()
 
         topic_consumer_earliest.on_stream_received = on_stream_received_handler
@@ -2140,7 +2144,7 @@ class TestApp(BaseIntegrationTest):
             shutdown_callback_value = True
 
         # Assert
-        qx.App.run(cts.token, before_shutdown=before_shutdown)
+        qx.App.run(cts.token, before_shutdown=before_shutdown, subscribe=True)
         event_thread.join()
         assert read_data is not None
         assert shutdown_callback_value

@@ -209,6 +209,7 @@ Quix Streams serializes and deserializes time-series data using different codecs
     for index in range(0, 3000):
         
         stream.timeseries \
+            .buffer \
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
             .add_value("Long", math.sin(index / 200.0) + math.sin(index) / 5.0) \
