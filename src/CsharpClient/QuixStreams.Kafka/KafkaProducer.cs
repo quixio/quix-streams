@@ -118,7 +118,12 @@ namespace QuixStreams.Kafka
             
             try
             {
-                using (var adminClient = new AdminClientBuilder(this.config).Build())
+                void NullLoggerForAdminLogs(IAdminClient adminClient, LogMessage logMessage)
+                {
+                    // Log nothing
+                }
+                
+                using (var adminClient = new AdminClientBuilder(this.config).SetLogHandler(NullLoggerForAdminLogs).Build())
                 {
                     var maxBrokerMessageBytesNumeric = int.MaxValue;
                     try
