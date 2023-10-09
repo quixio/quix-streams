@@ -1,5 +1,6 @@
 import operator
-from typing import Self, Optional, Any, Callable, TypeAlias, Union
+from typing import Optional, Any, Callable, Union
+from typing_extensions import Self, TypeAlias
 
 from ..models import Row
 

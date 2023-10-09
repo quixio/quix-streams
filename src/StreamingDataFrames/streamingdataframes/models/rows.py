@@ -6,7 +6,7 @@ from .types import MessageKey, MessageHeadersTuples
 
 
 # TODO: add other dict functions like .get() , __contains__  and .copy()
-@dataclasses.dataclass(eq=True, kw_only=True, slots=True)
+@dataclasses.dataclass(eq=True)
 class Row:
     """
     Row is a dict-like interface on top of the message data + some Kafka props

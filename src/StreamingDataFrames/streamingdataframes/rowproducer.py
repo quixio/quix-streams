@@ -17,7 +17,7 @@ class RowProducerProto(typing.Protocol):
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
     ):
-        ...
+        pass
 
 
 class RowProducer(Producer, RowProducerProto):
@@ -38,7 +38,7 @@ class RowProducer(Producer, RowProducerProto):
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
-        :param on_error: a callback triggerred when `RowProducer.produce_row()`
+        :param on_error: a callback triggered when `RowProducer.produce_row()`
             or `RowProducer.poll()` fail`.
             If producer fails and the callback returns `True`, the exception
             will be logged but not propagated.
@@ -83,7 +83,7 @@ class RowProducer(Producer, RowProducerProto):
         try:
             message = topic.row_serialize(row=row)
             self.produce(
-                topic=topic.name,
+                topic=topic.real_name,
                 key=message.key,
                 value=message.value,
                 headers=message.headers,

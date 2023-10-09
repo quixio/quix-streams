@@ -44,7 +44,7 @@ class RowConsumerProto(typing.Protocol):
         offsets: List[TopicPartition] = None,
         asynchronous: bool = True,
     ) -> Optional[List[TopicPartition]]:
-        ...
+        pass
 
     def subscribe(
         self,
@@ -53,7 +53,7 @@ class RowConsumerProto(typing.Protocol):
         on_revoke: Optional[RebalancingCallback] = None,
         on_lost: Optional[RebalancingCallback] = None,
     ):
-        ...
+        pass
 
 
 class RowConsumer(Consumer, RowConsumerProto):
@@ -136,15 +136,13 @@ class RowConsumer(Consumer, RowConsumerProto):
             owned by other members in the group and therefore committing offsets,
             for example, may fail.
         """
-        topics_map = {t.name: t for t in topics}
-        topics_names = list(topics_map.keys())
+        self._topics = {t.real_name: t for t in topics}
         super().subscribe(
-            topics=topics_names,
+            topics=list(self._topics.keys()),
             on_assign=on_assign,
             on_revoke=on_revoke,
             on_lost=on_lost,
         )
-        self._topics = {t.name: t for t in topics}
 
     def poll_row(self, timeout: float = None) -> Union[Row, List[Row], None]:
         """
@@ -182,7 +180,7 @@ class RowConsumer(Consumer, RowConsumerProto):
             logger.debug(
                 "Ignoring the message from Kafka",
                 extra={
-                    "topic": topic_name,
+                    "topic": self._topics[topic_name].name,
                     "partition": partition,
                     "offset": offset,
                 },

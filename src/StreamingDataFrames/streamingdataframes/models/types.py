@@ -25,31 +25,31 @@ class ConfluentKafkaMessageProto(Protocol):
     """
 
     def headers(self, *args, **kwargs) -> Optional[List[Tuple[str, bytes]]]:
-        ...
+        pass
 
     def key(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
-        ...
+        pass
 
     def offset(self, *args, **kwargs) -> int:
-        ...
+        pass
 
     def partition(self, *args, **kwargs) -> int:
-        ...
+        pass
 
     def timestamp(self, *args, **kwargs) -> (int, int):
-        ...
+        pass
 
     def topic(self, *args, **kwargs) -> str:
-        ...
+        pass
 
     def value(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
-        ...
+        pass
 
     def latency(self, *args, **kwargs) -> Optional[float]:
-        ...
+        pass
 
     def leader_epoch(self, *args, **kwargs) -> Optional[int]:
-        ...
+        pass
 
     def __len__(self) -> int:
-        ...
+        pass

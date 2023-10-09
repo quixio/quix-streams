@@ -1,7 +1,7 @@
 import logging
 import uuid
-from typing import Self, Optional, Callable, Any, Union
-
+from typing import Optional, Callable, Any, List
+from typing_extensions import Self
 from ..models import Row
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ __all__ = ("PipelineFunction", "Pipeline")
 
 
 class PipelineFunction:
-    def __init__(self, func: Union[Callable]):
+    def __init__(self, func: Callable):
         self._id = str(uuid.uuid4())
         self._func = func
 
@@ -21,17 +21,17 @@ class PipelineFunction:
     def __repr__(self):
         return f'<{self.__class__.__name__} "{repr(self._func)}">'
 
-    def __call__(self, row: Row):
+    def __call__(self, row: Row) -> Row:
         return self._func(row)
 
 
 class Pipeline:
-    def __init__(self, functions: list[PipelineFunction] = None, _id: str = None):
+    def __init__(self, functions: List[PipelineFunction] = None, _id: str = None):
         self._id = _id or str(uuid.uuid4())
         self._functions = functions or []
 
     @property
-    def functions(self) -> list[PipelineFunction]:
+    def functions(self) -> List[PipelineFunction]:
         return self._functions
 
     @property

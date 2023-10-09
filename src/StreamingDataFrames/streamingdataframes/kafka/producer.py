@@ -16,7 +16,7 @@ __all__ = (
 Partitioner = Literal[
     "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
 ]
-HeaderValue = Union[str | bytes | None]
+HeaderValue = Optional[Union[str, bytes]]
 Headers = Union[
     List[Tuple[str, HeaderValue]],
     Dict[str, HeaderValue],
@@ -101,7 +101,7 @@ class Producer:
         self,
         topic: str,
         value: Union[str, bytes],
-        key: Union[str, bytes] = None,
+        key: Optional[Union[str, bytes]] = None,
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,

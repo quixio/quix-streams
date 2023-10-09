@@ -132,12 +132,18 @@ def topic_json_serdes_factory(topic_factory):
     The factory will return the resulting Topic object.
     """
 
-    def factory(topic: str = None, num_partitions: int = 1, timeout: float = 10.0):
+    def factory(
+        topic: str = None,
+        real_name: str = None,
+        num_partitions: int = 1,
+        timeout: float = 10.0,
+    ):
         topic_name, _ = topic_factory(
-            topic=topic, num_partitions=num_partitions, timeout=timeout
+            topic=real_name or topic, num_partitions=num_partitions, timeout=timeout
         )
         return Topic(
-            topic_name,
+            name=topic or topic_name,
+            real_name=real_name,
             value_deserializer=JSONDeserializer(),
             value_serializer=JSONSerializer(),
         )

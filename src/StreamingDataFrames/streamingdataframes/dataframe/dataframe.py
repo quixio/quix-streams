@@ -1,5 +1,6 @@
 import uuid
-from typing import Self, Optional, Callable, TypeAlias, Union, List, Mapping
+from typing import Optional, Callable, Union, List, Mapping
+from typing_extensions import Self, TypeAlias
 
 from .column import Column, OpValue
 from .pipeline import Pipeline
@@ -7,12 +8,12 @@ from ..models import Row, Topic
 from ..rowconsumer import RowConsumerProto
 from ..rowproducer import RowProducerProto
 
-RowApplier: TypeAlias = Callable[[Row], Optional[Union[Row, list[Row]]]]
+RowApplier: TypeAlias = Callable[[Row], Optional[Union[Row, List[Row]]]]
 
 __all__ = ("StreamingDataFrame",)
 
 
-def subset(keys: list[str], row: Row) -> Row:
+def subset(keys: List[str], row: Row) -> Row:
     row.value = row[keys]
     return row
 
@@ -71,19 +72,22 @@ class StreamingDataFrame:
     """
 
     def __init__(
-        self, topics: List[Topic], _pipeline: Pipeline = None, _id: str = None
+        self,
+        topics_in: List[Topic],
+        topics_out: Optional[List[Topic]] = None,
+        _pipeline: Pipeline = None,
+        _id: str = None,
     ):
         self._id = _id or str(uuid.uuid4())
         self._pipeline = _pipeline or Pipeline(_id=self.id)
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
-        if not topics:
+        if not topics_in:
             raise ValueError("Topic list cannot be empty")
-        self._topics = {t.name: t for t in topics}
+        self._topics_in = {t.real_name: t for t in topics_in}
+        self._topics_out = {t.real_name: t for t in topics_out or []}
 
-    def apply(
-        self, func: Callable[[Row], Optional[Union[Row, list[Row], None]]]
-    ) -> Self:
+    def apply(self, func: Callable[[Row], Optional[Union[Row, List[Row]]]]) -> Self:
         """
         Add a callable to the StreamingDataframe execution list.
         The provided callable should accept a Quixstreams Row as its input.
@@ -96,7 +100,7 @@ class StreamingDataFrame:
         self._pipeline.apply(func)
         return self
 
-    def process(self, row: Row) -> Optional[Union[Row, list[Row]]]:
+    def process(self, row: Row) -> Optional[Union[Row, List[Row]]]:
         """
         Execute the previously defined StreamingDataframe operations on a provided Row.
         :param row: a QuixStreams Row object
@@ -114,6 +118,7 @@ class StreamingDataFrame:
         :param topic: A QuixStreams `Topic`
         :return: self (StreamingDataFrame)
         """
+        topic.real_name = self.topics_out[topic.name].real_name
         return self.apply(lambda row: self._produce(topic, row))
 
     @property
@@ -121,12 +126,20 @@ class StreamingDataFrame:
         return self._id
 
     @property
-    def topics(self) -> Mapping[str, Topic]:
+    def topics_in(self) -> Mapping[str, Topic]:
         """
-        Get a mapping with Topics for the StreamingDataFrame
+        Get a mapping with Topics for the StreamingDataFrame input topics
         :return: dict of {<topic_name>: <Topic>}
         """
-        return self._topics
+        return {t.name: t for t in self._topics_in.values()}
+
+    @property
+    def topics_out(self) -> Mapping[str, Topic]:
+        """
+        Get a mapping with Topics for the StreamingDataFrame output topics
+        :return: dict of {<topic_name>: <Topic>}
+        """
+        return {t.name: t for t in self._topics_out.values()}
 
     @property
     def consumer(self) -> RowConsumerProto:
@@ -152,7 +165,7 @@ class StreamingDataFrame:
         self.apply(lambda row: setitem(key, value, row))
 
     def __getitem__(
-        self, item: Union[str, list[str], Column, Self]
+        self, item: Union[str, List[str], Column, Self]
     ) -> Union[Column, Self]:
         if isinstance(item, Column):
             return self.apply(lambda row: row if item.eval(row) else None)
@@ -167,5 +180,6 @@ class StreamingDataFrame:
             return Column(col_name=item)
 
     def _produce(self, topic: Topic, row: Row) -> Row:
+        topic.real_name = self.topics_out[topic.name].real_name
         self.producer.produce_row(row, topic)
         return row

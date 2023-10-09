@@ -1,6 +1,6 @@
 from io import BytesIO
 from os import environ
-from typing import Optional
+from typing import Optional, List
 from urllib.parse import urljoin
 from zipfile import ZipFile
 
@@ -15,7 +15,7 @@ class QuixPortalApiService:
     use that workspaces auth token and portal endpoint, else you must provide it.
 
     Function names closely reflect the respective API endpoint,
-    each starting with the method [GET, POST, etc] followed by the endpoint path.
+    each starting with the method [GET, POST, etc.] followed by the endpoint path.
 
     Results will be returned in the form of request's Response.json(), unless something
     else is required. Non-200's will raise exceptions.
@@ -94,11 +94,11 @@ class QuixPortalApiService:
             workspace_id = self.default_workspace_id
         return self.session.get(f"/workspaces/{workspace_id}").json()
 
-    def get_workspaces(self) -> list[dict]:
+    def get_workspaces(self) -> List[dict]:
         # TODO: This seems only return [] with Personal Access Tokens as of Sept 7 '23
         return self.session.get("/workspaces").json()
 
-    def get_topics(self, workspace_id: Optional[str] = None) -> list[dict]:
+    def get_topics(self, workspace_id: Optional[str] = None) -> List[dict]:
         if not workspace_id:
             workspace_id = self.default_workspace_id
         return self.session.get(f"/{workspace_id}/topics").json()

@@ -17,7 +17,9 @@ from streamingdataframes.rowconsumer import (
     KafkaMessageError,
     RowConsumer,
 )
-from streamingdataframes.runner import RunnerNotStarted, Runner
+from streamingdataframes.runner import RunnerNotStarted, Runner, QuixRunner
+from streamingdataframes.platforms.quix.config import QuixKafkaConfigsBuilder
+from unittest.mock import create_autospec
 
 
 def _stop_runner_on_future(runner: Runner, future: Future, timeout: float):
@@ -61,7 +63,7 @@ class TestRunner:
         )
         topic_out = topic_json_serdes_factory()
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
         df.to_topic(topic_out)
 
         processed_count = 0
@@ -120,7 +122,7 @@ class TestRunner:
         topic = Topic(
             topic_name, value_deserializer=JSONDeserializer(column_name="root")
         )
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         with runner_factory(auto_offset_reset="error") as runner:
@@ -139,7 +141,7 @@ class TestRunner:
         with producer:
             producer.produce(topic=topic_name, value=b"abc")
 
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         with runner_factory(auto_offset_reset="earliest") as runner:
             with pytest.raises(SerializationError):
@@ -151,7 +153,7 @@ class TestRunner:
         self, runner_factory, producer, topic_json_serdes_factory, consumer, executor
     ):
         topic = topic_json_serdes_factory()
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         done = Future()
         polled = 0
@@ -178,7 +180,7 @@ class TestRunner:
         self, topic_json_serdes_factory, producer, runner_factory, executor
     ):
         topic = topic_json_serdes_factory()
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         def fail(*args):
             raise ValueError("test")
@@ -198,7 +200,7 @@ class TestRunner:
         self, topic_json_serdes_factory, producer, runner_factory, executor
     ):
         topic = topic_json_serdes_factory()
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         def fail(*args):
             raise ValueError("test")
@@ -231,7 +233,7 @@ class TestRunner:
 
     def test_run_runner_isnot_started(self, runner_factory):
         topic = Topic("abc", value_deserializer=JSONDeserializer())
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
         runner = runner_factory()
         with pytest.raises(RunnerNotStarted):
             runner.run(df)
@@ -242,7 +244,7 @@ class TestRunner:
         topic_in = topic_json_serdes_factory()
         topic_out = topic_json_serdes_factory()
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
         df.to_topic(topic_out)
 
         with producer:
@@ -264,7 +266,7 @@ class TestRunner:
         topic_out_name, _ = topic_factory()
         topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
         df.to_topic(topic_out)
 
         with producer:
@@ -283,7 +285,7 @@ class TestRunner:
         topic_out_name, _ = topic_factory()
         topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
         df.to_topic(topic_out)
 
         produce_input = 2
@@ -308,3 +310,67 @@ class TestRunner:
             executor.submit(_stop_runner_on_future, runner, done, 10.0)
             runner.run(df)
         assert produce_output_attempts == produce_input
+
+
+class TestQuixRunner:
+    def test_init(self):
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg = {
+            "sasl.mechanisms": "SCRAM-SHA-256",
+            "security.protocol": "SASL_SSL",
+            "bootstrap.servers": "address1,address2",
+            "sasl.username": "my-username",
+            "sasl.password": "my-password",
+            "ssl.ca.location": "/mock/dir/ca.cert",
+            "ssl.endpoint.identification.algorithm": "none",
+        }
+        cfg_builder.get_confluent_broker_config.return_value = cfg
+        cfg_builder.append_workspace_id.return_value = "my_ws-c_group"
+        runner = QuixRunner(
+            quix_config_builder=cfg_builder,
+            consumer_group="c_group",
+            consumer_extra_config={"extra": "config"},
+            producer_extra_config={"extra": "config"},
+        )
+
+        for k, v in cfg.items():
+            assert runner.producer._producer_config[k] == v
+            assert runner.consumer._consumer_config[k] == v
+        assert runner.producer._producer_config["extra"] == "config"
+        assert runner.consumer._consumer_config["extra"] == "config"
+        assert runner.consumer._consumer_config["group.id"] == "my_ws-c_group"
+        cfg_builder.append_workspace_id.assert_called_with("c_group")
+
+    def test_run(self, kafka_container, topic_json_serdes_factory, executor):
+        """
+        Ensure that `real_name`s get set for the df as expected when runner is executed.
+        """
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg = {"bootstrap.servers": kafka_container.broker_address}
+        cfg_builder.get_confluent_broker_config.return_value = cfg
+        cfg_builder._workspace_id = "my_ws"
+        cfg_builder.append_workspace_id.side_effect = lambda s: f"my_ws-{s}"
+
+        real_input_topic = "my_ws-input_topic"
+        real_output_topic = "my_ws-output_topic"
+        input_topic = topic_json_serdes_factory(
+            topic="input_topic", real_name=real_input_topic
+        )
+        input_topic.real_name = None  # unset after topic is created for test
+        output_topic = topic_json_serdes_factory(
+            topic="output_topic", real_name=real_output_topic
+        )
+        output_topic.real_name = None  # unset after topic is created for test
+
+        quix_runner = QuixRunner(
+            quix_config_builder=cfg_builder,
+            consumer_group="c_group",
+        )
+        df = StreamingDataFrame(topics_in=[input_topic], topics_out=[output_topic])
+
+        done = Future()
+        with quix_runner as runner:
+            executor.submit(_stop_runner_on_future, runner, done, 2.0)
+            runner.run(df)
+        assert df.topics_in[input_topic.name].real_name == real_input_topic
+        assert df.topics_out[output_topic.name].real_name == real_output_topic

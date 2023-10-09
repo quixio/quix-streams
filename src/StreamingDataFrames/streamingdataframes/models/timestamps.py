@@ -12,7 +12,7 @@ class TimestampType(enum.IntEnum):
     TIMESTAMP_LOG_APPEND_TIME = 2  # broker receive time
 
 
-@dataclasses.dataclass(slots=True, init=True, frozen=True)
+@dataclasses.dataclass(init=True, frozen=True)
 class MessageTimestamp:
     """
     Represents a timestamp of incoming Kafka message
