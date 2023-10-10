@@ -21,31 +21,31 @@ __all__ = (
 
 
 class SerializationError(exceptions.QuixException, _SerializationError):
-    pass
+    ...
 
 
 class KeyDeserializationError(exceptions.QuixException, _KeyDeserializationError):
-    pass
+    ...
 
 
 class KeySerializationError(exceptions.QuixException, _KeySerializationError):
-    pass
+    ...
 
 
 class ValueSerializationError(exceptions.QuixException, _ValueSerializationError):
-    pass
+    ...
 
 
 class ValueDeserializationError(exceptions.QuixException, _ValueDeserializationError):
-    pass
+    ...
 
 
 class SerializerIsNotProvidedError(exceptions.QuixException):
-    pass
+    ...
 
 
 class DeserializerIsNotProvidedError(exceptions.QuixException):
-    pass
+    ...
 
 
 class IgnoreMessage(exceptions.QuixException):

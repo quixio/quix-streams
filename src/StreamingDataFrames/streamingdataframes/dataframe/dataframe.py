@@ -107,7 +107,7 @@ class StreamingDataFrame:
         """
         return self._pipeline.process(row)
 
-    # TODO: maybe we should just allow list(Topics) as well (in many spots actually)
+    # # TODO: maybe we should just allow list(Topics) as well (in many spots actually)
     def to_topic(self, topic: Topic):
         """
         Produce a row to a desired topic.
@@ -119,6 +119,7 @@ class StreamingDataFrame:
         """
         self._topics_out[topic.name] = topic
         return self.apply(lambda row: self._produce(topic, row))
+        # return self.apply(partial(self._produce, topic))
 
     @property
     def id(self) -> str:
@@ -179,6 +180,5 @@ class StreamingDataFrame:
             return Column(col_name=item)
 
     def _produce(self, topic: Topic, row: Row) -> Row:
-        topic.real_name = self.topics_out[topic.name].real_name
         self.producer.produce_row(row, topic)
         return row
