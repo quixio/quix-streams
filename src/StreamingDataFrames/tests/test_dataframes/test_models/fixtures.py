@@ -68,7 +68,7 @@ class EventDataParams(SlottedClass):
 
     def __init__(self, id: str, timestamp: int, value: str, tags: dict = None):
         self.id = id
-        self.timestamp = (timestamp,)
+        self.timestamp = timestamp
         self.value = value
         self.tags = tags
 
