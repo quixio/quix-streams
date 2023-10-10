@@ -17,7 +17,7 @@ class RowProducerProto(Protocol):
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
     ):
-        pass
+        ...
 
 
 class RowProducer(Producer, RowProducerProto):
