@@ -1,9 +1,9 @@
-import dataclasses
 import enum
 
 __all__ = ("TimestampType", "MessageTimestamp")
 
 from typing import Optional
+from .types import SlottedClass
 
 
 class TimestampType(enum.IntEnum):
@@ -12,14 +12,20 @@ class TimestampType(enum.IntEnum):
     TIMESTAMP_LOG_APPEND_TIME = 2  # broker receive time
 
 
-@dataclasses.dataclass(init=True, frozen=True)
-class MessageTimestamp:
+class MessageTimestamp(SlottedClass):
     """
     Represents a timestamp of incoming Kafka message
     """
 
-    milliseconds: Optional[int]
-    type: TimestampType
+    __slots__ = ("milliseconds", "type")
+
+    def __init__(
+        self,
+        milliseconds: Optional[int],
+        type: TimestampType,
+    ):
+        self.milliseconds = milliseconds
+        self.type = type
 
     @classmethod
     def create(cls, timestamp_type: int, milliseconds: int):

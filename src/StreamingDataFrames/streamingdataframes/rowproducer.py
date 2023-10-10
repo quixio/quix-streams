@@ -1,6 +1,6 @@
 import logging
-import typing
 from typing import Optional
+from typing_extensions import Protocol
 
 from .kafka.producer import Producer, Partitioner
 from .models import Topic, Row
@@ -9,7 +9,7 @@ from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 logger = logging.getLogger(__name__)
 
 
-class RowProducerProto(typing.Protocol):
+class RowProducerProto(Protocol):
     def produce_row(
         self,
         row: Row,

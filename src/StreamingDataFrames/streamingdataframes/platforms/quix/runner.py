@@ -60,10 +60,8 @@ class QuixRunner(Runner):
         append the workspace id name to all the output topics given via a
         StreamingDataFrame.
         """
-        for topic in self.dataframe.topics_out:
-            self.dataframe.topics_out[
-                topic
-            ].real_name = self.config_builder.append_workspace_id(topic)
+        for topic in self.dataframe.topics_out.values():
+            topic.real_name = self.config_builder.append_workspace_id(topic.name)
 
     def _df_init(self, dataframe: StreamingDataFrame):
         """

@@ -74,7 +74,6 @@ class StreamingDataFrame:
     def __init__(
         self,
         topics_in: List[Topic],
-        topics_out: Optional[List[Topic]] = None,
         _pipeline: Pipeline = None,
         _id: str = None,
     ):
@@ -85,7 +84,7 @@ class StreamingDataFrame:
         if not topics_in:
             raise ValueError("Topic Input list cannot be empty")
         self._topics_in = {t.name: t for t in topics_in}
-        self._topics_out = {t.name: t for t in topics_out or []}
+        self._topics_out = {}
 
     def apply(self, func: Callable[[Row], Optional[Union[Row, List[Row]]]]) -> Self:
         """
@@ -108,7 +107,7 @@ class StreamingDataFrame:
         """
         return self._pipeline.process(row)
 
-    # TODO: maybe we should just allow list(Topics) as well (in many spots actually)
+    # # TODO: maybe we should just allow list(Topics) as well (in many spots actually)
     def to_topic(self, topic: Topic):
         """
         Produce a row to a desired topic.
@@ -118,8 +117,9 @@ class StreamingDataFrame:
         :param topic: A QuixStreams `Topic`
         :return: self (StreamingDataFrame)
         """
-        topic.real_name = self.topics_out[topic.name].real_name
+        self._topics_out[topic.name] = topic
         return self.apply(lambda row: self._produce(topic, row))
+        # return self.apply(partial(self._produce, topic))
 
     @property
     def id(self) -> str:
@@ -180,6 +180,5 @@ class StreamingDataFrame:
             return Column(col_name=item)
 
     def _produce(self, topic: Topic, row: Row) -> Row:
-        topic.real_name = self.topics_out[topic.name].real_name
         self.producer.produce_row(row, topic)
         return row

@@ -1,11 +1,5 @@
-from typing import (
-    Union,
-    Protocol,
-    List,
-    Tuple,
-    Optional,
-    Mapping,
-)
+from typing import Union, List, Tuple, Optional, Mapping, Any
+from typing_extensions import Protocol
 
 MessageKey = Union[str, bytes]
 MessageValue = Union[str, bytes]
@@ -25,31 +19,52 @@ class ConfluentKafkaMessageProto(Protocol):
     """
 
     def headers(self, *args, **kwargs) -> Optional[List[Tuple[str, bytes]]]:
-        pass
+        ...
 
     def key(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
-        pass
+        ...
 
     def offset(self, *args, **kwargs) -> int:
-        pass
+        ...
 
     def partition(self, *args, **kwargs) -> int:
-        pass
+        ...
 
     def timestamp(self, *args, **kwargs) -> (int, int):
-        pass
+        ...
 
     def topic(self, *args, **kwargs) -> str:
-        pass
+        ...
 
     def value(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
-        pass
+        ...
 
     def latency(self, *args, **kwargs) -> Optional[float]:
-        pass
+        ...
 
     def leader_epoch(self, *args, **kwargs) -> Optional[int]:
-        pass
+        ...
 
     def __len__(self) -> int:
-        pass
+        ...
+
+
+# TODO: replace with dataclasses in Python>=3.10
+class SlottedClass:
+    """
+    Mostly here as a placeholder for DataClasses and doing "equals" comparisons.
+    """
+
+    __slots__ = ()
+
+    def __eq__(self, other) -> bool:
+        for p in self.__slots__:
+            if self.eq_get_attr(p) != other.eq_get_attr(p):
+                return False
+        return True
+
+    def eq_get_attr(self, item) -> Any:
+        try:
+            return self.__getattribute__(item)
+        except AttributeError:
+            return None

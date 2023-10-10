@@ -179,7 +179,7 @@ class TestDataframeKafka:
         topic = topic_json_serdes_factory()
         producer = row_producer_factory()
 
-        dataframe = dataframe_factory(topics_out=[topic])
+        dataframe = dataframe_factory()
         dataframe.producer = producer
         dataframe.to_topic(topic)
 
@@ -213,7 +213,7 @@ class TestDataframeKafka:
         topic_1 = topic_json_serdes_factory()
         producer = row_producer_factory()
 
-        dataframe = dataframe_factory(topics_out=[topic_0, topic_1])
+        dataframe = dataframe_factory()
         dataframe.producer = producer
 
         dataframe.to_topic(topic_0)
@@ -244,7 +244,7 @@ class TestDataframeKafka:
     def test_to_topic_no_producer_assigned(self, dataframe_factory, row_factory):
         topic = Topic("whatever")
 
-        dataframe = dataframe_factory(topics_out=[topic])
+        dataframe = dataframe_factory()
         dataframe.to_topic(topic)
 
         with pytest.raises(RuntimeError):

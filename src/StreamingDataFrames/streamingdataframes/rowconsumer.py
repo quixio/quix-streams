@@ -1,6 +1,6 @@
 import logging
-import typing
 from typing import Optional, Callable, List, Union, Mapping
+from typing_extensions import Protocol
 
 from confluent_kafka import KafkaError, TopicPartition
 
@@ -37,14 +37,14 @@ class KafkaMessageError(QuixException):
         return str(self)
 
 
-class RowConsumerProto(typing.Protocol):
+class RowConsumerProto(Protocol):
     def commit(
         self,
         message=None,
         offsets: List[TopicPartition] = None,
         asynchronous: bool = True,
     ) -> Optional[List[TopicPartition]]:
-        pass
+        ...
 
     def subscribe(
         self,
@@ -53,7 +53,7 @@ class RowConsumerProto(typing.Protocol):
         on_revoke: Optional[RebalancingCallback] = None,
         on_lost: Optional[RebalancingCallback] = None,
     ):
-        pass
+        ...
 
 
 class RowConsumer(Consumer, RowConsumerProto):

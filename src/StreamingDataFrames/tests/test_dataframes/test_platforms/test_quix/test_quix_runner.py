@@ -60,7 +60,8 @@ class TestQuixRunner:
             quix_config_builder=cfg_builder,
             consumer_group="c_group",
         )
-        df = StreamingDataFrame(topics_in=[input_topic], topics_out=[output_topic])
+        df = StreamingDataFrame(topics_in=[input_topic])
+        df.to_topic(output_topic)
 
         done = Future()
         with quix_runner as runner:

@@ -1,8 +1,8 @@
 import base64
-import dataclasses
 import json
 import time
-from typing import Mapping, Union, Iterable, List, Optional, Any
+from typing import Mapping, Union, List, Any
+from streamingdataframes.models.types import SlottedClass
 
 import pytest
 
@@ -58,12 +58,19 @@ def quix_timeseries_factory():
     return factory
 
 
-@dataclasses.dataclass
-class EventDataParams:
-    id: str
-    timestamp: int
-    value: str
-    tags: dict = None
+class EventDataParams(SlottedClass):
+    __slots__ = (
+        "id",
+        "timestamp",
+        "value",
+        "tags",
+    )
+
+    def __init__(self, id: str, timestamp: int, value: str, tags: dict = None):
+        self.id = id
+        self.timestamp = (timestamp,)
+        self.value = value
+        self.tags = tags
 
 
 @pytest.fixture()

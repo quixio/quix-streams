@@ -60,7 +60,7 @@ class TestRunner:
         )
         topic_out = topic_json_serdes_factory()
 
-        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         processed_count = 0
@@ -241,7 +241,7 @@ class TestRunner:
         topic_in = topic_json_serdes_factory()
         topic_out = topic_json_serdes_factory()
 
-        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         with producer:
@@ -263,7 +263,7 @@ class TestRunner:
         topic_out_name, _ = topic_factory()
         topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         with producer:
@@ -282,7 +282,7 @@ class TestRunner:
         topic_out_name, _ = topic_factory()
         topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = StreamingDataFrame(topics_in=[topic_in], topics_out=[topic_out])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         produce_input = 2

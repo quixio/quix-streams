@@ -23,10 +23,9 @@ def pipeline(pipeline_function):
 
 @pytest.fixture()
 def dataframe_factory():
-    def _dataframe_factory(topics_in=None, topics_out=None):
+    def _dataframe_factory(topics_in=None):
         return StreamingDataFrame(
             topics_in=topics_in or [Topic(name="test_in")],
-            topics_out=topics_out or [Topic(name="test_out")],
         )
 
     return _dataframe_factory
