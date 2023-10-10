@@ -183,6 +183,8 @@ class TestDataframeKafka:
         dataframe.producer = producer
         dataframe.to_topic(topic)
 
+        assert dataframe.topics_out[topic.name] == topic
+
         row_to_produce = row_factory(
             topic="ignore_me",
             key=b"test_key",

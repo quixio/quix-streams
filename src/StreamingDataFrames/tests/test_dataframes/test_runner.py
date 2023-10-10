@@ -19,6 +19,7 @@ from streamingdataframes.rowconsumer import (
 )
 from streamingdataframes.runner import RunnerNotStarted, Runner
 
+
 def _stop_runner_on_future(runner: Runner, future: Future, timeout: float):
     """
     Call "Runner.stop" after the future is resolved to stop the poll loop
