@@ -104,14 +104,6 @@ class RocksDBStorage:
         """
         return key in self._db
 
-    def flush(self, wait: bool = False):
-        """
-        Manually flush the current mem-table.
-
-        :param wait: whether to wait for the flush to finish
-        """
-        self._db.flush(wait)
-
     def close(self):
         """
         Close the underlying RocksDB
