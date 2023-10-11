@@ -193,8 +193,8 @@ class TransactionStore:
     *********
     `TransactionStore` allows to set prefixes for the keys in the given code block
     using :meth:`with_prefix()` context manager.
-    Normally, Streaming DataFrames will set prefixes order to scope
-    the store operations
+    Normally, `StreamingDataFrame` class will use message keys as prefixes
+    in order to namespace the stored keys across different messages.
 
     Transactional properties
     ************************
