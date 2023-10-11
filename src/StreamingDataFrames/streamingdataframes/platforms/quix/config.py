@@ -1,7 +1,7 @@
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 from requests import HTTPError
 
@@ -271,7 +271,7 @@ class QuixKafkaConfigsBuilder:
 
     def get_confluent_client_configs(
         self, topics: list, consumer_group_id: Optional[str] = None
-    ) -> Tuple[dict, list[str], Optional[str]]:
+    ) -> Tuple[dict, List[str], Optional[str]]:
         """
         Get all the values you need in order to use a confluent_kafka-based client
         with a topic on a Quix platform broker/workspace.

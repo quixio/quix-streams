@@ -221,7 +221,7 @@ class TestConsumerOnRevoke:
 
 
 class TestConsumerPoll:
-    def test_poll_single_messsage_success(
+    def test_poll_single_message_success(
         self, consumer_factory, producer, topic_factory
     ):
         topic, _ = topic_factory()

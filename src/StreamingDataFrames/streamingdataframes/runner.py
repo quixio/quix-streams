@@ -1,6 +1,6 @@
 import contextlib
 import logging
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 
 from confluent_kafka import TopicPartition
 
@@ -15,6 +15,7 @@ from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .exceptions import QuixException
+from .models.topics import Topic
 
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ class Runner:
             extra_config=producer_extra_config,
             on_error=on_producer_error,
         )
+        self.dataframe = None
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._running = False
@@ -144,6 +146,24 @@ class Runner:
         logger.debug("Closing Runner and its Kafka consumers & producers")
         self._exit_stack.close()
 
+    def _get_df_input_topics(self) -> List[Topic]:
+        """
+        Get the list of topics names from the dataframe handed to the Runner.
+        """
+        return list(self.dataframe.topics_in.values())
+
+    def _df_init(self, dataframe: StreamingDataFrame):
+        """
+        Set up the kafka-related attributes of the StreamingDataFrame object.
+        """
+        self.dataframe = dataframe
+        logger.info("Start processing of the streaming dataframe")
+        # Provide Consumer and Producer instances to StreamingDataFrame
+        self.dataframe.producer = self.producer
+        self.dataframe.consumer = self.consumer
+        # Subscribe to topics in Kafka and start polling
+        self.consumer.subscribe(self._get_df_input_topics())
+
     def run(
         self,
         dataframe: StreamingDataFrame,
@@ -156,16 +176,7 @@ class Runner:
         if not self._running:
             raise RunnerNotStarted("Runner is not yet started")
 
-        logger.info("Start processing of the streaming dataframe")
-
-        # Provide Consumer and Producer instances to StreamingDataFrame
-        dataframe.producer = self.producer
-        dataframe.consumer = self.consumer
-
-        # Get a list of input topics for this Dataframe
-        topics = list(dataframe.topics.values())
-        # Subscribe to topics in Kafka and start polling
-        self.consumer.subscribe(topics)
+        self._df_init(dataframe)
         # Start polling Kafka for messages and callbacks
         while self._running:
             # Serve producer callbacks

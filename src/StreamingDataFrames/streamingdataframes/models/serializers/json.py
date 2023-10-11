@@ -10,7 +10,7 @@ __all__ = ("JSONSerializer", "JSONDeserializer")
 class JSONSerializer(Serializer):
     def __init__(
         self,
-        dumps: Callable[[Any, ...], Union[str, bytes]] = json.dumps,
+        dumps: Callable[[Any, None], Union[str, bytes]] = json.dumps,
         dumps_kwargs: Optional[Mapping] = None,
     ):
         """
@@ -36,7 +36,7 @@ class JSONDeserializer(Deserializer):
         self,
         column_name: Optional[str] = None,
         loads: Callable[
-            [Union[str, bytes, bytearray], ...], Union[List, Mapping]
+            [Union[str, bytes, bytearray], None], Union[List, Mapping]
         ] = json.loads,
         loads_kwargs: Optional[Mapping] = None,
     ):

@@ -1,6 +1,6 @@
 import logging
-import typing
 from typing import Optional, Callable, List, Union, Mapping
+from typing_extensions import Protocol
 
 from confluent_kafka import KafkaError, TopicPartition
 
@@ -37,7 +37,7 @@ class KafkaMessageError(QuixException):
         return str(self)
 
 
-class RowConsumerProto(typing.Protocol):
+class RowConsumerProto(Protocol):
     def commit(
         self,
         message=None,
@@ -136,15 +136,13 @@ class RowConsumer(Consumer, RowConsumerProto):
             owned by other members in the group and therefore committing offsets,
             for example, may fail.
         """
-        topics_map = {t.name: t for t in topics}
-        topics_names = list(topics_map.keys())
+        self._topics = {t.real_name: t for t in topics}
         super().subscribe(
-            topics=topics_names,
+            topics=list(self._topics.keys()),
             on_assign=on_assign,
             on_revoke=on_revoke,
             on_lost=on_lost,
         )
-        self._topics = {t.name: t for t in topics}
 
     def poll_row(self, timeout: float = None) -> Union[Row, List[Row], None]:
         """
@@ -182,7 +180,7 @@ class RowConsumer(Consumer, RowConsumerProto):
             logger.debug(
                 "Ignoring the message from Kafka",
                 extra={
-                    "topic": topic_name,
+                    "topic": self._topics[topic_name].name,
                     "partition": partition,
                     "offset": offset,
                 },

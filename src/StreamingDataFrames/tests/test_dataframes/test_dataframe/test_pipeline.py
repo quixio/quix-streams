@@ -1,6 +1,4 @@
-from streamingdataframes.dataframe.pipeline import (
-    PipelineFunction,
-)
+from streamingdataframes.dataframe.pipeline import PipelineFunction
 
 
 class TestPipeline:
