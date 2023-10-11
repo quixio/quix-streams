@@ -1,11 +1,11 @@
 from typing import Mapping, Optional, Union, List
 
 from .timestamps import MessageTimestamp
-from .types import MessageKey, MessageHeadersTuples, SlottedClass
+from .types import MessageKey, MessageHeadersTuples
 
 
 # TODO: add other dict functions like .get() , __contains__  and .copy()
-class Row(SlottedClass):
+class Row:
     """
     Row is a dict-like interface on top of the message data + some Kafka props
     """

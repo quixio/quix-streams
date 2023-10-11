@@ -1,5 +1,5 @@
-from typing import Union, List, Tuple, Optional, Mapping, Any
-from typing_extensions import Protocol, Self
+from typing import Union, List, Tuple, Optional, Mapping
+from typing_extensions import Protocol
 
 MessageKey = Union[str, bytes]
 MessageValue = Union[str, bytes]
@@ -47,28 +47,3 @@ class ConfluentKafkaMessageProto(Protocol):
 
     def __len__(self) -> int:
         ...
-
-
-# TODO: replace with dataclass in Python>=3.10
-class SlottedClass:
-    """
-    Mostly here as a placeholder for DataClasses and doing "equals" comparisons.
-    """
-
-    __slots__ = ()
-
-    def __eq__(self, other: Self) -> bool:
-        for p in self.__slots__:
-            if self.eq_get_attr(p) != other.eq_get_attr(p):
-                return False
-        return True
-
-    def eq_get_attr(self, item: str) -> Any:
-        """
-        This is for when a slot is defined, but was never assigned a value.
-        Don't want it to fail an equality check via exception, so we just return None.
-        """
-        try:
-            return self.__getattribute__(item)
-        except AttributeError:
-            return None

@@ -3,7 +3,6 @@ import enum
 __all__ = ("TimestampType", "MessageTimestamp")
 
 from typing import Optional
-from .types import SlottedClass
 
 
 class TimestampType(enum.IntEnum):
@@ -12,7 +11,7 @@ class TimestampType(enum.IntEnum):
     TIMESTAMP_LOG_APPEND_TIME = 2  # broker receive time
 
 
-class MessageTimestamp(SlottedClass):
+class MessageTimestamp:
     """
     Represents a timestamp of incoming Kafka message
     """

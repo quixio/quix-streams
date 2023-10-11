@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        python: [ 3.11 ]
+        python: [ 3.8 ]
     steps:
       - name: Checkout
         uses: actions/checkout@v3

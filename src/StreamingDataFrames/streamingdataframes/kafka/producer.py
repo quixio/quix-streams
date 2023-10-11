@@ -1,6 +1,6 @@
 import logging
-from typing import List, Dict, Literal, Tuple
-from typing import Union, Optional
+from typing import List, Dict, Tuple, Union, Optional
+from typing_extensions import Literal
 
 from confluent_kafka import (
     Producer as ConfluentProducer,

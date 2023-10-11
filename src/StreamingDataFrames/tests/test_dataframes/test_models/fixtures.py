@@ -2,7 +2,6 @@ import base64
 import json
 import time
 from typing import Mapping, Union, List, Any
-from streamingdataframes.models.types import SlottedClass
 
 import pytest
 
@@ -58,7 +57,7 @@ def quix_timeseries_factory():
     return factory
 
 
-class EventDataParams(SlottedClass):
+class EventDataParams:
     __slots__ = (
         "id",
         "timestamp",

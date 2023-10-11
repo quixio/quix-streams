@@ -5,17 +5,11 @@ from .types import (
     MessageValue,
     MessageHeadersTuples,
     MessageHeadersMapping,
-    SlottedClass,
 )
 
 
-class KafkaMessage(SlottedClass):
-    __slots__ = (
-        "key",
-        "value",
-        "headers",
-        "timestamp",
-    )
+class KafkaMessage:
+    __slots__ = ("key", "value", "headers", "timestamp")
 
     def __init__(
         self,

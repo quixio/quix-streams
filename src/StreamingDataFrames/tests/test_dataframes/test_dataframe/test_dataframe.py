@@ -1,8 +1,6 @@
 import pytest
 
-from streamingdataframes.dataframe.pipeline import (
-    Pipeline,
-)
+from streamingdataframes.dataframe.pipeline import Pipeline
 from streamingdataframes.models.topics import Topic
 
 
@@ -18,52 +16,52 @@ class TestDataframeProcess:
         dataframe = dataframe_factory()
         dataframe = dataframe.apply(row_plus_n_func(1))
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row_factory({"x": 2, "y": 3})
+        assert dataframe.process(row).value == row_factory({"x": 2, "y": 3}).value
 
     def test_apply_fluent(self, dataframe_factory, row_factory, row_plus_n_func):
         dataframe = dataframe_factory()
         dataframe = dataframe.apply(row_plus_n_func(n=1)).apply(row_plus_n_func(n=2))
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row_factory({"x": 4, "y": 5})
+        assert dataframe.process(row).value == row_factory({"x": 4, "y": 5}).value
 
     def test_apply_sequential(self, dataframe_factory, row_factory, row_plus_n_func):
         dataframe = dataframe_factory()
         dataframe = dataframe.apply(row_plus_n_func(n=1))
         dataframe = dataframe.apply(row_plus_n_func(n=2))
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row_factory({"x": 4, "y": 5})
+        assert dataframe.process(row).value == row_factory({"x": 4, "y": 5}).value
 
     def test_setitem_primitive(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe["new"] = 1
         row = row_factory({"x": 1})
-        assert dataframe.process(row) == row_factory({"x": 1, "new": 1})
+        assert dataframe.process(row).value == row_factory({"x": 1, "new": 1}).value
 
     def test_setitem_column_only(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe["new"] = dataframe["x"]
         row = row_factory({"x": 1})
-        assert dataframe.process(row) == row_factory({"x": 1, "new": 1})
+        assert dataframe.process(row).value == row_factory({"x": 1, "new": 1}).value
 
     def test_setitem_column_with_function(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe["new"] = dataframe["x"].apply(lambda v: v + 5)
         row = row_factory({"x": 1})
-        assert dataframe.process(row) == row_factory({"x": 1, "new": 6})
+        assert dataframe.process(row).value == row_factory({"x": 1, "new": 6}).value
 
     def test_setitem_column_with_operations(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe["new"] = dataframe["x"] + dataframe["y"].apply(lambda v: v + 5) + 1
         row = row_factory({"x": 1, "y": 2})
         expected = row_factory({"x": 1, "y": 2, "new": 9})
-        assert dataframe.process(row) == expected
+        assert dataframe.process(row).value == expected.value
 
     def test_column_subset(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe = dataframe[["x", "y"]]
         row = row_factory({"x": 1, "y": 2, "z": 3})
         expected = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == expected
+        assert dataframe.process(row).value == expected.value
 
     def test_column_subset_with_funcs(
         self, dataframe_factory, row_factory, row_plus_n_func
@@ -72,13 +70,13 @@ class TestDataframeProcess:
         dataframe = dataframe[["x", "y"]].apply(row_plus_n_func(n=5))
         row = row_factory({"x": 1, "y": 2, "z": 3})
         expected = row_factory({"x": 6, "y": 7})
-        assert dataframe.process(row) == expected
+        assert dataframe.process(row).value == expected.value
 
     def test_inequality_filter(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe = dataframe[dataframe["x"] > 0]
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row
+        assert dataframe.process(row).value == row.value
 
     def test_inequality_filter_is_filtered(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
@@ -90,7 +88,7 @@ class TestDataframeProcess:
         dataframe = dataframe_factory()
         dataframe = dataframe[(dataframe["x"] - 0 + dataframe["y"]) > 0]
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row
+        assert dataframe.process(row).value == row.value
 
     def test_inequality_filter_with_operation_is_filtered(
         self, dataframe_factory, row_factory
@@ -104,7 +102,7 @@ class TestDataframeProcess:
         dataframe = dataframe_factory()
         dataframe = dataframe[dataframe["x"].apply(lambda v: v - 1) >= 0]
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row
+        assert dataframe.process(row).value == row.value
 
     def test_inequality_filtering_with_apply_is_filtered(
         self, dataframe_factory, row_factory
@@ -118,7 +116,7 @@ class TestDataframeProcess:
         dataframe = dataframe_factory()
         dataframe = dataframe[(dataframe["x"] >= 0) & (dataframe["y"] < 10)]
         row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row) == row
+        assert dataframe.process(row).value == row.value
 
     def test_compound_inequality_filter_is_filtered(
         self, dataframe_factory, row_factory
@@ -143,8 +141,10 @@ class TestDataframeProcess:
         dataframe = dataframe_factory()
         dataframe = dataframe.apply(more_rows_func)
         expected = [row_factory({"x": 1, "x_list": i}) for i in range(3)]
-        row = row_factory({"x": 1, "x_list": [0, 1, 2]})
-        assert dataframe.process(row) == expected
+        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+        assert len(actual) == len(expected)
+        for idx in range(len(actual)):
+            assert actual[idx].value == expected[idx].value
 
     def test_multiple_row_generation_with_additional_apply(
         self, dataframe_factory, more_rows_func, row_factory, row_plus_n_func
@@ -153,8 +153,10 @@ class TestDataframeProcess:
         dataframe = dataframe.apply(more_rows_func)
         dataframe = dataframe.apply(row_plus_n_func(n=1))
         expected = [row_factory({"x": 2, "x_list": i + 1}) for i in range(3)]
-        row = row_factory({"x": 1, "x_list": [0, 1, 2]})
-        assert dataframe.process(row) == expected
+        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+        assert len(actual) == len(expected)
+        for idx in range(len(actual)):
+            assert actual[idx].value == expected[idx].value
 
     def test_multiple_row_generation_with_additional_filtering(
         self, dataframe_factory, more_rows_func, row_factory
@@ -163,8 +165,10 @@ class TestDataframeProcess:
         dataframe = dataframe.apply(more_rows_func)
         dataframe = dataframe.apply(lambda row: row if row["x_list"] > 0 else None)
         expected = [row_factory({"x": 1, "x_list": i}) for i in range(1, 3)]
-        row = row_factory({"x": 1, "x_list": [0, 1, 2]})
-        assert dataframe.process(row) == expected
+        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+        assert len(actual) == len(expected)
+        for idx in range(len(actual)):
+            assert actual[idx].value == expected[idx].value
 
 
 class TestDataframeKafka:
