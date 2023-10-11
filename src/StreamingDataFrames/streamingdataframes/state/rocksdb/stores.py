@@ -252,7 +252,7 @@ class TransactionStore:
         self._storage = storage
         self._update_cache = {}
         self._batch = rocksdict.WriteBatch(raw_mode=True)
-        self._prefix = b""
+        self._prefix = _DEFAULT_PREFIX
         self._failed = False
         self._completed = False
         self._dumps = dumps
@@ -286,7 +286,7 @@ class TransactionStore:
         try:
             yield self
         finally:
-            self._prefix = b""
+            self._prefix = _DEFAULT_PREFIX
 
     @_validate_transaction_state
     def get(self, key: Any, default: Any = None) -> Optional[Any]:
