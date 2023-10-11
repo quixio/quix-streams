@@ -1,6 +1,6 @@
 import functools
 import logging
-from typing import Mapping
+from typing import Mapping, Optional
 
 # Logging config to be used in tests
 LOGGING_CONFIG = {
@@ -52,9 +52,9 @@ def _patch_makeRecord(func_):
         msg: object,
         args,
         exc_info,
-        func: str | None = ...,
-        extra: Mapping[str, object] | None = ...,
-        sinfo: str | None = ...,
+        func: Optional[str] = None,
+        extra: Optional[Mapping[str, object]] = None,
+        sinfo: Optional[str] = None,
     ) -> logging.LogRecord:
         """
         Print all field from "extra" dict in the logs in tests

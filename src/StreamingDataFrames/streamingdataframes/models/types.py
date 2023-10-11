@@ -1,11 +1,5 @@
-from typing import (
-    Union,
-    Protocol,
-    List,
-    Tuple,
-    Optional,
-    Mapping,
-)
+from typing import Union, List, Tuple, Optional, Mapping
+from typing_extensions import Protocol
 
 MessageKey = Union[str, bytes]
 MessageValue = Union[str, bytes]

@@ -14,12 +14,11 @@ from streamingdataframes.models import MessageTimestamp, TimestampType
 def test_create_timestamp_success(
     timestamp_type: int, milliseconds: int, expected: MessageTimestamp
 ):
-    assert (
-        MessageTimestamp.create(
-            timestamp_type=timestamp_type, milliseconds=milliseconds
-        )
-        == expected
+    ts = MessageTimestamp.create(
+        timestamp_type=timestamp_type, milliseconds=milliseconds
     )
+    assert ts.type == expected.type
+    assert ts.milliseconds == expected.milliseconds
 
 
 def test_create_timestamp_unknown_type_error():

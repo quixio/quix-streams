@@ -61,7 +61,7 @@ class TestRunner:
         )
         topic_out = topic_json_serdes_factory()
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         processed_count = 0
@@ -120,7 +120,7 @@ class TestRunner:
         topic = Topic(
             topic_name, value_deserializer=JSONDeserializer(column_name="root")
         )
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         with runner_factory(auto_offset_reset="error") as runner:
@@ -139,7 +139,7 @@ class TestRunner:
         with producer:
             producer.produce(topic=topic_name, value=b"abc")
 
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         with runner_factory(auto_offset_reset="earliest") as runner:
             with pytest.raises(SerializationError):
@@ -151,7 +151,7 @@ class TestRunner:
         self, runner_factory, producer, topic_json_serdes_factory, consumer, executor
     ):
         topic = topic_json_serdes_factory()
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         done = Future()
         polled = 0
@@ -178,7 +178,7 @@ class TestRunner:
         self, topic_json_serdes_factory, producer, runner_factory, executor
     ):
         topic = topic_json_serdes_factory()
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         def fail(*args):
             raise ValueError("test")
@@ -198,7 +198,7 @@ class TestRunner:
         self, topic_json_serdes_factory, producer, runner_factory, executor
     ):
         topic = topic_json_serdes_factory()
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
 
         def fail(*args):
             raise ValueError("test")
@@ -231,7 +231,7 @@ class TestRunner:
 
     def test_run_runner_isnot_started(self, runner_factory):
         topic = Topic("abc", value_deserializer=JSONDeserializer())
-        df = StreamingDataFrame(topics=[topic])
+        df = StreamingDataFrame(topics_in=[topic])
         runner = runner_factory()
         with pytest.raises(RunnerNotStarted):
             runner.run(df)
@@ -242,7 +242,7 @@ class TestRunner:
         topic_in = topic_json_serdes_factory()
         topic_out = topic_json_serdes_factory()
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         with producer:
@@ -264,7 +264,7 @@ class TestRunner:
         topic_out_name, _ = topic_factory()
         topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         with producer:
@@ -283,7 +283,7 @@ class TestRunner:
         topic_out_name, _ = topic_factory()
         topic_out = Topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = StreamingDataFrame(topics=[topic_in])
+        df = StreamingDataFrame(topics_in=[topic_in])
         df.to_topic(topic_out)
 
         produce_input = 2
