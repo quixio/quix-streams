@@ -129,7 +129,7 @@ class RocksDBStorage:
 
         :param path: an absolute path to the RocksDB folder
         """
-        rocksdict.Rdict.destroy(path=path)
+        rocksdict.Rdict.destroy(path=path)  # noqa
 
     def _open_db(self) -> rocksdict.Rdict:
         attempt = 1
@@ -141,7 +141,7 @@ class RocksDBStorage:
                 db = rocksdict.Rdict(
                     path=self._path,
                     options=self._options.to_options(),
-                    access_type=rocksdict.AccessType.read_write(),
+                    access_type=rocksdict.AccessType.read_write(),  # noqa
                 )
                 logger.info(
                     f'Successfully opened db partition on "{self._path}"',
