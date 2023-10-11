@@ -1,4 +1,5 @@
 import contextlib
+import functools
 import logging
 import time
 from typing import Any, Union, Optional
@@ -170,6 +171,27 @@ class RocksDBStorage:
         self.close()
 
 
+def _validate_transaction_state(func):
+    """
+    Check that the state of `TransactionStore` is valid before calling a method
+    """
+
+    @functools.wraps(func)
+    def wrapper(self: "TransactionStore", *args, **kwargs):
+        if self.failed:
+            raise StateTransactionError(
+                "Transaction is failed, create a new one to proceed"
+            )
+        if self.completed:
+            raise StateTransactionError(
+                "Transaction is already finished, create a new one to proceed"
+            )
+
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 class TransactionStore:
     """
     A transaction-based store to perform simple key-value operations like
@@ -266,6 +288,7 @@ class TransactionStore:
         finally:
             self._prefix = b""
 
+    @_validate_transaction_state
     def get(self, key: Any, default: Any = None) -> Optional[Any]:
         """
         Get a key from the store.
@@ -280,7 +303,6 @@ class TransactionStore:
             It can be of any type.
         :return: a JSON-deserialized value
         """
-        self._validate_transaction_state()
 
         # First, check the update cache in case the value was previously written
         # Use sentinel as default because the actual value can be "None"
@@ -295,6 +317,7 @@ class TransactionStore:
             return self._deserialize_value(stored)
         return default
 
+    @_validate_transaction_state
     def set(self, key: Any, value: Any):
         """
         Set a key to the store.
@@ -304,7 +327,6 @@ class TransactionStore:
         :param key: a JSON-deserializable key.
         :param value: a JSON-serializable value
         """
-        self._validate_transaction_state()
 
         key_serialized = self._serialize_key(key)
         value_serialized = self._serialize_value(value)
@@ -316,6 +338,7 @@ class TransactionStore:
             self._failed = True
             raise
 
+    @_validate_transaction_state
     def delete(self, key: Any):
         """
         Delete a key from the store.
@@ -325,7 +348,6 @@ class TransactionStore:
         :param key: a JSON-deserializable key.
         :return:
         """
-        self._validate_transaction_state()
         key_serialized = self._serialize_key(key)
         try:
             self._batch.delete(key_serialized)
@@ -334,6 +356,7 @@ class TransactionStore:
             self._failed = True
             raise
 
+    @_validate_transaction_state
     def exists(self, key: Any) -> bool:
         """
         Check if a key exists in the store.
@@ -343,7 +366,6 @@ class TransactionStore:
         :param key: a JSON-deserializable key
         :return: `True` if the key exists, `False` otherwise.
         """
-        self._validate_transaction_state()
 
         key_serialized = self._serialize_key(key)
         if key_serialized in self._update_cache:
@@ -376,16 +398,7 @@ class TransactionStore:
         """
         return self._failed
 
-    def _validate_transaction_state(self):
-        if self._failed:
-            raise StateTransactionError(
-                "Transaction is failed, create a new one to proceed"
-            )
-        if self._completed:
-            raise StateTransactionError(
-                "Transaction is already finished, create a new one to proceed"
-            )
-
+    @_validate_transaction_state
     def _flush(self):
         # TODO: Does Flush sometimes need to be called manually?
         """
@@ -395,7 +408,6 @@ class TransactionStore:
         If writing fails, the transaction will be also marked as "failed" and
         cannot be used anymore.
         """
-        self._validate_transaction_state()
 
         try:
             # Don't write batches if this transaction doesn't change any keys
