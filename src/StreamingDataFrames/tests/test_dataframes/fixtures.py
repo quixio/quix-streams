@@ -5,6 +5,7 @@ from typing import Optional
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
 
+from streamingdataframes.app import Application, MessageProcessedCallback
 from streamingdataframes.error_callbacks import (
     ConsumerErrorCallback,
     ProducerErrorCallback,
@@ -28,7 +29,6 @@ from streamingdataframes.models.timestamps import (
 from streamingdataframes.models.topics import Topic
 from streamingdataframes.rowconsumer import RowConsumer
 from streamingdataframes.rowproducer import RowProducer
-from streamingdataframes.runner import MessageProcessedCallback, Runner
 
 
 @pytest.fixture()
@@ -134,16 +134,14 @@ def topic_json_serdes_factory(topic_factory):
 
     def factory(
         topic: str = None,
-        real_name: str = None,
         num_partitions: int = 1,
         timeout: float = 10.0,
     ):
         topic_name, _ = topic_factory(
-            topic=real_name or topic, num_partitions=num_partitions, timeout=timeout
+            topic=topic, num_partitions=num_partitions, timeout=timeout
         )
         return Topic(
             name=topic or topic_name,
-            real_name=real_name,
             value_deserializer=JSONDeserializer(),
             value_serializer=JSONSerializer(),
         )
@@ -237,7 +235,7 @@ def row_factory():
 
 
 @pytest.fixture()
-def runner_factory(kafka_container, random_consumer_group):
+def app_factory(kafka_container, random_consumer_group):
     def factory(
         auto_offset_reset: AutoOffsetReset = "latest",
         consumer_extra_config: Optional[dict] = None,
@@ -246,8 +244,8 @@ def runner_factory(kafka_container, random_consumer_group):
         on_producer_error: Optional[ProducerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_message_processed: Optional[MessageProcessedCallback] = None,
-    ) -> Runner:
-        return Runner(
+    ) -> Application:
+        return Application(
             broker_address=kafka_container.broker_address,
             consumer_group=random_consumer_group,
             auto_offset_reset=auto_offset_reset,

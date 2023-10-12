@@ -1,15 +1,15 @@
 import logging
 from typing import Optional, Callable, List, Union, Mapping
-from typing_extensions import Protocol
 
 from confluent_kafka import KafkaError, TopicPartition
+from typing_extensions import Protocol
 
+from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import QuixException
 from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset
 from .kafka.consumer import RebalancingCallback
 from .models import Topic, Row
 from .models.serializers.exceptions import IgnoreMessage
-from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 
 logger = logging.getLogger(__name__)
 
@@ -136,13 +136,15 @@ class RowConsumer(Consumer, RowConsumerProto):
             owned by other members in the group and therefore committing offsets,
             for example, may fail.
         """
-        self._topics = {t.real_name: t for t in topics}
+        topics_map = {t.name: t for t in topics}
+        topics_names = list(topics_map.keys())
         super().subscribe(
-            topics=list(self._topics.keys()),
+            topics=topics_names,
             on_assign=on_assign,
             on_revoke=on_revoke,
             on_lost=on_lost,
         )
+        self._topics = {t.name: t for t in topics}
 
     def poll_row(self, timeout: float = None) -> Union[Row, List[Row], None]:
         """
@@ -180,7 +182,7 @@ class RowConsumer(Consumer, RowConsumerProto):
             logger.debug(
                 "Ignoring the message from Kafka",
                 extra={
-                    "topic": self._topics[topic_name].name,
+                    "topic": topic_name,
                     "partition": partition,
                     "offset": offset,
                 },
