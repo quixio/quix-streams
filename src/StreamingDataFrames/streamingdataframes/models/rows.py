@@ -1,8 +1,10 @@
-from typing import Mapping, Optional, Union, List
+from copy import deepcopy, copy
+
+from typing import Mapping, Optional, Union, List, Any, KeysView, ValuesView, ItemsView
+from typing_extensions import Self
 
 from .timestamps import MessageTimestamp
 from .types import MessageKey, MessageHeadersTuples
-from copy import deepcopy, copy
 
 
 # TODO: add other dict functions like .get() , __contains__  and .copy()
@@ -54,7 +56,7 @@ class Row:
         self.latency = latency
         self.leader_epoch = leader_epoch
 
-    def __getitem__(self, item: Union[str, List[str]]):
+    def __getitem__(self, item: Union[str, List[str]]) -> Any:
         if isinstance(item, list):
             return {k: self.value[k] for k in item}
         return self.value[item]
@@ -62,33 +64,19 @@ class Row:
     def __setitem__(self, key: str, value: any):
         self.value[key] = value
 
-    def keys(self):
+    def keys(self) -> KeysView:
         """
         Also allows unpacking row.value via **row
         """
         return self.value.keys()
 
-    def values(self):
+    def values(self) -> ValuesView:
         return self.value.values()
 
-    def items(self):
+    def items(self) -> ItemsView:
         return self.value.items()
 
-    def clone_new_value(self, value):
-        return self.__class__(
-            value=value,
-            topic=self.topic,
-            partition=self.partition,
-            offset=self.offset,
-            size=self.size,
-            timestamp=copy(self.timestamp),
-            key=self.key,
-            headers=deepcopy(self.headers),
-            latency=self.latency,
-            leader_epoch=self.leader_epoch,
-        )
-
-    def clone(self, **kwargs):
+    def clone(self, **kwargs) -> Self:
         """
         Manually clone the Row; doing it this way is much faster than doing a deepcopy
         on the entire Row object.
