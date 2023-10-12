@@ -37,16 +37,7 @@ def apply(
 
     This means "filtering" is not possible; a Row will always be returned.
     """
-    try:
-        result = func(row.value)
-    except AttributeError as e:
-        # Added this as a friendly note about not being able to edit the Row here
-        if (attribute := e.args[0].split(" ")[-1][1:-1]) in row.__slots__:
-            raise AttributeError(
-                f"Attempting to access the Row's {attribute}, which is forbidden here"
-            )
-        raise
-
+    result = func(row.value)
     if result is None and isinstance(row.value, dict):  # assume edited in-place
         return row
     if isinstance(result, dict):
