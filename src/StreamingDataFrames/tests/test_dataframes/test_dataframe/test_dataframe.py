@@ -1,5 +1,6 @@
 import pytest
 
+from streamingdataframes.dataframe.exceptions import InvalidApplyResultType
 from streamingdataframes.dataframe.pipeline import Pipeline
 from streamingdataframes.models.topics import Topic
 
@@ -17,6 +18,19 @@ class TestDataframeProcess:
         dataframe = dataframe.apply(row_plus_n_func(1))
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row).value == row_factory({"x": 2, "y": 3}).value
+
+    def test_apply_no_return_value(self, dataframe_factory, row_factory):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(lambda row: row.update({"y": 2}))
+        row = row_factory({"x": 1})
+        assert dataframe.process(row).value == row_factory({"x": 1, "y": 2}).value
+
+    def test_apply_invalid_return_type(self, dataframe_factory, row_factory):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(lambda row: False)
+        row = row_factory({"x": 1, "y": 2})
+        with pytest.raises(InvalidApplyResultType):
+            dataframe.process(row)
 
     def test_apply_fluent(self, dataframe_factory, row_factory, row_plus_n_func):
         dataframe = dataframe_factory()
@@ -126,31 +140,30 @@ class TestDataframeProcess:
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row) is None
 
-    @pytest.mark.skip("This should fail based on our outline but currently does not")
-    # TODO: make this fail correctly
-    def test_non_row_apply_breaks_things(self, dataframe_factory, row_factory):
-        dataframe = dataframe_factory()
-        dataframe = dataframe.apply(lambda row: False)
-        dataframe = dataframe.apply(lambda row: row)
-        row = row_factory({"x": 1, "y": 2})
-        dataframe.process(row)
-
     def test_multiple_row_generation(
         self, dataframe_factory, more_rows_func, row_factory
     ):
         dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func)
+        dataframe = dataframe.apply(more_rows_func, expand=True)
         expected = [row_factory({"x": 1, "x_list": i}) for i in range(3)]
         actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
         assert len(actual) == len(expected)
         for idx in range(len(actual)):
             assert actual[idx].value == expected[idx].value
 
+    def test_multiple_row_generation_expand_not_set(
+        self, dataframe_factory, more_rows_func, row_factory
+    ):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(more_rows_func)
+        with pytest.raises(InvalidApplyResultType):
+            dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+
     def test_multiple_row_generation_with_additional_apply(
         self, dataframe_factory, more_rows_func, row_factory, row_plus_n_func
     ):
         dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func)
+        dataframe = dataframe.apply(more_rows_func, expand=True)
         dataframe = dataframe.apply(row_plus_n_func(n=1))
         expected = [row_factory({"x": 2, "x_list": i + 1}) for i in range(3)]
         actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
@@ -158,13 +171,14 @@ class TestDataframeProcess:
         for idx in range(len(actual)):
             assert actual[idx].value == expected[idx].value
 
-    def test_multiple_row_generation_with_additional_filtering(
+    def test_multiple_row_generation_with_filtering_not_possible(
         self, dataframe_factory, more_rows_func, row_factory
     ):
         dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func)
+        dataframe = dataframe.apply(more_rows_func, expand=True)
         dataframe = dataframe.apply(lambda row: row if row["x_list"] > 0 else None)
-        expected = [row_factory({"x": 1, "x_list": i}) for i in range(1, 3)]
+        # You cannot "filter" this way!! Row count should remain the same
+        expected = [row_factory({"x": 1, "x_list": i}) for i in range(0, 3)]
         actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
         assert len(actual) == len(expected)
         for idx in range(len(actual)):

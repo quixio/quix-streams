@@ -2,6 +2,7 @@ from typing import Mapping, Optional, Union, List
 
 from .timestamps import MessageTimestamp
 from .types import MessageKey, MessageHeadersTuples
+from copy import deepcopy, copy
 
 
 # TODO: add other dict functions like .get() , __contains__  and .copy()
@@ -23,14 +24,20 @@ class Row:
         "leader_epoch",
     )
 
+    # TODO: Maybe include headers here for if/when it's a dict?
+    _copy_map = {
+        "value": lambda self, k: deepcopy(getattr(self, k)),
+        "timestamp": lambda self, k: copy(getattr(self, k)),
+    }
+
     def __init__(
         self,
         value: Optional[dict],
-        topic: str,
-        partition: int,
-        offset: int,
-        size: int,
-        timestamp: MessageTimestamp,
+        topic: Optional[str] = None,
+        partition: Optional[int] = None,
+        offset: Optional[int] = None,
+        size: Optional[int] = None,
+        timestamp: Optional[MessageTimestamp] = None,
         key: Optional[MessageKey] = None,
         headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
         latency: Optional[float] = None,
@@ -66,3 +73,27 @@ class Row:
 
     def items(self):
         return self.value.items()
+
+    def clone_new_value(self, value):
+        return self.__class__(
+            value=value,
+            topic=self.topic,
+            partition=self.partition,
+            offset=self.offset,
+            size=self.size,
+            timestamp=copy(self.timestamp),
+            key=self.key,
+            headers=deepcopy(self.headers),
+            latency=self.latency,
+            leader_epoch=self.leader_epoch,
+        )
+
+    def clone(self, **kwargs):
+        """
+        Manually clone the Row; doing it this way is much faster than doing a deepcopy
+        on the entire Row object.
+        """
+        for k in self.__slots__:
+            if k not in kwargs:
+                kwargs[k] = self._copy_map.get(k, getattr)(self, k)
+        return self.__class__(**kwargs)
