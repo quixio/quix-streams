@@ -28,8 +28,8 @@ class Row:
 
     # TODO: Maybe include headers here for if/when it's a dict?
     _copy_map = {
-        "value": lambda self, k: deepcopy(getattr(self, k)),
-        "timestamp": lambda self, k: copy(getattr(self, k)),
+        "value": lambda self, k: deepcopy(self.value),
+        "timestamp": lambda self, k: copy(self.timestamp),
     }
 
     def __init__(
@@ -80,6 +80,8 @@ class Row:
         """
         Manually clone the Row; doing it this way is much faster than doing a deepcopy
         on the entire Row object.
+
+        You can hand it any Row kwargs to replace those specific instance attribute(s).
         """
         for k in self.__slots__:
             if k not in kwargs:

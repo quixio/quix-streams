@@ -1,4 +1,5 @@
 import uuid
+
 from typing import Optional, Callable, Union, List, Mapping
 from typing_extensions import Self, TypeAlias
 
@@ -29,14 +30,6 @@ def apply(
     func: Callable[[dict], Optional[Union[dict, List[dict]]]],
     expand: bool = False,
 ) -> Union[Row, List[Row]]:
-    """
-    For StreamingDataFrame.apply()
-
-    Gives `func` the flexibility of either returning a new dict (or list if expanding)
-    or modifying the row value dict in-place (i.e. returning None).
-
-    This means "filtering" is not possible; a Row will always be returned.
-    """
     result = func(row.value)
     if result is None and isinstance(row.value, dict):  # assume edited in-place
         return row
@@ -46,7 +39,9 @@ def apply(
     if isinstance(result, list):
         if expand:
             return [row.clone(value=r) for r in result]
-        raise InvalidApplyResultType("'list' not allowed unless 'expand=True'")
+        raise InvalidApplyResultType(
+            "Returning 'list' types is not allowed unless 'expand=True' is passed"
+        )
     raise InvalidApplyResultType(
         f"Only 'dict' or 'NoneType' (in-place modification) allowed, not {type(result)}"
     )
@@ -120,6 +115,12 @@ class StreamingDataFrame:
         func: Callable[[dict], Optional[Union[dict, List[dict]]]],
         expand: bool = False,
     ) -> Self:
+        """
+        Apply a user-defined function that where the `Row.value` is the expected input.
+
+        It should either return a new dict, a list of dicts (with expand=True), or
+        modifying a dict in-place (i.e. returning None).
+        """
         return self._apply(lambda row: apply(row, func, expand=expand))
 
     def process(self, row: Row) -> Optional[Union[Row, List[Row]]]:
