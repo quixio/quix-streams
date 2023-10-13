@@ -28,7 +28,6 @@ class Topic:
     def __init__(
         self,
         name: str,
-        real_name: str = None,
         value_deserializer: Optional[Deserializer] = None,
         key_deserializer: Optional[Deserializer] = BytesDeserializer(),
         value_serializer: Optional[Serializer] = None,
@@ -38,14 +37,12 @@ class Topic:
         A definition of Topic.
 
         :param name: topic name
-        :param real_name: the actual topic name in the cluster, else uses name
         :param value_deserializer: a deserializer for values
         :param key_deserializer: a deserializer for keys
         :param value_serializer: a serializer for values
         :param key_serializer: a serializer for keys
         """
         self._name = name
-        self._real_name = real_name
         self._key_serializer = key_serializer
         self._key_deserializer = key_deserializer
         self._value_serializer = value_serializer
@@ -57,14 +54,6 @@ class Topic:
         Topic name
         """
         return self._name
-
-    @property
-    def real_name(self) -> str:
-        return self._real_name or self._name
-
-    @real_name.setter
-    def real_name(self, value: str):
-        self._real_name = value
 
     def row_serialize(self, row: Row) -> KafkaMessage:
         """

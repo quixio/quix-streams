@@ -1,10 +1,11 @@
 import logging
 from typing import Optional
+
 from typing_extensions import Protocol
 
+from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 from .kafka.producer import Producer, Partitioner
 from .models import Topic, Row
-from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class RowProducer(Producer, RowProducerProto):
         try:
             message = topic.row_serialize(row=row)
             self.produce(
-                topic=topic.real_name,
+                topic=topic.name,
                 key=message.key,
                 value=message.value,
                 headers=message.headers,
