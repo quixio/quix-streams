@@ -1,8 +1,10 @@
 import uuid
+
 from typing import Optional, Callable, Union, List, Mapping
 from typing_extensions import Self, TypeAlias
 
 from .column import Column, OpValue
+from .exceptions import InvalidApplyResultType
 from .pipeline import Pipeline
 from ..models import Row, Topic
 from ..rowconsumer import RowConsumerProto
@@ -21,6 +23,28 @@ def subset(keys: List[str], row: Row) -> Row:
 def setitem(k: str, v: Union[Column, OpValue], row: Row) -> Row:
     row[k] = v.eval(row) if isinstance(v, Column) else v
     return row
+
+
+def apply(
+    row: Row,
+    func: Callable[[dict], Optional[Union[dict, List[dict]]]],
+    expand: bool = False,
+) -> Union[Row, List[Row]]:
+    result = func(row.value)
+    if result is None and isinstance(row.value, dict):  # assume edited in-place
+        return row
+    if isinstance(result, dict):
+        row.value = result
+        return row
+    if isinstance(result, list):
+        if expand:
+            return [row.clone(value=r) for r in result]
+        raise InvalidApplyResultType(
+            "Returning 'list' types is not allowed unless 'expand=True' is passed"
+        )
+    raise InvalidApplyResultType(
+        f"Only 'dict' or 'NoneType' (in-place modification) allowed, not {type(result)}"
+    )
 
 
 class StreamingDataFrame:
@@ -90,18 +114,18 @@ class StreamingDataFrame:
         self._topics_in = {t.name: t for t in topics_in}
         self._topics_out = {}
 
-    def apply(self, func: Callable[[Row], Optional[Union[Row, List[Row]]]]) -> Self:
+    def apply(
+        self,
+        func: Callable[[dict], Optional[Union[dict, List[dict]]]],
+        expand: bool = False,
+    ) -> Self:
         """
-        Add a callable to the StreamingDataframe execution list.
-        The provided callable should accept a Quixstreams Row as its input.
-        The provided callable should operate on and return the same input Row, or None
-        if its intended to be a "filtering" function.
+        Apply a user-defined function that where the `Row.value` is the expected input.
 
-        :param func: callable that accepts and (usually) returns a QuixStreams Row
-        :return: self (StreamingDataFrame)
+        It should either return a new dict, a list of dicts (with expand=True), or
+        modifying a dict in-place (i.e. returning None).
         """
-        self._pipeline.apply(func)
-        return self
+        return self._apply(lambda row: apply(row, func, expand=expand))
 
     def process(self, row: Row) -> Optional[Union[Row, List[Row]]]:
         """
@@ -123,7 +147,7 @@ class StreamingDataFrame:
         :return: self (StreamingDataFrame)
         """
         self._topics_out[topic.name] = topic
-        return self.apply(lambda row: self._produce(topic, row))
+        return self._apply(lambda row: self._produce(topic, row))
 
     @property
     def id(self) -> str:
@@ -166,15 +190,15 @@ class StreamingDataFrame:
         self._real_producer = producer
 
     def __setitem__(self, key: str, value: Union[Column, OpValue, str]):
-        self.apply(lambda row: setitem(key, value, row))
+        self._apply(lambda row: setitem(key, value, row))
 
     def __getitem__(
         self, item: Union[str, List[str], Column, Self]
     ) -> Union[Column, Self]:
         if isinstance(item, Column):
-            return self.apply(lambda row: row if item.eval(row) else None)
+            return self._apply(lambda row: row if item.eval(row) else None)
         elif isinstance(item, list):
-            return self.apply(lambda row: subset(item, row))
+            return self._apply(lambda row: subset(item, row))
         elif isinstance(item, StreamingDataFrame):
             # TODO: Implement filtering based on another SDF
             raise ValueError(
@@ -186,3 +210,15 @@ class StreamingDataFrame:
     def _produce(self, topic: Topic, row: Row) -> Row:
         self.producer.produce_row(row, topic)
         return row
+
+    def _apply(self, func: Callable[[Row], Optional[Union[Row, List[Row]]]]) -> Self:
+        """
+        Add a callable to the StreamingDataframe execution list.
+        The provided callable should accept and return a Quixstreams Row; exceptions
+        to this include a user's .apply() function, or a "filter" that returns None.
+
+        :param func: callable that accepts and (usually) returns a QuixStreams Row
+        :return: self (StreamingDataFrame)
+        """
+        self._pipeline.apply(func)
+        return self
