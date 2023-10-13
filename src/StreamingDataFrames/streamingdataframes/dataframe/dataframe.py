@@ -48,12 +48,15 @@ class StreamingDataFrame:
     If a processing step nulls the Row in some way, all further processing on that
     row (including kafka operations, besides committing) will be skipped.
 
-    There is a `Runner` class that can manage the kafka-specific dependencies of
-    `StreamingDataFrame`; it is recommended you hand your `StreamingDataFrame`
-    instance to a `Runner` instance when interacting with kafka.
+    There is a :class:`streamingdataframes.app.Application` class that can manage
+    the kafka-specific dependencies of `StreamingDataFrame`;
+    it is recommended you hand your `StreamingDataFrame` instance to an `Application`
+    instance when interacting with Kafka.
 
-    Below is a larger example of a `StreamingDataFrame` (that you'd hand to a runner):
+    Below is a larger example of a `StreamingDataFrame`
+    (that you'd hand to an `Application`):
 
+    ```
     # Define your processing steps
     # Remove column_a, add 1 to columns b and c, skip row if b+1 >= 5, else publish row
     df = StreamingDataframe()
@@ -67,8 +70,9 @@ class StreamingDataFrame:
     record_1 = Row(value={'column_a': 'a_string', 'column_b': 1, 'column_c': 10})
 
     # process records
-    df.process(record_0) -> produces {'column_b': 4, 'column_c': 6} to "my_output_topic"
-    df.process(record_1) -> filters row, does NOT produce to "my_output_topic"
+    df.process(record_0)  # produces {'column_b': 4, 'column_c': 6} to "my_output_topic"
+    df.process(record_1)  # filters row, does NOT produce to "my_output_topic"
+    ```
     """
 
     def __init__(
@@ -111,8 +115,9 @@ class StreamingDataFrame:
     def to_topic(self, topic: Topic):
         """
         Produce a row to a desired topic.
-        Note that a producer must be assigned on the StreamingDataFrame if not using
-        a QuixStreams `Runner` class to facilitate the execution of StreamingDataFrame.
+        Note that a producer must be assigned on the `StreamingDataFrame` if not using
+        :class:`streamingdataframes.app.Application` class to facilitate
+        the execution of StreamingDataFrame.
 
         :param topic: A QuixStreams `Topic`
         :return: self (StreamingDataFrame)

@@ -1,8 +1,12 @@
 import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
-from streamingdataframes import Topic
-from streamingdataframes.models import Deserializer, IgnoreMessage, SerializationError
+from streamingdataframes.models import (
+    Deserializer,
+    IgnoreMessage,
+    SerializationError,
+    Topic,
+)
 from streamingdataframes.rowconsumer import KafkaMessageError
 from tests.utils import Timeout
 

@@ -12,31 +12,15 @@ __all__ = ("QuixKafkaConfigsBuilder",)
 
 class QuixKafkaConfigsBuilder:
     """
-     Retrieves all the necessary information from the Quix API and builds all the
-     objects required to connect a confluent-kafka client to the Quix Platform.
+    Retrieves all the necessary information from the Quix API and builds all the
+    objects required to connect a confluent-kafka client to the Quix Platform.
 
-     If not executed within the Quix platform directly, you must provide a Quix
-     "sdk-token" (aka workspace token) or Personal Access Token.
+    If not executed within the Quix platform directly, you must provide a Quix
+    "sdk-token" (aka workspace token) or Personal Access Token.
 
-     Ideally you also know your workspace name or id. If not, you can search for it
-     using a known topic name, but note the search space is limited to the access level
-     of your token.
-
-    If using Quix Platform, your most common use will be:
-
-     api = QuixPortalApiInstance()
-     builder = QuixKafkaConfigsBuilder(quix_portal_api_service=api)
-     topics = ['topic_a', 'topic_b']
-     cons_grp = 'my_consumer_group
-     cfgs, topics, cons_grp = builder.get_confluent_client_configs(topics, cons_grp)
-
-     Then, if using a Quix Runner:
-     runner = Runner(
-         broker_address=cfgs.pop('bootstrap_servers'),
-         consumer_group=cons_grp,
-         producer_extra_configs=cfgs,
-         consumer_extra_configs=cfgs
-     )
+    Ideally you also know your workspace name or id. If not, you can search for it
+    using a known topic name, but note the search space is limited to the access level
+    of your token.
     """
 
     # TODO: Consider alterations to the current Topic class to accommodate the
