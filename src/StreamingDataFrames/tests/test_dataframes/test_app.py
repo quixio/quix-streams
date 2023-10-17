@@ -384,10 +384,8 @@ class TestQuixApplication:
         """
         app = quix_app_factory(auto_create_topics=False)
 
-        topic_in_0 = app.topic("topic_in_0")
-        topic_in_1 = app.topic("topic_in_1")
-        topic_out_0 = app.topic("topic_out_0")
-        topic_out_1 = app.topic("topic_out_1")
+        topic_in_0, topic_in_1 = app.topic("topic_in_0"), app.topic("topic_in_1")
+        topic_out_0, topic_out_1 = app.topic("topic_out_0"), app.topic("topic_out_1")
 
         sdf = app.dataframe(topics_in=[topic_in_0, topic_in_1])
         sdf.to_topic(topic_out_0)
