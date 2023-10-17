@@ -11,6 +11,8 @@ from confluent_kafka import (
 )
 from confluent_kafka.admin import ClusterMetadata
 
+from streamingdataframes.exceptions import PartitionAssignmentError, KafkaPartitionError
+
 __all__ = (
     "Consumer",
     "AutoOffsetReset",
@@ -45,6 +47,22 @@ def _default_on_commit_cb(
         )
     if on_commit is not None:
         on_commit(error, partitions)
+
+
+def _wrap_assignment_errors(func):
+    """
+    Wrap exceptions raised from "on_assign", "on_revoke" and "on_lost" callbacks
+    into `PartitionAssignmentError`
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            raise PartitionAssignmentError("Error during partition assignment") from exc
+
+    return wrapper
 
 
 class Consumer:
@@ -158,8 +176,16 @@ class Consumer:
             assigned or revoked.
         """
 
+        @_wrap_assignment_errors
         def _on_assign_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
             for partition in partitions:
+                if partition.error:
+                    raise KafkaPartitionError(
+                        f"Kafka partition error "
+                        f'(topic "{partition.topic}", '
+                        f'partition "{partition.partition}"): '
+                        f"{partition.error}"
+                    )
                 logger.debug(
                     "Assigned partition to a consumer",
                     extra={"topic": partition.topic, "partition": partition.partition},
@@ -167,8 +193,16 @@ class Consumer:
             if on_assign is not None:
                 on_assign(consumer, partitions)
 
+        @_wrap_assignment_errors
         def _on_revoke_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
             for partition in partitions:
+                if partition.error:
+                    raise KafkaPartitionError(
+                        f"Kafka partition error "
+                        f'(topic "{partition.topic}", '
+                        f'partition "{partition.partition}"): '
+                        f"{partition.error}"
+                    )
                 logger.debug(
                     "Revoking partition from a consumer",
                     extra={"topic": partition.topic, "partition": partition.partition},
@@ -176,12 +210,20 @@ class Consumer:
             if on_revoke is not None:
                 on_revoke(consumer, partitions)
 
+        @_wrap_assignment_errors
         def _on_lost_wrapper(consumer: Consumer, partitions: List[TopicPartition]):
             for partition in partitions:
                 logger.debug(
                     "Consumer lost a partition",
                     extra={"topic": partition.topic, "partition": partition.partition},
                 )
+                if partition.error:
+                    raise KafkaPartitionError(
+                        f"Kafka partition error "
+                        f'(topic "{partition.topic}", '
+                        f'partition "{partition.partition}"): '
+                        f"{partition.error}"
+                    )
             if on_lost is not None:
                 on_lost(consumer, partitions)
 
