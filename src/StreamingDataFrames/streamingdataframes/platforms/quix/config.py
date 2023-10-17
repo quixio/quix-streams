@@ -63,7 +63,7 @@ class QuixKafkaConfigsBuilder:
         self._quix_broker_config = None
         self._quix_broker_settings = None
         self._workspace_meta = None
-        self.app_auto_create_topics: bool = False  # Used by Application.Quix only
+        self.app_auto_create_topics: Optional[bool] = None  # Application.Quix only
 
     class NoWorkspaceFound(QuixException):
         ...

@@ -162,7 +162,7 @@ class Application:
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
-        auto_create_topics: bool = False,
+        auto_create_topics: bool = True,
     ) -> Self:
         """
         Initialize an Application to work with Quix platform,

@@ -275,7 +275,7 @@ def quix_app_factory(random_consumer_group):
         on_producer_error: Optional[ProducerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_message_processed: Optional[MessageProcessedCallback] = None,
-        auto_create_topics: bool = False,
+        auto_create_topics: bool = True,
     ) -> Application:
         workspace_id = "my_ws"
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
