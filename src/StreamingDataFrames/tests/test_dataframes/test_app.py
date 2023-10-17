@@ -364,24 +364,60 @@ class TestQuixApplication:
         assert app._consumer._consumer_config["group.id"] == "my_ws-c_group"
         cfg_builder.append_workspace_id.assert_called_with("c_group")
 
-    def test_topic_init_name_is_prefixed(self, kafka_container):
+    def test_topic_init_name_is_prefixed(self, quix_app_factory):
         """
-        Ensure that Topic names created from Quix apps are prefixed by the workspace id
+        Topic names created from Quix apps are prefixed by the workspace id
         """
-        workspace_id = "my_ws"
-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg = {"bootstrap.servers": kafka_container.broker_address}
-        cfg_builder.get_confluent_broker_config.return_value = cfg
-        cfg_builder._workspace_id = workspace_id
-        cfg_builder.append_workspace_id.side_effect = lambda s: f"{workspace_id}-{s}"
-
-        app = Application.Quix(
-            quix_config_builder=cfg_builder,
-            consumer_group="c_group",
-        )
+        app = quix_app_factory()
         initial_topic_name = "input_topic"
-        topic = app.topic(initial_topic_name, value_deserializer=JSONDeserializer())
-        assert topic.name == f"{workspace_id}-{initial_topic_name}"
+        topic = app.topic(initial_topic_name)
+        assert (
+            topic.name
+            == f"{app._quix_config_builder.workspace_id}-{initial_topic_name}"
+        )
+
+    def test_topic_auto_create_false_topic_confirmation(
+        self, dataframe_factory, quix_app_factory
+    ):
+        """
+        Topics are confirmed when auto_create_topics=False
+        """
+        app = quix_app_factory(auto_create_topics=False)
+
+        topic_in_0 = app.topic("topic_in_0")
+        topic_in_1 = app.topic("topic_in_1")
+        topic_out_0 = app.topic("topic_out_0")
+        topic_out_1 = app.topic("topic_out_1")
+
+        sdf = app.dataframe(topics_in=[topic_in_0, topic_in_1])
+        sdf.to_topic(topic_out_0)
+        sdf.to_topic(topic_out_1)
+
+        app._quix_runtime_init(sdf)
+
+        actual_call_arg = [
+            _ for _ in app._quix_config_builder.confirm_topics_exist.call_args[0][0]
+        ]
+        assert actual_call_arg == [topic_in_0, topic_in_1, topic_out_0, topic_out_1]
+
+    def test_topic_auto_create_true(self, dataframe_factory, quix_app_factory):
+        """
+        Topics are created when auto_create_topics=True
+        """
+        app = quix_app_factory(auto_create_topics=True)
+        topic_in_0, topic_in_1 = app.topic("topic_in_0"), app.topic("topic_in_1")
+        topic_out_0, topic_out_1 = app.topic("topic_out_0"), app.topic("topic_out_1")
+
+        sdf = app.dataframe(topics_in=[topic_in_0, topic_in_1])
+        sdf.to_topic(topic_out_0)
+        sdf.to_topic(topic_out_1)
+
+        app._quix_runtime_init(sdf)
+
+        actual_call_arg = [
+            _ for _ in app._quix_config_builder.create_topics.call_args[0][0]
+        ]
+        assert actual_call_arg == [topic_in_0, topic_in_1, topic_out_0, topic_out_1]
 
 
 class TestApplicationWithState:

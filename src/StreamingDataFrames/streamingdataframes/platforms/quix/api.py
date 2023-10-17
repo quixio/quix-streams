@@ -1,10 +1,12 @@
 from io import BytesIO
 from os import environ
-from typing import Optional, List
 from urllib.parse import urljoin
 from zipfile import ZipFile
 
 import requests
+from typing import Optional, List
+
+from ...exceptions import QuixException
 
 __all__ = ("QuixPortalApiService",)
 
@@ -32,14 +34,17 @@ class QuixPortalApiService:
     ):
         self._portal_api = portal_api or environ.get(self.QuixEnvironmentMap.portal_api)
         self._auth_token = auth_token or environ.get(self.QuixEnvironmentMap.sdk_token)
-        self.default_workspace_id = default_workspace_id or environ.get(
+        self._default_workspace_id = default_workspace_id or environ.get(
             self.QuixEnvironmentMap.workspace_id
         )
         self.api_version = api_version or "2.0"
         self.session = self._init_session()
 
-    class MissingConnectionRequirements(Exception):
-        pass
+    class MissingConnectionRequirements(QuixException):
+        ...
+
+    class UndefinedQuixWorkspaceId(QuixException):
+        ...
 
     class QuixEnvironmentMap:
         sdk_token = "Quix__Sdk__Token"
@@ -55,6 +60,16 @@ class QuixPortalApiService:
             return super().request(
                 method, urljoin(base=self.url_base, url=url), **kwargs
             )
+
+    @property
+    def default_workspace_id(self) -> str:
+        if not self._default_workspace_id:
+            raise self.UndefinedQuixWorkspaceId("You must provide a Quix Workspace ID")
+        return self._default_workspace_id
+
+    @default_workspace_id.setter
+    def default_workspace_id(self, value):
+        self._default_workspace_id = value
 
     def _init_session(self) -> SessionWithUrlBase:
         if not (self._portal_api and self._auth_token):
@@ -76,8 +91,7 @@ class QuixPortalApiService:
         return s
 
     def get_workspace_certificate(self, workspace_id: Optional[str] = None) -> bytes:
-        if not workspace_id:
-            workspace_id = self.default_workspace_id
+        workspace_id = workspace_id or self.default_workspace_id
         with ZipFile(
             BytesIO(
                 self.session.get(f"/workspaces/{workspace_id}/certificates").content
@@ -90,42 +104,38 @@ class QuixPortalApiService:
         return self.session.get(f"/auth/token/details").json()
 
     def get_workspace(self, workspace_id: Optional[str] = None) -> dict:
-        if not workspace_id:
-            workspace_id = self.default_workspace_id
+        workspace_id = workspace_id or self.default_workspace_id
         return self.session.get(f"/workspaces/{workspace_id}").json()
 
     def get_workspaces(self) -> List[dict]:
         # TODO: This seems only return [] with Personal Access Tokens as of Sept 7 '23
         return self.session.get("/workspaces").json()
 
+    def get_topic(self, topic_name: str, workspace_id: Optional[str] = None) -> dict:
+        workspace_id = workspace_id or self.default_workspace_id
+        return self.session.get(f"/{workspace_id}/topics/{topic_name}").json()
+
     def get_topics(self, workspace_id: Optional[str] = None) -> List[dict]:
-        if not workspace_id:
-            workspace_id = self.default_workspace_id
+        workspace_id = workspace_id or self.default_workspace_id
         return self.session.get(f"/{workspace_id}/topics").json()
 
     def post_topic(
         self,
         topic_name: str,
         workspace_id: Optional[str] = None,
-        topic_partitions: int = 2,
-        topic_rep_factor: int = 2,
-        topic_ret_minutes: int = 10080,
-        topic_ret_bytes: int = 52428800,
+        topic_partitions: Optional[int] = None,
+        topic_rep_factor: Optional[int] = None,
+        topic_ret_minutes: Optional[int] = None,
+        topic_ret_bytes: Optional[int] = None,
     ) -> dict:
-        if not workspace_id:
-            workspace_id = self.default_workspace_id
+        workspace_id = workspace_id or self.default_workspace_id
         d = {
             "name": topic_name,
             "configuration": {
-                "partitions": topic_partitions,
-                "replicationFactor": topic_rep_factor,
-                "retentionInMinutes": topic_ret_minutes,
-                "retentionInBytes": topic_ret_bytes,
+                "partitions": topic_partitions or 2,
+                "replicationFactor": topic_rep_factor or 2,
+                "retentionInMinutes": topic_ret_minutes or 10080,
+                "retentionInBytes": topic_ret_bytes or 52428800,
             },
         }
         return self.session.post(f"/{workspace_id}/topics", json=d).json()
-
-    def get_topic(self, topic_name: str, workspace_id: Optional[str] = None) -> dict:
-        if not workspace_id:
-            workspace_id = self.default_workspace_id
-        return self.session.get(f"/{workspace_id}/topics/{topic_name}").json()
