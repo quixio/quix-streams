@@ -36,8 +36,8 @@ namespace QuixStreams.Kafka.Transport.SerDes
 
         /// <summary>
         /// Whether message split is enabled.
-        /// Disabled by default
+        /// Enabled by default
         /// </summary>
-        public static bool EnableMessageSplit { get; set; } = false;
+        public static bool EnableMessageSplit { get; set; } = true;
     }
 }
