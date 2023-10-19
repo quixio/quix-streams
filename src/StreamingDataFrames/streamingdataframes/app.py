@@ -2,7 +2,7 @@ import contextlib
 import logging
 from typing import Optional, List, Callable
 
-from confluent_kafka import TopicPartition, Consumer
+from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
 from .dataframe import StreamingDataFrame
@@ -83,6 +83,8 @@ class Application:
         :param state_dir: path to the application state directory, optional.
             It should be passed if the application uses stateful operations, otherwise
             the exception will be raised.
+        :param rocksdb_options: RocksDB options.
+            If `None`, the default options will be used.
         :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
@@ -143,6 +145,8 @@ class Application:
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
+        state_dir: Optional[str] = None,
+        rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_producer_error: Optional[ProducerErrorCallback] = None,
@@ -178,6 +182,11 @@ class Application:
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
+        :param state_dir: path to the application state directory, optional.
+            It should be passed if the application uses stateful operations, otherwise
+            the exception will be raised.
+        :param rocksdb_options: RocksDB options.
+            If `None`, the default options will be used.
         :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
@@ -222,6 +231,8 @@ class Application:
             on_message_processed=on_message_processed,
             consumer_poll_timeout=consumer_poll_timeout,
             producer_poll_timeout=producer_poll_timeout,
+            state_dir=state_dir,
+            rocksdb_options=rocksdb_options,
         )
         # Inject Quix config builder to use it in other methods
         app.set_quix_config_builder(quix_config_builder)
