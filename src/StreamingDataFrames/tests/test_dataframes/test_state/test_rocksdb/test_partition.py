@@ -12,7 +12,7 @@ from rocksdict import Rdict
 from streamingdataframes.state.rocksdb import (
     StateSerializationError,
     StateTransactionError,
-    RocksDBStorage,
+    RocksDBStorePartition,
     NestedPrefixError,
     RocksDBOptions,
 )
@@ -44,13 +44,13 @@ TEST_PREFIXES = [
 ]
 
 
-class TestRocksDBStorage:
-    def test_open_db_close(self, rocksdb_storage_factory):
-        with rocksdb_storage_factory():
+class TestRocksDBStorePartition:
+    def test_open_db_close(self, rocksdb_partition_factory):
+        with rocksdb_partition_factory():
             ...
 
-    def test_open_db_locked_retries(self, rocksdb_storage_factory, executor):
-        db1 = rocksdb_storage_factory("db")
+    def test_open_db_locked_retries(self, rocksdb_partition_factory, executor):
+        db1 = rocksdb_partition_factory("db")
 
         def _close_db():
             time.sleep(3)
@@ -58,79 +58,79 @@ class TestRocksDBStorage:
 
         executor.submit(_close_db)
 
-        rocksdb_storage_factory("db", open_max_retries=10, open_retry_backoff=1)
+        rocksdb_partition_factory("db", open_max_retries=10, open_retry_backoff=1)
 
-    def test_open_db_locked_no_retries_fails(self, rocksdb_storage_factory, executor):
-        _ = rocksdb_storage_factory("db")
+    def test_open_db_locked_no_retries_fails(self, rocksdb_partition_factory, executor):
+        _ = rocksdb_partition_factory("db")
 
         with pytest.raises(Exception):
-            rocksdb_storage_factory("db", open_max_retries=0)
+            rocksdb_partition_factory("db", open_max_retries=0)
 
     def test_open_db_locked_retries_exhausted_fails(
-        self, rocksdb_storage_factory, executor
+        self, rocksdb_partition_factory, executor
     ):
-        _ = rocksdb_storage_factory("db")
+        _ = rocksdb_partition_factory("db")
 
         with pytest.raises(Exception):
-            rocksdb_storage_factory("db", open_max_retries=3, open_retry_backoff=1)
+            rocksdb_partition_factory("db", open_max_retries=3, open_retry_backoff=1)
 
-    def test_open_arbitrary_exception_fails(self, rocksdb_storage_factory):
+    def test_open_arbitrary_exception_fails(self, rocksdb_partition_factory):
         err = Exception("some exception")
         with patch.object(Rdict, "__init__", side_effect=err):
             with pytest.raises(Exception) as raised:
-                rocksdb_storage_factory()
+                rocksdb_partition_factory()
 
         assert str(raised.value) == "some exception"
 
-    def test_get_db_closed_fails(self, rocksdb_storage_factory):
-        storage = rocksdb_storage_factory()
+    def test_get_db_closed_fails(self, rocksdb_partition_factory):
+        storage = rocksdb_partition_factory()
         storage.close()
         with pytest.raises(Exception):
             storage.get(b"key")
 
-    def test_get_key_doesnt_exist(self, rocksdb_storage):
-        assert rocksdb_storage.get(b"key") is None
+    def test_get_key_doesnt_exist(self, rocksdb_partition):
+        assert rocksdb_partition.get(b"key") is None
 
-    def test_destroy(self, rocksdb_storage_factory):
-        with rocksdb_storage_factory() as storage:
+    def test_destroy(self, rocksdb_partition_factory):
+        with rocksdb_partition_factory() as storage:
             path = storage.path
 
-        RocksDBStorage.destroy(path)
+        RocksDBStorePartition.destroy(path)
 
-    def test_custom_options(self, rocksdb_storage_factory, tmp_path):
+    def test_custom_options(self, rocksdb_partition_factory, tmp_path):
         """
         Pass custom "logs_dir" to Rdict and ensure it exists and has some files
         """
 
         logs_dir = Path(tmp_path / "db" / "logs")
         options = RocksDBOptions(db_log_dir=logs_dir.as_posix())
-        with rocksdb_storage_factory(options=options):
+        with rocksdb_partition_factory(options=options):
             assert logs_dir.is_dir()
             assert len(list(logs_dir.rglob("*"))) == 1
 
 
-class TestTransactionStore:
-    def test_transaction_complete(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+class TestRocksDBPartitionTransaction:
+    def test_transaction_complete(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             ...
 
         assert tx.completed
 
-    def test_transaction_doesnt_write_empty_batch(self, rocksdb_storage):
+    def test_transaction_doesnt_write_empty_batch(self, rocksdb_partition):
         """
         Test that transaction doesn't call "StateStore.write()" if the internal
         WriteBatch is empty (i.e. no keys were updated during the transaction).
         Writing empty batches costs more than doing
         """
 
-        with patch.object(RocksDBStorage, "write") as mocked:
-            with rocksdb_storage.begin() as tx:
+        with patch.object(RocksDBStorePartition, "write") as mocked:
+            with rocksdb_partition.begin() as tx:
                 tx.get("key")
 
             assert not mocked.called
 
-    def test_delete_key_doesnt_exist(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_delete_key_doesnt_exist(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.delete("key")
 
     @pytest.mark.parametrize(
@@ -141,8 +141,8 @@ class TestTransactionStore:
         "value",
         TEST_VALUES,
     )
-    def test_get_key_exists_cached(self, key, value, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_get_key_exists_cached(self, key, value, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.set(key, value)
             stored = tx.get(key)
             assert stored == value
@@ -155,46 +155,46 @@ class TestTransactionStore:
         "value",
         TEST_VALUES,
     )
-    def test_get_key_exists_no_cache(self, key, value, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_get_key_exists_no_cache(self, key, value, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.set(key, value)
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             stored = tx.get(key, value)
             assert stored == value
 
-    def test_get_key_doesnt_exist_default(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_get_key_doesnt_exist_default(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             value = tx.get("key", default=123)
             assert value == 123
 
-    def test_delete_key_cached(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_delete_key_cached(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.set("key", "value")
             assert tx.get("key") == "value"
             tx.delete("key")
             assert tx.get("key") is None
 
-    def test_delete_key_no_cache(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_delete_key_no_cache(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.set("key", "value")
             assert tx.get("key") == "value"
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             tx.delete("key")
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             assert tx.get("key") is None
 
-    def test_key_exists_cached(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_key_exists_cached(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.set("key", "value")
             assert tx.exists("key")
             assert not tx.exists("key123")
 
-    def test_key_exists_no_cache(self, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_key_exists_no_cache(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             tx.set("key", "value")
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             assert tx.exists("key")
             assert not tx.exists("key123")
 
@@ -207,18 +207,18 @@ class TestTransactionStore:
             (datetime.utcnow(), "string"),
         ],
     )
-    def test_set_serialization_error(self, key, value, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_set_serialization_error(self, key, value, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value)
 
     @pytest.mark.parametrize("key", [object(), b"somebytes", datetime.utcnow()])
-    def test_delete_serialization_error(self, key, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_delete_serialization_error(self, key, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.delete(key)
 
-    def test_get_deserialization_error(self, rocksdb_storage):
+    def test_get_deserialization_error(self, rocksdb_partition):
         bytes_ = secrets.token_bytes(10)
         string_ = "string"
 
@@ -227,42 +227,42 @@ class TestTransactionStore:
         batch.put(bytes_, serialize(string_))
         # Set valid key and non-deserializable value
         batch.put(serialize(string_), bytes_)
-        rocksdb_storage.write(batch)
+        rocksdb_partition.write(batch)
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.get(string_)
             with pytest.raises(StateSerializationError):
                 tx.get(bytes_)
 
     @pytest.mark.parametrize("prefix", TEST_PREFIXES)
-    def test_set_key_with_prefix_no_cache(self, prefix, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_set_key_with_prefix_no_cache(self, prefix, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(prefix):
                 tx.set("key", "value")
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(prefix):
                 assert tx.get("key") == "value"
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             assert tx.get("key") is None
 
     @pytest.mark.parametrize("prefix", TEST_PREFIXES)
-    def test_delete_key_with_prefix_no_cache(self, prefix, rocksdb_storage):
-        with rocksdb_storage.begin() as tx:
+    def test_delete_key_with_prefix_no_cache(self, prefix, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(prefix):
                 tx.set("key", "value")
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(prefix):
                 assert tx.get("key") == "value"
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(prefix):
                 tx.delete("key")
 
-        with rocksdb_storage.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(prefix):
                 assert tx.get("key") is None
 
@@ -273,7 +273,7 @@ class TestTransactionStore:
             lambda tx: tx.delete("key"),
         ],
     )
-    def test_update_key_failed_transaction_failed(self, operation, rocksdb_storage):
+    def test_update_key_failed_transaction_failed(self, operation, rocksdb_partition):
         """
         Test that if the update operation (set or delete) fails the transaction is
         marked as failed and cannot be re-used anymore.
@@ -281,7 +281,7 @@ class TestTransactionStore:
         with patch.object(
             rocksdict.WriteBatch, "put", side_effect=ValueError("test")
         ), patch.object(rocksdict.WriteBatch, "delete", side_effect=ValueError("test")):
-            with rocksdb_storage.begin() as tx:
+            with rocksdb_partition.begin() as tx:
                 with contextlib.suppress(ValueError):
                     operation(tx=tx)
 
@@ -301,22 +301,24 @@ class TestTransactionStore:
                     tx.exists("key")
 
                 with pytest.raises(StateTransactionError):
-                    tx._flush()
+                    tx.maybe_flush()
 
             assert not tx.completed
 
-    def test_flush_failed_transaction_failed(self, rocksdb_storage):
+    def test_flush_failed_transaction_failed(self, rocksdb_partition):
         """
-        Test that if the "StateStore.write()" fails the transaction is also marked
+        Test that if the "maybe_flush()" fails the transaction is also marked
         as failed and cannot be re-used anymore.
         """
 
-        with patch.object(RocksDBStorage, "write", side_effect=ValueError("test")):
-            with rocksdb_storage.begin() as tx:
+        with patch.object(
+            RocksDBStorePartition, "write", side_effect=ValueError("test")
+        ):
+            with rocksdb_partition.begin() as tx:
                 tx.set("key", "value")
 
                 with contextlib.suppress(ValueError):
-                    tx._flush()
+                    tx.maybe_flush()
 
                 assert tx.failed
 
@@ -335,18 +337,27 @@ class TestTransactionStore:
 
             assert tx.completed
 
-    def test_nested_prefixes_fail(self, rocksdb_storage):
-        tx = rocksdb_storage.begin()
+    def test_transaction_not_flushed_on_error(self, rocksdb_partition):
+        with contextlib.suppress(ValueError):
+            with rocksdb_partition.begin() as tx:
+                tx.set("key", "value")
+                raise ValueError("test")
+
+        with rocksdb_partition.begin() as tx:
+            assert tx.get("key") is None
+
+    def test_nested_prefixes_fail(self, rocksdb_partition):
+        tx = rocksdb_partition.begin()
         with pytest.raises(NestedPrefixError):
             with tx.with_prefix("prefix"):
                 with tx.with_prefix("prefix"):
                     ...
 
-    def test_custom_dumps_loads(self, rocksdb_storage_factory):
+    def test_custom_dumps_loads(self, rocksdb_partition_factory):
         key = secrets.token_bytes(10)
         value = secrets.token_bytes(10)
 
-        with rocksdb_storage_factory(loads=lambda v: v, dumps=lambda v: v) as db:
+        with rocksdb_partition_factory(loads=lambda v: v, dumps=lambda v: v) as db:
             with db.begin() as tx:
                 tx.set(key, value)
 

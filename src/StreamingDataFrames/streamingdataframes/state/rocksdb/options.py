@@ -1,14 +1,12 @@
 import dataclasses
-from typing import Optional, Mapping, Literal
+from typing import Optional, Mapping
 
 import rocksdict
 from rocksdict import DBCompressionType
 
-from .types import RocksDBOptionsProto
+from .types import RocksDBOptionsType, CompressionType
 
 __all__ = ("RocksDBOptions",)
-
-CompressionType = Literal["none", "snappy", "zlib", "bz2", "lz4", "lz4hc", "zstd"]
 
 COMPRESSION_TYPES: Mapping[CompressionType, DBCompressionType] = {
     "none": DBCompressionType.none(),
@@ -22,7 +20,7 @@ COMPRESSION_TYPES: Mapping[CompressionType, DBCompressionType] = {
 
 
 @dataclasses.dataclass(frozen=True)
-class RocksDBOptions(RocksDBOptionsProto):
+class RocksDBOptions(RocksDBOptionsType):
     """
     Common RocksDB database options.
 

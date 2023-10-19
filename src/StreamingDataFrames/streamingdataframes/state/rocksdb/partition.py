@@ -1,23 +1,30 @@
 import contextlib
 import functools
 import logging
+import struct
 import time
 from typing import Any, Union, Optional
 
 import rocksdict
 from typing_extensions import Self
 
+from streamingdataframes.state.types import (
+    DumpsFunc,
+    LoadsFunc,
+    PartitionTransaction,
+    StorePartition,
+)
 from .exceptions import (
     StateTransactionError,
     NestedPrefixError,
 )
 from .options import RocksDBOptions
 from .serialization import serialize, deserialize, serialize_key
-from .types import RocksDBOptionsProto, DumpsFunc, LoadsFunc
+from .types import RocksDBOptionsType
 
 __all__ = (
-    "RocksDBStorage",
-    "TransactionStore",
+    "RocksDBStorePartition",
+    "RocksDBPartitionTransaction",
 )
 
 logger = logging.getLogger(__name__)
@@ -28,11 +35,21 @@ _PREFIX_SEPARATOR = b"|"
 
 _DEFAULT_PREFIX = b""
 
+_PROCESSED_OFFSET_KEY = b"__topic_offset__"
 
-class RocksDBStorage:
+
+def _int_to_int64_bytes(value: int) -> bytes:
+    return struct.pack(">q", value)
+
+
+def _int_from_int64_bytes(value: bytes) -> int:
+    return struct.unpack(">q", value)[0]
+
+
+class RocksDBStorePartition(StorePartition):
     """
-    A base class to for accessing state in RocksDB.
-    It represents a single partition of the state.
+    A base class to access state in RocksDB.
+    It represents a single RocksDB database.
 
     Responsibilities:
      1. Managing access to the RocksDB instance
@@ -40,7 +57,7 @@ class RocksDBStorage:
      3. Flushing WriteBatches to the RocksDB
 
     It opens the RocksDB on `__init__`. If the db is locked by another process,
-    it will retry opening according to `open_max_retries` and `open_retry_backoff`
+    it will retry according to `open_max_retries` and `open_retry_backoff`.
 
     :param path: an absolute path to the RocksDB folder
     :param options: RocksDB options. If `None`, the default options will be used.
@@ -56,7 +73,7 @@ class RocksDBStorage:
     def __init__(
         self,
         path: str,
-        options: Optional[RocksDBOptionsProto] = None,
+        options: Optional[RocksDBOptionsType] = None,
         open_max_retries: int = 10,
         open_retry_backoff: float = 3.0,
         dumps: Optional[DumpsFunc] = None,
@@ -68,16 +85,18 @@ class RocksDBStorage:
         self._open_retry_backoff = open_retry_backoff
         self._dumps = dumps
         self._loads = loads
-        self._db = self._open_db()
+        self._db = self._init_db()
 
-    def begin(self) -> "TransactionStore":
+    def begin(self) -> "RocksDBPartitionTransaction":
         """
-        Create a new `TransactionStore` object.
-        Using `TransactionStore` is a recommended way for accessing the data.
+        Create a new `RocksDBTransaction` object.
+        Using `RocksDBTransaction` is a recommended way for accessing the data.
 
-        :return: an instance of `TransactionStore`
+        :return: an instance of `RocksDBTransaction`
         """
-        return TransactionStore(storage=self, dumps=self._dumps, loads=self._loads)
+        return RocksDBPartitionTransaction(
+            partition=self, dumps=self._dumps, loads=self._loads
+        )
 
     def write(self, batch: rocksdict.WriteBatch):
         """
@@ -105,13 +124,22 @@ class RocksDBStorage:
         """
         return key in self._db
 
+    def get_processed_offset(self) -> Optional[int]:
+        """
+        Get last processed offset for the given partition
+        :return: offset or `None` if there's no processed offset yet
+        """
+        offset_bytes = self._db.get(_PROCESSED_OFFSET_KEY)
+        if offset_bytes is not None:
+            return _int_from_int64_bytes(offset_bytes)
+
     def close(self):
         """
         Close the underlying RocksDB
         """
-        logger.info(f'Closing db partition on "{self._path}"')
+        logger.debug(f'Closing rocksdb partition on "{self._path}"')
         self._db.close()
-        logger.info(f'Successfully closed db partition on "{self._path}"')
+        logger.debug(f'Closed rocksdb partition on "{self._path}"')
 
     @property
     def path(self) -> str:
@@ -132,11 +160,15 @@ class RocksDBStorage:
         """
         rocksdict.Rdict.destroy(path=path)  # noqa
 
-    def _open_db(self) -> rocksdict.Rdict:
+    def _init_db(self) -> rocksdict.Rdict:
+        db = self._open_rocksdb()
+        return db
+
+    def _open_rocksdb(self) -> rocksdict.Rdict:
         attempt = 1
         while True:
-            logger.info(
-                f'Opening db partition on "{self._path}" attempt={attempt}',
+            logger.debug(
+                f'Opening rocksdb partition on "{self._path}" attempt={attempt}',
             )
             try:
                 db = rocksdict.Rdict(
@@ -144,8 +176,8 @@ class RocksDBStorage:
                     options=self._options.to_options(),
                     access_type=rocksdict.AccessType.read_write(),  # noqa
                 )
-                logger.info(
-                    f'Successfully opened db partition on "{self._path}"',
+                logger.debug(
+                    f'Successfully opened rocksdb partition on "{self._path}"',
                 )
                 return db
             except Exception as exc:
@@ -157,7 +189,7 @@ class RocksDBStorage:
                     raise
 
                 logger.warning(
-                    f"Failed to open db partition, cannot acquire a lock. "
+                    f"Failed to open rocksdb partition, cannot acquire a lock. "
                     f"Retrying in {self._open_retry_backoff}sec."
                 )
 
@@ -173,11 +205,12 @@ class RocksDBStorage:
 
 def _validate_transaction_state(func):
     """
-    Check that the state of `TransactionStore` is valid before calling a method
+    Check that the state of `RocksDBTransaction` is valid before calling a method
     """
 
     @functools.wraps(func)
-    def wrapper(self: "TransactionStore", *args, **kwargs):
+    def wrapper(*args, **kwargs):
+        self: "RocksDBPartitionTransaction" = args[0]
         if self.failed:
             raise StateTransactionError(
                 "Transaction is failed, create a new one to proceed"
@@ -187,53 +220,51 @@ def _validate_transaction_state(func):
                 "Transaction is already finished, create a new one to proceed"
             )
 
-        return func(self, *args, **kwargs)
+        return func(*args, **kwargs)
 
     return wrapper
 
 
-class TransactionStore:
+class RocksDBPartitionTransaction(PartitionTransaction):
     """
-    A transaction-based store to perform simple key-value operations like
-    "get", "set", "delete" and "exists".
-    It is supposed to be used by stateful operators in Streaming DataFrames.
-
+    A transaction class to perform simple key-value operations like
+    "get", "set", "delete" and "exists" on a single RocksDB partition.
 
     Serialization
     *************
-    `TransactionStore` automatically serializes keys and values to JSON.
+    `RocksDBTransaction` automatically serializes keys and values to JSON.
 
     Prefixing
     *********
-    `TransactionStore` allows to set prefixes for the keys in the given code block
+    `RocksDBTransaction` allows to set prefixes for the keys in the given code block
     using :meth:`with_prefix()` context manager.
     Normally, `StreamingDataFrame` class will use message keys as prefixes
     in order to namespace the stored keys across different messages.
 
     Transactional properties
     ************************
-    `TransactionStore` uses a combination of in-memory update cache
+    `RocksDBTransaction` uses a combination of in-memory update cache
     and RocksDB's WriteBatch in order to accumulate all the state mutations
     in a single batch, flush them atomically, and allow the updates be visible
     within the transaction before it's flushed (aka "read-your-own-writes" problem).
 
-    A single transaction can span across multiple incoming messages,
-
     If any mutation fails during the transaction
-    (e.g. we failed to write the updates to the RocksDB), the whole transaction is now
-    invalid and cannot be used anymore.
-    In this case, a new `TransactionStore` should be created.
+    (e.g. we failed to write the updates to the RocksDB), the whole transaction
+    will be marked as failed and cannot be used anymore.
+    In this case, a new `RocksDBTransaction` should be created.
 
-    The `TransactionStore` also cannot be used after it's flushed, and a new
-    instance of `TransactionStore` should be used instead.
+    `RocksDBTransaction` can be used only once.
 
-    :param storage: instance of `StateStorage` to be used for accessing
+    :param partition: instance of `RocksDBStatePartition` to be used for accessing
         the underlying RocksDB
-
+    :param dumps: a function to serialize data to bytes, optional.
+        By default, `json.dumps` will be used.
+    :param loads: a function to deserialize data from bytes, optional.
+        By default, `json.loads` will be used.
     """
 
     __slots__ = (
-        "_storage",
+        "_partition",
         "_update_cache",
         "_batch",
         "_prefix",
@@ -245,11 +276,11 @@ class TransactionStore:
 
     def __init__(
         self,
-        storage: RocksDBStorage,
+        partition: RocksDBStorePartition,
         dumps: Optional[DumpsFunc] = None,
         loads: Optional[LoadsFunc] = None,
     ):
-        self._storage = storage
+        self._partition = partition
         self._update_cache = {}
         self._batch = rocksdict.WriteBatch(raw_mode=True)
         self._prefix = _DEFAULT_PREFIX
@@ -261,7 +292,7 @@ class TransactionStore:
     @contextlib.contextmanager
     def with_prefix(self, prefix: Any = b"") -> Self:
         """
-        Prefix all the keys in the given scope.
+        A context manager set the prefix for all keys in the scope.
 
         Normally, it's called by Streaming DataFrames engine to ensure that every
         message key is stored separately.
@@ -312,7 +343,7 @@ class TransactionStore:
             return self._deserialize_value(cached)
 
         # The value is not found in cache, check the db
-        stored = self._storage.get(key_serialized, _sentinel)
+        stored = self._partition.get(key_serialized, _sentinel)
         if stored is not _sentinel:
             return self._deserialize_value(stored)
         return default
@@ -346,7 +377,6 @@ class TransactionStore:
         It first deletes the key from the update cache.
 
         :param key: a JSON-deserializable key.
-        :return:
         """
         key_serialized = self._serialize_key(key)
         try:
@@ -370,7 +400,7 @@ class TransactionStore:
         key_serialized = self._serialize_key(key)
         if key_serialized in self._update_cache:
             return True
-        return self._storage.exists(key_serialized)
+        return self._partition.exists(key_serialized)
 
     @property
     def completed(self) -> bool:
@@ -378,7 +408,7 @@ class TransactionStore:
         Check if the transaction is completed.
 
         It doesn't indicate whether transaction is successful or not.
-        Use `TransactionStore.failed` for that.
+        Use `RocksDBTransaction.failed` for that.
 
         The completed transaction should not be re-used.
 
@@ -399,20 +429,27 @@ class TransactionStore:
         return self._failed
 
     @_validate_transaction_state
-    def _flush(self):
-        # TODO: Does Flush sometimes need to be called manually?
+    def maybe_flush(self, offset: Optional[int] = None):
         """
         Flush the recent updates to the database and empty the update cache.
         It writes the WriteBatch to RocksDB and marks itself as finished.
 
         If writing fails, the transaction will be also marked as "failed" and
         cannot be used anymore.
-        """
 
+        .. note:: If no keys have been modified during the transaction
+            (i.e no "set" or "delete" have been called at least once), it will
+            not flush ANY data to the database including the offset in order to optimize
+            I/O.
+
+        :param offset: offset of the last processed message, optional.
+        """
         try:
             # Don't write batches if this transaction doesn't change any keys
             if len(self._batch):
-                self._storage.write(self._batch)
+                if offset is not None:
+                    self._batch.put(_PROCESSED_OFFSET_KEY, _int_to_int64_bytes(offset))
+                self._partition.write(self._batch)
         except Exception:
             self._failed = True
             raise
@@ -432,5 +469,5 @@ class TransactionStore:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self._failed:
-            self._flush()
+        if exc_val is None and not self._failed:
+            self.maybe_flush()
