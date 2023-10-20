@@ -57,8 +57,9 @@ class QuixPortalApiService:
             super().__init__()
 
         def request(self, method, url, **kwargs):
+            timeout = kwargs.pop("timeout", 10)
             return super().request(
-                method, urljoin(base=self.url_base, url=url), **kwargs
+                method, urljoin(base=self.url_base, url=url), timeout=timeout, **kwargs
             )
 
     @property

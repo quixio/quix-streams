@@ -1,11 +1,11 @@
 import logging
+import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from time import sleep
 
 from requests import HTTPError
-from typing import Optional, Tuple, List, Iterable
+from typing import Optional, Tuple, List, Iterable, Set
 
 from .api import QuixPortalApiService
 from ...exceptions import QuixException
@@ -72,6 +72,9 @@ class QuixKafkaConfigsBuilder:
         ...
 
     class MissingQuixTopics(QuixException):
+        ...
+
+    class CreateTopicTimeout(QuixException):
         ...
 
     class QuixApiKafkaAuthConfigMap:
@@ -252,32 +255,57 @@ class QuixKafkaConfigsBuilder:
             topic_ret_minutes=cfg.optionals.get("retention.ms", 0) // (60 * 1000)
             or None,
         )
-        logger.info(f"Creation of topic {topic_name} acknowledged by broker.")
+        logger.info(
+            f"Creation of topic {topic_name} acknowledged by broker. Must wait "
+            f"for 'Ready' status before topic is actually available"
+        )
 
-    def create_topics(self, topics: Iterable[Topic]):
+    def _finalize_create(self, topics: Set[str], timeout: Optional[int] = None):
+        stop_time = time.time() + (timeout or len(topics) * 30)
+        while topics and time.time() < stop_time:
+            # Each topic seems to take 10-15 seconds each to finalize (at least in dev)
+            time.sleep(1)
+            for topic in [t for t in self.get_topics() if t["id"] in topics.copy()]:
+                if topic["status"] == "Ready":
+                    logger.debug(f"Topic {topic['name']} creation finalized")
+                    topics.remove(topic["id"])
+        if topics:
+            raise self.CreateTopicTimeout(
+                f"Creation succeeded, but waiting for 'Ready' status timed out "
+                f"for topics: {[self.strip_workspace_id(t) for t in topics]}"
+            )
+
+    def create_topics(self, topics: Iterable[Topic], finalize_timeout_seconds=None):
         logger.info("Attempting to create topics...")
-        current_topics = {t["id"] for t in self.get_topics()}
+        current_topics = {t["id"]: t for t in self.get_topics()}
         finalize = set()
         for topic in topics:
-            if topic.name in current_topics:
-                logger.debug(
-                    f"topic {self.strip_workspace_id(topic.name)} already exists."
-                )
+            topic_name = self.append_workspace_id(topic.name)
+            exists = self.append_workspace_id(topic_name) in current_topics
+            if not exists or current_topics[topic_name]["status"] != "Ready":
+                if exists:
+                    logger.debug(
+                        f"Topic {self.strip_workspace_id(topic_name)} exists but does "
+                        f"not have 'Ready' status. Added to finalize check."
+                    )
+                else:
+                    try:
+                        self._create_topic(topic)
+                    except HTTPError as e:
+                        # Topic was maybe created by another instance
+                        if "already exists" not in e.response.text:
+                            raise
+                finalize.add(topic_name)
             else:
-                self._create_topic(topic)
-                finalize.add(topic.name)
+                logger.debug(
+                    f"Topic {self.strip_workspace_id(topic_name)} exists and is Ready"
+                )
         logger.info(
             "Topic creations acknowledged; waiting for 'Ready' statuses..."
             if finalize
             else "No topic creations required!"
         )
-        while finalize:
-            # Each topic seems to take 10-15 seconds each to finalize (at least in dev)
-            sleep(1)
-            for topic in [t for t in self.get_topics() if t["id"] in finalize.copy()]:
-                if topic["status"] == "Ready":
-                    logger.debug(f"Topic {topic['name']} creation finalized")
-                    finalize.remove(topic["id"])
+        self._finalize_create(finalize, timeout=finalize_timeout_seconds)
 
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
