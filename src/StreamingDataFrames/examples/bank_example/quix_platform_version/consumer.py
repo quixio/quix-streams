@@ -10,7 +10,7 @@ from streamingdataframes.models.serializers import (
 
 # Reminder: the platform will have these values available by default so loading the
 # environment would be unnecessary there.
-load_dotenv("./platforms/quix/quix_vars.env")
+load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
 # Quix app has an option to auto create topics
 # Quix app does not require the broker being defined
