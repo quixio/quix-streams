@@ -1,4 +1,4 @@
-# This is an alternative example of how to produce messages using QuixTimeSeries
+# This is an alternative example of how to produce messages using the RowProducer
 
 import uuid
 from random import randint, random, choice
@@ -12,7 +12,7 @@ from streamingdataframes.models.topics import Topic
 from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
 from streamingdataframes.rowproducer import RowProducer, Row
 
-load_dotenv("./platforms/quix/quix_vars.env")
+load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
 
 # For non-"Application.Quix" platform producing, config is a bit manual right now
@@ -21,7 +21,6 @@ cfg_builder = QuixKafkaConfigsBuilder()
 cfgs, topics, _ = cfg_builder.get_confluent_client_configs([topic])
 topic = Topic(name=topics[0], value_serializer=QuixTimeseriesSerializer())
 cfg_builder.create_topics([topic])
-producer = RowProducer(broker_address=cfgs.pop("bootstrap.servers"), extra_config=cfgs)
 
 retailers = [
     "Billy Bob's Shop",
@@ -35,7 +34,9 @@ retailers = [
 
 # strings for key and headers will be serialized to bytes by default
 i = 0
-try:
+with RowProducer(
+    broker_address=cfgs.pop("bootstrap.servers"), extra_config=cfgs
+) as producer:
     while i < 10000:
         account = randint(0, 10)
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
@@ -62,5 +63,3 @@ try:
         )
         i += 1
         sleep(random())
-finally:
-    producer.flush(10)

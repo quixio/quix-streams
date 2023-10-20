@@ -12,7 +12,7 @@ from streamingdataframes.models.serializers import (
 from streamingdataframes.models.topics import Topic, TopicCreationConfigs
 from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
 
-load_dotenv("./platforms/quix/quix_vars.env")
+load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
 
 # For non-"Application.Quix" platform producing, config is a bit manual right now
