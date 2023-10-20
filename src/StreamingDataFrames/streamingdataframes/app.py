@@ -250,6 +250,10 @@ class Application:
         app.set_quix_config_builder(quix_config_builder)
         return app
 
+    @property
+    def is_quix_app(self):
+        return self._quix_config_builder is not None
+
     def topic(
         self,
         name: str,
@@ -273,7 +277,7 @@ class Application:
         :param creation_configs: settings for topic creation, if needed
         :return: `Topic` object
         """
-        if self._quix_config_builder is not None:
+        if self.is_quix_app:
             # This Application object was created via `.Quix()` method.
             # Quix platform's workspace id is used as topic prefix.
             name = self._quix_config_builder.append_workspace_id(name)
@@ -324,7 +328,7 @@ class Application:
 
         :param dataframe: instance of `StreamingDataFrame`
         """
-        if self._quix_config_builder:
+        if self.is_quix_app:
             logger.debug("Performing Quix-Specific runtime setup...")
             topics = chain(dataframe.topics_in.values(), dataframe.topics_out.values())
             if self._quix_config_builder.app_auto_create_topics:
