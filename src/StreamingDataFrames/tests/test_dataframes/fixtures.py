@@ -281,6 +281,7 @@ def quix_app_factory(random_consumer_group):
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
+        cfg_builder.create_topic_configs = {}
         cfg_builder.append_workspace_id.side_effect = lambda s: f"{workspace_id}-{s}"
 
         return Application.Quix(

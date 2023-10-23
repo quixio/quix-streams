@@ -16,13 +16,12 @@ from .error_callbacks import (
 from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
 from .models import (
     Topic,
-    TopicCreationConfigs,
     Deserializer,
     BytesDeserializer,
     Serializer,
     BytesSerializer,
 )
-from .platforms.quix import QuixKafkaConfigsBuilder
+from .platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
@@ -274,24 +273,23 @@ class Application:
         :param key_deserializer: a deserializer for keys
         :param value_serializer: a serializer for values
         :param key_serializer: a serializer for keys
-        :param creation_configs: settings for topic creation, if needed
+        :param creation_configs: settings for auto topic creation (Quix platform only)
+            Its name will be overridden by this method's 'name' param.
         :return: `Topic` object
         """
         if self.is_quix_app:
-            # This Application object was created via `.Quix()` method.
-            # Quix platform's workspace id is used as topic prefix.
             name = self._quix_config_builder.append_workspace_id(name)
-            if not creation_configs:
-                creation_configs = TopicCreationConfigs(
-                    num_partitions=2, replication_factor=2
-                )
+            if creation_configs:
+                creation_configs.name = name
+            else:
+                creation_configs = TopicCreationConfigs(name=name)
+            self._quix_config_builder.create_topic_configs[name] = creation_configs
         return Topic(
             name=name,
             value_serializer=value_serializer,
             value_deserializer=value_deserializer,
             key_serializer=key_serializer,
             key_deserializer=key_deserializer,
-            creation_configs=creation_configs,
         )
 
     def dataframe(
@@ -322,15 +320,13 @@ class Application:
     def is_stateful(self) -> bool:
         return bool(self._state_manager and self._state_manager.stores)
 
-    def _quix_runtime_init(self, dataframe: StreamingDataFrame):
+    def _quix_runtime_init(self):
         """
         Do some runtime setup only applicable to an Application.Quix instance
-
-        :param dataframe: instance of `StreamingDataFrame`
         """
         if self.is_quix_app:
+            topics = self._quix_config_builder.create_topic_configs.values()
             logger.debug("Performing Quix-Specific runtime setup...")
-            topics = chain(dataframe.topics_in.values(), dataframe.topics_out.values())
             if self._quix_config_builder.app_auto_create_topics:
                 self._quix_config_builder.create_topics(topics)
             else:
@@ -347,7 +343,7 @@ class Application:
         """
         logger.info("Start processing of the streaming dataframe")
 
-        self._quix_runtime_init(dataframe)
+        self._quix_runtime_init()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)

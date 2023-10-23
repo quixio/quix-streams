@@ -16,7 +16,10 @@ from streamingdataframes.models import (
     SerializationError,
     JSONSerializer,
 )
-from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
+from streamingdataframes.platforms.quix import (
+    QuixKafkaConfigsBuilder,
+    TopicCreationConfigs,
+)
 from streamingdataframes.rowconsumer import (
     KafkaMessageError,
     RowConsumer,
@@ -364,17 +367,35 @@ class TestQuixApplication:
         assert app._consumer._consumer_config["group.id"] == "my_ws-c_group"
         cfg_builder.append_workspace_id.assert_called_with("c_group")
 
-    def test_topic_init_name_is_prefixed(self, quix_app_factory):
+    def test_topic_default(self, quix_app_factory):
         """
         Topic names created from Quix apps are prefixed by the workspace id
         """
         app = quix_app_factory()
+        builder = app._quix_config_builder
+
         initial_topic_name = "input_topic"
         topic = app.topic(initial_topic_name)
-        assert (
-            topic.name
-            == f"{app._quix_config_builder.workspace_id}-{initial_topic_name}"
+        expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        assert topic.name == expected_name
+        assert builder.create_topic_configs[expected_name].name == expected_name
+
+    def test_topic_config(self, quix_app_factory):
+        """
+        Topic names created from Quix apps are prefixed by the workspace id
+        """
+        app = quix_app_factory()
+        builder = app._quix_config_builder
+
+        initial_topic_name = "input_topic"
+        topic = app.topic(
+            initial_topic_name,
+            creation_configs=TopicCreationConfigs(name="billy bob", num_partitions=5),
         )
+        expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        assert topic.name == expected_name
+        assert builder.create_topic_configs[expected_name].name == expected_name
+        assert builder.create_topic_configs[expected_name].num_partitions == 5
 
     def test_topic_auto_create_false_topic_confirmation(
         self, dataframe_factory, quix_app_factory
@@ -383,39 +404,28 @@ class TestQuixApplication:
         Topics are confirmed when auto_create_topics=False
         """
         app = quix_app_factory(auto_create_topics=False)
+        builder = app._quix_config_builder
+        topics = [app.topic("topic_in"), app.topic("topic_out")]
 
-        topic_in_0, topic_in_1 = app.topic("topic_in_0"), app.topic("topic_in_1")
-        topic_out_0, topic_out_1 = app.topic("topic_out_0"), app.topic("topic_out_1")
+        app._quix_runtime_init()
 
-        sdf = app.dataframe(topics_in=[topic_in_0, topic_in_1])
-        sdf.to_topic(topic_out_0)
-        sdf.to_topic(topic_out_1)
-
-        app._quix_runtime_init(sdf)
-
-        actual_call_arg = [
-            _ for _ in app._quix_config_builder.confirm_topics_exist.call_args[0][0]
-        ]
-        assert actual_call_arg == [topic_in_0, topic_in_1, topic_out_0, topic_out_1]
+        actual_call_arg = [_ for _ in builder.confirm_topics_exist.call_args[0][0]]
+        assert actual_call_arg == list(builder.create_topic_configs.values())
+        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
 
     def test_topic_auto_create_true(self, dataframe_factory, quix_app_factory):
         """
         Topics are created when auto_create_topics=True
         """
         app = quix_app_factory(auto_create_topics=True)
-        topic_in_0, topic_in_1 = app.topic("topic_in_0"), app.topic("topic_in_1")
-        topic_out_0, topic_out_1 = app.topic("topic_out_0"), app.topic("topic_out_1")
+        builder = app._quix_config_builder
+        topics = [app.topic("topic_in"), app.topic("topic_out")]
 
-        sdf = app.dataframe(topics_in=[topic_in_0, topic_in_1])
-        sdf.to_topic(topic_out_0)
-        sdf.to_topic(topic_out_1)
+        app._quix_runtime_init()
 
-        app._quix_runtime_init(sdf)
-
-        actual_call_arg = [
-            _ for _ in app._quix_config_builder.create_topics.call_args[0][0]
-        ]
-        assert actual_call_arg == [topic_in_0, topic_in_1, topic_out_0, topic_out_1]
+        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
+        assert actual_call_arg == list(builder.create_topic_configs.values())
+        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
 
 
 class TestApplicationWithState:

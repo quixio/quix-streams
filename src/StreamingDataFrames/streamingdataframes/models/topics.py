@@ -24,19 +24,7 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = (
-    "TopicCreationConfigs",
-    "Topic",
-)
-
-
-class TopicCreationConfigs:
-    def __init__(
-        self, num_partitions: int, replication_factor: int, optionals: dict = None
-    ):
-        self.num_partitions = num_partitions
-        self.replication_factor = replication_factor
-        self.optionals = optionals or {}
+__all__ = ("Topic",)
 
 
 class Topic:
@@ -47,7 +35,6 @@ class Topic:
         key_deserializer: Optional[Deserializer] = BytesDeserializer(),
         value_serializer: Optional[Serializer] = None,
         key_serializer: Optional[Serializer] = BytesSerializer(),
-        creation_configs: Optional[TopicCreationConfigs] = None,
     ):
         """
         A definition of Topic.
@@ -57,14 +44,12 @@ class Topic:
         :param key_deserializer: a deserializer for keys
         :param value_serializer: a serializer for values
         :param key_serializer: a serializer for keys
-        :param creation_configs: settings for topic creation, if needed
         """
         self._name = name
         self._key_serializer = key_serializer
         self._key_deserializer = key_deserializer
         self._value_serializer = value_serializer
         self._value_deserializer = value_deserializer
-        self.creation_configs = creation_configs
 
     @property
     def name(self) -> str:
