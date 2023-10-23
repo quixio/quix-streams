@@ -1,10 +1,12 @@
 import time
+import uuid
 from concurrent.futures import Future
 from json import loads, dumps
 from unittest.mock import patch, create_autospec
 
 import pytest
 from confluent_kafka import KafkaException, TopicPartition
+from tests.utils import TopicPartitionStub
 
 from streamingdataframes.app import Application
 from streamingdataframes.models import (
@@ -380,3 +382,204 @@ class TestQuixApplication:
         initial_topic_name = "input_topic"
         topic = app.topic(initial_topic_name, value_deserializer=JSONDeserializer())
         assert topic.name == f"{workspace_id}-{initial_topic_name}"
+
+
+class TestApplicationWithState:
+    def test_run_stateful_success(
+        self,
+        app_factory,
+        producer,
+        topic_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        """
+        Test that StreamingDataFrame processes 3 messages from Kafka and updates
+        the counter in the state store
+        """
+
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        app = app_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+        )
+
+        topic_in_name, _ = topic_factory()
+
+        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        state_manager = app._state_manager
+        state_manager.register_store(topic_in.name, "default")
+
+        # TODO: Use stateful functions after they're implemented
+        # Define a function that counts incoming Rows using state
+        def count(_):
+            state = state_manager.get_store_transaction("default")
+            total = state.get("total", 0)
+            total += 1
+            state.set("total", total)
+            if total == total_messages:
+                total_consumed.set_result(total)
+
+        df = app.dataframe(topics_in=[topic_in])
+        df.apply(count)
+
+        total_messages = 3
+        # Produce messages to the topic and flush
+        data = {"key": b"key", "value": dumps({"key": "value"})}
+        with producer:
+            for _ in range(total_messages):
+                producer.produce(topic_in_name, **data)
+
+        total_consumed = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
+        app.run(df)
+
+        # Check that the values are actually in the DB
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+        state_manager.register_store(topic_in.name, "default")
+        state_manager.on_partition_assign(
+            TopicPartitionStub(topic=topic_in.name, partition=0)
+        )
+        store = state_manager.get_store(topic=topic_in.name, store_name="default")
+        with store.start_partition_transaction(partition=0) as tx:
+            assert tx.get("total") == total_consumed.result()
+
+    def test_run_stateful_processing_fails(
+        self,
+        app_factory,
+        producer,
+        topic_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        app = app_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+        )
+
+        topic_in_name, _ = topic_factory()
+
+        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        state_manager = app._state_manager
+        state_manager.register_store(topic_in.name, "default")
+
+        # TODO: Use stateful functions after they're implemented
+        # Define a function that counts incoming Rows using state
+        def count(_):
+            state = state_manager.get_store_transaction("default")
+            total = state.get("total", 0)
+            total += 1
+            state.set("total", total)
+
+        failed = Future()
+
+        def fail(_):
+            failed.set_result(True)
+            raise ValueError("test")
+
+        df = app.dataframe(topics_in=[topic_in])
+        df.apply(count)
+        df.apply(fail)
+
+        total_messages = 3
+        # Produce messages to the topic and flush
+        data = {"key": b"key", "value": dumps({"key": "value"})}
+        with producer:
+            for _ in range(total_messages):
+                producer.produce(topic_in_name, **data)
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, failed, 10.0)
+        with pytest.raises(ValueError):
+            app.run(df)
+
+        # Ensure that nothing was committed to the DB
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+        state_manager.register_store(topic_in.name, "default")
+        state_manager.on_partition_assign(
+            TopicPartitionStub(topic=topic_in.name, partition=0)
+        )
+        store = state_manager.get_store(topic=topic_in.name, store_name="default")
+        with store.start_partition_transaction(partition=0) as tx:
+            assert tx.get("total") is None
+
+    def test_run_stateful_suppress_processing_errors(
+        self,
+        app_factory,
+        producer,
+        topic_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        app = app_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+            # Suppress errors during message processing
+            on_processing_error=lambda *args: True,
+        )
+
+        topic_in_name, _ = topic_factory()
+
+        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        state_manager = app._state_manager
+        state_manager.register_store(topic_in.name, "default")
+
+        # TODO: Use stateful functions after they're implemented
+        # Define a function that counts incoming Rows using state
+        def count(_):
+            state = state_manager.get_store_transaction("default")
+            total = state.get("total", 0)
+            total += 1
+            state.set("total", total)
+            if total == total_messages:
+                total_consumed.set_result(total)
+
+        def fail(_):
+            raise ValueError("test")
+
+        df = app.dataframe(topics_in=[topic_in])
+        df.apply(count)
+        df.apply(fail)
+
+        total_messages = 3
+        # Produce messages to the topic and flush
+        data = {"key": b"key", "value": dumps({"key": "value"})}
+        with producer:
+            for _ in range(total_messages):
+                producer.produce(topic_in_name, **data)
+
+        total_consumed = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
+        # Run the application
+        app.run(df)
+
+        # Ensure that data is committed to the DB
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+        state_manager.register_store(topic_in.name, "default")
+        state_manager.on_partition_assign(
+            TopicPartitionStub(topic=topic_in.name, partition=0)
+        )
+        store = state_manager.get_store(topic=topic_in.name, store_name="default")
+        with store.start_partition_transaction(partition=0) as tx:
+            assert tx.get("total") == total_consumed.result()

@@ -1,4 +1,7 @@
+import dataclasses
 import time
+
+from confluent_kafka import OFFSET_INVALID
 
 DEFAULT_TIMEOUT = 10.0
 
@@ -21,3 +24,10 @@ class Timeout:
         if expired:
             raise TimeoutError("Timeout expired")
         return True
+
+
+@dataclasses.dataclass
+class TopicPartitionStub:
+    topic: str
+    partition: int
+    offset: int = OFFSET_INVALID

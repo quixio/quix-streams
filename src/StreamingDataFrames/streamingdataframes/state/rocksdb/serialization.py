@@ -1,8 +1,8 @@
 import json
 from typing import Any, Optional
 
+from streamingdataframes.state.types import DumpsFunc, LoadsFunc
 from .exceptions import StateSerializationError
-from .types import DumpsFunc, LoadsFunc
 
 __all__ = (
     "serialize",

@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError, TopicPartition
 from typing_extensions import Protocol
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
-from .exceptions import QuixException
+from .exceptions import QuixException, PartitionAssignmentError
 from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset
 from .kafka.consumer import RebalancingCallback
 from .models import Topic, Row
@@ -159,6 +159,9 @@ class RowConsumer(Consumer, RowConsumerProto):
         """
         try:
             msg = self.poll(timeout=timeout)
+        except PartitionAssignmentError:
+            # Always propagate errors happened during assignment
+            raise
         except Exception as exc:
             to_suppress = self._on_error(exc, None, logger)
             if to_suppress:
