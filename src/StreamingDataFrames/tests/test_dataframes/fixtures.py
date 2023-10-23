@@ -237,6 +237,7 @@ def row_factory():
 @pytest.fixture()
 def app_factory(kafka_container, random_consumer_group):
     def factory(
+        consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
@@ -244,10 +245,11 @@ def app_factory(kafka_container, random_consumer_group):
         on_producer_error: Optional[ProducerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_message_processed: Optional[MessageProcessedCallback] = None,
+        state_dir: Optional[str] = None,
     ) -> Application:
         return Application(
             broker_address=kafka_container.broker_address,
-            consumer_group=random_consumer_group,
+            consumer_group=consumer_group or random_consumer_group,
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
@@ -255,6 +257,7 @@ def app_factory(kafka_container, random_consumer_group):
             on_producer_error=on_producer_error,
             on_processing_error=on_processing_error,
             on_message_processed=on_message_processed,
+            state_dir=state_dir,
         )
 
     return factory

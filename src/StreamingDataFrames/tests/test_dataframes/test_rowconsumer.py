@@ -1,6 +1,7 @@
 import pytest
 from confluent_kafka import KafkaError, TopicPartition
 
+from streamingdataframes.exceptions import PartitionAssignmentError
 from streamingdataframes.models import (
     Deserializer,
     IgnoreMessage,
@@ -162,3 +163,24 @@ class TestRowConsumer:
             row = consumer.poll_row(10.0)
             assert row is None
             assert suppressed
+
+    def test_poll_row_kafka_error_suppress_except_partition_assignment(
+        self, row_consumer_factory, topic_json_serdes_factory, producer
+    ):
+        topic = topic_json_serdes_factory()
+
+        def on_error(*_):
+            return True
+
+        def on_assign(*_):
+            raise ValueError("Test")
+
+        with row_consumer_factory(
+            auto_offset_reset="error",
+            on_error=on_error,
+        ) as consumer, producer:
+            producer.produce(topic.name, key=b"key", value=b"value")
+            producer.flush()
+            consumer.subscribe([topic], on_assign=on_assign)
+            with pytest.raises(PartitionAssignmentError):
+                consumer.poll_row(10.0)

@@ -1,13 +1,16 @@
+import uuid
 from typing import Optional
 
 import pytest
 
-from streamingdataframes.state.rocksdb import RocksDBStorage, RocksDBOptions
-from streamingdataframes.state.rocksdb.serialization import DumpsFunc, LoadsFunc
+from streamingdataframes.state.rocksdb import RocksDBStore
+from streamingdataframes.state.rocksdb.options import RocksDBOptions
+from streamingdataframes.state.rocksdb.partition import RocksDBStorePartition
+from streamingdataframes.state.types import DumpsFunc, LoadsFunc
 
 
 @pytest.fixture()
-def rocksdb_storage_factory(tmp_path):
+def rocksdb_partition_factory(tmp_path):
     def factory(
         name: str = "db",
         options: Optional[RocksDBOptions] = None,
@@ -15,9 +18,9 @@ def rocksdb_storage_factory(tmp_path):
         open_retry_backoff: float = 3.0,
         dumps: Optional[DumpsFunc] = None,
         loads: Optional[LoadsFunc] = None,
-    ) -> RocksDBStorage:
+    ) -> RocksDBStorePartition:
         path = (tmp_path / name).as_posix()
-        return RocksDBStorage(
+        return RocksDBStorePartition(
             path,
             options=options,
             open_max_retries=open_max_retries,
@@ -30,7 +33,23 @@ def rocksdb_storage_factory(tmp_path):
 
 
 @pytest.fixture()
-def rocksdb_storage(rocksdb_storage_factory) -> RocksDBStorage:
-    storage = rocksdb_storage_factory()
-    yield storage
-    storage.close()
+def rocksdb_partition(rocksdb_partition_factory) -> RocksDBStorePartition:
+    partition = rocksdb_partition_factory()
+    yield partition
+    partition.close()
+
+
+@pytest.fixture()
+def rocksdb_store_factory(tmp_path):
+    def factory(topic: Optional[str] = None, name: str = "default") -> RocksDBStore:
+        topic = topic or str(uuid.uuid4())
+        return RocksDBStore(topic=topic, name=name, base_dir=str(tmp_path))
+
+    return factory
+
+
+@pytest.fixture()
+def rocksdb_store(rocksdb_store_factory) -> RocksDBStore:
+    store = rocksdb_store_factory()
+    yield store
+    store.close()
