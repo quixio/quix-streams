@@ -20,10 +20,7 @@ topic = "qts__purchase_events"
 cfg_builder = QuixKafkaConfigsBuilder()
 cfgs, topics, _ = cfg_builder.get_confluent_client_configs([topic])
 topic = topics[0]
-cfg_builder.create_topics(
-    [Topic(name=topic, creation_configs=TopicCreationConfigs(1, 1))]
-)
-producer = Producer(broker_address=cfgs.pop("bootstrap.servers"), extra_config=cfgs)
+cfg_builder.create_topics([TopicCreationConfigs(name=topic)])
 serialize = QuixTimeseriesSerializer()
 
 
@@ -39,7 +36,9 @@ retailers = [
 
 # strings for key and headers will be serialized to bytes by default
 i = 0
-try:
+with Producer(
+    broker_address=cfgs.pop("bootstrap.servers"), extra_config=cfgs
+) as producer:
     while i < 10000:
         account = randint(0, 10)
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
@@ -61,5 +60,3 @@ try:
         )
         i += 1
         sleep(random())
-finally:
-    producer.flush(10)

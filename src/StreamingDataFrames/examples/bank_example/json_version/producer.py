@@ -10,11 +10,6 @@ from streamingdataframes.kafka import Producer
 
 load_dotenv("./env_vars.env")
 
-producer = Producer(
-    broker_address=environ["BROKER_ADDRESS"],
-    extra_config={"allow.auto.create.topics": "true"},
-)
-
 retailers = [
     "Billy Bob's Shop",
     "Tasty Pete's Burgers",
@@ -26,7 +21,10 @@ retailers = [
 
 # strings for key, value, and headers will be serialized to bytes by default
 i = 0
-try:
+with Producer(
+    broker_address=environ["BROKER_ADDRESS"],
+    extra_config={"allow.auto.create.topics": "true"},
+) as producer:
     while i < 10000:
         account = randint(0, 10)
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
@@ -45,5 +43,3 @@ try:
         )
         i += 1
         time.sleep(random())
-finally:
-    producer.flush(10)
