@@ -1,8 +1,9 @@
 import contextlib
 import logging
-from typing import Optional, List, Callable
+from itertools import chain
 
 from confluent_kafka import TopicPartition
+from typing import Optional, List, Callable
 from typing_extensions import Self
 
 from .dataframe import StreamingDataFrame
@@ -13,8 +14,14 @@ from .error_callbacks import (
     default_on_processing_error,
 )
 from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
-from .models import Topic, Deserializer, BytesDeserializer, Serializer, BytesSerializer
-from .platforms.quix import QuixKafkaConfigsBuilder
+from .models import (
+    Topic,
+    Deserializer,
+    BytesDeserializer,
+    Serializer,
+    BytesSerializer,
+)
+from .platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
@@ -154,12 +161,13 @@ class Application:
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
+        auto_create_topics: bool = True,
     ) -> Self:
         """
         Initialize an Application to work with Quix platform,
         assuming environment is properly configured (by default in the platform).
 
-        It takes the credenetials from the environment and configures consumer and
+        It takes the credentials from the environment and configures consumer and
         producer to properly connect to the Quix platform.
 
         .. note:: Quix platform requires `consumer_group` and topic names to be prefixed
@@ -206,10 +214,13 @@ class Application:
 
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
+        :param auto_create_topics: Whether to auto-create any topics handed to a
+            StreamingDataFrame instance (topics_in + topics_out).
 
         :return: `Application` object
         """
         quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
+        quix_config_builder.app_auto_create_topics = auto_create_topics
         quix_configs = quix_config_builder.get_confluent_broker_config()
         broker_address = quix_configs.pop("bootstrap.servers")
         # Quix platform prefixes consumer group with workspace id
@@ -238,6 +249,10 @@ class Application:
         app.set_quix_config_builder(quix_config_builder)
         return app
 
+    @property
+    def is_quix_app(self):
+        return self._quix_config_builder is not None
+
     def topic(
         self,
         name: str,
@@ -245,6 +260,7 @@ class Application:
         key_deserializer: Optional[Deserializer] = BytesDeserializer(),
         value_serializer: Optional[Serializer] = None,
         key_serializer: Optional[Serializer] = BytesSerializer(),
+        creation_configs: Optional[TopicCreationConfigs] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -257,13 +273,17 @@ class Application:
         :param key_deserializer: a deserializer for keys
         :param value_serializer: a serializer for values
         :param key_serializer: a serializer for keys
-
+        :param creation_configs: settings for auto topic creation (Quix platform only)
+            Its name will be overridden by this method's 'name' param.
         :return: `Topic` object
         """
-        if self._quix_config_builder is not None:
-            # This Application object was created via `.Quix()` method.
-            # Quix platform's workspace id is used as topic prefix.
+        if self.is_quix_app:
             name = self._quix_config_builder.append_workspace_id(name)
+            if creation_configs:
+                creation_configs.name = name
+            else:
+                creation_configs = TopicCreationConfigs(name=name)
+            self._quix_config_builder.create_topic_configs[name] = creation_configs
         return Topic(
             name=name,
             value_serializer=value_serializer,
@@ -300,6 +320,18 @@ class Application:
     def is_stateful(self) -> bool:
         return bool(self._state_manager and self._state_manager.stores)
 
+    def _quix_runtime_init(self):
+        """
+        Do some runtime setup only applicable to an Application.Quix instance
+        """
+        if self.is_quix_app:
+            topics = self._quix_config_builder.create_topic_configs.values()
+            logger.debug("Performing Quix-Specific runtime setup...")
+            if self._quix_config_builder.app_auto_create_topics:
+                self._quix_config_builder.create_topics(topics)
+            else:
+                self._quix_config_builder.confirm_topics_exist(topics)
+
     def run(
         self,
         dataframe: StreamingDataFrame,
@@ -310,6 +342,8 @@ class Application:
         :param dataframe: instance of `StreamingDataFrame`
         """
         logger.info("Start processing of the streaming dataframe")
+
+        self._quix_runtime_init()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)

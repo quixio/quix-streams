@@ -1,10 +1,13 @@
+from contextlib import ExitStack
 from copy import deepcopy
 from os import getcwd
 from pathlib import Path
-from unittest.mock import patch, call
+from unittest.mock import patch, call, create_autospec
 
 import pytest
-from requests import HTTPError
+from requests import HTTPError, Response
+
+from streamingdataframes.models.topics import Topic
 
 
 class TestQuixKafkaConfigsBuilder:
@@ -408,6 +411,11 @@ class TestQuixKafkaConfigsBuilder:
         assert cfg_factory.append_workspace_id("topic") == "12345-topic"
         assert cfg_factory.append_workspace_id("12345-topic") == "12345-topic"
 
+    def test_strip_workspace_id(self, quix_kafka_config_factory):
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        assert cfg_factory.strip_workspace_id("12345-topic") == "topic"
+        assert cfg_factory.strip_workspace_id("topic") == "topic"
+
     def test_get_confluent_client_config(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
         topics = ["topic_1", "topic_2"]
@@ -422,3 +430,233 @@ class TestQuixKafkaConfigsBuilder:
             ["12345-topic_1", "12345-topic_2"],
             "12345-my_consumer_group",
         )
+
+    def test_get_topics(self, quix_kafka_config_factory):
+        api_data = [
+            {
+                "id": "12345-topic_in",
+                "name": "topic_in",
+                "createdAt": "2023-10-16T22:27:39.943Z",
+                "updatedAt": "2023-10-16T22:28:27.17Z",
+                "persisted": False,
+                "persistedStatus": "Complete",
+                "external": False,
+                "workspaceId": "12345",
+                "status": "Ready",
+                "configuration": {
+                    "partitions": 2,
+                    "replicationFactor": 2,
+                    "retentionInMinutes": 10080,
+                    "retentionInBytes": 52428800,
+                },
+            },
+            {
+                "id": "12345-topic_out",
+                "name": "topic-out",
+                "createdAt": "2023-10-16T22:27:39.943Z",
+                "updatedAt": "2023-10-16T22:28:27.17Z",
+                "persisted": False,
+                "persistedStatus": "Complete",
+                "external": False,
+                "workspaceId": "12345",
+                "status": "Ready",
+                "configuration": {
+                    "partitions": 2,
+                    "replicationFactor": 2,
+                    "retentionInMinutes": 10080,
+                    "retentionInBytes": 52428800,
+                },
+            },
+        ]
+        cfg_factory = quix_kafka_config_factory(
+            workspace_id="12345", api_responses={"get_topics": api_data}
+        )
+        assert cfg_factory.get_topics() == api_data
+
+    def test_create_topics(self, quix_kafka_config_factory):
+        get_topics_return = [
+            {
+                "id": "12345-topic_a",
+                "name": "topic_a",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_b",
+                "name": "topic_b",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_c",
+                "name": "topic_c",
+                "status": "Creating",
+            },
+        ]
+
+        topic_b = Topic("12345-topic_b")
+        topic_c = Topic("12345-topic_c")
+        topic_d = Topic("12345-topic_d")
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        stack = ExitStack()
+        create_topic = stack.enter_context(patch.object(cfg_factory, "_create_topic"))
+        get_topics = stack.enter_context(patch.object(cfg_factory, "get_topics"))
+        get_topics.return_value = get_topics_return
+        finalize = stack.enter_context(patch.object(cfg_factory, "_finalize_create"))
+        cfg_factory.create_topics(
+            [topic_b, topic_c, topic_d], finalize_timeout_seconds=1
+        )
+        stack.close()
+        create_topic.assert_called_once_with(topic_d)
+        finalize.assert_called_with({t.name for t in [topic_c, topic_d]}, timeout=1)
+
+    def test_create_topics_parallel_create_attempt(self, quix_kafka_config_factory):
+        """When another app or something tries to create a topic at the same time"""
+        get_topics_return = [
+            {
+                "id": "12345-topic_a",
+                "name": "topic_a",
+                "status": "Ready",
+            },
+        ]
+
+        topic_b = Topic("12345-topic_b")
+
+        mock_response = create_autospec(Response)
+        mock_response.text = "already exists"
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        stack = ExitStack()
+        create_topic = stack.enter_context(patch.object(cfg_factory, "_create_topic"))
+        create_topic.side_effect = HTTPError(response=mock_response)
+        get_topics = stack.enter_context(patch.object(cfg_factory, "get_topics"))
+        get_topics.return_value = get_topics_return
+        finalize = stack.enter_context(patch.object(cfg_factory, "_finalize_create"))
+        cfg_factory.create_topics([topic_b])
+        stack.close()
+        create_topic.assert_called_once_with(topic_b)
+        finalize.assert_called_with({topic_b.name}, timeout=None)
+
+    def test__finalize_create(self, quix_kafka_config_factory):
+        def side_effect():
+            def nested():
+                data = [
+                    {
+                        "id": "12345-topic_a",
+                        "name": "topic_a",
+                        "status": "Ready",
+                    },
+                    {
+                        "id": "12345-topic_b",
+                        "name": "topic_b",
+                        "status": "Ready",
+                    },
+                    {
+                        "id": "12345-topic_c",
+                        "name": "topic_c",
+                        "status": "Creating",
+                    },
+                    {
+                        "id": "12345-topic_d",
+                        "name": "topic_d",
+                        "status": "Creating",
+                    },
+                ]
+                for i in range(2, 4):
+                    data[i]["status"] = "Ready"
+                    yield data
+
+            n = nested()
+            return lambda: next(n)
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        with patch.object(cfg_factory, "get_topics") as get_topics:
+            get_topics.side_effect = side_effect()
+            cfg_factory._finalize_create(
+                {"12345-topic_b", "12345-topic_c", "12345-topic_d"}
+            )
+        assert get_topics.call_count == 2
+
+    def test__finalize_create_timeout(self, quix_kafka_config_factory):
+        get_topics_return = [
+            {
+                "id": "12345-topic_c",
+                "name": "topic_c",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_d",
+                "name": "topic_d",
+                "status": "Creating",
+            },
+        ]
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        with patch.object(cfg_factory, "get_topics") as get_topics:
+            get_topics.return_value = get_topics_return
+            with pytest.raises(cfg_factory.CreateTopicTimeout) as e:
+                cfg_factory._finalize_create(
+                    {"12345-topic_b", "12345-topic_c", "12345-topic_d"}, timeout=1
+                )
+        e = e.value.args[0]
+        assert "topic_c" not in e and "topic_d" in e
+        assert get_topics.call_count == 1
+
+    def test_confirm_topics_exist(self, quix_kafka_config_factory):
+        api_data_stub = [
+            {
+                "id": "12345-topic_a",
+                "name": "topic_a",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_b",
+                "name": "topic_b",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_c",
+                "name": "topic_c",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_d",
+                "name": "topic_d",
+                "status": "Ready",
+            },
+        ]
+
+        topic_b = Topic("12345-topic_b")
+        topic_c = Topic("12345-topic_c")
+        topic_d = Topic("12345-topic_d")
+
+        cfg_factory = quix_kafka_config_factory(
+            workspace_id="12345", api_responses={"get_topics": api_data_stub}
+        )
+        cfg_factory.confirm_topics_exist([topic_b, topic_c, topic_d])
+
+    def test_confirm_topics_exist_topics_missing(self, quix_kafka_config_factory):
+        api_data_stub = [
+            {
+                "id": "12345-topic_a",
+                "name": "topic_a",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_b",
+                "name": "topic_b",
+                "status": "Ready",
+            },
+        ]
+
+        topic_b = Topic("12345-topic_b")
+        topic_c = Topic("12345-topic_c")
+        topic_d = Topic("12345-topic_d")
+
+        cfg_factory = quix_kafka_config_factory(
+            workspace_id="12345", api_responses={"get_topics": api_data_stub}
+        )
+        with pytest.raises(cfg_factory.MissingQuixTopics) as e:
+            cfg_factory.confirm_topics_exist([topic_b, topic_c, topic_d])
+        e = e.value.args[0]
+        assert "topic_c" in e and "topic_d" in e
+        assert "topic_b" not in e

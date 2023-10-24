@@ -16,7 +16,10 @@ from streamingdataframes.models import (
     SerializationError,
     JSONSerializer,
 )
-from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
+from streamingdataframes.platforms.quix import (
+    QuixKafkaConfigsBuilder,
+    TopicCreationConfigs,
+)
 from streamingdataframes.rowconsumer import (
     KafkaMessageError,
     RowConsumer,
@@ -364,24 +367,65 @@ class TestQuixApplication:
         assert app._consumer._consumer_config["group.id"] == "my_ws-c_group"
         cfg_builder.append_workspace_id.assert_called_with("c_group")
 
-    def test_topic_init_name_is_prefixed(self, kafka_container):
+    def test_topic_default(self, quix_app_factory):
         """
-        Ensure that Topic names created from Quix apps are prefixed by the workspace id
+        Topic names created from Quix apps are prefixed by the workspace id
         """
-        workspace_id = "my_ws"
-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg = {"bootstrap.servers": kafka_container.broker_address}
-        cfg_builder.get_confluent_broker_config.return_value = cfg
-        cfg_builder._workspace_id = workspace_id
-        cfg_builder.append_workspace_id.side_effect = lambda s: f"{workspace_id}-{s}"
+        app = quix_app_factory()
+        builder = app._quix_config_builder
 
-        app = Application.Quix(
-            quix_config_builder=cfg_builder,
-            consumer_group="c_group",
-        )
         initial_topic_name = "input_topic"
-        topic = app.topic(initial_topic_name, value_deserializer=JSONDeserializer())
-        assert topic.name == f"{workspace_id}-{initial_topic_name}"
+        topic = app.topic(initial_topic_name)
+        expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        assert topic.name == expected_name
+        assert builder.create_topic_configs[expected_name].name == expected_name
+
+    def test_topic_config(self, quix_app_factory):
+        """
+        Topic names created from Quix apps are prefixed by the workspace id
+        """
+        app = quix_app_factory()
+        builder = app._quix_config_builder
+
+        initial_topic_name = "input_topic"
+        topic = app.topic(
+            initial_topic_name,
+            creation_configs=TopicCreationConfigs(name="billy bob", num_partitions=5),
+        )
+        expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        assert topic.name == expected_name
+        assert builder.create_topic_configs[expected_name].name == expected_name
+        assert builder.create_topic_configs[expected_name].num_partitions == 5
+
+    def test_topic_auto_create_false_topic_confirmation(
+        self, dataframe_factory, quix_app_factory
+    ):
+        """
+        Topics are confirmed when auto_create_topics=False
+        """
+        app = quix_app_factory(auto_create_topics=False)
+        builder = app._quix_config_builder
+        topics = [app.topic("topic_in"), app.topic("topic_out")]
+
+        app._quix_runtime_init()
+
+        actual_call_arg = [_ for _ in builder.confirm_topics_exist.call_args[0][0]]
+        assert actual_call_arg == list(builder.create_topic_configs.values())
+        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
+
+    def test_topic_auto_create_true(self, dataframe_factory, quix_app_factory):
+        """
+        Topics are created when auto_create_topics=True
+        """
+        app = quix_app_factory(auto_create_topics=True)
+        builder = app._quix_config_builder
+        topics = [app.topic("topic_in"), app.topic("topic_out")]
+
+        app._quix_runtime_init()
+
+        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
+        assert actual_call_arg == list(builder.create_topic_configs.values())
+        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
 
 
 class TestApplicationWithState:

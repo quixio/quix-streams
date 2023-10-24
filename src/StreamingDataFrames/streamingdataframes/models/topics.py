@@ -1,4 +1,5 @@
 import logging
+
 from typing import Union, List, Mapping, Optional
 
 from .messages import KafkaMessage
@@ -22,6 +23,8 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
+
+__all__ = ("Topic",)
 
 
 class Topic:
