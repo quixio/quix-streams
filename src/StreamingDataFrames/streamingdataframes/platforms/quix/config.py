@@ -23,11 +23,11 @@ __all__ = (
 
 @dataclasses.dataclass
 class TopicCreationConfigs:
-    name: str
-    num_partitions: Optional[int] = None
-    replication_factor: Optional[int] = None
-    retention_bytes: Optional[int] = None
-    retention_minutes: Optional[int] = None
+    name: Optional[str] = None  # Required when not created by a Quix App.
+    num_partitions: int = 2
+    replication_factor: int = 2
+    retention_bytes: int = 52428800
+    retention_minutes: int = 10080
     optionals: Optional[Mapping] = None
 
 
@@ -82,7 +82,7 @@ class QuixKafkaConfigsBuilder:
         # since this is slowly building up.
         # Application.Quix only
         self.app_auto_create_topics: bool = True
-        self.create_topic_configs: Dict[str:TopicCreationConfigs] = {}
+        self.create_topic_configs: Dict[str, TopicCreationConfigs] = {}
 
     class NoWorkspaceFound(QuixException):
         ...
@@ -105,15 +105,6 @@ class QuixKafkaConfigsBuilder:
             "password": "sasl.password",
         }
         values = {"ScramSha256": "SCRAM-SHA-256", "SaslSsl": "SASL_SSL"}
-
-    @dataclasses.dataclass
-    class TopicCreationConfigs:
-        name: Optional[str] = None  # Required when not created by a Quix App.
-        num_partitions: Optional[int] = None
-        replication_factor: Optional[int] = None
-        retention_bytes: Optional[int] = None
-        retention_minutes: Optional[int] = None
-        optionals: Optional[Mapping] = None
 
     @property
     def workspace_id(self) -> str:

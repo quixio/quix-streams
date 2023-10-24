@@ -123,20 +123,20 @@ class QuixPortalApiService:
     def post_topic(
         self,
         topic_name: str,
+        topic_partitions: int,
+        topic_rep_factor: int,
+        topic_ret_minutes: int,
+        topic_ret_bytes: int,
         workspace_id: Optional[str] = None,
-        topic_partitions: Optional[int] = None,
-        topic_rep_factor: Optional[int] = None,
-        topic_ret_minutes: Optional[int] = None,
-        topic_ret_bytes: Optional[int] = None,
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
         d = {
             "name": topic_name,
             "configuration": {
-                "partitions": topic_partitions or 2,
-                "replicationFactor": topic_rep_factor or 2,
-                "retentionInMinutes": topic_ret_minutes or 10080,
-                "retentionInBytes": topic_ret_bytes or 52428800,
+                "partitions": topic_partitions,
+                "replicationFactor": topic_rep_factor,
+                "retentionInMinutes": topic_ret_minutes,
+                "retentionInBytes": topic_ret_bytes,
             },
         }
         return self.session.post(f"/{workspace_id}/topics", json=d).json()
