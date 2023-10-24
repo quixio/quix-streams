@@ -1,9 +1,10 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from unittest.mock import create_autospec
 
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
+from typing import Optional
 
 from streamingdataframes.app import Application, MessageProcessedCallback
 from streamingdataframes.error_callbacks import (
@@ -27,6 +28,7 @@ from streamingdataframes.models.timestamps import (
     MessageTimestamp,
 )
 from streamingdataframes.models.topics import Topic
+from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
 from streamingdataframes.rowconsumer import RowConsumer
 from streamingdataframes.rowproducer import RowProducer
 
@@ -258,6 +260,41 @@ def app_factory(kafka_container, random_consumer_group):
             on_processing_error=on_processing_error,
             on_message_processed=on_message_processed,
             state_dir=state_dir,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def quix_app_factory(random_consumer_group):
+    def factory(
+        auto_offset_reset: AutoOffsetReset = "latest",
+        consumer_extra_config: Optional[dict] = None,
+        producer_extra_config: Optional[dict] = None,
+        on_consumer_error: Optional[ConsumerErrorCallback] = None,
+        on_producer_error: Optional[ProducerErrorCallback] = None,
+        on_processing_error: Optional[ProcessingErrorCallback] = None,
+        on_message_processed: Optional[MessageProcessedCallback] = None,
+        auto_create_topics: bool = True,
+    ) -> Application:
+        workspace_id = "my_ws"
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder._workspace_id = workspace_id
+        cfg_builder.workspace_id = workspace_id
+        cfg_builder.create_topic_configs = {}
+        cfg_builder.append_workspace_id.side_effect = lambda s: f"{workspace_id}-{s}"
+
+        return Application.Quix(
+            random_consumer_group,
+            quix_config_builder=cfg_builder,
+            auto_offset_reset=auto_offset_reset,
+            consumer_extra_config=consumer_extra_config,
+            producer_extra_config=producer_extra_config,
+            on_consumer_error=on_consumer_error,
+            on_producer_error=on_producer_error,
+            on_processing_error=on_processing_error,
+            on_message_processed=on_message_processed,
+            auto_create_topics=auto_create_topics,
         )
 
     return factory
