@@ -128,12 +128,9 @@ class StreamingDataFrame:
         self,
         topics_in: List[Topic],
         state_manager: StateStoreManager,
-        # TODO: Do we need these params?
-        _pipeline: Pipeline = None,
-        _id: str = None,
     ):
-        self._id = _id or str(uuid.uuid4())
-        self._pipeline = _pipeline or Pipeline(_id=self.id)
+        self._id = str(uuid.uuid4())
+        self._pipeline = Pipeline(_id=self.id)
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
         if not topics_in:
