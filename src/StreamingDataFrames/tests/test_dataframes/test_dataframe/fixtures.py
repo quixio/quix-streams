@@ -1,11 +1,14 @@
 from copy import deepcopy
 from functools import partial
+from typing import Optional, List
+from unittest.mock import MagicMock
 
 import pytest
 
 from streamingdataframes.dataframe.dataframe import StreamingDataFrame
 from streamingdataframes.dataframe.pipeline import Pipeline, PipelineFunction
 from streamingdataframes.models.topics import Topic
+from streamingdataframes.state import StateStoreManager
 
 
 @pytest.fixture()
@@ -23,9 +26,13 @@ def pipeline(pipeline_function):
 
 @pytest.fixture()
 def dataframe_factory():
-    def _dataframe_factory(topics_in=None):
+    def _dataframe_factory(
+        topics_in: Optional[List[Topic]] = None,
+        state_manager: Optional[StateStoreManager] = None,
+    ):
         return StreamingDataFrame(
             topics_in=topics_in or [Topic(name="test_in")],
+            state_manager=state_manager or MagicMock(spec=StateStoreManager),
         )
 
     return _dataframe_factory

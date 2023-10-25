@@ -136,6 +136,13 @@ class PartitionTransaction(State):
     """
 
     @property
+    def state(self) -> State:
+        """
+        An instance of State to be provided to `StreamingDataFrame` functions
+        :return:
+        """
+
+    @property
     def failed(self) -> bool:
         """
         Return `True` if transaction failed to update data at some point.

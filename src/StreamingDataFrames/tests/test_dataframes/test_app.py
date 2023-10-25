@@ -24,6 +24,7 @@ from streamingdataframes.rowconsumer import (
     KafkaMessageError,
     RowConsumer,
 )
+from streamingdataframes.state import State
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -454,13 +455,9 @@ class TestApplicationWithState:
         topic_in_name, _ = topic_factory()
 
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
-        state_manager = app._state_manager
-        state_manager.register_store(topic_in.name, "default")
 
-        # TODO: Use stateful functions after they're implemented
         # Define a function that counts incoming Rows using state
-        def count(_):
-            state = state_manager.get_store_transaction("default")
+        def count(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -468,11 +465,12 @@ class TestApplicationWithState:
                 total_consumed.set_result(total)
 
         df = app.dataframe(topics_in=[topic_in])
-        df.apply(count)
+        df.apply(count, stateful=True)
 
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {"key": b"key", "value": dumps({"key": "value"})}
+        message_key = b"key"
+        data = {"key": message_key, "value": dumps({"key": "value"})}
         with producer:
             for _ in range(total_messages):
                 producer.produce(topic_in_name, **data)
@@ -493,7 +491,9 @@ class TestApplicationWithState:
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
-            assert tx.get("total") == total_consumed.result()
+            # All keys in state must be prefixed with the message key
+            with tx.with_prefix(message_key):
+                assert tx.get("total") == total_consumed.result()
 
     def test_run_stateful_processing_fails(
         self,
@@ -515,13 +515,9 @@ class TestApplicationWithState:
         topic_in_name, _ = topic_factory()
 
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
-        state_manager = app._state_manager
-        state_manager.register_store(topic_in.name, "default")
 
-        # TODO: Use stateful functions after they're implemented
         # Define a function that counts incoming Rows using state
-        def count(_):
-            state = state_manager.get_store_transaction("default")
+        def count(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -533,7 +529,7 @@ class TestApplicationWithState:
             raise ValueError("test")
 
         df = app.dataframe(topics_in=[topic_in])
-        df.apply(count)
+        df.apply(count, stateful=True)
         df.apply(fail)
 
         total_messages = 3
@@ -580,15 +576,10 @@ class TestApplicationWithState:
         )
 
         topic_in_name, _ = topic_factory()
-
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
-        state_manager = app._state_manager
-        state_manager.register_store(topic_in.name, "default")
 
-        # TODO: Use stateful functions after they're implemented
         # Define a function that counts incoming Rows using state
-        def count(_):
-            state = state_manager.get_store_transaction("default")
+        def count(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -599,12 +590,13 @@ class TestApplicationWithState:
             raise ValueError("test")
 
         df = app.dataframe(topics_in=[topic_in])
-        df.apply(count)
+        df.apply(count, stateful=True)
         df.apply(fail)
 
         total_messages = 3
+        message_key = b"key"
         # Produce messages to the topic and flush
-        data = {"key": b"key", "value": dumps({"key": "value"})}
+        data = {"key": message_key, "value": dumps({"key": "value"})}
         with producer:
             for _ in range(total_messages):
                 producer.produce(topic_in_name, **data)
@@ -626,4 +618,5 @@ class TestApplicationWithState:
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
-            assert tx.get("total") == total_consumed.result()
+            with tx.with_prefix(message_key):
+                assert tx.get("total") == total_consumed.result()

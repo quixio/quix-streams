@@ -1,0 +1,49 @@
+from typing import Any, Optional
+
+from .types import State, PartitionTransaction
+
+
+class TransactionState(State):
+    def __init__(self, transaction: PartitionTransaction):
+        """
+        Simple key-value state to be provided into `StreamingDataFrame` functions
+
+        :param transaction: instance of `PartitionTransaction`
+        """
+        self._transaction = transaction
+
+    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        return self._transaction.get(key=key, default=default)
+
+    def set(self, key: Any, value: Any):
+        """
+        Set value for the key.
+        :param key: key
+        :param value: value
+        """
+        return self._transaction.set(key=key, value=value)
+
+    def delete(self, key: Any):
+        """
+        Delete value for the key.
+
+        This function always returns `None`, even if value is not found.
+        :param key: key
+        """
+        return self._transaction.delete(key=key)
+
+    def exists(self, key: Any) -> bool:
+        """
+        Check if the key exists in state.
+        :param key: key
+        :return: True if key exists, False otherwise
+        """
+
+        return self._transaction.exists(key=key)
