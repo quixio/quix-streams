@@ -403,12 +403,6 @@ class TestConsumerStoreOffsets:
 
 
 class TestConsumerCommit:
-    def test_commit_none_passed(self, consumer_factory):
-        with consumer_factory() as consumer:
-            with pytest.raises(ValueError) as raised:
-                consumer.commit()
-        assert str(raised.value) == 'One of "message" or "offsets" must be passed'
-
     def test_commit_offsets_and_message_passed(self, consumer):
         with consumer:
             with pytest.raises(ValueError) as raised:
