@@ -19,7 +19,7 @@ class JSONSerializer(Serializer):
         :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
         """
         self._dumps = dumps
-        self._dumps_kwargs = dumps_kwargs or {}
+        self._dumps_kwargs = {"separators": (",", ":"), **(dumps_kwargs or {})}
 
     def __call__(self, value: Any, ctx: SerializationContext) -> Union[str, bytes]:
         return self._to_json(value)

@@ -13,7 +13,9 @@ from .exceptions import *
 from .json import JSONSerializer, JSONDeserializer
 from .quix import (
     QuixEventsSerializer,
+    QuixLegacyEventsSerializer,
     QuixTimeseriesSerializer,
+    QuixLegacyTimeseriesSerializer,
     QuixTimeseriesDeserializer,
     QuixEventsDeserializer,
 )

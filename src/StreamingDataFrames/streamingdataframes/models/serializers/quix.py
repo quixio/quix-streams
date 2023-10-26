@@ -1,9 +1,8 @@
 import abc
 import base64
-import itertools
 import time
 from abc import ABCMeta
-from typing import List, Mapping, Iterable, Optional, Union
+from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any
 
 from .base import SerializationContext
 from .exceptions import SerializationError, IgnoreMessage
@@ -54,6 +53,11 @@ class QCodecId:
     SUPPORTED_CODECS = (JSON, JSON_TYPED)
 
 
+class LegacyHeaderNames:
+    Q_CODEC_ID = "C"
+    Q_MODEL_KEY = "K"
+
+
 def _b64_decode_or_none(s) -> Optional[bytes]:
     if s is not None:
         return base64.b64decode(s)
@@ -94,14 +98,14 @@ class BaseQuixDeserializer(JSONDeserializer, metaclass=ABCMeta):
         :return: Iterable of dicts
         """
 
-        # Validate message headers
         # Warning: headers can have multiple values for the same key, but in context
         # of this function it doesn't matter because we're looking for specific keys.
-        headers_dict = (
-            {key: value.decode() for key, value in ctx.headers}
-            if ctx.headers is not None
-            else {}
-        )
+        if ctx.headers is None:
+            legacy = True
+            headers_dict, value = self._parse_legacy_format(value)
+        else:
+            legacy = False
+            headers_dict = {key: value.decode() for key, value in ctx.headers}
         # Fail if the message is a part of a split
         if Q_SPLITMESSAGEID_NAME in headers_dict:
             raise SerializationError(
@@ -132,7 +136,7 @@ class BaseQuixDeserializer(JSONDeserializer, metaclass=ABCMeta):
                 f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
             )
 
-        # Fail if the model_key is unknowun
+        # Fail if the model_key is unknown
         if model_key not in QModelKey.ALLOWED_KEYS:
             raise SerializationError(
                 f'Unsupported "{QModelKey.HEADER_NAME}" value "{model_key}"'
@@ -140,13 +144,31 @@ class BaseQuixDeserializer(JSONDeserializer, metaclass=ABCMeta):
 
         # Parse JSON from the message value
         try:
-            deserialized = self._loads(value, **self._loads_kwargs)
+            deserialized = (
+                self._loads(value, **self._loads_kwargs) if not legacy else value
+            )
         except (ValueError, TypeError) as exc:
             raise SerializationError(str(exc)) from exc
 
         # Pass deserialized value to the `deserialize` function
         for item in self.deserialize(model_key=model_key, value=deserialized):
             yield item
+
+    def _parse_legacy_format(
+        self, value: bytes
+    ) -> Tuple[Union[Mapping, List[Mapping]], Mapping]:
+        if value.startswith(b"<"):
+            raise SerializationError(
+                "Message splitting was detected in a legacy-formatted message; "
+                "it is not supported in the new client."
+            )
+        value = self._loads(value, **self._loads_kwargs)
+        headers = {
+            QCodecId.HEADER_NAME: value.pop(LegacyHeaderNames.Q_CODEC_ID),
+            QModelKey.HEADER_NAME: value.pop(LegacyHeaderNames.Q_MODEL_KEY),
+        }
+        message = value.pop("V")
+        return headers, message
 
 
 class QuixTimeseriesDeserializer(BaseQuixDeserializer):
@@ -214,6 +236,25 @@ class QuixTimeseriesDeserializer(BaseQuixDeserializer):
 
             row_value[Q_TIMESTAMP_KEY] = timestamp_ns
             yield self._to_dict(row_value)
+
+
+class QuixLegacySerializer(JSONSerializer):
+    pseudo_headers = {}
+
+    def _to_json(self, value: Any):
+        value = super()._to_json(value)
+        new_value = super()._to_json(
+            {
+                LegacyHeaderNames.Q_CODEC_ID: self.pseudo_headers[QCodecId.HEADER_NAME],
+                LegacyHeaderNames.Q_MODEL_KEY: self.pseudo_headers[
+                    QModelKey.HEADER_NAME
+                ],
+            }
+        )
+        start = len(new_value) + 4  # len of ',"V":' append - 1
+        end = start + len(value)
+        ending = super()._to_json({"S": start, "E": end})
+        return new_value[:-1] + ',"V":' + value + "," + ending[1:]
 
 
 class QuixTimeseriesSerializer(JSONSerializer):
@@ -288,11 +329,19 @@ class QuixTimeseriesSerializer(JSONSerializer):
             params.append(item)
             is_empty = False
 
-        # Add a timestamp only if there's a least one parameter
+        # Add a timestamp only if there's at least one parameter
         if not is_empty:
             result["Timestamps"].append(timestamp_ns or time.time_ns())
 
         return self._to_json(result)
+
+
+class QuixLegacyTimeseriesSerializer(QuixTimeseriesSerializer, QuixLegacySerializer):
+    pseudo_headers = {
+        QModelKey.HEADER_NAME: QModelKey.PARAMETERDATA,
+        QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+    }
+    extra_headers = {}
 
 
 class QuixEventsDeserializer(BaseQuixDeserializer):
@@ -407,3 +456,8 @@ class QuixEventsSerializer(JSONSerializer):
         }
 
         return self._to_json(result)
+
+
+class QuixLegacyEventsSerializer(QuixEventsSerializer, QuixLegacySerializer):
+    pseudo_headers = {k: v for k, v in QuixEventsSerializer.extra_headers.items()}
+    extra_headers = {}
