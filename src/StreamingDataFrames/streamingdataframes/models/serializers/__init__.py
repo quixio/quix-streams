@@ -16,6 +16,5 @@ from .quix import (
     QuixLegacyEventsSerializer,
     QuixTimeseriesSerializer,
     QuixLegacyTimeseriesSerializer,
-    QuixTimeseriesDeserializer,
-    QuixEventsDeserializer,
+    QuixDeserializer,
 )

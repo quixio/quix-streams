@@ -10,7 +10,7 @@ __all__ = ("JSONSerializer", "JSONDeserializer")
 class JSONSerializer(Serializer):
     def __init__(
         self,
-        dumps: Callable[[Any, None], Union[str, bytes]] = json.dumps,
+        dumps: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
         dumps_kwargs: Optional[Mapping] = None,
     ):
         """
@@ -18,7 +18,7 @@ class JSONSerializer(Serializer):
         :param dumps: a function to serialize objects to json. Default - `json.dumps`
         :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
         """
-        self._dumps = dumps
+        self._dumps = dumps or json.dumps
         self._dumps_kwargs = {"separators": (",", ":"), **(dumps_kwargs or {})}
 
     def __call__(self, value: Any, ctx: SerializationContext) -> Union[str, bytes]:
@@ -35,9 +35,9 @@ class JSONDeserializer(Deserializer):
     def __init__(
         self,
         column_name: Optional[str] = None,
-        loads: Callable[
-            [Union[str, bytes, bytearray], None], Union[List, Mapping]
-        ] = json.loads,
+        loads: Optional[
+            Callable[[Union[str, bytes, bytearray], None], Union[List, Mapping]]
+        ] = None,
         loads_kwargs: Optional[Mapping] = None,
     ):
         """
@@ -49,7 +49,7 @@ class JSONDeserializer(Deserializer):
         :param loads_kwargs: dict with named arguments for `loads` function.
         """
         super().__init__(column_name=column_name)
-        self._loads = loads
+        self._loads = loads or json.loads
         self._loads_kwargs = loads_kwargs or {}
 
     def __call__(

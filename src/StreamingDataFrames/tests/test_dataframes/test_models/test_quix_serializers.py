@@ -10,8 +10,7 @@ from streamingdataframes.models.serializers import (
     IgnoreMessage,
 )
 from streamingdataframes.models.serializers.quix import (
-    QuixTimeseriesDeserializer,
-    QuixEventsDeserializer,
+    QuixDeserializer,
     QuixTimeseriesSerializer,
     QuixLegacyTimeseriesSerializer,
     QuixEventsSerializer,
@@ -23,9 +22,6 @@ from streamingdataframes.models.serializers.quix import (
 
 
 class TestQuixDeserializersValidation:
-    @pytest.mark.parametrize(
-        "deserializer", [QuixTimeseriesDeserializer(), QuixEventsDeserializer()]
-    )
     @pytest.mark.parametrize(
         "headers, error",
         [
@@ -67,8 +63,11 @@ class TestQuixDeserializersValidation:
         ],
     )
     def test_deserialize_missing_or_invalid_headers_fails(
-        self, headers, error, deserializer
+        self,
+        headers,
+        error,
     ):
+        deserializer = QuixDeserializer()
         with pytest.raises(SerializationError, match=error):
             list(
                 deserializer(
@@ -76,10 +75,8 @@ class TestQuixDeserializersValidation:
                 )
             )
 
-    @pytest.mark.parametrize(
-        "deserializer", [QuixTimeseriesDeserializer(), QuixEventsDeserializer()]
-    )
-    def test_deserialize_message_not_json_fails(self, deserializer):
+    def test_deserialize_message_not_json_fails(self):
+        deserializer = QuixDeserializer()
         with pytest.raises(
             SerializationError,
             match="the JSON object must be str, bytes or bytearray, not int",
@@ -97,15 +94,11 @@ class TestQuixDeserializersValidation:
                 )
             )
 
-    @pytest.mark.parametrize(
-        "deserializer", [QuixTimeseriesDeserializer(), QuixEventsDeserializer()]
-    )
     @pytest.mark.parametrize("model_key", QModelKey.KEYS_TO_IGNORE)
-    def test_deserialize_message_is_ignored(
-        self, model_key, deserializer, quix_timeseries_factory
-    ):
+    def test_deserialize_message_is_ignored(self, model_key, quix_timeseries_factory):
         # We don't care about a particular message structure in this test
         message = quix_timeseries_factory(model_key=model_key)
+        deserializer = QuixDeserializer()
         with pytest.raises(IgnoreMessage):
             list(
                 deserializer(
@@ -116,13 +109,11 @@ class TestQuixDeserializersValidation:
                 )
             )
 
-    @pytest.mark.parametrize(
-        "deserializer", [QuixTimeseriesDeserializer(), QuixEventsDeserializer()]
-    )
     def test_deserialize_legacy_multi_part_message_is_ignored(
-        self, deserializer, quix_timeseries_factory
+        self, quix_timeseries_factory
     ):
         message = quix_timeseries_factory(as_legacy=True)
+        deserializer = QuixDeserializer()
         with pytest.raises(SerializationError):
             list(
                 deserializer(
@@ -134,7 +125,7 @@ class TestQuixDeserializersValidation:
             )
 
 
-class TestQuixTimeseriesDeserializer:
+class TestQuixDeserializer:
     @pytest.mark.parametrize("as_legacy", [False, True])
     def test_deserialize_timeseries_success(self, quix_timeseries_factory, as_legacy):
         message = quix_timeseries_factory(
@@ -168,7 +159,7 @@ class TestQuixTimeseriesDeserializer:
             },
         ]
 
-        deserializer = QuixTimeseriesDeserializer()
+        deserializer = QuixDeserializer()
         rows = list(
             deserializer(
                 value=message.value(),
@@ -224,7 +215,7 @@ class TestQuixTimeseriesDeserializer:
             },
         ]
 
-        deserializer = QuixTimeseriesDeserializer(column_name="root")
+        deserializer = QuixDeserializer(column_name="root")
         rows = list(
             deserializer(
                 value=message.value(),
@@ -243,6 +234,103 @@ class TestQuixTimeseriesDeserializer:
             assert value["__Q_Timestamp"]
             for key in item:
                 assert item[key] == value[key]
+
+    @pytest.mark.parametrize("as_legacy", [False, True])
+    def test_deserialize_eventdata_success(
+        self, quix_eventdata_factory, quix_eventdata_params_factory, as_legacy
+    ):
+        event_params = quix_eventdata_params_factory(
+            id="test",
+            value={"blabla": 123},
+            tags={"tag1": "1"},
+        )
+        message = quix_eventdata_factory(params=event_params, as_legacy=as_legacy)
+
+        deserializer = QuixDeserializer()
+        rows = list(
+            deserializer(
+                value=message.value(),
+                ctx=SerializationContext(topic="test", headers=message.headers()),
+            )
+        )
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["__Q_Timestamp"]
+        assert row["Id"] == event_params.id
+        assert row["Value"] == event_params.value
+        assert row["Tags"] == event_params.tags
+
+    @pytest.mark.parametrize("as_legacy", [False, True])
+    def test_deserialize_eventdata_list_success(
+        self,
+        quix_eventdata_list_factory,
+        quix_eventdata_params_factory,
+        as_legacy,
+    ):
+        event_params = [
+            quix_eventdata_params_factory(
+                id="test",
+                value={"blabla": 123},
+                tags={"tag1": "1"},
+            ),
+            quix_eventdata_params_factory(
+                id="test2",
+                value={"blabla2": 1234},
+                tags={"tag2": "2"},
+            ),
+        ]
+        message = quix_eventdata_list_factory(params=event_params, as_legacy=as_legacy)
+
+        deserializer = QuixDeserializer()
+        rows = list(
+            deserializer(
+                value=message.value(),
+                ctx=SerializationContext(topic="test", headers=message.headers()),
+            )
+        )
+        assert len(rows) == 2
+        for row, params in zip(rows, event_params):
+            assert row["__Q_Timestamp"]
+            assert row["Id"] == params.id
+            assert row["Value"] == params.value
+            assert row["Tags"] == params.tags
+
+    @pytest.mark.parametrize("as_legacy", [False, True])
+    def test_deserialize_event_data_with_column(
+        self,
+        quix_eventdata_list_factory,
+        quix_eventdata_params_factory,
+        as_legacy,
+    ):
+        event_params = [
+            quix_eventdata_params_factory(
+                id="test",
+                value={"blabla": 123},
+                tags={"tag1": "1"},
+            ),
+            quix_eventdata_params_factory(
+                id="test2",
+                value={"blabla2": 1234},
+                tags={"tag2": "2"},
+            ),
+        ]
+        message = quix_eventdata_list_factory(params=event_params, as_legacy=as_legacy)
+
+        deserializer = QuixDeserializer(column_name="root")
+        rows = list(
+            deserializer(
+                value=message.value(),
+                ctx=SerializationContext(topic="test", headers=message.headers()),
+            )
+        )
+        assert len(rows) == 2
+        for row, params in zip(rows, event_params):
+            assert "root" in row
+            row = row["root"]
+            assert row["__Q_Timestamp"]
+            assert row["Id"] == params.id
+            assert row["Value"] == params.value
+            assert row["Tags"] == params.tags
 
 
 class TestQuixTimeseriesSerializer:
@@ -404,105 +492,6 @@ class TestQuixLegacyTimeseriesSerializer:
         }
         assert json.loads(serialized) == expected
         assert serialized[expected["S"] : expected["E"]] == expected_value_str
-
-
-class TestQuixEventsDeserializer:
-    @pytest.mark.parametrize("as_legacy", [False, True])
-    def test_deserialize_eventdata_success(
-        self, quix_eventdata_factory, quix_eventdata_params_factory, as_legacy
-    ):
-        event_params = quix_eventdata_params_factory(
-            id="test",
-            value={"blabla": 123},
-            tags={"tag1": "1"},
-        )
-        message = quix_eventdata_factory(params=event_params, as_legacy=as_legacy)
-
-        deserializer = QuixEventsDeserializer()
-        rows = list(
-            deserializer(
-                value=message.value(),
-                ctx=SerializationContext(topic="test", headers=message.headers()),
-            )
-        )
-        assert len(rows) == 1
-        row = rows[0]
-        assert row["__Q_Timestamp"]
-        assert row["Id"] == event_params.id
-        assert row["Value"] == event_params.value
-        assert row["Tags"] == event_params.tags
-
-    @pytest.mark.parametrize("as_legacy", [False, True])
-    def test_deserialize_eventdata_list_success(
-        self,
-        quix_eventdata_list_factory,
-        quix_eventdata_params_factory,
-        as_legacy,
-    ):
-        event_params = [
-            quix_eventdata_params_factory(
-                id="test",
-                value={"blabla": 123},
-                tags={"tag1": "1"},
-            ),
-            quix_eventdata_params_factory(
-                id="test2",
-                value={"blabla2": 1234},
-                tags={"tag2": "2"},
-            ),
-        ]
-        message = quix_eventdata_list_factory(params=event_params, as_legacy=as_legacy)
-
-        deserializer = QuixEventsDeserializer()
-        rows = list(
-            deserializer(
-                value=message.value(),
-                ctx=SerializationContext(topic="test", headers=message.headers()),
-            )
-        )
-        assert len(rows) == 2
-        for row, params in zip(rows, event_params):
-            assert row["__Q_Timestamp"]
-            assert row["Id"] == params.id
-            assert row["Value"] == params.value
-            assert row["Tags"] == params.tags
-
-    @pytest.mark.parametrize("as_legacy", [False, True])
-    def test_deserialize_event_data_with_column(
-        self,
-        quix_eventdata_list_factory,
-        quix_eventdata_params_factory,
-        as_legacy,
-    ):
-        event_params = [
-            quix_eventdata_params_factory(
-                id="test",
-                value={"blabla": 123},
-                tags={"tag1": "1"},
-            ),
-            quix_eventdata_params_factory(
-                id="test2",
-                value={"blabla2": 1234},
-                tags={"tag2": "2"},
-            ),
-        ]
-        message = quix_eventdata_list_factory(params=event_params, as_legacy=as_legacy)
-
-        deserializer = QuixEventsDeserializer(column_name="root")
-        rows = list(
-            deserializer(
-                value=message.value(),
-                ctx=SerializationContext(topic="test", headers=message.headers()),
-            )
-        )
-        assert len(rows) == 2
-        for row, params in zip(rows, event_params):
-            assert "root" in row
-            row = row["root"]
-            assert row["__Q_Timestamp"]
-            assert row["Id"] == params.id
-            assert row["Value"] == params.value
-            assert row["Tags"] == params.tags
 
 
 class TestQuixEventsSerializer:
