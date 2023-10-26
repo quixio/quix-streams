@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from concurrent.futures import Future
@@ -620,3 +621,63 @@ class TestApplicationWithState:
         with store.start_partition_transaction(partition=0) as tx:
             with tx.with_prefix(message_key):
                 assert tx.get("total") == total_consumed.result()
+
+    def test_on_assign_topic_offset_behind_warning(
+        self,
+        app_factory,
+        producer,
+        topic_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+        caplog,
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        app = app_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+        )
+
+        topic_in_name, _ = topic_factory()
+        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+
+        # Set the store partition offset to 9999
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+        with state_manager:
+            state_manager.register_store(topic_in.name, "default")
+            state_partitions = state_manager.on_partition_assign(
+                TopicPartitionStub(topic=topic_in.name, partition=0)
+            )
+            with state_manager.start_store_transaction(
+                topic=topic_in.name, partition=0, offset=9999
+            ):
+                tx = state_manager.get_store_transaction()
+                tx.set("key", "value")
+            assert state_partitions[0].get_processed_offset() == 9999
+
+        # Define some stateful function so the App assigns store partitions
+        done = Future()
+
+        def count(_, state: State):
+            done.set_result(True)
+
+        df = app.dataframe(topics_in=[topic_in])
+        df.apply(count, stateful=True)
+
+        # Produce a message to the topic and flush
+        data = {"key": b"key", "value": dumps({"key": "value"})}
+        with producer:
+            producer.produce(topic_in_name, **data)
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        # Run the application
+        with patch.object(logging.getLoggerClass(), "warning") as mock:
+            app.run(df)
+
+        assert mock.called
+        assert "is behind the stored offset" in mock.call_args[0][0]

@@ -28,7 +28,6 @@ from .state.rocksdb import RocksDBOptionsType
 
 __all__ = ("Application",)
 
-
 logger = logging.getLogger(__name__)
 MessageProcessedCallback = Callable[[str, int, int], None]
 
@@ -426,7 +425,30 @@ class Application:
         if self._state_manager.stores:
             logger.info(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
-                self._state_manager.on_partition_assign(tp)
+                # Assign store partitions
+                store_partitions = self._state_manager.on_partition_assign(tp)
+
+                # Check if the latest committed offset >= stored offset
+                # Otherwise, the re-processed messages might use already updated
+                # state, which can lead to inconsistent outputs
+                stored_offsets = [
+                    offset
+                    for offset in (
+                        store_tp.get_processed_offset() for store_tp in store_partitions
+                    )
+                    if offset is not None
+                ]
+                min_stored_offset = min(stored_offsets) + 1 if stored_offsets else None
+                if min_stored_offset is not None:
+                    tp_committed = self._consumer.committed([tp], timeout=30)[0]
+                    if min_stored_offset > tp_committed.offset:
+                        logger.warning(
+                            f'Warning: offset "{tp_committed.offset}" '
+                            f"for topic partition "
+                            f'"{tp_committed.topic}[{tp_committed.partition}]" '
+                            f'is behind the stored offset "{min_stored_offset}". '
+                            f"It may lead to distortions in produced data."
+                        )
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """
