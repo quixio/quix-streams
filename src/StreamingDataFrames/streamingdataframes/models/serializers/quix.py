@@ -179,18 +179,16 @@ class QuixDeserializer(JSONDeserializer):
 
         # Warning: headers can have multiple values for the same key, but in context
         # of this function it doesn't matter because we're looking for specific keys.
-        if ctx.headers is None:
-            as_legacy = True
+        if as_legacy := self._is_legacy_format(value):
             headers_dict, value = self._parse_legacy_format(value)
         else:
-            as_legacy = False
-            headers_dict = {key: value.decode() for key, value in ctx.headers}
-        # Fail if the message is a part of a split
-        if Q_SPLITMESSAGEID_NAME in headers_dict:
-            raise SerializationError(
-                f'Detected "{Q_SPLITMESSAGEID_NAME}" header but message splitting '
-                f"is not supported"
-            )
+            headers_dict = {key: value.decode() for key, value in ctx.headers or {}}
+            # Fail if the message is a part of a split
+            if Q_SPLITMESSAGEID_NAME in headers_dict:
+                raise SerializationError(
+                    f'Detected "{Q_SPLITMESSAGEID_NAME}" header but message splitting '
+                    f"is not supported"
+                )
 
         codec_id = headers_dict.get(QCodecId.HEADER_NAME)
         if not codec_id:
@@ -232,15 +230,20 @@ class QuixDeserializer(JSONDeserializer):
         # Pass deserialized value to the `deserialize` function
         yield from self._deserializers[model_key](value=deserialized)
 
+    def _is_legacy_format(self, value: bytes):
+        try:
+            if value.startswith(b"<"):
+                raise SerializationError(
+                    "Message splitting was detected in a legacy-formatted message; "
+                    "it is not supported in the new client."
+                )
+            return value.startswith(b'{"C":') and b'"K":' in value
+        except AttributeError:
+            return False
+
     def _parse_legacy_format(
         self, value: bytes
     ) -> Tuple[Union[Mapping, List[Mapping]], Mapping]:
-        if value.startswith(b"<"):
-            # Instead, you could add the Q_SPLITMESSAGEID_NAME to the headers dict
-            raise SerializationError(
-                "Message splitting was detected in a legacy-formatted message; "
-                "it is not supported in the new client."
-            )
         value = self._loads(value, **self._loads_kwargs)
         headers = {
             QCodecId.HEADER_NAME: value.pop(LegacyHeaders.Q_CODEC_ID),
