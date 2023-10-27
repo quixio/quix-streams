@@ -1,9 +1,8 @@
 import contextlib
 import logging
-from itertools import chain
+from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
-from typing import Optional, List, Callable
 from typing_extensions import Self
 
 from .dataframe import StreamingDataFrame
@@ -29,7 +28,6 @@ from .state.rocksdb import RocksDBOptionsType
 
 __all__ = ("Application",)
 
-
 logger = logging.getLogger(__name__)
 MessageProcessedCallback = Callable[[str, int, int], None]
 
@@ -45,7 +43,7 @@ class Application:
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
-        state_dir: Optional[str] = None,
+        state_dir: str = "state",
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
@@ -87,9 +85,8 @@ class Application:
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
-        :param state_dir: path to the application state directory, optional.
-            It should be passed if the application uses stateful operations, otherwise
-            the exception will be raised.
+        :param state_dir: path to the application state directory.
+            Default - ".state".
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
         :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
@@ -132,12 +129,11 @@ class Application:
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._state_manager: Optional[StateStoreManager] = None
-        if state_dir:
-            self._state_manager = StateStoreManager(
-                group_id=consumer_group,
-                state_dir=state_dir,
-                rocksdb_options=rocksdb_options,
-            )
+        self._state_manager = StateStoreManager(
+            group_id=consumer_group,
+            state_dir=state_dir,
+            rocksdb_options=rocksdb_options,
+        )
 
     def set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
         self._quix_config_builder = config_builder
@@ -152,7 +148,7 @@ class Application:
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
-        state_dir: Optional[str] = None,
+        state_dir: str = "state",
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
@@ -190,15 +186,16 @@ class Application:
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
-        :param state_dir: path to the application state directory, optional.
-            It should be passed if the application uses stateful operations, otherwise
-            the exception will be raised.
+        :param state_dir: path to the application state directory.
+            Default - ".state".
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
         :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
+        :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
+            instead of the default one.
 
         To handle errors, `Application` accepts callbacks triggered when exceptions
         occur on different stages of stream processing.
@@ -305,7 +302,7 @@ class Application:
             to be used as input topics.
         :return: `StreamingDataFrame` object
         """
-        sdf = StreamingDataFrame(topics_in=topics_in)
+        sdf = StreamingDataFrame(topics_in=topics_in, state_manager=self._state_manager)
         sdf.consumer = self._consumer
         sdf.producer = self._producer
         return sdf
@@ -315,10 +312,6 @@ class Application:
         Stop the internal poll loop and the message processing.
         """
         self._running = False
-
-    @property
-    def is_stateful(self) -> bool:
-        return bool(self._state_manager and self._state_manager.stores)
 
     def _quix_runtime_init(self):
         """
@@ -348,13 +341,20 @@ class Application:
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)
         exit_stack.enter_context(self._consumer)
-        if self.is_stateful:
-            exit_stack.enter_context(self._state_manager)
+        exit_stack.enter_context(self._state_manager)
 
         exit_stack.callback(
             lambda *_: logger.debug("Closing Kafka consumers & producers")
         )
         exit_stack.callback(lambda *_: self.stop())
+
+        if self._state_manager.stores:
+            # Store manager has stores registered, use real state transactions
+            # during processing
+            start_state_transaction = self._state_manager.start_store_transaction
+        else:
+            # Application is stateless, use dummy state transactionss
+            start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
             logger.info("Start processing of the streaming dataframe")
@@ -388,16 +388,9 @@ class Application:
                     first_row.offset,
                 )
 
-                if self.is_stateful:
-                    # Store manager has stores registered, starting a transaction
-                    state_transaction = self._state_manager.start_store_transaction(
-                        topic=topic_name, partition=partition, offset=offset
-                    )
-                else:
-                    # The application is stateless, use noop transaction
-                    state_transaction = contextlib.nullcontext()
-
-                with state_transaction:
+                with start_state_transaction(
+                    topic=topic_name, partition=partition, offset=offset
+                ):
                     for row in rows:
                         try:
                             dataframe.process(row=row)
@@ -430,16 +423,39 @@ class Application:
 
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
-        if self.is_stateful:
+        if self._state_manager.stores:
             logger.info(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
-                self._state_manager.on_partition_assign(tp)
+                # Assign store partitions
+                store_partitions = self._state_manager.on_partition_assign(tp)
+
+                # Check if the latest committed offset >= stored offset
+                # Otherwise, the re-processed messages might use already updated
+                # state, which can lead to inconsistent outputs
+                stored_offsets = [
+                    offset
+                    for offset in (
+                        store_tp.get_processed_offset() for store_tp in store_partitions
+                    )
+                    if offset is not None
+                ]
+                min_stored_offset = min(stored_offsets) + 1 if stored_offsets else None
+                if min_stored_offset is not None:
+                    tp_committed = self._consumer.committed([tp], timeout=30)[0]
+                    if min_stored_offset > tp_committed.offset:
+                        logger.warning(
+                            f'Warning: offset "{tp_committed.offset}" '
+                            f"for topic partition "
+                            f'"{tp_committed.topic}[{tp_committed.partition}]" '
+                            f'is behind the stored offset "{min_stored_offset}". '
+                            f"It may lead to distortions in produced data."
+                        )
 
     def _on_revoke(self, _, topic_partitions: List[TopicPartition]):
         """
         Revoke partitions from consumer and state
         """
-        if self.is_stateful:
+        if self._state_manager.stores:
             logger.info(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_revoke(tp)
@@ -448,7 +464,14 @@ class Application:
         """
         Dropping lost partitions from consumer and state
         """
-        if self.is_stateful:
+        if self._state_manager.stores:
             logger.info(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_lost(tp)
+
+
+_nullcontext = contextlib.nullcontext()
+
+
+def _dummy_state_transaction(topic: str, partition: int, offset: int):
+    return _nullcontext

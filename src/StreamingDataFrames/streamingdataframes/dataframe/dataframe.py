@@ -1,6 +1,12 @@
 import uuid
+from typing import (
+    Optional,
+    Callable,
+    Union,
+    List,
+    Mapping,
+)
 
-from typing import Optional, Callable, Union, List, Mapping
 from typing_extensions import Self, TypeAlias
 
 from .column import Column, OpValue
@@ -9,8 +15,12 @@ from .pipeline import Pipeline
 from ..models import Row, Topic
 from ..rowconsumer import RowConsumerProto
 from ..rowproducer import RowProducerProto
+from ..state import State, StateStoreManager
 
-RowApplier: TypeAlias = Callable[[Row], Optional[Union[Row, List[Row]]]]
+ApplyFunc: TypeAlias = Callable[[dict], Optional[Union[dict, List[dict]]]]
+StatefulApplyFunc: TypeAlias = Callable[
+    [dict, State], Optional[Union[dict, List[dict]]]
+]
 
 __all__ = ("StreamingDataFrame",)
 
@@ -27,17 +37,31 @@ def setitem(k: str, v: Union[Column, OpValue], row: Row) -> Row:
 
 def apply(
     row: Row,
-    func: Callable[[dict], Optional[Union[dict, List[dict]]]],
+    func: Union[ApplyFunc, StatefulApplyFunc],
     expand: bool = False,
+    state_manager: Optional[StateStoreManager] = None,
 ) -> Union[Row, List[Row]]:
-    result = func(row.value)
-    if result is None and isinstance(row.value, dict):  # assume edited in-place
+    # Providing state to the function if state_manager is passed
+    if state_manager is not None:
+        transaction = state_manager.get_store_transaction()
+        # Prefix all the state keys by the message key
+        with transaction.with_prefix(prefix=row.key):
+            # Pass a State object with an interface limited to the key updates only
+            result = func(row.value, transaction.state)
+    else:
+        result = func(row.value)
+
+    if result is None and isinstance(row.value, dict):
+        # Function returned None, assume it changed the incoming dict in-place
         return row
     if isinstance(result, dict):
+        # Function returned dict, assume it's a new value for the Row
         row.value = result
         return row
     if isinstance(result, list):
         if expand:
+            # Function returned a list and `expand=True` - treat each item in the list
+            # as a new Row object downstream
             return [row.clone(value=r) for r in result]
         raise InvalidApplyResultType(
             "Returning 'list' types is not allowed unless 'expand=True' is passed"
@@ -50,7 +74,8 @@ def apply(
 class StreamingDataFrame:
     """
     Allows you to define transformations on a kafka message as if it were a Pandas
-    DataFrame. Currently implements a small subset of the Pandas interface, along with
+    DataFrame.
+    Currently, it implements a small subset of the Pandas interface, along with
     some differences/accommodations for kafka-specific functionality.
 
     A `StreamingDataFrame` expects to interact with a QuixStreams `Row`, which is
@@ -66,9 +91,9 @@ class StreamingDataFrame:
         print(df.process(row_obj))
 
     Note that just like Pandas, you can "filter" out rows with your operations, like:
-
+    ```
     df = df[df['column_b'] >= 5]
-
+    ```
     If a processing step nulls the Row in some way, all further processing on that
     row (including kafka operations, besides committing) will be skipped.
 
@@ -102,29 +127,39 @@ class StreamingDataFrame:
     def __init__(
         self,
         topics_in: List[Topic],
-        _pipeline: Pipeline = None,
-        _id: str = None,
+        state_manager: StateStoreManager,
     ):
-        self._id = _id or str(uuid.uuid4())
-        self._pipeline = _pipeline or Pipeline(_id=self.id)
+        self._id = str(uuid.uuid4())
+        self._pipeline = Pipeline(_id=self.id)
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
         if not topics_in:
             raise ValueError("Topic Input list cannot be empty")
         self._topics_in = {t.name: t for t in topics_in}
         self._topics_out = {}
+        self._state_manager = state_manager
 
     def apply(
         self,
-        func: Callable[[dict], Optional[Union[dict, List[dict]]]],
+        func: Union[ApplyFunc, StatefulApplyFunc],
         expand: bool = False,
+        stateful: bool = False,
     ) -> Self:
         """
-        Apply a user-defined function that where the `Row.value` is the expected input.
+        Apply a custom function with `Row.value` as the expected input.
 
-        It should either return a new dict, a list of dicts (with expand=True), or
-        modifying a dict in-place (i.e. returning None).
+        The function either return a new dict, a list of dicts (with expand=True), or
+        None (to modify a dict in-place)
         """
+        if stateful:
+            # Register the default store for each input topic
+            for topic in self._topics_in.values():
+                self._state_manager.register_store(topic_name=topic.name)
+            return self._apply(
+                lambda row: apply(
+                    row, func, expand=expand, state_manager=self._state_manager
+                )
+            )
         return self._apply(lambda row: apply(row, func, expand=expand))
 
     def process(self, row: Row) -> Optional[Union[Row, List[Row]]]:
@@ -135,7 +170,6 @@ class StreamingDataFrame:
         """
         return self._pipeline.process(row)
 
-    # TODO: maybe we should just allow list(Topics) as well (in many spots actually)
     def to_topic(self, topic: Topic):
         """
         Produce a row to a desired topic.

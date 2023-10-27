@@ -1,10 +1,10 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 from unittest.mock import create_autospec
 
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
-from typing import Optional
 
 from streamingdataframes.app import Application, MessageProcessedCallback
 from streamingdataframes.error_callbacks import (
@@ -31,6 +31,7 @@ from streamingdataframes.models.topics import Topic
 from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
 from streamingdataframes.rowconsumer import RowConsumer
 from streamingdataframes.rowproducer import RowProducer
+from streamingdataframes.state import StateStoreManager
 
 
 @pytest.fixture()
@@ -220,15 +221,22 @@ def row_factory():
     need to validate upon producing/consuming.
     """
 
-    def factory(value, topic="input-topic", key=b"key", headers=None) -> Row:
+    def factory(
+        value,
+        topic="input-topic",
+        key=b"key",
+        headers=None,
+        partition: int = 0,
+        offset: int = 0,
+    ) -> Row:
         headers = headers or {}
         return Row(
             key=key,
             value=value,
             headers=headers,
             topic=topic,
-            partition=0,
-            offset=0,
+            partition=partition,
+            offset=offset,
             size=0,
             timestamp=MessageTimestamp(0, TimestampType.TIMESTAMP_NOT_AVAILABLE),
         )
@@ -237,7 +245,7 @@ def row_factory():
 
 
 @pytest.fixture()
-def app_factory(kafka_container, random_consumer_group):
+def app_factory(kafka_container, random_consumer_group, tmp_path):
     def factory(
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
@@ -249,6 +257,7 @@ def app_factory(kafka_container, random_consumer_group):
         on_message_processed: Optional[MessageProcessedCallback] = None,
         state_dir: Optional[str] = None,
     ) -> Application:
+        state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
             broker_address=kafka_container.broker_address,
             consumer_group=consumer_group or random_consumer_group,
@@ -263,6 +272,26 @@ def app_factory(kafka_container, random_consumer_group):
         )
 
     return factory
+
+
+@pytest.fixture()
+def state_manager_factory(tmp_path):
+    def factory(
+        group_id: Optional[str] = None, state_dir: Optional[str] = None
+    ) -> StateStoreManager:
+        group_id = group_id or str(uuid.uuid4())
+        state_dir = state_dir or str(uuid.uuid4())
+        return StateStoreManager(group_id=group_id, state_dir=str(tmp_path / state_dir))
+
+    return factory
+
+
+@pytest.fixture()
+def state_manager(state_manager_factory) -> StateStoreManager:
+    manager = state_manager_factory()
+    manager.init()
+    yield manager
+    manager.close()
 
 
 @pytest.fixture()
