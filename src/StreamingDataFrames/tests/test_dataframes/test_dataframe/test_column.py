@@ -284,3 +284,24 @@ class TestColumn:
     def test_isnot(self, row_factory, value, other, expected):
         row = row_factory(value)
         assert Column("x").isnot(other).eval(row) == expected
+
+    @pytest.mark.parametrize(
+        "nested_item", [110, "a_string", {"another": "dict"}, ["a", "list"]]
+    )
+    def test__get_item__(self, row_factory, nested_item):
+        msg_value = row_factory({"x": {"y": {"z": nested_item}}, "k": 0})
+        result = Column("x")["y"]["z"]
+        assert isinstance(result, Column)
+        assert result.eval(msg_value) == nested_item
+
+    def test_get_item_with_apply(self, row_factory):
+        msg_value = row_factory({"x": {"y": {"z": 110}}, "k": 0})
+        result = Column("x")["y"]["z"].apply(lambda v: v + 10)
+        assert isinstance(result, Column)
+        assert result.eval(msg_value) == 120
+
+    def test_get_item_with_op(self, row_factory):
+        msg_value = row_factory({"x": {"y": 10}, "j": {"k": 5}})
+        result = Column("x")["y"] + Column("j")["k"]
+        assert isinstance(result, Column)
+        assert result.eval(msg_value) == 15
