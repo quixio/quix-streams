@@ -14,6 +14,7 @@ from streamingdataframes.state.types import (
     PartitionTransaction,
     StorePartition,
 )
+from ..state import TransactionState
 from .exceptions import (
     StateTransactionError,
     NestedPrefixError,
@@ -26,6 +27,7 @@ __all__ = (
     "RocksDBStorePartition",
     "RocksDBPartitionTransaction",
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +290,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         self._completed = False
         self._dumps = dumps
         self._loads = loads
+        self._state = TransactionState(transaction=self)
+
+    @property
+    def state(self) -> TransactionState:
+        return self._state
 
     @contextlib.contextmanager
     def with_prefix(self, prefix: Any = b"") -> Self:
