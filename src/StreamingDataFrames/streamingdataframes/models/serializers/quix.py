@@ -83,8 +83,8 @@ class QuixDeserializer(JSONDeserializer):
             column_name=column_name, loads=loads, loads_kwargs=loads_kwargs
         )
         self._deserializers = {
-            QModelKey.TIMESERIESDATA: self.deserialize_timestamp,
-            QModelKey.PARAMETERDATA: self.deserialize_timestamp,
+            QModelKey.TIMESERIESDATA: self.deserialize_timeseries,
+            QModelKey.PARAMETERDATA: self.deserialize_timeseries,
             QModelKey.EVENTDATA: self.deserialize_event_data,
             QModelKey.EVENTDATA_LIST: self.deserialize_event_data_list,
         }
@@ -98,7 +98,7 @@ class QuixDeserializer(JSONDeserializer):
         """
         return True
 
-    def deserialize_timestamp(
+    def deserialize_timeseries(
         self, value: Union[List[Mapping], Mapping]
     ) -> Iterable[Mapping]:
         if not isinstance(value, Mapping):
@@ -180,10 +180,10 @@ class QuixDeserializer(JSONDeserializer):
         # Warning: headers can have multiple values for the same key, but in context
         # of this function it doesn't matter because we're looking for specific keys.
         if ctx.headers is None:
-            legacy = True
+            as_legacy = True
             headers_dict, value = self._parse_legacy_format(value)
         else:
-            legacy = False
+            as_legacy = False
             headers_dict = {key: value.decode() for key, value in ctx.headers}
         # Fail if the message is a part of a split
         if Q_SPLITMESSAGEID_NAME in headers_dict:
@@ -224,7 +224,7 @@ class QuixDeserializer(JSONDeserializer):
         # Parse JSON from the message value
         try:
             deserialized = (
-                self._loads(value, **self._loads_kwargs) if not legacy else value
+                self._loads(value, **self._loads_kwargs) if not as_legacy else value
             )
         except (ValueError, TypeError) as exc:
             raise SerializationError(str(exc)) from exc
@@ -251,24 +251,55 @@ class QuixDeserializer(JSONDeserializer):
 
 
 class QuixLegacySerializer(JSONSerializer):
+    extra_headers = {}
     _legacy = {}
 
+    def __init__(
+        self,
+        as_legacy: Optional[bool] = None,
+        dumps: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
+        dumps_kwargs: Optional[Mapping] = None,
+    ):
+        """
+        Serializer that returns data in json format.
+        :param as_legacy: parse as the legacy format; Default = True
+        :param dumps: a function to serialize objects to json. Default - `json.dumps`
+        :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
+        """
+        if as_legacy is None:
+            as_legacy = True
+        self.as_legacy = as_legacy
+        super().__init__(dumps=dumps, dumps_kwargs=dumps_kwargs)
+        if self.as_legacy:
+            self._legacy = {
+                QModelKey.HEADER_NAME: QModelKey.PARAMETERDATA,
+                QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+            }
+        else:
+            self.extra_headers = {
+                QModelKey.HEADER_NAME: QModelKey.TIMESERIESDATA,
+                QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+            }
+
     def _to_json(self, value: Any):
-        start = (
-            f'{{"{LegacyHeaders.Q_CODEC_ID}":"{self._legacy[QCodecId.HEADER_NAME]}",'
-            f'"{LegacyHeaders.Q_MODEL_KEY}":"{self._legacy[QModelKey.HEADER_NAME]}",'
-            f'"{LegacyHeaders.VALUE}":'
-        )
-        start_idx = len(start)
-        value = super()._to_json(value)
-        end = (
-            f',"{LegacyHeaders.VALUE_START_IDX}":{start_idx},'
-            f'"{LegacyHeaders.VALUE_END_IDX}":{start_idx + len(value)}}}'
-        )
-        return f"{start}{value}{end}"
+        if self.as_legacy:
+            start = (
+                f'{{"{LegacyHeaders.Q_CODEC_ID}":"{self._legacy[QCodecId.HEADER_NAME]}",'
+                f'"{LegacyHeaders.Q_MODEL_KEY}":"{self._legacy[QModelKey.HEADER_NAME]}",'
+                f'"{LegacyHeaders.VALUE}":'
+            )
+            start_idx = len(start)
+            value = super()._to_json(value)
+            end = (
+                f',"{LegacyHeaders.VALUE_START_IDX}":{start_idx},'
+                f'"{LegacyHeaders.VALUE_END_IDX}":{start_idx + len(value)}}}'
+            )
+            return f"{start}{value}{end}"
+        else:
+            return super()._to_json(value)
 
 
-class QuixTimeseriesSerializer(JSONSerializer):
+class QuixTimeseriesSerializer(QuixLegacySerializer):
     """
     Serialize data to JSON formatted according to Quix Timeseries format.
 
@@ -291,11 +322,30 @@ class QuixTimeseriesSerializer(JSONSerializer):
 
     """
 
-    # Quix Timeseries data must have the following headers set
     extra_headers = {
         QModelKey.HEADER_NAME: QModelKey.TIMESERIESDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
+
+    def __init__(
+        self,
+        as_legacy: Optional[bool] = None,
+        dumps: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
+        dumps_kwargs: Optional[Mapping] = None,
+    ):
+        """
+        Serializer that returns data in json format.
+        :param as_legacy: parse as the legacy format; Default = True
+        :param dumps: a function to serialize objects to json. Default - `json.dumps`
+        :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
+        """
+        super().__init__(as_legacy=as_legacy, dumps=dumps, dumps_kwargs=dumps_kwargs)
+        if self.as_legacy:
+            self._legacy = {
+                QModelKey.HEADER_NAME: QModelKey.PARAMETERDATA,
+                QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+            }
+            self.extra_headers = {}
 
     def __call__(
         self, value: Mapping, ctx: SerializationContext, timestamp_ns: int = None
@@ -347,15 +397,7 @@ class QuixTimeseriesSerializer(JSONSerializer):
         return self._to_json(result)
 
 
-class QuixLegacyTimeseriesSerializer(QuixTimeseriesSerializer, QuixLegacySerializer):
-    _legacy = {
-        QModelKey.HEADER_NAME: QModelKey.PARAMETERDATA,
-        QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
-    }
-    extra_headers = {}
-
-
-class QuixEventsSerializer(JSONSerializer):
+class QuixEventsSerializer(QuixLegacySerializer):
     """
     Serialize data to JSON formatted according to Quix EventData format.
     The input value is expected to be a dictionary with the following keys:
@@ -386,6 +428,26 @@ class QuixEventsSerializer(JSONSerializer):
         QModelKey.HEADER_NAME: QModelKey.EVENTDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
+
+    def __init__(
+        self,
+        as_legacy: Optional[bool] = None,
+        dumps: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
+        dumps_kwargs: Optional[Mapping] = None,
+    ):
+        """
+        Serializer that returns data in json format.
+        :param as_legacy: parse as the legacy format; Default = True
+        :param dumps: a function to serialize objects to json. Default - `json.dumps`
+        :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
+        """
+        super().__init__(as_legacy=as_legacy, dumps=dumps, dumps_kwargs=dumps_kwargs)
+        if self.as_legacy:
+            self._legacy = {
+                QModelKey.HEADER_NAME: QModelKey.EVENTDATA,
+                QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+            }
+            self.extra_headers = {}
 
     def __call__(
         self, value: Mapping, ctx: SerializationContext, timestamp_ns: int = None
@@ -418,8 +480,3 @@ class QuixEventsSerializer(JSONSerializer):
         }
 
         return self._to_json(result)
-
-
-class QuixLegacyEventsSerializer(QuixEventsSerializer, QuixLegacySerializer):
-    _legacy = {k: v for k, v in QuixEventsSerializer.extra_headers.items()}
-    extra_headers = {}

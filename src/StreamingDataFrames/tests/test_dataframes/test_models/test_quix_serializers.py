@@ -12,9 +12,7 @@ from streamingdataframes.models.serializers import (
 from streamingdataframes.models.serializers.quix import (
     QuixDeserializer,
     QuixTimeseriesSerializer,
-    QuixLegacyTimeseriesSerializer,
     QuixEventsSerializer,
-    QuixLegacyEventsSerializer,
     QCodecId,
     QModelKey,
     Q_SPLITMESSAGEID_NAME,
@@ -335,7 +333,7 @@ class TestQuixDeserializer:
 
 class TestQuixTimeseriesSerializer:
     def test_serialize_dict_success(self):
-        serializer = QuixTimeseriesSerializer()
+        serializer = QuixTimeseriesSerializer(as_legacy=False)
         value = {
             "int": 1,
             "float": 1.0,
@@ -371,6 +369,55 @@ class TestQuixTimeseriesSerializer:
         }
         assert json.loads(serialized) == expected
 
+    def test_legacy_serialize_dict_success(self):
+        serializer = QuixTimeseriesSerializer(as_legacy=True)
+        value = {
+            "int": 1,
+            "float": 1.0,
+            "str": "abc",
+            "bytes": b"123",
+            "bytearray": bytearray(b"Hi"),
+            "Tags": {"tag1": "tag1", "tag2": "tag2"},
+        }
+        timestamp_ns = 1234567890
+        serialized = serializer(
+            value, timestamp_ns=timestamp_ns, ctx=SerializationContext(topic="test")
+        )
+
+        expected_value = {
+            "BinaryValues": {
+                "bytes": [base64.b64encode(value["bytes"]).decode("ascii")],
+                "bytearray": [base64.b64encode(value["bytearray"]).decode("ascii")],
+            },
+            "StringValues": {
+                "str": [
+                    value["str"],
+                ]
+            },
+            "NumericValues": {
+                "int": [value["int"]],
+                "float": [value["float"]],
+            },
+            "Timestamps": [timestamp_ns],
+            "TagValues": {
+                "tag1": [value["Tags"]["tag1"]],
+                "tag2": [value["Tags"]["tag2"]],
+            },
+        }
+        c = "JT"
+        k = "ParameterData"
+        s = len("{" + f'"C":"{c}","K":"{k}","V":')
+        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
+        expected = {
+            "C": c,
+            "K": k,
+            "V": expected_value,
+            "S": s,
+            "E": s + len(expected_value_str),
+        }
+        assert json.loads(serialized) == expected
+        assert serialized[expected["S"] : expected["E"]] == expected_value_str
+
     @pytest.mark.parametrize(
         "value",
         [
@@ -379,7 +426,7 @@ class TestQuixTimeseriesSerializer:
         ],
     )
     def test_serialize_dict_empty_or_none(self, value):
-        serializer = QuixTimeseriesSerializer()
+        serializer = QuixTimeseriesSerializer(as_legacy=False)
         timestamp_ns = time.time_ns()
         serialized = serializer(
             value, ctx=SerializationContext(topic="test"), timestamp_ns=timestamp_ns
@@ -393,110 +440,61 @@ class TestQuixTimeseriesSerializer:
         }
         assert json.loads(serialized) == expected
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            {},  # empty dict
+            {"a": None, "b": None},  # all values are None
+        ],
+    )
+    def test_serialize_dict_empty_or_none(self, value):
+        serializer = QuixTimeseriesSerializer(as_legacy=True)
+        timestamp_ns = 1234567890
+        serialized = serializer(
+            value, ctx=SerializationContext(topic="test"), timestamp_ns=timestamp_ns
+        )
+        expected_value = {
+            "BinaryValues": {},
+            "StringValues": {},
+            "NumericValues": {},
+            "Timestamps": [],
+            "TagValues": {},
+        }
+
+        c = "JT"
+        k = "ParameterData"
+        s = len("{" + f'"C":"{c}","K":"{k}","V":')
+        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
+        expected = {
+            "C": c,
+            "K": k,
+            "V": expected_value,
+            "S": s,
+            "E": s + len(expected_value_str),
+        }
+        assert json.loads(serialized) == expected
+        assert serialized[expected["S"] : expected["E"]] == expected_value_str
+
+    @pytest.mark.parametrize("as_legacy", [True, False])
     @pytest.mark.parametrize("value", ["", 0, True, [], ()])
-    def test_serialize_not_mapping(self, value):
-        serializer = QuixTimeseriesSerializer()
+    def test_serialize_not_mapping(self, value, as_legacy):
+        serializer = QuixTimeseriesSerializer(as_legacy=as_legacy)
         with pytest.raises(SerializationError, match="Expected Mapping"):
             serializer(value, ctx=SerializationContext(topic="test"))  # noqa
 
+    @pytest.mark.parametrize("as_legacy", [True, False])
     @pytest.mark.parametrize("item", [True, [], (), object()])
-    def test_serialize_item_of_unsupported_type(self, item):
-        serializer = QuixTimeseriesSerializer()
+    def test_serialize_item_of_unsupported_type(self, item, as_legacy):
+        serializer = QuixTimeseriesSerializer(as_legacy=as_legacy)
         with pytest.raises(
             SerializationError, match='Item with key "item" has unsupported type'
         ):
             serializer({"item": item}, ctx=SerializationContext(topic="test"))
 
 
-class TestQuixLegacyTimeseriesSerializer:
-    def test_serialize_dict_success(self):
-        serializer = QuixLegacyTimeseriesSerializer()
-        value = {
-            "int": 1,
-            "float": 1.0,
-            "str": "abc",
-            "bytes": b"123",
-            "bytearray": bytearray(b"Hi"),
-            "Tags": {"tag1": "tag1", "tag2": "tag2"},
-        }
-        timestamp_ns = 1234567890
-        serialized = serializer(
-            value, timestamp_ns=timestamp_ns, ctx=SerializationContext(topic="test")
-        )
-
-        expected_value = {
-            "BinaryValues": {
-                "bytes": [base64.b64encode(value["bytes"]).decode("ascii")],
-                "bytearray": [base64.b64encode(value["bytearray"]).decode("ascii")],
-            },
-            "StringValues": {
-                "str": [
-                    value["str"],
-                ]
-            },
-            "NumericValues": {
-                "int": [value["int"]],
-                "float": [value["float"]],
-            },
-            "Timestamps": [timestamp_ns],
-            "TagValues": {
-                "tag1": [value["Tags"]["tag1"]],
-                "tag2": [value["Tags"]["tag2"]],
-            },
-        }
-        c = "JT"
-        k = "ParameterData"
-        s = len("{" + f'"C":"{c}","K":"{k}","V":')
-        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
-        expected = {
-            "C": c,
-            "K": k,
-            "V": expected_value,
-            "S": s,
-            "E": s + len(expected_value_str),
-        }
-        assert json.loads(serialized) == expected
-        assert serialized[expected["S"] : expected["E"]] == expected_value_str
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            {},  # empty dict
-            {"a": None, "b": None},  # all values are None
-        ],
-    )
-    def test_serialize_dict_empty_or_none(self, value):
-        serializer = QuixLegacyTimeseriesSerializer()
-        timestamp_ns = 1234567890
-        serialized = serializer(
-            value, ctx=SerializationContext(topic="test"), timestamp_ns=timestamp_ns
-        )
-        expected_value = {
-            "BinaryValues": {},
-            "StringValues": {},
-            "NumericValues": {},
-            "Timestamps": [],
-            "TagValues": {},
-        }
-
-        c = "JT"
-        k = "ParameterData"
-        s = len("{" + f'"C":"{c}","K":"{k}","V":')
-        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
-        expected = {
-            "C": c,
-            "K": k,
-            "V": expected_value,
-            "S": s,
-            "E": s + len(expected_value_str),
-        }
-        assert json.loads(serialized) == expected
-        assert serialized[expected["S"] : expected["E"]] == expected_value_str
-
-
 class TestQuixEventsSerializer:
     def test_serialize_success(self):
-        serializer = QuixEventsSerializer()
+        serializer = QuixEventsSerializer(as_legacy=False)
         value = {"Id": "id", "Value": "value", "Tags": {"tag1": "tag1"}}
         timestamp_ns = time.time_ns()
         expected = {
@@ -511,40 +509,8 @@ class TestQuixEventsSerializer:
             == expected
         )
 
-    @pytest.mark.parametrize("value", [0, "", object(), [], (), set()])
-    def test_serialize_not_a_mapping(self, value):
-        serializer = QuixEventsSerializer()
-        with pytest.raises(SerializationError, match="Expected Mapping"):
-            serializer(value, ctx=SerializationContext("test"))  # noqa
-
-    def test_serialize_id_isnot_string(self):
-        serializer = QuixEventsSerializer()
-        with pytest.raises(
-            SerializationError, match='Field "Id" is expected to be of type "str"'
-        ):
-            serializer({"Id": 0, "Value": "abc"}, ctx=SerializationContext("test"))
-
-    def test_serialize_value_isnot_string(self):
-        serializer = QuixEventsSerializer()
-        with pytest.raises(
-            SerializationError, match='Field "Value" is expected to be of type "str"'
-        ):
-            serializer({"Id": "id", "Value": 1}, ctx=SerializationContext("test"))
-
-    def test_serialize_tags_isnot_dict(self):
-        serializer = QuixEventsSerializer()
-        with pytest.raises(
-            SerializationError, match='Field "Tags" is expected to be of type "dict"'
-        ):
-            serializer(
-                {"Id": "id", "Value": "value", "Tags": 1},
-                ctx=SerializationContext("test"),
-            )
-
-
-class TestQuixLegacyEventsSerializer:
-    def test_serialize_success(self):
-        serializer = QuixLegacyEventsSerializer()
+    def test_legacy_serialize_success(self):
+        serializer = QuixEventsSerializer(as_legacy=True)
         value = {"Id": "id", "Value": "value", "Tags": {"tag1": "tag1"}}
         timestamp_ns = 1234567890
         ctx = SerializationContext("test")
@@ -570,3 +536,37 @@ class TestQuixLegacyEventsSerializer:
         serialized = serializer(value, timestamp_ns=timestamp_ns, ctx=ctx)
         assert json.loads(serialized) == expected
         assert serialized[expected["S"] : expected["E"]] == expected_value_str
+
+    @pytest.mark.parametrize("as_legacy", [True, False])
+    @pytest.mark.parametrize("value", [0, "", object(), [], (), set()])
+    def test_serialize_not_a_mapping(self, value, as_legacy):
+        serializer = QuixEventsSerializer(as_legacy=as_legacy)
+        with pytest.raises(SerializationError, match="Expected Mapping"):
+            serializer(value, ctx=SerializationContext("test"))  # noqa
+
+    @pytest.mark.parametrize("as_legacy", [True, False])
+    def test_serialize_id_isnot_string(self, as_legacy):
+        serializer = QuixEventsSerializer(as_legacy=as_legacy)
+        with pytest.raises(
+            SerializationError, match='Field "Id" is expected to be of type "str"'
+        ):
+            serializer({"Id": 0, "Value": "abc"}, ctx=SerializationContext("test"))
+
+    @pytest.mark.parametrize("as_legacy", [True, False])
+    def test_serialize_value_isnot_string(self, as_legacy):
+        serializer = QuixEventsSerializer(as_legacy=as_legacy)
+        with pytest.raises(
+            SerializationError, match='Field "Value" is expected to be of type "str"'
+        ):
+            serializer({"Id": "id", "Value": 1}, ctx=SerializationContext("test"))
+
+    @pytest.mark.parametrize("as_legacy", [True, False])
+    def test_serialize_tags_isnot_dict(self, as_legacy):
+        serializer = QuixEventsSerializer(as_legacy=as_legacy)
+        with pytest.raises(
+            SerializationError, match='Field "Tags" is expected to be of type "dict"'
+        ):
+            serializer(
+                {"Id": "id", "Value": "value", "Tags": 1},
+                ctx=SerializationContext("test"),
+            )
