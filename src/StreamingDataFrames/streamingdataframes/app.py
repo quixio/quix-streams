@@ -348,6 +348,14 @@ class Application:
         )
         exit_stack.callback(lambda *_: self.stop())
 
+        if self._state_manager.stores:
+            # Store manager has stores registered, use real state transactions
+            # during processing
+            start_state_transaction = self._state_manager.start_store_transaction
+        else:
+            # Application is stateless, use dummy state transactionss
+            start_state_transaction = _dummy_state_transaction
+
         with exit_stack:
             logger.info("Start processing of the streaming dataframe")
 
@@ -380,16 +388,9 @@ class Application:
                     first_row.offset,
                 )
 
-                if self._state_manager.stores:
-                    # Store manager has stores registered, starting a state transaction
-                    state_transaction = self._state_manager.start_store_transaction(
-                        topic=topic_name, partition=partition, offset=offset
-                    )
-                else:
-                    # The application is stateless, use noop transaction
-                    state_transaction = contextlib.nullcontext()
-
-                with state_transaction:
+                with start_state_transaction(
+                    topic=topic_name, partition=partition, offset=offset
+                ):
                     for row in rows:
                         try:
                             dataframe.process(row=row)
@@ -467,3 +468,10 @@ class Application:
             logger.info(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_lost(tp)
+
+
+_nullcontext = contextlib.nullcontext()
+
+
+def _dummy_state_transaction(topic: str, partition: int, offset: int):
+    return _nullcontext
