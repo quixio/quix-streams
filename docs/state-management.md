@@ -14,11 +14,9 @@ Quix Streams has state management built in to enable values to be used and persi
 
 	When using the Quix Platform, the platform provides your replicas with a shared state store when enabled.
 
-## State management
+The library provides automatic state management which handles application lifecycle automatically, such as commits and revocation to ensure the state reflects the processed and committed messages only. There are two types of state available: dictionary state and scalar state. The stream state managed is available on stream consumer and not the producer currently.
 
-The library is providing automatic state management which handles application lifecycle automatically, such as commits and revocation to ensure the state reflects the processed and committed messages only. There are two types of state available: dictionary state and scalar state. The stream state managed is available on stream consumer and not the producer currently.
-
-### Reading and writing
+## Reading and writing
 
 === "Python"
     ``` python
@@ -64,7 +62,7 @@ The library is providing automatic state management which handles application li
         myLastValueState["someParam"]["Mean"] = 37
     ```
 
-### Querying
+## Querying
 
 You can query the existing states several ways. All states can be iterated through starting from App, Topic or Stream.
 
@@ -115,7 +113,7 @@ You can query the existing states several ways. All states can be iterated throu
         var streamStateValue = streamState["my_key"];
     ```
 
-### Deleting
+## Deleting
 
 You can delete any or all state using the state manager of a specific level. See [Querying](#querying) section for how to acquire specific managers.
 
@@ -155,7 +153,7 @@ You can delete any or all state using the state manager of a specific level. See
         streamStateManager.DeleteStates(); // deletes all
     ```
 
-### Scalar state type
+## Scalar state type
 In addition to the dictionary state type, we also have the scalar state type. It functions similarly, but holds just a single value, making it simpler to use. Below is an example:
 
 === "Python"
@@ -176,7 +174,7 @@ In addition to the dictionary state type, we also have the scalar state type. It
             row.add_value("total_rpm", stream_state.value)
     ```
 
-### Storage types
+## Storage types
 
 Any state storage is supported as long as as it implements IStateStorage. These are currently LocalFileStorage and InMemoryStorage.
 
@@ -194,7 +192,7 @@ The storage type must be specified at app level using the following code, but by
         App.SetStateStorage(storage); // this mostly makes sense for testing until other storage types are implemented
     ```
 
-### Using State storage directly
+## Using State storage directly
 
 To use the library’s state management feature, create an instance of `LocalFileStorage` or `InMemoryStorage`, and then use the available methods on the instance to manipulate the state as needed. For example:
 
@@ -289,3 +287,8 @@ To use the library’s state management feature, create an instance of `LocalFil
     //list all keys in the storage
     await storage.GetAllKeysAsync();
     ```
+    
+## State folder
+
+In Quix Cloud, when state management is enabled for a deployment, Quix Streams uses a `state` folder to store data and files. If running Quix Streams locally, the `state` folder is automatically created for you. You can read more about enabling state, and using the `state` folder, in the [state management documentation](https://quix.io/docs/platform/how-to/state-management.html).
+
