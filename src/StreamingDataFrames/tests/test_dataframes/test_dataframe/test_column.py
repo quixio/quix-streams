@@ -1,3 +1,5 @@
+import pytest
+
 from streamingdataframes.dataframe.column import Column
 
 
@@ -211,3 +213,74 @@ class TestColumn:
         result = ~(Column("x") <= Column("y"))
         assert isinstance(result, Column)
         assert result.eval(msg_value) is False
+
+    @pytest.mark.parametrize(
+        "value, other, expected",
+        [
+            ({"x": 1}, [1, 2, 3], True),
+            ({"x": 1}, [], False),
+            ({"x": 1}, {1: 456}, True),
+        ],
+    )
+    def test_isin(self, row_factory, value, other, expected):
+        row = row_factory(value)
+        assert Column("x").isin(other).eval(row) == expected
+
+    @pytest.mark.parametrize(
+        "value, other, expected",
+        [
+            ({"x": [1, 2, 3]}, 1, True),
+            ({"x": [1, 2, 3]}, 5, False),
+            ({"x": "abc"}, "a", True),
+            ({"x": {"y": "z"}}, "y", True),
+        ],
+    )
+    def test_contains(self, row_factory, value, other, expected):
+        row = row_factory(value)
+        assert Column("x").contains(other).eval(row) == expected
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ({"x": None}, True),
+            ({"x": [1, 2, 3]}, False),
+        ],
+    )
+    def test_isnull(self, row_factory, value, expected):
+        row = row_factory(value)
+        assert Column("x").isnull().eval(row) == expected
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ({"x": None}, False),
+            ({"x": [1, 2, 3]}, True),
+        ],
+    )
+    def test_notnull(self, row_factory, value, expected):
+        row = row_factory(value)
+        assert Column("x").notnull().eval(row) == expected
+
+    @pytest.mark.parametrize(
+        "value, other, expected",
+        [
+            ({"x": [1, 2, 3]}, None, False),
+            ({"x": None}, None, True),
+            ({"x": 1}, 1, True),
+        ],
+    )
+    def test_is_(self, row_factory, value, other, expected):
+        row = row_factory(value)
+        assert Column("x").is_(other).eval(row) == expected
+
+    @pytest.mark.parametrize(
+        "value, other, expected",
+        [
+            ({"x": [1, 2, 3]}, None, True),
+            ({"x": None}, None, False),
+            ({"x": 1}, 1, False),
+        ],
+    )
+    def test_isnot(self, row_factory, value, other, expected):
+        row = row_factory(value)
+        assert Column("x").isnot(other).eval(row) == expected

@@ -1,15 +1,9 @@
 import uuid
-from typing import (
-    Optional,
-    Callable,
-    Union,
-    List,
-    Mapping,
-)
+from typing import Optional, Callable, Union, List, Mapping, Any
 
 from typing_extensions import Self, TypeAlias
 
-from .column import Column, OpValue
+from .column import Column
 from .exceptions import InvalidApplyResultType
 from .pipeline import Pipeline
 from ..models import Row, Topic
@@ -30,7 +24,7 @@ def subset(keys: List[str], row: Row) -> Row:
     return row
 
 
-def setitem(k: str, v: Union[Column, OpValue], row: Row) -> Row:
+def setitem(k: str, v: Any, row: Row) -> Row:
     row[k] = v.eval(row) if isinstance(v, Column) else v
     return row
 
@@ -223,7 +217,7 @@ class StreamingDataFrame:
     def producer(self, producer: RowProducerProto):
         self._real_producer = producer
 
-    def __setitem__(self, key: str, value: Union[Column, OpValue, str]):
+    def __setitem__(self, key: str, value: Any):
         self._apply(lambda row: setitem(key, value, row))
 
     def __getitem__(
