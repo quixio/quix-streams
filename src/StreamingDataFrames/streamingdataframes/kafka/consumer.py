@@ -30,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 def _default_error_cb(error: KafkaError):
     logger.error(
-        "Kafka consumer error",
-        extra={"error_code": error.code(), "error_desc": error.str()},
+        f"Kafka consumer error: {error.str()} (code={error.code()})",
     )
 
 
@@ -42,8 +41,7 @@ def _default_on_commit_cb(
 ):
     if error is not None:
         logger.error(
-            "Kafka commit error",
-            extra={"error_code": error.code(), "error_desc": error.str()},
+            f"Kafka commit error: {error.str()} (code={error.code()})",
         )
     if on_commit is not None:
         on_commit(error, partitions)
@@ -307,8 +305,6 @@ class Consumer:
             raise ValueError(
                 'Parameters "message" and "offsets" are mutually exclusive'
             )
-        if message is None and offsets is None:
-            raise ValueError('One of "message" or "offsets" must be passed')
         kwargs = {
             "asynchronous": asynchronous,
         }
