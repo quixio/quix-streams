@@ -5,7 +5,7 @@ from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callabl
 from .base import SerializationContext
 from .exceptions import SerializationError, IgnoreMessage
 from .json import JSONDeserializer, JSONSerializer
-
+from ..types import MessageHeadersMapping
 
 Q_SPLITMESSAGEID_NAME = "__Q_SplitMessageId"
 
@@ -255,7 +255,7 @@ class QuixDeserializer(JSONDeserializer):
 
 class QuixSerializer(JSONSerializer):
     _legacy = {}
-    extra_headers = {}
+    _extra_headers = {}
 
     def __init__(
         self,
@@ -270,25 +270,35 @@ class QuixSerializer(JSONSerializer):
         :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
         """
         super().__init__(dumps=dumps, dumps_kwargs=dumps_kwargs)
-        if as_legacy:
-            self.extra_headers = {}
-            self._serialize = self._as_legacy_format
-        else:
-            self._serialize = self._to_json
+        self._as_legacy = as_legacy
 
-    def _as_legacy_format(self, value: Any):
+    @property
+    def extra_headers(self) -> MessageHeadersMapping:
+        # Legacy-formatted messages should not contain any headers
+        return self._extra_headers if not self._as_legacy else {}
+
+    def _as_legacy_format(self, value: Union[str, bytes]) -> bytes:
+        if isinstance(value, str):
+            # Encode value to bytes to get its correct byte length in case of non-ascii
+            # symbols
+            value = value.encode()
         start = (
             f'{{"{LegacyHeaders.Q_CODEC_ID}":"{self._legacy[QCodecId.HEADER_NAME]}",'
             f'"{LegacyHeaders.Q_MODEL_KEY}":"{self._legacy[QModelKey.HEADER_NAME]}",'
             f'"{LegacyHeaders.VALUE}":'
-        )
+        ).encode()
         start_idx = len(start)
-        value = self._to_json(value)
         end = (
             f',"{LegacyHeaders.VALUE_START_IDX}":{start_idx},'
             f'"{LegacyHeaders.VALUE_END_IDX}":{start_idx + len(value)}}}'
-        )
-        return f"{start}{value}{end}"
+        ).encode()
+        return start + value + end
+
+    def _to_json(self, value: Any) -> Union[str, bytes]:
+        serialized = super()._to_json(value)
+        if self._as_legacy:
+            return self._as_legacy_format(serialized)
+        return serialized
 
 
 class QuixTimeseriesSerializer(QuixSerializer):
@@ -318,7 +328,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
         QModelKey.HEADER_NAME: QModelKey.PARAMETERDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
-    extra_headers = {
+    _extra_headers = {
         QModelKey.HEADER_NAME: QModelKey.TIMESERIESDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
@@ -370,7 +380,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
         if not is_empty:
             result["Timestamps"].append(timestamp_ns or time.time_ns())
 
-        return self._serialize(result)
+        return self._to_json(result)
 
 
 class QuixEventsSerializer(QuixSerializer):
@@ -400,7 +410,7 @@ class QuixEventsSerializer(QuixSerializer):
     """
 
     # Quix EventData data must have the following headers set
-    extra_headers = {
+    _extra_headers = {
         QModelKey.HEADER_NAME: QModelKey.EVENTDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
@@ -439,4 +449,4 @@ class QuixEventsSerializer(QuixSerializer):
             "Timestamp": timestamp_ns or time.time_ns(),
         }
 
-        return self._serialize(result)
+        return self._to_json(result)

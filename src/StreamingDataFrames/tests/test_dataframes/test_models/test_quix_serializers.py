@@ -407,16 +407,18 @@ class TestQuixTimeseriesSerializer:
         c = "JT"
         k = "ParameterData"
         s = len("{" + f'"C":"{c}","K":"{k}","V":')
-        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
+        expected_value_bytes = json.dumps(
+            expected_value, separators=(",", ":")
+        ).encode()
         expected = {
             "C": c,
             "K": k,
             "V": expected_value,
             "S": s,
-            "E": s + len(expected_value_str),
+            "E": s + len(expected_value_bytes),
         }
         assert json.loads(serialized) == expected
-        assert serialized[expected["S"] : expected["E"]] == expected_value_str
+        assert serialized[expected["S"] : expected["E"]] == expected_value_bytes
 
     @pytest.mark.parametrize(
         "value",
@@ -464,7 +466,7 @@ class TestQuixTimeseriesSerializer:
         c = "JT"
         k = "ParameterData"
         s = len("{" + f'"C":"{c}","K":"{k}","V":')
-        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
+        expected_value_str = json.dumps(expected_value, separators=(",", ":")).encode()
         expected = {
             "C": c,
             "K": k,
@@ -525,17 +527,19 @@ class TestQuixEventsSerializer:
         c = "JT"
         k = "EventData"
         s = len("{" + f'"C":"{c}","K":"{k}","V":')
-        expected_value_str = json.dumps(expected_value, separators=(",", ":"))
+        expected_value_bytes = json.dumps(
+            expected_value, separators=(",", ":")
+        ).encode()
         expected = {
             "C": c,
             "K": k,
             "V": expected_value,
             "S": s,
-            "E": s + len(expected_value_str),
+            "E": s + len(expected_value_bytes),
         }
         serialized = serializer(value, timestamp_ns=timestamp_ns, ctx=ctx)
         assert json.loads(serialized) == expected
-        assert serialized[expected["S"] : expected["E"]] == expected_value_str
+        assert serialized[expected["S"] : expected["E"]] == expected_value_bytes
 
     @pytest.mark.parametrize("as_legacy", [True, False])
     @pytest.mark.parametrize("value", [0, "", object(), [], (), set()])
