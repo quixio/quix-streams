@@ -72,6 +72,15 @@ class TestDataframeProcess:
         expected = row_factory({"x": 1, "y": 2, "new": 9})
         assert dataframe.process(row).value == expected.value
 
+    def test_setitem_from_a_nested_column(
+        self, dataframe_factory, row_factory, row_plus_n_func
+    ):
+        dataframe = dataframe_factory()
+        dataframe["a"] = dataframe["x"]["y"]
+        row = row_factory({"x": {"y": 1, "z": "banana"}})
+        expected = row_factory({"x": {"y": 1, "z": "banana"}, "a": 1})
+        assert dataframe.process(row).value == expected.value
+
     def test_column_subset(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe = dataframe[["x", "y"]]

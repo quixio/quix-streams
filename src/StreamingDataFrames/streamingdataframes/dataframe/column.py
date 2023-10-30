@@ -1,7 +1,7 @@
 import operator
 from typing import Optional, Any, Callable, Container
 
-from typing_extensions import Self, TypeAlias
+from typing_extensions import Self, TypeAlias, Union
 
 from ..models import Row
 
@@ -25,6 +25,9 @@ class Column:
     ):
         self.col_name = col_name
         self._eval_func = _eval_func if _eval_func else lambda row: row[self.col_name]
+
+    def __getitem__(self, item: Union[str, int]) -> Self:
+        return self.__class__(_eval_func=lambda x: self.eval(x)[item])
 
     def _operation(self, other: Any, op: Callable[[Any, Any], Any]) -> Self:
         return self.__class__(
