@@ -14,6 +14,5 @@ from .json import JSONSerializer, JSONDeserializer
 from .quix import (
     QuixEventsSerializer,
     QuixTimeseriesSerializer,
-    QuixTimeseriesDeserializer,
-    QuixEventsDeserializer,
+    QuixDeserializer,
 )

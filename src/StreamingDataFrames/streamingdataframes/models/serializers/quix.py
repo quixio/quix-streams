@@ -1,14 +1,11 @@
-import abc
 import base64
-import itertools
 import time
-from abc import ABCMeta
-from typing import List, Mapping, Iterable, Optional, Union
+from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable
 
 from .base import SerializationContext
 from .exceptions import SerializationError, IgnoreMessage
 from .json import JSONDeserializer, JSONSerializer
-
+from ..types import MessageHeadersMapping
 
 Q_SPLITMESSAGEID_NAME = "__Q_SplitMessageId"
 
@@ -54,12 +51,44 @@ class QCodecId:
     SUPPORTED_CODECS = (JSON, JSON_TYPED)
 
 
+class LegacyHeaders:
+    Q_CODEC_ID = "C"
+    Q_MODEL_KEY = "K"
+    VALUE = "V"
+    VALUE_START_IDX = "S"
+    VALUE_END_IDX = "E"
+
+
 def _b64_decode_or_none(s) -> Optional[bytes]:
     if s is not None:
         return base64.b64decode(s)
 
 
-class BaseQuixDeserializer(JSONDeserializer, metaclass=ABCMeta):
+class QuixDeserializer(JSONDeserializer):
+    def __init__(
+        self,
+        column_name: Optional[str] = None,
+        loads: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
+        loads_kwargs: Optional[Mapping] = None,
+    ):
+        """
+        Parses JSON data from either Timeseries/Parameter or EventData formats.
+
+        :param column_name: if provided, the deserialized value will be wrapped into
+            dictionary with `column_name` as a key.
+        :param loads: function to parse json from bytes. Default - `json.loads`.
+        :param loads_kwargs: dict with named arguments for `loads` function.
+        """
+        super().__init__(
+            column_name=column_name, loads=loads, loads_kwargs=loads_kwargs
+        )
+        self._deserializers = {
+            QModelKey.TIMESERIESDATA: self.deserialize_timeseries,
+            QModelKey.PARAMETERDATA: self.deserialize_timeseries,
+            QModelKey.EVENTDATA: self.deserialize_event_data,
+            QModelKey.EVENTDATA_LIST: self.deserialize_event_data_list,
+        }
+
     @property
     def split_values(self) -> bool:
         """
@@ -69,120 +98,9 @@ class BaseQuixDeserializer(JSONDeserializer, metaclass=ABCMeta):
         """
         return True
 
-    @abc.abstractmethod
-    def deserialize(
-        self, model_key: str, value: Union[List[Mapping], Mapping]
+    def deserialize_timeseries(
+        self, value: Union[List[Mapping], Mapping]
     ) -> Iterable[Mapping]:
-        """
-        Deserialization function for particular data type (Timeseries or EventData).
-
-        :param model_key: value of "__Q_ModelKey" message header
-        :param value: deserialized JSON value of the message, list or dict
-        :return: Iterable of dicts
-        """
-
-    def __call__(self, value: bytes, ctx: SerializationContext) -> Iterable[dict]:
-        """
-        Deserialize messages from Quix formats (Timeseries or Events) using JSON codec.
-
-        The concrete implementation for particular data type should be provided by
-        method `deserialize()`.
-        The code in this method only validates that incoming message is a Quix message.
-
-        :param value: message value bytes
-        :param ctx: serialization context
-        :return: Iterable of dicts
-        """
-
-        # Validate message headers
-        # Warning: headers can have multiple values for the same key, but in context
-        # of this function it doesn't matter because we're looking for specific keys.
-        headers_dict = (
-            {key: value.decode() for key, value in ctx.headers}
-            if ctx.headers is not None
-            else {}
-        )
-        # Fail if the message is a part of a split
-        if Q_SPLITMESSAGEID_NAME in headers_dict:
-            raise SerializationError(
-                f'Detected "{Q_SPLITMESSAGEID_NAME}" header but message splitting '
-                f"is not supported"
-            )
-
-        codec_id = headers_dict.get(QCodecId.HEADER_NAME)
-        if not codec_id:
-            raise SerializationError(
-                f'"{QCodecId.HEADER_NAME}" header is missing or empty'
-            )
-        model_key = headers_dict.get(QModelKey.HEADER_NAME)
-        if not model_key:
-            raise SerializationError(
-                f'"{QModelKey.HEADER_NAME}" header is missing or empty'
-            )
-
-        # Ignore the protocol message if it doesn't contain any meaningful data
-        if model_key in QModelKey.KEYS_TO_IGNORE:
-            raise IgnoreMessage(
-                f'Ignore Quix message with "{QModelKey.HEADER_NAME}": "{model_key}"'
-            )
-
-        # Fail if the codec is not JSON
-        if codec_id not in QCodecId.SUPPORTED_CODECS:
-            raise SerializationError(
-                f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
-            )
-
-        # Fail if the model_key is unknowun
-        if model_key not in QModelKey.ALLOWED_KEYS:
-            raise SerializationError(
-                f'Unsupported "{QModelKey.HEADER_NAME}" value "{model_key}"'
-            )
-
-        # Parse JSON from the message value
-        try:
-            deserialized = self._loads(value, **self._loads_kwargs)
-        except (ValueError, TypeError) as exc:
-            raise SerializationError(str(exc)) from exc
-
-        # Pass deserialized value to the `deserialize` function
-        for item in self.deserialize(model_key=model_key, value=deserialized):
-            yield item
-
-
-class QuixTimeseriesDeserializer(BaseQuixDeserializer):
-    """
-    Deserialize data from JSON formatted according to Quix Timeseries format.
-
-    Example:
-        Input:
-        {
-            "Timestamps": [123123123],
-            "StringValues": {"a": ["str"]},
-            "NumericValues": {"b": [1], "c": [1.1]},
-            "BinaryValues: {"d": ["Ynl0ZXM="]},
-            "TagValues": {"tag1": ["tag"]}
-        }
-
-        Output:
-        {
-            "a": "str",
-            "b": 1,
-            "c": 1.1,
-            "d": b"bytes",
-            "Tags": {"tag1": "tag"}},
-            "__Q_Timestamp": 123123123
-        }
-    """
-
-    def deserialize(
-        self, model_key: str, value: Union[List[Mapping], Mapping]
-    ) -> Iterable[Mapping]:
-        # Fail if model key is unsupported
-        if model_key not in (QModelKey.TIMESERIESDATA, QModelKey.PARAMETERDATA):
-            raise SerializationError(
-                f'"{QModelKey.HEADER_NAME}" must be "{QModelKey.TIMESERIESDATA}" '
-                f'or {QModelKey.PARAMETERDATA}, got"{model_key}"'
-            )
         if not isinstance(value, Mapping):
             raise SerializationError(f'Expected mapping, got type "{type(value)}"')
 
@@ -215,8 +133,175 @@ class QuixTimeseriesDeserializer(BaseQuixDeserializer):
             row_value[Q_TIMESTAMP_KEY] = timestamp_ns
             yield self._to_dict(row_value)
 
+    def deserialize(
+        self, model_key: str, value: Union[List[Mapping], Mapping]
+    ) -> Iterable[Mapping]:
+        """
+        Deserialization function for particular data types (Timeseries or EventData).
 
-class QuixTimeseriesSerializer(JSONSerializer):
+        :param model_key: value of "__Q_ModelKey" message header
+        :param value: deserialized JSON value of the message, list or dict
+        :return: Iterable of dicts
+        """
+        return self._deserializers[model_key](value)
+
+    def deserialize_event_data(self, value: Mapping) -> Iterable[Mapping]:
+        yield self._to_dict(self._parse_event_data(value))
+
+    def deserialize_event_data_list(self, value: List[Mapping]) -> Iterable[Mapping]:
+        for item in value:
+            yield self._to_dict(self._parse_event_data(item))
+
+    def _parse_event_data(self, value: Mapping) -> Mapping:
+        if not isinstance(value, Mapping):
+            raise SerializationError(f'Expected mapping, got type "{type(value)}"')
+
+        row_value = {
+            Q_TIMESTAMP_KEY: value["Timestamp"],
+            "Id": value["Id"],
+            "Value": value["Value"],
+            "Tags": value.get("Tags", {}),
+        }
+        return row_value
+
+    def __call__(self, value: bytes, ctx: SerializationContext) -> Iterable[dict]:
+        """
+        Deserialize messages from Quix formats (Timeseries or Events) using JSON codec.
+
+        The concrete implementation for particular data type should be provided by
+        method `deserialize()`.
+        The code in this method only validates that incoming message is a Quix message.
+
+        :param value: message value bytes
+        :param ctx: serialization context
+        :return: Iterable of dicts
+        """
+
+        # Warning: headers can have multiple values for the same key, but in context
+        # of this function it doesn't matter because we're looking for specific keys.
+        if as_legacy := self._is_legacy_format(value):
+            headers_dict, value = self._parse_legacy_format(value)
+        else:
+            headers_dict = {key: value.decode() for key, value in ctx.headers or {}}
+            # Fail if the message is a part of a split
+            if Q_SPLITMESSAGEID_NAME in headers_dict:
+                raise SerializationError(
+                    f'Detected "{Q_SPLITMESSAGEID_NAME}" header but message splitting '
+                    f"is not supported"
+                )
+
+        codec_id = headers_dict.get(QCodecId.HEADER_NAME)
+        if not codec_id:
+            raise SerializationError(
+                f'"{QCodecId.HEADER_NAME}" header is missing or empty'
+            )
+        model_key = headers_dict.get(QModelKey.HEADER_NAME)
+        if not model_key:
+            raise SerializationError(
+                f'"{QModelKey.HEADER_NAME}" header is missing or empty'
+            )
+
+        # Ignore the protocol message if it doesn't contain any meaningful data
+        if model_key in QModelKey.KEYS_TO_IGNORE:
+            raise IgnoreMessage(
+                f'Ignore Quix message with "{QModelKey.HEADER_NAME}": "{model_key}"'
+            )
+
+        # Fail if the codec is not JSON
+        if codec_id not in QCodecId.SUPPORTED_CODECS:
+            raise SerializationError(
+                f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
+            )
+
+        # Fail if the model_key is unknown
+        if model_key not in QModelKey.ALLOWED_KEYS:
+            raise SerializationError(
+                f'Unsupported "{QModelKey.HEADER_NAME}" value "{model_key}"'
+            )
+
+        # Parse JSON from the message value
+        try:
+            deserialized = (
+                self._loads(value, **self._loads_kwargs) if not as_legacy else value
+            )
+        except (ValueError, TypeError) as exc:
+            raise SerializationError(str(exc)) from exc
+
+        # Pass deserialized value to the `deserialize` function
+        yield from self._deserializers[model_key](value=deserialized)
+
+    def _is_legacy_format(self, value: bytes):
+        try:
+            if value.startswith(b"<"):
+                raise SerializationError(
+                    "Message splitting was detected in a legacy-formatted message; "
+                    "it is not supported in the new client."
+                )
+            return value.startswith(b'{"C":') and b'"K":' in value
+        except AttributeError:
+            return False
+
+    def _parse_legacy_format(
+        self, value: bytes
+    ) -> Tuple[Union[Mapping, List[Mapping]], Mapping]:
+        value = self._loads(value, **self._loads_kwargs)
+        headers = {
+            QCodecId.HEADER_NAME: value.pop(LegacyHeaders.Q_CODEC_ID),
+            QModelKey.HEADER_NAME: value.pop(LegacyHeaders.Q_MODEL_KEY),
+        }
+        message = value.pop("V")
+        return headers, message
+
+
+class QuixSerializer(JSONSerializer):
+    _legacy = {}
+    _extra_headers = {}
+
+    def __init__(
+        self,
+        as_legacy: bool = True,
+        dumps: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
+        dumps_kwargs: Optional[Mapping] = None,
+    ):
+        """
+        Serializer that returns data in json format.
+        :param as_legacy: parse as the legacy format; Default = True
+        :param dumps: a function to serialize objects to json. Default - `json.dumps`
+        :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
+        """
+        super().__init__(dumps=dumps, dumps_kwargs=dumps_kwargs)
+        self._as_legacy = as_legacy
+
+    @property
+    def extra_headers(self) -> MessageHeadersMapping:
+        # Legacy-formatted messages should not contain any headers
+        return self._extra_headers if not self._as_legacy else {}
+
+    def _as_legacy_format(self, value: Union[str, bytes]) -> bytes:
+        if isinstance(value, str):
+            # Encode value to bytes to get its correct byte length in case of non-ascii
+            # symbols
+            value = value.encode()
+        start = (
+            f'{{"{LegacyHeaders.Q_CODEC_ID}":"{self._legacy[QCodecId.HEADER_NAME]}",'
+            f'"{LegacyHeaders.Q_MODEL_KEY}":"{self._legacy[QModelKey.HEADER_NAME]}",'
+            f'"{LegacyHeaders.VALUE}":'
+        ).encode()
+        start_idx = len(start)
+        end = (
+            f',"{LegacyHeaders.VALUE_START_IDX}":{start_idx},'
+            f'"{LegacyHeaders.VALUE_END_IDX}":{start_idx + len(value)}}}'
+        ).encode()
+        return start + value + end
+
+    def _to_json(self, value: Any) -> Union[str, bytes]:
+        serialized = super()._to_json(value)
+        if self._as_legacy:
+            return self._as_legacy_format(serialized)
+        return serialized
+
+
+class QuixTimeseriesSerializer(QuixSerializer):
     """
     Serialize data to JSON formatted according to Quix Timeseries format.
 
@@ -239,8 +324,11 @@ class QuixTimeseriesSerializer(JSONSerializer):
 
     """
 
-    # Quix Timeseries data must have the following headers set
-    extra_headers = {
+    _legacy = {
+        QModelKey.HEADER_NAME: QModelKey.PARAMETERDATA,
+        QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+    }
+    _extra_headers = {
         QModelKey.HEADER_NAME: QModelKey.TIMESERIESDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
@@ -288,63 +376,14 @@ class QuixTimeseriesSerializer(JSONSerializer):
             params.append(item)
             is_empty = False
 
-        # Add a timestamp only if there's a least one parameter
+        # Add a timestamp only if there's at least one parameter
         if not is_empty:
             result["Timestamps"].append(timestamp_ns or time.time_ns())
 
         return self._to_json(result)
 
 
-class QuixEventsDeserializer(BaseQuixDeserializer):
-    """
-    Deserialize data from JSON formatted according to Quix EventData format.
-
-    Example:
-        Input:
-        {
-            "Id": "an_event",
-            "Value": "any_string",
-            "Tags": {"tag1": "tag"}},
-            "Timestamp":1692703362840389000
-        }
-
-        Output:
-        {
-            "Id": "an_event",
-            "Value": "any_string"
-            "Tags": {"tag1": "tag"}},
-            "__Q_Timestamp": 1692703362840389000
-        }
-    """
-
-    def deserialize(
-        self, model_key: str, value: Union[List[Mapping], Mapping]
-    ) -> Iterable[Mapping]:
-        if model_key not in (QModelKey.EVENTDATA, QModelKey.EVENTDATA_LIST):
-            raise SerializationError(
-                f'"{QModelKey.HEADER_NAME}" must be "{QModelKey.EVENTDATA}" '
-                f'or {QModelKey.EVENTDATA_LIST}, got"{model_key}"'
-            )
-        if model_key == QModelKey.EVENTDATA:
-            yield self._to_dict(self._parse_event_data(value))
-        elif model_key == QModelKey.EVENTDATA_LIST:
-            for item in value:
-                yield self._to_dict(self._parse_event_data(item))
-
-    def _parse_event_data(self, value: Mapping) -> Mapping:
-        if not isinstance(value, Mapping):
-            raise SerializationError(f'Expected mapping, got type "{type(value)}"')
-
-        row_value = {
-            Q_TIMESTAMP_KEY: value["Timestamp"],
-            "Id": value["Id"],
-            "Value": value["Value"],
-            "Tags": value.get("Tags", {}),
-        }
-        return row_value
-
-
-class QuixEventsSerializer(JSONSerializer):
+class QuixEventsSerializer(QuixSerializer):
     """
     Serialize data to JSON formatted according to Quix EventData format.
     The input value is expected to be a dictionary with the following keys:
@@ -371,7 +410,11 @@ class QuixEventsSerializer(JSONSerializer):
     """
 
     # Quix EventData data must have the following headers set
-    extra_headers = {
+    _extra_headers = {
+        QModelKey.HEADER_NAME: QModelKey.EVENTDATA,
+        QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
+    }
+    _legacy = {
         QModelKey.HEADER_NAME: QModelKey.EVENTDATA,
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
