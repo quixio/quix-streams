@@ -1,12 +1,12 @@
 from io import BytesIO
-from os import environ
+from typing import Optional, List
 from urllib.parse import urljoin
 from zipfile import ZipFile
 
 import requests
-from typing import Optional, List
 
-from ...exceptions import QuixException
+from streamingdataframes.exceptions import QuixException
+from .env import QUIX_ENVIRONMENT
 
 __all__ = ("QuixPortalApiService",)
 
@@ -32,10 +32,10 @@ class QuixPortalApiService:
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
     ):
-        self._portal_api = portal_api or environ.get(self.QuixEnvironmentMap.portal_api)
-        self._auth_token = auth_token or environ.get(self.QuixEnvironmentMap.sdk_token)
-        self._default_workspace_id = default_workspace_id or environ.get(
-            self.QuixEnvironmentMap.workspace_id
+        self._portal_api = portal_api or QUIX_ENVIRONMENT.portal_api
+        self._auth_token = auth_token or QUIX_ENVIRONMENT.sdk_token
+        self._default_workspace_id = (
+            default_workspace_id or QUIX_ENVIRONMENT.workspace_id
         )
         self.api_version = api_version or "2.0"
         self.session = self._init_session()
@@ -45,11 +45,6 @@ class QuixPortalApiService:
 
     class UndefinedQuixWorkspaceId(QuixException):
         ...
-
-    class QuixEnvironmentMap:
-        sdk_token = "Quix__Sdk__Token"
-        portal_api = "Quix__Portal__Api"
-        workspace_id = "Quix__Workspace__Id"
 
     class SessionWithUrlBase(requests.Session):
         def __init__(self, url_base: str):

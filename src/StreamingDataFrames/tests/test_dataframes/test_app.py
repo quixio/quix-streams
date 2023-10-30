@@ -21,6 +21,8 @@ from streamingdataframes.platforms.quix import (
     QuixKafkaConfigsBuilder,
     TopicCreationConfigs,
 )
+from streamingdataframes.platforms.quix.exceptions import StateManagementDisabledError
+from streamingdataframes.platforms.quix.env import QuixEnvironment
 from streamingdataframes.rowconsumer import (
     KafkaMessageError,
     RowConsumer,
@@ -429,6 +431,48 @@ class TestQuixApplication:
         assert actual_call_arg == list(builder.create_topic_configs.values())
         assert {c.name for c in actual_call_arg} == {t.name for t in topics}
 
+    def test_quix_app_stateful_quix_deployment_no_state_management_fails(
+        self, quix_app_factory, monkeypatch
+    ):
+        """
+        Ensure that Application.run() raises an exception if the app is stateful,
+        runs on Quix (the "Quix__Deployment__Id" env var is set),
+        but the "State Management" flag is disabled for the deployment.
+        """
+        app = quix_app_factory()
+        topic = app.topic("topic")
+        sdf = app.dataframe([topic])
+        sdf.apply(lambda x, state: x, stateful=True)
+
+        monkeypatch.setenv(
+            QuixEnvironment.DEPLOYMENT_ID,
+            "123",
+        )
+        monkeypatch.setenv(
+            QuixEnvironment.STATE_MANAGEMENT_ENABLED,
+            "",
+        )
+        with pytest.raises(StateManagementDisabledError):
+            app.run(sdf)
+
+    def test_quix_app_stateful_quix_deployment_state_dir_mismatch_warning(
+        self, quix_app_factory, monkeypatch, caplog
+    ):
+        """
+        Ensure that Application.Quix() logs a warning
+        if the app runs on Quix (the "Quix__Deployment__Id" env var is set),
+        but the "state_dir" path doesn't match the one on Quix.
+        """
+        monkeypatch.setenv(
+            QuixEnvironment.DEPLOYMENT_ID,
+            "123",
+        )
+        with patch.object(logging.getLoggerClass(), "warning") as mock:
+            quix_app_factory()
+
+        assert mock.called
+        assert "does not match the state directory" in mock.call_args[0][0]
+
 
 class TestApplicationWithState:
     def test_run_stateful_success(
@@ -630,7 +674,6 @@ class TestApplicationWithState:
         executor,
         state_manager_factory,
         tmp_path,
-        caplog,
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
