@@ -27,7 +27,7 @@ class ConfluentKafkaMessageStub:
         timestamp: Tuple[int, int] = (1, 123),
         key: bytes = None,
         value: bytes = None,
-        headers: List[Tuple[str, bytes]] = None,
+        headers: Optional[List[Tuple[str, bytes]]] = None,
         latency: float = None,
         leader_epoch: int = None,
     ):
@@ -37,7 +37,7 @@ class ConfluentKafkaMessageStub:
         self._timestamp = timestamp
         self._key = key
         self._value = value
-        self._headers = headers or []
+        self._headers = headers
         self._latency = latency
         self._leader_epoch = leader_epoch
 

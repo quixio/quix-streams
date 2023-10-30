@@ -32,8 +32,8 @@ class TestSerializers:
             (StringSerializer(), "abc", b"abc"),
             (StringSerializer(codec="cp1251"), "abc", "abc".encode("cp1251")),
             (BytesSerializer(), b"abc", b"abc"),
-            (JSONSerializer(), {"a": 123}, '{"a": 123}'),
-            (JSONSerializer(), [1, 2, 3], "[1, 2, 3]"),
+            (JSONSerializer(), {"a": 123}, '{"a":123}'),
+            (JSONSerializer(), [1, 2, 3], "[1,2,3]"),
         ],
     )
     def test_serialize_success(self, serializer: Serializer, value, expected):

@@ -17,6 +17,7 @@ def quix_timeseries_factory():
         tags: Mapping[str, List[Union[str, None]]] = None,
         model_key: str = "TimeseriesData",
         codec_id: str = "JT",
+        as_legacy: bool = False,
     ) -> ConfluentKafkaMessageStub:
         binary = binary or {}
         numeric = numeric or {}
@@ -45,9 +46,16 @@ def quix_timeseries_factory():
             "BinaryValues": binary,
             "TagValues": tags,
         }
+        # Note: Only legacy client uses S and E, so we just use 0 and 1 as placeholders
         message = ConfluentKafkaMessageStub(
-            value=json.dumps(value).encode(),
-            headers=[
+            value=json.dumps(
+                {"C": codec_id, "K": model_key, "V": value, "S": 0, "E": 1}
+                if as_legacy
+                else value
+            ).encode(),
+            headers=None
+            if as_legacy
+            else [
                 ("__Q_ModelKey", model_key.encode()),
                 ("__Q_CodecId", codec_id.encode()),
             ],
@@ -93,6 +101,7 @@ def quix_eventdata_factory():
         params: EventDataParams,
         model_key: str = "EventData",
         codec_id: str = "JT",
+        as_legacy: bool = False,
     ) -> ConfluentKafkaMessageStub:
         event = {
             "Timestamp": params.timestamp,
@@ -101,8 +110,14 @@ def quix_eventdata_factory():
             "Tags": params.tags,
         }
         message = ConfluentKafkaMessageStub(
-            value=json.dumps(event).encode(),
-            headers=[
+            value=json.dumps(
+                {"C": codec_id, "K": model_key, "V": event, "S": 0, "E": 1}
+                if as_legacy
+                else event
+            ).encode(),
+            headers=None
+            if as_legacy
+            else [
                 ("__Q_ModelKey", model_key.encode()),
                 ("__Q_CodecId", codec_id.encode()),
             ],
@@ -118,6 +133,7 @@ def quix_eventdata_list_factory():
         params: List[EventDataParams],
         model_key: str = "EventData[]",
         codec_id: str = "JT",
+        as_legacy: bool = False,
     ) -> ConfluentKafkaMessageStub:
         events = [
             {
@@ -129,8 +145,14 @@ def quix_eventdata_list_factory():
             for p in params
         ]
         message = ConfluentKafkaMessageStub(
-            value=json.dumps(events).encode(),
-            headers=[
+            value=json.dumps(
+                {"C": codec_id, "K": model_key, "V": events, "S": 0, "E": 1}
+                if as_legacy
+                else events
+            ).encode(),
+            headers=None
+            if as_legacy
+            else [
                 ("__Q_ModelKey", model_key.encode()),
                 ("__Q_CodecId", codec_id.encode()),
             ],
