@@ -14,18 +14,29 @@ class TimestampType(enum.IntEnum):
 
 class MessageTimestamp:
     """
-    Represents a timestamp of incoming Kafka message
+    Represents a timestamp of incoming Kafka message.
+
+    It is made pseudo-immutable (i.e. public attributes don't have setters), and
+    it should not be mutated during message processing.
     """
 
-    __slots__ = ("milliseconds", "type")
+    __slots__ = ("_milliseconds", "_type")
 
     def __init__(
         self,
         milliseconds: Optional[int],
         type: TimestampType,
     ):
-        self.milliseconds = milliseconds
-        self.type = type
+        self._milliseconds = milliseconds
+        self._type = type
+
+    @property
+    def milliseconds(self) -> Optional[int]:
+        return self._milliseconds
+
+    @property
+    def type(self) -> TimestampType:
+        return self._type
 
     @classmethod
     def create(cls, timestamp_type: int, milliseconds: int) -> Self:
