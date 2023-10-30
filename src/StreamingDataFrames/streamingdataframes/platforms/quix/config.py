@@ -4,16 +4,15 @@ import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-
-from requests import HTTPError
 from typing import Optional, Tuple, List, Iterable, Set, Mapping, Union, Dict
 
+from requests import HTTPError
+
+from streamingdataframes.exceptions import QuixException
+from streamingdataframes.models import Topic
 from .api import QuixPortalApiService
-from ...exceptions import QuixException
-from ...models import Topic
 
 logger = logging.getLogger(__name__)
-
 
 __all__ = (
     "QuixKafkaConfigsBuilder",

@@ -20,7 +20,12 @@ from .models import (
     Serializer,
     BytesSerializer,
 )
-from .platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
+from .platforms.quix import (
+    QuixKafkaConfigsBuilder,
+    TopicCreationConfigs,
+    check_state_dir,
+    check_state_management_enabled,
+)
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
@@ -219,6 +224,12 @@ class Application:
         quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
         quix_config_builder.app_auto_create_topics = auto_create_topics
         quix_configs = quix_config_builder.get_confluent_broker_config()
+
+        # Check if the state dir points to the mounted PVC while running on Quix
+        # Otherwise, the state won't be shared and replicas won't be able to
+        # recover the same state.
+        check_state_dir(state_dir=state_dir)
+
         broker_address = quix_configs.pop("bootstrap.servers")
         # Quix platform prefixes consumer group with workspace id
         consumer_group = quix_config_builder.append_workspace_id(consumer_group)
@@ -247,7 +258,7 @@ class Application:
         return app
 
     @property
-    def is_quix_app(self):
+    def is_quix_app(self) -> bool:
         return self._quix_config_builder is not None
 
     def topic(
@@ -315,15 +326,25 @@ class Application:
 
     def _quix_runtime_init(self):
         """
-        Do some runtime setup only applicable to an Application.Quix instance
+        Do a runtime setup only applicable to an Application.Quix instance
+
+        In particular:
+        - Create topics in Quix if `auto_create_topics` is True and ensure that all
+          necessary topics are created
+        - Ensure that "State management" flag is enabled for deployment if the app
+          is stateful and is running on Quix platform
         """
-        if self.is_quix_app:
-            topics = self._quix_config_builder.create_topic_configs.values()
-            logger.debug("Performing Quix-Specific runtime setup...")
-            if self._quix_config_builder.app_auto_create_topics:
-                self._quix_config_builder.create_topics(topics)
-            else:
-                self._quix_config_builder.confirm_topics_exist(topics)
+
+        logger.debug("Ensure that all topics are present in Quix")
+        topics = self._quix_config_builder.create_topic_configs.values()
+        if self._quix_config_builder.app_auto_create_topics:
+            self._quix_config_builder.create_topics(topics)
+        else:
+            self._quix_config_builder.confirm_topics_exist(topics)
+
+        # Ensure that state management is enabled if application is stateful
+        # and is running on Quix platform
+        check_state_management_enabled()
 
     def run(
         self,
@@ -336,7 +357,8 @@ class Application:
         """
         logger.info("Start processing of the streaming dataframe")
 
-        self._quix_runtime_init()
+        if self.is_quix_app:
+            self._quix_runtime_init()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)

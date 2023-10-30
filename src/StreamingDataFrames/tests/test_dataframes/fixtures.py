@@ -295,7 +295,7 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
-def quix_app_factory(random_consumer_group):
+def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
     def factory(
         auto_offset_reset: AutoOffsetReset = "latest",
         consumer_extra_config: Optional[dict] = None,
@@ -305,16 +305,22 @@ def quix_app_factory(random_consumer_group):
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_message_processed: Optional[MessageProcessedCallback] = None,
         auto_create_topics: bool = True,
+        state_dir: Optional[str] = None,
     ) -> Application:
         workspace_id = "my_ws"
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
         cfg_builder.create_topic_configs = {}
+        cfg_builder.get_confluent_broker_config.return_value = {
+            "bootstrap.servers": kafka_container.broker_address
+        }
         cfg_builder.append_workspace_id.side_effect = lambda s: f"{workspace_id}-{s}"
+        state_dir = state_dir or (tmp_path / "state").absolute()
 
         return Application.Quix(
-            random_consumer_group,
+            consumer_group=random_consumer_group,
+            state_dir=state_dir,
             quix_config_builder=cfg_builder,
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
