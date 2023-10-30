@@ -5,10 +5,10 @@ from streamingdataframes.dataframe.column import Column
 
 class TestColumn:
     def test_apply(self, row_factory):
-        msg_value = row_factory({"x": 5, "y": 20, "z": 110})
-        result = Column("x").apply(lambda v: v + 22)
+        msg_value = row_factory({"x": 5, "y": 20, "z": 110}, key=123)
+        result = Column("x").apply(lambda v, context: v + context.key)
         assert isinstance(result, Column)
-        assert result.eval(msg_value) == 27
+        assert result.eval(msg_value) == 128
 
     def test_addition(self, row_factory):
         msg_value = row_factory({"x": 5, "y": 20, "z": 110})
