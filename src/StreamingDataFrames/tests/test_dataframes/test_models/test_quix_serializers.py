@@ -131,6 +131,7 @@ class TestQuixDeserializer:
             strings={"param3": [1, None], "param4": [None, 1.1]},
             numeric={"param5": ["1", None], "param6": [None, "a"], "param7": ["", ""]},
             tags={"tag1": ["value1", "value2"], "tag2": ["value3", "value4"]},
+            timestamps=[1234567890, 1234567891],
             as_legacy=as_legacy,
         )
 
@@ -144,6 +145,7 @@ class TestQuixDeserializer:
                 "param6": None,
                 "param7": "",
                 "Tags": {"tag1": "value1", "tag2": "value3"},
+                "Timestamp": 1234567890,
             },
             {
                 "param1": None,
@@ -154,6 +156,7 @@ class TestQuixDeserializer:
                 "param6": "a",
                 "param7": "",
                 "Tags": {"tag1": "value2", "tag2": "value4"},
+                "Timestamp": 1234567891,
             },
         ]
 
@@ -169,10 +172,34 @@ class TestQuixDeserializer:
         )
         assert len(rows) == len(expected)
         for item, row in zip(expected, rows):
-            assert "__Q_Timestamp" in row
-            assert row["__Q_Timestamp"]
             for key in item:
                 assert item[key] == row[key]
+
+    @pytest.mark.parametrize("as_legacy", [False, True])
+    def test_deserialize_timeseries_timestamp_field_clash(
+        self, quix_timeseries_factory, as_legacy
+    ):
+        message = quix_timeseries_factory(
+            numeric={"param5": ["1", None], "Timestamp": [1, 2]},
+            as_legacy=as_legacy,
+        )
+
+        error_string = (
+            "There is a competing 'Timestamp' field name present at "
+            "NumericValues.Timestamp: you must rename your field "
+            "or specify a field to use for the 'Timestamps' parameter."
+        )
+        deserializer = QuixDeserializer()
+        with pytest.raises(SerializationError, match=error_string):
+            list(
+                deserializer(
+                    value=message.value(),
+                    ctx=SerializationContext(
+                        topic=message.topic(),
+                        headers=message.headers(),
+                    ),
+                )
+            )
 
     @pytest.mark.parametrize("as_legacy", [False, True])
     def test_deserialize_timeseries_with_column_name_success(
@@ -183,6 +210,7 @@ class TestQuixDeserializer:
             strings={"param3": [1, None], "param4": [None, 1.1]},
             numeric={"param5": ["1", None], "param6": [None, "a"], "param7": ["", ""]},
             tags={"tag1": ["value1", "value2"], "tag2": ["value3", "value4"]},
+            timestamps=[1234567890, 1234567891],
             as_legacy=as_legacy,
         )
 
@@ -197,6 +225,7 @@ class TestQuixDeserializer:
                     "param6": None,
                     "param7": "",
                     "Tags": {"tag1": "value1", "tag2": "value3"},
+                    "Timestamp": 1234567890,
                 }
             },
             {
@@ -209,6 +238,7 @@ class TestQuixDeserializer:
                     "param6": "a",
                     "param7": "",
                     "Tags": {"tag1": "value2", "tag2": "value4"},
+                    "Timestamp": 1234567891,
                 }
             },
         ]
@@ -228,8 +258,6 @@ class TestQuixDeserializer:
             assert "root" in row
             value = row["root"]
             item = row["root"]
-            assert "__Q_Timestamp" in value
-            assert value["__Q_Timestamp"]
             for key in item:
                 assert item[key] == value[key]
 
@@ -238,9 +266,7 @@ class TestQuixDeserializer:
         self, quix_eventdata_factory, quix_eventdata_params_factory, as_legacy
     ):
         event_params = quix_eventdata_params_factory(
-            id="test",
-            value={"blabla": 123},
-            tags={"tag1": "1"},
+            id="test", value={"blabla": 123}, tags={"tag1": "1"}, timestamp=1234567890
         )
         message = quix_eventdata_factory(params=event_params, as_legacy=as_legacy)
 
@@ -253,7 +279,7 @@ class TestQuixDeserializer:
         )
         assert len(rows) == 1
         row = rows[0]
-        assert row["__Q_Timestamp"]
+        assert row["Timestamp"] == event_params.timestamp
         assert row["Id"] == event_params.id
         assert row["Value"] == event_params.value
         assert row["Tags"] == event_params.tags
@@ -270,11 +296,13 @@ class TestQuixDeserializer:
                 id="test",
                 value={"blabla": 123},
                 tags={"tag1": "1"},
+                timestamp=1234567890,
             ),
             quix_eventdata_params_factory(
                 id="test2",
                 value={"blabla2": 1234},
                 tags={"tag2": "2"},
+                timestamp=1234567891,
             ),
         ]
         message = quix_eventdata_list_factory(params=event_params, as_legacy=as_legacy)
@@ -288,7 +316,7 @@ class TestQuixDeserializer:
         )
         assert len(rows) == 2
         for row, params in zip(rows, event_params):
-            assert row["__Q_Timestamp"]
+            assert row["Timestamp"] == params.timestamp
             assert row["Id"] == params.id
             assert row["Value"] == params.value
             assert row["Tags"] == params.tags
@@ -305,11 +333,13 @@ class TestQuixDeserializer:
                 id="test",
                 value={"blabla": 123},
                 tags={"tag1": "1"},
+                timestamp=1234567790,
             ),
             quix_eventdata_params_factory(
                 id="test2",
                 value={"blabla2": 1234},
                 tags={"tag2": "2"},
+                timestamp=1234567891,
             ),
         ]
         message = quix_eventdata_list_factory(params=event_params, as_legacy=as_legacy)
@@ -325,15 +355,17 @@ class TestQuixDeserializer:
         for row, params in zip(rows, event_params):
             assert "root" in row
             row = row["root"]
-            assert row["__Q_Timestamp"]
+            assert row["Timestamp"] == params.timestamp
             assert row["Id"] == params.id
             assert row["Value"] == params.value
             assert row["Tags"] == params.tags
 
 
 class TestQuixTimeseriesSerializer:
-    def test_serialize_dict_success(self):
+    @pytest.mark.parametrize("timestamp", [1234567891, None])
+    def test_serialize_dict_success(self, timestamp):
         serializer = QuixTimeseriesSerializer(as_legacy=False)
+        msg_ts = 1234567890
         value = {
             "int": 1,
             "float": 1.0,
@@ -341,14 +373,14 @@ class TestQuixTimeseriesSerializer:
             "bytes": b"123",
             "bytearray": bytearray(b"Hi"),
             "Tags": {"tag1": "tag1", "tag2": "tag2"},
+            "Timestamp": msg_ts,
         }
-        timestamp_ns = time.time_ns()
         serialized = serializer(
-            value, timestamp_ns=timestamp_ns, ctx=SerializationContext(topic="test")
+            value, timestamp_ns=timestamp, ctx=SerializationContext(topic="test")
         )
 
         expected = {
-            "Timestamps": [timestamp_ns],
+            "Timestamps": [timestamp or msg_ts],
             "BinaryValues": {
                 "bytes": [base64.b64encode(value["bytes"]).decode("ascii")],
                 "bytearray": [base64.b64encode(value["bytearray"]).decode("ascii")],

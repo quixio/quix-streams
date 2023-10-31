@@ -1,5 +1,6 @@
 import base64
 import time
+import logging
 from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable
 
 from .base import SerializationContext
@@ -7,12 +8,14 @@ from .exceptions import SerializationError, IgnoreMessage
 from .json import JSONDeserializer, JSONSerializer
 from ..types import MessageHeadersMapping
 
+logger = logging.getLogger(__name__)
+
 Q_SPLITMESSAGEID_NAME = "__Q_SplitMessageId"
 
 # Quix data types pass timestamp in the message body
 # During parsing we take this value from the body to ensure it's not produced
 # to another topic
-Q_TIMESTAMP_KEY = "__Q_Timestamp"
+Q_TIMESTAMP_KEY = "Timestamp"
 
 
 class QModelKey:
@@ -101,6 +104,20 @@ class QuixDeserializer(JSONDeserializer):
     def deserialize_timeseries(
         self, value: Union[List[Mapping], Mapping]
     ) -> Iterable[Mapping]:
+        param_types = ("NumericValues", "StringValues", "BinaryValues")
+
+        # Confirm that an existing 'Timestamp' field does not exist, otherwise it would
+        # be unexpectedly overwritten
+        for param_type in param_types:
+            for key in value.get(param_type, {}).keys():
+                if key == Q_TIMESTAMP_KEY:
+                    # TODO: in future story, this functionality will be added
+                    raise SerializationError(
+                        f"There is a competing 'Timestamp' field name present at "
+                        f"{param_type}.{key}: you must rename your field "
+                        f"or specify a field to use for the 'Timestamps' parameter."
+                    )
+
         if not isinstance(value, Mapping):
             raise SerializationError(f'Expected mapping, got type "{type(value)}"')
 
@@ -113,7 +130,7 @@ class QuixDeserializer(JSONDeserializer):
                 iter(param_values),
                 True if param_type == "BinaryValues" else False,
             )
-            for param_type in ("NumericValues", "StringValues", "BinaryValues")
+            for param_type in param_types
             for param_name, param_values in value.get(param_type, {}).items()
         ]
         # Do the same with TagValues
@@ -349,7 +366,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
 
         for key, item in value.items():
             # Omit None values because we cannot determine their type
-            # Also omit '__Q_Timestamp' because it's not supposed to be forwarded
+            # Timestamp gets checked at the end.
             if item is None or key == Q_TIMESTAMP_KEY:
                 continue
             if key == "Tags":  # "Tags" is a special key
@@ -376,9 +393,12 @@ class QuixTimeseriesSerializer(QuixSerializer):
             params.append(item)
             is_empty = False
 
-        # Add a timestamp only if there's at least one parameter
+        # Add a timestamp only if there's at least one parameter, generating one
+        # if not provided one directly or from current message.
         if not is_empty:
-            result["Timestamps"].append(timestamp_ns or time.time_ns())
+            result["Timestamps"].append(
+                timestamp_ns or value.get(Q_TIMESTAMP_KEY) or time.time_ns()
+            )
 
         return self._to_json(result)
 
@@ -446,7 +466,9 @@ class QuixEventsSerializer(QuixSerializer):
             "Id": event_id,
             "Value": event_value,
             "Tags": tags,
-            "Timestamp": timestamp_ns or time.time_ns(),
+            Q_TIMESTAMP_KEY: timestamp_ns
+            or value.get(Q_TIMESTAMP_KEY)
+            or time.time_ns(),
         }
 
         return self._to_json(result)
