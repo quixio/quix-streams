@@ -1,13 +1,10 @@
 import base64
-import logging
 from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable
 
 from .base import SerializationContext
 from .exceptions import SerializationError, IgnoreMessage
 from .json import JSONDeserializer, JSONSerializer
 from ..types import MessageHeadersMapping
-
-logger = logging.getLogger(__name__)
 
 Q_SPLITMESSAGEID_NAME = "__Q_SplitMessageId"
 
