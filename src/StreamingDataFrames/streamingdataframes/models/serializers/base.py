@@ -7,7 +7,6 @@ from confluent_kafka.serialization import (
 )
 
 from ..types import MessageHeadersTuples, MessageHeadersMapping
-from ..timestamps import MessageTimestamp
 
 __all__ = (
     "SerializationContext",
@@ -23,17 +22,15 @@ class SerializationContext:
     Every `Serializer` and `Deserializer` receives an instance of `SerializationContext`
     """
 
-    __slots__ = ("topic", "headers", "timestamp")
+    __slots__ = ("topic", "headers")
 
     def __init__(
         self,
         topic: str,
         headers: Optional[MessageHeadersTuples] = None,
-        timestamp: Optional[MessageTimestamp] = None,
     ):
         self.topic = topic
         self.headers = headers
-        self.timestamp = timestamp  # used only by Quix Serializers
 
     def to_confluent_ctx(self, field: MessageField) -> _SerializationContext:
         """

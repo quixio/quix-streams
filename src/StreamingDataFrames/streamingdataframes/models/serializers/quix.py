@@ -1,5 +1,4 @@
 import base64
-import time
 import logging
 from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable
 
@@ -101,38 +100,34 @@ class QuixDeserializer(JSONDeserializer):
         """
         return True
 
+    def _timestamp_key_check(self, param_name, param_type):
+        if param_name != Q_TIMESTAMP_KEY:
+            return True
+        # TODO: in future story, this functionality will be added
+        raise SerializationError(
+            f"There is a competing 'Timestamp' field name present at "
+            f"{param_type}.{param_name}: you must rename your field "
+            f"or specify a field to use for the 'Timestamps' parameter."
+        )
+
     def deserialize_timeseries(
         self, value: Union[List[Mapping], Mapping]
     ) -> Iterable[Mapping]:
-        param_types = ("NumericValues", "StringValues", "BinaryValues")
-
-        # Confirm that an existing 'Timestamp' field does not exist, otherwise it would
-        # be unexpectedly overwritten
-        for param_type in param_types:
-            for key in value.get(param_type, {}).keys():
-                if key == Q_TIMESTAMP_KEY:
-                    # TODO: in future story, this functionality will be added
-                    raise SerializationError(
-                        f"There is a competing 'Timestamp' field name present at "
-                        f"{param_type}.{key}: you must rename your field "
-                        f"or specify a field to use for the 'Timestamps' parameter."
-                    )
-
         if not isinstance(value, Mapping):
             raise SerializationError(f'Expected mapping, got type "{type(value)}"')
 
         timestamps = value["Timestamps"]
         # Make a list of parameters and iterators with values to get them one by one
         # and decode values from base64 if they're binary
-        all_params = [
-            (
-                param_name,
+        all_params = {
+            param_name: (
                 iter(param_values),
                 True if param_type == "BinaryValues" else False,
             )
-            for param_type in param_types
+            for param_type in ("NumericValues", "StringValues", "BinaryValues")
             for param_name, param_values in value.get(param_type, {}).items()
-        ]
+            if self._timestamp_key_check(param_name, param_type)
+        }
         # Do the same with TagValues
         tags = [
             (tag, iter(values)) for tag, values in value.get("TagValues", {}).items()
@@ -143,7 +138,7 @@ class QuixDeserializer(JSONDeserializer):
         for timestamp_ns in timestamps:
             row_value = {
                 param: _b64_decode_or_none(next(values)) if is_binary else next(values)
-                for param, values, is_binary in all_params
+                for param, (values, is_binary) in all_params.items()
             }
             row_value["Tags"] = {tag: next(values) for tag, values in tags}
 
@@ -391,12 +386,14 @@ class QuixTimeseriesSerializer(QuixSerializer):
             params.append(item)
             is_empty = False
 
-        # Add a timestamp only if there's at least one parameter, generating one
-        # if not provided one directly or from current message.
+        # Add a timestamp only if there's at least one parameter
         if not is_empty:
-            result["Timestamps"].append(
-                value.get(Q_TIMESTAMP_KEY) or ctx.timestamp.milliseconds
-            )
+            try:
+                result["Timestamps"].append(value[Q_TIMESTAMP_KEY])
+            except KeyError:
+                raise SerializationError(
+                    f"Missing required Quix field: '{Q_TIMESTAMP_KEY}'"
+                )
 
         return self._to_json(result)
 
@@ -462,7 +459,13 @@ class QuixEventsSerializer(QuixSerializer):
             "Id": event_id,
             "Value": event_value,
             "Tags": tags,
-            Q_TIMESTAMP_KEY: value.get(Q_TIMESTAMP_KEY) or ctx.timestamp.milliseconds,
         }
+
+        try:
+            result[Q_TIMESTAMP_KEY] = value[Q_TIMESTAMP_KEY]
+        except KeyError:
+            raise SerializationError(
+                f"Missing required Quix field: '{Q_TIMESTAMP_KEY}'"
+            )
 
         return self._to_json(result)
