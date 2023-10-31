@@ -350,9 +350,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
 
-    def __call__(
-        self, value: Mapping, ctx: SerializationContext, timestamp_ns: int = None
-    ) -> Union[str, bytes]:
+    def __call__(self, value: Mapping, ctx: SerializationContext) -> Union[str, bytes]:
         if not isinstance(value, Mapping):
             raise SerializationError(f"Expected Mapping, got {type(value)}")
         result = {
@@ -397,7 +395,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
         # if not provided one directly or from current message.
         if not is_empty:
             result["Timestamps"].append(
-                timestamp_ns or value.get(Q_TIMESTAMP_KEY) or time.time_ns()
+                value.get(Q_TIMESTAMP_KEY) or ctx.timestamp.milliseconds
             )
 
         return self._to_json(result)
@@ -439,9 +437,7 @@ class QuixEventsSerializer(QuixSerializer):
         QCodecId.HEADER_NAME: QCodecId.JSON_TYPED,
     }
 
-    def __call__(
-        self, value: Mapping, ctx: SerializationContext, timestamp_ns: int = None
-    ) -> Union[str, bytes]:
+    def __call__(self, value: Mapping, ctx: SerializationContext) -> Union[str, bytes]:
         if not isinstance(value, Mapping):
             raise SerializationError(f"Expected Mapping, got {type(value)}")
 
@@ -466,9 +462,7 @@ class QuixEventsSerializer(QuixSerializer):
             "Id": event_id,
             "Value": event_value,
             "Tags": tags,
-            Q_TIMESTAMP_KEY: timestamp_ns
-            or value.get(Q_TIMESTAMP_KEY)
-            or time.time_ns(),
+            Q_TIMESTAMP_KEY: value.get(Q_TIMESTAMP_KEY) or ctx.timestamp.milliseconds,
         }
 
         return self._to_json(result)

@@ -17,6 +17,7 @@ from streamingdataframes.models.serializers.quix import (
     QModelKey,
     Q_SPLITMESSAGEID_NAME,
 )
+from streamingdataframes.models.timestamps import MessageTimestamp, TimestampType
 
 
 class TestQuixDeserializersValidation:
@@ -365,7 +366,6 @@ class TestQuixTimeseriesSerializer:
     @pytest.mark.parametrize("timestamp", [1234567891, None])
     def test_serialize_dict_success(self, timestamp):
         serializer = QuixTimeseriesSerializer(as_legacy=False)
-        msg_ts = 1234567890
         value = {
             "int": 1,
             "float": 1.0,
@@ -373,14 +373,18 @@ class TestQuixTimeseriesSerializer:
             "bytes": b"123",
             "bytearray": bytearray(b"Hi"),
             "Tags": {"tag1": "tag1", "tag2": "tag2"},
-            "Timestamp": msg_ts,
         }
+        value.update({"Timestamp": timestamp} if timestamp else {})
+        consumed_ts = 1234567890
         serialized = serializer(
-            value, timestamp_ns=timestamp, ctx=SerializationContext(topic="test")
+            value,
+            ctx=SerializationContext(
+                topic="test", timestamp=MessageTimestamp(consumed_ts, TimestampType(1))
+            ),
         )
 
         expected = {
-            "Timestamps": [timestamp or msg_ts],
+            "Timestamps": [timestamp or consumed_ts],
             "BinaryValues": {
                 "bytes": [base64.b64encode(value["bytes"]).decode("ascii")],
                 "bytearray": [base64.b64encode(value["bytearray"]).decode("ascii")],
@@ -401,7 +405,8 @@ class TestQuixTimeseriesSerializer:
         }
         assert json.loads(serialized) == expected
 
-    def test_legacy_serialize_dict_success(self):
+    @pytest.mark.parametrize("timestamp", [1234567891, None])
+    def test_legacy_serialize_dict_success(self, timestamp):
         serializer = QuixTimeseriesSerializer(as_legacy=True)
         value = {
             "int": 1,
@@ -411,11 +416,14 @@ class TestQuixTimeseriesSerializer:
             "bytearray": bytearray(b"Hi"),
             "Tags": {"tag1": "tag1", "tag2": "tag2"},
         }
-        timestamp_ns = 1234567890
+        value.update({"Timestamp": timestamp} if timestamp else {})
+        consumed_ts = 1234567890
         serialized = serializer(
-            value, timestamp_ns=timestamp_ns, ctx=SerializationContext(topic="test")
+            value,
+            ctx=SerializationContext(
+                topic="test", timestamp=MessageTimestamp(consumed_ts, TimestampType(1))
+            ),
         )
-
         expected_value = {
             "BinaryValues": {
                 "bytes": [base64.b64encode(value["bytes"]).decode("ascii")],
@@ -430,7 +438,7 @@ class TestQuixTimeseriesSerializer:
                 "int": [value["int"]],
                 "float": [value["float"]],
             },
-            "Timestamps": [timestamp_ns],
+            "Timestamps": [timestamp or consumed_ts],
             "TagValues": {
                 "tag1": [value["Tags"]["tag1"]],
                 "tag2": [value["Tags"]["tag2"]],
@@ -461,10 +469,7 @@ class TestQuixTimeseriesSerializer:
     )
     def test_serialize_dict_empty_or_none(self, value):
         serializer = QuixTimeseriesSerializer(as_legacy=False)
-        timestamp_ns = time.time_ns()
-        serialized = serializer(
-            value, ctx=SerializationContext(topic="test"), timestamp_ns=timestamp_ns
-        )
+        serialized = serializer(value, ctx=SerializationContext(topic="test"))
         expected = {
             "Timestamps": [],
             "BinaryValues": {},
@@ -483,10 +488,7 @@ class TestQuixTimeseriesSerializer:
     )
     def test_serialize_dict_empty_or_none(self, value):
         serializer = QuixTimeseriesSerializer(as_legacy=True)
-        timestamp_ns = 1234567890
-        serialized = serializer(
-            value, ctx=SerializationContext(topic="test"), timestamp_ns=timestamp_ns
-        )
+        serialized = serializer(value, ctx=SerializationContext(topic="test"))
         expected_value = {
             "BinaryValues": {},
             "StringValues": {},
@@ -527,35 +529,35 @@ class TestQuixTimeseriesSerializer:
 
 
 class TestQuixEventsSerializer:
-    def test_serialize_success(self):
+    @pytest.mark.parametrize("timestamp", [1234567891, None])
+    def test_serialize_success(self, timestamp):
         serializer = QuixEventsSerializer(as_legacy=False)
         value = {"Id": "id", "Value": "value", "Tags": {"tag1": "tag1"}}
-        timestamp_ns = time.time_ns()
+        value.update({"Timestamp": timestamp} if timestamp else {})
+        consumed_ts = 1234567890
         expected = {
             "Id": "id",
             "Value": "value",
             "Tags": {"tag1": "tag1"},
-            "Timestamp": timestamp_ns,
+            "Timestamp": timestamp if timestamp else consumed_ts,
         }
-        ctx = SerializationContext("test")
-        assert (
-            json.loads(serializer(value, timestamp_ns=timestamp_ns, ctx=ctx))
-            == expected
+        ctx = SerializationContext(
+            topic="test", timestamp=MessageTimestamp(consumed_ts, TimestampType(1))
         )
+        assert json.loads(serializer(value, ctx=ctx)) == expected
 
-    def test_legacy_serialize_success(self):
+    @pytest.mark.parametrize("timestamp", [1234567891, None])
+    def test_legacy_serialize_success(self, timestamp):
         serializer = QuixEventsSerializer(as_legacy=True)
         value = {"Id": "id", "Value": "value", "Tags": {"tag1": "tag1"}}
-        timestamp_ns = 1234567890
-        ctx = SerializationContext("test")
-
+        value.update({"Timestamp": timestamp} if timestamp else {})
+        consumed_ts = 1234567890
         expected_value = {
             "Id": "id",
             "Value": "value",
             "Tags": {"tag1": "tag1"},
-            "Timestamp": timestamp_ns,
+            "Timestamp": timestamp if timestamp else consumed_ts,
         }
-
         c = "JT"
         k = "EventData"
         s = len("{" + f'"C":"{c}","K":"{k}","V":')
@@ -569,7 +571,10 @@ class TestQuixEventsSerializer:
             "S": s,
             "E": s + len(expected_value_bytes),
         }
-        serialized = serializer(value, timestamp_ns=timestamp_ns, ctx=ctx)
+        ctx = SerializationContext(
+            topic="test", timestamp=MessageTimestamp(consumed_ts, TimestampType(1))
+        )
+        serialized = serializer(value, ctx=ctx)
         assert json.loads(serialized) == expected
         assert serialized[expected["S"] : expected["E"]] == expected_value_bytes
 

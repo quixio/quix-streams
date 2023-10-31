@@ -64,7 +64,9 @@ class Topic:
         :param row: Row to serialize
         :return: KafkaMessage object with serialized values
         """
-        ctx = SerializationContext(topic=row.topic, headers=row.headers)
+        ctx = SerializationContext(
+            topic=self.name, headers=row.headers, timestamp=row.timestamp
+        )
         if self._key_serializer is None:
             raise SerializerIsNotProvidedError(
                 f'Key serializer is not provided for topic "{self.name}"'
