@@ -1,7 +1,7 @@
 import logging
-
 from typing import Union, List, Mapping, Optional
 
+from .context import MessageContext
 from .messages import KafkaMessage
 from .rows import Row
 from .serializers import (
@@ -107,17 +107,17 @@ class Topic:
             timestamp_type=timestamp_type, milliseconds=timestamp_ms
         )
 
-        row_kwargs = {
-            "key": key,
-            "headers": headers,
-            "topic": message.topic(),
-            "partition": message.partition(),
-            "offset": message.offset(),
-            "size": len(message),
-            "timestamp": timestamp,
-            "latency": message.latency(),
-            "leader_epoch": message.leader_epoch(),
-        }
+        context = MessageContext(
+            key=key,
+            headers=headers,
+            topic=message.topic(),
+            partition=message.partition(),
+            offset=message.offset(),
+            size=len(message),
+            timestamp=timestamp,
+            latency=message.latency(),
+            leader_epoch=message.leader_epoch(),
+        )
 
         try:
             value = self._value_deserializer(value=message.value(), ctx=ctx)
@@ -140,12 +140,12 @@ class Topic:
             for item in value:
                 if not isinstance(item, dict):
                     raise TypeError(f'Row value must be a dict, but got "{type(item)}"')
-                rows.append(Row(value=item, **row_kwargs))
+                rows.append(Row(value=item, context=context))
             return rows
 
         if not isinstance(value, dict):
             raise TypeError(f'Row value must be a dict, but got "{type(value)}"')
-        return Row(value=value, **row_kwargs)
+        return Row(value=value, context=context)
 
     def serialize(
         self,

@@ -3,6 +3,7 @@ from tests.utils import TopicPartitionStub
 
 from streamingdataframes.dataframe.exceptions import InvalidApplyResultType
 from streamingdataframes.dataframe.pipeline import Pipeline
+from streamingdataframes.models import MessageContext
 from streamingdataframes.models.topics import Topic
 from streamingdataframes.state import State
 
@@ -15,21 +16,30 @@ class TestDataframe:
 
 
 class TestDataframeProcess:
-    def test_apply(self, dataframe_factory, row_factory, row_plus_n_func):
+    def test_apply(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe = dataframe.apply(row_plus_n_func(1))
-        row = row_factory({"x": 1, "y": 2})
-        assert dataframe.process(row).value == row_factory({"x": 2, "y": 3}).value
+        row = row_factory({"x": 1, "y": 2}, key="key")
+
+        def _apply(value: dict, ctx: MessageContext):
+            assert ctx.key == "key"
+            assert value == {"x": 1, "y": 2}
+            return {
+                "x": 3,
+                "y": 4,
+            }
+
+        dataframe.apply(_apply)
+        assert dataframe.process(row).value == {"x": 3, "y": 4}
 
     def test_apply_no_return_value(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe = dataframe.apply(lambda row: row.update({"y": 2}))
+        dataframe = dataframe.apply(lambda row, ctx: row.update({"y": 2}))
         row = row_factory({"x": 1})
         assert dataframe.process(row).value == row_factory({"x": 1, "y": 2}).value
 
     def test_apply_invalid_return_type(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe = dataframe.apply(lambda row: False)
+        dataframe = dataframe.apply(lambda row, ctx: False)
         row = row_factory({"x": 1, "y": 2})
         with pytest.raises(InvalidApplyResultType):
             dataframe.process(row)
@@ -61,13 +71,15 @@ class TestDataframeProcess:
 
     def test_setitem_column_with_function(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe["new"] = dataframe["x"].apply(lambda v: v + 5)
+        dataframe["new"] = dataframe["x"].apply(lambda v, ctx: v + 5)
         row = row_factory({"x": 1})
         assert dataframe.process(row).value == row_factory({"x": 1, "new": 6}).value
 
     def test_setitem_column_with_operations(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe["new"] = dataframe["x"] + dataframe["y"].apply(lambda v: v + 5) + 1
+        dataframe["new"] = (
+            dataframe["x"] + dataframe["y"].apply(lambda v, ctx: v + 5) + 1
+        )
         row = row_factory({"x": 1, "y": 2})
         expected = row_factory({"x": 1, "y": 2, "new": 9})
         assert dataframe.process(row).value == expected.value
@@ -125,7 +137,7 @@ class TestDataframeProcess:
 
     def test_inequality_filtering_with_apply(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe = dataframe[dataframe["x"].apply(lambda v: v - 1) >= 0]
+        dataframe = dataframe[dataframe["x"].apply(lambda v, ctx: v - 1) >= 0]
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row).value == row.value
 
@@ -133,7 +145,7 @@ class TestDataframeProcess:
         self, dataframe_factory, row_factory
     ):
         dataframe = dataframe_factory()
-        dataframe = dataframe[dataframe["x"].apply(lambda v: v - 10) >= 0]
+        dataframe = dataframe[dataframe["x"].apply(lambda v, ctx: v - 10) >= 0]
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row) is None
 
@@ -187,7 +199,7 @@ class TestDataframeProcess:
     ):
         dataframe = dataframe_factory()
         dataframe = dataframe.apply(more_rows_func, expand=True)
-        dataframe = dataframe.apply(lambda row: row if row["x_list"] > 0 else None)
+        dataframe = dataframe.apply(lambda row, ctx: row if row["x_list"] > 0 else None)
         # You cannot "filter" this way!! Row count should remain the same
         expected = [row_factory({"x": 1, "x_list": i}) for i in range(0, 3)]
         actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
@@ -290,7 +302,7 @@ class TestDataframeStateful:
     def test_apply_stateful(self, dataframe_factory, state_manager, row_factory):
         topic = Topic("test")
 
-        def stateful_func(value, state: State):
+        def stateful_func(value, ctx, state: State):
             current_max = state.get("max")
             if current_max is None:
                 current_max = value["number"]
@@ -323,7 +335,7 @@ class TestDataframeStateful:
     def test_apply_stateful_expand(self, dataframe_factory, state_manager, row_factory):
         topic = Topic("test")
 
-        def stateful_func(value, state: State):
+        def stateful_func(value, ctx, state: State):
             current_max = state.get("max")
             if current_max is None:
                 current_max = value["number"]
@@ -333,7 +345,7 @@ class TestDataframeStateful:
             value["max"] = current_max
 
         sdf = dataframe_factory([topic], state_manager=state_manager)
-        sdf.apply(lambda v: [{"number": i} for i in v["number"]], expand=True)
+        sdf.apply(lambda v, ctx: [{"number": i} for i in v["number"]], expand=True)
         sdf.apply(stateful_func, stateful=True)
 
         state_manager.on_partition_assign(

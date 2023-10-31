@@ -6,14 +6,16 @@ from typing_extensions import Self, TypeAlias
 from .column import Column
 from .exceptions import InvalidApplyResultType
 from .pipeline import Pipeline
-from ..models import Row, Topic
+from ..models import Row, Topic, MessageContext
 from ..rowconsumer import RowConsumerProto
 from ..rowproducer import RowProducerProto
 from ..state import State, StateStoreManager
 
-ApplyFunc: TypeAlias = Callable[[dict], Optional[Union[dict, List[dict]]]]
+ApplyFunc: TypeAlias = Callable[
+    [dict, MessageContext], Optional[Union[dict, List[dict]]]
+]
 StatefulApplyFunc: TypeAlias = Callable[
-    [dict, State], Optional[Union[dict, List[dict]]]
+    [dict, MessageContext, State], Optional[Union[dict, List[dict]]]
 ]
 
 __all__ = ("StreamingDataFrame",)
@@ -41,9 +43,9 @@ def apply(
         # Prefix all the state keys by the message key
         with transaction.with_prefix(prefix=row.key):
             # Pass a State object with an interface limited to the key updates only
-            result = func(row.value, transaction.state)
+            result = func(row.value, row.context, transaction.state)
     else:
-        result = func(row.value)
+        result = func(row.value, row.context)
 
     if result is None and isinstance(row.value, dict):
         # Function returned None, assume it changed the incoming dict in-place
