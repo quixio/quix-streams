@@ -15,6 +15,7 @@ def quix_timeseries_factory():
         numeric: Mapping[str, List[Union[int, float, None]]] = None,
         strings: Mapping[str, List[Union[str, None]]] = None,
         tags: Mapping[str, List[Union[str, None]]] = None,
+        timestamps: List[int] = None,
         model_key: str = "TimeseriesData",
         codec_id: str = "JT",
         as_legacy: bool = False,
@@ -38,9 +39,11 @@ def quix_timeseries_factory():
                 length = max(length, len(values))
                 if length != len(values):
                     raise ValueError("Parameters must be of the same length")
+        if timestamps and len(timestamps) != length:
+            raise ValueError("Parameters must be of the same length")
 
         value = {
-            "Timestamps": [time.time_ns() for _ in range(length)],
+            "Timestamps": timestamps or [time.time_ns() for _ in range(length)],
             "StringValues": strings,
             "NumericValues": numeric,
             "BinaryValues": binary,
