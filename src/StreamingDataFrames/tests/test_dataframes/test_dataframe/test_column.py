@@ -303,7 +303,7 @@ class TestColumn:
 
     def test_get_item_with_apply(self, row_factory):
         msg_value = row_factory({"x": {"y": {"z": 110}}, "k": 0})
-        result = Column("x")["y"]["z"].apply(lambda v: v + 10)
+        result = Column("x")["y"]["z"].apply(lambda v, ctx: v + 10)
         assert isinstance(result, Column)
         assert result.eval(msg_value) == 120
 
