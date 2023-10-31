@@ -3,9 +3,9 @@ from typing import Optional, Any, Callable, Container
 
 from typing_extensions import Self, TypeAlias, Union
 
-from ..models import Row
+from ..models import Row, MessageContext
 
-ColumnApplier: TypeAlias = Callable[[Any], Any]
+ColumnApplier: TypeAlias = Callable[[Any, MessageContext], Any]
 
 __all__ = ("Column", "ColumnApplier")
 
@@ -55,7 +55,7 @@ class Column:
         :param func: a callable with one argument and one output
         :return: a new Column with the new callable added
         """
-        return Column(_eval_func=lambda x: func(self.eval(x)))
+        return Column(_eval_func=lambda row: func(self.eval(row), row.context))
 
     def isin(self, other: Container) -> Self:
         return self._operation(other, lambda a, b: operator.contains(b, a))

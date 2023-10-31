@@ -16,6 +16,7 @@ from streamingdataframes.models import (
     JSONDeserializer,
     SerializationError,
     JSONSerializer,
+    MessageContext,
 )
 from streamingdataframes.platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -502,7 +503,7 @@ class TestApplicationWithState:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, state: State):
+        def count(_, ctx: MessageContext, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -562,14 +563,14 @@ class TestApplicationWithState:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, state: State):
+        def count(_, ctx, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
 
         failed = Future()
 
-        def fail(_):
+        def fail(*_):
             failed.set_result(True)
             raise ValueError("test")
 
@@ -624,7 +625,7 @@ class TestApplicationWithState:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, state: State):
+        def count(_, ctx, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -705,7 +706,7 @@ class TestApplicationWithState:
         # Define some stateful function so the App assigns store partitions
         done = Future()
 
-        def count(_, state: State):
+        def count(_, ctx, state: State):
             done.set_result(True)
 
         df = app.dataframe(topics_in=[topic_in])

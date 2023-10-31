@@ -40,7 +40,7 @@ def dataframe_factory():
 
 @pytest.fixture()
 def more_rows_func():
-    def more_rows(row):
+    def more_rows(row, ctx):
         rows_out = []
         for item in row["x_list"]:
             row_out = deepcopy(row)
@@ -51,7 +51,7 @@ def more_rows_func():
     return more_rows
 
 
-def row_values_plus_n(n, row):
+def row_values_plus_n(n, row, ctx):
     for k, v in row.items():
         row[k] = v + n
     return row

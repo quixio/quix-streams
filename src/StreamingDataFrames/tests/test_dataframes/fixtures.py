@@ -18,6 +18,7 @@ from streamingdataframes.kafka import (
     Consumer,
     Producer,
 )
+from streamingdataframes.models import MessageContext
 from streamingdataframes.models.rows import Row
 from streamingdataframes.models.serializers import (
     JSONSerializer,
@@ -230,9 +231,8 @@ def row_factory():
         offset: int = 0,
     ) -> Row:
         headers = headers or {}
-        return Row(
+        context = MessageContext(
             key=key,
-            value=value,
             headers=headers,
             topic=topic,
             partition=partition,
@@ -240,6 +240,7 @@ def row_factory():
             size=0,
             timestamp=MessageTimestamp(0, TimestampType.TIMESTAMP_NOT_AVAILABLE),
         )
+        return Row(value=value, context=context)
 
     return factory
 
