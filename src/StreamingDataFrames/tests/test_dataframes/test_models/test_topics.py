@@ -3,7 +3,7 @@ from typing import Optional, Any
 
 import pytest
 
-from streamingdataframes.models import Topic
+from streamingdataframes.models import Topic, StringSerializer
 from streamingdataframes.models.serializers import (
     Deserializer,
     Serializer,
@@ -221,6 +221,48 @@ class TestTopic:
         assert message.key == expected_key
         assert message.value == expected_value
         assert not message.headers
+
+    @pytest.mark.parametrize(
+        "key_serializer, value_serializer, key, value, new_key, expected_key, expected_value",
+        [
+            (
+                BytesSerializer(),
+                BytesSerializer(),
+                b"key",
+                b"value",
+                b"new_key",
+                b"new_key",
+                b"value",
+            ),
+            (
+                StringSerializer(),
+                JSONSerializer(),
+                "key",
+                {"field": "value"},
+                "new_key",
+                b"new_key",
+                '{"field":"value"}',
+            ),
+        ],
+    )
+    def test_row_serialize_new_key(
+        self,
+        key_serializer: Serializer,
+        value_serializer: Serializer,
+        key: Any,
+        value: Any,
+        new_key: Any,
+        expected_key: Optional[bytes],
+        expected_value: Optional[bytes],
+        row_factory: pytest.fixture,
+    ):
+        topic = Topic(
+            "topic", key_serializer=key_serializer, value_serializer=value_serializer
+        )
+        row = row_factory(key=key, value=value)
+        message = topic.row_serialize(row=row, key=new_key)
+        assert message.key == expected_key
+        assert message.value == expected_value
 
     def test_row_serialize_extra_headers(self, row_factory: pytest.fixture):
         class BytesSerializerWithHeaders(BytesSerializer):

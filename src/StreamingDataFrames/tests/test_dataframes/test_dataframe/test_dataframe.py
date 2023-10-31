@@ -244,6 +244,40 @@ class TestDataframeKafka:
         assert row_to_produce.key == consumed_row.key
         assert row_to_produce.value == consumed_row.value
 
+    def test_to_topic_custom_key(
+        self,
+        dataframe_factory,
+        row_consumer_factory,
+        row_producer_factory,
+        row_factory,
+        topic_json_serdes_factory,
+    ):
+        topic = topic_json_serdes_factory()
+        producer = row_producer_factory()
+
+        dataframe = dataframe_factory()
+        dataframe.producer = producer
+        # Using value of "x" column as a new key
+        dataframe.to_topic(topic, key=lambda value, ctx: value["x"])
+
+        row_to_produce = row_factory(
+            topic=topic.name,
+            key=b"test_key",
+            value={"x": "1", "y": "2"},
+        )
+
+        with producer:
+            dataframe.process(row_to_produce)
+
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic])
+            consumed_row = consumer.poll_row(timeout=5.0)
+
+        assert consumed_row
+        assert consumed_row.topic == topic.name
+        assert consumed_row.value == row_to_produce.value
+        assert consumed_row.key == row_to_produce.value["x"].encode()
+
     def test_to_topic_multiple_topics_out(
         self,
         dataframe_factory,
