@@ -24,11 +24,7 @@ class SerializationContext:
 
     __slots__ = ("topic", "headers")
 
-    def __init__(
-        self,
-        topic: str,
-        headers: Optional[MessageHeadersTuples] = None,
-    ):
+    def __init__(self, topic: str, headers: Optional[MessageHeadersTuples] = None):
         self.topic = topic
         self.headers = headers
 
