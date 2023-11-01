@@ -182,14 +182,6 @@ class RowConsumer(Consumer, RowConsumerProto):
             return row_or_rows
         except IgnoreMessage:
             # Deserializer decided to ignore the message
-            logger.debug(
-                "Ignoring the message from Kafka",
-                extra={
-                    "topic": topic_name,
-                    "partition": partition,
-                    "offset": offset,
-                },
-            )
             return
         except Exception as exc:
             to_suppress = self._on_error(exc, msg, logger)

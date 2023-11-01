@@ -123,14 +123,12 @@ class Topic:
         try:
             value = self._value_deserializer(value=message.value(), ctx=ctx)
         except IgnoreMessage:
-            # Ignore message completely if the deserializer raised IgnoreValueError.
+            # Ignore message completely if deserializer raised IgnoreValueError.
             logger.debug(
-                "Ignore incoming message",
-                extra={
-                    "topic": message.topic(),
-                    "partition": message.partition(),
-                    "offset": message.offset(),
-                },
+                'Ignore incoming message: partition="%s[%s]" offset="%s"',
+                message.topic(),
+                message.partition(),
+                message.offset(),
             )
             return
 
