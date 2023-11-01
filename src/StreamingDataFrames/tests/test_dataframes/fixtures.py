@@ -307,8 +307,8 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
         on_message_processed: Optional[MessageProcessedCallback] = None,
         auto_create_topics: bool = True,
         state_dir: Optional[str] = None,
+        workspace_id: str = "my_ws",
     ) -> Application:
-        workspace_id = "my_ws"
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
@@ -316,7 +316,9 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
         cfg_builder.get_confluent_broker_config.return_value = {
             "bootstrap.servers": kafka_container.broker_address
         }
-        cfg_builder.append_workspace_id.side_effect = lambda s: f"{workspace_id}-{s}"
+        cfg_builder.append_workspace_id.side_effect = (
+            lambda s: f"{workspace_id}-{s}" if workspace_id else s
+        )
         state_dir = state_dir or (tmp_path / "state").absolute()
 
         return Application.Quix(

@@ -344,7 +344,8 @@ class Application:
 
         # Ensure that state management is enabled if application is stateful
         # and is running on Quix platform
-        check_state_management_enabled()
+        if self._state_manager.stores:
+            check_state_management_enabled()
 
     def run(
         self,
