@@ -28,31 +28,27 @@ confluent_logger = logging.getLogger(__name__)
 
 def _default_error_cb(error: KafkaError):
     logger.error(
-        "Kafka producer error",
-        extra={"error_code": error.code(), "error_desc": error.str()},
+        f'Kafka producer error: {error.str()} code="{error.code()}"',
     )
 
 
 def _on_delivery_cb(err: Optional[KafkaError], msg: Message):
     if err is not None:
-        logger.error(
-            "Failed to deliver a message",
-            extra={
-                "key": msg.key(),
-                "topic": msg.topic(),
-                "partition": msg.partition(),
-                "error_code": err.code(),
-                "error_desc": err.str(),
-            },
+        logger.debug(
+            'Delivery failed: topic="%s" partition="%s" key="%s" error=%s ' "code=%s",
+            msg.topic(),
+            msg.partition(),
+            msg.key(),
+            err.str(),
+            err.code(),
         )
     else:
         logger.debug(
-            "Successfully delivered a message",
-            extra={
-                "key": msg.key(),
-                "topic": msg.topic(),
-                "partition": msg.partition(),
-            },
+            'Delivery succeeded: topic="%s" partition="%s" key="%s" value="%s"',
+            msg.topic(),
+            msg.partition(),
+            msg.key(),
+            msg.value(),
         )
 
 

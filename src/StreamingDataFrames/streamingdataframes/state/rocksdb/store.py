@@ -107,8 +107,10 @@ class RocksDBStore(Store):
 
         self._partitions[partition] = store_partition
         logger.debug(
-            f'Assigned partition "{partition}" '
-            f'for store "{self._name}" (topic "{self._topic}")'
+            f'Assigned store partition "%s[%s]" (topic "%s")',
+            self._name,
+            partition,
+            self._topic,
         )
         return store_partition
 
@@ -122,15 +124,16 @@ class RocksDBStore(Store):
         """
         store_partition = self._partitions.get(partition)
         if store_partition is None:
-            logger.debug(
-                f'Partition for store "{self._name}" (topic "{self._topic}") '
-                f"is not assigned"
-            )
             return
 
         store_partition.close()
         self._partitions.pop(partition)
-        logger.debug(f'Revoked partition "{partition}" for store "{self._name}"')
+        logger.debug(
+            'Revoked store partition "%s[%s]" topic("%s")',
+            self._name,
+            partition,
+            self._topic,
+        )
 
     def start_partition_transaction(
         self, partition: int
@@ -147,8 +150,8 @@ class RocksDBStore(Store):
         if partition not in self._partitions:
             # Requested partition has not been assigned. Something went completely wrong
             raise PartitionNotAssignedError(
-                f'Partition "{partition}" is not assigned '
-                f'to the store "{self._name}" (topic "{self._topic}")'
+                f'Store partition "{self._name}[{partition}]" '
+                f'(topic "{self._topic}") is not assigned'
             )
 
         store_partition = self._partitions[partition]
