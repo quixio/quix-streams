@@ -62,7 +62,6 @@ class Producer:
         broker_address: str,
         partitioner: Partitioner = "murmur2",
         extra_config: dict = None,
-        debug: bool = False,
     ):
         """
         A wrapper around `confluent_kafka.Producer`.
@@ -81,8 +80,6 @@ class Producer:
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
-        :param debug: if True, the Producer will log the data from the delivery callbacks.
-            Note: enabling the debug mode may reduce the throughput.
         """
         config = dict(
             **extra_config or {},
@@ -94,8 +91,10 @@ class Producer:
             },
         )
         self._producer_config = config
-        self._debug = debug
         self._inner_producer: Optional[ConfluentProducer] = None
+        # Optimization: pass `on_delivery` callbacks only in "debug" mode, otherwise
+        # it significantly reduces a throughput because of additional function calls
+        self._enable_delivery_callbacks = logger.isEnabledFor(logging.DEBUG)
 
     def produce(
         self,
@@ -132,9 +131,7 @@ class Producer:
             "timestamp": timestamp,
             "headers": headers,
         }
-        if self._debug:
-            # Trigger `on_delivery` callbacks only in "debug" mode, otherwise
-            # it reduces throughput because of additional function calls
+        if self._enable_delivery_callbacks:
             kwargs["on_delivery"] = _on_delivery_cb
 
         # confluent_kafka doesn't like None for optional parameters
