@@ -1,5 +1,5 @@
 import logging
-from typing import Union, List, Mapping, Optional
+from typing import Union, List, Mapping, Optional, Any
 
 from .context import MessageContext
 from .messages import KafkaMessage
@@ -58,10 +58,11 @@ class Topic:
         """
         return self._name
 
-    def row_serialize(self, row: Row) -> KafkaMessage:
+    def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
         """
         Serialize Row to a Kafka message structure
         :param row: Row to serialize
+        :param key: message key to serialize, optional. Default - current Row key.
         :return: KafkaMessage object with serialized values
         """
         ctx = SerializationContext(topic=self.name, headers=row.headers)
@@ -75,7 +76,7 @@ class Topic:
             )
 
         return KafkaMessage(
-            key=self._key_serializer(row.key, ctx=ctx),
+            key=self._key_serializer(key or row.key, ctx=ctx),
             value=self._value_serializer(row.value, ctx=ctx),
             headers=self._value_serializer.extra_headers,
         )
