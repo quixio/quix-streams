@@ -52,10 +52,10 @@ class StateStoreManager:
                     f'Path "{self._state_dir}" already exists, '
                     f"but it is not a directory"
                 )
-            logger.info(f'State directory already exists at "{self._state_dir}"')
+            logger.debug(f'State directory already exists at "{self._state_dir}"')
         else:
             self._state_dir.mkdir(parents=True)
-            logger.info(f'Created state directory at "{self._state_dir}"')
+            logger.debug(f'Created state directory at "{self._state_dir}"')
 
     @property
     def stores(self) -> Dict[str, Dict[str, Store]]:

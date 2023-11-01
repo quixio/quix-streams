@@ -22,12 +22,8 @@ def default_on_consumer_error(
             message.offset(),
         )
     logger.exception(
-        "Failed to consume a message from Kafka",
-        extra={
-            "topic": topic,
-            "partition": partition,
-            "offset": offset,
-        },
+        f"Failed to consume a message from Kafka: "
+        f'partition="{topic}[{partition}]" offset="{offset}"',
     )
     return False
 
@@ -36,8 +32,8 @@ def default_on_processing_error(
     exc: Exception, row: Row, logger: logging.Logger
 ) -> bool:
     logger.exception(
-        "Failed to process a row",
-        extra={"topic": row.topic, "partition": row.partition, "offset": row.offset},
+        f"Failed to process a Row: "
+        f'partition="{row.topic}[{row.partition}]" offset="{row.offset}"',
     )
     return False
 
@@ -49,11 +45,7 @@ def default_on_producer_error(
     if row is not None:
         topic, partition, offset = row.topic, row.partition, row.offset
     logger.exception(
-        "Failed to produce a message to Kafka",
-        extra={
-            "topic": topic,
-            "partition": partition,
-            "offset": offset,
-        },
+        f"Failed to produce a message to Kafka: "
+        f'partition="{topic}[{partition}]" offset="{offset}"',
     )
     return False

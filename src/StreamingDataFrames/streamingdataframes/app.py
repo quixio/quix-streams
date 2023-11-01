@@ -30,6 +30,7 @@ from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.rocksdb import RocksDBOptionsType
+from .logging import configure_logging, LogLevel
 
 __all__ = ("Application",)
 
@@ -56,6 +57,7 @@ class Application:
         on_message_processed: Optional[MessageProcessedCallback] = None,
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
+        loglevel: Optional[LogLevel] = "INFO",
     ):
         """
         The main Application class.
@@ -71,7 +73,8 @@ class Application:
 
             app = Application(broker_address='localhost:9092', consumer_group='group')
             topic = app.topic('test-topic')
-            df = app.dataframe([topic)
+            df = app.dataframe([topic])
+            df.apply(lambda value, context: print('New message', value)
 
             app.run(dataframe=df)
         ```
@@ -110,8 +113,14 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-
+        :param loglevel: a log level for "streamingdataframes" logger.
+            Should be a string or None.
+            If `None` is passed, no logging will be configured.
+            You may pass `None` and configure "streamingdataframes" logger
+            externally using `logging` library.
+            Default - "INFO".
         """
+        configure_logging(loglevel=loglevel)
         self._consumer = RowConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -161,6 +170,7 @@ class Application:
         on_message_processed: Optional[MessageProcessedCallback] = None,
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
+        loglevel: Optional[LogLevel] = "INFO",
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         auto_create_topics: bool = True,
     ) -> Self:
@@ -199,8 +209,12 @@ class Application:
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
-        :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
-            instead of the default one.
+        :param loglevel: a log level for "streamingdataframes" logger.
+            Should be a string or None.
+            If `None` is passed, no logging will be configured.
+            You may pass `None` and configure "streamingdataframes" logger
+            externally using `logging` library.
+            Default - "INFO".
 
         To handle errors, `Application` accepts callbacks triggered when exceptions
         occur on different stages of stream processing.
@@ -214,6 +228,9 @@ class Application:
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
 
+
+        Quix-specific parameters:
+
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
         :param auto_create_topics: Whether to auto-create any topics handed to a
@@ -221,6 +238,7 @@ class Application:
 
         :return: `Application` object
         """
+        configure_logging(loglevel=loglevel)
         quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
         quix_config_builder.app_auto_create_topics = auto_create_topics
         quix_configs = quix_config_builder.get_confluent_broker_config()
@@ -355,8 +373,7 @@ class Application:
 
         :param dataframe: instance of `StreamingDataFrame`
         """
-        logger.info("Start processing of the streaming dataframe")
-
+        logger.info("Initializing processing of StreamingDataFrame")
         if self.is_quix_app:
             self._quix_runtime_init()
 
@@ -379,8 +396,6 @@ class Application:
             start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
-            logger.info("Start processing of the streaming dataframe")
-
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
                 list(dataframe.topics_in.values()),
@@ -388,6 +403,7 @@ class Application:
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
             )
+            logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
             self._running = True
             while self._running:
@@ -446,7 +462,7 @@ class Application:
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
         if self._state_manager.stores:
-            logger.info(f"Rebalancing: assigning state store partitions")
+            logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
                 # Assign store partitions
                 store_partitions = self._state_manager.on_partition_assign(tp)
@@ -478,7 +494,7 @@ class Application:
         Revoke partitions from consumer and state
         """
         if self._state_manager.stores:
-            logger.info(f"Rebalancing: revoking state store partitions")
+            logger.debug(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_revoke(tp)
 
@@ -487,7 +503,7 @@ class Application:
         Dropping lost partitions from consumer and state
         """
         if self._state_manager.stores:
-            logger.info(f"Rebalancing: dropping lost state store partitions")
+            logger.debug(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_lost(tp)
 
