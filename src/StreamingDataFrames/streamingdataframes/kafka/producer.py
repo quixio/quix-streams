@@ -23,7 +23,6 @@ Headers = Union[
 ]
 
 logger = logging.getLogger(__name__)
-confluent_logger = logging.getLogger(__name__)
 
 
 def _default_error_cb(error: KafkaError):
@@ -82,7 +81,7 @@ class Producer:
             **{
                 "bootstrap.servers": broker_address,
                 "partitioner": partitioner,
-                "logger": confluent_logger,
+                "logger": logger,
                 "error_cb": _default_error_cb,
             },
         )

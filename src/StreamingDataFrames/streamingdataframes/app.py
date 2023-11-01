@@ -355,8 +355,7 @@ class Application:
 
         :param dataframe: instance of `StreamingDataFrame`
         """
-        logger.info("Start processing of the streaming dataframe")
-
+        logger.info("Initializing processing of StreamingDataFrame")
         if self.is_quix_app:
             self._quix_runtime_init()
 
@@ -379,8 +378,6 @@ class Application:
             start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
-            logger.info("Start processing of the streaming dataframe")
-
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
                 list(dataframe.topics_in.values()),
@@ -388,6 +385,7 @@ class Application:
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
             )
+            logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
             self._running = True
             while self._running:
@@ -446,7 +444,7 @@ class Application:
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
         if self._state_manager.stores:
-            logger.info(f"Rebalancing: assigning state store partitions")
+            logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
                 # Assign store partitions
                 store_partitions = self._state_manager.on_partition_assign(tp)
@@ -478,7 +476,7 @@ class Application:
         Revoke partitions from consumer and state
         """
         if self._state_manager.stores:
-            logger.info(f"Rebalancing: revoking state store partitions")
+            logger.debug(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_revoke(tp)
 
@@ -487,7 +485,7 @@ class Application:
         Dropping lost partitions from consumer and state
         """
         if self._state_manager.stores:
-            logger.info(f"Rebalancing: dropping lost state store partitions")
+            logger.debug(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_lost(tp)
 
