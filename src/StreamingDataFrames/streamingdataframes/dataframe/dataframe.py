@@ -17,6 +17,7 @@ ApplyFunc: TypeAlias = Callable[
 StatefulApplyFunc: TypeAlias = Callable[
     [dict, MessageContext, State], Optional[Union[dict, List[dict]]]
 ]
+KeyFunc: TypeAlias = Callable[[dict, MessageContext], Any]
 
 __all__ = ("StreamingDataFrame",)
 
@@ -166,7 +167,7 @@ class StreamingDataFrame:
         """
         return self._pipeline.process(row)
 
-    def to_topic(self, topic: Topic):
+    def to_topic(self, topic: Topic, key: Optional[KeyFunc] = None) -> Self:
         """
         Produce a row to a desired topic.
         Note that a producer must be assigned on the `StreamingDataFrame` if not using
@@ -174,10 +175,19 @@ class StreamingDataFrame:
         the execution of StreamingDataFrame.
 
         :param topic: A QuixStreams `Topic`
+        :param key: a callable to generate a new message key, optional.
+            If passed, the return type of this callable must be serializable
+            by `key_serializer` defined for this Topic object.
+            By default, the current message key will be used.
+
         :return: self (StreamingDataFrame)
         """
         self._topics_out[topic.name] = topic
-        return self._apply(lambda row: self._produce(topic, row))
+        return self._apply(
+            lambda row: self._produce(
+                topic, row, key=key(row.value, row.context) if key else None
+            )
+        )
 
     @property
     def id(self) -> str:
@@ -237,8 +247,8 @@ class StreamingDataFrame:
         else:
             return Column(col_name=item)
 
-    def _produce(self, topic: Topic, row: Row) -> Row:
-        self.producer.produce_row(row, topic)
+    def _produce(self, topic: Topic, row: Row, key: Optional[Any] = None) -> Row:
+        self.producer.produce_row(row, topic, key=key)
         return row
 
     def _apply(self, func: Callable[[Row], Optional[Union[Row, List[Row]]]]) -> Self:

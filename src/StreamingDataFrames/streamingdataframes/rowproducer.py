@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 from typing_extensions import Protocol
 
@@ -15,6 +15,7 @@ class RowProducerProto(Protocol):
         self,
         row: Row,
         topic: Topic,
+        key: Optional[Any] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
     ):
@@ -66,6 +67,7 @@ class RowProducer(Producer, RowProducerProto):
         self,
         row: Row,
         topic: Topic,
+        key: Optional[Any] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
     ):
@@ -77,12 +79,13 @@ class RowProducer(Producer, RowProducerProto):
 
         :param row: Row object
         :param topic: Topic object
-        :param partition: partition number
-        :param timestamp: timestamp in milliseconds
+        :param key: message key, optional
+        :param partition: partition number, optional
+        :param timestamp: timestamp in milliseconds, optional
         """
 
         try:
-            message = topic.row_serialize(row=row)
+            message = topic.row_serialize(row=row, key=key)
             self.produce(
                 topic=topic.name,
                 key=message.key,
