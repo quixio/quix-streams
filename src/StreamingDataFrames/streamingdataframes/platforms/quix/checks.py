@@ -1,7 +1,8 @@
 import logging
+import warnings
+from pathlib import Path
 
 from .env import QUIX_ENVIRONMENT
-from .exceptions import StateManagementDisabledError
 
 logger = logging.getLogger(__name__)
 __all__ = ("check_state_management_enabled", "check_state_dir")
@@ -15,10 +16,12 @@ def check_state_management_enabled():
 
     """
     if QUIX_ENVIRONMENT.deployment_id and not QUIX_ENVIRONMENT.state_management_enabled:
-        raise StateManagementDisabledError(
+        warnings.warn(
             f"State Management feature is disabled for Quix deployment "
             f'"{QUIX_ENVIRONMENT.deployment_id}". '
-            f"Please enable it in the deployment settings to use state."
+            f"You may enable it in the deployment settings to share "
+            f"the state between replicas.",
+            category=RuntimeWarning,
         )
 
 
@@ -30,10 +33,13 @@ def check_state_dir(state_dir: str):
 
     :param state_dir: application state_dir path
     """
-    if QUIX_ENVIRONMENT.deployment_id and state_dir != QUIX_ENVIRONMENT.state_dir:
-        logger.warning(
-            f'Path to state directory "{state_dir}" does not match the state directory'
-            f' "{QUIX_ENVIRONMENT.state_dir}" on Quix Platform. '
+
+    state_dir_abs = str(Path(state_dir).absolute())
+    if QUIX_ENVIRONMENT.deployment_id and state_dir_abs != QUIX_ENVIRONMENT.state_dir:
+        warnings.warn(
+            f'Path to state directory "{state_dir_abs}" does not match '
+            f'the state directory "{QUIX_ENVIRONMENT.state_dir}" on Quix Platform. '
             f"The state will not be shared between replicas "
-            f"of this deployment, and it may be lost on restart."
+            f"of this deployment, and it may be lost on restart.",
+            category=RuntimeWarning,
         )
