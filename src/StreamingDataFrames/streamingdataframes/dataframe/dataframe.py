@@ -262,13 +262,3 @@ class StreamingDataFrame:
         """
         self._pipeline.apply(func)
         return self
-
-
-# TODO: Find an easy way to check if the Column exists in SDF (e.g. .contains() on SDF)
-# TODO: JSON doesn't allow keys to be non-strings
-# TODO: Check type hints, at some point Quix thinks that SDF is a Column
-# TODO: SDF.apply() doesn't allow returning simple values and assigning them
-
-
-# TODO: Graceful shutdown - check if sigterm and sigint are handled correctly (I think they must be propagated as SystemExit or KeyboardInterrupt)
-# TODO:     Sigint is handled, but sigterm is not.
