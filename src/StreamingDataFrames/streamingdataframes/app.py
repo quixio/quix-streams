@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import signal
-import time
 from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
