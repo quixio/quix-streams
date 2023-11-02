@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import signal
 from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
@@ -13,6 +14,7 @@ from .error_callbacks import (
     default_on_processing_error,
 )
 from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
+from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
     Deserializer,
@@ -30,7 +32,6 @@ from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.rocksdb import RocksDBOptionsType
-from .logging import configure_logging, LogLevel
 
 __all__ = ("Application",)
 
@@ -374,6 +375,8 @@ class Application:
 
         :param dataframe: instance of `StreamingDataFrame`
         """
+        self._setup_signal_handlers()
+
         logger.info("Initializing processing of StreamingDataFrame")
         if self.is_quix_app:
             self._quix_runtime_init()
@@ -454,7 +457,7 @@ class Application:
                 if self._on_message_processed is not None:
                     self._on_message_processed(topic_name, partition, offset)
 
-            logger.info("Stop processing of the streaming dataframe")
+            logger.info("Stop processing of StreamingDataFrame")
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -507,6 +510,21 @@ class Application:
             logger.debug(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_lost(tp)
+
+    def _setup_signal_handlers(self):
+        signal.signal(signal.SIGINT, self._on_sigint)
+        signal.signal(signal.SIGTERM, self._on_sigterm)
+
+    def _on_sigint(self, *_):
+        # Re-install the default SIGINT handler so doing Ctrl+C twice
+        # raises KeyboardInterrupt
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+        logger.debug(f"Received SIGINT, stopping the processing loop")
+        self.stop()
+
+    def _on_sigterm(self, *_):
+        logger.debug(f"Received SIGTERM, stopping the processing loop")
+        self.stop()
 
 
 _nullcontext = contextlib.nullcontext()
