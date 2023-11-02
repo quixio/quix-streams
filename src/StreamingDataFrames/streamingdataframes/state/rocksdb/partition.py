@@ -14,7 +14,6 @@ from streamingdataframes.state.types import (
     PartitionTransaction,
     StorePartition,
 )
-from ..state import TransactionState
 from .exceptions import (
     StateTransactionError,
     NestedPrefixError,
@@ -22,12 +21,12 @@ from .exceptions import (
 from .options import RocksDBOptions
 from .serialization import serialize, deserialize, serialize_key
 from .types import RocksDBOptionsType
+from ..state import TransactionState
 
 __all__ = (
     "RocksDBStorePartition",
     "RocksDBPartitionTransaction",
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +65,6 @@ class RocksDBStorePartition(StorePartition):
     :param open_max_retries: number of times to retry opening the database
         if it's locked by another process. To disable retrying, pass 0.
     :param open_retry_backoff: number of seconds to wait between each retry.
-    :param dumps: the function used to serialize keys & values to bytes in transactions.
-        Default - `json.dumps`
-    :param loads: the function used to deserialize keys & values from bytes to objects
-        in transactions. Default - `json.loads`.
     """
 
     def __init__(
@@ -78,15 +73,11 @@ class RocksDBStorePartition(StorePartition):
         options: Optional[RocksDBOptionsType] = None,
         open_max_retries: int = 10,
         open_retry_backoff: float = 3.0,
-        dumps: Optional[DumpsFunc] = None,
-        loads: Optional[LoadsFunc] = None,
     ):
         self._path = path
         self._options = options or RocksDBOptions()
         self._open_max_retries = open_max_retries
         self._open_retry_backoff = open_retry_backoff
-        self._dumps = dumps
-        self._loads = loads
         self._db = self._init_db()
 
     def begin(self) -> "RocksDBPartitionTransaction":
@@ -97,7 +88,7 @@ class RocksDBStorePartition(StorePartition):
         :return: an instance of `RocksDBTransaction`
         """
         return RocksDBPartitionTransaction(
-            partition=self, dumps=self._dumps, loads=self._loads
+            partition=self, dumps=self._options.dumps, loads=self._options.loads
         )
 
     def write(self, batch: rocksdict.WriteBatch):
@@ -234,7 +225,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
     Serialization
     *************
-    `RocksDBTransaction` automatically serializes keys and values to JSON.
+    `RocksDBTransaction` automatically serializes keys and values to bytes.
 
     Prefixing
     *********
@@ -259,10 +250,8 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
     :param partition: instance of `RocksDBStatePartition` to be used for accessing
         the underlying RocksDB
-    :param dumps: a function to serialize data to bytes, optional.
-        By default, `json.dumps` will be used.
-    :param loads: a function to deserialize data from bytes, optional.
-        By default, `json.loads` will be used.
+    :param dumps: a function to serialize data to bytes.
+    :param loads: a function to deserialize data from bytes.
     """
 
     __slots__ = (
@@ -279,8 +268,8 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def __init__(
         self,
         partition: RocksDBStorePartition,
-        dumps: Optional[DumpsFunc] = None,
-        loads: Optional[LoadsFunc] = None,
+        dumps: DumpsFunc,
+        loads: LoadsFunc,
     ):
         self._partition = partition
         self._update_cache = {}
@@ -308,10 +297,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         Only one prefix can be set at a time.
 
         :param prefix: a prefix string to be used.
-            Should be either `bytes` or JSON-serializable object.
+            Should be either `bytes` or object serializable to `bytes`
+            by `dumps` function.
             The prefix doesn't need to contain the separator, it will be added
-            automatically between the key and the prefix itself if the prefix
-            is present.
+            automatically between the key and the prefix if the prefix
+            is not empty.
         """
         if self._prefix != _DEFAULT_PREFIX:
             raise NestedPrefixError("The transaction already has a prefix")
@@ -336,10 +326,10 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         It returns `None` if the key is not found and `default` is not provided.
 
-        :param key: a JSON-deserializable key.
+        :param key: a key to get from DB
         :param default: value to return if the key is not present in the state.
             It can be of any type.
-        :return: a JSON-deserialized value
+        :return: value or `default`
         """
 
         # First, check the update cache in case the value was previously written
@@ -362,8 +352,8 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         It first updates the key in the update cache.
 
-        :param key: a JSON-deserializable key.
-        :param value: a JSON-serializable value
+        :param key: key to store in DB
+        :param value: value to store in DB
         """
 
         key_serialized = self._serialize_key(key)
@@ -383,7 +373,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         It first deletes the key from the update cache.
 
-        :param key: a JSON-deserializable key.
+        :param key: key to delete from DB
         """
         key_serialized = self._serialize_key(key)
         try:
@@ -400,7 +390,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         It first looks up the key in the update cache.
 
-        :param key: a JSON-deserializable key
+        :param key: a key to check in DB
         :return: `True` if the key exists, `False` otherwise.
         """
 
