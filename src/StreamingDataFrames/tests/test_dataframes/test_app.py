@@ -22,7 +22,6 @@ from streamingdataframes.platforms.quix import (
     QuixKafkaConfigsBuilder,
     TopicCreationConfigs,
 )
-from streamingdataframes.platforms.quix.exceptions import StateManagementDisabledError
 from streamingdataframes.platforms.quix.env import QuixEnvironment
 from streamingdataframes.rowconsumer import (
     KafkaMessageError,
@@ -418,7 +417,7 @@ class TestQuixApplication:
         assert actual_call_arg == list(builder.create_topic_configs.values())
         assert {c.name for c in actual_call_arg} == {t.name for t in topics}
 
-    def test_topic_auto_create_true(self, dataframe_factory, quix_app_factory):
+    def test_topic_auto_create_true(self, quix_app_factory):
         """
         Topics are created when auto_create_topics=True
         """
@@ -432,16 +431,17 @@ class TestQuixApplication:
         assert actual_call_arg == list(builder.create_topic_configs.values())
         assert {c.name for c in actual_call_arg} == {t.name for t in topics}
 
-    def test_quix_app_stateful_quix_deployment_no_state_management_fails(
-        self, quix_app_factory, monkeypatch
+    def test_quix_app_stateful_quix_deployment_no_state_management_warning(
+        self, quix_app_factory, monkeypatch, topic_factory, executor
     ):
         """
-        Ensure that Application.run() raises an exception if the app is stateful,
+        Ensure that Application.run() prints a warning if the app is stateful,
         runs on Quix (the "Quix__Deployment__Id" env var is set),
         but the "State Management" flag is disabled for the deployment.
         """
-        app = quix_app_factory()
-        topic = app.topic("topic")
+        topic_name, _ = topic_factory()
+        app = quix_app_factory(workspace_id="")
+        topic = app.topic(topic_name)
         sdf = app.dataframe([topic])
         sdf.apply(lambda x, state: x, stateful=True)
 
@@ -453,8 +453,12 @@ class TestQuixApplication:
             QuixEnvironment.STATE_MANAGEMENT_ENABLED,
             "",
         )
-        with pytest.raises(StateManagementDisabledError):
+        with pytest.warns(RuntimeWarning) as warned:
+            executor.submit(_stop_app_on_timeout, app, 5.0)
             app.run(sdf)
+
+        warning = str(warned.list[0].message)
+        assert "State Management feature is disabled" in warning
 
     def test_quix_app_stateful_quix_deployment_state_dir_mismatch_warning(
         self, quix_app_factory, monkeypatch, caplog
@@ -468,11 +472,11 @@ class TestQuixApplication:
             QuixEnvironment.DEPLOYMENT_ID,
             "123",
         )
-        with patch.object(logging.getLoggerClass(), "warning") as mock:
+        with pytest.warns(RuntimeWarning) as warned:
             quix_app_factory()
 
-        assert mock.called
-        assert "does not match the state directory" in mock.call_args[0][0]
+        warning = str(warned.list[0].message)
+        assert "does not match the state directory" in warning
 
 
 class TestApplicationWithState:
