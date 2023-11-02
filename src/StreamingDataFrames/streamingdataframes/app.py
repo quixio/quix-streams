@@ -503,9 +503,6 @@ class Application:
             for tp in topic_partitions:
                 self._state_manager.on_partition_revoke(tp)
 
-        for i in range(100):
-            time.sleep(0.1)
-
     def _on_lost(self, _, topic_partitions: List[TopicPartition]):
         """
         Dropping lost partitions from consumer and state
