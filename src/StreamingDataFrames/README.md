@@ -82,10 +82,19 @@ additional processing steps for that row if successful (including producing).
 
 See below for a more detailed breakdown of functionality.
 
+
+
+
+
+
+
+<br><br>
+
 # The Basics of Streaming DataFrames
 
 Here's the minimum you need to know to get started with Streaming DataFrames.
 
+<br>
 
 ## The `Application` class
 
