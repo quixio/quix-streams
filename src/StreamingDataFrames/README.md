@@ -3,6 +3,7 @@
 ***WARNING: This library is in alpha and will experience rapid and significant 
 interface changes, feature additions, and bugfixes. Use with discretion!***
 
+<br>
 
 ## A Note to Current Quixstreams Python Users
 
@@ -24,14 +25,12 @@ To see how to use this new library with your existing ecoystem, check out the se
 **Migrating from Legacy Quixstreams (<2.0.0a)**
 
 
-<br>
-
 ## Old client code
 
 Should you need the old version of the client still, the code has been moved to a 
 separate branch [here](TODO:LINKHERE).
 
-
+<br>
 
 # Installation
 
