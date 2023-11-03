@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from streamingdataframes.state.exceptions import PartitionNotAssignedError
-from streamingdataframes.state.types import DumpsFunc, LoadsFunc, Store
+from streamingdataframes.state.types import Store
 from .partition import (
     RocksDBStorePartition,
     RocksDBPartitionTransaction,
@@ -24,8 +24,6 @@ class RocksDBStore(Store):
         options: Optional[RocksDBOptionsType] = None,
         open_max_retries: int = 10,
         open_retry_backoff: float = 3.0,
-        dumps: Optional[DumpsFunc] = None,
-        loads: Optional[LoadsFunc] = None,
     ):
         """
         RocksDB-based state store.
@@ -40,10 +38,6 @@ class RocksDBStore(Store):
         :param open_max_retries: number of times to retry opening the database
             if it's locked by another process. To disable retrying, pass 0.
         :param open_retry_backoff: number of seconds to wait between each retry.
-        :param dumps: the function used to serialize keys & values to bytes in
-            transactions. Default - `json.dumps`
-        :param loads: the function used to deserialize keys & values from bytes
-            to objects in transactions. Default - `json.loads`.
         """
         self._name = name
         self._topic = topic
@@ -51,8 +45,6 @@ class RocksDBStore(Store):
         self._transactions: Dict[int, RocksDBPartitionTransaction] = {}
         self._partitions: Dict[int, RocksDBStorePartition] = {}
         self._options = options
-        self._dumps = dumps
-        self._loads = loads
         self._open_max_retries = open_max_retries
         self._open_retry_backoff = open_retry_backoff
 
@@ -99,8 +91,6 @@ class RocksDBStore(Store):
         store_partition = RocksDBStorePartition(
             path=path,
             options=self._options,
-            dumps=self._dumps,
-            loads=self._loads,
             open_max_retries=self._open_max_retries,
             open_retry_backoff=self._open_retry_backoff,
         )

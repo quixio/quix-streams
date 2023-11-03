@@ -1,5 +1,4 @@
-import json
-from typing import Any, Optional
+from typing import Any
 
 from streamingdataframes.state.types import DumpsFunc, LoadsFunc
 from .exceptions import StateSerializationError
@@ -11,24 +10,14 @@ __all__ = (
 )
 
 
-def _default_dumps(value: Any) -> bytes:
-    return json.dumps(value, separators=(",", ":")).encode()
-
-
-def _default_loads(value: bytes) -> Any:
-    return json.loads(value)
-
-
-def serialize(value: Any, dumps: Optional[DumpsFunc] = None) -> bytes:
-    dumps = dumps or _default_dumps
+def serialize(value: Any, dumps: DumpsFunc) -> bytes:
     try:
         return dumps(value)
     except Exception as exc:
         raise StateSerializationError(f'Failed to serialize value: "{value}"') from exc
 
 
-def deserialize(value: bytes, loads: Optional[LoadsFunc] = None) -> Any:
-    loads = loads or _default_loads
+def deserialize(value: bytes, loads: LoadsFunc) -> Any:
     try:
         return loads(value)
     except Exception as exc:
@@ -38,7 +27,8 @@ def deserialize(value: bytes, loads: Optional[LoadsFunc] = None) -> Any:
 
 
 def serialize_key(
-    key: Any, prefix: bytes = b"", dumps: Optional[DumpsFunc] = None
+    key: Any,
+    dumps: DumpsFunc,
+    prefix: bytes = b"",
 ) -> bytes:
-    dumps = dumps or _default_dumps
     return prefix + serialize(key, dumps=dumps)

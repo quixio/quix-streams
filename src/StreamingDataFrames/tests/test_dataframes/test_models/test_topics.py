@@ -199,7 +199,7 @@ class TestTopic:
                 b"key",
                 {"field": "value"},
                 b"key",
-                '{"field":"value"}',
+                b'{"field":"value"}',
             ),
         ],
     )
@@ -241,7 +241,7 @@ class TestTopic:
                 {"field": "value"},
                 "new_key",
                 b"new_key",
-                '{"field":"value"}',
+                b'{"field":"value"}',
             ),
         ],
     )
