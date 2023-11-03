@@ -16,7 +16,8 @@ from streamingdataframes.state.rocksdb import (
     NestedPrefixError,
     RocksDBOptions,
 )
-from streamingdataframes.state.rocksdb.serialization import serialize, default_dumps
+from streamingdataframes.state.rocksdb.serialization import serialize
+from streamingdataframes.utils.json import dumps
 
 TEST_KEYS = [
     "string",
@@ -224,9 +225,9 @@ class TestRocksDBPartitionTransaction:
 
         batch = rocksdict.WriteBatch(raw_mode=True)
         # Set non-deserializable key and valid value
-        batch.put(bytes_, serialize(string_, dumps=default_dumps))
+        batch.put(bytes_, serialize(string_, dumps=dumps))
         # Set valid key and non-deserializable value
-        batch.put(serialize(string_, dumps=default_dumps), bytes_)
+        batch.put(serialize(string_, dumps=dumps), bytes_)
         rocksdb_partition.write(batch)
 
         with rocksdb_partition.begin() as tx:

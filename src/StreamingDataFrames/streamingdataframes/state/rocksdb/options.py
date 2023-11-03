@@ -5,7 +5,7 @@ import rocksdict
 from rocksdict import DBCompressionType
 
 from streamingdataframes.state.types import DumpsFunc, LoadsFunc
-from .serialization import default_dumps, default_loads
+from streamingdataframes.utils.json import dumps, loads
 from .types import RocksDBOptionsType, CompressionType
 
 __all__ = ("RocksDBOptions",)
@@ -40,8 +40,8 @@ class RocksDBOptions(RocksDBOptionsType):
     compression_type: CompressionType = "lz4"
     wal_dir: Optional[str] = None
     db_log_dir: Optional[str] = None
-    dumps: DumpsFunc = default_dumps
-    loads: LoadsFunc = default_loads
+    dumps: DumpsFunc = dumps
+    loads: LoadsFunc = loads
 
     def to_options(self) -> rocksdict.Options:
         """
