@@ -82,10 +82,12 @@ class StreamingDataFrame:
     instead, the command is permanently added to the `StreamingDataFrame`'s
     "pipeline". You can then execute this pipeline indefinitely on a `Row` like so:
 
-    df = StreamingDataframe()
+    ```
+    df = StreamingDataframe(topic)
     df = df.apply(lambda row: row) # do stuff; must return the row back!
     for row_obj in [row_0, row_1]:
         print(df.process(row_obj))
+    ```
 
     Note that just like Pandas, you can "filter" out rows with your operations, like:
     ```
@@ -123,16 +125,14 @@ class StreamingDataFrame:
 
     def __init__(
         self,
-        topics_in: List[Topic],
+        topic: Topic,
         state_manager: StateStoreManager,
     ):
         self._id = str(uuid.uuid4())
         self._pipeline = Pipeline(_id=self.id)
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
-        if not topics_in:
-            raise ValueError("Topic Input list cannot be empty")
-        self._topics_in = {t.name: t for t in topics_in}
+        self._topics_in = {topic.name: topic}
         self._topics_out = {}
         self._state_manager = state_manager
 
@@ -143,11 +143,34 @@ class StreamingDataFrame:
         stateful: bool = False,
     ) -> Self:
         """
-        Apply a custom function with `Row.value` as the expected input.
+        Apply a custom function with current value
+        and :py:class:`streamingdataframes.models.context.MessageContext`
+        as the expected input.
 
-        The function either return a new dict, a list of dicts (with expand=True), or
-        None (to modify a dict in-place)
+        :param func: a callable which accepts 2 arguments:
+            - value - a dict with fields and values for the current Row
+            - a context - an instance of :py:class:`streamingdataframes.models.context.MessageContext`
+                which contains message metadata like key, timestamp, partition,
+                and more.
+
+            .. note:: if `stateful=True` is passed, a third argument of type `State`
+                will be provided to the function.
+
+            The custom function may return:
+            - a new dict to replace the current Row value
+            - a list of dicts (with `expand=True`) to treat each item of the list
+                as a separate Row downstream
+            - `None` to modify the current Row value in-place
+
+        :param expand: if True and return value is a list, the StreamingDataFrame
+            will treat each item of the list as a separate Row.
+            Default - `False`.
+        :param stateful: if `True`, the function will be provided with 3rd argument
+            of type `State` to perform stateful operations.
+
+        :return: current instance of `StreamingDataFrame`
         """
+
         if stateful:
             # Register the default store for each input topic
             for topic in self._topics_in.values():

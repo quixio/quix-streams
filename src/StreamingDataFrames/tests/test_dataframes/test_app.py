@@ -92,7 +92,7 @@ class TestApplication:
             value_deserializer=JSONDeserializer(),
         )
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.to_topic(topic_out)
 
         processed_count = 0
@@ -139,7 +139,7 @@ class TestApplication:
         topic = app.topic(
             topic_name, value_deserializer=JSONDeserializer(column_name="root")
         )
-        df = app.dataframe(topics_in=[topic])
+        df = app.dataframe(topic)
 
         # Stop app after 10s if nothing failed
         executor.submit(_stop_app_on_timeout, app, 10.0)
@@ -157,7 +157,7 @@ class TestApplication:
         with producer:
             producer.produce(topic=topic_name, value=b"abc")
 
-        df = app.dataframe(topics_in=[topic])
+        df = app.dataframe(topic)
 
         with pytest.raises(SerializationError):
             # Stop app after 10s if nothing failed
@@ -181,7 +181,7 @@ class TestApplication:
         app = app_factory(on_consumer_error=on_consumer_error)
         topic_name, _ = topic_factory()
         topic = app.topic(topic_name)
-        df = app.dataframe(topics_in=[topic])
+        df = app.dataframe(topic)
 
         with patch.object(RowConsumer, "poll") as mocked:
             # Patch RowConsumer.poll to simulate failures
@@ -198,7 +198,7 @@ class TestApplication:
 
         topic_name, _ = topic_factory()
         topic = app.topic(topic_name, value_deserializer=JSONDeserializer())
-        df = app.dataframe(topics_in=[topic])
+        df = app.dataframe(topic)
 
         def fail(*args):
             raise ValueError("test")
@@ -232,7 +232,7 @@ class TestApplication:
         )
         topic_name, _ = topic_factory()
         topic = app.topic(topic_name, value_deserializer=JSONDeserializer())
-        df = app.dataframe(topics_in=[topic])
+        df = app.dataframe(topic)
 
         def fail(*args):
             raise ValueError("test")
@@ -261,7 +261,7 @@ class TestApplication:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
         topic_out = app.topic(topic_out_name, value_serializer=JSONSerializer())
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.to_topic(topic_out)
 
         with producer:
@@ -281,7 +281,7 @@ class TestApplication:
         topic_out_name, _ = topic_factory()
         topic_out = app.topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.to_topic(topic_out)
 
         with producer:
@@ -314,7 +314,7 @@ class TestApplication:
         topic_out_name, _ = topic_factory()
         topic_out = app.topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.to_topic(topic_out)
 
         with producer:
@@ -335,7 +335,7 @@ class TestApplication:
     def test_streamingdataframe_init(self):
         app = Application(broker_address="localhost", consumer_group="test")
         topic = app.topic(name="test-topic")
-        sdf = app.dataframe(topics_in=[topic])
+        sdf = app.dataframe(topic)
 
         assert sdf
 
@@ -442,7 +442,7 @@ class TestQuixApplication:
         topic_name, _ = topic_factory()
         app = quix_app_factory(workspace_id="")
         topic = app.topic(topic_name)
-        sdf = app.dataframe([topic])
+        sdf = app.dataframe(topic)
         sdf.apply(lambda x, state: x, stateful=True)
 
         monkeypatch.setenv(
@@ -514,7 +514,7 @@ class TestApplicationWithState:
             if total == total_messages:
                 total_consumed.set_result(total)
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.apply(count, stateful=True)
 
         total_messages = 3
@@ -578,7 +578,7 @@ class TestApplicationWithState:
             failed.set_result(True)
             raise ValueError("test")
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.apply(count, stateful=True)
         df.apply(fail)
 
@@ -639,7 +639,7 @@ class TestApplicationWithState:
         def fail(_):
             raise ValueError("test")
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.apply(count, stateful=True)
         df.apply(fail)
 
@@ -713,7 +713,7 @@ class TestApplicationWithState:
         def count(_, ctx, state: State):
             done.set_result(True)
 
-        df = app.dataframe(topics_in=[topic_in])
+        df = app.dataframe(topic_in)
         df.apply(count, stateful=True)
 
         # Produce a message to the topic and flush

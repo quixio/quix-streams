@@ -27,11 +27,11 @@ def pipeline(pipeline_function):
 @pytest.fixture()
 def dataframe_factory():
     def _dataframe_factory(
-        topics_in: Optional[List[Topic]] = None,
+        topic: Optional[Topic] = None,
         state_manager: Optional[StateStoreManager] = None,
     ):
         return StreamingDataFrame(
-            topics_in=topics_in or [Topic(name="test_in")],
+            topic=topic or Topic(name="test_in"),
             state_manager=state_manager or MagicMock(spec=StateStoreManager),
         )
 
