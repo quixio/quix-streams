@@ -21,9 +21,8 @@ previous versions of the library, though some functionality is not 100% replicat
 Barring very specific circumstances, you should be able to upgrade to the new version
 relatively easily.
 
-To see how to use this new library with your existing ecoystem, check out the section
-**Migrating from Legacy Quixstreams (<2.0.0a)**
-
+To see how to use this new library with your existing ecosystem, see 
+[**Migrating from Legacy Quixstreams**](#migrating-from-legacy-quixstreams-v200a)
 
 ## Old client code
 
@@ -110,11 +109,12 @@ If you are using the Quix platform, you will still use the `Application` class, 
 instead call it via `Application.Quix()`.
 
 If you are running this within the Quix platform it will be configured 
-automatically. Otherwise, see the **Quix Platform Configuration** section.
+automatically. Otherwise, see 
+[**Quix Platform Configuration**](#quix-platform-users-applicationquix).
 
 <br>
 
-## Defining Kafka Topics - `Application.topic()`
+## Defining Kafka Topics: `Application.topic()`
 
 Any topic you plan to interact with will require a respective `Topic` object. 
 
@@ -129,7 +129,7 @@ Hold on to those topic objects, you'll need them later for your `dataframe`!
 
 <br>
 
-## Creating your DataFrame - `Application.dataframe()`
+## Creating your DataFrame: `Application.dataframe()`
 
 You'll need a `StreamingDataFrame` object to work with; the `Application` class can 
 generate that for you via:
@@ -152,7 +152,7 @@ next section.
 
 <br>
 
-## Running your Application + DataFrame - `Application.run()`
+## Running your Application + DataFrame: `Application.run()`
 
 Finally, we can run this as a Kafka client by handing the sdf to the `.run` call:
 
@@ -178,7 +178,7 @@ Otherwise, proceed onward to learn more about the libraries features in detail.
 
 <br><br><br>
 
-# `StreamingDataFrame` - Detailed Overview
+# `StreamingDataFrame`: Detailed Overview
 
 Now that we've outlined how to get an `Application` up and running, what exactly can you
 do with a `StreamingDataFrame`?
@@ -381,8 +381,8 @@ def edit_data(row, ctx, state):
 sdf = sdf.apply(edit_data, stateful=True)
 ```
 
-For more information about stateful processing in general, see the 
-**Stateful Processing** section.
+For more information about stateful processing in general, see 
+[**Stateful Applications**](#stateful-applications).
 
 
 <br>
@@ -575,7 +575,7 @@ An appropriate recovery process is currently under development.
 
 <br><br><br>
 
-# Quix Platform Users - `Application.Quix()`
+# Quix Platform Users: `Application.Quix()`
 
 For those using the Quix platform directly (that is, using the client in the web 
 browser), all you need for ensuring everything connects as expected is to use the 
@@ -587,7 +587,7 @@ API to create topics).
 
 <br>
 
-## Using Quix-formatted Messages (SERDES)
+## Using Quix-formatted Messages (SERDES
 
 The Quix Platform/topics use their own messaging formats, known as `TimeseriesData` and 
 `EventData`. In order to consume or produce these, you must use the respective SERDES:
@@ -599,8 +599,12 @@ The Quix Platform/topics use their own messaging formats, known as `TimeseriesDa
 By default, they currently use the "legacy" format (Quixstreams<0.6.0), so we recommend 
 using the flag `as_legacy=False` when you are ready to convert over to the newest format.
 
-See [here](#migrating-from-legacy-quixstreams-v200a) for more detail around the
-legacy format.
+See [**Migrating from Legacy Quixstreams**](#migrating-from-legacy-quixstreams-v200a) 
+for more detail around the legacy format.
+
+Of course, you can use whatever serialization method you like instead of the Quix 
+format, it just may not play as nicely with the Quix Platform UI tooling!
+
 
 <br>
 
