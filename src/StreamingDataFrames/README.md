@@ -658,6 +658,8 @@ guarantees going forward.
 
 ***`streamingdataframes` will (gracefully) skip any split messages it encounters.***
 
+<br>
+
 ## Batched/"Buffered" Message Handling
 
 `streamingdataframes` has deprecated producer-based buffering producer 
