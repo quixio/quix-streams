@@ -19,8 +19,10 @@ from .models import (
     Topic,
     Deserializer,
     BytesDeserializer,
+    JSONDeserializer,
     Serializer,
     BytesSerializer,
+    JSONSerializer,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -283,9 +285,9 @@ class Application:
     def topic(
         self,
         name: str,
-        value_deserializer: Optional[Deserializer] = None,
+        value_deserializer: Optional[Deserializer] = JSONDeserializer(),
         key_deserializer: Optional[Deserializer] = BytesDeserializer(),
-        value_serializer: Optional[Serializer] = None,
+        value_serializer: Optional[Serializer] = JSONSerializer(),
         key_serializer: Optional[Serializer] = BytesSerializer(),
         creation_configs: Optional[TopicCreationConfigs] = None,
     ) -> Topic:
