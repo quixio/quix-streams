@@ -18,6 +18,8 @@ from streamingdataframes.models.serializers import (
     DeserializerIsNotProvidedError,
     IgnoreMessage,
     SerializationError,
+    SERIALIZERS,
+    DESERIALIZERS,
 )
 from .utils import ConfluentKafkaMessageStub, int_to_bytes, float_to_bytes
 
@@ -314,3 +316,20 @@ class TestTopic:
         row = row_factory(key=key, value=value)
         with pytest.raises(SerializationError):
             topic.row_serialize(row=row)
+
+    @pytest.mark.parametrize(
+        "serializer_str, expected_type", [(k, v) for k, v in SERIALIZERS.items()]
+    )
+    def test_get_serializer_strings(self, serializer_str, expected_type):
+        assert isinstance(
+            Topic("topic", key_serializer=serializer_str)._key_serializer, expected_type
+        )
+
+    @pytest.mark.parametrize(
+        "deserializer_str, expected_type", [(k, v) for k, v in DESERIALIZERS.items()]
+    )
+    def test_get_deserializer_strings(self, deserializer_str, expected_type):
+        assert isinstance(
+            Topic("topic", key_deserializer=deserializer_str)._key_deserializer,
+            expected_type,
+        )

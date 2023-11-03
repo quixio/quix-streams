@@ -17,12 +17,8 @@ from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
-    Deserializer,
-    BytesDeserializer,
-    JSONDeserializer,
-    Serializer,
-    BytesSerializer,
-    JSONSerializer,
+    SerializerType,
+    DeserializerType,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -285,23 +281,27 @@ class Application:
     def topic(
         self,
         name: str,
-        value_deserializer: Optional[Deserializer] = JSONDeserializer(),
-        key_deserializer: Optional[Deserializer] = BytesDeserializer(),
-        value_serializer: Optional[Serializer] = JSONSerializer(),
-        key_serializer: Optional[Serializer] = BytesSerializer(),
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "bytes",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "bytes",
         creation_configs: Optional[TopicCreationConfigs] = None,
     ) -> Topic:
         """
         Create a topic definition.
 
+        Allows you to specify serialization that should be used when consuming/producing
+        to the topic in the form of a string name (i.e. "json" for JSON) or a
+        serialization class instance directly, like JSONSerializer().
+
         :param name: topic name
             .. note:: If the application is created via `Quix.Application()`,
               the topic name will be prefixed by Quix workspace id, and it will
               be `<workspace_id>-<name>`
-        :param value_deserializer: a deserializer for values
-        :param key_deserializer: a deserializer for keys
-        :param value_serializer: a serializer for values
-        :param key_serializer: a serializer for keys
+        :param value_deserializer: a deserializer type for values; default="json"
+        :param key_deserializer: a deserializer type for keys; default="bytes"
+        :param value_serializer: a serializer type for values; default="json"
+        :param key_serializer: a serializer type for keys; default="bytes"
         :param creation_configs: settings for auto topic creation (Quix platform only)
             Its name will be overridden by this method's 'name' param.
         :return: `Topic` object
