@@ -74,7 +74,7 @@ class Application:
 
             app = Application(broker_address='localhost:9092', consumer_group='group')
             topic = app.topic('test-topic')
-            df = app.dataframe([topic])
+            df = app.dataframe(topic)
             df.apply(lambda value, context: print('New message', value)
 
             app.run(dataframe=df)
@@ -321,18 +321,18 @@ class Application:
 
     def dataframe(
         self,
-        topics_in: List[Topic],
+        topic: Topic,
     ) -> StreamingDataFrame:
         """
         Create a StreamingDataFrame to define message processing pipeline.
 
         See :class:`streamingdataframes.dataframe.StreamingDataFrame` for more details
 
-        :param topics_in: a list of :class:`streamingdataframes.models.Topic`
-            to be used as input topics.
+        :param topic: a `streamingdataframes.models.Topic` instance
+            to be used as an input topic.
         :return: `StreamingDataFrame` object
         """
-        sdf = StreamingDataFrame(topics_in=topics_in, state_manager=self._state_manager)
+        sdf = StreamingDataFrame(topic=topic, state_manager=self._state_manager)
         sdf.consumer = self._consumer
         sdf.producer = self._producer
         return sdf

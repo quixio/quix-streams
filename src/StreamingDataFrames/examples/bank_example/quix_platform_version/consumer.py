@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from streamingdataframes import Application, MessageContext
 from streamingdataframes.models.serializers import (
     QuixTimeseriesSerializer,
-    QuixTimeseriesDeserializer,
+    QuixDeserializer,
 )
 
 # Reminder: the platform will have these values available by default so loading the
@@ -27,9 +27,7 @@ app = Application.Quix(
 )
 
 # Define an input topic with JSON deserializer
-input_topic = app.topic(
-    "qts__purchase_events", value_deserializer=QuixTimeseriesDeserializer()
-)
+input_topic = app.topic("qts__purchase_events", value_deserializer=QuixDeserializer())
 
 # Define an output topic with JSON dserializer
 output_topic = app.topic(
@@ -37,7 +35,7 @@ output_topic = app.topic(
 )
 
 # Create a StreamingDataFrame and start building your processing pipeline
-sdf = app.dataframe(topics_in=[input_topic])
+sdf = app.dataframe(input_topic)
 
 
 def uppercase_source(value: dict, ctx: MessageContext):

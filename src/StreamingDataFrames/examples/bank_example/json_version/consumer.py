@@ -32,7 +32,7 @@ input_topic = app.topic("json__purchase_events", value_deserializer=JSONDeserial
 output_topic = app.topic("json__user_notifications", value_serializer=JSONSerializer())
 
 # Create a StreamingDataFrame and start building your processing pipeline
-sdf = app.dataframe(topics_in=[input_topic])
+sdf = app.dataframe(input_topic)
 
 # Filter only messages with "account_class" == "Gold" and "transaction_amount" >= 1000
 sdf = sdf[

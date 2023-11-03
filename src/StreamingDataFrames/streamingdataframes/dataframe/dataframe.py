@@ -82,10 +82,12 @@ class StreamingDataFrame:
     instead, the command is permanently added to the `StreamingDataFrame`'s
     "pipeline". You can then execute this pipeline indefinitely on a `Row` like so:
 
-    df = StreamingDataframe()
+    ```
+    df = StreamingDataframe(topic)
     df = df.apply(lambda row: row) # do stuff; must return the row back!
     for row_obj in [row_0, row_1]:
         print(df.process(row_obj))
+    ```
 
     Note that just like Pandas, you can "filter" out rows with your operations, like:
     ```
@@ -123,16 +125,14 @@ class StreamingDataFrame:
 
     def __init__(
         self,
-        topics_in: List[Topic],
+        topic: Topic,
         state_manager: StateStoreManager,
     ):
         self._id = str(uuid.uuid4())
         self._pipeline = Pipeline(_id=self.id)
         self._real_consumer: Optional[RowConsumerProto] = None
         self._real_producer: Optional[RowProducerProto] = None
-        if not topics_in:
-            raise ValueError("Topic Input list cannot be empty")
-        self._topics_in = {t.name: t for t in topics_in}
+        self._topics_in = {topic.name: topic}
         self._topics_out = {}
         self._state_manager = state_manager
 
