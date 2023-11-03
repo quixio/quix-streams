@@ -104,7 +104,7 @@ app = Application(
 
 <br>
 
-### Using the Quix Platform? - `Application.Quix()`
+#### Using the Quix Platform? - `Application.Quix()`
 
 If you are using the Quix platform, you will still use the `Application` class, but
 instead call it via `Application.Quix()`.
@@ -127,6 +127,7 @@ output_topic = app.topic("my_output_topic")
 
 Hold on to those topic objects, you'll need them later for your `dataframe`!
 
+<br>
 
 ## Creating your DataFrame - `Application.dataframe()`
 
@@ -149,6 +150,7 @@ sdf = sdf.to_topic(output_topic)
 More details on the features and usage of `StreamingDataFrame` will be in the 
 next section.
 
+<br>
 
 ## Running your Application + DataFrame - `Application.run()`
 
@@ -163,6 +165,7 @@ That's it! Once running it will, as an endless loop,
 - process it with your `StreamingDataFrame`
 - commit the message
 
+<br>
 
 ## Ready to Jump In? Try out the Examples!
 
