@@ -56,7 +56,7 @@ def uppercase_source(value: dict, ctx: MessageContext):
 # Filter only messages with "account_class" == "Gold" and "transaction_amount" >= 1000
 sdf = sdf[
     (sdf["account_class"] == "Gold")
-    & (sdf["transaction_amount"].apply(lambda x: abs(x)) >= 1000)
+    & (sdf["transaction_amount"].apply(lambda x, ctx: abs(x)) >= 1000)
 ]
 
 # Drop all fields except the ones we need
@@ -69,7 +69,7 @@ sdf = sdf.apply(uppercase_source)
 sdf["customer_notification"] = "A high cost purchase was attempted"  # add new column
 
 # Print the transformed message to the console
-sdf = sdf.apply(lambda val: print(f"Sending update: {val}"))
+sdf = sdf.apply(lambda val, ctx: print(f"Sending update: {val}"))
 
 # Send the message to the output topic
 sdf.to_topic(output_topic)
