@@ -76,7 +76,7 @@ class TestQuixDeserializersValidation:
         deserializer = QuixDeserializer()
         with pytest.raises(
             SerializationError,
-            match="the JSON object must be str, bytes or bytearray, not int",
+            match="Input must be bytes, bytearray, memoryview, or str",
         ):
             list(
                 deserializer(  # noqa

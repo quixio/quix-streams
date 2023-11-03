@@ -5,6 +5,10 @@ from .base import SerializationContext
 from .exceptions import SerializationError, IgnoreMessage
 from .json import JSONDeserializer, JSONSerializer
 from ..types import MessageHeadersMapping
+from streamingdataframes.utils.json import (
+    dumps as default_dumps,
+    loads as default_loads,
+)
 
 Q_SPLITMESSAGEID_NAME = "__Q_SplitMessageId"
 
@@ -67,20 +71,17 @@ class QuixDeserializer(JSONDeserializer):
     def __init__(
         self,
         column_name: Optional[str] = None,
-        loads: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
-        loads_kwargs: Optional[Mapping] = None,
+        loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
     ):
         """
         Parses JSON data from either Timeseries/Parameter or EventData formats.
 
         :param column_name: if provided, the deserialized value will be wrapped into
             dictionary with `column_name` as a key.
-        :param loads: function to parse json from bytes. Default - `json.loads`.
-        :param loads_kwargs: dict with named arguments for `loads` function.
+        :param loads: function to parse json from bytes.
+            Default - :py:func:`streamingdataframes.utils.json.loads`.
         """
-        super().__init__(
-            column_name=column_name, loads=loads, loads_kwargs=loads_kwargs
-        )
+        super().__init__(column_name=column_name, loads=loads)
         self._deserializers = {
             QModelKey.TIMESERIESDATA: self.deserialize_timeseries,
             QModelKey.PARAMETERDATA: self.deserialize_timeseries,
@@ -230,9 +231,7 @@ class QuixDeserializer(JSONDeserializer):
 
         # Parse JSON from the message value
         try:
-            deserialized = (
-                self._loads(value, **self._loads_kwargs) if not as_legacy else value
-            )
+            deserialized = self._loads(value) if not as_legacy else value
         except (ValueError, TypeError) as exc:
             raise SerializationError(str(exc)) from exc
 
@@ -253,7 +252,7 @@ class QuixDeserializer(JSONDeserializer):
     def _parse_legacy_format(
         self, value: bytes
     ) -> Tuple[Union[Mapping, List[Mapping]], Mapping]:
-        value = self._loads(value, **self._loads_kwargs)
+        value = self._loads(value)
         headers = {
             QCodecId.HEADER_NAME: value.pop(LegacyHeaders.Q_CODEC_ID),
             QModelKey.HEADER_NAME: value.pop(LegacyHeaders.Q_MODEL_KEY),
@@ -269,16 +268,15 @@ class QuixSerializer(JSONSerializer):
     def __init__(
         self,
         as_legacy: bool = True,
-        dumps: Optional[Callable[[Any, None], Union[str, bytes]]] = None,
-        dumps_kwargs: Optional[Mapping] = None,
+        dumps: Callable[[Any], Union[str, bytes]] = default_dumps,
     ):
         """
         Serializer that returns data in json format.
         :param as_legacy: parse as the legacy format; Default = True
-        :param dumps: a function to serialize objects to json. Default - `json.dumps`
-        :param dumps_kwargs: a dict with keyword arguments for `dumps()` function.
+        :param dumps: a function to serialize objects to json.
+            Default - :py:func:`streamingdataframes.utils.json.dumps`
         """
-        super().__init__(dumps=dumps, dumps_kwargs=dumps_kwargs)
+        super().__init__(dumps=dumps)
         self._as_legacy = as_legacy
 
     @property
@@ -320,9 +318,12 @@ class QuixTimeseriesSerializer(QuixSerializer):
 
     Example of the format:
         Input:
-        {'a': 1, 'b': 1.1, 'c': "string", 'd': b'bytes', 'Tags': {'tag1': 'tag'}}
+        ```
+            {'a': 1, 'b': 1.1, 'c': "string", 'd': b'bytes', 'Tags': {'tag1': 'tag'}}
+        ```
 
         Output:
+        ```
         {
             "Timestamps" [123123123],
             "NumericValues: {"a": [1], "b": [1.1]},
@@ -330,6 +331,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
             "BinaryValues: {"d": ["Ynl0ZXM="]},
             "TagValues": {"tag1": ["tag']}
         }
+        ```
 
     """
 
@@ -407,18 +409,23 @@ class QuixEventsSerializer(QuixSerializer):
 
     Example:
         Input:
+        ```
         {
             "Id": "an_event",
             "Value": "any_string"
             "Tags": {"tag1": "tag"}},
         }
+        ```
+
         Output:
+        ```
         {
             "Id": "an_event",
             "Value": "any_string",
             "Tags": {"tag1": "tag"}},
             "Timestamp":1692703362840389000
         }
+        ```
     """
 
     # Quix EventData data must have the following headers set

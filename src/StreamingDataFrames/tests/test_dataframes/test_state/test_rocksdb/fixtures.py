@@ -6,7 +6,6 @@ import pytest
 from streamingdataframes.state.rocksdb import RocksDBStore
 from streamingdataframes.state.rocksdb.options import RocksDBOptions
 from streamingdataframes.state.rocksdb.partition import RocksDBStorePartition
-from streamingdataframes.state.types import DumpsFunc, LoadsFunc
 
 
 @pytest.fixture()
@@ -16,8 +15,6 @@ def rocksdb_partition_factory(tmp_path):
         options: Optional[RocksDBOptions] = None,
         open_max_retries: int = 0,
         open_retry_backoff: float = 3.0,
-        dumps: Optional[DumpsFunc] = None,
-        loads: Optional[LoadsFunc] = None,
     ) -> RocksDBStorePartition:
         path = (tmp_path / name).as_posix()
         return RocksDBStorePartition(
@@ -25,8 +22,6 @@ def rocksdb_partition_factory(tmp_path):
             options=options,
             open_max_retries=open_max_retries,
             open_retry_backoff=open_retry_backoff,
-            dumps=dumps,
-            loads=loads,
         )
 
     return factory

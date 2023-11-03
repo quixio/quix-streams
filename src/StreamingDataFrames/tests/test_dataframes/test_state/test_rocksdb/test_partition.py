@@ -17,6 +17,7 @@ from streamingdataframes.state.rocksdb import (
     RocksDBOptions,
 )
 from streamingdataframes.state.rocksdb.serialization import serialize
+from streamingdataframes.utils.json import dumps
 
 TEST_KEYS = [
     "string",
@@ -224,9 +225,9 @@ class TestRocksDBPartitionTransaction:
 
         batch = rocksdict.WriteBatch(raw_mode=True)
         # Set non-deserializable key and valid value
-        batch.put(bytes_, serialize(string_))
+        batch.put(bytes_, serialize(string_, dumps=dumps))
         # Set valid key and non-deserializable value
-        batch.put(serialize(string_), bytes_)
+        batch.put(serialize(string_, dumps=dumps), bytes_)
         rocksdb_partition.write(batch)
 
         with rocksdb_partition.begin() as tx:
@@ -357,9 +358,25 @@ class TestRocksDBPartitionTransaction:
         key = secrets.token_bytes(10)
         value = secrets.token_bytes(10)
 
-        with rocksdb_partition_factory(loads=lambda v: v, dumps=lambda v: v) as db:
+        with rocksdb_partition_factory(
+            options=RocksDBOptions(loads=lambda v: v, dumps=lambda v: v)
+        ) as db:
             with db.begin() as tx:
                 tx.set(key, value)
 
             with db.begin() as tx:
                 assert tx.get(key) == value
+
+    def test_set_dict_nonstr_keys_fails(self, rocksdb_partition):
+        key = "key"
+        value = {0: 1}
+        with rocksdb_partition.begin() as tx:
+            with pytest.raises(StateSerializationError):
+                tx.set(key, value)
+
+    def test_set_datetime_fails(self, rocksdb_partition):
+        key = "key"
+        value = datetime.utcnow()
+        with rocksdb_partition.begin() as tx:
+            with pytest.raises(StateSerializationError):
+                tx.set(key, value)

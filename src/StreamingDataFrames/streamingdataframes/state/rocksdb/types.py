@@ -2,6 +2,8 @@ from typing import Protocol, Optional, Literal
 
 import rocksdict
 
+from streamingdataframes.state.types import DumpsFunc, LoadsFunc
+
 CompressionType = Literal["none", "snappy", "zlib", "bz2", "lz4", "lz4hc", "zstd"]
 
 
@@ -14,6 +16,8 @@ class RocksDBOptionsType(Protocol):
     compression_type: CompressionType
     wal_dir: Optional[str]
     db_log_dir: Optional[str]
+    dumps: DumpsFunc
+    loads: LoadsFunc
 
     def to_options(self) -> rocksdict.Options:
         ...
