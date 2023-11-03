@@ -265,7 +265,7 @@ sdf["a_new_str_field"] = sdf["field_a"] + sdf["field_b"]
 sdf["another_new_field"] = sdf["a_new_str_field"].apply(lambda value: value + "another")
 ```
 
-See [the `.apply()` section](#user-defined-functions:`.apply()`) for more information on how that works.
+See [the `.apply()` section](#user-defined-functions-apply) for more information on how that works.
 
 
 <br>
@@ -599,7 +599,7 @@ The Quix Platform/topics use their own messaging formats, known as `TimeseriesDa
 By default, they currently use the "legacy" format (Quixstreams<0.6.0), so we recommend 
 using the flag `as_legacy=False` when you are ready to convert over to the newest format.
 
-See [here](#migrating-from-legacy-quixstreams-(<2.0.0a)) for more detail around the
+See [here](#migrating-from-legacy-quixstreams-v200a) for more detail around the
 legacy format.
 
 <br>
@@ -622,7 +622,7 @@ You can find these values on the platform in your given workspace settings.
 
 <br>
 
-# Migrating from Legacy Quixstreams (<2.0.0a)
+# Migrating from Legacy Quixstreams <v2.0.0a
 
 If you were using a previous version of QuixStreams, more specifically the Quix
 `ParameterData` or `EventData` formats, This section is for you!
