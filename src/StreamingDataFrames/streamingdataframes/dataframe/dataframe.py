@@ -143,11 +143,34 @@ class StreamingDataFrame:
         stateful: bool = False,
     ) -> Self:
         """
-        Apply a custom function with `Row.value` as the expected input.
+        Apply a custom function with current value
+        and :py:class:`streamingdataframes.models.context.MessageContext`
+        as the expected input.
 
-        The function either return a new dict, a list of dicts (with expand=True), or
-        None (to modify a dict in-place)
+        :param func: a callable which accepts 2 arguments:
+            - value - a dict with fields and values for the current Row
+            - a context - an instance of :py:class:`streamingdataframes.models.context.MessageContext`
+                which contains message metadata like key, timestamp, partition,
+                and more.
+
+            .. note:: if `stateful=True` is passed, a third argument of type `State`
+                will be provided to the function.
+
+            The custom function may return:
+            - a new dict to replace the current Row value
+            - a list of dicts (with `expand=True`) to treat each item of the list
+                as a separate Row downstream
+            - `None` to modify the current Row value in-place
+
+        :param expand: if True and return value is a list, the StreamingDataFrame
+            will treat each item of the list as a separate Row.
+            Default - `False`.
+        :param stateful: if `True`, the function will be provided with 3rd argument
+            of type `State` to perform stateful operations.
+
+        :return: current instance of `StreamingDataFrame`
         """
+
         if stateful:
             # Register the default store for each input topic
             for topic in self._topics_in.values():
