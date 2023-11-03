@@ -345,7 +345,7 @@ class TestDataframeStateful:
             state.set("max", current_max)
             value["max"] = current_max
 
-        sdf = dataframe_factory([topic], state_manager=state_manager)
+        sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf.apply(stateful_func, stateful=True)
 
         state_manager.on_partition_assign(
@@ -378,7 +378,7 @@ class TestDataframeStateful:
             state.set("max", current_max)
             value["max"] = current_max
 
-        sdf = dataframe_factory([topic], state_manager=state_manager)
+        sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf.apply(lambda v, ctx: [{"number": i} for i in v["number"]], expand=True)
         sdf.apply(stateful_func, stateful=True)
 
