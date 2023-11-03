@@ -265,7 +265,7 @@ sdf["a_new_str_field"] = sdf["field_a"] + sdf["field_b"]
 sdf["another_new_field"] = sdf["a_new_str_field"].apply(lambda value: value + "another")
 ```
 
-See the `.apply()` section for more information on how that works.
+See [the `.apply()` section](#user-defined-functions:`.apply()`) for more information on how that works.
 
 
 <br>
@@ -305,7 +305,7 @@ sdf = sdf[(sdf["field_a"] != "woo") and (sdf["field_c"][0] > 100)]
 
 <br>
 
-## User Defined Functions - `.apply()`
+## User Defined Functions: `.apply()`
 
 Should you need more advanced transformations, `.apply()` allows you
 to use any python function to operate on your row.
@@ -387,7 +387,7 @@ For more information about stateful processing in general, see the
 
 <br>
 
-## Producing to Topics - `.to_topic()`
+## Producing to Topics: `.to_topic()`
 
 To send the current state of the `StreamingDataFrame` to a topic, simply call 
 `to_topic` with a `Topic` instance (like one generated from `Application.topic()`) 
@@ -595,6 +595,12 @@ The Quix Platform/topics use their own messaging formats, known as `TimeseriesDa
 - `QuixDeserializer` (can deserialize both)
 - `QuixEventsSerializer`
 - `QuixTimeseriesSerializer`
+
+By default, they currently use the "legacy" format (Quixstreams<0.6.0), so we recommend 
+using the flag `as_legacy=False` when you are ready to convert over to the newest format.
+
+See [here](#migrating-from-legacy-quixstreams-(<2.0.0a)) for more detail around the
+legacy format.
 
 <br>
 
