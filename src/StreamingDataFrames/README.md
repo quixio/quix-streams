@@ -216,7 +216,7 @@ That's it! Once running it will, as an endless loop,
 
 ## Putting it All Together
 
-No we have everything we need to get your app running:
+Now we have everything we need to get your app running:
 
 ```python
 from quixstreams import Application
