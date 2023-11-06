@@ -4,13 +4,13 @@ from time import sleep
 
 from dotenv import load_dotenv
 
-from streamingdataframes.kafka import Producer
-from streamingdataframes.models.serializers import (
+from quixstreams.kafka import Producer
+from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
     SerializationContext,
 )
-from streamingdataframes.models.topics import Topic, TopicCreationConfigs
-from streamingdataframes.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.models.topics import Topic, TopicCreationConfigs
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
