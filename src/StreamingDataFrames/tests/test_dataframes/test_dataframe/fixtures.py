@@ -1,6 +1,5 @@
-from copy import deepcopy
 from functools import partial
-from typing import Optional, List
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -36,19 +35,6 @@ def dataframe_factory():
         )
 
     return _dataframe_factory
-
-
-@pytest.fixture()
-def more_rows_func():
-    def more_rows(row, ctx):
-        rows_out = []
-        for item in row["x_list"]:
-            row_out = deepcopy(row)
-            row_out["x_list"] = item
-            rows_out.append(row_out)
-        return rows_out
-
-    return more_rows
 
 
 def row_values_plus_n(n, row, ctx):
