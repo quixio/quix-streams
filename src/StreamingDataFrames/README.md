@@ -71,19 +71,20 @@ The `app` manages various Kafka-related setup/teardown and message lifecycle
 ## Current Features
 
 - A simple framework with familiar Pandas interface to ease newcomers into streaming.
-- Seamless integration with other Python frameworks and ML models.
+- Easily integrates with other Python frameworks and ML models.
 - Support for basic serialization formats, including JSON (and Quix-specific)
 - Support for basic stateful operations using RocksDB
 - At-least-once Kafka processing guarantees
 - Designed to run and scale resiliently via container orchestration (like Kubernetes)
 - Also easily runs locally for development and debugging
-- Integrates well with the Quix platform.
+- Seamless integration with the Quix platform.
 
 Unfamiliar with the Quix platform? We make building and releasing your applications 
 easy by managing an entire infrastructure stack (Kafka, Kubernetes, CI/CD) for you 
 under the hood, with production software best practices in mind, and all backed by Git. 
 
-[Be sure to check us out](https://quix.io/) to get up and running with Kafka, fast!
+[Be sure to check us out at quix.io](https://quix.io/) to get up and running with 
+Kafka, fast!
 
 <br>
 
