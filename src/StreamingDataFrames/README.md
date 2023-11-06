@@ -36,11 +36,15 @@ There are also details about format/functional changes at
 Should you need the old version of the client still, the code has been moved to a 
 separate branch [here](TODO:LINKHERE).
 
+
 <br><br>
 
-# Installation
+
+# Installation on `Python>=3.8`
+
 
 `pip install quixstreams>=2.0alpha`
+
 
 <br><br>
 
