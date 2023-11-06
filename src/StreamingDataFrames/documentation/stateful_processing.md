@@ -5,15 +5,6 @@ Currently, Streaming DataFrames utilizes a basic state-store with RocksDB.
 This allows you to do things like compare a record to a previous version of it, or
 do some aggregate calculations. Here, we will outline how stateful processing works.
 
-
-<br>
-
-## Single Topic Consumption Only
-
-Due to limitations outlined below, you can only consume from 1 topic for a stateful
-application.
-
-
 <br>
 
 ## How State Relates to Kafka Keys
