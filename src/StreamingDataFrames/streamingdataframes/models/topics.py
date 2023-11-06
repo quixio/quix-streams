@@ -79,7 +79,7 @@ class Topic:
         return serializer
 
     @staticmethod
-    def _get_deserializer(deserializer: SerializerType) -> Deserializer:
+    def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
         if isinstance(deserializer, str):
             try:
                 return DESERIALIZERS[deserializer]()
