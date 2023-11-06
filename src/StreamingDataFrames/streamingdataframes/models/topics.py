@@ -15,6 +15,8 @@ from .serializers import (
     DESERIALIZERS,
     SerializerType,
     DeserializerType,
+    Serializer,
+    Deserializer,
 )
 from .timestamps import MessageTimestamp
 from .types import (
@@ -52,10 +54,10 @@ class Topic:
         :param key_serializer: a serializer type for keys
         """
         self._name = name
-        self._key_serializer = self.get_serializer(key_serializer)
-        self._key_deserializer = self.get_deserializer(key_deserializer)
-        self._value_serializer = self.get_serializer(value_serializer)
-        self._value_deserializer = self.get_deserializer(value_deserializer)
+        self._key_serializer = self._get_serializer(key_serializer)
+        self._key_deserializer = self._get_deserializer(key_deserializer)
+        self._value_serializer = self._get_serializer(value_serializer)
+        self._value_deserializer = self._get_deserializer(value_deserializer)
 
     @property
     def name(self) -> str:
@@ -65,15 +67,27 @@ class Topic:
         return self._name
 
     @staticmethod
-    def get_serializer(serializer: SerializerType):
+    def _get_serializer(serializer: SerializerType) -> Serializer:
         if isinstance(serializer, str):
-            return SERIALIZERS[serializer]()
+            try:
+                return SERIALIZERS[serializer]()
+            except KeyError:
+                raise ValueError(
+                    f"Unknown deserializer option '{serializer}'; "
+                    f"valid options are {list(SERIALIZERS.keys())}"
+                )
         return serializer
 
     @staticmethod
-    def get_deserializer(deserializer: SerializerType):
+    def _get_deserializer(deserializer: SerializerType) -> Deserializer:
         if isinstance(deserializer, str):
-            return DESERIALIZERS[deserializer]()
+            try:
+                return DESERIALIZERS[deserializer]()
+            except KeyError:
+                raise ValueError(
+                    f"Unknown deserializer option '{deserializer}'; "
+                    f"valid options are {list(DESERIALIZERS.keys())}"
+                )
         return deserializer
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:

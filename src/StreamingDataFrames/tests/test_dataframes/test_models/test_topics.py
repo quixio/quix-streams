@@ -320,16 +320,24 @@ class TestTopic:
     @pytest.mark.parametrize(
         "serializer_str, expected_type", [(k, v) for k, v in SERIALIZERS.items()]
     )
-    def test_get_serializer_strings(self, serializer_str, expected_type):
+    def test__get_serializer_strings(self, serializer_str, expected_type):
         assert isinstance(
             Topic("topic", key_serializer=serializer_str)._key_serializer, expected_type
         )
 
+    def test__get_serializer_strings_invalid(self):
+        with pytest.raises(ValueError):
+            Topic("topic", key_serializer="fail_me_bro")
+
     @pytest.mark.parametrize(
         "deserializer_str, expected_type", [(k, v) for k, v in DESERIALIZERS.items()]
     )
-    def test_get_deserializer_strings(self, deserializer_str, expected_type):
+    def test__get_deserializer_strings(self, deserializer_str, expected_type):
         assert isinstance(
             Topic("topic", key_deserializer=deserializer_str)._key_deserializer,
             expected_type,
         )
+
+    def test__get_deserializer_strings_invalid(self):
+        with pytest.raises(ValueError):
+            Topic("topic", key_deserializer="fail_me_bro")

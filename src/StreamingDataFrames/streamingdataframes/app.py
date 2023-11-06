@@ -281,10 +281,10 @@ class Application:
     def topic(
         self,
         name: str,
-        value_deserializer: Optional[DeserializerType] = "json",
-        key_deserializer: Optional[DeserializerType] = "bytes",
-        value_serializer: Optional[SerializerType] = "json",
-        key_serializer: Optional[SerializerType] = "bytes",
+        value_deserializer: DeserializerType = "json",
+        key_deserializer: DeserializerType = "bytes",
+        value_serializer: SerializerType = "json",
+        key_serializer: SerializerType = "bytes",
         creation_configs: Optional[TopicCreationConfigs] = None,
     ) -> Topic:
         """
