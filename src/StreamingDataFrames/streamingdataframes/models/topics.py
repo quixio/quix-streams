@@ -31,6 +31,30 @@ logger = logging.getLogger(__name__)
 __all__ = ("Topic",)
 
 
+def _get_serializer(serializer: SerializerType) -> Serializer:
+    if isinstance(serializer, str):
+        try:
+            return SERIALIZERS[serializer]()
+        except KeyError:
+            raise ValueError(
+                f"Unknown deserializer option '{serializer}'; "
+                f"valid options are {list(SERIALIZERS.keys())}"
+            )
+    return serializer
+
+
+def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
+    if isinstance(deserializer, str):
+        try:
+            return DESERIALIZERS[deserializer]()
+        except KeyError:
+            raise ValueError(
+                f"Unknown deserializer option '{deserializer}'; "
+                f"valid options are {list(DESERIALIZERS.keys())}"
+            )
+    return deserializer
+
+
 class Topic:
     def __init__(
         self,
@@ -54,10 +78,10 @@ class Topic:
         :param key_serializer: a serializer type for keys
         """
         self._name = name
-        self._key_serializer = self._get_serializer(key_serializer)
-        self._key_deserializer = self._get_deserializer(key_deserializer)
-        self._value_serializer = self._get_serializer(value_serializer)
-        self._value_deserializer = self._get_deserializer(value_deserializer)
+        self._key_serializer = _get_serializer(key_serializer)
+        self._key_deserializer = _get_deserializer(key_deserializer)
+        self._value_serializer = _get_serializer(value_serializer)
+        self._value_deserializer = _get_deserializer(value_deserializer)
 
     @property
     def name(self) -> str:
@@ -65,30 +89,6 @@ class Topic:
         Topic name
         """
         return self._name
-
-    @staticmethod
-    def _get_serializer(serializer: SerializerType) -> Serializer:
-        if isinstance(serializer, str):
-            try:
-                return SERIALIZERS[serializer]()
-            except KeyError:
-                raise ValueError(
-                    f"Unknown deserializer option '{serializer}'; "
-                    f"valid options are {list(SERIALIZERS.keys())}"
-                )
-        return serializer
-
-    @staticmethod
-    def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
-        if isinstance(deserializer, str):
-            try:
-                return DESERIALIZERS[deserializer]()
-            except KeyError:
-                raise ValueError(
-                    f"Unknown deserializer option '{deserializer}'; "
-                    f"valid options are {list(DESERIALIZERS.keys())}"
-                )
-        return deserializer
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
         """
