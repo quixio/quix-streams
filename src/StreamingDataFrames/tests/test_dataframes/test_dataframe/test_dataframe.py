@@ -163,50 +163,6 @@ class TestDataframeProcess:
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row) is None
 
-    def test_multiple_row_generation(
-        self, dataframe_factory, more_rows_func, row_factory
-    ):
-        dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func, expand=True)
-        expected = [row_factory({"x": 1, "x_list": i}) for i in range(3)]
-        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
-        assert len(actual) == len(expected)
-        for idx in range(len(actual)):
-            assert actual[idx].value == expected[idx].value
-
-    def test_multiple_row_generation_expand_not_set(
-        self, dataframe_factory, more_rows_func, row_factory
-    ):
-        dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func)
-        with pytest.raises(InvalidApplyResultType):
-            dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
-
-    def test_multiple_row_generation_with_additional_apply(
-        self, dataframe_factory, more_rows_func, row_factory, row_plus_n_func
-    ):
-        dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func, expand=True)
-        dataframe = dataframe.apply(row_plus_n_func(n=1))
-        expected = [row_factory({"x": 2, "x_list": i + 1}) for i in range(3)]
-        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
-        assert len(actual) == len(expected)
-        for idx in range(len(actual)):
-            assert actual[idx].value == expected[idx].value
-
-    def test_multiple_row_generation_with_filtering_not_possible(
-        self, dataframe_factory, more_rows_func, row_factory
-    ):
-        dataframe = dataframe_factory()
-        dataframe = dataframe.apply(more_rows_func, expand=True)
-        dataframe = dataframe.apply(lambda row, ctx: row if row["x_list"] > 0 else None)
-        # You cannot "filter" this way!! Row count should remain the same
-        expected = [row_factory({"x": 1, "x_list": i}) for i in range(0, 3)]
-        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
-        assert len(actual) == len(expected)
-        for idx in range(len(actual)):
-            assert actual[idx].value == expected[idx].value
-
 
 class TestDataframeKafka:
     def test_to_topic(
@@ -365,38 +321,3 @@ class TestDataframeStateful:
 
         assert result
         assert result.value["max"] == 10
-
-    def test_apply_stateful_expand(self, dataframe_factory, state_manager, row_factory):
-        topic = Topic("test")
-
-        def stateful_func(value, ctx, state: State):
-            current_max = state.get("max")
-            if current_max is None:
-                current_max = value["number"]
-            else:
-                current_max = max(current_max, value["number"])
-            state.set("max", current_max)
-            value["max"] = current_max
-
-        sdf = dataframe_factory(topic, state_manager=state_manager)
-        sdf.apply(lambda v, ctx: [{"number": i} for i in v["number"]], expand=True)
-        sdf.apply(stateful_func, stateful=True)
-
-        state_manager.on_partition_assign(
-            tp=TopicPartitionStub(topic=topic.name, partition=0)
-        )
-        rows = [
-            row_factory(topic=topic.name, value={"number": [0, 1, 2]}),
-            row_factory(topic=topic.name, value={"number": [10, 11, 12]}),
-            row_factory(topic=topic.name, value={"number": [3]}),
-        ]
-        result = None
-        for row in rows:
-            with state_manager.start_store_transaction(
-                topic=row.topic, partition=row.partition, offset=row.offset
-            ):
-                result = sdf.process(row)
-
-        assert result
-        # A list will be returned because of expand
-        assert result[0].value["max"] == 12

@@ -35,7 +35,6 @@ def setitem(k: str, v: Any, row: Row) -> Row:
 def apply(
     row: Row,
     func: Union[ApplyFunc, StatefulApplyFunc],
-    expand: bool = False,
     state_manager: Optional[StateStoreManager] = None,
 ) -> Union[Row, List[Row]]:
     # Providing state to the function if state_manager is passed
@@ -55,14 +54,6 @@ def apply(
         # Function returned dict, assume it's a new value for the Row
         row.value = result
         return row
-    if isinstance(result, list):
-        if expand:
-            # Function returned a list and `expand=True` - treat each item in the list
-            # as a new Row object downstream
-            return [row.clone(value=r) for r in result]
-        raise InvalidApplyResultType(
-            "Returning 'list' types is not allowed unless 'expand=True' is passed"
-        )
     raise InvalidApplyResultType(
         f"Only 'dict' or 'NoneType' (in-place modification) allowed, not {type(result)}"
     )
@@ -139,7 +130,6 @@ class StreamingDataFrame:
     def apply(
         self,
         func: Union[ApplyFunc, StatefulApplyFunc],
-        expand: bool = False,
         stateful: bool = False,
     ) -> Self:
         """
@@ -158,13 +148,8 @@ class StreamingDataFrame:
 
             The custom function may return:
             - a new dict to replace the current Row value
-            - a list of dicts (with `expand=True`) to treat each item of the list
-                as a separate Row downstream
             - `None` to modify the current Row value in-place
 
-        :param expand: if True and return value is a list, the StreamingDataFrame
-            will treat each item of the list as a separate Row.
-            Default - `False`.
         :param stateful: if `True`, the function will be provided with 3rd argument
             of type `State` to perform stateful operations.
 
@@ -176,11 +161,9 @@ class StreamingDataFrame:
             for topic in self._topics_in.values():
                 self._state_manager.register_store(topic_name=topic.name)
             return self._apply(
-                lambda row: apply(
-                    row, func, expand=expand, state_manager=self._state_manager
-                )
+                lambda row: apply(row, func, state_manager=self._state_manager)
             )
-        return self._apply(lambda row: apply(row, func, expand=expand))
+        return self._apply(lambda row: apply(row, func))
 
     def process(self, row: Row) -> Optional[Union[Row, List[Row]]]:
         """
