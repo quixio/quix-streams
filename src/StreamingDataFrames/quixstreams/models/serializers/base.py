@@ -119,4 +119,4 @@ DeserializerStr: TypeAlias = Literal[
     "json",
     "quix",
 ]
-DeserializerType: TypeAlias = Union[SerializerStr, Serializer]
+DeserializerType: TypeAlias = Union[DeserializerStr, Deserializer]
