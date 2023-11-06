@@ -1,5 +1,7 @@
 import abc
 from typing import Optional, Any, Union
+from typing_extensions import TypeAlias, Literal
+
 
 from confluent_kafka.serialization import (
     SerializationContext as _SerializationContext,
@@ -12,6 +14,8 @@ __all__ = (
     "SerializationContext",
     "Deserializer",
     "Serializer",
+    "SerializerType",
+    "DeserializerType",
 )
 
 
@@ -89,3 +93,30 @@ class Serializer(abc.ABC):
     @abc.abstractmethod
     def __call__(self, *args, **kwargs) -> bytes:
         ...
+
+
+SerializerStr: TypeAlias = Literal[
+    "str",
+    "string",
+    "bytes",
+    "double",
+    "int",
+    "integer",
+    "json",
+    "quix_timeseries",
+    "quix_events",
+]
+
+SerializerType: TypeAlias = Union[SerializerStr, Serializer]
+
+DeserializerStr: TypeAlias = Literal[
+    "str",
+    "string",
+    "bytes",
+    "double",
+    "int",
+    "integer",
+    "json",
+    "quix",
+]
+DeserializerType: TypeAlias = Union[SerializerStr, Serializer]

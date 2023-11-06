@@ -5,14 +5,18 @@ from .context import MessageContext
 from .messages import KafkaMessage
 from .rows import Row
 from .serializers import (
-    Deserializer,
     SerializationContext,
-    Serializer,
     DeserializerIsNotProvidedError,
     SerializerIsNotProvidedError,
     BytesSerializer,
     BytesDeserializer,
     IgnoreMessage,
+    SERIALIZERS,
+    DESERIALIZERS,
+    SerializerType,
+    DeserializerType,
+    Serializer,
+    Deserializer,
 )
 from .timestamps import MessageTimestamp
 from .types import (
@@ -27,29 +31,57 @@ logger = logging.getLogger(__name__)
 __all__ = ("Topic",)
 
 
+def _get_serializer(serializer: SerializerType) -> Serializer:
+    if isinstance(serializer, str):
+        try:
+            return SERIALIZERS[serializer]()
+        except KeyError:
+            raise ValueError(
+                f"Unknown deserializer option '{serializer}'; "
+                f"valid options are {list(SERIALIZERS.keys())}"
+            )
+    return serializer
+
+
+def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
+    if isinstance(deserializer, str):
+        try:
+            return DESERIALIZERS[deserializer]()
+        except KeyError:
+            raise ValueError(
+                f"Unknown deserializer option '{deserializer}'; "
+                f"valid options are {list(DESERIALIZERS.keys())}"
+            )
+    return deserializer
+
+
 class Topic:
     def __init__(
         self,
         name: str,
-        value_deserializer: Optional[Deserializer] = None,
-        key_deserializer: Optional[Deserializer] = BytesDeserializer(),
-        value_serializer: Optional[Serializer] = None,
-        key_serializer: Optional[Serializer] = BytesSerializer(),
+        value_deserializer: Optional[DeserializerType] = None,
+        key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
+        value_serializer: Optional[SerializerType] = None,
+        key_serializer: Optional[SerializerType] = BytesSerializer(),
     ):
         """
         A definition of Topic.
 
+        Allows you to specify serialization that should be used when consuming/producing
+        to the topic in the form of a string name (i.e. "json" for JSON) or a
+        serialization class instance directly, like JSONSerializer().
+
         :param name: topic name
-        :param value_deserializer: a deserializer for values
-        :param key_deserializer: a deserializer for keys
-        :param value_serializer: a serializer for values
-        :param key_serializer: a serializer for keys
+        :param value_deserializer: a deserializer type for values
+        :param key_deserializer: a deserializer type for keys
+        :param value_serializer: a serializer type for values
+        :param key_serializer: a serializer type for keys
         """
         self._name = name
-        self._key_serializer = key_serializer
-        self._key_deserializer = key_deserializer
-        self._value_serializer = value_serializer
-        self._value_deserializer = value_deserializer
+        self._key_serializer = _get_serializer(key_serializer)
+        self._key_deserializer = _get_deserializer(key_deserializer)
+        self._value_serializer = _get_serializer(value_serializer)
+        self._value_deserializer = _get_deserializer(value_deserializer)
 
     @property
     def name(self) -> str:
