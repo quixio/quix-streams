@@ -1,28 +1,32 @@
-# Quixstreams v2.0.0a: Streaming DataFrames
+# Quixstreams v2.0 ALPHA: Streaming DataFrames
 
-***WARNING: This library is in alpha and will experience rapid and significant 
-interface changes, feature additions, and bugfixes. Use with discretion!***
+***WARNING: v2.0 is currently in alpha and will likely experience rapid and 
+significant interface changes, feature additions, and bugfixes. Use with discretion!***
 
 <br>
 
 ## A Note to Current Quixstreams Python Users
 
-Quix is sunsetting the previous `quixstreams` python client and replacing it with a new 
-`streamingdataframes` interface. 
+Quix is sunsetting the previous python interface and replacing it with a new 
+`Streaming DataFrames` interface. 
 
-It is now completely independent of the C# library and will be the first to receive new 
+It is also completely independent of the C# library and will be the first to receive new 
 features and functionality.
 
 
-## Compatibility with `quixstreams<2.0.0a`
+## Compatibility with `quixstreams<2.0`
 
-`streamingdataframes` is currently fully backwards compatible with the
+`quixstreams v2.0` is currently fully backwards compatible with the
 previous versions of the library, though some functionality is not 100% replicated.
+
 Barring very specific circumstances, you should be able to upgrade to the new version
 relatively easily.
 
 To see how to use this new library with your existing ecosystem, see 
-[**Migrating from Legacy Quixstreams**](#migrating-from-legacy-quixstreams-v200a)
+[**Quix Platform Users**](./documentation/quix_platform.md).
+
+There are also details about format/functional changes at 
+[**Upgrading from Legacy Quixstreams**](./documentation/upgrading_legacy.md).
 
 ## Old client code
 
@@ -33,7 +37,7 @@ separate branch [here](TODO:LINKHERE).
 
 # Installation
 
-`pip install quixstreams>=2.0.0a`
+`pip install quixstreams>=2.0alpha`
 
 <br>
 
@@ -41,59 +45,90 @@ separate branch [here](TODO:LINKHERE).
 # Overview
 
 ## What is Streaming DataFrames (SDF)?
-Streaming DataFrames is a Pandas-like Kafka client for Python. It uses a similar 
-interface as Pandas where possible for data transformation steps, along with adding 
-kafka-specific operations or features.
+Streaming DataFrames is a Pandas-like Python application/microservice framework for 
+Kafka or Redpanda. 
 
-It additionally provides simple state storage (based on message keys).
+It uses a similar interface as Pandas for data transformation (ETL), along with 
+additional kafka-specific operations or features.
 
-In the future, it will offer more complex stateful aggregations like windowed 
-calculations and exactly once semantics.
-
+<br>
 
 ## How does it work?
-Unlike Pandas, your `dataframe` is a pre-defined pipeline that is executed at runtime, 
-so you do not interact with it in real time. You define a handler that manages other 
-kafka-related setup and runs the `dataframe`.
+There are two primary components: a `StreamingDataFrame` (`dataframe`) and it's handler, 
+`Application` (`app`).
 
-Your `dataframe` will be receiving kafka messages one at a time, so imagine each message 
-is equivalent to a single-rowed `dataframe`.
+Your `dataframe` is a pre-defined (declarative) pipeline that you give to your `app`
+to execute. All of your ETL is done here. 
 
-With the `dataframe` itself, you can do typical Pandas column-wise ETL manipulations, or
-more direct work with `.apply()`, manipulating the row like it were a dictionary. 
+The `app` manages various Kafka-related setup/teardown and message lifecycle 
+(consuming, committing). It processes each message with the `dataframe` you provide it.
 
-You can also "filter" a row by doing Pandas-like conditional checks, which ignores all 
-additional processing steps for that row if successful (including producing).
+<br>
 
-See below for a more detailed breakdown of functionality.
+## Current Features
 
+- A simple framework with familiar Pandas interface to ease newcomers into streaming.
+- Seamless integration with other Python frameworks and ML models.
+- Support for basic serialization formats, including JSON (and Quix-specific)
+- Support for basic stateful operations using RocksDB
+- At-least-once Kafka processing guarantees
+- Designed to run and scale resiliently via container orchestration (like Kubernetes)
+- Also easily runs locally for development and debugging
+- Integrates well with the Quix platform.
 
+Unfamiliar with the Quix platform? We make building and releasing your applications 
+easy by managing an entire infrastructure stack (Kafka, Kubernetes, CI/CD) for you 
+under the hood, with production software best practices in mind, and all backed by Git. 
 
+[Be sure to check us out](https://quix.io/) to get up and running with Kafka, fast!
 
+<br>
 
+## Upcoming Improvements
+
+- Stateful Windowing: tumbling, hopping, and sliding windows
+- Group-bys and joins (for merging topics/keys)
+- State recovery based on Kafka changelog topics
+- Support for exactly-once Kafka processing (aka transactions)
+- Other serialization support like Avro and Protobuf support
+- Schema Registry support
+- Multiple input topic support (for non-stateful applications)
+
+<br>
+
+## Want to get Involved?
+
+We strongly believe in the open source model and would love to build a strong 
+community with you, so please join us!
+
+While we are still working on out contribution guidelines, here are some ways you can 
+get involved right now:
+
+- [Join our community mailing list](https://share.hsforms.com/1WWc91mC_SqCvk8xeUWibMw4yjw2)
+- [Check out our project on GitHub](https://github.com/quixio/quix-streams/)
+- [Hang out with us on Slack](https://join.slack.com/t/stream-processing/shared_invite/zt-25lo3wxo7-28hlegDhR2XqyLWjBQynwA)
 
 
 <br><br>
 
-# The Basics of Streaming DataFrames
+# The Basics
 
 Here's the minimum you need to know to get started with Streaming DataFrames.
 
 
 ## The `Application` class
 
-This is the handler and entrypoint of Quixstreams application, and thus a good place 
-to start!
+This is the handler and entrypoint of any `quixstreams` application.
 
-You can use the `Application` class to help define all of kafka-related configuration,
-and it can generate all necessary objects you will need to get up and running.
+The `Application` class houses all kafka-related configuration, and can generate all 
+necessary objects you will need to get up and running.
 
 At minimum, you'll need to know your Kafka broker address and the consumer group ID you
 wish to use.
 
 You can get started via:
 ```python
-from streamingdataframes import Application
+from quixstreams import Application
 
 app = Application(
    broker_address="my_broker_url",
@@ -110,7 +145,7 @@ instead call it via `Application.Quix()`.
 
 If you are running this within the Quix platform it will be configured 
 automatically. Otherwise, see 
-[**Quix Platform Configuration**](#quix-platform-users-applicationquix).
+[**Quix Platform Configuration**](./documentation/quix_platform.md).
 
 <br>
 
@@ -131,24 +166,27 @@ Hold on to those topic objects, you'll need them later for your `dataframe`!
 
 ## Creating your DataFrame: `Application.dataframe()`
 
-You'll need a `StreamingDataFrame` object to work with; the `Application` class can 
-generate that for you via:
+Next is the `StreamingDataFrame`, which the `Application` class can generate for you 
+via:
 
-```
-sdf = app.dataframe(topics_in=[input_topic])
+```python
+sdf = app.dataframe(topic=input_topic)
 ```
 
-From here, you can add processing steps to your `StreamingDataFrame`, like so:
+Then, add processing steps to your `StreamingDataFrame`, like so:
 
-```
-sdf = sdf[["field_a", "field_b"]]
-sdf = sdf[sdf["field_a" > 10]]
+```python
+def add_one(data, ctx):
+    for field, value in data.items():
+        if isinstance(value, int):
+            data[field] += 1
+
+sdf = sdf[["field_0", "field_2", "field_8"]]
+sdf = sdf.apply(add_one)
+sdf = sdf[sdf["field_0" > 10]]
 sdf = sdf.to_topic(output_topic)
 # etc...
 ```
-
-More details on the features and usage of `StreamingDataFrame` will be in the 
-next section.
 
 <br>
 
@@ -167,634 +205,45 @@ That's it! Once running it will, as an endless loop,
 
 <br>
 
-## Ready to Jump In? Try out the Examples!
+## Putting it All Together
 
-There are some examples available in the `./examples` folder of the library to get
-you started!
-
-Otherwise, proceed onward to learn more about the libraries features in detail.
-
-
-
-<br><br><br>
-
-# `StreamingDataFrame`: Detailed Overview
-
-Now that we've outlined how to get an `Application` up and running, what exactly can you
-do with a `StreamingDataFrame`?
-
-<br>
-
-For example purposes, assume the record we are manipulating looks like this:
+No we have everything we need to get your app running:
 
 ```python
-row = {
-    "field_a": "my_str", 
-    "field_b": "my_other_str",
-    "field_c": [1, 2, 3],
-    "field_d": "DELETE ME",
-}
-```
+from quixstreams import Application
 
-Along with a `StreamingDataFrame` instance, as generated by an `Application`:
+app = Application(
+   broker_address="my_broker_url",
+   consumer_group="my_consumer_group_name",
+)
 
-```python
-sdf = Application().dataframe()
-```
-
-<br>
-
-## Interacting with `Rows`
-
-Under the hood, `StreamingDataFrame` is manipulating kafka messages via `Row` objects.
-
-Simplified, a `Row` is effectively a dictionary of the Kafka message 
-value, with each key equivalent to a dataframe column name. 
-
-Our `StreamingDataFrame` interacts with `Row` objects via the Pandas dataframe
-interface, unless specified otherwise (i.e. the `.apply()` feature).
-
-As a user, their existence should largely go unnoticed.
+input_topic = app.topic("my_input_topic")
+output_topic = app.topic("my_output_topic")
 
 
-<br>
+def add_one(data, ctx):
+    for field, value in data.items():
+        if isinstance(value, int):
+            data[field] += 1
 
-## Accessing Fields/Columns
-
-In typical Pandas dataframe fashion, you can access a column:
-
-```python
-sdf["field_a"]  # "my_str"
-```
-
-Typically, this is done in combination with other operations.
-
-You can also access nested objects (dicts, lists, etc):
-
-```python
-sdf["field_c"][2]  # 3
-```
-
-
-<br>
-
-## Performing Operations with Columns
-
-In typical Pandas dataframe fashion, you can do almost any basic operations or 
-comparisons with columns, assuming validity:
-
-```python
-sdf["field_a"] + sdf["field_b"]
-sdf["field_a"] or sdf["field_b"]
-sdf["field_a"] & sdf["field_b"]
-sdf["field_a"] is not None
-sdf["field_a"] != "woo"
-```
-
-
-<br>
-
-## Assigning New Columns
-
-In typical Pandas fashion, you can add new columns from the results of numerous other
-operations:
-
-```python
-sdf["a_new_int_field"] = 5 
-sdf["a_new_str_field"] = sdf["field_a"] + sdf["field_b"]
-sdf["another_new_field"] = sdf["a_new_str_field"].apply(lambda value: value + "another")
-```
-
-See [the `.apply()` section](#user-defined-functions-apply) for more information on how that works.
-
-
-<br>
-
-## Subsetting/Slicing Columns
-
-In typical Pandas fashion, you can take a subset of columns:
-
-```python
-# remove "field_d"
-sdf = sdf[["field_a", "field_b", "field_c"]]
-```
-
-
-<br>
-
-## Filtering Rows (messages)
-
-"Filtering" is a very specific concept and operation with `StreamingDataFrames`.
-
-In practice, it functions similarly to how you might filter rows with Pandas DataFrames
-with conditionals.
-
-Basically, when a "column" reference is actually another operation, it will be treated 
-as a "filter". If that result is empty or None, the row is now "filtered".
-
-When filtered, ALL additional SDF-defined processes for that row are now skipped,
-_including kafka-related operations like producing_.
-
-```python
-# This would continue onward
-sdf = sdf[sdf["field_a"] == "my_str"]
-
-# This would filter the row, skipping further functions
-sdf = sdf[(sdf["field_a"] != "woo") and (sdf["field_c"][0] > 100)]
-```
-
-<br>
-
-## User Defined Functions: `.apply()`
-
-Should you need more advanced transformations, `.apply()` allows you
-to use any python function to operate on your row.
-
-When used on a `StreamingDataFrame`, your function must accept 2 ordered arguments, 
-first is the row data (as a dictionary), and the other is a special "context" object
-that allows you to access other message metadata (key, partition, etc).
-
-Consequently, your function **MUST either** _alter this dict in-place_ 
-**OR** _return a dictionary_ to directly replace the current data with.
-
-For example:
-
-```python
-# in place example
-def in_place(row, ctx):
-    for k in list(row.keys()):
-        if isinstance(row[k], str):
-            del row[k]     
             
-sdf = sdf.apply(in_place)
+sdf = app.dataframe(topic=input_topic)
+sdf = sdf[["field_0", "field_2", "field_8"]]
+sdf = sdf[sdf["field_0" > 10]]
+sdf = sdf.apply(add_one)
+sdf = sdf.to_topic(output_topic)
 
+if __name__ == "__main__":
+    app.run(sdf)
 
-# replacement example
-def new_data(row, ctx):
-    return {col: val for col, val in row.items() if isinstance(val, str)}
-
-sdf = sdf.apply(new_data)
-```
-
-<br>
-
-The `.apply()` function is also valid for columns, but rather than providing a 
-dictionary, it instead uses the column value, and the function must return a value.
-
-```python
-sdf["new_field"] = sdf["field_a"].apply(lambda value: value + "-add_me")
-```
-
-NOTE: Every `.apply()` is a _temporary_ state change, but the result can be assigned. 
-So, in the above example, `field_a` remains `my_str`, but `new_field == my_str-add_me` 
-as desired.
-
-<br>
-
-### Stateful Processing with `.apply()`
-
-If you are using stateful processing, you can access the state for a given row via
-a keyword argument `stateful=True`, and your function should accept a third object as
-an argument (you can just call it something like `state`).
-
-When your function has access to state, it will receive a `State` object, which can do:
-- `.get(key)`
-- `.set(key, value)`
-- `.delete(key)`
-- `.exists(key)`
-
-`Key` and value can be anything, and you can have any number of keys.
-
-NOTE: `key` is unrelated to the Kafka message key, which is handled behind the scenes.
-
-```python
-def edit_data(row, ctx, state):
-    msg_max = len(row["field_c"])
-    current_max = state.get("current_len_max")
-    if current_max < msg_max:
-        state.set("current_len_max", msg_max)
-        current_max = msg_max
-    row["len_max"] = current_max
-    return row
-
-
-sdf = sdf.apply(edit_data, stateful=True)
-```
-
-For more information about stateful processing in general, see 
-[**Stateful Applications**](#stateful-applications).
-
-
-<br>
-
-## Producing to Topics: `.to_topic()`
-
-To send the current state of the `StreamingDataFrame` to a topic, simply call 
-`to_topic` with a `Topic` instance (like one generated from `Application.topic()`) 
-as an argument.
-
-To change the outgoing message key (which defaults to the current consumed key), 
-you can optionally provide a key function, which operates similarly to the `.apply()` 
-function with a `row` (dict) and `ctx` argument, and returns a desired 
-(serializable) key.
-
-```python
-output_topic = Application().topic("my_output_topic")
-other_output_topic = Application().topic("my_other_output_topic")
-
-def key_generator(row, ctx):
-    # do stuff
-    return "my_new_key"
-
-
-### previous sdf stuff here
-sdf = sdf.to_topic(output_topic, key=key_generator)
-
-### additional sdf stuff here
-sdf = sdf.to_topic(other_output_topic)
-```
-
-
-
-
-
-
-<br><br><br>
-
-# Serialization and Deserialization (SERDES)
-
-SERDES simply refers to how you pack (serialize) or unpack (deserialize) your data 
-when publishing to or reading from a topic. With our `Application.topic()`, we use the `JSON`
-format by default.
-
-There are numerous ways to SERDES your data, and we provide some plain formats for you 
-to select from, including `bytes`, `string`, `integer`, etc.
-
-We also plan on including other popular ones like `PROTOBUF` in the near future.
-
-<br>
-
-## Using a SERDES
-
-SERDES are used by providing the appropriate SERDES class to a `Topic` object
-(or, with `Application.topic()` which forwards all the same arguments to `Topic`)
-
-You can select them like so:
-
-```python
-from streamingdataframes.models.serializers import (
-    JSONSerializer, JSONDeserializer
-)
-from streamingdataframes.app import Application
-
-app = Application()
-topic_in = app.topic(
-    "my_input_topic", value_deserializer=JSONDeserializer(),
-)
-topic_out = app.topic(
-    "my_output_topic", value_serializer=JSONSerializer(),
-)
 ```
 
 
 <br>
 
-## Picking a SERDES
+## Ready to Jump In? Check out some Examples!
 
-You can find all available serializers in `streamingdataframes.models.serializers`.
+[There are some examples available](./examples) to get you started!
 
-
-<br>
-
-## Message Key and Value SERDES
-
-Most people refer to serializing the message _value_ when discussing SERDES. However,
-you can also SERDES message _keys_, but you probably won't need to.
-
-Should you need it, they use the same SERDES'es classes:
-
-```python
-topic = app.topic("my_topic", key_serializer=JSONSerializer())
-```
-
-
-
-
-<br><br><br>
-
-# Stateful Applications
-
-Currently, Streaming DataFrames utilizes a basic state-store with RocksDB.
-
-This allows you to do things like compare a record to a previous version of it, or
-do some aggregate calculations. Here, we will outline how stateful processing works.
-
-
-<br>
-
-## Single Topic Consumption Only
-
-Due to limitations outlined below, you can only consume from 1 topic for a stateful
-application.
-
-
-<br>
-
-## How State Relates to Kafka Keys
-
-The most important concept to understand with state is that it depends on the message 
-key due to how kafka topic partitioning works.
-
-What does this mean for you?
-
-**Every Kafka key's state is independent and _inaccessible_ from all others; it is
-accessible only while it is the currently active message key**. 
-
-Be sure to take this into consideration when making decisions around what your 
-Kafka message keys should be.
-
-The good news? _The library manages this aspect for you_, so you don't need to 
-handle that complexity yourself! You do need to understand the limitations, however.
-
-### Example: 
-
-I have two messages with two new message keys, `KEY_A` and `KEY_B`. 
-
-I consume and process `KEY_A`, storing a value for it, `{"important_value": 5}`. Done!
-
-Next, I read the message with `KEY_B`. 
-
-While processing `KEY_B`, I would love to know what happened with `KEY_A` to decide 
-what to do, but I cannot access `KEY_A`'s state, because `KEY_A` (and thus its 
-state store) effectively _does not exist_ according to `KEY_B`: only `KEY_A` 
-can access `KEY_A`'s state!
-
-<br>
-
-## Using State
-
-To have an `Application` be stateful, simply use stateful function calls with 
-`StreamingDataFrame`. 
-
-Currently, this relates only to `StreamingDataFrame.apply()`, so
-see that section for details.
-
-
-<br>
-
-## Changing the State FilePath
-
-Optionally, you can specify a filepath where the `Application` will store your files 
-(defaults to `"./state"`) via `Application(state_dir="folder/path/here")`
-
-
-<br>
-
-## State Guarantees
-
-Because we currently handle messages with "At Least Once" guarantees, it is possible
-for the state to become slightly out of sync with a topic in-between shutdowns and
-rebalances. 
-
-While the impact of this is generally minimal and only for a small amount of messages,
-be aware this could cause side effects where the same message may be re-processed 
-differently if it depended on certain state conditionals.
-
-Exactly Once Semantics avoids this, and it is currently on our roadmap.
-
-
-<br>
-
-## Recovery
-
-Currently, if the state store becomes corrupted, the state must start from scratch.
-
-An appropriate recovery process is currently under development.
-
-
-
-<br><br><br>
-
-# Quix Platform Users: `Application.Quix()`
-
-For those using the Quix platform directly (that is, using the client in the web 
-browser), all you need for ensuring everything connects as expected is to use the 
-`Application.Quix()` instance.
-
-There aren't many features unique to the `Quix` version other than allowing topics to
-auto create via `auto_create_topics=True`, which is the default (Quix requires a special
-API to create topics).
-
-<br>
-
-## Using Quix-formatted Messages (SERDES
-
-The Quix Platform/topics use their own messaging formats, known as `TimeseriesData` and 
-`EventData`. In order to consume or produce these, you must use the respective SERDES:
-
-- `QuixDeserializer` (can deserialize both)
-- `QuixEventsSerializer`
-- `QuixTimeseriesSerializer`
-
-By default, they currently use the "legacy" format (Quixstreams<0.6.0), so we recommend 
-using the flag `as_legacy=False` when you are ready to convert over to the newest format.
-
-See [**Migrating from Legacy Quixstreams**](#migrating-from-legacy-quixstreams-v200a) 
-for more detail around the legacy format.
-
-Of course, you can use whatever serialization method you like instead of the Quix 
-format, it just may not play as nicely with the Quix Platform UI tooling!
-
-
-<br>
-
-## Using `Application.Quix()` externally
-
-If you decide to connect to the Quix Platform from external sources (i.e. running an 
-app connected to the platform directly via your local machine), you will need to set 
-the following environment variables:
-
-```
-Quix__Sdk__Token
-Quix__Portal__Api
-```
-
-You can find these values on the platform in your given workspace settings.
-
-
-
-
-<br>
-
-# Migrating from Legacy Quixstreams <v2.0.0a
-
-If you were using a previous version of QuixStreams, more specifically the Quix
-`ParameterData` or `EventData` formats, This section is for you!
-
-`Quixstreams>=0.6` introduced some (currently optional) message formatting changes 
-that are intended to be the default moving forward. 
-
-Until the old format is fully deprecated, `streamingdataframes` will continue to be able
-to parse the old formats going forward.
-
-The intention of these changes is two-fold:
-- Putting message-related metadata where it belongs - in the headers!
-- Simplifying usage of the Quix protocol overall, particularly with 
-`streamingdataframes`.
-
-Let's highlight those differences, and other important things to be aware of while 
-converting over to `streamingdataframes`.
-
-<br>
-
-## "Split" Messages Unsupported
-
-`streamingdataframes` has deprecated the "split" messaging format (it will remain 
-supported in C#).
-
-Split messaging is only necessary in very specific circumstances with extremely large
-messages, and requires a significant layer of complexity to provide desired processing 
-guarantees going forward.
-
-***`streamingdataframes` will (gracefully) skip any split messages it encounters.***
-
-<br>
-
-## Batched/"Buffered" Message Handling
-
-`streamingdataframes` has deprecated producer-based buffering producer 
-batching/buffering of messages, which essentially consolidates multiple messages into one.
-
-However, it WILL still be able to consume these messages without issue.
-
-To process them, it will separate each record/message out and handle them individually. 
-
-For example, a message with: 
-```
-{
-  "NumericValues": {"p0": [10, 20, 30]},
-  "StringValues": {p1": ["a", "b", "c"]}
-}
-```
-would equate to 3 independently processed messages.
-
-
-<br>
-
-## Multiple Message/Serialization Types
-
-The previous QuixStreams client supported and actively managed multiple message types 
-on one topic under the hood, which significantly complicates the client messaging model.
-
-It was mostly a way to handle things that we plan to handle differently in the future
-with things like message headers and state.
-
-As such, `streamingdataframes` intends to _encourage_ producing only one message type
-per topic by enforcing 1 serializer per-topic, per-application. Additionally, 
-`streamingdataframes` ignores all but `TimeseriesData` and `EventData` message types 
-when using a `QuixDeserializer`. 
-
-It will still be possible to handle mutliple types in one application if you so wish, 
-but it will require a lot of manual work (likely via `.apply()` functions) to handle 
-both effectively.
-
-It is also possible to handle them by just using different applications, where each
-handles a specific message type.
-
-In all, this is to discourage having many different message structures on one topic,
-which is generally not a good design principal.
-
-<br>
-
-## Hellooooo Headers!
-
-QuixStreams 0.6.0 moved some of the serialization-based information out of the message 
-body and into the headers, making message handling not only cleaner, but faster! 
-
-This is the main driver of the format changes you'll see below.
-
-In general, you should NOT have to worry about managing any Quix-based headers yourself.
-
-<br>
-
-## `TimeseriesData` replaces `ParameterData`
-
-Pre-0.6.0, we had what was known as `ParameterData`, with message value as:
-
-```json
-{
-  "C": "JT",
-  "K": "ParameterData",
-  "V": {
-    "Epoch": 1000000,
-    "Timestamps": [10, 11, 12],
-    "NumericValues": {
-      "p0": [100.0, 110.0, 120.0],
-      },
-    "StringValues": {
-      "p1": ["100", "110", "120"]
-      },
-    "BinaryValues": {
-      "p2": ["MTAw", "MTEw", "MTIw"]
-      }
-  },
-  "S": 34,
-  "E": 251
-}
-```
-
-<br>
-
-This is now being replaced with a new format known as `TimeseriesData`:
-
-```json
-{
-  "Epoch": 0,
-  "Timestamps": [10, 11, 12],
-  "NumericValues": {
-    "p0": [100.0, 110.0, 120.0]
-  },
-  "StringValues": {
-    "p1": ["100", "110", "120"]
-  },
-  "BinaryValues": {
-    "p2": ["MTAw", "MTEw", "MTIw"]
-  }
-}
-```
-
-<br>
-
-## EventData
-
-```json
-[
-  {
-    "Timestamp": 100,
-    "Tags": {
-      "tag1": "tagValue"
-    },
-    "Id": "event1",
-    "Value": "value a"
-  },
-  {
-    "Timestamp": 101,
-    "Tags": {
-      "tag1": "tagValue"
-    },
-    "Id": "event3",
-    "Value": "value c"
-  }
-]
-```
-
-
-# Configuration
-
-<br>
-
-## Producers and Consumers
-
-<br>
-
-## Other options?
+The examples outline other important features like changing serializers, using state, 
+and showcasing other `dateframe` operations.
