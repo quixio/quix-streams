@@ -6,7 +6,7 @@ from random import randint, random, choice
 
 from dotenv import load_dotenv
 
-from streamingdataframes.kafka import Producer
+from quixstreams.kafka import Producer
 
 load_dotenv("./env_vars.env")
 

@@ -23,7 +23,7 @@ LOGGING_CONFIG = {
             "level": "DEBUG",
             "propagate": False,
         },
-        "streamingdataframes": {
+        "quixstreams": {
             "handlers": ["default"],
             "level": "DEBUG",
             "propagate": False,

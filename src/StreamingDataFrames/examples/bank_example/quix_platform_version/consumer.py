@@ -8,8 +8,8 @@ purchase events larger than $1000
 
 from dotenv import load_dotenv
 
-from streamingdataframes import Application, MessageContext
-from streamingdataframes.models.serializers import (
+from quixstreams import Application, MessageContext
+from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
     QuixDeserializer,
 )
