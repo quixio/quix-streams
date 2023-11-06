@@ -13,6 +13,7 @@ Quix is sunsetting the previous python interface and replacing it with a new
 It is also completely independent of the C# library and will be the first to receive new 
 features and functionality.
 
+<br>
 
 ## Compatibility with `quixstreams<2.0`
 
@@ -28,18 +29,20 @@ To see how to use this new library with your existing ecosystem, see
 There are also details about format/functional changes at 
 [**Upgrading from Legacy Quixstreams**](./documentation/upgrading_legacy.md).
 
+<br>
+
 ## Old client code
 
 Should you need the old version of the client still, the code has been moved to a 
 separate branch [here](TODO:LINKHERE).
 
-<br>
+<br><br>
 
 # Installation
 
 `pip install quixstreams>=2.0alpha`
 
-<br>
+<br><br>
 
 
 # Overview
@@ -115,6 +118,7 @@ get involved right now:
 
 Here's the minimum you need to know to get started with Streaming DataFrames.
 
+More detailed breakdowns can be found in the [documentation folder](./documentation).
 
 ## The `Application` class
 
@@ -138,7 +142,7 @@ app = Application(
 
 <br>
 
-#### Using the Quix Platform? - `Application.Quix()`
+### Using the Quix Platform? - `Application.Quix()`
 
 If you are using the Quix platform, you will still use the `Application` class, but
 instead call it via `Application.Quix()`.
