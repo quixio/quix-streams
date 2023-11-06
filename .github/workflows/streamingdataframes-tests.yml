@@ -38,7 +38,7 @@ jobs:
           python -m pip install -U -r requirements-dev.txt
       - name: Run Black
         run: |
-          python -m black --check streamingdataframes
+          python -m black --check quixstreams
           python -m black --check tests
 
   test:
