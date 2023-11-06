@@ -208,6 +208,70 @@ class TestDataframeProcess:
             assert actual[idx].value == expected[idx].value
 
 
+class TestDataframeApplyExpand:
+    def test_apply_expand(self, dataframe_factory, more_rows_func, row_factory):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(more_rows_func, expand=True)
+        expected = [row_factory({"x": 1, "x_list": i}) for i in range(3)]
+        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+        assert len(actual) == len(expected)
+        for idx in range(len(actual)):
+            assert actual[idx].value == expected[idx].value
+
+    def test_apply_expand_false_return_list_fails(
+        self, dataframe_factory, more_rows_func, row_factory
+    ):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(more_rows_func)
+        with pytest.raises(InvalidApplyResultType):
+            dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+
+    def test_apply_expand_additional_apply(
+        self, dataframe_factory, more_rows_func, row_factory, row_plus_n_func
+    ):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(more_rows_func, expand=True)
+        dataframe = dataframe.apply(row_plus_n_func(n=1))
+        expected = [row_factory({"x": 2, "x_list": i + 1}) for i in range(3)]
+        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+        assert len(actual) == len(expected)
+        for idx in range(len(actual)):
+            assert actual[idx].value == expected[idx].value
+
+    def test_multiple_row_generation_with_filtering_not_possible(
+        self, dataframe_factory, more_rows_func, row_factory
+    ):
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(more_rows_func, expand=True)
+        dataframe = dataframe.apply(lambda row, ctx: row if row["x_list"] > 0 else None)
+        # You cannot "filter" this way!! Row count should remain the same
+        expected = [row_factory({"x": 1, "x_list": i}) for i in range(0, 3)]
+        actual = dataframe.process(row_factory({"x": 1, "x_list": [0, 1, 2]}))
+        assert len(actual) == len(expected)
+        for idx in range(len(actual)):
+            assert actual[idx].value == expected[idx].value
+
+    def test_apply_expand_twice(self, dataframe_factory, row_factory):
+        row = row_factory({"text": "a,b.c,d"})
+        expected = [
+            row_factory({"word": "a"}),
+            row_factory({"word": "b"}),
+            row_factory({"word": "c"}),
+            row_factory({"word": "d"}),
+        ]
+        dataframe = dataframe_factory()
+        dataframe = dataframe.apply(
+            lambda v, ctx: [{"sentence": s} for s in v["text"].split(".")], expand=True
+        )
+        dataframe = dataframe.apply(
+            lambda v, ctx: [{"word": s} for s in v["sentence"].split(",")], expand=True
+        )
+        result = dataframe.process(row)
+        assert len(result) == len(expected)
+        for idx in range(len(result)):
+            assert result[idx].value == expected[idx].value
+
+
 class TestDataframeKafka:
     def test_to_topic(
         self,
