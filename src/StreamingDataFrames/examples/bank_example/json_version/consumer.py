@@ -10,8 +10,8 @@ from os import environ
 
 from dotenv import load_dotenv
 
-from streamingdataframes import Application, MessageContext
-from streamingdataframes.models.serializers import JSONSerializer, JSONDeserializer
+from quixstreams import Application, MessageContext
+from quixstreams.models.serializers import JSONSerializer, JSONDeserializer
 
 load_dotenv("./env_vars.env")
 
