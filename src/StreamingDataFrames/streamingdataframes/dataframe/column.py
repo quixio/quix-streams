@@ -91,6 +91,12 @@ class Column:
         """
         return self._operation(None, operator.is_not)
 
+    def abs(self) -> Self:
+        """
+        Get absolute value of the Column value
+        """
+        return self.apply(lambda v, ctx: abs(v))
+
     def __and__(self, other: Any) -> Self:
         return self._operation(other, operator.and_)
 

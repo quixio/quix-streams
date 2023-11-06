@@ -312,3 +312,17 @@ class TestColumn:
         result = Column("x")["y"] + Column("j")["k"]
         assert isinstance(result, Column)
         assert result.eval(msg_value) == 15
+
+    @pytest.mark.parametrize("value, expected", [(10, 10), (-10, 10), (10.0, 10.0)])
+    def test_abs_success(self, value, expected, row_factory):
+        row = row_factory({"x": value})
+        result = Column("x").abs()
+        assert isinstance(result, Column)
+        assert result.eval(row) == expected
+
+    def test_abs_not_a_number_fails(self, row_factory):
+        row = row_factory({"x": "string"})
+        result = Column("x").abs()
+        assert isinstance(result, Column)
+        with pytest.raises(TypeError, match="bad operand type for abs()"):
+            assert result.eval(row)
