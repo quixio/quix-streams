@@ -140,7 +140,7 @@ Under the hood, the `Application` will:
 - Handle OS signals and gracefully exit the application.
 
 ### More Examples
-> You may find more examples in the `examples` folder **[here](./src/StreamingDataFrames/examples)**
+> You may find more examples in the `examples` folder **[here](./src/StreamingDataFrames/examples)**.
 
 ### Advanced Usage
 
