@@ -1,12 +1,11 @@
 import operator
-from typing import Optional, Any, Callable, Container
+from copy import deepcopy
 
+from typing import Optional, Any, Callable, Container
 from typing_extensions import Self, TypeAlias, Union
 
 from ..models import Row, MessageContext
 from ..models.context import BaseMessageContext
-
-from copy import deepcopy
 
 ColumnApplier: TypeAlias = Callable[[Any, MessageContext], Any]
 
