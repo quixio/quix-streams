@@ -72,7 +72,7 @@ app = Application(
    consumer_group="consumer-group-name",  # Kafka consumer group
 )
 
-# Define the input and output topics. By default, "json" serialization will be used
+# Define the input and output topics. By default, the "json" serialization will be used
 input_topic = app.topic("my_input_topic")
 output_topic = app.topic("my_output_topic")
 
