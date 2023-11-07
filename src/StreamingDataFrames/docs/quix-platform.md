@@ -3,8 +3,7 @@
 If you are deploying your Quix Streams application to the Quix platform directly, all you need for ensuring everything connects as expected is to use the 
 `Application.Quix()` instance.
 
-`Application.Quix()` automatically configures the application to use Quix Kafka broker using API token, and it also provides API to than allowing topics to
-auto create via `auto_create_topics=True` parameter.
+`Application.Quix()` automatically configures the application to use Quix Kafka broker and underlying API which allows topic creation.
 <br>
 By default, `Application.Quix()` use `auto_create_topics=True`.
 
