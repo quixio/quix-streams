@@ -43,15 +43,14 @@ Use Quix Streams to build event-driven, machine learning/AI or physics-based app
 To install the latest alpha version of Quix Streams 2.0: 
 
 ```shell
-python -m pip install quixstreams>=2.0a
+python -m pip install --pre quixstreams
 ```
 
 or
 
 ```shell
-python -m pip install --pre quixstreams
+python -m pip install "quixstreams>=2.0a"
 ```
-
 
 #### Requirements
 Python 3.8+, Apache Kafka 0.10+
