@@ -28,7 +28,7 @@ Quix Streams has the following benefits:
 - A simple framework with Pandas-like interface to ease newcomers to streaming.
 - "At-least-once" Kafka processing guarantees.
 - Designed to run and scale resiliently via container orchestration (like Kubernetes).
-- Easily runs locally and in Jupyter Notebook for development and debugging
+- Easily runs locally and in Jupyter Notebook for convenient development and debugging.
 - Seamless integration with the Quix platform.
 
 Use Quix Streams if you’re building machine learning/AI and physics-based applications that depend on real-time data from Kafka to deliver quick, reliable insights and efficient end-user experiences. 
