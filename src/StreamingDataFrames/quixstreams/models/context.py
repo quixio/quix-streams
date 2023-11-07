@@ -1,17 +1,17 @@
 from typing import Any, Optional, Union, Mapping
+from typing_extensions import Protocol
 
 from .messages import MessageHeadersTuples
 from .timestamps import MessageTimestamp
 
 
-class BaseMessageContext:
+class BaseMessageContext(Protocol):
     """
-    An object with Kafka message properties.
+    Base Object for inheriting methods for ColumnContext.
 
-    It is made pseudo-immutable (i.e. public attributes don't have setters), and
-    it should not be mutated during message processing.
+    It allows skipping slot assignment and providing auto-complete.
 
-    All params are optional to accommodate ColumnContext access to its methods.
+    Methods will also work as defaults for its subclasses.
     """
 
     __slots__ = (
@@ -25,28 +25,6 @@ class BaseMessageContext:
         "_latency",
         "_leader_epoch",
     )
-
-    def __init__(
-        self,
-        topic: Optional[str] = None,
-        partition: Optional[int] = None,
-        offset: Optional[int] = None,
-        size: Optional[int] = None,
-        timestamp: Optional[MessageTimestamp] = None,
-        key: Optional[Any] = None,
-        headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
-        latency: Optional[float] = None,
-        leader_epoch: Optional[int] = None,
-    ):
-        self._topic = topic
-        self._partition = partition
-        self._offset = offset
-        self._size = size
-        self._timestamp = timestamp
-        self._key = key
-        self._headers = headers
-        self._latency = latency
-        self._leader_epoch = leader_epoch
 
     @property
     def topic(self) -> str:
@@ -87,7 +65,10 @@ class BaseMessageContext:
 
 class MessageContext(BaseMessageContext):
     """
-    Enforces the existence of certain values when used in real time.
+    An object with Kafka message properties.
+
+    It is made pseudo-immutable (i.e. public attributes don't have setters), and
+    it should not be mutated during message processing.
     """
 
     def __init__(
@@ -102,14 +83,12 @@ class MessageContext(BaseMessageContext):
         latency: Optional[float] = None,
         leader_epoch: Optional[int] = None,
     ):
-        super().__init__(
-            topic=topic,
-            partition=partition,
-            offset=offset,
-            size=size,
-            timestamp=timestamp,
-            key=key,
-            headers=headers,
-            latency=latency,
-            leader_epoch=leader_epoch,
-        )
+        self._topic = topic
+        self._partition = partition
+        self._offset = offset
+        self._size = size
+        self._timestamp = timestamp
+        self._key = key
+        self._headers = headers
+        self._latency = latency
+        self._leader_epoch = leader_epoch
