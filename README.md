@@ -201,7 +201,7 @@ Contributing is a great way to learn and we especially welcome those who haven't
 <br>
 We're very open to any feedback or code contributions to this OSS project ❤️. 
 
-Before contributing, please read our [Contributing File](https://github.com/quixio/quix-streams/blob/main/CONTRIBUTING.md) for how you can best give feedback and contribute. 
+Before contributing, please read our [Contributing](https://github.com/quixio/quix-streams/blob/main/CONTRIBUTING.md) file for how you can best give feedback and contribute. 
 
 ## Need help?
 
