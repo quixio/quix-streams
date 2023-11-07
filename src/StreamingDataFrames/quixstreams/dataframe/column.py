@@ -143,8 +143,8 @@ class Column:
 
 
 class ColumnContext(BaseMessageContext):
-    def __getattribute__(self, item):
-        def _getattr(row):
+    def __getattribute__(self, item) -> Column:
+        def _getattr(row) -> Any:
             r = getattr(row, item)
             if item == "headers":
                 if isinstance(row.headers, dict):
