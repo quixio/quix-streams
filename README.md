@@ -39,7 +39,7 @@ Use Quix Streams to build event-driven, machine learning/AI or physics-based app
 
 ### Install Quix Streams
 
-#### Quix Streams 2.0 (curretly in alpha)
+#### Quix Streams 2.0 (currently in alpha)
 To install the latest alpha version of Quix Streams 2.0: 
 
 ```shell
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
 ### How It Works
 There are two primary components:
-- `StreamingDataFrame` - a pre-defined declarative pipeline to process and transform incoming messages.
+- `StreamingDataFrame` - a predefined declarative pipeline to process and transform incoming messages.
 - `Application` - to manage the Kafka-related setup & teardown and message lifecycle (consuming, committing). It processes each message with the dataframe you provide it.
 
 Under the hood, the `Application` will:
@@ -166,7 +166,7 @@ This library doesn't have any dependency on any commercial product, but if you u
 and more.
 
 Quix Streams provides a seamless integration with Quix Platform via `Application.Quix()` class.
-This class will automatically configre the Application using Quix SDK Token.
+This class will automatically configure the Application using Quix SDK Token.
 <br>
 If you are running this within the Quix platform it will be configured 
 automatically.
@@ -205,7 +205,7 @@ Before contributing, please read our [Contributing File](https://github.com/quix
 
 ## Need help?
 
-If you run into any problems, please create an [issue](https://github.com/quixio/quix-streams/issues) onr ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite). 
+If you run into any problems, please create an [issue](https://github.com/quixio/quix-streams/issues) or ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite). 
 
 ## Community 👭
 

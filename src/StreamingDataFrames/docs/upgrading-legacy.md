@@ -85,7 +85,7 @@ stream.timeseries.buffer.time_span_in_milliseconds = 100
 
 These metadata were passed to Kafka topics as messages.
 
-Quix Streams >=2.0 has deprecated the metadata messages, and they are silently ommitted 
+Quix Streams >=2.0 has deprecated the metadata messages, and they are silently omitted 
 during processing.
 
 
