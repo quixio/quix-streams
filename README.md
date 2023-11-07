@@ -205,7 +205,7 @@ Before contributing, please read our [Contributing File](https://github.com/quix
 
 ## Need help?
 
-If you run into any problems, please create an [issue](https://github.com/quixio/quix-streams/issues) or ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite). 
+If you run into any problems, please create an [issue](https://github.com/quixio/quix-streams/issues) or ask in #quix-help in our [Quix Community on Slack](https://quix.io/slack-invite).  
 
 ## Community 👭
 
