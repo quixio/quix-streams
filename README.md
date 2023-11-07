@@ -146,11 +146,11 @@ Under the hood, the `Application` will:
 
 For more in-depth description of Quix Streams components, please
 follow these links:
-- ***[StreamingDataFrame](./src/StreamingDataFrames/docs/streamingdataframe.md)***
-- ***[Serialization](./src/StreamingDataFrames/docs/serialization.md)***
-- ***[Stateful Processing](./src/StreamingDataFrames/docs/stateful-processing.md)***
-- ***[Usage with Quix SaaS Platform](./src/StreamingDataFrames/docs/quix-platform.md)***
-- ***[Upgrading from Quix Streams <2.0](./src/StreamingDataFrames/docs/upgrading-legacy.md)*** 
+- ***[StreamingDataFrame](./src/StreamingDataFrames/docs/streamingdataframe.md)***.
+- ***[Serialization](./src/StreamingDataFrames/docs/serialization.md)***.
+- ***[Stateful Processing](./src/StreamingDataFrames/docs/stateful-processing.md)***.
+- ***[Usage with Quix SaaS Platform](./src/StreamingDataFrames/docs/quix-platform.md)***.
+- ***[Upgrading from Quix Streams <2.0](./src/StreamingDataFrames/docs/upgrading-legacy.md)***.
 
 
 ### Using the [Quix Platform](https://quix.io/) - `Application.Quix()`
