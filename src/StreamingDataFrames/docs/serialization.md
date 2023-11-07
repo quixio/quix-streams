@@ -1,56 +1,63 @@
-# Serialization and Deserialization (SERDES)
+# Serialization and Deserialization (SerDes)
 
-SERDES simply refers to how you pack (serialize) or unpack (deserialize) your data 
-when publishing to or reading from a topic. With our `Application.topic()`, we use the `JSON`
-format by default.
-
-There are numerous ways to SERDES your data, and we provide some plain formats for you 
-to select from, including `bytes`, `string`, `integer`, etc.
-
-We also plan on including other popular ones like `PROTOBUF` in the near future.
-
+SerDes simply refers to how you pack (serialize) or unpack (deserialize) your data 
+when publishing to or reading from a topic.
 <br>
+These settings are defined per-topic via these parameters of `Application.topic()` function:
+- `key_serializer`
+- `value_serializer`
+- `key_deserializer`
+- `value_deserializer`
 
-## Using a SERDES
+By default, message values are serialized with  `JSON`, message keys are serialized with `bytes` (i.e. passed as they are received from Kafka).
 
-SERDES are used by providing the appropriate SERDES class, or string shorthand of it,
-to a `Topic` object (or, to `Application.topic()` which forwards all the same arguments 
-to `Topic`).
+## Supported formats:
+- `bytes`
+- `string`
+- `integer`
+- `double`
+- `json`
+- `quix` - for deserializers only
+- `quix_events` & `quix_timeseries` - for serializers only.
 
-You can select them like so:
+## Using SerDes
+To set a serializer, you may either pass a string shorthand for it, or an instance of `streamingdataframes.models.serializers.Serializer` and `streamingdataframes.models.serializers.Deserializer` directly 
+to the `Application.topic()`.
 
+Example with format shorthands:
 ```python
-from streamingdataframes.models.serializers import (
-    JSONDeserializer
-)
-from streamingdataframes.app import Application
+from streamingdataframes.models.serializers import JSONDeserializer
+app = Application(...)
+# Deserializing message values from JSON to objects and message keys as strings 
+input_topic = app.topic(value_deserializer='json', key_deserializer='string')
 
-app = Application()
-topic_in = app.topic(
-    "my_input_topic", value_deserializer=JSONDeserializer(),
-)
-topic_out = app.topic(
-    "my_output_topic", value_serializer="json",
-)
+# Serializing message values to JSON and message keys to bytes
+output_topic = app.topic(value_serializer='json', key_deserializer='bytes')
 ```
 
-
-<br>
-
-## Picking a SERDES
-
-You can find all available serializers in `streamingdataframes.models.serializers`.
-
-
-<br>
-
-## Message Key and Value SERDES
-
-Most people refer to serializing the message _value_ when discussing SERDES. However,
-you can also SERDES message _keys_, but you probably won't need to.
-
-Should you need it, they use the same SERDES'es classes:
+Passing `Serializer` and `Deserializer` instances directly:
 
 ```python
-topic = app.topic("my_topic", key_serializer="str")
+from streamingdataframes.models.serializers import JSONDeserializer, JSONSerializer
+app = Application(...)
+input_topic = app.topic(value_deserializer=JSONDeserializer())
+output_topic = app.topic(value_deserializer=JSONSerializer())
+```
+
+You can find all available serializers in `streamingdataframes.models.serializers` module.
+
+We also plan on including other popular ones like Avro and Protobuf in the near future.
+
+## Data format
+Currently, Quix Streams 2.0a expects all values to be serialized and deserialized as dictionaries.
+If you need to consume messages formatted as simple types, you need to pass `column_name="<some_column>"` to Deserializer class.
+The Deserializer object will wrap the received value to the dictionary with `column_name` as a key.
+
+Example:
+
+```python
+from streamingdataframes.models.serializers import IntegerDeserializer
+app = Application(...)
+input_topic = app.topic(value_deserializer=IntegerDeserializer(column_name='number'))
+# Will deserialize message with value "123" to "{'number': 123}" ...
 ```
