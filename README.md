@@ -22,7 +22,7 @@ Quix Streams 2.0 is a cloud native library for processing data in Kafka using pu
 Quix Streams has the following benefits:
 
 - No JVM, no orchestrator, no server-side engine.
-- Easily integrates with the entire Python ecosystem (Pandas, scikit-learn, TensorFlow, PyTorch etc).
+- Easily integrates with the entire Python ecosystem (pandas, scikit-learn, TensorFlow, PyTorch etc).
 - Support for many serialization formats, including JSON (and Quix-specific).
 - Support for stateful operations using RocksDB.
 - A simple framework with Pandas-like interface to ease newcomers to streaming.
