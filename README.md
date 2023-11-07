@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
 ### How It Works
 There are two primary components:
-- `StreamingDataFrame` - a pre-defined declarative pipeline to process and transform incoming messages
+- `StreamingDataFrame` - a pre-defined declarative pipeline to process and transform incoming messages.
 - `Application` - to manage the Kafka-related setup & teardown and message lifecycle (consuming, committing). It processes each message with the dataframe you provide it.
 
 Under the hood, the `Application` will:
