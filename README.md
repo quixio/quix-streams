@@ -118,7 +118,7 @@ sdf = sdf.apply(lambda value, ctx: print('Producing a message:', value))
 sdf = sdf.to_topic(output_topic)
 
 if __name__ == "__main__":
-    # Run your streaming application 
+    # Run the streaming application 
     app.run(sdf)
 
 ```
