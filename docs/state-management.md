@@ -290,5 +290,5 @@ To use the library’s state management feature, create an instance of `LocalFil
     
 ## State folder
 
-In Quix Cloud, when state management is enabled for a deployment, Quix Streams uses a `state` folder to store data and files. If running Quix Streams locally, the `state` folder is automatically created for you. You can read more about enabling state, and using the `state` folder, in the [state management documentation](https://quix.io/docs/platform/how-to/state-management.html).
+In Quix Cloud, when state management is enabled for a deployment, Quix Streams uses a `state` folder to store data and files. If running Quix Streams locally, the `state` folder is automatically created for you. You can read more about enabling state, and using the `state` folder, in the [state management documentation](https://www.quix.io/docs/deploy/state-management.html).
 
