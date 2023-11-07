@@ -20,11 +20,11 @@ Quix Streams has the following benefits:
 
  - Pure Python (no DSL’s!) providing native support for the entire Python ecosystem (Pandas, scikit-learn, TensorFlow, PyTorch etc).
 
- - Simplified [state management](https://quix.io/docs/client-library/state-management.html) backed by Kubernetes PVC for enhanced resiliency.
+ - Simplified [state management](https://www.quix.io/docs/deploy/state-management.html) backed by Kubernetes PVC for enhanced resiliency.
 
  - [DataFrames](#support-for-dataframes) and buffers provide a powerful processing environment where a Python data scientist can use their existing batch skills to process streaming data.
 
- - Resilient horizontal scaling using [Streaming Context](https://quix.io/docs/client-library/features/streaming-context.html).
+ - Resilient horizontal scaling using [Streaming Context](https://quix.io/docs/quix-streams/features/streaming-context.html).
 
  - Native support for structured and semistructured (time-series) and unstructured (binary) data files.
 
@@ -75,7 +75,7 @@ This library needs to utilize a message broker to send and receive data. Quix us
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
-To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/client-library/quickstart.html) in our official documentation. 
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/quix-streams/quickstart.html) in our official documentation. 
 
 However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
 
@@ -158,7 +158,7 @@ qx.App.run()
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/client-library/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/client-library/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library-intro.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/quix-streams/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/quix-streams/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library-intro.html).
 
 ## Library features
 
@@ -239,7 +239,7 @@ If you’re sending data at <b>high frequency</b>, processing each message can b
     ```
 
 
-For a detailed overview of built-in buffers, [visit our documentation](https://quix.io/docs/client-library/features/builtin-buffers.html).
+For a detailed overview of built-in buffers, [visit our documentation](https://quix.io/docs/quix-streams/features/builtin-buffers.html).
 
 ### Support for DataFrames
 
