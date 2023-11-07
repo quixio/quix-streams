@@ -99,7 +99,7 @@ sdf = app.dataframe(topic=input_topic)
 # Print the incoming messages
 sdf = sdf.apply(lambda value, ctx: print('Received a message:', value))
 
-# Select fields from incoming message
+# Select fields from incoming messages
 sdf = sdf[["field_0", "field_2", "field_8"]]
 
 # Filter only messages with "field_0" > 10 and "field_2" != "test"
