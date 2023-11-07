@@ -130,14 +130,14 @@ There are two primary components:
 - `Application` - to manage the Kafka-related setup & teardown and message lifecycle (consuming, committing). It processes each message with the dataframe you provide it.
 
 Under the hood, the `Application` will:
-- consume a message
-- deserialize it
-- process it with your `StreamingDataFrame`
-- produce it to the output topic
-- automatically commit the topic offset and state updates after the message is processed
-- react to Kafka rebalancing updates and manage the topic partitions 
-- create and manage the State store for each topic partition
-- handle OS signals and gracefully exit the application
+- Consume a message.
+- Deserialize it.
+- Process it with your `StreamingDataFrame`.
+- Produce it to the output topic.
+- Automatically commit the topic offset and state updates after the message is processed.
+- React to Kafka rebalancing updates and manage the topic partitions.
+- Create and manage the State store for each topic partition.
+- Handle OS signals and gracefully exit the application.
 
 ### More Examples
 > You may find more examples in the `examples` folder **[here](./src/StreamingDataFrames/examples)**
