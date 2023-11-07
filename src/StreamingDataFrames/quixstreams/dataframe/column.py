@@ -4,6 +4,9 @@ from typing import Optional, Any, Callable, Container
 from typing_extensions import Self, TypeAlias, Union
 
 from ..models import Row, MessageContext
+from ..models.context import BaseMessageContext
+
+from copy import deepcopy
 
 ColumnApplier: TypeAlias = Callable[[Any, MessageContext], Any]
 
@@ -138,3 +141,17 @@ class Column:
 
     def __invert__(self) -> Self:
         return self.__class__(_eval_func=lambda x: invert(self.eval(x)))
+
+
+class ColumnContext(BaseMessageContext):
+    def __getattribute__(self, item):
+        def _getattr(row):
+            r = getattr(row, item)
+            if item == "headers":
+                if isinstance(row.headers, dict):
+                    return deepcopy(r)
+            elif item == "timestamp":
+                return deepcopy(r)
+            return r
+
+        return Column(_eval_func=_getattr)

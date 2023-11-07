@@ -3,7 +3,7 @@ from typing import Optional, Callable, Union, List, Mapping, Any
 
 from typing_extensions import Self, TypeAlias
 
-from .column import Column
+from .column import Column, ColumnContext
 from .exceptions import InvalidApplyResultType
 from .pipeline import Pipeline
 from ..models import Row, Topic, MessageContext
@@ -194,6 +194,10 @@ class StreamingDataFrame:
                 topic, row, key=key(row.value, row.context) if key else None
             )
         )
+
+    @property
+    def context(self) -> ColumnContext:
+        return ColumnContext()
 
     @property
     def id(self) -> str:

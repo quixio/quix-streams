@@ -163,6 +163,13 @@ class TestDataframeProcess:
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row) is None
 
+    def test_column_context(self, dataframe_factory, row_factory):
+        dataframe = dataframe_factory()
+        dataframe["new_column"] = dataframe.context.topic + "-woo"
+        row = row_factory({"x": 1})
+        expected = row_factory({"x": 1, "new_column": f"{row.topic}{'-woo'}"})
+        assert dataframe.process(row).value == expected.value
+
 
 class TestDataframeKafka:
     def test_to_topic(

@@ -4,12 +4,14 @@ from .messages import MessageHeadersTuples
 from .timestamps import MessageTimestamp
 
 
-class MessageContext:
+class BaseMessageContext:
     """
     An object with Kafka message properties.
 
     It is made pseudo-immutable (i.e. public attributes don't have setters), and
     it should not be mutated during message processing.
+
+    All params are optional to accommodate ColumnContext access to its methods.
     """
 
     __slots__ = (
@@ -26,11 +28,11 @@ class MessageContext:
 
     def __init__(
         self,
-        topic: str,
-        partition: int,
-        offset: int,
-        size: int,
-        timestamp: MessageTimestamp,
+        topic: Optional[str] = None,
+        partition: Optional[int] = None,
+        offset: Optional[int] = None,
+        size: Optional[int] = None,
+        timestamp: Optional[MessageTimestamp] = None,
         key: Optional[Any] = None,
         headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
         latency: Optional[float] = None,
@@ -81,3 +83,33 @@ class MessageContext:
     @property
     def leader_epoch(self) -> Optional[int]:
         return self._leader_epoch
+
+
+class MessageContext(BaseMessageContext):
+    """
+    Enforces the existence of certain values when used in real time.
+    """
+
+    def __init__(
+        self,
+        topic: str,
+        partition: int,
+        offset: int,
+        size: int,
+        timestamp: MessageTimestamp,
+        key: Optional[Any] = None,
+        headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
+        latency: Optional[float] = None,
+        leader_epoch: Optional[int] = None,
+    ):
+        super().__init__(
+            topic=topic,
+            partition=partition,
+            offset=offset,
+            size=size,
+            timestamp=timestamp,
+            key=key,
+            headers=headers,
+            latency=latency,
+            leader_epoch=leader_epoch,
+        )

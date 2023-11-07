@@ -1,6 +1,6 @@
 import pytest
 
-from quixstreams.dataframe.column import Column
+from quixstreams.dataframe.column import Column, ColumnContext
 
 
 class TestColumn:
@@ -326,3 +326,9 @@ class TestColumn:
         assert isinstance(result, Column)
         with pytest.raises(TypeError, match="bad operand type for abs()"):
             assert result.eval(row)
+
+
+class TestColumnContext:
+    def test_column_context(self, row_factory):
+        row = row_factory({"doesn't": "matter"})
+        assert ColumnContext().topic.eval(row) == row.context.topic
