@@ -88,7 +88,7 @@ def count(data: dict, ctx: MessageContext, state: State):
     total = state.get('total', default=0)
     total += 1
     # Set a value back to the state
-    state.set('total')
+    state.set('total', total)
     # Update your message data with a value from the state
     data['total'] = total
 
