@@ -189,7 +189,7 @@ Here are some of the planned improvements:
 
 
 To find out when the next version is ready, make sure you watch this repo 
-and join our [Slack community](https://quix.io/slack-invite)! 
+and join our [Quix Community on Slack](https://quix.io/slack-invite)! 
 
 ## Using Quix Streams with the Quix SaaS platform
 
