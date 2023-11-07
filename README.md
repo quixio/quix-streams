@@ -31,7 +31,7 @@ Quix Streams has the following benefits:
 - Easily runs locally and in Jupyter Notebook for convenient development and debugging.
 - Seamless integration with the Quix platform.
 
-Use Quix Streams if you’re building machine learning/AI and physics-based applications that depend on real-time data from Kafka to deliver quick, reliable insights and efficient end-user experiences. 
+Use Quix Streams to build event-driven, machine learning/AI or physics-based applications that depend on real-time data from Kafka.
 
 
 ## Getting started 🏄
