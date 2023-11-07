@@ -156,12 +156,12 @@ follow these links:
 ### Using the [Quix Platform](https://quix.io/) - `Application.Quix()`
 
 This library doesn't have any dependency on any commercial product, but if you use it together with Quix SaaS platform you will get some advantages out of the box during your development process such as:
-- auto-configuration
-- monitoring
-- data explorer
-- data persistence
-- pipeline visualization 
-- metrics
+- Auto-configuration.
+- Monitoring.
+- Data explorer.
+- Data persistence.
+- Pipeline visualization.
+- Metrics.
 
 and more.
 
