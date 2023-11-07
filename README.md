@@ -24,7 +24,7 @@ Quix Streams has the following benefits:
 - No JVM, no orchestrator, no server-side engine.
 - Easily integrates with the entire Python ecosystem (Pandas, scikit-learn, TensorFlow, PyTorch etc).
 - Support for many serialization formats, including JSON (and Quix-specific).
-- Support for stateful operations using RocksDB
+- Support for stateful operations using RocksDB.
 - A simple framework with Pandas-like interface to ease newcomers into streaming.
 - "At-least-once" Kafka processing guarantees
 - Designed to run and scale resiliently via container orchestration (like Kubernetes)
