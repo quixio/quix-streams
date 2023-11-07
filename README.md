@@ -108,7 +108,7 @@ sdf = sdf[(sdf["field_0"] > 10) & (sdf["field_2"] != "test")]
 # Apply custom function to transform the message
 sdf = sdf.apply(add_one)
 
-# Apply a stateful function in persist data into the state store
+# Apply a stateful function to persist data to the state store
 sdf = sdf.apply(count, stateful=True)
 
 # Print the result before producing it
