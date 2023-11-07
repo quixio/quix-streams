@@ -11,6 +11,11 @@
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
 # Quix Streams
+>***IMPORTANT:*** This is the page for older version of Quix Streams library v0.5.7.
+> <br>
+> It will be receiving only maintenance updates, and we don't plan to introduce new features to it.
+>
+> To learn more about new version of Quix Streams (2.0 alpha), please see [here](./README.md).
 
 Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka and Kubernetes in a highly abstracted and easy to use Python interface.
 
@@ -20,11 +25,11 @@ Quix Streams has the following benefits:
 
  - Pure Python (no DSL’s!) providing native support for the entire Python ecosystem (Pandas, scikit-learn, TensorFlow, PyTorch etc).
 
- - Simplified [state management](https://quix.io/docs/client-library/state-management.html) backed by Kubernetes PVC for enhanced resiliency.
+ - Simplified [state management](https://quix.io/docs/quix-streams/state-management.html) backed by Kubernetes PVC for enhanced resiliency.
 
  - [DataFrames](#support-for-dataframes) and buffers provide a powerful processing environment where a Python data scientist can use their existing batch skills to process streaming data.
 
- - Resilient horizontal scaling using [Streaming Context](https://quix.io/docs/client-library/features/streaming-context.html).
+ - Resilient horizontal scaling using [Streaming Context](https://quix.io/docs/quix-streams/features/streaming-context.html).
 
  - Native support for structured and semistructured (time-series) and unstructured (binary) data files.
 
@@ -75,7 +80,7 @@ This library needs to utilize a message broker to send and receive data. Quix us
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
-To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/client-library/quickstart.html) in our official documentation. 
+To get started with Quix Streams, we recommend following the comprehensive [Quick Start guide](https://quix.io/docs/quix-streams/quickstart.html) in our official documentation. 
 
 However, the following examples will give you a basic idea of how to produce and consume data with Quix Streams.:
 
@@ -158,7 +163,7 @@ qx.App.run()
 
 Quix Streams allows multiple configurations to leverage resources while consuming and producing data from a Topic depending on the use case, frequency, language, and data types. 
 
-For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/client-library/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/client-library/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library-intro.html).
+For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/quix-streams/subscribe.html) and [<b>produce</b>](https://www.quix.io/docs/quix-streams/publish.html) time-series and event data with Quix Streams, [visit our docs](https://www.quix.io/docs/client-library-intro.html).
 
 ## Library features
 
@@ -209,7 +214,6 @@ Quix Streams serializes and deserializes time-series data using different codecs
     for index in range(0, 3000):
         
         stream.timeseries \
-            .buffer \
             .add_timestamp(datetime.datetime.utcnow()) \
             .add_value("Lat", math.sin(index / 100.0) + math.sin(index) / 5.0) \
             .add_value("Long", math.sin(index / 200.0) + math.sin(index) / 5.0) \
@@ -239,7 +243,7 @@ If you’re sending data at <b>high frequency</b>, processing each message can b
     ```
 
 
-For a detailed overview of built-in buffers, [visit our documentation](https://quix.io/docs/client-library/features/builtin-buffers.html).
+For a detailed overview of built-in buffers, [visit our documentation](https://quix.io/docs/quix-streams/features/builtin-buffers.html).
 
 ### Support for DataFrames
 
@@ -368,34 +372,6 @@ The library also includes a number of other enhancements that are designed to si
 
 For a detailed overview of features, [visit our documentation](https://www.quix.io/docs/client-library-intro.html).
 
-### What's Next
-
-This library is being actively developed. We have some more features planned in the library's [roadmap](https://github.com/orgs/quixio/projects/1) coming soon. The main highlight a new feature called "streaming data frames" that simplifies stateful stream processing for users coming from a batch processing environment. It eliminates the need for users to manage state in memory, update rolling windows, deal with checkpointing and state persistence, and manage state recovery after a service unexpectedly restarts. By introducing a familiar interface to Pandas DataFrames, we hopes to make stream processing even more accessible to data professionals who are new to streaming data.
-
-The following example shows how you would perform rolling window calculation on a streaming data frame:
-
-```python
-# Create a projection for columns we need.
-df = consumer_stream.df[["gForceX", "gForceY", "gForceZ"]] 
-
-# Create new feature by simply combining three columns to one new column.
-df["gForceTotal"] = df["gForceX"].abs() + df["gForceY"].abs() + df["gForceZ"].abs()
-
-# Calculate rolling window of previous column for last 10 minutes
-df["gForceTotal_avg10s"] = df["gForceTotal"].rolling("10m").mean()
-
-# Loop through the stream row by row as data flows through the service. 
-# The async iterator will stop the code if there is no new data incoming from the consumer stream
-async for row in df:
-    print(row)
-    await producer_stream.write(row)
-```
-Note that this is exactly how you would do the same calculation on static data in Jupyter notebook—so will be easy to learn for those of you who are used to batch processing. 
-
-There's also no need to get your head around the complexity of stateful processing on streaming data—this will all be managed by the library. Moreover, although it will still feel like Pandas, it will use binary tables under the hood—which adds a significant performance boost compared to traditional Pandas DataFrames.
-
-To find out when the next version is ready, make sure you watch this repo.
-
 ## Using Quix Streams with the Quix SaaS platform
 
 This library doesn't have any dependency on any commercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantages out of the box during your development process such as auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics, and more.
@@ -407,10 +383,6 @@ Contributing is a great way to learn and we especially welcome those who haven't
 ## Need help?
 
 If you run into any problems, ask on #quix-help in [The Stream Slack channel](https://quix.io/slack-invite), alternatively create an [issue](https://github.com/quixio/quix-streams/issues)
-
-## Roadmap
-
-You can view and contribute to our feature [roadmap](https://github.com/orgs/quixio/projects/1).
 
 ## Community 👭
 
