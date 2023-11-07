@@ -1,17 +1,12 @@
 from typing import Any, Optional, Union, Mapping
-from typing_extensions import Protocol
 
 from .messages import MessageHeadersTuples
 from .timestamps import MessageTimestamp
 
 
-class BaseMessageContext(Protocol):
+class BaseMessageContext:
     """
     Base Object for inheriting methods for ColumnContext.
-
-    It allows skipping slot assignment and providing auto-complete.
-
-    Methods will also work as defaults for its subclasses.
     """
 
     __slots__ = (
