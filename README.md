@@ -136,7 +136,7 @@ Under the hood, the `Application` will:
 - Produce it to the output topic.
 - Automatically commit the topic offset and state updates after the message is processed.
 - React to Kafka rebalancing updates and manage the topic partitions.
-- Create and manage the State store for each topic partition.
+- Manage the State store.
 - Handle OS signals and gracefully exit the application.
 
 ### More Examples
