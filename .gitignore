@@ -1,6 +1,14 @@
+# MacOS
 .DS_Store
-.idea/
+
+# Quixstreams
 certificates/
+
+# Pycharm
+.idea/
+
+# VS Code
+.vscode/
 
 #direnv
 .direnv/
