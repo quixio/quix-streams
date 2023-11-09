@@ -405,12 +405,12 @@ Try one of the following resources to continue your Quix learning journey:
 
 * [Quix Streams GitHub](https://github.com/quixio/quix-streams){target=_blank}
 
-* [Quix Platform glossary](https://quix.io/docs/platform/glossary.html)
+* [Quix Platform glossary](https://quix.io/docs/get-started/glossary.html)
 
 * [The Stream community on Slack](https://quix.io/slack-invite){target=_blank}
 
 * [Stream processing glossary](https://quix.io/stream-processing-glossary/){target=_blank}
 
-* [Sentiment analysis tutorial](https://quix.io/docs/platform/tutorials/sentiment-analysis/index.html)
+* [Sentiment analysis tutorial](https://quix.io/docs/tutorials/sentiment-analysis/overview.html)
 
 * [Kafka setup blog post](https://www.quix.io/blog/send-timeseries-data-to-kafka-python/?returnUrl=https://www.quix.io/blog/tutorial/){target=_blank}

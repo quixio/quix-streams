@@ -72,7 +72,7 @@ When you’re running the app in the Quix Portal, the following code connects to
 
 If you wish to connect to Quix with your code running locally, you’ll have to provide an **OAuth2.0** bearer token. Quix have created a token for this, called `SDK token`. 
 
-Once you have [obtained the token](https://quix.io/docs/platform/how-to/streaming-token.html) you will have to provide it as an argument to `QuixStreamingClient` or set the `Quix__Sdk__Token` environment variable. This is shown in the following code:
+Once you have [obtained the token](https://quix.io/docs/develop/authentication/streaming-token.html) you will have to provide it as an argument to `QuixStreamingClient` or set the `Quix__Sdk__Token` environment variable. This is shown in the following code:
 
 === "Python"
     
