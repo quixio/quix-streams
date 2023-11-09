@@ -6,7 +6,7 @@ import time
 from typing import Any, Union, Optional
 
 import rocksdict
-from typing_extensions import Self
+from typing_extensions import Self, Generator
 
 from quixstreams.state.types import (
     DumpsFunc,
@@ -286,7 +286,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         return self._state
 
     @contextlib.contextmanager
-    def with_prefix(self, prefix: Any = b"") -> Self:
+    def with_prefix(self, prefix: Any = b"") -> Generator[Self, None, None]:
         """
         A context manager set the prefix for all keys in the scope.
 

@@ -1,9 +1,21 @@
-from typing import Protocol, Any, Optional, Iterator, Callable, Dict
+from typing import (
+    Protocol,
+    Any,
+    Optional,
+    Callable,
+    Iterator,
+    Dict,
+    overload,
+    TypeVar,
+    Union,
+)
+from contextlib import contextmanager
 
-from typing_extensions import Self
+from typing_extensions import Self, Generator
 
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
+T = TypeVar("T")
 
 
 class Store(Protocol):
@@ -19,12 +31,14 @@ class Store(Protocol):
         """
         Topic name
         """
+        ...
 
     @property
     def name(self) -> str:
         """
         Store name
         """
+        ...
 
     @property
     def partitions(self) -> Dict[int, "StorePartition"]:
@@ -49,12 +63,9 @@ class Store(Protocol):
 
         :param partition: partition number
         """
-
         ...
 
-    def start_partition_transaction(
-        self, partition: int
-    ) -> Optional["PartitionTransaction"]:
+    def start_partition_transaction(self, partition: int) -> "PartitionTransaction":
         """
         Start a new partition transaction.
 
@@ -62,11 +73,13 @@ class Store(Protocol):
         :param partition: partition number
         :return: instance of `PartitionTransaction`
         """
+        ...
 
     def close(self):
         """
         Close store and revoke all store partitions
         """
+        ...
 
     def __enter__(self):
         ...
@@ -87,6 +100,7 @@ class StorePartition(Protocol):
         """
         State new `PartitionTransaction`
         """
+        ...
 
     def get_processed_offset(self) -> Optional[int]:
         ...
@@ -97,7 +111,10 @@ class State(Protocol):
     Primary interface for working with key-value state data from `StreamingDataFrame`
     """
 
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    # @overload()
+    # def get(self, key: Any, default: T) -> T
+
+    def get(self, key: Any, default: Optional[T] = None) -> Optional[Union[Any, T]]:
         """
         Get the value for key if key is present in the state, else default
 
@@ -105,6 +122,7 @@ class State(Protocol):
         :param default: default value to return if the key is not found
         :return: value or None if the key is not found and `default` is not provided
         """
+        ...
 
     def set(self, key: Any, value: Any):
         """
@@ -112,6 +130,7 @@ class State(Protocol):
         :param key: key
         :param value: value
         """
+        ...
 
     def delete(self, key: Any):
         """
@@ -120,6 +139,7 @@ class State(Protocol):
         This function always returns `None`, even if value is not found.
         :param key: key
         """
+        ...
 
     def exists(self, key: Any) -> bool:
         """
@@ -127,9 +147,10 @@ class State(Protocol):
         :param key: key
         :return: True if key exists, False otherwise
         """
+        ...
 
 
-class PartitionTransaction(State):
+class PartitionTransaction(State, Protocol):
     """
     A transaction class to perform simple key-value operations like
     "get", "set", "delete" and "exists" on a single storage partition.
@@ -141,6 +162,7 @@ class PartitionTransaction(State):
         An instance of State to be provided to `StreamingDataFrame` functions
         :return:
         """
+        ...
 
     @property
     def failed(self) -> bool:
@@ -150,6 +172,7 @@ class PartitionTransaction(State):
         Failed transactions cannot be re-used.
         :return: bool
         """
+        ...
 
     @property
     def completed(self) -> bool:
@@ -161,6 +184,7 @@ class PartitionTransaction(State):
         """
         ...
 
+    @contextmanager
     def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
         """
         A context manager set the prefix for all keys in the scope.
@@ -168,14 +192,16 @@ class PartitionTransaction(State):
         Normally, it's called by `StreamingDataFrame` internals to ensure that every
         message key is stored separately.
         :param prefix: key prefix
-        :return: context maager
+        :return: context manager
         """
+        ...
 
     def maybe_flush(self, offset: Optional[int] = None):
         """
         Flush the recent updates and last processed offset to the storage.
         :param offset: offset of the last processed message, optional.
         """
+        ...
 
     def __enter__(self):
         ...

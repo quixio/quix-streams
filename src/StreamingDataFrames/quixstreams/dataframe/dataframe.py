@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Callable, Union, List, Mapping, Any
+from typing import Optional, Callable, Union, List, Mapping, Any, overload, cast
 
 from typing_extensions import Self, TypeAlias
 
@@ -11,12 +11,8 @@ from ..rowconsumer import RowConsumerProto
 from ..rowproducer import RowProducerProto
 from ..state import State, StateStoreManager
 
-ApplyFunc: TypeAlias = Callable[
-    [dict, MessageContext], Optional[Union[dict, List[dict]]]
-]
-StatefulApplyFunc: TypeAlias = Callable[
-    [dict, MessageContext, State], Optional[Union[dict, List[dict]]]
-]
+ApplyFunc: TypeAlias = Callable[[dict, MessageContext], Optional[dict]]
+StatefulApplyFunc: TypeAlias = Callable[[dict, MessageContext, State], Optional[dict]]
 KeyFunc: TypeAlias = Callable[[dict, MessageContext], Any]
 
 __all__ = ("StreamingDataFrame",)
@@ -36,7 +32,7 @@ def apply(
     row: Row,
     func: Union[ApplyFunc, StatefulApplyFunc],
     state_manager: Optional[StateStoreManager] = None,
-) -> Union[Row, List[Row]]:
+) -> Row:
     # Providing state to the function if state_manager is passed
     if state_manager is not None:
         transaction = state_manager.get_store_transaction()
@@ -238,18 +234,19 @@ class StreamingDataFrame:
     def __setitem__(self, key: str, value: Any):
         self._apply(lambda row: setitem(key, value, row))
 
-    def __getitem__(
-        self, item: Union[str, List[str], Column, Self]
-    ) -> Union[Column, Self]:
+    @overload
+    def __getitem__(self, item: str) -> Column:
+        ...
+
+    @overload
+    def __getitem__(self, item: Union[Column, List[str]]) -> Self:
+        ...
+
+    def __getitem__(self, item: Union[str, List[str], Column]) -> Union[Column, Self]:
         if isinstance(item, Column):
             return self._apply(lambda row: row if item.eval(row) else None)
         elif isinstance(item, list):
             return self._apply(lambda row: subset(item, row))
-        elif isinstance(item, StreamingDataFrame):
-            # TODO: Implement filtering based on another SDF
-            raise ValueError(
-                "Filtering based on StreamingDataFrame is not supported yet."
-            )
         else:
             return Column(col_name=item)
 
