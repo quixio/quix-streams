@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, Callable, Union, List, Mapping, Any, overload, cast
+from typing import Optional, Callable, Union, List, Mapping, overload
 
 from typing_extensions import Self, TypeAlias
 
@@ -13,7 +13,7 @@ from ..state import State, StateStoreManager
 
 ApplyFunc: TypeAlias = Callable[[dict, MessageContext], Optional[dict]]
 StatefulApplyFunc: TypeAlias = Callable[[dict, MessageContext, State], Optional[dict]]
-KeyFunc: TypeAlias = Callable[[dict, MessageContext], Any]
+KeyFunc: TypeAlias = Callable[[dict, MessageContext], object]
 
 __all__ = ("StreamingDataFrame",)
 
@@ -23,7 +23,7 @@ def subset(keys: List[str], row: Row) -> Row:
     return row
 
 
-def setitem(k: str, v: Any, row: Row) -> Row:
+def setitem(k: str, v: object, row: Row) -> Row:
     row[k] = v.eval(row) if isinstance(v, Column) else v
     return row
 
@@ -231,7 +231,7 @@ class StreamingDataFrame:
     def producer(self, producer: RowProducerProto):
         self._real_producer = producer
 
-    def __setitem__(self, key: str, value: Any):
+    def __setitem__(self, key: str, value: object):
         self._apply(lambda row: setitem(key, value, row))
 
     @overload
@@ -250,7 +250,7 @@ class StreamingDataFrame:
         else:
             return Column(col_name=item)
 
-    def _produce(self, topic: Topic, row: Row, key: Optional[Any] = None) -> Row:
+    def _produce(self, topic: Topic, row: Row, key: Optional[object] = None) -> Row:
         self.producer.produce_row(row, topic, key=key)
         return row
 

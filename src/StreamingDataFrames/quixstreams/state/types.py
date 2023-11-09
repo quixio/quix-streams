@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 from typing import (
     Protocol,
-    Any,
     Optional,
     Callable,
     Iterator,
@@ -9,8 +8,8 @@ from typing import (
 )
 from typing_extensions import Self
 
-DumpsFunc = Callable[[Any], bytes]
-LoadsFunc = Callable[[bytes], Any]
+DumpsFunc = Callable[[object], bytes]
+LoadsFunc = Callable[[bytes], object]
 
 
 class Store(Protocol):
@@ -106,7 +105,7 @@ class State(Protocol):
     Primary interface for working with key-value state data from `StreamingDataFrame`
     """
 
-    def get(self, key: Any, default=None) -> Optional[Any]:
+    def get(self, key: object, default=None) -> Optional[object]:
         """
         Get the value for key if key is present in the state, else default
 
@@ -116,7 +115,7 @@ class State(Protocol):
         """
         ...
 
-    def set(self, key: Any, value: Any):
+    def set(self, key: object, value: object):
         """
         Set value for the key.
         :param key: key
@@ -124,7 +123,7 @@ class State(Protocol):
         """
         ...
 
-    def delete(self, key: Any):
+    def delete(self, key: object):
         """
         Delete value for the key.
 
@@ -133,7 +132,7 @@ class State(Protocol):
         """
         ...
 
-    def exists(self, key: Any) -> bool:
+    def exists(self, key: object) -> bool:
         """
         Check if the key exists in state.
         :param key: key
@@ -177,7 +176,7 @@ class PartitionTransaction(State, Protocol):
         ...
 
     @contextmanager
-    def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
+    def with_prefix(self, prefix: object = b"") -> Iterator[Self]:
         """
         A context manager set the prefix for all keys in the scope.
 

@@ -3,7 +3,7 @@ import functools
 import logging
 import struct
 import time
-from typing import Any, Union, Optional
+from typing import Union, Optional
 
 import rocksdict
 from typing import Iterator
@@ -99,7 +99,7 @@ class RocksDBStorePartition(StorePartition):
         """
         self._db.write(batch)
 
-    def get(self, key: bytes, default: Any = None) -> Union[None, bytes, Any]:
+    def get(self, key: bytes, default: object = None) -> Union[None, bytes, object]:
         """
         Get a key from RocksDB.
 
@@ -287,7 +287,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         return self._state
 
     @contextlib.contextmanager
-    def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
+    def with_prefix(self, prefix: object = b"") -> Iterator[Self]:
         """
         A context manager set the prefix for all keys in the scope.
 
@@ -318,7 +318,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             self._prefix = _DEFAULT_PREFIX
 
     @_validate_transaction_state
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    def get(self, key: object, default: object = None) -> Optional[object]:
         """
         Get a key from the store.
 
@@ -347,7 +347,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         return default
 
     @_validate_transaction_state
-    def set(self, key: Any, value: Any):
+    def set(self, key: object, value: object):
         """
         Set a key to the store.
 
@@ -368,7 +368,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             raise
 
     @_validate_transaction_state
-    def delete(self, key: Any):
+    def delete(self, key: object):
         """
         Delete a key from the store.
 
@@ -385,7 +385,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             raise
 
     @_validate_transaction_state
-    def exists(self, key: Any) -> bool:
+    def exists(self, key: object) -> bool:
         """
         Check if a key exists in the store.
 
@@ -454,13 +454,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         finally:
             self._completed = True
 
-    def _serialize_value(self, value: Any) -> bytes:
+    def _serialize_value(self, value: object) -> bytes:
         return serialize(value, dumps=self._dumps)
 
-    def _deserialize_value(self, value: bytes) -> Any:
+    def _deserialize_value(self, value: bytes) -> object:
         return deserialize(value, loads=self._loads)
 
-    def _serialize_key(self, key: Any) -> bytes:
+    def _serialize_key(self, key: object) -> bytes:
         return serialize_key(key, prefix=self._prefix, dumps=self._dumps)
 
     def __enter__(self):
