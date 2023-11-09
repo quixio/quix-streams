@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from typing import (
     Protocol,
     Any,
@@ -5,17 +6,11 @@ from typing import (
     Callable,
     Iterator,
     Dict,
-    overload,
-    TypeVar,
-    Union,
 )
-from contextlib import contextmanager
-
-from typing_extensions import Self, Generator
+from typing_extensions import Self
 
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
-T = TypeVar("T")
 
 
 class Store(Protocol):
@@ -111,10 +106,7 @@ class State(Protocol):
     Primary interface for working with key-value state data from `StreamingDataFrame`
     """
 
-    # @overload()
-    # def get(self, key: Any, default: T) -> T
-
-    def get(self, key: Any, default: Optional[T] = None) -> Optional[Union[Any, T]]:
+    def get(self, key: Any, default=None) -> Optional[Any]:
         """
         Get the value for key if key is present in the state, else default
 
