@@ -155,7 +155,9 @@ class TestDataframeProcess:
         row = row_factory({"x": 1, "y": 2})
         assert dataframe.process(row).value == row.value
 
-    def test_compound_inequality_filter_is_filtered(self, dataframe_factory, row_factory):
+    def test_compound_inequality_filter_is_filtered(
+        self, dataframe_factory, row_factory
+    ):
         dataframe = dataframe_factory()
         dataframe = dataframe[(dataframe["x"] >= 0) & (dataframe["y"] < 0)]
         row = row_factory({"x": 1, "y": 2})
@@ -163,19 +165,25 @@ class TestDataframeProcess:
 
     def test_contains_on_existing_column(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe['has_column'] = dataframe.contains('x')
+        dataframe["has_column"] = dataframe.contains("x")
         row = row_factory({"x": 1})
-        assert dataframe.process(row).value == row_factory({"x": 1, "has_column": True}).value
+        assert (
+            dataframe.process(row).value
+            == row_factory({"x": 1, "has_column": True}).value
+        )
 
     def test_contains_on_missing_column(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe['has_column'] = dataframe.contains('wrong_column')
+        dataframe["has_column"] = dataframe.contains("wrong_column")
         row = row_factory({"x": 1})
-        assert dataframe.process(row).value == row_factory({"x": 1, "has_column": False}).value
+        assert (
+            dataframe.process(row).value
+            == row_factory({"x": 1, "has_column": False}).value
+        )
 
     def test_contains_as_filter(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
-        dataframe = dataframe[dataframe.contains('x')]
+        dataframe = dataframe[dataframe.contains("x")]
 
         valid_row = row_factory({"x": 1, "y": 2})
         valid_result = dataframe.process(valid_row)
