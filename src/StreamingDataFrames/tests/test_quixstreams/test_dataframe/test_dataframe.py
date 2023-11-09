@@ -78,14 +78,14 @@ class TestDataframeProcess:
     def test_setitem_column_with_operations(self, dataframe_factory, row_factory):
         dataframe = dataframe_factory()
         dataframe["new"] = (
-            dataframe["x"] + dataframe["y"].apply(lambda v, ctx: v + 5) + 1
+                dataframe["x"] + dataframe["y"].apply(lambda v, ctx: v + 5) + 1
         )
         row = row_factory({"x": 1, "y": 2})
         expected = row_factory({"x": 1, "y": 2, "new": 9})
         assert dataframe.process(row).value == expected.value
 
     def test_setitem_from_a_nested_column(
-        self, dataframe_factory, row_factory, row_plus_n_func
+            self, dataframe_factory, row_factory, row_plus_n_func
     ):
         dataframe = dataframe_factory()
         dataframe["a"] = dataframe["x"]["y"]
@@ -101,7 +101,7 @@ class TestDataframeProcess:
         assert dataframe.process(row).value == expected.value
 
     def test_column_subset_with_funcs(
-        self, dataframe_factory, row_factory, row_plus_n_func
+            self, dataframe_factory, row_factory, row_plus_n_func
     ):
         dataframe = dataframe_factory()
         dataframe = dataframe[["x", "y"]].apply(row_plus_n_func(n=5))
@@ -128,7 +128,7 @@ class TestDataframeProcess:
         assert dataframe.process(row).value == row.value
 
     def test_inequality_filter_with_operation_is_filtered(
-        self, dataframe_factory, row_factory
+            self, dataframe_factory, row_factory
     ):
         dataframe = dataframe_factory()
         dataframe = dataframe[(dataframe["x"] - dataframe["y"]) > 0]
@@ -142,7 +142,7 @@ class TestDataframeProcess:
         assert dataframe.process(row).value == row.value
 
     def test_inequality_filtering_with_apply_is_filtered(
-        self, dataframe_factory, row_factory
+            self, dataframe_factory, row_factory
     ):
         dataframe = dataframe_factory()
         dataframe = dataframe[dataframe["x"].apply(lambda v, ctx: v - 10) >= 0]
@@ -187,12 +187,12 @@ class TestDataframeProcess:
 
 class TestDataframeKafka:
     def test_to_topic(
-        self,
-        dataframe_factory,
-        row_consumer_factory,
-        row_producer_factory,
-        row_factory,
-        topic_json_serdes_factory,
+            self,
+            dataframe_factory,
+            row_consumer_factory,
+            row_producer_factory,
+            row_factory,
+            topic_json_serdes_factory,
     ):
         topic = topic_json_serdes_factory()
         producer = row_producer_factory()
@@ -222,12 +222,12 @@ class TestDataframeKafka:
         assert row_to_produce.value == consumed_row.value
 
     def test_to_topic_custom_key(
-        self,
-        dataframe_factory,
-        row_consumer_factory,
-        row_producer_factory,
-        row_factory,
-        topic_json_serdes_factory,
+            self,
+            dataframe_factory,
+            row_consumer_factory,
+            row_producer_factory,
+            row_factory,
+            topic_json_serdes_factory,
     ):
         topic = topic_json_serdes_factory()
         producer = row_producer_factory()
@@ -256,12 +256,12 @@ class TestDataframeKafka:
         assert consumed_row.key == row_to_produce.value["x"].encode()
 
     def test_to_topic_multiple_topics_out(
-        self,
-        dataframe_factory,
-        row_consumer_factory,
-        row_producer_factory,
-        row_factory,
-        topic_json_serdes_factory,
+            self,
+            dataframe_factory,
+            row_consumer_factory,
+            row_producer_factory,
+            row_factory,
+            topic_json_serdes_factory,
     ):
         topic_0 = topic_json_serdes_factory()
         topic_1 = topic_json_serdes_factory()
@@ -336,7 +336,7 @@ class TestDataframeStateful:
         result = None
         for row in rows:
             with state_manager.start_store_transaction(
-                topic=row.topic, partition=row.partition, offset=row.offset
+                    topic=row.topic, partition=row.partition, offset=row.offset
             ):
                 result = sdf.process(row)
 
