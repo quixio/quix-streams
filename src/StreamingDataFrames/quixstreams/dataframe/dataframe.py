@@ -235,6 +235,22 @@ class StreamingDataFrame:
     def producer(self, producer: RowProducerProto):
         self._real_producer = producer
 
+    @staticmethod
+    def contains(key: str) -> Column:
+        """
+        Returns a Column configured to assess whether a specified key is present in rows.
+
+        :param key: A string representing the column name to check for in each row.
+        :return: A Column object configured to evaluate the presence of a column.
+
+        Example:
+            >>> df = StreamingDataframe()
+            >>> sdf['has_column'] = sdf.contains('column_x')
+            # This would add a new column 'has_column' which contains boolean values
+            # indicating the presence of 'column_x' in each row.
+        """
+        return Column(_eval_func=lambda row: key in row.keys())
+
     def __setitem__(self, key: str, value: Any):
         self._apply(lambda row: setitem(key, value, row))
 
