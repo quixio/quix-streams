@@ -2,6 +2,7 @@
 
 [//]: <> (This will be a banner image w/ the name e.g. Quix Streams.)
 
+[![GitHub repo](https://img.shields.io/badge/GitHub_repo-darkslategray)](https://github.com/quixio/quix-streams)
 [![Quix on Twitter](https://img.shields.io/twitter/url?label=Twitter&style=social&url=https%3A%2F%2Ftwitter.com%2Fquix_io)](https://twitter.com/quix_io)
 [![The Stream Community Slack](https://img.shields.io/badge/-The%20Stream%20Slack-blueviolet)](https://quix.io/slack-invite)
 [![Linkedin](https://img.shields.io/badge/LinkedIn-0A66C2.svg?logo=linkedin)](https://www.linkedin.com/company/70925173/)
@@ -11,13 +12,14 @@
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
 # Quix Streams
+
 >***IMPORTANT:*** This is the page for older version of Quix Streams library v0.5.7.
 > <br>
 > It will be receiving only maintenance updates, and we don't plan to introduce new features to it.
 >
 > To learn more about new version of Quix Streams (2.0 alpha), please see [here](./README.md).
 
-Quix Streams is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka and Kubernetes in a highly abstracted and easy to use Python interface.
+[Quix Streams](https://github.com/quixio/quix-streams) is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka and Kubernetes in a highly abstracted and easy to use Python interface.
 
 Quix Streams has the following benefits:
 
@@ -56,16 +58,19 @@ python3 -m pip install quixstreams
 This library needs to utilize a message broker to send and receive data. Quix uses [Apache Kafka](https://kafka.apache.org/) because it is the leading message broker in the field of streaming data, with enough performance to support high volumes of time-series data, with minimum latency.
 
 **To install and test Kafka locally**:
+
 * Download the Apache Kafka binary from the [Apache Kafka Download](https://kafka.apache.org/downloads) page.
 * Extract the contents of the file to a convenient location (i.e. `kafka_dir`), and start the Kafka services with the following commands:<br><br>
 
   * **Linux / macOS**
+
     ```
     <kafka_dir>/bin/zookeeper-server-start.sh config/zookeeper.properties
     <kafka_dir>/bin/zookeeper-server-start.sh config/server.properties
     ```
 
   * **Windows**
+
     ```
     <kafka_dir>\bin\windows\zookeeper-server-start.bat.\config\zookeeper.properties
     <kafka_dir>\bin\windows\kafka-server-start.bat .\config\server.properties
@@ -73,10 +78,16 @@ This library needs to utilize a message broker to send and receive data. Quix us
 * Create a test topic with the `kafka-topics` script.
   
   * **Linux / macOS**
-    `<kafka_dir>/bin/kafka-topics.sh --create --topic mytesttopic --bootstrap-server localhost:9092`
+
+    ```
+    <kafka_dir>/bin/kafka-topics.sh --create --topic mytesttopic --bootstrap-server localhost:9092`
+    ```
 
   * **Windows**
-    `bin\windows\kafka-topics.bat --create --topic mytesttopic --bootstrap-server localhost:9092`
+
+    ```
+    bin\windows\kafka-topics.bat --create --topic mytesttopic --bootstrap-server localhost:9092
+    ```
 
 You can find more detailed instructions in Apache Kafka's [official documentation](https://kafka.apache.org/quickstart).
 
@@ -170,6 +181,7 @@ For full documentation of how to [<b>consume</b>](https://www.quix.io/docs/quix-
 The following features are designed to address common issues faced when developing real-time streaming applications:
 
 ### Streaming contexts
+
 Streaming contexts allow you to bundle data from one data source into the same scope with supplementary metadata—thus enabling workloads to be horizontally scaled with multiple replicas.
 
 * In the following sample, the `create_stream` function is used to create a stream called _bus-123AAAV_ which gets assigned to one particular consumer and will receive messages in the correct order: 
