@@ -6,7 +6,9 @@ from typing import Optional, List, Callable
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
-from .dataframe import StreamingDataFrame
+from .context import set_current_context, copy_context
+from .core.stream import Filtered
+from .dataframe.dataframe_v2 import StreamingDataFrame
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
@@ -335,7 +337,6 @@ class Application:
         :return: `StreamingDataFrame` object
         """
         sdf = StreamingDataFrame(topic=topic, state_manager=self._state_manager)
-        sdf.consumer = self._consumer
         sdf.producer = self._producer
         return sdf
 
@@ -404,7 +405,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                list(dataframe.topics_in.values()),
+                [dataframe.topic],
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
@@ -412,6 +413,8 @@ class Application:
             logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
             self._running = True
+
+            dataframe_compiled = dataframe.compile()
             while self._running:
                 # Serve producer callbacks
                 self._producer.poll(self._producer_poll_timeout)
@@ -431,13 +434,21 @@ class Application:
                     first_row.partition,
                     first_row.offset,
                 )
+                # Create a new contextvars.Context and set the current MessageContext
+                # (it's the same across multiple rows)
+                context = copy_context()
+                context.run(set_current_context, first_row.context)
 
                 with start_state_transaction(
                     topic=topic_name, partition=partition, offset=offset
                 ):
                     for row in rows:
                         try:
-                            dataframe.process(row=row)
+                            # Execute StreamingDataFrame in a context
+                            context.run(dataframe_compiled, row.value)
+                        except Filtered:
+                            # The message was filtered by StreamingDataFrame
+                            continue
                         except Exception as exc:
                             # TODO: This callback might be triggered because of Producer
                             #  errors too because they happen within ".process()"

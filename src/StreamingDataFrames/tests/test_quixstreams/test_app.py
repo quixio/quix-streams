@@ -7,7 +7,6 @@ from unittest.mock import patch, create_autospec
 
 import pytest
 from confluent_kafka import KafkaException, TopicPartition
-from tests.utils import TopicPartitionStub
 
 from quixstreams.app import Application
 from quixstreams.models import (
@@ -16,7 +15,6 @@ from quixstreams.models import (
     JSONDeserializer,
     SerializationError,
     JSONSerializer,
-    MessageContext,
 )
 from quixstreams.platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -28,6 +26,7 @@ from quixstreams.rowconsumer import (
     RowConsumer,
 )
 from quixstreams.state import State
+from tests.utils import TopicPartitionStub
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -92,8 +91,8 @@ class TestApplication:
             value_deserializer=JSONDeserializer(),
         )
 
-        df = app.dataframe(topic_in)
-        df.to_topic(topic_out)
+        sdf = app.dataframe(topic_in)
+        sdf = sdf.to_topic(topic_out)
 
         processed_count = 0
         total_messages = 3
@@ -107,7 +106,7 @@ class TestApplication:
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(df)
+        app.run(sdf)
 
         # Check that all messages have been processed
         assert processed_count == total_messages
@@ -130,21 +129,19 @@ class TestApplication:
             assert row.key == data["key"]
             assert row.value == {column_name: loads(data["value"].decode())}
 
-    def test_run_consumer_error_raised(
-        self, app_factory, producer, topic_factory, consumer, executor
-    ):
+    def test_run_consumer_error_raised(self, app_factory, topic_factory, executor):
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         app = app_factory(auto_offset_reset="error")
         topic_name, _ = topic_factory()
         topic = app.topic(
             topic_name, value_deserializer=JSONDeserializer(column_name="root")
         )
-        df = app.dataframe(topic)
+        sdf = app.dataframe(topic)
 
         # Stop app after 10s if nothing failed
         executor.submit(_stop_app_on_timeout, app, 10.0)
         with pytest.raises(KafkaMessageError):
-            app.run(df)
+            app.run(sdf)
 
     def test_run_deserialization_error_raised(
         self, app_factory, producer, topic_factory, consumer, executor
@@ -157,12 +154,12 @@ class TestApplication:
         with producer:
             producer.produce(topic=topic_name, value=b"abc")
 
-        df = app.dataframe(topic)
+        sdf = app.dataframe(topic)
 
         with pytest.raises(SerializationError):
             # Stop app after 10s if nothing failed
             executor.submit(_stop_app_on_timeout, app, 10.0)
-            app.run(df)
+            app.run(sdf)
 
     def test_run_consumer_error_suppressed(
         self, app_factory, producer, topic_factory, consumer, executor
@@ -181,14 +178,14 @@ class TestApplication:
         app = app_factory(on_consumer_error=on_consumer_error)
         topic_name, _ = topic_factory()
         topic = app.topic(topic_name)
-        df = app.dataframe(topic)
+        sdf = app.dataframe(topic)
 
         with patch.object(RowConsumer, "poll") as mocked:
             # Patch RowConsumer.poll to simulate failures
             mocked.side_effect = ValueError("test")
             # Stop app when the future is resolved
             executor.submit(_stop_app_on_future, app, done, 10.0)
-            app.run(df)
+            app.run(sdf)
         assert polled > 1
 
     def test_run_processing_error_raised(
@@ -198,19 +195,19 @@ class TestApplication:
 
         topic_name, _ = topic_factory()
         topic = app.topic(topic_name, value_deserializer=JSONDeserializer())
-        df = app.dataframe(topic)
+        sdf = app.dataframe(topic)
 
         def fail(*args):
             raise ValueError("test")
 
-        df = df.apply(fail)
+        sdf = sdf.apply(fail)
 
         with producer:
             producer.produce(topic=topic.name, value=b'{"field":"value"}')
 
         with pytest.raises(ValueError):
             executor.submit(_stop_app_on_timeout, app, 10.0)
-            app.run(df)
+            app.run(sdf)
 
     def test_run_processing_error_suppressed(
         self, app_factory, topic_factory, producer, executor
@@ -232,12 +229,12 @@ class TestApplication:
         )
         topic_name, _ = topic_factory()
         topic = app.topic(topic_name, value_deserializer=JSONDeserializer())
-        df = app.dataframe(topic)
+        sdf = app.dataframe(topic)
 
         def fail(*args):
             raise ValueError("test")
 
-        df = df.apply(fail)
+        sdf = sdf.apply(fail)
 
         with producer:
             for i in range(produced):
@@ -245,7 +242,7 @@ class TestApplication:
 
         # Stop app from the background thread when the future is resolved
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(df)
+        app.run(sdf)
         assert produced == consumed
 
     def test_run_producer_error_raised(
@@ -261,15 +258,15 @@ class TestApplication:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
         topic_out = app.topic(topic_out_name, value_serializer=JSONSerializer())
 
-        df = app.dataframe(topic_in)
-        df.to_topic(topic_out)
+        sdf = app.dataframe(topic_in)
+        sdf = sdf.to_topic(topic_out)
 
         with producer:
             producer.produce(topic_in.name, dumps({"field": 1001 * "a"}))
 
         with pytest.raises(KafkaException):
             executor.submit(_stop_app_on_timeout, app, 10.0)
-            app.run(df)
+            app.run(sdf)
 
     def test_run_serialization_error_raised(
         self, app_factory, producer, topic_factory, executor
@@ -281,15 +278,15 @@ class TestApplication:
         topic_out_name, _ = topic_factory()
         topic_out = app.topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = app.dataframe(topic_in)
-        df.to_topic(topic_out)
+        sdf = app.dataframe(topic_in)
+        sdf = sdf.to_topic(topic_out)
 
         with producer:
             producer.produce(topic_in.name, b'{"field":"value"}')
 
         with pytest.raises(SerializationError):
             executor.submit(_stop_app_on_timeout, app, 10.0)
-            app.run(df)
+            app.run(sdf)
 
     def test_run_producer_error_suppressed(
         self, app_factory, producer, topic_factory, consumer, executor
@@ -314,15 +311,15 @@ class TestApplication:
         topic_out_name, _ = topic_factory()
         topic_out = app.topic(topic_out_name, value_serializer=DoubleSerializer())
 
-        df = app.dataframe(topic_in)
-        df.to_topic(topic_out)
+        sdf = app.dataframe(topic_in)
+        sdf = sdf.to_topic(topic_out)
 
         with producer:
             for _ in range(produce_input):
                 producer.produce(topic_in.name, b'{"field":"value"}')
 
         executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(df)
+        app.run(sdf)
 
         assert produce_output_attempts == produce_input
 
@@ -336,7 +333,6 @@ class TestApplication:
         app = Application(broker_address="localhost", consumer_group="test")
         topic = app.topic(name="test-topic")
         sdf = app.dataframe(topic)
-
         assert sdf
 
 
@@ -401,9 +397,7 @@ class TestQuixApplication:
         assert builder.create_topic_configs[expected_name].name == expected_name
         assert builder.create_topic_configs[expected_name].num_partitions == 5
 
-    def test_topic_auto_create_false_topic_confirmation(
-        self, dataframe_factory, quix_app_factory
-    ):
+    def test_topic_auto_create_false_topic_confirmation(self, quix_app_factory):
         """
         Topics are confirmed when auto_create_topics=False
         """
@@ -443,7 +437,7 @@ class TestQuixApplication:
         app = quix_app_factory(workspace_id="")
         topic = app.topic(topic_name)
         sdf = app.dataframe(topic)
-        sdf.apply(lambda x, state: x, stateful=True)
+        sdf = sdf.apply(lambda x, state: x, stateful=True)
 
         monkeypatch.setenv(
             QuixEnvironment.DEPLOYMENT_ID,
@@ -507,15 +501,15 @@ class TestApplicationWithState:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, ctx: MessageContext, state: State):
+        def count(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
             if total == total_messages:
                 total_consumed.set_result(total)
 
-        df = app.dataframe(topic_in)
-        df.apply(count, stateful=True)
+        sdf = app.dataframe(topic_in)
+        sdf = sdf.update(count, stateful=True)
 
         total_messages = 3
         # Produce messages to the topic and flush
@@ -529,7 +523,7 @@ class TestApplicationWithState:
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
-        app.run(df)
+        app.run(sdf)
 
         # Check that the values are actually in the DB
         state_manager = state_manager_factory(
@@ -567,7 +561,7 @@ class TestApplicationWithState:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, ctx, state: State):
+        def count(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -578,9 +572,7 @@ class TestApplicationWithState:
             failed.set_result(True)
             raise ValueError("test")
 
-        df = app.dataframe(topic_in)
-        df.apply(count, stateful=True)
-        df.apply(fail)
+        sdf = app.dataframe(topic_in).update(count, stateful=True).update(fail)
 
         total_messages = 3
         # Produce messages to the topic and flush
@@ -592,7 +584,7 @@ class TestApplicationWithState:
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, failed, 10.0)
         with pytest.raises(ValueError):
-            app.run(df)
+            app.run(sdf)
 
         # Ensure that nothing was committed to the DB
         state_manager = state_manager_factory(
@@ -629,7 +621,7 @@ class TestApplicationWithState:
         topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, ctx, state: State):
+        def count(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
@@ -639,9 +631,7 @@ class TestApplicationWithState:
         def fail(_):
             raise ValueError("test")
 
-        df = app.dataframe(topic_in)
-        df.apply(count, stateful=True)
-        df.apply(fail)
+        sdf = app.dataframe(topic_in).update(count, stateful=True).apply(fail)
 
         total_messages = 3
         message_key = b"key"
@@ -656,7 +646,7 @@ class TestApplicationWithState:
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, total_consumed, 10.0)
         # Run the application
-        app.run(df)
+        app.run(sdf)
 
         # Ensure that data is committed to the DB
         state_manager = state_manager_factory(
@@ -710,11 +700,9 @@ class TestApplicationWithState:
         # Define some stateful function so the App assigns store partitions
         done = Future()
 
-        def count(_, ctx, state: State):
-            done.set_result(True)
-
-        df = app.dataframe(topic_in)
-        df.apply(count, stateful=True)
+        sdf = app.dataframe(topic_in).update(
+            lambda *_: done.set_result(True), stateful=True
+        )
 
         # Produce a message to the topic and flush
         data = {"key": b"key", "value": dumps({"key": "value"})}
@@ -725,7 +713,7 @@ class TestApplicationWithState:
         executor.submit(_stop_app_on_future, app, done, 10.0)
         # Run the application
         with patch.object(logging.getLoggerClass(), "warning") as mock:
-            app.run(df)
+            app.run(sdf)
 
         assert mock.called
         assert "is behind the stored offset" in mock.call_args[0][0]
