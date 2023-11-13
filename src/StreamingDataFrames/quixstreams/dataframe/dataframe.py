@@ -238,10 +238,10 @@ class StreamingDataFrame:
     @staticmethod
     def contains(key: str) -> Column:
         """
-        Returns a Column configured to assess whether a specified key is present in rows.
+        Check if the key is present in the Row value.
 
-        :param key: A string representing the column name to check for in each row.
-        :return: A Column object configured to evaluate the presence of a column.
+        :param key: a column name to check.
+        :returns: a Column object that evaluates to True if the key is present or False otherwise.
 
         Example:
             >>> df = StreamingDataframe()
