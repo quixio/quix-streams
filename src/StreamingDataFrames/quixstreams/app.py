@@ -345,6 +345,12 @@ class Application:
         """
         self._running = False
 
+    def clear_state(self):
+        """
+        Clear the state of the application.
+        """
+        self._state_manager.clear_state()
+
     def _quix_runtime_init(self):
         """
         Do a runtime setup only applicable to an Application.Quix instance

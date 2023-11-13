@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
@@ -103,6 +104,18 @@ class StateStoreManager:
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
+
+    def delete_stores(self):
+        """
+        Delete all state stores managed by StateStoreManager.
+        """
+        for topic_stores in self._stores.values():
+            for store in topic_stores.values():
+                for store_partition in store.partitions.values():
+                    store_partition.close()
+                    shutil.rmtree(store_partition.path)
+
+        self._stores.clear()
 
     def on_partition_assign(self, tp: TopicPartition) -> List[StorePartition]:
         """
