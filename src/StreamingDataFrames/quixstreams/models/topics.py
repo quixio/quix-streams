@@ -1,7 +1,7 @@
 import logging
 from typing import Union, List, Mapping, Optional, Any
 
-from .context import MessageContext
+from .messagecontext import MessageContext
 from .messages import KafkaMessage
 from .rows import Row
 from .serializers import (

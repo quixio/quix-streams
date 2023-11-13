@@ -5,7 +5,7 @@ from typing_extensions import Self
 
 from .messages import MessageHeadersTuples
 from .timestamps import MessageTimestamp
-from .context import MessageContext
+from .messagecontext import MessageContext
 
 
 class Row:
