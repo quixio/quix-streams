@@ -17,7 +17,7 @@
 > <br>
 > It will be receiving only maintenance updates, and we don't plan to introduce new features to it.
 >
-> To learn more about new version of Quix Streams (2.0 alpha), please see [here](./README.md).
+> To learn more about new version of Quix Streams (2.0 alpha), please see [here](https://github.com/quixio/quix-streams/blob/main/README.md).
 
 [Quix Streams](https://github.com/quixio/quix-streams) is a cloud-native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka and Kubernetes in a highly abstracted and easy to use Python interface.
 
