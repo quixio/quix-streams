@@ -23,6 +23,17 @@ class StreamingSeries(BaseStreaming):
             raise ValueError('Either "name" or "stream" must be passed')
         self._stream = stream or Stream(func=Apply(lambda v: v[name]))
 
+    @classmethod
+    def from_func(cls, func: StreamCallable) -> Self:
+        """
+        Createa StreamingSeries from a function.
+
+        The provided function will be wrapped into `Apply`
+        :param func: a function to apply
+        :return: instance of `StreamingSeries`
+        """
+        return cls(stream=Stream(Apply(func)))
+
     @property
     def stream(self) -> Stream:
         return self._stream
@@ -84,21 +95,17 @@ class StreamingSeries(BaseStreaming):
         compiled = self.compile()
         return context.run(compiled, value)
 
-    @classmethod
-    def _from_func(cls, func: StreamCallable) -> Self:
-        return cls(stream=Stream(Apply(func)))
-
     def _operation(
         self, other: Union[Self, object], operator_: Callable[[object, object], object]
     ) -> Self:
         self_compiled = self.compile()
         if isinstance(other, self.__class__):
             other_compiled = other.compile()
-            return self._from_func(
+            return self.from_func(
                 func=lambda v, op=operator_: op(self_compiled(v), other_compiled(v))
             )
         else:
-            return self._from_func(
+            return self.from_func(
                 func=lambda v, op=operator_: op(self_compiled(v), other)
             )
 

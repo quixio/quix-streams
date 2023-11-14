@@ -201,34 +201,27 @@ class TestStreamingDataFrame:
         else:
             assert sdf.test(value) == value
 
-    def test_contains_on_existing_column(self, dataframe_factory, row_factory):
-        dataframe = dataframe_factory()
-        dataframe["has_column"] = dataframe.contains("x")
-        row = row_factory({"x": 1})
-        assert (
-            dataframe.process(row).value
-            == row_factory({"x": 1, "has_column": True}).value
-        )
+    def test_contains_on_existing_column(self, dataframe_factory):
+        sdf = dataframe_factory()
+        sdf["has_column"] = sdf.contains("x")
+        assert sdf.test({"x": 1}) == {"x": 1, "has_column": True}
 
-    def test_contains_on_missing_column(self, dataframe_factory, row_factory):
-        dataframe = dataframe_factory()
-        dataframe["has_column"] = dataframe.contains("wrong_column")
-        row = row_factory({"x": 1})
-        assert (
-            dataframe.process(row).value
-            == row_factory({"x": 1, "has_column": False}).value
-        )
+    def test_contains_on_missing_column(self, dataframe_factory):
+        sdf = dataframe_factory()
+        sdf["has_column"] = sdf.contains("wrong_column")
 
-    def test_contains_as_filter(self, dataframe_factory, row_factory):
-        dataframe = dataframe_factory()
-        dataframe = dataframe[dataframe.contains("x")]
+        assert sdf.test({"x": 1}) == {"x": 1, "has_column": False}
 
-        valid_row = row_factory({"x": 1, "y": 2})
-        valid_result = dataframe.process(valid_row)
-        assert valid_result is not None and valid_result.value == valid_row.value
+    def test_contains_as_filter(self, dataframe_factory):
+        sdf = dataframe_factory()
+        sdf = sdf[sdf.contains("x")]
 
-        invalid_row = row_factory({"y": 2})
-        assert dataframe.process(invalid_row) is None
+        valid_value = {"x": 1, "y": 2}
+        assert sdf.test(valid_value) == valid_value
+
+        invalid_value = {"y": 2}
+        with pytest.raises(Filtered):
+            sdf.test(invalid_value)
 
 
 class TestDatafTestStreamingDataFrameToTopic:

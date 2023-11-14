@@ -116,7 +116,7 @@ class StreamingDataFrame(BaseStreaming):
         self._real_producer = producer
 
     @staticmethod
-    def contains(key: str) -> Column:
+    def contains(key: str) -> StreamingSeries:
         """
         Check if the key is present in the Row value.
 
@@ -129,7 +129,7 @@ class StreamingDataFrame(BaseStreaming):
             # This would add a new column 'has_column' which contains boolean values
             # indicating the presence of 'column_x' in each row.
         """
-        return Column(_eval_func=lambda row: key in row.keys())
+        return StreamingSeries.from_func(lambda value: key in value)
 
     def to_topic(
         self, topic: Topic, key: Optional[Callable[[object], object]] = None
