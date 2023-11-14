@@ -72,13 +72,13 @@ Currently, only functions passed to `StreamingDataFrame.apply()` may use State.
 
 ## Clearing the State
 
-To clear all the state data, use the `app.clear_state()` command. This will delete all data stored in the state, allowing you to start from a clean slate:
+To clear all the state data, use the `app.clear_state()` command. This will delete all data stored in the state stores, allowing you to start from a clean slate:
 
 ```python
 app.clear_state()
 ```
 
-Note that clearing the app state using `app.clear_state()` is only possible when the `app.run()` is not running. Meaning that the state should be cleared either before calling `app.run()` or after.
+Note that clearing the app state using `app.clear_state()` is only possible when the `app.run()` is not running. Meaning that the state can be cleared either before calling `app.run()` or after.
 This ensures that state clearing does not interfere with the ongoing stateful processing.
 
 <br>
