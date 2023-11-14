@@ -190,10 +190,6 @@ Here are some of the planned improvements:
 To find out when the next version is ready, make sure you watch this repo 
 and join our [Quix Community on Slack](https://quix.io/slack-invite)! 
 
-## Using Quix Streams with the Quix SaaS platform
-
-This library doesn't have any dependency on any commercial product, but if you use it together with [Quix SaaS platform](https://www.quix.io) you will get some advantages out of the box during your development process such as auto-configuration, monitoring, data explorer, data persistence, pipeline visualization, metrics, and more.
-
 ## Contribution Guide
 
 Contributing is a great way to learn and we especially welcome those who haven't contributed to an OSS project before.
