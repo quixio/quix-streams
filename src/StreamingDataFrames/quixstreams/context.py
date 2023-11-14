@@ -1,5 +1,5 @@
 from contextvars import ContextVar, copy_context
-from typing import Optional
+from typing import Optional, Any
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models.messagecontext import MessageContext
@@ -40,7 +40,7 @@ def message_context() -> MessageContext:
         raise MessageContextNotSetError("Message context is not set")
 
 
-def message_key() -> object:
+def message_key() -> Any:
     """
     Get current a message key.
 
