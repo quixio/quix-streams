@@ -349,7 +349,7 @@ class Application:
         """
         Clear the state of the application.
         """
-        self._state_manager.clear_state()
+        self._state_manager.clear_stores()
 
     def _quix_runtime_init(self):
         """

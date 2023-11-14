@@ -5,6 +5,10 @@ class PartitionNotAssignedError(QuixException):
     ...
 
 
+class PartitionStoreIsUsed(QuixException):
+    ...
+
+
 class StoreNotRegisteredError(QuixException):
     ...
 

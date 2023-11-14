@@ -729,3 +729,58 @@ class TestApplicationWithState:
 
         assert mock.called
         assert "is behind the stored offset" in mock.call_args[0][0]
+
+    def test_clear_state(
+        self,
+        app_factory,
+        producer,
+        topic_factory,
+        executor,
+        state_manager_factory,
+        tmp_path,
+    ):
+        """
+        Test that clear_state() removes all data from the state stores
+        """
+
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        app = app_factory(
+            consumer_group=consumer_group,
+            auto_offset_reset="earliest",
+            state_dir=state_dir,
+        )
+
+        topic_in_name, _ = topic_factory()
+        tx_prefix = b"key"
+
+        state_manager = state_manager_factory(
+            group_id=consumer_group, state_dir=state_dir
+        )
+
+        # Add data to the state store
+        with state_manager:
+            state_manager.register_store(topic_in_name, "default")
+            state_manager.on_partition_assign(
+                TopicPartitionStub(topic=topic_in_name, partition=0)
+            )
+            store = state_manager.get_store(topic=topic_in_name, store_name="default")
+            with store.start_partition_transaction(partition=0) as tx:
+                # All keys in state must be prefixed with the message key
+                with tx.with_prefix(tx_prefix):
+                    tx.set("my_state", True)
+
+        # Clear the state
+        app.clear_state()
+
+        # Check that the date is cleared from the state store
+        with state_manager:
+            state_manager.register_store(topic_in_name, "default")
+            state_manager.on_partition_assign(
+                TopicPartitionStub(topic=topic_in_name, partition=0)
+            )
+            store = state_manager.get_store(topic=topic_in_name, store_name="default")
+            with store.start_partition_transaction(partition=0) as tx:
+                # All keys in state must be prefixed with the message key
+                with tx.with_prefix(tx_prefix):
+                    assert tx.get("my_state") is None

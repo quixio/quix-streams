@@ -10,6 +10,7 @@ from tests.utils import TopicPartitionStub
 from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
+    PartitionStoreIsUsed,
 )
 
 
@@ -109,11 +110,11 @@ class TestStateStoreManager:
         with pytest.raises(StoreNotRegisteredError):
             state_manager.get_store("topic", "store")
 
-    def test_delete_stores_when_empty(self, state_manager):
-        state_manager.delete_stores()
+    def test_clear_stores_when_empty(self, state_manager):
+        state_manager.clear_stores()
         assert not state_manager.stores
 
-    def test_delete_stores(self, state_manager):
+    def test_clear_stores(self, state_manager):
         # Register stores
         state_manager.register_store("topic1", store_name="store1")
         state_manager.register_store("topic1", store_name="extra_store")
@@ -138,15 +139,30 @@ class TestStateStoreManager:
             for store_partition in store.partitions.values()
         ]
 
-        # Act - Delete stores
-        state_manager.delete_stores()
+        # Revoke partitions
+        for tp in partitions:
+            state_manager.on_partition_revoke(tp)
 
-        # Assert stores are deleted
-        assert not state_manager.stores
+        # Act - Delete stores
+        state_manager.clear_stores()
 
         # Assert store paths are deleted
         for path in stores_to_delete:
             assert not os.path.exists(path), f"RocksDB store at {path} was not deleted"
+
+    def test_clear_stores_fails(self, state_manager):
+        # Register stores
+        state_manager.register_store("topic1", store_name="store1")
+
+        # Define the partition
+        partition = TopicPartitionStub("topic1", 0)
+
+        # Assign the partition
+        state_manager.on_partition_assign(partition)
+
+        # Act - Delete stores
+        with pytest.raises(PartitionStoreIsUsed):
+            state_manager.clear_stores()
 
     def test_store_transaction_success(self, state_manager):
         state_manager.register_store("topic", "store")

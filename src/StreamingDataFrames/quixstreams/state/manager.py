@@ -8,6 +8,7 @@ from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
+    PartitionStoreIsUsed,
 )
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .types import (
@@ -105,17 +106,20 @@ class StateStoreManager:
                 options=self._rocksdb_options,
             )
 
-    def delete_stores(self):
+    def clear_stores(self):
         """
         Delete all state stores managed by StateStoreManager.
         """
-        for topic_stores in self._stores.values():
-            for store in topic_stores.values():
-                for store_partition in store.partitions.values():
-                    store_partition.close()
-                    shutil.rmtree(store_partition.path)
+        if any(
+            store.partitions
+            for topic_stores in self._stores.values()
+            for store in topic_stores.values()
+        ):
+            raise PartitionStoreIsUsed(
+                "Cannot clear stores with active partitions assigned"
+            )
 
-        self._stores.clear()
+        shutil.rmtree(self._state_dir)
 
     def on_partition_assign(self, tp: TopicPartition) -> List[StorePartition]:
         """
