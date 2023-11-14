@@ -1,8 +1,8 @@
 import abc
 from typing import Optional, Any
 
-from quixstreams.models.messagecontext import MessageContext
 from quixstreams.core.stream import Stream, StreamCallable
+from quixstreams.models.messagecontext import MessageContext
 
 
 class BaseStreaming:

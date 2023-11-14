@@ -8,7 +8,7 @@ from typing_extensions import Self
 
 from .context import set_message_context, copy_context
 from .core.stream import Filtered
-from .dataframe.dataframe_v2 import StreamingDataFrame
+from .dataframe import StreamingDataFrame
 from .error_callbacks import (
     ConsumerErrorCallback,
     ProcessingErrorCallback,
