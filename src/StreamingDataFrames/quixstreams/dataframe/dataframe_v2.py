@@ -6,9 +6,9 @@ from typing import Optional, Callable, Union, List, TypeVar, Any
 from typing_extensions import Self
 
 from quixstreams.context import (
-    get_current_context,
-    set_current_context,
-    get_current_key,
+    message_context,
+    set_message_context,
+    message_key,
 )
 from quixstreams.core.stream import StreamCallable, Stream
 from quixstreams.models import Topic, Row, MessageContext
@@ -161,7 +161,7 @@ class StreamingDataFrame(BaseStreaming):
         :return: result of `StreamingDataFrame`
         """
         context = contextvars.copy_context()
-        context.run(set_current_context, ctx)
+        context.run(set_message_context, ctx)
         compiled = self.compile()
         return context.run(compiled, value)
 
@@ -174,7 +174,7 @@ class StreamingDataFrame(BaseStreaming):
         return clone
 
     def _produce(self, topic: Topic, value: object, key: Optional[object] = None):
-        ctx = get_current_context()
+        ctx = message_context()
         key = key or ctx.key
         row = Row(value=value, context=ctx)  # noqa
         self.producer.produce_row(row, topic, key=key)
@@ -229,7 +229,7 @@ def _as_stateful(
     @functools.wraps(func)
     def wrapper(value: object) -> object:
         transaction = state_manager.get_store_transaction()
-        key = get_current_key()
+        key = message_key()
         # Prefix all the state keys by the message key
         with transaction.with_prefix(prefix=key):
             # Pass a State object with an interface limited to the key updates only

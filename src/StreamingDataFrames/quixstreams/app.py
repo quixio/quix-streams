@@ -6,7 +6,7 @@ from typing import Optional, List, Callable
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
-from .context import set_current_context, copy_context
+from .context import set_message_context, copy_context
 from .core.stream import Filtered
 from .dataframe.dataframe_v2 import StreamingDataFrame
 from .error_callbacks import (
@@ -437,7 +437,7 @@ class Application:
                 # Create a new contextvars.Context and set the current MessageContext
                 # (it's the same across multiple rows)
                 context = copy_context()
-                context.run(set_current_context, first_row.context)
+                context.run(set_message_context, first_row.context)
 
                 with start_state_transaction(
                     topic=topic_name, partition=partition, offset=offset

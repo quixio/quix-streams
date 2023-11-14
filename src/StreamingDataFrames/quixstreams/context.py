@@ -6,9 +6,9 @@ from quixstreams.models.messagecontext import MessageContext
 
 __all__ = (
     "MessageContextNotSetError",
-    "set_current_context",
-    "get_current_key",
-    "get_current_context",
+    "set_message_context",
+    "message_key",
+    "message_context",
     "copy_context",
 )
 
@@ -19,16 +19,16 @@ class MessageContextNotSetError(QuixException):
     ...
 
 
-def set_current_context(message_context: Optional[MessageContext]):
+def set_message_context(context: Optional[MessageContext]):
     """
     Set a MessageContext for the current message in the given `contextvars.Context`
 
-    :param message_context: instance of `MessageContext`
+    :param context: instance of `MessageContext`
     """
-    _current_message_context.set(message_context)
+    _current_message_context.set(context)
 
 
-def get_current_context() -> MessageContext:
+def message_context() -> MessageContext:
     """
     Get a MessageContext for the current message
     :return: instance of `MessageContext`
@@ -40,10 +40,10 @@ def get_current_context() -> MessageContext:
         raise MessageContextNotSetError("Message context is not set")
 
 
-def get_current_key() -> object:
+def message_key() -> object:
     """
     Get current a message key.
 
     :return: a deserialized message key
     """
-    return get_current_context().key
+    return message_context().key

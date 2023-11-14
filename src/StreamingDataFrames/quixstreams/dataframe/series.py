@@ -4,7 +4,7 @@ from typing import Optional, Union, Callable, Container, Any
 
 from typing_extensions import Self
 
-from quixstreams.context import set_current_context
+from quixstreams.context import set_message_context
 from quixstreams.core.stream.functions import StreamCallable, Apply
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
@@ -80,7 +80,7 @@ class StreamingSeries(BaseStreaming):
         :return: result of `StreamingSeries`
         """
         context = contextvars.copy_context()
-        context.run(set_current_context, ctx)
+        context.run(set_message_context, ctx)
         compiled = self.compile()
         return context.run(compiled, value)
 
