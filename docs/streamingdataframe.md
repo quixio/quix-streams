@@ -321,7 +321,7 @@ sdf = sdf.update(edit_data, stateful=True)
 ```
 
 For more information about stateful processing in general, see 
-[**Stateful Applications**](./stateful_processing.md).
+[**Stateful Applications**](./stateful-processing.md).
 
 
 ## Accessing the Kafka Message Keys and Metadata
