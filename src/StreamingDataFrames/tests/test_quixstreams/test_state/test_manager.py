@@ -1,3 +1,4 @@
+import os
 import contextlib
 import uuid
 from unittest.mock import patch
@@ -9,6 +10,7 @@ from tests.utils import TopicPartitionStub
 from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
+    PartitionStoreIsUsed,
 )
 
 
@@ -107,6 +109,60 @@ class TestStateStoreManager:
     def test_get_store_not_registered(self, state_manager):
         with pytest.raises(StoreNotRegisteredError):
             state_manager.get_store("topic", "store")
+
+    def test_clear_stores_when_empty(self, state_manager):
+        state_manager.clear_stores()
+        assert not state_manager.stores
+
+    def test_clear_stores(self, state_manager):
+        # Register stores
+        state_manager.register_store("topic1", store_name="store1")
+        state_manager.register_store("topic1", store_name="extra_store")
+        state_manager.register_store("topic2", store_name="store1")
+
+        # Define partitions
+        partitions = [
+            TopicPartitionStub("topic1", 0),
+            TopicPartitionStub("topic1", 1),
+            TopicPartitionStub("topic2", 0),
+        ]
+
+        # Assign partitions
+        for tp in partitions:
+            state_manager.on_partition_assign(tp)
+
+        # Collect paths of stores to be deleted
+        stores_to_delete = [
+            store_partition.path
+            for topic_stores in state_manager.stores.values()
+            for store in topic_stores.values()
+            for store_partition in store.partitions.values()
+        ]
+
+        # Revoke partitions
+        for tp in partitions:
+            state_manager.on_partition_revoke(tp)
+
+        # Act - Delete stores
+        state_manager.clear_stores()
+
+        # Assert store paths are deleted
+        for path in stores_to_delete:
+            assert not os.path.exists(path), f"RocksDB store at {path} was not deleted"
+
+    def test_clear_stores_fails(self, state_manager):
+        # Register stores
+        state_manager.register_store("topic1", store_name="store1")
+
+        # Define the partition
+        partition = TopicPartitionStub("topic1", 0)
+
+        # Assign the partition
+        state_manager.on_partition_assign(partition)
+
+        # Act - Delete stores
+        with pytest.raises(PartitionStoreIsUsed):
+            state_manager.clear_stores()
 
     def test_store_transaction_success(self, state_manager):
         state_manager.register_store("topic", "store")

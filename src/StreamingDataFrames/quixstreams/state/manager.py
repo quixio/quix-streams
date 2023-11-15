@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
@@ -7,6 +8,7 @@ from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
+    PartitionStoreIsUsed,
 )
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .types import (
@@ -103,6 +105,21 @@ class StateStoreManager:
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
+
+    def clear_stores(self):
+        """
+        Delete all state stores managed by StateStoreManager.
+        """
+        if any(
+            store.partitions
+            for topic_stores in self._stores.values()
+            for store in topic_stores.values()
+        ):
+            raise PartitionStoreIsUsed(
+                "Cannot clear stores with active partitions assigned"
+            )
+
+        shutil.rmtree(self._state_dir)
 
     def on_partition_assign(self, tp: TopicPartition) -> List[StorePartition]:
         """
