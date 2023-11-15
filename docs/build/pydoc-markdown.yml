@@ -1,0 +1,16 @@
+loaders:
+  - type: python
+    search_path: [ ../.. ]
+    packages: [ quixstreams ]
+processors:
+  - type: filter
+    expression: not name.startswith('_') and default()
+    documented_only: true
+    exclude_private: true
+    skip_empty_modules: true
+  - type: sphinx
+  - type: crossref
+
+renderer:
+  type: markdown
+  render_toc: true
