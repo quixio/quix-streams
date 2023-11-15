@@ -93,6 +93,30 @@ app = Application.Quix(
 )
 ```
 
+## Clearing the State
+
+To clear all the state data, use the `Application.clear_state()` command. 
+<br>
+This will delete all data stored in the state stores for the given consumer group, 
+allowing you to start from a clean slate:
+
+```python
+from quixstreams import Application
+
+app = Application(broker_address='localhost:9092', consumer_group='consumer')
+
+# Delete state for the app with consumer group "consumer"
+app.clear_state()
+```
+
+Note that clearing the app state using `Application.clear_state()` 
+is only possible when the `Application.run()` is not running. 
+Meaning that the state can be cleared either before calling `Application.run()` or after.
+This ensures that state clearing does not interfere with the ongoing stateful processing.
+
+<br>
+
+
 ## State Guarantees
 
 Because we currently handle messages with "At Least Once" guarantees, it is possible
