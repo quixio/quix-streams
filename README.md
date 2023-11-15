@@ -15,7 +15,7 @@ significant interface changes, feature additions, and bugfixes.
 ><br>
 >Use with discretion!
 >
-> ***The documentation for Quix Streams <2.0 can be found [here](./README.legacy.md)***
+> ***The documentation for Quix Streams <2.0 can be found [here](https://github.com/quixio/quix-streams/blob/release/v0.5/README.md)***
 
 Quix Streams 2.0 is a cloud native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka with an easy to use Python interface.
 
@@ -55,7 +55,7 @@ python -m pip install "quixstreams>=2.0a"
 #### Requirements
 Python 3.8+, Apache Kafka 0.10+
 
-See [requirements.txt](./src/StreamingDataFrames/requirements.txt) for the full list of requirements
+See [requirements.txt](requirements.txt) for the full list of requirements
 
 
 ### Example Application
@@ -140,17 +140,17 @@ Under the hood, the `Application` will:
 - Handle OS signals and gracefully exit the application.
 
 ### More Examples
-> You may find more examples in the `examples` folder **[here](./src/StreamingDataFrames/examples)**.
+> You may find more examples in the `examples` folder **[here](examples)**.
 
 ### Advanced Usage
 
 For more in-depth description of Quix Streams components, please
 follow these links:
-- ***[StreamingDataFrame](./src/StreamingDataFrames/docs/streamingdataframe.md)***.
-- ***[Serialization](./src/StreamingDataFrames/docs/serialization.md)***.
-- ***[Stateful Processing](./src/StreamingDataFrames/docs/stateful-processing.md)***.
-- ***[Usage with Quix SaaS Platform](./src/StreamingDataFrames/docs/quix-platform.md)***.
-- ***[Upgrading from Quix Streams <2.0](./src/StreamingDataFrames/docs/upgrading-legacy.md)***.
+- ***[StreamingDataFrame](docs/streamingdataframe.md)***.
+- ***[Serialization](docs/serialization.md)***.
+- ***[Stateful Processing](docs/stateful-processing.md)***.
+- ***[Usage with Quix SaaS Platform](docs/quix-platform.md)***.
+- ***[Upgrading from Quix Streams <2.0](docs/upgrading-legacy.md)***.
 
 
 ### Using the [Quix Platform](https://quix.io/) - `Application.Quix()`
@@ -172,7 +172,7 @@ If you are running this within the Quix platform it will be configured
 automatically.
 <br>
 Otherwise, please see 
-[**Quix Platform Configuration**](./src/StreamingDataFrames/docs/quix-platform.md).
+[**Quix Platform Configuration**](docs/quix-platform.md).
 
 
 ### What's Next
