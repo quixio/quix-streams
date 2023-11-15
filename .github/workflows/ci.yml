@@ -1,9 +1,8 @@
-name: CI
+name: 'CI'
 
 on:
   push:
-    branches:
-      - 'main'
+  pull_request:
 
 
 # Run only one workflow per PR or commit
@@ -14,110 +13,34 @@ concurrency:
 # Disable default permissions for all jobs
 permissions: { }
 
-env:
-  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
-  DOTNET_CLI_TELEMETRY_OPTOUT: 1
-
 jobs:
-  build-python:
+  lint:
     permissions:
       contents: read # to fetch code (actions/checkout)
-    name: Build native code and wheels (${{ matrix.runner.agent }})
-    runs-on: ${{ matrix.runner.agent }}
-    container:
-      image: ${{ matrix.runner.image }}
-    strategy:
-      matrix:
-        runner: [
-          {
-            agent: ubuntu-latest,
-            image: quay.io/pypa/manylinux2014_x86_64,
-            artifact_name_prefix: linux-amd64,
-            build_scripts_dir: src/builds/python/linux,
-            # Empty - the runner is responsible for setting up Python itself
-            python_ver: ''
-          },
-          {
-            agent: buildjet-4vcpu-ubuntu-2204-arm,
-            image: quay.io/pypa/manylinux_2_28_aarch64,
-            artifact_name_prefix: linux-arm64,
-            build_scripts_dir: src/builds/python/linux,
-            python_ver: ''
-          },
-          {
-            agent: windows-latest,
-            image: '',
-            artifact_name_prefix: windows-amd64,
-            build_scripts_dir: src/builds/python/windows,
-            python_ver: 3.8
-          },
-          {
-            agent: macos-latest,
-            image: '',
-            artifact_name_prefix: mac-amd64,
-            build_scripts_dir: src/builds/python/mac,
-            python_ver: 3.8
-          },
-          {
-            agent: [self-hosted, macOS, ARM64],
-            image: '',
-            artifact_name_prefix: mac-arm64,
-            build_scripts_dir: src/builds/python/mac,
-            python_ver: 3.11
-          },
-        ]
-      fail-fast: false
+    name: Run linters
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Copy LICENSE to src
-        run: |
-          cp LICENSE src/LICENSE
-      - name: Prepare Docker container "${{ matrix.runner.image }}:${{ matrix.runner.arch }}"
-        if: ${{ matrix.runner.image != '' }}
-        run: |
-          yum install clang gcc krb5-devel libstdc++-static python3 -y
-      - name: Setup Python
-        if: ${{ matrix.runner.python_ver != '' }}
+      - name: Setup Python ${{ matrix.python }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.runner.python_ver }}
-      - name: Install wheel
+          python-version: 3.8
+      - name: Install linters
         run: |
-          python3 -m pip install --upgrade pip wheel
-      - name: Install .NET Core SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.100-preview.2.23157.25'
-      - name: Build native code
-        working-directory: ${{ matrix.runner.build_scripts_dir }}
+          python -m pip install -U -r requirements-dev.txt
+      - name: Run Black
         run: |
-          python3 build_native.py
-      - name: Upload compiled native files
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ matrix.runner.artifact_name_prefix }}-native
-          path: |
-            src/PythonClient/src/quixstreams/native/*
-          if-no-files-found: error
-      - name: Build wheel
-        working-directory: ${{ matrix.runner.build_scripts_dir }}
-        run: |
-          python3 build_wheel.py
-      - name: Upload wheel
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ matrix.runner.artifact_name_prefix }}-wheel
-          path: |
-            src/PythonClient/dist/*.whl
-          if-no-files-found: error
+          python -m black --check quixstreams
+          python -m black --check tests
 
-  test-python:
-    needs: build-python
+  test:
+    needs: lint
     permissions:
       contents: read # to fetch code (actions/checkout)
     name: Run Python tests (python${{ matrix.python }})
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       matrix:
         python: [ 3.8 ]
@@ -133,73 +56,8 @@ jobs:
           python -m pip install -U pip
       - name: Install requirements
         run: |
-          python -m pip install -U -r src/PythonClient/tests/requirements.txt
-          python -m pip install -U -r src/PythonClient/src/requirements.txt
-      - name: Download native code to Python project
-        uses: actions/download-artifact@v3
-        with:
-          name: linux-amd64-native
-          path: src/PythonClient/src/quixstreams/native/
-      - name: Run unit tests
-        working-directory: src/PythonClient
+          python -m pip install -U -r tests/requirements.txt
+          python -m pip install -U -r requirements.txt
+      - name: Run tests
         run: |
-          python -m pytest -s -v --ignore=tests/quixstreams/manual --ignore=tests/quixstreams/integrationtests
-      - name: Run integration tests
-        working-directory: src/PythonClient
-        run: |
-          python -m pytest -v tests/quixstreams/integrationtests
-
-  test-dotnet:
-    permissions:
-      contents: read # to fetch code (actions/checkout)
-    name: Run C# tests
-    runs-on: ${{ matrix.runner.agent }}
-    strategy:
-      matrix:
-        runner: [
-          { agent: ubuntu-latest },
-        ]
-      fail-fast: false
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Install .NET Core SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.100-preview.2.23157.25'
-      - name: Run C# tests
-        working-directory: src/CsharpClient
-        run: |
-          dotnet test -l "console;verbosity=normal" --blame --blame-hang-timeout=30s
-
-  build-dotnet:
-    permissions:
-      contents: read # to fetch code (actions/checkout)
-    name: Build C# nugets
-    runs-on: windows-latest
-    needs: test-dotnet
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Copy LICENSE to src
-        run: |
-          cp LICENSE src/LICENSE
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-      - name: Install .NET Core SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.100-preview.2.23157.25'
-      - name: Build nugets
-        working-directory: src/builds/csharp/nuget
-        run: |
-          python3 build_nugets.py
-      - name: Upload nugets
-        uses: actions/upload-artifact@v3
-        with:
-          name: windows-x64-nugets
-          path: |
-            src/builds/csharp/nuget/build-result/*.nupkg
-          if-no-files-found: error
+          python -m pytest -s -v
