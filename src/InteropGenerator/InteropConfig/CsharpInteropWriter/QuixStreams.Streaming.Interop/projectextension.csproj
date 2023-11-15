@@ -1,5 +1,0 @@
-<Project>
-    <ItemGroup>
-        <RdXmlFile Include="rd.xml" />
-    </ItemGroup>
-</Project>

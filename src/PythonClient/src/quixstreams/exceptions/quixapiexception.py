@@ -1,2 +1,0 @@
-class QuixApiException(Exception):
-    pass
