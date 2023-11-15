@@ -10,7 +10,7 @@ Simply pick a folder in here, like `bank_example`. Then, a serialization type, l
 
 ## Requirements
 
-- Working from the examples directory (`/quix-streams/src/StreamingDataFrames/examples`)
+- Working from the examples directory (`examples/`)
   - that includes executing python files from here
 - Installing the python requirements file in here
   - `pip install -r requirements.txt`

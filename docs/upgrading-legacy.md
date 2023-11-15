@@ -4,7 +4,7 @@ If you were using a previous version of Quix Streams, more specifically the Quix
 `ParameterData` or `EventData` formats and plan on using old 
 topics or mixing legacy + new library versions, then this section is for you!
 
-To learn more about the previous version of Quix Streams, please see [here](../README.legacy.md)
+To learn more about the previous version of Quix Streams, please see [here](https://github.com/quixio/quix-streams/blob/release/v0.5/README.md)
 
 ***Note: Many of these details can be skipped for most users, but the context
 may help you understand speed/operational differences you might experience, or if
