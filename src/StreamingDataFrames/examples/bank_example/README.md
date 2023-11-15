@@ -18,8 +18,8 @@ account and the purchase attempt was above a certain cost (we don't want to spam
 This example showcases:
   - How to use multiple Quix kafka applications together
     - Producer
-    - Consumer via `streamingdataframes.Application` (consumes and produces)
-  - Basic usage of the `dataframe` object
+    - Consumer via `quixstreams.Application` (consumes and produces)
+  - Basic usage of the `StreamingDataFrame` object
   - Using different serializations/data structures
     - json
     - Quix serializers (more intended for Quix platform use)

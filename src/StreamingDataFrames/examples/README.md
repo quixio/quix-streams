@@ -1,7 +1,7 @@
-# `StreamingDataFrames` Examples
+# Quix Streams Examples
 
-This folder contains a few examples/boiler-plate applications to get you started with
-the `StreamingDataFrames` library.
+This folder contains a few boilerplate applications to get you started with
+the Quix Streams library.
 
 ## Running an Example
 

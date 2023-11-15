@@ -45,28 +45,31 @@ When another consumer reads the message with `KEY_B`, it will not be able to rea
 
 ## Using State
 
-The state is available in functions passed to `StreamingDataFrame.apply()` with parameter `stateful=True`:
+The state is available in functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` and `StreamingDataFrame.filter()` with parameter `stateful=True`:
 
 ```python
-from quixstreams import Application, MessageContext, State
-app = Application()
+from quixstreams import Application, State
+app = Application(
+    broker_address='localhost:9092', 
+    consumer_group='consumer', 
+)
 topic = app.topic('topic')
 
 sdf = app.dataframe(topic)
 
-def count_messages(value: dict, ctx: MessageContext, state: State):
+def count_messages(value: dict, state: State):
     total = state.get('total', default=0)
     total += 1
     state.set('total', total)
-    value['total'] = total
+    return {**value, 'total': total}
     
-# Apply a custom function and inform StreamingDataFrame to provide a State instance to it
-# by passing "stateful=True"
-sdf.apply(count_messages, stateful=True)
+    
+# Apply a custom function and inform StreamingDataFrame to provide a State instance to it via passing "stateful=True"
+sdf = sdf.apply(count_messages, stateful=True)
 
 ```
 
-Currently, only functions passed to `StreamingDataFrame.apply()` may use State.
+Currently, only functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` and `StreamingDataFrame.filter()` may use State.
 
 <br>
 
@@ -75,11 +78,19 @@ Currently, only functions passed to `StreamingDataFrame.apply()` may use State.
 By default, an `Application` keeps the state in `state` directory relative to the current working directory.
 To change it, pass `state_dir="your-path"` to `Application` or `Application.Quix` calls:
 ```python
-Application(state_dir="folder/path/here")
+from quixstreams import Application
+app = Application(
+    broker_address='localhost:9092', 
+    consumer_group='consumer', 
+    state_dir="folder/path/here",
+)
 
 # or
 
-Application.Quix(state_dir="folder/path/here")
+app = Application.Quix(
+    consumer_group='consumer', 
+    state_dir="folder/path/here",
+)
 ```
 
 ## State Guarantees
@@ -105,4 +116,4 @@ We plan to add a proper recovery process in the future.
 
 #### Shared state directory 
 In the current version, it's assumed that the state directory is shared between consumers (e.g. using Kubernetes PVC)
-If consumers live on different nodes and don't have access to the same state directory, they will not be able to pickup state on rebalancing.
+If consumers live on different nodes and don't have access to the same state directory, they will not be able to pick up state on rebalancing.

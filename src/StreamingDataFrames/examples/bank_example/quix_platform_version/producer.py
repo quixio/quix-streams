@@ -1,3 +1,4 @@
+import time
 import uuid
 from random import randint, random, choice
 from time import sleep
@@ -9,8 +10,7 @@ from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
     SerializationContext,
 )
-from quixstreams.models.topics import Topic, TopicCreationConfigs
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
@@ -48,6 +48,7 @@ with Producer(
             "account_class": "Gold" if account >= 8 else "Silver",
             "transaction_amount": randint(-2500, -1),
             "transaction_source": choice(retailers),
+            "Timestamp": time.time_ns(),
         }
         print(f"Producing value {value}")
         producer.produce(
