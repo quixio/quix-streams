@@ -1,6 +1,3 @@
-# Pre-commit hooks for src/StreamingDataFrames
-
-files: 'src/StreamingDataFrames/.*'
 repos:
   - repo: https://github.com/psf/black
     rev: '23.7.0'
@@ -8,5 +5,5 @@ repos:
       - id: black
         types: [python]
         language_version: python3
-        args: [ --config=src/StreamingDataFrames/pyproject.toml, --check ]
+        args: [ --config=pyproject.toml, --check ]
         verbose: true

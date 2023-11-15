@@ -1,4 +1,0 @@
-testcontainers~=3.7.0
-pytest
-psutil
-numpy==1.24.3
