@@ -68,7 +68,8 @@ class StreamingDataFrame(BaseStreaming):
     ```python
     sdf = StreamingDataframe()
     sdf = sdf.apply(a_func)
-    sdf["my_new_bool_field"] = sdf["a_column_name"].contains("a_str")
+    sdf = sdf.filter(another_func)
+    sdf = sdf.to_topic(topic_obj)
     ```
     </blockquote>
 

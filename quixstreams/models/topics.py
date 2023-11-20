@@ -56,6 +56,15 @@ def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
 
 
 class Topic:
+    """
+    A representation of a Kafka topic and its expected data format via
+    designated key and value serializers/deserializers.
+
+    Typically created with an `app = quixstreams.app.Application()` instance via
+    `app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
+    instance.
+    """
+
     def __init__(
         self,
         name: str,
@@ -65,11 +74,30 @@ class Topic:
         key_serializer: Optional[SerializerType] = BytesSerializer(),
     ):
         """
-        A definition of Topic.
-
-        Allows you to specify serialization that should be used when consuming/producing
+        Can specify serialization that should be used when consuming/producing
         to the topic in the form of a string name (i.e. "json" for JSON) or a
         serialization class instance directly, like JSONSerializer().
+
+
+        Example Snippet:
+
+        <blockquote>
+        Specify an input and output topic for a `StreamingDataFrame` instance,
+        where the output topic requires adjusting the key serializer.
+
+        ```python
+        from quixstreams.dataframe import StreamingDataFrame
+        from quixstreams.models import Topic, JSONSerializer
+
+        input_topic = Topic("input-topic", value_deserializer="json")
+        output_topic = Topic(
+            "output-topic", key_serializer="str", value_serializer=JSONSerializer()
+        )
+        sdf = StreamingDataFrame(input_topic)
+        sdf.to_topic(output_topic)
+        ```
+        </blockquote>
+
 
         :param name: topic name
         :param value_deserializer: a deserializer type for values

@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L42)
 
 The main Application class.
 
@@ -38,16 +38,20 @@ Most functionality is explained the various methods, except for
 <br>
 ***Example Snippet:***
 
-```
-    from quixstreams import Application
+<blockquote>
+Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+add some operations to `sdf` and then run everything.
+```python
+from quixstreams import Application
 
-    app = Application(broker_address='localhost:9092', consumer_group='group')
-    topic = app.topic('test-topic')
-    df = app.dataframe(topic)
-    df.apply(lambda value, context: print('New message', value)
+app = Application(broker_address='localhost:9092', consumer_group='group')
+topic = app.topic('test-topic')
+df = app.dataframe(topic)
+df.apply(lambda value, context: print('New message', value)
 
-    app.run(dataframe=df)
+app.run(dataframe=df)
 ```
+</blockquote>
 
 <a id="quixstreams.app.Application.__init__"></a>
 
@@ -75,7 +79,7 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L82)
 
 
 <br>
@@ -150,7 +154,7 @@ def Quix(cls,
          auto_create_topics: bool = True) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L173)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L177)
 
 Initialize an Application to work with Quix platform,
 
@@ -164,6 +168,30 @@ producer to properly connect to the Quix platform.
     If the application is created via `Application.Quix()`, the real consumer
     group will be `<workspace_id>-<consumer_group>`,
     and the real topic names will be `<workspace_id>-<topic_name>`.
+
+
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+add some operations to `sdf` and then run everything. Also shows off how to
+use the quix-specific serializers and deserializers.
+
+```python
+from quixstreams import Application
+
+app = Application.Quix()
+input_topic = app.topic("topic-in", value_deserializer="quix")
+output_topic = app.topic("topic-out", value_serializer="quix_timeseries")
+df = app.dataframe(topic_in)
+df = df.to_topic(output_topic)
+
+app.run(dataframe=df)
+```
+</blockquote>
 
 
 <br>
@@ -234,13 +262,35 @@ def topic(name: str,
           creation_configs: Optional[TopicCreationConfigs] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L294)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L321)
 
 Create a topic definition.
 
 Allows you to specify serialization that should be used when consuming/producing
 to the topic in the form of a string name (i.e. "json" for JSON) or a
 serialization class instance directly, like JSONSerializer().
+
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Specify an input and output topic for a `StreamingDataFrame` instance,
+where the output topic requires adjusting the key serializer.
+
+```python
+from quixstreams import Application
+
+app = Application()
+input_topic = app.topic("input-topic", value_deserializer="json")
+output_topic = app.topic(
+    "output-topic", key_serializer="str", value_serializer=JSONSerializer()
+)
+sdf = app.dataframe(input_topic)
+sdf.to_topic(output_topic)
+```
+</blockquote>
 
 
 <br>
@@ -273,13 +323,34 @@ Its name will be overridden by this method's 'name' param.
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L337)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L387)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
 to define your message processing pipeline.
 
 See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
+
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+add some operations to `sdf` and then run everything.
+
+```python
+from quixstreams import Application
+
+app = Application(broker_address='localhost:9092', consumer_group='group')
+topic = app.topic('test-topic')
+df = app.dataframe(topic)
+df.apply(lambda value, context: print('New message', value)
+
+app.run(dataframe=df)
+```
+</blockquote>
 
 
 <br>
@@ -304,7 +375,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L355)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L425)
 
 Stop the internal poll loop and the message processing.
 
@@ -324,7 +395,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L367)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L437)
 
 Clear the state of the application.
 
@@ -338,12 +409,33 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L396)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/app.py#L466)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
 One started, can be safely terminated with a `SIGTERM` signal
 (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+add some operations to `sdf` and then run everything.
+
+```python
+from quixstreams import Application
+
+app = Application(broker_address='localhost:9092', consumer_group='group')
+topic = app.topic('test-topic')
+df = app.dataframe(topic)
+df.apply(lambda value, context: print('New message', value)
+
+app.run(dataframe=df)
+```
+</blockquote>
 
 
 <br>

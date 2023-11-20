@@ -63,16 +63,20 @@ class Application:
 
     Example Snippet:
 
-    ```
-        from quixstreams import Application
+    <blockquote>
+    Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+    add some operations to `sdf` and then run everything.
+    ```python
+    from quixstreams import Application
 
-        app = Application(broker_address='localhost:9092', consumer_group='group')
-        topic = app.topic('test-topic')
-        df = app.dataframe(topic)
-        df.apply(lambda value, context: print('New message', value)
+    app = Application(broker_address='localhost:9092', consumer_group='group')
+    topic = app.topic('test-topic')
+    df = app.dataframe(topic)
+    df.apply(lambda value, context: print('New message', value)
 
-        app.run(dataframe=df)
+    app.run(dataframe=df)
     ```
+    </blockquote>
     """
 
     def __init__(
@@ -204,6 +208,29 @@ class Application:
             group will be `<workspace_id>-<consumer_group>`,
             and the real topic names will be `<workspace_id>-<topic_name>`.
 
+
+
+        Example Snippet:
+
+        <blockquote>
+        Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+        add some operations to `sdf` and then run everything. Also shows off how to
+        use the quix-specific serializers and deserializers.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application.Quix()
+        input_topic = app.topic("topic-in", value_deserializer="quix")
+        output_topic = app.topic("topic-out", value_serializer="quix_timeseries")
+        df = app.dataframe(topic_in)
+        df = df.to_topic(output_topic)
+
+        app.run(dataframe=df)
+        ```
+        </blockquote>
+
+
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
               >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
@@ -307,6 +334,27 @@ class Application:
         to the topic in the form of a string name (i.e. "json" for JSON) or a
         serialization class instance directly, like JSONSerializer().
 
+
+        Example Snippet:
+
+        <blockquote>
+        Specify an input and output topic for a `StreamingDataFrame` instance,
+        where the output topic requires adjusting the key serializer.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application()
+        input_topic = app.topic("input-topic", value_deserializer="json")
+        output_topic = app.topic(
+            "output-topic", key_serializer="str", value_serializer=JSONSerializer()
+        )
+        sdf = app.dataframe(input_topic)
+        sdf.to_topic(output_topic)
+        ```
+        </blockquote>
+
+
         :param name: topic name
             >***NOTE:*** If the application is created via `Quix.Application()`,
               the topic name will be prefixed by Quix workspace id, and it will
@@ -317,6 +365,8 @@ class Application:
         :param key_serializer: a serializer type for keys; default="bytes"
         :param creation_configs: settings for auto topic creation (Quix platform only)
             Its name will be overridden by this method's 'name' param.
+
+
         :return: `Topic` object
         """
         if self.is_quix_app:
@@ -343,6 +393,26 @@ class Application:
         to define your message processing pipeline.
 
         See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
+
+
+        Example Snippet:
+
+        <blockquote>
+        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        add some operations to `sdf` and then run everything.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application(broker_address='localhost:9092', consumer_group='group')
+        topic = app.topic('test-topic')
+        df = app.dataframe(topic)
+        df.apply(lambda value, context: print('New message', value)
+
+        app.run(dataframe=df)
+        ```
+        </blockquote>
+
 
         :param topic: a `quixstreams.models.Topic` instance
             to be used as an input topic.
@@ -402,6 +472,26 @@ class Application:
 
         One started, can be safely terminated with a `SIGTERM` signal
         (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+
+        Example Snippet:
+
+        <blockquote>
+        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        add some operations to `sdf` and then run everything.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application(broker_address='localhost:9092', consumer_group='group')
+        topic = app.topic('test-topic')
+        df = app.dataframe(topic)
+        df.apply(lambda value, context: print('New message', value)
+
+        app.run(dataframe=df)
+        ```
+        </blockquote>
+
 
         :param dataframe: instance of `StreamingDataFrame`
         """

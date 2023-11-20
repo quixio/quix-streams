@@ -12,9 +12,34 @@
 def set_message_context(context: Optional[MessageContext])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/context.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/context.py#L22)
 
 Set a MessageContext for the current message in the given `contextvars.Context`
+
+>***NOTE:*** This is for advanced usage only. If you need to change the message key,
+`StreamingDataFrame.to_topic()` has an argument for it.
+
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Changes the current sdf value based on what the message partition is.
+```python
+from quixstreams import Application, set_message_context, message_context
+
+def alter_context(value):
+    context = message_context()
+    if value > 1:
+        context.headers = context.headers + (b"cool_new_header", value.encode())
+        set_message_context(context)
+
+app = Application()
+sdf = app.dataframe()
+sdf = sdf.update(lambda value: alter_context(value))
+```
+</blockquote>
 
 
 <br>
@@ -32,9 +57,31 @@ Set a MessageContext for the current message in the given `contextvars.Context`
 def message_context() -> MessageContext
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/context.py#L31)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/context.py#L55)
 
-Get a MessageContext for the current message
+Get a MessageContext for the current message, which houses most of the message
+
+metadata, like:
+    - key
+    - timestamp
+    - partition
+    - offset
+
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Changes the current sdf value based on what the message partition is.
+```python
+from quixstreams import Application, message_context
+
+app = Application()
+sdf = app.dataframe()
+sdf = sdf.apply(lambda value: 1 if message_context().partition == 2 else 0)
+```
+</blockquote>
 
 
 <br>
@@ -52,9 +99,24 @@ instance of `MessageContext`
 def message_key() -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/context.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/context.py#L88)
 
-Get current a message key.
+Get the current message's key.
+
+
+<br>
+***Example Snippet:***
+
+<blockquote>
+Changes the current sdf value based on what the message key is.
+```python
+from quixstreams import Application, message_key
+
+app = Application()
+sdf = app.dataframe()
+sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
+```
+</blockquote>
 
 
 <br>
@@ -74,7 +136,7 @@ a deserialized message key
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L26)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -125,7 +187,8 @@ various methods or in the docs folder.
 ```python
 sdf = StreamingDataframe()
 sdf = sdf.apply(a_func)
-sdf["my_new_bool_field"] = sdf["a_column_name"].contains("a_str")
+sdf = sdf.filter(another_func)
+sdf = sdf.to_topic(topic_obj)
 ```
 </blockquote>
 
@@ -140,7 +203,7 @@ def apply(func: Union[DataFrameFunc, DataFrameStatefulFunc],
           stateful: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L97)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L98)
 
 Apply a function to transform the value and return a new value.
 
@@ -189,7 +252,7 @@ def update(func: Union[DataFrameFunc, DataFrameStatefulFunc],
            stateful: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L139)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L140)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -240,7 +303,7 @@ def filter(func: Union[DataFrameFunc, DataFrameStatefulFunc],
            stateful: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L181)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L182)
 
 Filter value using provided function.
 
@@ -290,7 +353,7 @@ of type `State` to perform stateful operations.
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L236)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L237)
 
 Check if the key is present in the Row value.
 
@@ -332,7 +395,7 @@ def to_topic(topic: Topic,
              key: Optional[Callable[[object], object]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L261)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L262)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -384,7 +447,7 @@ By default, the current message key will be used.
 def compile() -> StreamCallable
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L304)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L305)
 
 Compile all functions of this StreamingDataFrame into one big closure.
 
@@ -432,7 +495,7 @@ and returns a result of StreamingDataFrame
 def test(value: object, ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/dataframe.py#L339)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/dataframe.py#L340)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -466,7 +529,7 @@ result of `StreamingDataFrame`
 class StreamingSeries(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L16)
 
 `StreamingSeries` are typically generated by `StreamingDataframes` when getting
 elements from, or performing certain operations on, a `StreamingDataframe`,
@@ -533,7 +596,7 @@ sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
 def from_func(cls, func: StreamCallable) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L77)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L77)
 
 Create a StreamingSeries from a function.
 
@@ -561,7 +624,7 @@ instance of `StreamingSeries`
 def apply(func: StreamCallable) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L91)
 
 Add a callable to the execution list for this series.
 
@@ -618,7 +681,7 @@ def compile(allow_filters: bool = True,
             allow_updates: bool = True) -> StreamCallable
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L130)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L130)
 
 Compile all functions of this StreamingSeries into one big closure.
 
@@ -683,7 +746,7 @@ and returns a result of StreamingDataFrame
 def test(value: Any, ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L183)
 
 A shorthand to test `StreamingSeries` with provided value
 
@@ -715,7 +778,7 @@ result of `StreamingSeries`
 def isin(other: Container) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L214)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L214)
 
 Check if series value is in "other".
 
@@ -761,7 +824,7 @@ new StreamingSeries
 def contains(other: object) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L243)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L243)
 
 Check if series value contains "other"
 
@@ -807,7 +870,7 @@ new StreamingSeries
 def is_(other: object) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L270)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L270)
 
 Check if series value refers to the same object as `other`
 
@@ -851,7 +914,7 @@ new StreamingSeries
 def isnot(other: object) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L296)
 
 Check if series value does not refer to the same object as `other`
 
@@ -895,7 +958,7 @@ new StreamingSeries
 def isnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L323)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L323)
 
 Check if series value is None.
 
@@ -933,7 +996,7 @@ new StreamingSeries
 def notnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L349)
 
 Check if series value is not None.
 
@@ -971,7 +1034,7 @@ new StreamingSeries
 def abs() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/dataframe/series.py#L374)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/dataframe/series.py#L374)
 
 Get absolute value of the series value.
 
@@ -999,4 +1062,112 @@ new StreamingSeries
 <a id="quixstreams.state.types"></a>
 
 ## quixstreams.state.types
+
+<a id="quixstreams.state.types.State"></a>
+
+### State
+
+```python
+class State(Protocol)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/state/types.py#L95)
+
+Primary interface for working with key-value state data from `StreamingDataFrame`
+
+<a id="quixstreams.state.types.State.get"></a>
+
+<br><br>
+
+#### State.get
+
+```python
+def get(key: Any, default: Any = None) -> Optional[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/state/types.py#L100)
+
+Get the value for key if key is present in the state, else default
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+- `default`: default value to return if the key is not found
+
+
+<br>
+***Returns:***
+
+value or None if the key is not found and `default` is not provided
+
+<a id="quixstreams.state.types.State.set"></a>
+
+<br><br>
+
+#### State.set
+
+```python
+def set(key: Any, value: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/state/types.py#L109)
+
+Set value for the key.
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+- `value`: value
+
+<a id="quixstreams.state.types.State.delete"></a>
+
+<br><br>
+
+#### State.delete
+
+```python
+def delete(key: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/state/types.py#L116)
+
+Delete value for the key.
+
+This function always returns `None`, even if value is not found.
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+
+<a id="quixstreams.state.types.State.exists"></a>
+
+<br><br>
+
+#### State.exists
+
+```python
+def exists(key: Any) -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/834fc5d6bef64104a0732bcfe8db3dc49d2a9f40/quixstreams/state/types.py#L124)
+
+Check if the key exists in state.
+
+
+<br>
+***Arguments:***
+
+- `key`: key
+
+
+<br>
+***Returns:***
+
+True if key exists, False otherwise
 

@@ -23,9 +23,9 @@ nav:
     - Streaming DataFrame: streamingdataframe.md
     - Upgrading from Legacy QuixStreams: upgrading-legacy.md
   - API Docs:
-    - Typical Usage:
+    - Essentials:
       - Application: api-reference/application.md
       - Streaming DataFrame: api-reference/dataframe.md
       - Topics & Serialization: api-reference/topics-serdes.md
       - Quix Platform API: api-reference/quix-platform-api.md
-    - Complete (advanced users): api-reference/quixstreams.md
+    - Complete (rarely needed): api-reference/quixstreams.md
