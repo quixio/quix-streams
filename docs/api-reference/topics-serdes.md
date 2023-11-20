@@ -10,7 +10,7 @@
 class QuixDeserializer(JSONDeserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L70)
 
 <a id="quixstreams.models.serializers.quix.QuixDeserializer.__init__"></a>
 
@@ -23,7 +23,7 @@ def __init__(column_name: Optional[str] = None,
              loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L71)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L71)
 
 Parses JSON data from either Timeseries/Parameter or EventData formats.
 
@@ -47,7 +47,7 @@ Default - :py:func:`quixstreams.utils.json.loads`.
 def split_values() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L93)
 
 Each Quix message might contain data for multiple Rows.
 This property informs the downstream processors about that, so they can
@@ -64,7 +64,7 @@ def deserialize(model_key: str, value: Union[List[Mapping],
                                              Mapping]) -> Iterable[Mapping]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L146)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L146)
 
 Deserialization function for particular data types (Timeseries or EventData).
 
@@ -89,7 +89,7 @@ Iterable of dicts
 class QuixSerializer(JSONSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L264)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L264)
 
 <a id="quixstreams.models.serializers.quix.QuixSerializer.__init__"></a>
 
@@ -102,7 +102,7 @@ def __init__(as_legacy: bool = True,
              dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L268)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L268)
 
 Serializer that returns data in json format.
 
@@ -122,7 +122,7 @@ Default - :py:func:`quixstreams.utils.json.dumps`
 class QuixTimeseriesSerializer(QuixSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L311)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L311)
 
 Serialize data to JSON formatted according to Quix Timeseries format.
 
@@ -155,7 +155,7 @@ Example of the format:
 class QuixEventsSerializer(QuixSerializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/quix.py#L400)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/quix.py#L400)
 
 Serialize data to JSON formatted according to Quix EventData format.
 The input value is expected to be a dictionary with the following keys:
@@ -198,7 +198,7 @@ Output:
 class BytesDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L44)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L44)
 
 A deserializer to bypass bytes without any changes
 
@@ -210,7 +210,7 @@ A deserializer to bypass bytes without any changes
 class BytesSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L55)
 
 A serializer to bypass bytes without any changes
 
@@ -222,7 +222,7 @@ A serializer to bypass bytes without any changes
 class StringDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L64)
 
 <a id="quixstreams.models.serializers.simple_types.StringDeserializer.__init__"></a>
 
@@ -234,7 +234,7 @@ class StringDeserializer(Deserializer)
 def __init__(column_name: Optional[str] = None, codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L65)
 
 Deserializes bytes to strings using the specified encoding.
 
@@ -253,7 +253,7 @@ A wrapper around `confluent_kafka.serialization.StringDeserializer`.
 class IntegerDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L84)
 
 Deserializes bytes to integers.
 
@@ -267,7 +267,7 @@ A wrapper around `confluent_kafka.serialization.IntegerDeserializer`.
 class DoubleDeserializer(Deserializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L103)
 
 Deserializes float to IEEE 764 binary64.
 
@@ -281,7 +281,7 @@ A wrapper around `confluent_kafka.serialization.DoubleDeserializer`.
 class StringSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L122)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L122)
 
 <a id="quixstreams.models.serializers.simple_types.StringSerializer.__init__"></a>
 
@@ -293,7 +293,7 @@ class StringSerializer(Serializer)
 def __init__(codec: str = "utf_8")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L123)
 
 Serializes strings to bytes using the specified encoding.
 
@@ -311,7 +311,7 @@ Serializes strings to bytes using the specified encoding.
 class IntegerSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L135)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L135)
 
 Serializes integers to bytes
 
@@ -323,7 +323,7 @@ Serializes integers to bytes
 class DoubleSerializer(Serializer)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/serializers/simple_types.py#L148)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/serializers/simple_types.py#L148)
 
 Serializes floats to bytes
 
@@ -339,7 +339,7 @@ Serializes floats to bytes
 class Topic()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/topics.py#L58)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/topics.py#L58)
 
 <a id="quixstreams.models.topics.Topic.__init__"></a>
 
@@ -356,7 +356,7 @@ def __init__(
     key_serializer: Optional[SerializerType] = BytesSerializer())
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/topics.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/topics.py#L59)
 
 A definition of Topic.
 
@@ -385,7 +385,7 @@ serialization class instance directly, like JSONSerializer().
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/topics.py#L87)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/topics.py#L87)
 
 Topic name
 
@@ -399,7 +399,7 @@ Topic name
 def row_serialize(row: Row, key: Optional[Any] = None) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/topics.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/topics.py#L93)
 
 Serialize Row to a Kafka message structure
 
@@ -427,7 +427,7 @@ def row_deserialize(
         message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/models/topics.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/models/topics.py#L116)
 
 Deserialize incoming Kafka message to a Row.
 

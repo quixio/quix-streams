@@ -327,6 +327,7 @@ class StreamingDataFrame(BaseStreaming):
 
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
+        ```
         </blockquote>
 
 

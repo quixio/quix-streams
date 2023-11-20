@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L42)
 
 The main Application class.
 
@@ -75,7 +75,7 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L77)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L78)
 
 
 <br>
@@ -150,7 +150,7 @@ def Quix(cls,
          auto_create_topics: bool = True) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L173)
 
 Initialize an Application to work with Quix platform,
 
@@ -234,7 +234,7 @@ def topic(name: str,
           creation_configs: Optional[TopicCreationConfigs] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L293)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L294)
 
 Create a topic definition.
 
@@ -273,7 +273,7 @@ Its name will be overridden by this method's 'name' param.
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L336)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L337)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -304,7 +304,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L354)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L355)
 
 Stop the internal poll loop and the message processing.
 
@@ -324,7 +324,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L366)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L367)
 
 Clear the state of the application.
 
@@ -338,7 +338,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7729e6dd74ddbc325cd100fa1fed3094a3ab62ec/quixstreams/app.py#L395)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/212727fa51cb0d2e36c18c7f14360aa1210d1499/quixstreams/app.py#L396)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 

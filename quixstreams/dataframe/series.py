@@ -160,6 +160,7 @@ class StreamingSeries(BaseStreaming):
 
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
+        ```
         </blockquote>
 
 
@@ -228,6 +229,7 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["has_my_str"] = sdf["str_column"].isin(sdf["column_with_list_of_strs"])
+        ```
         </blockquote>
 
 
@@ -256,6 +258,7 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["has_my_substr"] = sdf["column_a"].contains("my_substring")
+        ```
         </blockquote>
 
 
@@ -281,6 +284,7 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["is_same"] = sdf["column_a"].is_(sdf["column_b"])
+        ```
         </blockquote>
 
 
@@ -306,7 +310,9 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["is_not_same"] = sdf["column_a"].isnot(sdf["column_b"])
+        ```
         </blockquote>
+
 
 
         :param other: object to check for "is_not"
@@ -331,7 +337,9 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["is_null"] = sdf["column_a"].isnull()
+        ```
         </blockquote>
+
 
 
         :return: new StreamingSeries
@@ -355,6 +363,7 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["is_not_null"] = sdf["column_a"].notnull()
+        ```
         </blockquote>
 
 
@@ -377,6 +386,7 @@ class StreamingSeries(BaseStreaming):
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["abs_col_sum"] = sdf["int_col"].abs() + sdf["other_int_col"]
+        ```
         </blockquote>
 
 
