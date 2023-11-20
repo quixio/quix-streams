@@ -26,7 +26,7 @@ __all__ = (
 )
 
 
-def wrap_serialization_error(func):
+def _wrap_serialization_error(func):
     """
     A decorator to wrap `confluent_kafka.SerializationError` into our own type.
     """
@@ -73,7 +73,7 @@ class StringDeserializer(Deserializer):
         self._codec = codec
         self._deserializer = _StringDeserializer(codec=self._codec)
 
-    @wrap_serialization_error
+    @_wrap_serialization_error
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[str, Mapping[str, str]]:
@@ -92,7 +92,7 @@ class IntegerDeserializer(Deserializer):
         super().__init__(column_name=column_name)
         self._deserializer = _IntegerDeserializer()
 
-    @wrap_serialization_error
+    @_wrap_serialization_error
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[int, Mapping[str, int]]:
@@ -111,7 +111,7 @@ class DoubleDeserializer(Deserializer):
         super().__init__(column_name=column_name)
         self._deserializer = _DoubleDeserializer()
 
-    @wrap_serialization_error
+    @_wrap_serialization_error
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[float, Mapping[str, float]]:
@@ -127,7 +127,7 @@ class StringSerializer(Serializer):
         """
         self._serializer = _StringSerializer(codec=codec)
 
-    @wrap_serialization_error
+    @_wrap_serialization_error
     def __call__(self, value: str, ctx: SerializationContext) -> bytes:
         return self._serializer(obj=value)
 
@@ -140,7 +140,7 @@ class IntegerSerializer(Serializer):
     def __init__(self):
         self._serializer = _IntegerSerializer()
 
-    @wrap_serialization_error
+    @_wrap_serialization_error
     def __call__(self, value: int, ctx: SerializationContext) -> bytes:
         return self._serializer(obj=value)
 
@@ -153,6 +153,6 @@ class DoubleSerializer(Serializer):
     def __init__(self):
         self._serializer = _DoubleSerializer()
 
-    @wrap_serialization_error
+    @_wrap_serialization_error
     def __call__(self, value: float, ctx: SerializationContext) -> bytes:
         return self._serializer(obj=value)

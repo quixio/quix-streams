@@ -27,7 +27,7 @@ def configure_logging(
     """
     Configure "quixstreams" logger.
 
-    .. note:: If "quixstreams" logger already has pre-defined handlers
+    >***NOTE:*** If "quixstreams" logger already has pre-defined handlers
     (e.g. logging has already been configured via `logging`, or the function
     is called twice), it will skip configuration and return `False`.
 

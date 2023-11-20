@@ -24,6 +24,57 @@ DataFrameStatefulFunc = Callable[[T, State], R]
 
 
 class StreamingDataFrame(BaseStreaming):
+    """
+    `StreamingDataFrame` is the main object you will use for ETL work.
+
+    Typically created with an `app = quixstreams.app.Application()` instance,
+    via `sdf = app.dataframe()`.
+
+
+    What it Does:
+
+    - Builds a data processing pipeline, declaratively (not executed immediately)
+        - Executes this pipeline on inputs at runtime (Kafka message values)
+    - Provides functions/interface similar to Pandas Dataframes/Series
+    - Enables stateful processing (and manages everything related to it)
+
+
+    How to Use:
+
+    Define various operations while continuously reassigning to itself (or new fields).
+
+    These operations will generally transform your data, access/update state, or produce
+    to kafka topics.
+
+    We recommend your data structure to be "columnar" (aka a dict/JSON) in nature so
+    that it works with the entire interface, but simple types like `ints`, `str`, etc.
+    are also supported.
+
+    See the various methods and classes for more specifics, or for a deep dive into
+    usage, see `streamingdataframe.md` under the `docs/` folder.
+
+    >***NOTE:*** column referencing like `sdf["a_column"]` and various methods often
+        create other object types (typically `quixstreams.dataframe.StreamingSeries`),
+        which is expected; type hinting should alert you to any issues should you
+        attempt invalid operations with said objects (however, we cannot infer whether
+        an operation is valid with respect to your data!).
+
+
+    Example Snippet:
+
+    <blockquote>
+    Random methods for example purposes. More detailed explanations found under
+    various methods or in the docs folder.
+    ```python
+    sdf = StreamingDataframe()
+    sdf = sdf.apply(a_func)
+    sdf["my_new_bool_field"] = sdf["a_column_name"].contains("a_str")
+    ```
+    </blockquote>
+
+
+    """
+
     def __init__(
         self,
         topic: Topic,
@@ -51,6 +102,29 @@ class StreamingDataFrame(BaseStreaming):
 
         The result will be passed downstream as an input value.
 
+
+        Example Snippet:
+
+        <blockquote>
+        This stores a string in state and capitalizes every column with a string value.
+        <br>
+        A second apply then keeps only the string value columns (shows non-stateful).
+
+        ```python
+        def func(d: dict, state: State):
+            value = d["store_field"]
+            if value != state.get("my_store_key"):
+                state.set("my_store_key") = value
+            return {k: v.upper() if isinstance(v, str) else v for k, v in d.items()}
+
+        sdf = StreamingDataframe()
+        sdf = sdf.apply(func, stateful=True)
+        sdf = sdf.apply(lambda d: {k: v for k,v in d.items() if isinstance(v, str)})
+
+        ```
+        </blockquote>
+
+
         :param func: a function to apply
         :param stateful: if `True`, the function will be provided with a second argument
             of type `State` to perform stateful operations.
@@ -72,6 +146,27 @@ class StreamingDataFrame(BaseStreaming):
         The result of the function will be ignored, and the original value will be
         passed downstream.
 
+
+        Example Snippet:
+
+        <blockquote>
+        Stores a value and mutates a list by appending a new item to it.
+        <br>
+        Also prints to console.
+
+        ```python
+        def func(values: list, state: State):
+            value = values[0]
+            if value != state.get("my_store_key"):
+                state.set("my_store_key") = value
+            values.append("new_item")
+
+        sdf = StreamingDataframe()
+        sdf = sdf.update(func, stateful=True)
+        sdf = sdf.update(lambda value: print("Received value: ", value))
+        ```
+        </blockquote>
+
         :param func: function to update value
         :param stateful: if `True`, the function will be provided with a second argument
             of type `State` to perform stateful operations.
@@ -91,7 +186,29 @@ class StreamingDataFrame(BaseStreaming):
 
         If the function returns True-like value, the original value will be
         passed downstream.
-        Otherwise, the `Filtered` exception will be raised.
+        Otherwise, the `Filtered` exception will be raised (further processing for that
+        message will be skipped).
+
+
+        Example Snippet:
+
+        <blockquote>
+        Stores a value and allows further processing only if the value is greater than
+        what was previously stored.
+
+        ```python
+        def func(d: dict, state: State):
+            value = d["my_value"]
+            if value > state.get("my_store_key"):
+                state.set("my_store_key") = value
+                return True
+            return False
+
+        sdf = StreamingDataframe()
+        sdf = sdf.filter(func, stateful=True)
+        ```
+        </blockquote>
+
 
         :param func: function to filter value
         :param stateful: if `True`, the function will be provided with second argument
@@ -120,26 +237,58 @@ class StreamingDataFrame(BaseStreaming):
         """
         Check if the key is present in the Row value.
 
-        :param key: a column name to check.
-        :returns: a Column object that evaluates to True if the key is present or False otherwise.
 
-        Example:
-            >>> df = StreamingDataframe()
-            >>> sdf['has_column'] = sdf.contains('column_x')
-            # This would add a new column 'has_column' which contains boolean values
-            # indicating the presence of 'column_x' in each row.
+        Example Snippet:
+
+        <blockquote>
+        Add new column 'has_column' which contains a boolean indicating the presence of
+        'column_x'.
+
+        ```python
+        sdf = StreamingDataframe()
+        sdf['has_column'] = sdf.contains('column_x')
+        ```
+        </blockquote>
+
+
+        :param key: a column name to check.
+        :returns: a Column object that evaluates to True if the key is present or
+        False otherwise.
         """
+
         return StreamingSeries.from_func(lambda value: key in value)
 
     def to_topic(
         self, topic: Topic, key: Optional[Callable[[object], object]] = None
     ) -> Self:
         """
-        Produce value to the topic.
+        Produce current value to a topic. You can optionally specify a new key.
 
-        .. note:: A `RowProducer` instance must be assigned to
+        >***NOTE:*** A `RowProducer` instance must be assigned to
         `StreamingDataFrame.producer` if not using :class:`quixstreams.app.Application`
          to facilitate the execution of StreamingDataFrame.
+
+
+        Example Snippet:
+
+        <blockquote>
+        Produce to two different topics, changing the key for one of them.
+        <br>
+        Uses the Application class (sans arguments) to showcase how you'd commonly
+        use this.
+
+        ```python
+        from quixstreams import Application
+        app = Application()
+        input_topic = app.topic("input_x")
+        output_topic_0 = app.topic("output_a")
+        output_topic_1 = app.topic("output_b")
+
+        sdf = app.dataframe(input_topic)
+        sdf = sdf.to_topic(output_topic_0)
+        sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+        ```
+        </blockquote>
 
         :param topic: instance of `Topic`
         :param key: a callable to generate a new message key, optional.
@@ -158,6 +307,28 @@ class StreamingDataFrame(BaseStreaming):
 
         Closures are more performant than calling all the functions in the
         `StreamingDataFrame` one-by-one.
+
+        Generally not required by users; the `quixstreams.app.Application` class will
+        compile automatically for you (along with calling it with values, of course)!
+
+
+        Example Snippet:
+
+        <blockquote>
+        After all sdf commands have been made we then compile, which can then be called
+        with any values we desire to process them.
+
+        ```python
+        from quixstreams import Application
+        sdf = app.dataframe()
+        sdf = sdf.apply(apply_func)
+        sdf = sdf.filter(filter_func)
+        sdf = sdf.compile()
+
+        result_0 = sdf({"my": "record"})
+        result_1 = sdf({"other": "record"})
+        </blockquote>
+
 
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame

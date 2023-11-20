@@ -1,72 +1,15 @@
 
 # `StreamingDataFrame`: Detailed Overview
 
+
+> ***NOTE***: If you just need to see more general/full examples, [check out our various examples](example.md).
+
 `StreamingDataFrame` and `StreamingSeries` are the primary objects to define the stream processing pipelines.
 
 Changes to instances of `StreamingDataFrame` and `StreamingSeries` update the processing pipeline, but the actual
 data changes happen only when it's executed via `Application.run()`
 
-Example:
-```python
-from quixstreams import Application, State
-
-# Define an application
-app = Application(
-    broker_address="localhost:9092",  # Kafka broker address
-    consumer_group="consumer",  # Kafka consumer group
-)
-
-# Define the input and output topics. By default, the "json" serialization will be used
-input_topic = app.topic("input")
-output_topic = app.topic("output")
-
-
-def add_one(data: dict):
-    for field, value in data.items():
-        if isinstance(value, int):
-            data[field] += 1
-
-
-def count(data: dict, state: State):
-    # Get a value from state for the current Kafka message key
-    total = state.get("total", default=0)
-    total += 1
-    # Set a value back to the state
-    state.set("total", total)
-    # Return result
-    return total
-
-
-# Create a StreamingDataFrame instance
-# StreamingDataFrame is a primary interface to define the message processing pipeline
-sdf = app.dataframe(topic=input_topic)
-
-# Print the incoming messages
-sdf = sdf.update(lambda value: print("Received a message:", value))
-
-# Select fields from incoming message
-sdf = sdf[["field_0", "field_2", "field_8"]]
-
-# Filter only messages with "field_0" > 10 and "field_2" != "test"
-sdf = sdf[(sdf["field_0"] > 10) & (sdf["field_2"] != "test")]
-
-# You may also use a custom function to filter data
-sdf = sdf.filter(lambda v: v["field_0"] > 10 and v["field_2"] != "test")
-
-# Apply custom function to update values in place
-sdf = sdf.update(add_one)
-
-# Use a stateful function in persist data into the state store 
-# and update the message value
-sdf["total"] = sdf.apply(count, stateful=True)
-
-# Print the result before producing it
-sdf = sdf.update(lambda value: print("Producing a message:", value))
-
-# Produce the result to the output topic 
-sdf = sdf.to_topic(output_topic)
-```
-
+If you just need to see more general/full examples, [check out our various examples](example.md).
 
 ## Data Types
 
@@ -103,7 +46,9 @@ sdf["field_c"][2]  # returns a StreamingSeries with value of "field_c[2]" if "fi
 ## Performing Operations with StreamingSeries
 
 You can do almost any basic operations or 
-comparisons with columns, assuming validity:
+comparisons with columns, assuming typical validity of the given operations:
+
+> ***NOTE***: No type-checking is conducted here; it is expected you know your data's field types!
 
 ```python
 sdf["field_a"] + sdf["field_b"]
@@ -120,8 +65,7 @@ sdf["field_a"] != "woo"
 
 ## Assigning New Fields
 
-You may add new fields from the results of numerous other
-operations:
+You may add new fields from the results of numerous other operations:
 
 ```python
 # Set dictionary key "a_new_int_field" to 5
