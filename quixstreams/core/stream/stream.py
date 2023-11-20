@@ -47,8 +47,8 @@ class Stream:
             If it's `False`, the `Filtered` exception will be raised to signal that the
             value is filtered out.
 
-        To execute the functions on the `Stream`, call `.compile()` method.
-        It will return a closure to execute all the functions accumulated in the Stream
+        To execute the functions on the `Stream`, call `.compose()` method, and
+        it will return a closure to execute all the functions accumulated in the Stream
         and its parents.
 
         :param func: a function to be called on the stream.
@@ -161,15 +161,15 @@ class Stream:
             node = node.parent
         return tree_
 
-    def compile(
+    def compose(
         self,
         allow_filters: bool = True,
         allow_updates: bool = True,
         allow_expands: bool = True,
     ) -> Callable[[T], R]:
         """
-        Compile a list of functions from this `Stream` and its parents into a single
-        big closure using a "compiler" function.
+        Compose a list of functions from this `Stream` and its parents into one
+        big closure using a "composer" function.
 
         Closures are more performant than calling all the functions in the
         `Stream.tree()` one-by-one.

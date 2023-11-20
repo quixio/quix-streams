@@ -531,7 +531,7 @@ class Application:
             # Start polling Kafka for messages and callbacks
             self._running = True
 
-            dataframe_compiled = dataframe.compile()
+            dataframe_composed = dataframe.compose()
             while self._running:
                 # Serve producer callbacks
                 self._producer.poll(self._producer_poll_timeout)
@@ -562,7 +562,7 @@ class Application:
                     for row in rows:
                         try:
                             # Execute StreamingDataFrame in a context
-                            context.run(dataframe_compiled, row.value)
+                            context.run(dataframe_composed, row.value)
                         except Filtered:
                             # The message was filtered by StreamingDataFrame
                             continue

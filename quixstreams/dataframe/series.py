@@ -29,9 +29,9 @@ class StreamingSeries(BaseStreaming):
     What it Does:
 
     - Allows ways to do simple operations with dataframe "column"/dictionary values:
-        - Basic ops like add, subtract, modulo, etc
+        - Basic ops like add, subtract, modulo, etc.
     - Enables comparisons/inequalities:
-        - Greater than, equals, etc
+        - Greater than, equals, etc.
         - and/or, is/not operations
     - Can check for existence of columns in `StreamingDataFrames`
     - Enables chaining of various operations together
@@ -127,7 +127,7 @@ class StreamingSeries(BaseStreaming):
         child = self._stream.add_apply(func)
         return self.__class__(stream=child)
 
-    def compile(
+    def compose(
         self,
         allow_filters: bool = True,
         allow_updates: bool = True,
@@ -148,11 +148,14 @@ class StreamingSeries(BaseStreaming):
         After all sdf commands have been made we then compile, which can then be called
         with any values we desire to process them.
 
-        When calling `.compile()` on the `StreamingDataFrame`, it calls `.compile()`
+        When calling `.compose()` on the `StreamingDataFrame`, it calls `.compile()`
         on all subsequently generated `StreamingSeries`.
 
         ```python
         from quixstreams import Application
+
+        app = Application(...)
+
         sdf = app.dataframe()
         sdf = sdf["column_a"].apply(apply_func)
         sdf = sdf["column_b"].contains(filter_func)
@@ -173,10 +176,10 @@ class StreamingSeries(BaseStreaming):
             underlying `Stream`.
 
         :return: a function that accepts "value"
-            and returns a result of StreamingDataFrame
+            and returns a result of `StreamingSeries`
         """
 
-        return self._stream.compile(
+        return self._stream.compose(
             allow_filters=allow_filters, allow_updates=allow_updates
         )
 
@@ -194,21 +197,21 @@ class StreamingSeries(BaseStreaming):
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        compiled = self.compile()
-        return context.run(compiled, value)
+        composed = self.compose()
+        return context.run(composed, value)
 
     def _operation(
         self, other: Union[Self, object], operator_: Callable[[object, object], object]
     ) -> Self:
-        self_compiled = self.compile()
+        self_composed = self.compose()
         if isinstance(other, self.__class__):
-            other_compiled = other.compile()
+            other_composed = other.compose()
             return self.from_func(
-                func=lambda v, op=operator_: op(self_compiled(v), other_compiled(v))
+                func=lambda v, op=operator_: op(self_composed(v), other_composed(v))
             )
         else:
             return self.from_func(
-                func=lambda v, op=operator_: op(self_compiled(v), other)
+                func=lambda v, op=operator_: op(self_composed(v), other)
             )
 
     def isin(self, other: Container) -> Self:

@@ -308,7 +308,7 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: self._produce(topic, value, key=key(value) if key else None)
         )
 
-    def compile(self) -> StreamCallable:
+    def compose(self) -> StreamCallable:
         """
         Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -341,7 +341,7 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return self.stream.compile()
+        return self.stream.compose()
 
     def test(self, value: object, ctx: Optional[MessageContext] = None) -> Any:
         """
@@ -358,8 +358,8 @@ class StreamingDataFrame(BaseStreaming):
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        compiled = self.compile()
-        return context.run(compiled, value)
+        composed = self.compose()
+        return context.run(composed, value)
 
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(
@@ -384,16 +384,16 @@ class StreamingDataFrame(BaseStreaming):
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
             diff = self.stream.diff(value.stream)
-            diff_compiled = diff.compile(
+            diff_composed = diff.compose(
                 allow_filters=False, allow_updates=False, allow_expands=False
             )
             stream = self.stream.add_update(
-                lambda v: operator.setitem(v, key, diff_compiled(v))
+                lambda v: operator.setitem(v, key, diff_composed(v))
             )
         elif isinstance(value, StreamingSeries):
-            value_compiled = value.compile(allow_filters=False, allow_updates=False)
+            value_composed = value.compose(allow_filters=False, allow_updates=False)
             stream = self.stream.add_update(
-                lambda v: operator.setitem(v, key, value_compiled(v))
+                lambda v: operator.setitem(v, key, value_composed(v))
             )
         else:
             stream = self.stream.add_update(lambda v: operator.setitem(v, key, value))
@@ -404,15 +404,15 @@ class StreamingDataFrame(BaseStreaming):
     ) -> Union[Self, StreamingSeries]:
         if isinstance(item, StreamingSeries):
             # Filter SDF based on StreamingSeries
-            item_compiled = item.compile(allow_filters=False, allow_updates=False)
-            return self.filter(lambda v: item_compiled(v))
+            item_composed = item.compose(allow_filters=False, allow_updates=False)
+            return self.filter(lambda v: item_composed(v))
         elif isinstance(item, self.__class__):
             # Filter SDF based on another SDF
             diff = self.stream.diff(item.stream)
-            diff_compiled = diff.compile(
+            diff_composed = diff.compose(
                 allow_filters=False, allow_updates=False, allow_expands=False
             )
-            return self.filter(lambda v: diff_compiled(v))
+            return self.filter(lambda v: diff_composed(v))
         elif isinstance(item, list):
             # Take only certain keys from the dict and return a new dict
             return self.apply(lambda v: {k: v[k] for k in item})

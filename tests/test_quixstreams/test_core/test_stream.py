@@ -16,11 +16,11 @@ from quixstreams.core.stream.functions import (
 class TestStream:
     def test_add_apply(self):
         stream = Stream().add_apply(lambda v: v + 1)
-        assert stream.compile()(1) == 2
+        assert stream.compose()(1) == 2
 
     def test_add_update(self):
         stream = Stream().add_update(lambda v: v.append(1))
-        assert stream.compile()([0]) == [0, 1]
+        assert stream.compose()([0]) == [0, 1]
 
     @pytest.mark.parametrize(
         "value, filtered",
@@ -34,9 +34,9 @@ class TestStream:
 
         if filtered:
             with pytest.raises(Filtered):
-                stream.compile()(value)
+                stream.compose()(value)
         else:
-            assert stream.compile()(value) == value
+            assert stream.compose()(value) == value
 
     def test_tree(self):
         stream = (
@@ -88,15 +88,15 @@ class TestStream:
         with pytest.raises(ValueError, match="Common parent not found"):
             stream.diff(stream2)
 
-    def test_compile_allow_filters_false(self):
+    def test_compose_allow_filters_false(self):
         stream = Stream().add_filter(lambda v: v)
         with pytest.raises(ValueError, match="Filter functions are not allowed"):
-            stream.compile(allow_filters=False)
+            stream.compose(allow_filters=False)
 
-    def test_compile_allow_updates_false(self):
+    def test_compose_allow_updates_false(self):
         stream = Stream().add_update(lambda v: v)
         with pytest.raises(ValueError, match="Update functions are not allowed"):
-            stream.compile(allow_updates=False)
+            stream.compose(allow_updates=False)
 
     def test_repr(self):
         stream = (
@@ -112,13 +112,13 @@ class TestStream:
 
     def test_apply_expand(self):
         stream = Stream().add_apply(lambda v: [v, v], expand=True)
-        result = stream.compile()(1)
+        result = stream.compose()(1)
         assert result == [1, 1]
 
     def test_apply_expand_not_iterable_returned(self):
         stream = Stream().add_apply(lambda v: 1, expand=True)
         with pytest.raises(TypeError):
-            stream.compile()(1)
+            stream.compose()(1)
 
     def test_apply_expand_multiple(self):
         stream = (
@@ -126,7 +126,7 @@ class TestStream:
             .add_apply(lambda v: [v + 1, v + 1], expand=True)
             .add_apply(lambda v: [v, v + 1], expand=True)
         )
-        assert stream.compile()(1) == [2, 3, 2, 3]
+        assert stream.compose()(1) == [2, 3, 2, 3]
 
     def test_apply_expand_filter_all_filtered(self):
         stream = (
@@ -136,7 +136,7 @@ class TestStream:
             .add_filter(lambda v: v != 1)
         )
         with pytest.raises(Filtered):
-            assert stream.compile()(1)
+            assert stream.compose()(1)
 
     def test_apply_expand_filter_some_filtered(self):
         stream = (
@@ -145,7 +145,7 @@ class TestStream:
             .add_filter(lambda v: v != 1)
             .add_apply(lambda v: [v, v], expand=True)
         )
-        result = stream.compile()(1)
+        result = stream.compose()(1)
         assert result == [2, 2]
 
     def test_apply_expand_update(self):
@@ -154,7 +154,7 @@ class TestStream:
             .add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
             .add_update(lambda v: setitem(v, "x", v["x"] + 1))
         )
-        assert stream.compile()(1) == [
+        assert stream.compose()(1) == [
             {"x": 2},
             {"x": 3},
         ]
@@ -166,9 +166,9 @@ class TestStream:
             .add_update(lambda v: setitem(v, "x", v["x"] + 1))
             .add_filter(lambda v: v["x"] != 2)
         )
-        assert stream.compile()(1) == [{"x": 3}]
+        assert stream.compose()(1) == [{"x": 3}]
 
-    def test_build_expand_not_allowed(self):
+    def test_compose_allow_expands_false(self):
         stream = Stream().add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
         with pytest.raises(ValueError, match="Expand functions are not allowed"):
-            stream.compile(allow_expands=False)
+            stream.compose(allow_expands=False)
