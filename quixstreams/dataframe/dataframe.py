@@ -96,7 +96,10 @@ class StreamingDataFrame(BaseStreaming):
         return self._topic
 
     def apply(
-        self, func: Union[DataFrameFunc, DataFrameStatefulFunc], stateful: bool = False
+        self,
+        func: Union[DataFrameFunc, DataFrameStatefulFunc],
+        stateful: bool = False,
+        expand: bool = False,
     ) -> Self:
         """
         Apply a function to transform the value and return a new value.
@@ -129,12 +132,15 @@ class StreamingDataFrame(BaseStreaming):
         :param func: a function to apply
         :param stateful: if `True`, the function will be provided with a second argument
             of type `State` to perform stateful operations.
+        :param expand: if True, expand the returned iterable into individual values
+            downstream. If returned value is not iterable, `TypeError` will be raised.
+            Default - `False`.
         """
         if stateful:
             self._register_store()
             func = _as_stateful(func=func, state_manager=self._state_manager)
 
-        stream = self.stream.add_apply(func)
+        stream = self.stream.add_apply(func, expand=expand)
         return self._clone(stream=stream)
 
     def update(
@@ -253,8 +259,8 @@ class StreamingDataFrame(BaseStreaming):
 
 
         :param key: a column name to check.
-        :returns: a Column object that evaluates to True if the key is present or
-        False otherwise.
+        :returns: a Column object that evaluates to True if the key is present
+            or False otherwise.
         """
 
         return StreamingSeries.from_func(lambda value: key in value)
@@ -304,7 +310,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def compile(self) -> StreamCallable:
         """
-        Compile all functions of this StreamingDataFrame into one big closure.
+        Compose all functions of this StreamingDataFrame into one big closure.
 
         Closures are more performant than calling all the functions in the
         `StreamingDataFrame` one-by-one.
@@ -378,7 +384,9 @@ class StreamingDataFrame(BaseStreaming):
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
             diff = self.stream.diff(value.stream)
-            diff_compiled = diff.compile(allow_filters=False, allow_updates=False)
+            diff_compiled = diff.compile(
+                allow_filters=False, allow_updates=False, allow_expands=False
+            )
             stream = self.stream.add_update(
                 lambda v: operator.setitem(v, key, diff_compiled(v))
             )
@@ -401,7 +409,9 @@ class StreamingDataFrame(BaseStreaming):
         elif isinstance(item, self.__class__):
             # Filter SDF based on another SDF
             diff = self.stream.diff(item.stream)
-            diff_compiled = diff.compile(allow_filters=False, allow_updates=False)
+            diff_compiled = diff.compile(
+                allow_filters=False, allow_updates=False, allow_expands=False
+            )
             return self.filter(lambda v: diff_compiled(v))
         elif isinstance(item, list):
             # Take only certain keys from the dict and return a new dict

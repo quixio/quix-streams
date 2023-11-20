@@ -1,11 +1,17 @@
 import copy
-import functools
 import itertools
-from typing import Any, List, Callable, Optional, TypeVar
+from typing import List, Callable, Optional, TypeVar
 
 from typing_extensions import Self
 
-from .functions import *
+from .functions import (
+    ApplyFunction,
+    FilterFunction,
+    UpdateFunction,
+    StreamFunction,
+    compose,
+    ApplyExpandFunction,
+)
 
 __all__ = ("Stream",)
 
@@ -16,7 +22,7 @@ T = TypeVar("T")
 class Stream:
     def __init__(
         self,
-        func: Optional[Callable[[Any], Any]] = None,
+        func: Optional[StreamFunction] = None,
         parent: Optional[Self] = None,
     ):
         """
@@ -30,6 +36,8 @@ class Stream:
         Streams supports 3 types of functions:
         - "Apply" - generate new values based on a previous one.
             The result of an Apply function is passed downstream to the next functions.
+            If "expand=True" is passed and the function returns an `Iterable`,
+            each item of it will be treated as a separate value downstream.
         - "Update" - update values in-place.
             The result of an Update function is always ignored, and its input is passed
             downstream.
@@ -39,9 +47,9 @@ class Stream:
             If it's `False`, the `Filtered` exception will be raised to signal that the
             value is filtered out.
 
-        To execute functions accumulated on the `Stream` instance, it must be compiled
-        using `.compile()` method, which returns a function closure executing all the
-        functions in the tree.
+        To execute the functions on the `Stream`, call `.compile()` method.
+        It will return a closure to execute all the functions accumulated in the Stream
+        and its parents.
 
         :param func: a function to be called on the stream.
             It is expected to be wrapped into one of "Apply", "Filter" or "Update" from
@@ -49,18 +57,10 @@ class Stream:
             Default - "Apply(lambda v: v)".
         :param parent: a parent `Stream`
         """
-        if func is not None and not any(
-            (
-                is_apply_function(func),
-                is_update_function(func),
-                is_filter_function(func),
-            )
-        ):
-            raise ValueError(
-                "Provided function must be either Apply, Filter or Update function"
-            )
+        if func is not None and not isinstance(func, StreamFunction):
+            raise ValueError("Provided function must be a subclass of StreamFunction")
 
-        self.func = func if func is not None else Apply(lambda x: x)
+        self.func = func if func is not None else ApplyFunction(lambda x: x)
         self.parent = parent
 
     def __repr__(self) -> str:
@@ -72,10 +72,7 @@ class Stream:
         """
         tree_funcs = [s.func for s in self.tree()]
         funcs_repr = " | ".join(
-            (
-                f"<{get_stream_function_type(f).name}: {f.__qualname__}>"
-                for f in tree_funcs
-            )
+            (f"<{f.__class__.__name__}: {f.func.__qualname__}>" for f in tree_funcs)
         )
         return f"<{self.__class__.__name__} [{len(tree_funcs)}]: {funcs_repr}>"
 
@@ -90,9 +87,9 @@ class Stream:
         :param func: a function to filter values from the stream
         :return: a new `Stream` derived from the current one
         """
-        return self._add(Filter(func))
+        return self._add(FilterFunction(func))
 
-    def add_apply(self, func: Callable[[T], R]) -> Self:
+    def add_apply(self, func: Callable[[T], R], expand: bool = False) -> Self:
         """
         Add an "apply" function to the Stream.
 
@@ -100,9 +97,14 @@ class Stream:
         further during execution.
 
         :param func: a function to generate a new value
+        :param expand: if True, expand the returned iterable into individual values
+            downstream. If returned value is not iterable, `TypeError` will be raised.
+            Default - `False`.
         :return: a new `Stream` derived from the current one
         """
-        return self._add(Apply(func))
+        if expand:
+            return self._add(ApplyExpandFunction(func))
+        return self._add(ApplyFunction(func))
 
     def add_update(self, func: Callable[[T], object]) -> Self:
         """
@@ -114,7 +116,7 @@ class Stream:
         :param func: a function to mutate the value
         :return: a new Stream derived from the current one
         """
-        return self._add((Update(func)))
+        return self._add((UpdateFunction(func)))
 
     def diff(
         self,
@@ -163,6 +165,7 @@ class Stream:
         self,
         allow_filters: bool = True,
         allow_updates: bool = True,
+        allow_expands: bool = True,
     ) -> Callable[[T], R]:
         """
         Compile a list of functions from this `Stream` and its parents into a single
@@ -171,28 +174,24 @@ class Stream:
         Closures are more performant than calling all the functions in the
         `Stream.tree()` one-by-one.
 
-        :param allow_filters: If False, this function will fail with ValueError if
+        :param allow_filters: If False, this function will fail with `ValueError` if
             the stream has filter functions in the tree. Default - True.
-        :param allow_updates: If False, this function will fail with ValueError if
+        :param allow_updates: If False, this function will fail with `ValueError` if
             the stream has update functions in the tree. Default - True.
+        :param allow_expands: If False, this function will fail with `ValueError` if
+            the stream has functions with "expand=True" in the tree. Default - True.
 
         :raises ValueError: if disallowed functions are present in the stream tree.
         """
-        compiled = None
+
         tree = self.tree()
-        for node in tree:
-            func = node.func
-            if not allow_updates and is_update_function(func):
-                raise ValueError("Update functions are not allowed in this stream")
-            elif not allow_filters and is_filter_function(func):
-                raise ValueError("Filter functions are not allowed in this stream")
-
-            if compiled is None:
-                compiled = func
-            else:
-                compiled = compiler(func)(compiled)
-
-        return compiled
+        functions = [node.func for node in tree]
+        return compose(
+            functions=functions,
+            allow_filters=allow_filters,
+            allow_updates=allow_updates,
+            allow_expands=allow_expands,
+        )
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
         nodes_self = self.tree()
@@ -212,28 +211,5 @@ class Stream:
             raise ValueError("The diff is empty")
         return diff
 
-    def _add(self, func: Callable[[T], R]) -> Self:
+    def _add(self, func: StreamFunction) -> Self:
         return self.__class__(func=func, parent=self)
-
-
-def compiler(outer_func: Callable[[T], R]) -> Callable[[T], R]:
-    """
-    A function that wraps two other functions into a closure.
-    It passes the result of thje inner function as an input to the outer function.
-
-    It is used to transform (aka "compile") a list of functions into one large closure
-    like this:
-    ```
-    [func, func, func] -> func(func(func()))
-    ```
-
-    :return: a function with one argument (value)
-    """
-
-    def wrapper(inner_func: Callable[[T], R]):
-        def _wrapper(v: T) -> R:
-            return outer_func(inner_func(v))
-
-        return functools.update_wrapper(_wrapper, inner_func)
-
-    return functools.update_wrapper(wrapper, outer_func)

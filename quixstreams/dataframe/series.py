@@ -5,7 +5,7 @@ from typing import Optional, Union, Callable, Container, Any
 from typing_extensions import Self
 
 from quixstreams.context import set_message_context
-from quixstreams.core.stream.functions import StreamCallable, Apply
+from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
@@ -71,7 +71,7 @@ class StreamingSeries(BaseStreaming):
     ):
         if not (name or stream):
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=Apply(lambda v: v[name]))
+        self._stream = stream or Stream(func=ApplyFunction(lambda v: v[name]))
 
     @classmethod
     def from_func(cls, func: StreamCallable) -> Self:
@@ -82,7 +82,7 @@ class StreamingSeries(BaseStreaming):
         :param func: a function to apply
         :return: instance of `StreamingSeries`
         """
-        return cls(stream=Stream(Apply(func)))
+        return cls(stream=Stream(ApplyFunction(func)))
 
     @property
     def stream(self) -> Stream:
@@ -133,7 +133,7 @@ class StreamingSeries(BaseStreaming):
         allow_updates: bool = True,
     ) -> StreamCallable:
         """
-        Compile all functions of this StreamingSeries into one big closure.
+        Compose all functions of this StreamingSeries into one big closure.
 
         Closures are more performant than calling all the functions in the
         `StreamingDataFrame` one-by-one.
