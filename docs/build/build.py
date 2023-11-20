@@ -51,56 +51,59 @@ with open(f"{fp}/quixstreams.md", "w") as f:
 
 doc_map = {
     "application.md": {
-        "names": ["quixstreams.app"],
-        "modules": [],
+        k: None
+        for k in [
+            "quixstreams.app",
+            "quixstreams.state.types",
+        ]
     },
     "topics-serdes.md": {
-        "names": [
+        k: None
+        for k in [
             "quixstreams.models.topics",
             "quixstreams.models.serializers.quix",
             "quixstreams.models.serializers.simple_types",
-        ],
-        "modules": [],
+        ]
     },
     "dataframe.md": {
-        "names": [
+        k: None
+        for k in [
             "quixstreams.dataframe.dataframe",
             "quixstreams.dataframe.series",
             # note: additional filtering later for these below
-            "quixstreams.state.types",
             "quixstreams.context",
-        ],
-        "modules": [],
+        ]
     },
-    "Quix Platform API": {
-        "names": [
+    "quix-platform-api.md": {
+        k: None
+        for k in [
             "quixstreams.platforms.quix.api",
             "quixstreams.platforms.quix.config",
             "quixstreams.platforms.quix.env",
-        ],
-        "path": "quix-platform-api.md",
-        "modules": [],
+        ]
     },
 }
 
-doc_modules = {name: k for k, maps in doc_map.items() for name in maps["names"]}
+doc_modules = {name: f_name for f_name, m_name in doc_map.items() for name in m_name}
 for m in modules:
     if m.name in doc_modules:
-        doc_map[doc_modules[m.name]]["modules"].append(m)
+        doc_map[doc_modules[m.name]][m.name] = m
 
-for m in doc_map["topics-serdes.md"]["modules"]:
-    if m.name == "quixstreams.models.serializers.quix":
-        m.members = [x for x in m.members if x.name != "QuixSerializer"]
+for name, module in doc_map["application.md"].items():
+    if name == "quixstreams.state.types":
+        module.members = [x for x in module.members if x.name == "State"]
 
-for m in doc_map["dataframe.md"]["modules"]:
-    if m.name == "quixstreams.context":
-        m.members = [x for x in m.members if x.__class__.__name__ == "Function"]
-    elif m.name == "quixstreams.state.types":
-        m.members = [x for x in m.members if x.name == "State"]
+for name, module in doc_map["topics-serdes.md"].items():
+    if name == "quixstreams.models.serializers.quix":
+        module.members = [x for x in module.members if x.name != "QuixSerializer"]
+
+for name, module in doc_map["dataframe.md"].items():
+    if name == "quixstreams.context":
+        module = [x for x in module.members if x.__class__.__name__ == "Function"]
 
 
-for doc_path, doc_values in doc_map.items():
-    m = doc_values["modules"]
+for doc_path, modules in doc_map.items():
+    m = list(modules.values())
     with open(f"{fp}/{doc_path}", "w") as f:
         session.process(m)
         s = session.renderer.render_to_string(m)

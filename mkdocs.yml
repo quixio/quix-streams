@@ -15,17 +15,16 @@ markdown_extensions:
       alternate_style: true
 
 nav:
-  - Detailed Guides:
-    - An Example Application: example.md
-    - Using with the Quix Platform: quix-platform.md
-    - Serialization: serialization.md
-    - Stateful Processing: stateful-processing.md
-    - Streaming DataFrame: streamingdataframe.md
-    - Upgrading from Legacy QuixStreams: upgrading-legacy.md
+  - Example Applications: example.md
+  - Defining your Streaming Pipeline: streamingdataframe.md
+  - Serialization: serialization.md
+  - Stateful Processing: stateful-processing.md
+  - Working with Quix:
+    - Using the Platform: quix-platform.md
+    - Upgrading from QuixStreams v0.5: upgrading-legacy.md
   - API Docs:
-    - Essentials:
-      - Application: api-reference/application.md
-      - Streaming DataFrame: api-reference/dataframe.md
-      - Topics & Serialization: api-reference/topics-serdes.md
-      - Quix Platform API: api-reference/quix-platform-api.md
-    - Complete (rarely needed): api-reference/quixstreams.md
+    - Application: api-reference/application.md
+    - StreamingDataFrame & Series: api-reference/dataframe.md
+    - Topics & Serializers: api-reference/topics-serdes.md
+    - Quix Platform API: api-reference/quix-platform-api.md
+    - Full Reference: api-reference/quixstreams.md
