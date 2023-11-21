@@ -7,5 +7,5 @@ To generate new API docs
 
 - Go to `docs/build`
 - Install requirements via `python -m pip install -r requirements.txt`
-- Run `build.sh`
-- Check the generated docs in `docs/api-reference/quixstreams.md`
+- do `python build.py`
+- Check the generated docs in `docs/` folder

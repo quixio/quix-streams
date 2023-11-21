@@ -40,6 +40,45 @@ MessageProcessedCallback = Callable[[str, int, int], None]
 
 
 class Application:
+    """
+    The main Application class.
+
+    Typically, the primary object needed to get a kafka application up and running.
+
+    Most functionality is explained the various methods, except for
+    "column assignment".
+
+
+    What it Does:
+
+    - During user setup:
+        - Provides defaults or helper methods for commonly needed objects
+        - For Quix Platform Users: Configures the app for it
+            (see `Application.Quix()`)
+    - When executed via `.run()` (after setup):
+        - Initializes Topics and StreamingDataFrames
+        - Facilitates processing of Kafka messages with a `StreamingDataFrame`
+        - Handles all Kafka client consumer/producer responsibilities.
+
+
+    Example Snippet:
+
+    <blockquote>
+    Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+    add some operations to `sdf` and then run everything.
+    ```python
+    from quixstreams import Application
+
+    app = Application(broker_address='localhost:9092', consumer_group='group')
+    topic = app.topic('test-topic')
+    df = app.dataframe(topic)
+    df.apply(lambda value, context: print('New message', value)
+
+    app.run(dataframe=df)
+    ```
+    </blockquote>
+    """
+
     def __init__(
         self,
         broker_address: str,
@@ -61,24 +100,6 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
     ):
         """
-        The main Application class.
-
-        What it does:
-            - Initializes Topics and StreamingDataFrames
-            - Facilitates the execution of StreamingDataFrames
-            - Configures the app to work with Quix platform (if necessary)
-
-        Example usage:
-        ```
-            from quixstreams import Application
-
-            app = Application(broker_address='localhost:9092', consumer_group='group')
-            topic = app.topic('test-topic')
-            df = app.dataframe(topic)
-            df.apply(lambda value, context: print('New message', value)
-
-            app.run(dataframe=df)
-        ```
 
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
             Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
@@ -102,12 +123,11 @@ class Application:
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
-
-        To handle errors, `Application` accepts callbacks triggered when exceptions
-        occur on different stages of stream processing.
-        If the callback returns `True`, the exception will be ignored. Otherwise, the
-        exception will be propagated and the processing will eventually stop.
-
+        <br><br>***Error Handlers***<br>
+        To handle errors, `Application` accepts callbacks triggered when
+            exceptions occur on different stages of stream processing. If the callback
+            returns `True`, the exception will be ignored. Otherwise, the exception
+            will be propagated and the processing will eventually stop.
         :param on_consumer_error: triggered when internal `RowConsumer` fails
         to poll Kafka or cannot deserialize a message.
         :param on_processing_error: triggered when exception is raised within
@@ -150,7 +170,7 @@ class Application:
             rocksdb_options=rocksdb_options,
         )
 
-    def set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
+    def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
         self._quix_config_builder = config_builder
 
     @classmethod
@@ -182,16 +202,38 @@ class Application:
         It takes the credentials from the environment and configures consumer and
         producer to properly connect to the Quix platform.
 
-        .. note:: Quix platform requires `consumer_group` and topic names to be prefixed
-            with workspace id.
+        >***NOTE:*** Quix platform requires `consumer_group` and topic names to be
+            prefixed with workspace id.
             If the application is created via `Application.Quix()`, the real consumer
             group will be `<workspace_id>-<consumer_group>`,
             and the real topic names will be `<workspace_id>-<topic_name>`.
 
+
+
+        Example Snippet:
+
+        <blockquote>
+        Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+        add some operations to `sdf` and then run everything. Also shows off how to
+        use the quix-specific serializers and deserializers.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application.Quix()
+        input_topic = app.topic("topic-in", value_deserializer="quix")
+        output_topic = app.topic("topic-out", value_serializer="quix_timeseries")
+        df = app.dataframe(topic_in)
+        df = df.to_topic(output_topic)
+
+        app.run(dataframe=df)
+        ```
+        </blockquote>
+
+
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
-            .. note:: The consumer group will be prefixed by Quix workspace id.
-
+              >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
@@ -216,22 +258,18 @@ class Application:
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
             Default - "INFO".
-
-        To handle errors, `Application` accepts callbacks triggered when exceptions
-        occur on different stages of stream processing.
-        If the callback returns `True`, the exception will be ignored. Otherwise, the
-        exception will be propagated and the processing will eventually stop.
-
-        :param on_consumer_error: triggered when internal `RowConsumer` fails
-        to poll Kafka or cannot deserialize a message.
+        <br><br>***Error Handlers***<br>
+        To handle errors, `Application` accepts callbacks triggered when
+            exceptions occur on different stages of stream processing. If the callback
+            returns `True`, the exception will be ignored. Otherwise, the exception
+            will be propagated and the processing will eventually stop.
+        :param on_consumer_error: triggered when internal `RowConsumer` fails to poll
+            Kafka or cannot deserialize a message.
         :param on_processing_error: triggered when exception is raised within
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-
-
-        Quix-specific parameters:
-
+        <br><br>***Quix-specific Parameters***<br>
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
         :param auto_create_topics: Whether to auto-create any topics handed to a
@@ -273,7 +311,7 @@ class Application:
             rocksdb_options=rocksdb_options,
         )
         # Inject Quix config builder to use it in other methods
-        app.set_quix_config_builder(quix_config_builder)
+        app._set_quix_config_builder(quix_config_builder)
         return app
 
     @property
@@ -296,8 +334,29 @@ class Application:
         to the topic in the form of a string name (i.e. "json" for JSON) or a
         serialization class instance directly, like JSONSerializer().
 
+
+        Example Snippet:
+
+        <blockquote>
+        Specify an input and output topic for a `StreamingDataFrame` instance,
+        where the output topic requires adjusting the key serializer.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application()
+        input_topic = app.topic("input-topic", value_deserializer="json")
+        output_topic = app.topic(
+            "output-topic", key_serializer="str", value_serializer=JSONSerializer()
+        )
+        sdf = app.dataframe(input_topic)
+        sdf.to_topic(output_topic)
+        ```
+        </blockquote>
+
+
         :param name: topic name
-            .. note:: If the application is created via `Quix.Application()`,
+            >***NOTE:*** If the application is created via `Quix.Application()`,
               the topic name will be prefixed by Quix workspace id, and it will
               be `<workspace_id>-<name>`
         :param value_deserializer: a deserializer type for values; default="json"
@@ -306,6 +365,8 @@ class Application:
         :param key_serializer: a serializer type for keys; default="bytes"
         :param creation_configs: settings for auto topic creation (Quix platform only)
             Its name will be overridden by this method's 'name' param.
+
+
         :return: `Topic` object
         """
         if self.is_quix_app:
@@ -328,9 +389,30 @@ class Application:
         topic: Topic,
     ) -> StreamingDataFrame:
         """
-        Create a StreamingDataFrame to define message processing pipeline.
+        A simple helper method that generates a `StreamingDataFrame`, which is used
+        to define your message processing pipeline.
 
-        See :class:`quixstreams.dataframe.StreamingDataFrame` for more details
+        See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
+
+
+        Example Snippet:
+
+        <blockquote>
+        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        add some operations to `sdf` and then run everything.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application(broker_address='localhost:9092', consumer_group='group')
+        topic = app.topic('test-topic')
+        df = app.dataframe(topic)
+        df.apply(lambda value, context: print('New message', value)
+
+        app.run(dataframe=df)
+        ```
+        </blockquote>
+
 
         :param topic: a `quixstreams.models.Topic` instance
             to be used as an input topic.
@@ -343,6 +425,12 @@ class Application:
     def stop(self):
         """
         Stop the internal poll loop and the message processing.
+
+        Only necessary when manually managing the lifecycle of the `Application` (
+        likely through some sort of threading).
+
+        To otherwise stop an application, either send a `SIGTERM` to the process
+        (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
         """
         self._running = False
 
@@ -381,6 +469,29 @@ class Application:
     ):
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
+
+        One started, can be safely terminated with a `SIGTERM` signal
+        (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+
+        Example Snippet:
+
+        <blockquote>
+        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        add some operations to `sdf` and then run everything.
+
+        ```python
+        from quixstreams import Application
+
+        app = Application(broker_address='localhost:9092', consumer_group='group')
+        topic = app.topic('test-topic')
+        df = app.dataframe(topic)
+        df.apply(lambda value, context: print('New message', value)
+
+        app.run(dataframe=df)
+        ```
+        </blockquote>
+
 
         :param dataframe: instance of `StreamingDataFrame`
         """

@@ -1,10 +1,10 @@
-site_name: 'Quix Docs'
-site_description: 'Quix Streams Documentation'
-repo_url: https://github.com/quixio/quix-streams/docs
-edit_uri: tree/master/docs
+site_name: Quix Docs
+site_description: Quix Streams Documentation
+repo_url: https://github.com/quixio/quix-streams/
+edit_uri: tree/main
 
 theme:
-  name: 'material'
+  name: material
 
 markdown_extensions:
   - attr_list
@@ -12,32 +12,19 @@ markdown_extensions:
   - pymdownx.snippets
   - pymdownx.superfences
   - pymdownx.tabbed:
-      alternate_style: true 
+      alternate_style: true
 
 nav:
-    - 'Introduction': '../client-library-intro.html'
-    - 'Quickstart': 'quickstart.md'
-    - 'Using Quix Streams': 'using.md'
-    - 'Kafka and Quix Streams': 'kafka.md'
-    - 'Features overview':
-      - 'Streaming context': 'features/streaming-context.md'
-      - 'Built-in buffers': 'features/builtin-buffers.md'
-      - 'Support for Data Frames': 'features/data-frames.md'
-      - 'Message splitting': 'features/message-splitting.md'
-      - 'Data serialization': 'features/data-serialization.md'
-      - 'Multiple data types': 'features/multiple-data-types.md'
-      - 'Checkpointing': 'features/checkpointing.md'
-      - 'Horizontal scaling': 'features/horizontal-scaling.md'
-    - 'Connecting to a broker': 'connect.md'
-    - 'App management': 'app-management.md'
-    - 'Publishing data': 'publish.md'
-    - 'Subscribing to data': 'subscribe.md'
-    - 'Processing data': 'process.md'
-    - 'State management': 'state-management.md'
-    - 'Migration guide': 'versionmigration.md'
-    - 'API Reference':
-      - 'Python': 'api-reference/python/quixstreams.md'
-      - 'C#': 'api-reference/csharp/QuixStreams.Streaming.md'
-    # - 'Local environment':
-    #   - 'Set up local environment': 'python-setup.md'
-    #   - 'Set up docker environment': 'docker-setup.md'
+  - Example Applications: example.md
+  - Defining your Streaming Pipeline: streamingdataframe.md
+  - Serialization: serialization.md
+  - Stateful Processing: stateful-processing.md
+  - Working with Quix:
+    - Using the Platform: quix-platform.md
+    - Upgrading from QuixStreams v0.5: upgrading-legacy.md
+  - API Docs:
+    - Application: api-reference/application.md
+    - StreamingDataFrame & Series: api-reference/dataframe.md
+    - Topics & Serializers: api-reference/topics-serdes.md
+    - Quix Platform API: api-reference/quix-platform-api.md
+    - Full Reference: api-reference/quixstreams.md

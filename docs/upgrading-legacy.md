@@ -111,7 +111,7 @@ For example, a message with:
 ```
 {
   "NumericValues": {"p0": [10, 20, 30]},
-  "StringValues": {p1": ["a", "b", "c"]}
+  "StringValues": {"p1": ["a", "b", "c"]}
 }
 ```
 would equate to 3 independently processed messages.

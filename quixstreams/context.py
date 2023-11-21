@@ -23,6 +23,30 @@ def set_message_context(context: Optional[MessageContext]):
     """
     Set a MessageContext for the current message in the given `contextvars.Context`
 
+    >***NOTE:*** This is for advanced usage only. If you need to change the message key,
+    `StreamingDataFrame.to_topic()` has an argument for it.
+
+
+    Example Snippet:
+
+    <blockquote>
+    Changes the current sdf value based on what the message partition is.
+    ```python
+    from quixstreams import Application, set_message_context, message_context
+
+    def alter_context(value):
+        context = message_context()
+        if value > 1:
+            context.headers = context.headers + (b"cool_new_header", value.encode())
+            set_message_context(context)
+
+    app = Application()
+    sdf = app.dataframe()
+    sdf = sdf.update(lambda value: alter_context(value))
+    ```
+    </blockquote>
+
+
     :param context: instance of `MessageContext`
     """
     _current_message_context.set(context)
@@ -30,7 +54,28 @@ def set_message_context(context: Optional[MessageContext]):
 
 def message_context() -> MessageContext:
     """
-    Get a MessageContext for the current message
+    Get a MessageContext for the current message, which houses most of the message
+    metadata, like:
+        - key
+        - timestamp
+        - partition
+        - offset
+
+
+    Example Snippet:
+
+    <blockquote>
+    Changes the current sdf value based on what the message partition is.
+    ```python
+    from quixstreams import Application, message_context
+
+    app = Application()
+    sdf = app.dataframe()
+    sdf = sdf.apply(lambda value: 1 if message_context().partition == 2 else 0)
+    ```
+    </blockquote>
+
+
     :return: instance of `MessageContext`
     """
     try:
@@ -42,7 +87,22 @@ def message_context() -> MessageContext:
 
 def message_key() -> Any:
     """
-    Get current a message key.
+    Get the current message's key.
+
+
+    Example Snippet:
+
+    <blockquote>
+    Changes the current sdf value based on what the message key is.
+    ```python
+    from quixstreams import Application, message_key
+
+    app = Application()
+    sdf = app.dataframe()
+    sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
+    ```
+    </blockquote>
+
 
     :return: a deserialized message key
     """

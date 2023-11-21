@@ -68,14 +68,18 @@ def _b64_decode_or_none(s) -> Optional[bytes]:
 
 
 class QuixDeserializer(JSONDeserializer):
+    """
+    Handles Deserialization for any Quix-formatted topic.
+
+    Parses JSON data from either `TimeseriesData` and `EventData` (ignores the rest).
+    """
+
     def __init__(
         self,
         column_name: Optional[str] = None,
         loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
     ):
         """
-        Parses JSON data from either Timeseries/Parameter or EventData formats.
-
         :param column_name: if provided, the deserialized value will be wrapped into
             dictionary with `column_name` as a key.
         :param loads: function to parse json from bytes.

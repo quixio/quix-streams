@@ -434,7 +434,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         If writing fails, the transaction will be also marked as "failed" and
         cannot be used anymore.
 
-        .. note:: If no keys have been modified during the transaction
+        >***NOTE:*** If no keys have been modified during the transaction
             (i.e no "set" or "delete" have been called at least once), it will
             not flush ANY data to the database including the offset in order to optimize
             I/O.
