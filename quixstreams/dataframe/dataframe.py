@@ -316,21 +316,18 @@ class StreamingDataFrame(BaseStreaming):
         `StreamingDataFrame` one-by-one.
 
         Generally not required by users; the `quixstreams.app.Application` class will
-        compile automatically for you (along with calling it with values, of course)!
+        do this automatically.
 
 
         Example Snippet:
 
         <blockquote>
-        After all sdf commands have been made we then compile, which can then be called
-        with any values we desire to process them.
-
         ```python
         from quixstreams import Application
         sdf = app.dataframe()
         sdf = sdf.apply(apply_func)
         sdf = sdf.filter(filter_func)
-        sdf = sdf.compile()
+        sdf = sdf.compose()
 
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
