@@ -12,7 +12,7 @@ class BaseStreaming:
         ...
 
     @abc.abstractmethod
-    def compile(self, *args, **kwargs) -> StreamCallable:
+    def compose(self, *args, **kwargs) -> StreamCallable:
         ...
 
     @abc.abstractmethod

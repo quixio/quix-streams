@@ -5,7 +5,7 @@ from typing import Optional, Union, Callable, Container, Any
 from typing_extensions import Self
 
 from quixstreams.context import set_message_context
-from quixstreams.core.stream.functions import StreamCallable, Apply
+from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
@@ -29,9 +29,9 @@ class StreamingSeries(BaseStreaming):
     What it Does:
 
     - Allows ways to do simple operations with dataframe "column"/dictionary values:
-        - Basic ops like add, subtract, modulo, etc
+        - Basic ops like add, subtract, modulo, etc.
     - Enables comparisons/inequalities:
-        - Greater than, equals, etc
+        - Greater than, equals, etc.
         - and/or, is/not operations
     - Can check for existence of columns in `StreamingDataFrames`
     - Enables chaining of various operations together
@@ -71,7 +71,7 @@ class StreamingSeries(BaseStreaming):
     ):
         if not (name or stream):
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=Apply(lambda v: v[name]))
+        self._stream = stream or Stream(func=ApplyFunction(lambda v: v[name]))
 
     @classmethod
     def from_func(cls, func: StreamCallable) -> Self:
@@ -82,7 +82,7 @@ class StreamingSeries(BaseStreaming):
         :param func: a function to apply
         :return: instance of `StreamingSeries`
         """
-        return cls(stream=Stream(Apply(func)))
+        return cls(stream=Stream(ApplyFunction(func)))
 
     @property
     def stream(self) -> Stream:
@@ -127,36 +127,33 @@ class StreamingSeries(BaseStreaming):
         child = self._stream.add_apply(func)
         return self.__class__(stream=child)
 
-    def compile(
+    def compose(
         self,
         allow_filters: bool = True,
         allow_updates: bool = True,
     ) -> StreamCallable:
         """
-        Compile all functions of this StreamingSeries into one big closure.
+        Compose all functions of this StreamingSeries into one big closure.
 
         Closures are more performant than calling all the functions in the
         `StreamingDataFrame` one-by-one.
 
         Generally not required by users; the `quixstreams.app.Application` class will
-        compile automatically for you (along with calling it with values, of course)!
+        do this automatically.
 
 
         Example Snippet:
 
         <blockquote>
-        After all sdf commands have been made we then compile, which can then be called
-        with any values we desire to process them.
-
-        When calling `.compile()` on the `StreamingDataFrame`, it calls `.compile()`
-        on all subsequently generated `StreamingSeries`.
-
         ```python
         from quixstreams import Application
+
+        app = Application(...)
+
         sdf = app.dataframe()
         sdf = sdf["column_a"].apply(apply_func)
         sdf = sdf["column_b"].contains(filter_func)
-        sdf = sdf.compile()
+        sdf = sdf.compose()
 
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
@@ -173,10 +170,10 @@ class StreamingSeries(BaseStreaming):
             underlying `Stream`.
 
         :return: a function that accepts "value"
-            and returns a result of StreamingDataFrame
+            and returns a result of `StreamingSeries`
         """
 
-        return self._stream.compile(
+        return self._stream.compose(
             allow_filters=allow_filters, allow_updates=allow_updates
         )
 
@@ -194,21 +191,21 @@ class StreamingSeries(BaseStreaming):
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        compiled = self.compile()
-        return context.run(compiled, value)
+        composed = self.compose()
+        return context.run(composed, value)
 
     def _operation(
         self, other: Union[Self, object], operator_: Callable[[object, object], object]
     ) -> Self:
-        self_compiled = self.compile()
+        self_composed = self.compose()
         if isinstance(other, self.__class__):
-            other_compiled = other.compile()
+            other_composed = other.compose()
             return self.from_func(
-                func=lambda v, op=operator_: op(self_compiled(v), other_compiled(v))
+                func=lambda v, op=operator_: op(self_composed(v), other_composed(v))
             )
         else:
             return self.from_func(
-                func=lambda v, op=operator_: op(self_compiled(v), other)
+                func=lambda v, op=operator_: op(self_composed(v), other)
             )
 
     def isin(self, other: Container) -> Self:
