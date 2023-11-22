@@ -435,7 +435,18 @@ class StreamingSeries(BaseStreaming):
             a bitwise "and" if one of the arguments is a number.
             This function always does a logical "and" instead.
         """
-        return self._operation(other, lambda x, y: x and y)
+
+        # Do the "and" check manually instead of calling `self._operation`
+        # to preserve Python's lazy evaluation of `and`.
+        # Otherwise, it always evaluates both left and right side of the expression
+        # to compute the result which is not always desired.
+        # See https://docs.python.org/3/reference/expressions.html#boolean-operations
+        self_composed = self.compose()
+        if isinstance(other, self.__class__):
+            other_composed = other.compose()
+            return self.from_func(func=lambda v: self_composed(v) and other_composed(v))
+        else:
+            return self.from_func(func=lambda v: self_composed(v) and other)
 
     def __or__(self, other: object) -> Self:
         """
@@ -445,7 +456,18 @@ class StreamingSeries(BaseStreaming):
             a bitwise "or" if one of the arguments is a number.
             This function always does a logical "or" instead.
         """
-        return self._operation(other, lambda x, y: x or y)
+
+        # Do the "or" check manually instead of calling `self._operation`
+        # to preserve Python's lazy evaluation of `or`.
+        # Otherwise, it always evaluates both left and right side of the expression
+        # to compute the result which is not always desired.
+        # See https://docs.python.org/3/reference/expressions.html#boolean-operations
+        self_composed = self.compose()
+        if isinstance(other, self.__class__):
+            other_composed = other.compose()
+            return self.from_func(func=lambda v: self_composed(v) or other_composed(v))
+        else:
+            return self.from_func(func=lambda v: self_composed(v) or other)
 
     def __invert__(self) -> Self:
         """
