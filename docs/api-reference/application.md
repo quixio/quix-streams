@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L42)
 
 The main Application class.
 
@@ -38,11 +38,11 @@ Most functionality is explained the various methods, except for
 <br>
 ***Example Snippet:***
 
-<blockquote>
-Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything.
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
@@ -51,7 +51,6 @@ df.apply(lambda value, context: print('New message', value)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 <a id="quixstreams.app.Application.__init__"></a>
 
@@ -79,7 +78,7 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L81)
 
 
 <br>
@@ -107,7 +106,15 @@ If `None`, the default options will be used.
 - `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - 0s.
 - `on_message_processed`: a callback triggered when message is successfully
 processed.
-<br><br>***Error Handlers***<br>
+- `loglevel`: a log level for "quixstreams" logger.
+Should be a string or None.
+    If `None` is passed, no logging will be configured.
+    You may pass `None` and configure "quixstreams" logger
+    externally using `logging` library.
+    Default - "INFO".
+
+***Error Handlers***
+
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
@@ -118,12 +125,6 @@ to poll Kafka or cannot deserialize a message.
 `StreamingDataFrame.process()`.
 - `on_producer_error`: triggered when RowProducer fails to serialize
 or to produce a message to Kafka.
-- `loglevel`: a log level for "quixstreams" logger.
-Should be a string or None.
-If `None` is passed, no logging will be configured.
-You may pass `None` and configure "quixstreams" logger
-externally using `logging` library.
-Default - "INFO".
 
 <a id="quixstreams.app.Application.Quix"></a>
 
@@ -154,7 +155,7 @@ def Quix(cls,
          auto_create_topics: bool = True) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L178)
 
 Initialize an Application to work with Quix platform,
 
@@ -175,13 +176,12 @@ producer to properly connect to the Quix platform.
 <br>
 ***Example Snippet:***
 
-<blockquote>
-Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything. Also shows off how to
-use the quix-specific serializers and deserializers.
-
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything. Also shows off how to
+# use the quix-specific serializers and deserializers.
 
 app = Application.Quix()
 input_topic = app.topic("topic-in", value_deserializer="quix")
@@ -191,7 +191,6 @@ df = df.to_topic(output_topic)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 
 <br>
@@ -224,7 +223,9 @@ Should be a string or None.
     You may pass `None` and configure "quixstreams" logger
     externally using `logging` library.
     Default - "INFO".
-<br><br>***Error Handlers***<br>
+
+***Error Handlers***
+
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
@@ -235,7 +236,9 @@ Kafka or cannot deserialize a message.
 `StreamingDataFrame.process()`.
 - `on_producer_error`: triggered when RowProducer fails to serialize
 or to produce a message to Kafka.
-<br><br>***Quix-specific Parameters***<br>
+
+
+***Quix-specific Parameters***
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
 instead of the default one.
 - `auto_create_topics`: Whether to auto-create any topics handed to a
@@ -262,7 +265,7 @@ def topic(name: str,
           creation_configs: Optional[TopicCreationConfigs] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L324)
 
 Create a topic definition.
 
@@ -275,12 +278,11 @@ serialization class instance directly, like JSONSerializer().
 <br>
 ***Example Snippet:***
 
-<blockquote>
-Specify an input and output topic for a `StreamingDataFrame` instance,
-where the output topic requires adjusting the key serializer.
-
 ```python
 from quixstreams import Application
+
+# Specify an input and output topic for a `StreamingDataFrame` instance,
+# where the output topic requires adjusting the key serializer.
 
 app = Application()
 input_topic = app.topic("input-topic", value_deserializer="json")
@@ -290,7 +292,6 @@ output_topic = app.topic(
 sdf = app.dataframe(input_topic)
 sdf.to_topic(output_topic)
 ```
-</blockquote>
 
 
 <br>
@@ -323,7 +324,7 @@ Its name will be overridden by this method's 'name' param.
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L387)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L387)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -336,12 +337,11 @@ See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
 <br>
 ***Example Snippet:***
 
-<blockquote>
-Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything.
-
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
@@ -350,7 +350,6 @@ df.apply(lambda value, context: print('New message', value)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 
 <br>
@@ -375,7 +374,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L425)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L423)
 
 Stop the internal poll loop and the message processing.
 
@@ -395,7 +394,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L437)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L435)
 
 Clear the state of the application.
 
@@ -409,7 +408,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L466)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/app.py#L464)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -421,12 +420,11 @@ One started, can be safely terminated with a `SIGTERM` signal
 <br>
 ***Example Snippet:***
 
-<blockquote>
-Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything.
-
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
@@ -435,7 +433,6 @@ df.apply(lambda value, context: print('New message', value)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 
 <br>
@@ -455,7 +452,7 @@ app.run(dataframe=df)
 class State(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/state/types.py#L95)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -469,7 +466,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/state/types.py#L100)
 
 Get the value for key if key is present in the state, else default
 
@@ -496,7 +493,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/state/types.py#L109)
 
 Set value for the key.
 
@@ -517,7 +514,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/state/types.py#L116)
 
 Delete value for the key.
 
@@ -539,7 +536,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/421d37e210f9f3915c815c639a1c7c6fd6d5a585/quixstreams/state/types.py#L124)
 
 Check if the key exists in state.
 

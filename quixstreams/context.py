@@ -29,11 +29,10 @@ def set_message_context(context: Optional[MessageContext]):
 
     Example Snippet:
 
-    <blockquote>
-    Changes the current sdf value based on what the message partition is.
     ```python
     from quixstreams import Application, set_message_context, message_context
 
+    # Changes the current sdf value based on what the message partition is.
     def alter_context(value):
         context = message_context()
         if value > 1:
@@ -44,7 +43,6 @@ def set_message_context(context: Optional[MessageContext]):
     sdf = app.dataframe()
     sdf = sdf.update(lambda value: alter_context(value))
     ```
-    </blockquote>
 
 
     :param context: instance of `MessageContext`
@@ -64,17 +62,15 @@ def message_context() -> MessageContext:
 
     Example Snippet:
 
-    <blockquote>
-    Changes the current sdf value based on what the message partition is.
     ```python
     from quixstreams import Application, message_context
+
+    # Changes the current sdf value based on what the message partition is.
 
     app = Application()
     sdf = app.dataframe()
     sdf = sdf.apply(lambda value: 1 if message_context().partition == 2 else 0)
     ```
-    </blockquote>
-
 
     :return: instance of `MessageContext`
     """
@@ -92,16 +88,15 @@ def message_key() -> Any:
 
     Example Snippet:
 
-    <blockquote>
-    Changes the current sdf value based on what the message key is.
     ```python
     from quixstreams import Application, message_key
+
+    # Changes the current sdf value based on what the message key is.
 
     app = Application()
     sdf = app.dataframe()
     sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
     ```
-    </blockquote>
 
 
     :return: a deserialized message key
