@@ -51,17 +51,16 @@ class StreamingSeries(BaseStreaming):
 
     Example Snippet:
 
-    <blockquote>
-    Random methods for example purposes. More detailed explanations found under
-    various methods or in the docs folder.
     ```python
+    # Random methods for example purposes. More detailed explanations found under
+    # various methods or in the docs folder.
+
     sdf = StreamingDataframe()
     sdf = sdf["column_a"].apply(a_func).apply(diff_func, stateful=True)
     sdf["my_new_bool_field"] = sdf["column_b"].contains("this_string")
     sdf["new_sum_field"] = sdf["column_c"] + sdf["column_d"] + 2
     sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
     ```
-    </blockquote>
     """
 
     def __init__(
@@ -100,15 +99,12 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        The `StreamingSeries` are generated when `sdf["COLUMN_NAME"]` is called.
-        <br>
-        This stores a string in state and capitalizes the column value; the result is
-        assigned to a new column.
-        <br>
-        Another apply converts a str column to an int, assigning it to a new column.
-
         ```python
+        # The `StreamingSeries` are generated when `sdf["COLUMN_NAME"]` is called.
+        # This stores a string in state and capitalizes the column value; the result is
+        # assigned to a new column.
+        #  Another apply converts a str column to an int, assigning it to a new column.
+
         def func(value: str, state: State):
             if value != state.get("my_store_key"):
                 state.set("my_store_key") = value
@@ -118,8 +114,6 @@ class StreamingSeries(BaseStreaming):
         sdf["new_col"] = sdf["a_column"]["nested_dict_key"].apply(func, stateful=True)
         sdf["new_col_2"] = sdf["str_col"].apply(lambda v: int(v)) + sdf["str_col2"] + 2
         ```
-        </blockquote>
-
 
         :param func: a callable with one argument and one output
         :return: a new `StreamingSeries` with the new callable added
@@ -144,7 +138,6 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
         ```python
         from quixstreams import Application
 
@@ -158,8 +151,6 @@ class StreamingSeries(BaseStreaming):
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
         ```
-        </blockquote>
-
 
         :param allow_filters: If False, this function will fail with ValueError if
             the stream has filter functions in the tree. Default - True.
@@ -218,17 +209,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "str_column" is contained in a column with a list of strings and
-        assign the resulting `bool` to a new column: "has_my_str".
-
         ```python
         from quixstreams import Application
+
+        # Check if "str_column" is contained in a column with a list of strings and
+        # assign the resulting `bool` to a new column: "has_my_str".
+
         sdf = app.dataframe()
         sdf["has_my_str"] = sdf["str_column"].isin(sdf["column_with_list_of_strs"])
         ```
-        </blockquote>
-
 
         :param other: a container to check
         :return: new StreamingSeries
@@ -247,17 +236,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" contains "my_substring" and assign the resulting
-        `bool` to a new column: "has_my_substr".
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" contains "my_substring" and assign the resulting
+        # `bool` to a new column: "has_my_substr"
+
         sdf = app.dataframe()
         sdf["has_my_substr"] = sdf["column_a"].contains("my_substring")
         ```
-        </blockquote>
-
 
         :param other: object to check
         :return: new StreamingSeries
@@ -273,17 +260,14 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is the same as "column_b" and assign the resulting `bool`
-        to a new column: "is_same"
-
         ```python
+        # Check if "column_a" is the same as "column_b" and assign the resulting `bool`
+        #  to a new column: "is_same"
+
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["is_same"] = sdf["column_a"].is_(sdf["column_b"])
         ```
-        </blockquote>
-
 
         :param other: object to check for "is"
         :return: new StreamingSeries
@@ -299,18 +283,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is the same as "column_b" and assign the resulting `bool`
-        to a new column: "is_not_same"
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" is the same as "column_b" and assign the resulting `bool`
+        # to a new column: "is_not_same"
+
         sdf = app.dataframe()
         sdf["is_not_same"] = sdf["column_a"].isnot(sdf["column_b"])
         ```
-        </blockquote>
-
-
 
         :param other: object to check for "is_not"
         :return: new StreamingSeries
@@ -326,18 +307,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is null and assign the resulting `bool` to a new column:
-        "is_null"
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" is null and assign the resulting `bool` to a new column:
+        # "is_null"
+
         sdf = app.dataframe()
         sdf["is_null"] = sdf["column_a"].isnull()
         ```
-        </blockquote>
-
-
 
         :return: new StreamingSeries
         """
@@ -352,17 +330,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is not null and assign the resulting `bool` to a new column:
-        "is_not_null"
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" is not null and assign the resulting `bool` to a new column:
+        # "is_not_null"
+
         sdf = app.dataframe()
         sdf["is_not_null"] = sdf["column_a"].notnull()
         ```
-        </blockquote>
-
 
         :return: new StreamingSeries
         """
@@ -375,17 +351,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Get absolute value of "int_col" and add it to "other_int_col". Finally, assign
-        the result to a new column: "abs_col_sum".
-
         ```python
         from quixstreams import Application
+
+        # Get absolute value of "int_col" and add it to "other_int_col".
+        # Finally, assign the result to a new column: "abs_col_sum".
+
         sdf = app.dataframe()
         sdf["abs_col_sum"] = sdf["int_col"].abs() + sdf["other_int_col"]
         ```
-        </blockquote>
-
 
         :return: new StreamingSeries
         """

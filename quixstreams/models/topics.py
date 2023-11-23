@@ -81,14 +81,12 @@ class Topic:
 
         Example Snippet:
 
-        <blockquote>
-        Specify an input and output topic for a `StreamingDataFrame` instance,
-        where the output topic requires adjusting the key serializer.
-
         ```python
         from quixstreams.dataframe import StreamingDataFrame
         from quixstreams.models import Topic, JSONSerializer
 
+        # Specify an input and output topic for a `StreamingDataFrame` instance,
+        # where the output topic requires adjusting the key serializer.
         input_topic = Topic("input-topic", value_deserializer="json")
         output_topic = Topic(
             "output-topic", key_serializer="str", value_serializer=JSONSerializer()
@@ -96,7 +94,6 @@ class Topic:
         sdf = StreamingDataFrame(input_topic)
         sdf.to_topic(output_topic)
         ```
-        </blockquote>
 
 
         :param name: topic name

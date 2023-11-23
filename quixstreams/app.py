@@ -63,11 +63,11 @@ class Application:
 
     Example Snippet:
 
-    <blockquote>
-    Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-    add some operations to `sdf` and then run everything.
     ```python
     from quixstreams import Application
+
+    # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+    #     add some operations to `sdf` and then run everything.
 
     app = Application(broker_address='localhost:9092', consumer_group='group')
     topic = app.topic('test-topic')
@@ -76,7 +76,6 @@ class Application:
 
     app.run(dataframe=df)
     ```
-    </blockquote>
     """
 
     def __init__(
@@ -212,13 +211,12 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
-        add some operations to `sdf` and then run everything. Also shows off how to
-        use the quix-specific serializers and deserializers.
-
         ```python
         from quixstreams import Application
+
+        # Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything. Also shows off how to
+        # use the quix-specific serializers and deserializers.
 
         app = Application.Quix()
         input_topic = app.topic("topic-in", value_deserializer="quix")
@@ -228,8 +226,6 @@ class Application:
 
         app.run(dataframe=df)
         ```
-        </blockquote>
-
 
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -337,12 +333,11 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Specify an input and output topic for a `StreamingDataFrame` instance,
-        where the output topic requires adjusting the key serializer.
-
         ```python
         from quixstreams import Application
+
+        # Specify an input and output topic for a `StreamingDataFrame` instance,
+        # where the output topic requires adjusting the key serializer.
 
         app = Application()
         input_topic = app.topic("input-topic", value_deserializer="json")
@@ -352,8 +347,6 @@ class Application:
         sdf = app.dataframe(input_topic)
         sdf.to_topic(output_topic)
         ```
-        </blockquote>
-
 
         :param name: topic name
             >***NOTE:*** If the application is created via `Quix.Application()`,
@@ -397,12 +390,11 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-        add some operations to `sdf` and then run everything.
-
         ```python
         from quixstreams import Application
+
+        # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything.
 
         app = Application(broker_address='localhost:9092', consumer_group='group')
         topic = app.topic('test-topic')
@@ -411,7 +403,6 @@ class Application:
 
         app.run(dataframe=df)
         ```
-        </blockquote>
 
 
         :param topic: a `quixstreams.models.Topic` instance
@@ -476,12 +467,11 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-        add some operations to `sdf` and then run everything.
-
         ```python
         from quixstreams import Application
+
+        # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything.
 
         app = Application(broker_address='localhost:9092', consumer_group='group')
         topic = app.topic('test-topic')
@@ -490,8 +480,6 @@ class Application:
 
         app.run(dataframe=df)
         ```
-        </blockquote>
-
 
         :param dataframe: instance of `StreamingDataFrame`
         """

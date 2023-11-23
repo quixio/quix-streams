@@ -62,18 +62,12 @@ class StreamingDataFrame(BaseStreaming):
 
     Example Snippet:
 
-    <blockquote>
-    Random methods for example purposes. More detailed explanations found under
-    various methods or in the docs folder.
     ```python
     sdf = StreamingDataframe()
     sdf = sdf.apply(a_func)
     sdf = sdf.filter(another_func)
     sdf = sdf.to_topic(topic_obj)
     ```
-    </blockquote>
-
-
     """
 
     def __init__(
@@ -109,12 +103,9 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        This stores a string in state and capitalizes every column with a string value.
-        <br>
-        A second apply then keeps only the string value columns (shows non-stateful).
-
         ```python
+        # This stores a string in state and capitalizes every column with a string value.
+        # A second apply then keeps only the string value columns (shows non-stateful).
         def func(d: dict, state: State):
             value = d["store_field"]
             if value != state.get("my_store_key"):
@@ -126,8 +117,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.apply(lambda d: {k: v for k,v in d.items() if isinstance(v, str)})
 
         ```
-        </blockquote>
-
 
         :param func: a function to apply
         :param stateful: if `True`, the function will be provided with a second argument
@@ -156,12 +145,10 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Stores a value and mutates a list by appending a new item to it.
-        <br>
-        Also prints to console.
-
         ```python
+        # Stores a value and mutates a list by appending a new item to it.
+        # Also prints to console.
+
         def func(values: list, state: State):
             value = values[0]
             if value != state.get("my_store_key"):
@@ -172,7 +159,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.update(func, stateful=True)
         sdf = sdf.update(lambda value: print("Received value: ", value))
         ```
-        </blockquote>
 
         :param func: function to update value
         :param stateful: if `True`, the function will be provided with a second argument
@@ -199,11 +185,10 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Stores a value and allows further processing only if the value is greater than
-        what was previously stored.
-
         ```python
+        # Stores a value and allows further processing only if the value is greater than
+        # what was previously stored.
+
         def func(d: dict, state: State):
             value = d["my_value"]
             if value > state.get("my_store_key"):
@@ -214,7 +199,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = StreamingDataframe()
         sdf = sdf.filter(func, stateful=True)
         ```
-        </blockquote>
 
 
         :param func: function to filter value
@@ -247,15 +231,13 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Add new column 'has_column' which contains a boolean indicating the presence of
-        'column_x'.
-
         ```python
+        # Add new column 'has_column' which contains a boolean indicating
+        # the presence of 'column_x'
+
         sdf = StreamingDataframe()
         sdf['has_column'] = sdf.contains('column_x')
         ```
-        </blockquote>
 
 
         :param key: a column name to check.
@@ -278,14 +260,11 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Produce to two different topics, changing the key for one of them.
-        <br>
-        Uses the Application class (sans arguments) to showcase how you'd commonly
-        use this.
-
         ```python
         from quixstreams import Application
+
+        # Produce to two different topics, changing the key for one of them.
+
         app = Application()
         input_topic = app.topic("input_x")
         output_topic_0 = app.topic("output_a")
@@ -295,7 +274,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.to_topic(output_topic_0)
         sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
         ```
-        </blockquote>
 
         :param topic: instance of `Topic`
         :param key: a callable to generate a new message key, optional.
@@ -321,7 +299,6 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
         ```python
         from quixstreams import Application
         sdf = app.dataframe()
@@ -332,7 +309,6 @@ class StreamingDataFrame(BaseStreaming):
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
         ```
-        </blockquote>
 
 
         :return: a function that accepts "value"
