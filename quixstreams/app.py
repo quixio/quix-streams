@@ -67,7 +67,7 @@ class Application:
     from quixstreams import Application
 
     # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-    #     add some operations to `sdf` and then run everything.
+    # add some operations to `sdf` and then run everything.
 
     app = Application(broker_address='localhost:9092', consumer_group='group')
     topic = app.topic('test-topic')
@@ -122,7 +122,15 @@ class Application:
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
-        <br><br>***Error Handlers***<br>
+        :param loglevel: a log level for "quixstreams" logger.
+            Should be a string or None.
+            If `None` is passed, no logging will be configured.
+            You may pass `None` and configure "quixstreams" logger
+            externally using `logging` library.
+            Default - "INFO".
+
+        ***Error Handlers***
+
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
@@ -133,12 +141,6 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-        :param loglevel: a log level for "quixstreams" logger.
-            Should be a string or None.
-            If `None` is passed, no logging will be configured.
-            You may pass `None` and configure "quixstreams" logger
-            externally using `logging` library.
-            Default - "INFO".
         """
         configure_logging(loglevel=loglevel)
         self._consumer = RowConsumer(
@@ -254,7 +256,9 @@ class Application:
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
             Default - "INFO".
-        <br><br>***Error Handlers***<br>
+
+        ***Error Handlers***
+
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
@@ -265,7 +269,10 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-        <br><br>***Quix-specific Parameters***<br>
+
+
+        ***Quix-specific Parameters***
+
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
         :param auto_create_topics: Whether to auto-create any topics handed to a
