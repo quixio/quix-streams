@@ -311,3 +311,13 @@ class TestStreamingSeries:
 
         with pytest.raises(TypeError, match="bad operand type for abs()"):
             assert result.test({"x": "string"})
+
+    def test_and_is_lazy(self):
+        series = StreamingSeries("x") & StreamingSeries("y")
+        # Ensure it doesn't fail with KeyError ("y" is not present in value)
+        series.test({"x": False})
+
+    def test_or_is_lazy(self):
+        series = StreamingSeries("x") | StreamingSeries("y")
+        # Ensure it doesn't fail with KeyError ("y" is not present in value)
+        series.test({"x": True})
