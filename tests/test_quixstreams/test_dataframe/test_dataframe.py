@@ -224,7 +224,47 @@ class TestStreamingDataFrame:
             sdf.test(invalid_value)
 
 
-class TestDatafTestStreamingDataFrameToTopic:
+class TestStreamingDataFrameApplyExpand:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [(1, [1, 1]), ({"key": "value"}, [{"key": "value"}, {"key": "value"}])],
+    )
+    def test_apply_expand(self, dataframe_factory, value, expected):
+        sdf = dataframe_factory()
+        sdf = sdf.apply(lambda v: [v, v], expand=True)
+        result = sdf.test(value)
+        assert result == expected
+
+    def test_apply_expand_filter(self, dataframe_factory):
+        value = 1
+        expected = [1]
+        sdf = dataframe_factory()
+        sdf = sdf.apply(lambda v: [v, v + 1], expand=True)
+        sdf = sdf[sdf.apply(lambda v: v != 2)]
+        result = sdf.test(value)
+        assert result == expected
+
+    def test_apply_expand_update(self, dataframe_factory):
+        value = {"x": 1}
+        expected = [{"x": 2}, {"x": 2}]
+        sdf = dataframe_factory()
+        sdf = sdf.apply(lambda v: [v, v], expand=True)
+        sdf["x"] = 2
+        result = sdf.test(value)
+        assert result == expected
+
+    def test_apply_expand_as_filter_not_allowed(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with pytest.raises(ValueError, match="Expand functions are not allowed"):
+            sdf["x"] = sdf.apply(lambda v: [v, v], expand=True)
+
+    def test_setitem_expand_not_allowed(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with pytest.raises(ValueError, match="Expand functions are not allowed"):
+            _ = sdf[sdf.apply(lambda v: [v, v], expand=True)]
+
+
+class TestStreamingDataFrameToTopic:
     def test_to_topic(
         self,
         dataframe_factory,
@@ -266,6 +306,53 @@ class TestDatafTestStreamingDataFrameToTopic:
         assert consumed_row.topic == topic.name
         assert consumed_row.key == ctx.key
         assert consumed_row.value == value
+
+    def test_to_topic_apply_expand(
+        self,
+        dataframe_factory,
+        row_consumer_factory,
+        row_producer_factory,
+        topic_factory,
+    ):
+        topic_name, _ = topic_factory()
+        topic = Topic(
+            topic_name,
+            key_deserializer="str",
+            value_serializer="json",
+            value_deserializer="json",
+        )
+        producer = row_producer_factory()
+
+        sdf = dataframe_factory()
+        sdf.producer = producer
+
+        sdf = sdf.apply(lambda v: [v, v], expand=True).to_topic(topic)
+
+        value = {"x": 1, "y": 2}
+        ctx = MessageContext(
+            key="test",
+            topic="test",
+            partition=0,
+            offset=0,
+            size=0,
+            timestamp=MessageTimestamp.create(0, 0),
+        )
+
+        with producer:
+            sdf.test(value, ctx=ctx)
+
+        consumed = []
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic])
+            for _ in range(2):
+                row = consumer.poll_row(timeout=5.0)
+                consumed.append(row)
+
+        assert len(consumed) == 2
+        for row in consumed:
+            assert row.topic == topic.name
+            assert row.key == ctx.key
+            assert row.value == value
 
     def test_to_topic_custom_key(
         self,
@@ -365,7 +452,7 @@ class TestDatafTestStreamingDataFrameToTopic:
             assert consumed_row.key == ctx.key
             assert consumed_row.value == value
 
-    def test_to_topic_no_producer_assigned(self, dataframe_factory, row_factory):
+    def test_to_topic_no_producer_assigned(self, dataframe_factory):
         topic = Topic("test")
 
         sdf = dataframe_factory()
@@ -387,7 +474,7 @@ class TestDatafTestStreamingDataFrameToTopic:
             sdf.test(value, ctx=ctx)
 
 
-class TestDataframeStateful:
+class TestStreamingDataframeStateful:
     def test_apply_stateful(self, dataframe_factory, state_manager):
         topic = Topic("test")
 

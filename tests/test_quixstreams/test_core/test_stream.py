@@ -1,22 +1,26 @@
+from operator import setitem
+
 import pytest
 
 from quixstreams.core.stream import (
     Stream,
     Filtered,
-    is_filter_function,
-    is_update_function,
-    is_apply_function,
+)
+from quixstreams.core.stream.functions import (
+    ApplyFunction,
+    UpdateFunction,
+    FilterFunction,
 )
 
 
 class TestStream:
     def test_add_apply(self):
         stream = Stream().add_apply(lambda v: v + 1)
-        assert stream.compile()(1) == 2
+        assert stream.compose()(1) == 2
 
     def test_add_update(self):
         stream = Stream().add_update(lambda v: v.append(1))
-        assert stream.compile()([0]) == [0, 1]
+        assert stream.compose()([0]) == [0, 1]
 
     @pytest.mark.parametrize(
         "value, filtered",
@@ -30,9 +34,9 @@ class TestStream:
 
         if filtered:
             with pytest.raises(Filtered):
-                stream.compile()(value)
+                stream.compose()(value)
         else:
-            assert stream.compile()(value) == value
+            assert stream.compose()(value) == value
 
     def test_tree(self):
         stream = (
@@ -43,10 +47,10 @@ class TestStream:
         )
         tree = stream.tree()
         assert len(tree) == 4
-        assert is_apply_function(tree[0].func)
-        assert is_apply_function(tree[1].func)
-        assert is_filter_function(tree[2].func)
-        assert is_update_function(tree[3].func)
+        assert isinstance(tree[0].func, ApplyFunction)
+        assert isinstance(tree[1].func, ApplyFunction)
+        assert isinstance(tree[2].func, FilterFunction)
+        assert isinstance(tree[3].func, UpdateFunction)
 
     def test_diff_success(self):
         stream = Stream()
@@ -63,9 +67,9 @@ class TestStream:
 
         diff_tree = diff.tree()
         assert len(diff_tree) == 3
-        assert is_apply_function(diff_tree[0].func)
-        assert is_update_function(diff_tree[1].func)
-        assert is_filter_function(diff_tree[2].func)
+        assert isinstance(diff_tree[0].func, ApplyFunction)
+        assert isinstance(diff_tree[1].func, UpdateFunction)
+        assert isinstance(diff_tree[2].func, FilterFunction)
 
     def test_diff_empty_same_stream_fails(self):
         stream = Stream()
@@ -84,15 +88,15 @@ class TestStream:
         with pytest.raises(ValueError, match="Common parent not found"):
             stream.diff(stream2)
 
-    def test_compile_allow_filters_false(self):
+    def test_compose_allow_filters_false(self):
         stream = Stream().add_filter(lambda v: v)
         with pytest.raises(ValueError, match="Filter functions are not allowed"):
-            stream.compile(allow_filters=False)
+            stream.compose(allow_filters=False)
 
-    def test_compile_allow_updates_false(self):
+    def test_compose_allow_updates_false(self):
         stream = Stream().add_update(lambda v: v)
         with pytest.raises(ValueError, match="Update functions are not allowed"):
-            stream.compile(allow_updates=False)
+            stream.compose(allow_updates=False)
 
     def test_repr(self):
         stream = (
@@ -105,3 +109,66 @@ class TestStream:
 
     def test_init_with_unwrapped_function(self):
         ...
+
+    def test_apply_expand(self):
+        stream = Stream().add_apply(lambda v: [v, v], expand=True)
+        result = stream.compose()(1)
+        assert result == [1, 1]
+
+    def test_apply_expand_not_iterable_returned(self):
+        stream = Stream().add_apply(lambda v: 1, expand=True)
+        with pytest.raises(TypeError):
+            stream.compose()(1)
+
+    def test_apply_expand_multiple(self):
+        stream = (
+            Stream()
+            .add_apply(lambda v: [v + 1, v + 1], expand=True)
+            .add_apply(lambda v: [v, v + 1], expand=True)
+        )
+        assert stream.compose()(1) == [2, 3, 2, 3]
+
+    def test_apply_expand_filter_all_filtered(self):
+        stream = (
+            Stream()
+            .add_apply(lambda v: [v, v], expand=True)
+            .add_apply(lambda v: [v, v], expand=True)
+            .add_filter(lambda v: v != 1)
+        )
+        with pytest.raises(Filtered):
+            assert stream.compose()(1)
+
+    def test_apply_expand_filter_some_filtered(self):
+        stream = (
+            Stream()
+            .add_apply(lambda v: [v, v + 1], expand=True)
+            .add_filter(lambda v: v != 1)
+            .add_apply(lambda v: [v, v], expand=True)
+        )
+        result = stream.compose()(1)
+        assert result == [2, 2]
+
+    def test_apply_expand_update(self):
+        stream = (
+            Stream()
+            .add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
+            .add_update(lambda v: setitem(v, "x", v["x"] + 1))
+        )
+        assert stream.compose()(1) == [
+            {"x": 2},
+            {"x": 3},
+        ]
+
+    def test_apply_expand_update_filter(self):
+        stream = (
+            Stream()
+            .add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
+            .add_update(lambda v: setitem(v, "x", v["x"] + 1))
+            .add_filter(lambda v: v["x"] != 2)
+        )
+        assert stream.compose()(1) == [{"x": 3}]
+
+    def test_compose_allow_expands_false(self):
+        stream = Stream().add_apply(lambda v: [{"x": v}, {"x": v + 1}], expand=True)
+        with pytest.raises(ValueError, match="Expand functions are not allowed"):
+            stream.compose(allow_expands=False)

@@ -320,22 +320,21 @@ class QuixTimeseriesSerializer(QuixSerializer):
     `float`, `bytes` or `bytearray` type.
     Otherwise, the `SerializationError` will be raised.
 
-    Example of the format:
-        Input:
-        ```
-            {'a': 1, 'b': 1.1, 'c': "string", 'd': b'bytes', 'Tags': {'tag1': 'tag'}}
-        ```
+    Input:
+    ```python
+    {'a': 1, 'b': 1.1, 'c': "string", 'd': b'bytes', 'Tags': {'tag1': 'tag'}}
+    ```
 
-        Output:
-        ```
-        {
-            "Timestamps" [123123123],
-            "NumericValues: {"a": [1], "b": [1.1]},
-            "StringValues": {"c": ["string"]},
-            "BinaryValues: {"d": ["Ynl0ZXM="]},
-            "TagValues": {"tag1": ["tag']}
-        }
-        ```
+    Output:
+    ```json
+    {
+        "Timestamps": [123123123],
+        "NumericValues": {"a": [1], "b": [1.1]},
+        "StringValues": {"c": ["string"]},
+        "BinaryValues": {"d": ["Ynl0ZXM="]},
+        "TagValues": {"tag1": ["tag"]}
+    }
+    ```
 
     """
 
@@ -409,27 +408,26 @@ class QuixEventsSerializer(QuixSerializer):
         - "Value" (type `str`, default - ""),
         - "Tags" (type `dict`, default - {})
 
-    Note: All the other fields will be ignored.
+    >***NOTE:*** All the other fields will be ignored.
 
-    Example:
-        Input:
-        ```
-        {
-            "Id": "an_event",
-            "Value": "any_string"
-            "Tags": {"tag1": "tag"}},
-        }
-        ```
+    Input:
+    ```python
+    {
+        "Id": "an_event",
+        "Value": "any_string",
+        "Tags": {"tag1": "tag"}}
+    }
+    ```
 
-        Output:
-        ```
-        {
-            "Id": "an_event",
-            "Value": "any_string",
-            "Tags": {"tag1": "tag"}},
-            "Timestamp":1692703362840389000
-        }
-        ```
+    Output:
+    ```json
+    {
+        "Id": "an_event",
+        "Value": "any_string",
+        "Tags": {"tag1": "tag"}},
+        "Timestamp":1692703362840389000
+    }
+    ```
     """
 
     # Quix EventData data must have the following headers set

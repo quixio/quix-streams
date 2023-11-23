@@ -62,18 +62,12 @@ class StreamingDataFrame(BaseStreaming):
 
     Example Snippet:
 
-    <blockquote>
-    Random methods for example purposes. More detailed explanations found under
-    various methods or in the docs folder.
     ```python
     sdf = StreamingDataframe()
     sdf = sdf.apply(a_func)
     sdf = sdf.filter(another_func)
     sdf = sdf.to_topic(topic_obj)
     ```
-    </blockquote>
-
-
     """
 
     def __init__(
@@ -96,7 +90,10 @@ class StreamingDataFrame(BaseStreaming):
         return self._topic
 
     def apply(
-        self, func: Union[DataFrameFunc, DataFrameStatefulFunc], stateful: bool = False
+        self,
+        func: Union[DataFrameFunc, DataFrameStatefulFunc],
+        stateful: bool = False,
+        expand: bool = False,
     ) -> Self:
         """
         Apply a function to transform the value and return a new value.
@@ -106,12 +103,9 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        This stores a string in state and capitalizes every column with a string value.
-        <br>
-        A second apply then keeps only the string value columns (shows non-stateful).
-
         ```python
+        # This stores a string in state and capitalizes every column with a string value.
+        # A second apply then keeps only the string value columns (shows non-stateful).
         def func(d: dict, state: State):
             value = d["store_field"]
             if value != state.get("my_store_key"):
@@ -123,18 +117,19 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.apply(lambda d: {k: v for k,v in d.items() if isinstance(v, str)})
 
         ```
-        </blockquote>
-
 
         :param func: a function to apply
         :param stateful: if `True`, the function will be provided with a second argument
             of type `State` to perform stateful operations.
+        :param expand: if True, expand the returned iterable into individual values
+            downstream. If returned value is not iterable, `TypeError` will be raised.
+            Default - `False`.
         """
         if stateful:
             self._register_store()
             func = _as_stateful(func=func, state_manager=self._state_manager)
 
-        stream = self.stream.add_apply(func)
+        stream = self.stream.add_apply(func, expand=expand)
         return self._clone(stream=stream)
 
     def update(
@@ -150,12 +145,10 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Stores a value and mutates a list by appending a new item to it.
-        <br>
-        Also prints to console.
-
         ```python
+        # Stores a value and mutates a list by appending a new item to it.
+        # Also prints to console.
+
         def func(values: list, state: State):
             value = values[0]
             if value != state.get("my_store_key"):
@@ -166,7 +159,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.update(func, stateful=True)
         sdf = sdf.update(lambda value: print("Received value: ", value))
         ```
-        </blockquote>
 
         :param func: function to update value
         :param stateful: if `True`, the function will be provided with a second argument
@@ -193,11 +185,10 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Stores a value and allows further processing only if the value is greater than
-        what was previously stored.
-
         ```python
+        # Stores a value and allows further processing only if the value is greater than
+        # what was previously stored.
+
         def func(d: dict, state: State):
             value = d["my_value"]
             if value > state.get("my_store_key"):
@@ -208,7 +199,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = StreamingDataframe()
         sdf = sdf.filter(func, stateful=True)
         ```
-        </blockquote>
 
 
         :param func: function to filter value
@@ -241,20 +231,18 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Add new column 'has_column' which contains a boolean indicating the presence of
-        'column_x'.
-
         ```python
+        # Add new column 'has_column' which contains a boolean indicating
+        # the presence of 'column_x'
+
         sdf = StreamingDataframe()
         sdf['has_column'] = sdf.contains('column_x')
         ```
-        </blockquote>
 
 
         :param key: a column name to check.
-        :returns: a Column object that evaluates to True if the key is present or
-        False otherwise.
+        :returns: a Column object that evaluates to True if the key is present
+            or False otherwise.
         """
 
         return StreamingSeries.from_func(lambda value: key in value)
@@ -272,14 +260,11 @@ class StreamingDataFrame(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Produce to two different topics, changing the key for one of them.
-        <br>
-        Uses the Application class (sans arguments) to showcase how you'd commonly
-        use this.
-
         ```python
         from quixstreams import Application
+
+        # Produce to two different topics, changing the key for one of them.
+
         app = Application()
         input_topic = app.topic("input_x")
         output_topic_0 = app.topic("output_a")
@@ -289,7 +274,6 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.to_topic(output_topic_0)
         sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
         ```
-        </blockquote>
 
         :param topic: instance of `Topic`
         :param key: a callable to generate a new message key, optional.
@@ -302,40 +286,35 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: self._produce(topic, value, key=key(value) if key else None)
         )
 
-    def compile(self) -> StreamCallable:
+    def compose(self) -> StreamCallable:
         """
-        Compile all functions of this StreamingDataFrame into one big closure.
+        Compose all functions of this StreamingDataFrame into one big closure.
 
         Closures are more performant than calling all the functions in the
         `StreamingDataFrame` one-by-one.
 
         Generally not required by users; the `quixstreams.app.Application` class will
-        compile automatically for you (along with calling it with values, of course)!
+        do this automatically.
 
 
         Example Snippet:
-
-        <blockquote>
-        After all sdf commands have been made we then compile, which can then be called
-        with any values we desire to process them.
 
         ```python
         from quixstreams import Application
         sdf = app.dataframe()
         sdf = sdf.apply(apply_func)
         sdf = sdf.filter(filter_func)
-        sdf = sdf.compile()
+        sdf = sdf.compose()
 
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
         ```
-        </blockquote>
 
 
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return self.stream.compile()
+        return self.stream.compose()
 
     def test(self, value: object, ctx: Optional[MessageContext] = None) -> Any:
         """
@@ -352,8 +331,8 @@ class StreamingDataFrame(BaseStreaming):
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        compiled = self.compile()
-        return context.run(compiled, value)
+        composed = self.compose()
+        return context.run(composed, value)
 
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(
@@ -378,14 +357,16 @@ class StreamingDataFrame(BaseStreaming):
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
             diff = self.stream.diff(value.stream)
-            diff_compiled = diff.compile(allow_filters=False, allow_updates=False)
+            diff_composed = diff.compose(
+                allow_filters=False, allow_updates=False, allow_expands=False
+            )
             stream = self.stream.add_update(
-                lambda v: operator.setitem(v, key, diff_compiled(v))
+                lambda v: operator.setitem(v, key, diff_composed(v))
             )
         elif isinstance(value, StreamingSeries):
-            value_compiled = value.compile(allow_filters=False, allow_updates=False)
+            value_composed = value.compose(allow_filters=False, allow_updates=False)
             stream = self.stream.add_update(
-                lambda v: operator.setitem(v, key, value_compiled(v))
+                lambda v: operator.setitem(v, key, value_composed(v))
             )
         else:
             stream = self.stream.add_update(lambda v: operator.setitem(v, key, value))
@@ -396,13 +377,15 @@ class StreamingDataFrame(BaseStreaming):
     ) -> Union[Self, StreamingSeries]:
         if isinstance(item, StreamingSeries):
             # Filter SDF based on StreamingSeries
-            item_compiled = item.compile(allow_filters=False, allow_updates=False)
-            return self.filter(lambda v: item_compiled(v))
+            item_composed = item.compose(allow_filters=False, allow_updates=False)
+            return self.filter(lambda v: item_composed(v))
         elif isinstance(item, self.__class__):
             # Filter SDF based on another SDF
             diff = self.stream.diff(item.stream)
-            diff_compiled = diff.compile(allow_filters=False, allow_updates=False)
-            return self.filter(lambda v: diff_compiled(v))
+            diff_composed = diff.compose(
+                allow_filters=False, allow_updates=False, allow_expands=False
+            )
+            return self.filter(lambda v: diff_composed(v))
         elif isinstance(item, list):
             # Take only certain keys from the dict and return a new dict
             return self.apply(lambda v: {k: v[k] for k in item})

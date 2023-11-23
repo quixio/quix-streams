@@ -5,7 +5,7 @@ from typing import Optional, Union, Callable, Container, Any
 from typing_extensions import Self
 
 from quixstreams.context import set_message_context
-from quixstreams.core.stream.functions import StreamCallable, Apply
+from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
@@ -29,9 +29,9 @@ class StreamingSeries(BaseStreaming):
     What it Does:
 
     - Allows ways to do simple operations with dataframe "column"/dictionary values:
-        - Basic ops like add, subtract, modulo, etc
+        - Basic ops like add, subtract, modulo, etc.
     - Enables comparisons/inequalities:
-        - Greater than, equals, etc
+        - Greater than, equals, etc.
         - and/or, is/not operations
     - Can check for existence of columns in `StreamingDataFrames`
     - Enables chaining of various operations together
@@ -51,17 +51,16 @@ class StreamingSeries(BaseStreaming):
 
     Example Snippet:
 
-    <blockquote>
-    Random methods for example purposes. More detailed explanations found under
-    various methods or in the docs folder.
     ```python
+    # Random methods for example purposes. More detailed explanations found under
+    # various methods or in the docs folder.
+
     sdf = StreamingDataframe()
     sdf = sdf["column_a"].apply(a_func).apply(diff_func, stateful=True)
     sdf["my_new_bool_field"] = sdf["column_b"].contains("this_string")
     sdf["new_sum_field"] = sdf["column_c"] + sdf["column_d"] + 2
     sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
     ```
-    </blockquote>
     """
 
     def __init__(
@@ -71,7 +70,7 @@ class StreamingSeries(BaseStreaming):
     ):
         if not (name or stream):
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=Apply(lambda v: v[name]))
+        self._stream = stream or Stream(func=ApplyFunction(lambda v: v[name]))
 
     @classmethod
     def from_func(cls, func: StreamCallable) -> Self:
@@ -82,7 +81,7 @@ class StreamingSeries(BaseStreaming):
         :param func: a function to apply
         :return: instance of `StreamingSeries`
         """
-        return cls(stream=Stream(Apply(func)))
+        return cls(stream=Stream(ApplyFunction(func)))
 
     @property
     def stream(self) -> Stream:
@@ -100,15 +99,12 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        The `StreamingSeries` are generated when `sdf["COLUMN_NAME"]` is called.
-        <br>
-        This stores a string in state and capitalizes the column value; the result is
-        assigned to a new column.
-        <br>
-        Another apply converts a str column to an int, assigning it to a new column.
-
         ```python
+        # The `StreamingSeries` are generated when `sdf["COLUMN_NAME"]` is called.
+        # This stores a string in state and capitalizes the column value; the result is
+        # assigned to a new column.
+        #  Another apply converts a str column to an int, assigning it to a new column.
+
         def func(value: str, state: State):
             if value != state.get("my_store_key"):
                 state.set("my_store_key") = value
@@ -118,8 +114,6 @@ class StreamingSeries(BaseStreaming):
         sdf["new_col"] = sdf["a_column"]["nested_dict_key"].apply(func, stateful=True)
         sdf["new_col_2"] = sdf["str_col"].apply(lambda v: int(v)) + sdf["str_col2"] + 2
         ```
-        </blockquote>
-
 
         :param func: a callable with one argument and one output
         :return: a new `StreamingSeries` with the new callable added
@@ -127,42 +121,36 @@ class StreamingSeries(BaseStreaming):
         child = self._stream.add_apply(func)
         return self.__class__(stream=child)
 
-    def compile(
+    def compose(
         self,
         allow_filters: bool = True,
         allow_updates: bool = True,
     ) -> StreamCallable:
         """
-        Compile all functions of this StreamingSeries into one big closure.
+        Compose all functions of this StreamingSeries into one big closure.
 
         Closures are more performant than calling all the functions in the
         `StreamingDataFrame` one-by-one.
 
         Generally not required by users; the `quixstreams.app.Application` class will
-        compile automatically for you (along with calling it with values, of course)!
+        do this automatically.
 
 
         Example Snippet:
 
-        <blockquote>
-        After all sdf commands have been made we then compile, which can then be called
-        with any values we desire to process them.
-
-        When calling `.compile()` on the `StreamingDataFrame`, it calls `.compile()`
-        on all subsequently generated `StreamingSeries`.
-
         ```python
         from quixstreams import Application
+
+        app = Application(...)
+
         sdf = app.dataframe()
         sdf = sdf["column_a"].apply(apply_func)
         sdf = sdf["column_b"].contains(filter_func)
-        sdf = sdf.compile()
+        sdf = sdf.compose()
 
         result_0 = sdf({"my": "record"})
         result_1 = sdf({"other": "record"})
         ```
-        </blockquote>
-
 
         :param allow_filters: If False, this function will fail with ValueError if
             the stream has filter functions in the tree. Default - True.
@@ -173,10 +161,10 @@ class StreamingSeries(BaseStreaming):
             underlying `Stream`.
 
         :return: a function that accepts "value"
-            and returns a result of StreamingDataFrame
+            and returns a result of `StreamingSeries`
         """
 
-        return self._stream.compile(
+        return self._stream.compose(
             allow_filters=allow_filters, allow_updates=allow_updates
         )
 
@@ -194,21 +182,21 @@ class StreamingSeries(BaseStreaming):
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        compiled = self.compile()
-        return context.run(compiled, value)
+        composed = self.compose()
+        return context.run(composed, value)
 
     def _operation(
         self, other: Union[Self, object], operator_: Callable[[object, object], object]
     ) -> Self:
-        self_compiled = self.compile()
+        self_composed = self.compose()
         if isinstance(other, self.__class__):
-            other_compiled = other.compile()
+            other_composed = other.compose()
             return self.from_func(
-                func=lambda v, op=operator_: op(self_compiled(v), other_compiled(v))
+                func=lambda v, op=operator_: op(self_composed(v), other_composed(v))
             )
         else:
             return self.from_func(
-                func=lambda v, op=operator_: op(self_compiled(v), other)
+                func=lambda v, op=operator_: op(self_composed(v), other)
             )
 
     def isin(self, other: Container) -> Self:
@@ -221,17 +209,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "str_column" is contained in a column with a list of strings and
-        assign the resulting `bool` to a new column: "has_my_str".
-
         ```python
         from quixstreams import Application
+
+        # Check if "str_column" is contained in a column with a list of strings and
+        # assign the resulting `bool` to a new column: "has_my_str".
+
         sdf = app.dataframe()
         sdf["has_my_str"] = sdf["str_column"].isin(sdf["column_with_list_of_strs"])
         ```
-        </blockquote>
-
 
         :param other: a container to check
         :return: new StreamingSeries
@@ -250,17 +236,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" contains "my_substring" and assign the resulting
-        `bool` to a new column: "has_my_substr".
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" contains "my_substring" and assign the resulting
+        # `bool` to a new column: "has_my_substr"
+
         sdf = app.dataframe()
         sdf["has_my_substr"] = sdf["column_a"].contains("my_substring")
         ```
-        </blockquote>
-
 
         :param other: object to check
         :return: new StreamingSeries
@@ -276,17 +260,14 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is the same as "column_b" and assign the resulting `bool`
-        to a new column: "is_same"
-
         ```python
+        # Check if "column_a" is the same as "column_b" and assign the resulting `bool`
+        #  to a new column: "is_same"
+
         from quixstreams import Application
         sdf = app.dataframe()
         sdf["is_same"] = sdf["column_a"].is_(sdf["column_b"])
         ```
-        </blockquote>
-
 
         :param other: object to check for "is"
         :return: new StreamingSeries
@@ -302,18 +283,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is the same as "column_b" and assign the resulting `bool`
-        to a new column: "is_not_same"
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" is the same as "column_b" and assign the resulting `bool`
+        # to a new column: "is_not_same"
+
         sdf = app.dataframe()
         sdf["is_not_same"] = sdf["column_a"].isnot(sdf["column_b"])
         ```
-        </blockquote>
-
-
 
         :param other: object to check for "is_not"
         :return: new StreamingSeries
@@ -329,18 +307,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is null and assign the resulting `bool` to a new column:
-        "is_null"
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" is null and assign the resulting `bool` to a new column:
+        # "is_null"
+
         sdf = app.dataframe()
         sdf["is_null"] = sdf["column_a"].isnull()
         ```
-        </blockquote>
-
-
 
         :return: new StreamingSeries
         """
@@ -355,17 +330,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Check if "column_a" is not null and assign the resulting `bool` to a new column:
-        "is_not_null"
-
         ```python
         from quixstreams import Application
+
+        # Check if "column_a" is not null and assign the resulting `bool` to a new column:
+        # "is_not_null"
+
         sdf = app.dataframe()
         sdf["is_not_null"] = sdf["column_a"].notnull()
         ```
-        </blockquote>
-
 
         :return: new StreamingSeries
         """
@@ -378,17 +351,15 @@ class StreamingSeries(BaseStreaming):
 
         Example Snippet:
 
-        <blockquote>
-        Get absolute value of "int_col" and add it to "other_int_col". Finally, assign
-        the result to a new column: "abs_col_sum".
-
         ```python
         from quixstreams import Application
+
+        # Get absolute value of "int_col" and add it to "other_int_col".
+        # Finally, assign the result to a new column: "abs_col_sum".
+
         sdf = app.dataframe()
         sdf["abs_col_sum"] = sdf["int_col"].abs() + sdf["other_int_col"]
         ```
-        </blockquote>
-
 
         :return: new StreamingSeries
         """
@@ -438,7 +409,18 @@ class StreamingSeries(BaseStreaming):
             a bitwise "and" if one of the arguments is a number.
             This function always does a logical "and" instead.
         """
-        return self._operation(other, lambda x, y: x and y)
+
+        # Do the "and" check manually instead of calling `self._operation`
+        # to preserve Python's lazy evaluation of `and`.
+        # Otherwise, it always evaluates both left and right side of the expression
+        # to compute the result which is not always desired.
+        # See https://docs.python.org/3/reference/expressions.html#boolean-operations
+        self_composed = self.compose()
+        if isinstance(other, self.__class__):
+            other_composed = other.compose()
+            return self.from_func(func=lambda v: self_composed(v) and other_composed(v))
+        else:
+            return self.from_func(func=lambda v: self_composed(v) and other)
 
     def __or__(self, other: object) -> Self:
         """
@@ -448,7 +430,18 @@ class StreamingSeries(BaseStreaming):
             a bitwise "or" if one of the arguments is a number.
             This function always does a logical "or" instead.
         """
-        return self._operation(other, lambda x, y: x or y)
+
+        # Do the "or" check manually instead of calling `self._operation`
+        # to preserve Python's lazy evaluation of `or`.
+        # Otherwise, it always evaluates both left and right side of the expression
+        # to compute the result which is not always desired.
+        # See https://docs.python.org/3/reference/expressions.html#boolean-operations
+        self_composed = self.compose()
+        if isinstance(other, self.__class__):
+            other_composed = other.compose()
+            return self.from_func(func=lambda v: self_composed(v) or other_composed(v))
+        else:
+            return self.from_func(func=lambda v: self_composed(v) or other)
 
     def __invert__(self) -> Self:
         """

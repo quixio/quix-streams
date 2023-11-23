@@ -2,784 +2,509 @@
 
 ## quixstreams
 
-<a id="quixstreams.core"></a>
+<a id="quixstreams.logging"></a>
 
-## quixstreams.core
+## quixstreams.logging
 
-<a id="quixstreams.core.stream"></a>
+<a id="quixstreams.logging.configure_logging"></a>
 
-## quixstreams.core.stream
-
-<a id="quixstreams.core.stream.functions"></a>
-
-## quixstreams.core.stream.functions
-
-<a id="quixstreams.core.stream.functions.Filter"></a>
-
-#### Filter
+#### configure\_logging
 
 ```python
-def Filter(func: Callable[[T], SupportsBool]) -> StreamCallable
+def configure_logging(loglevel: Optional[LogLevel]) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/functions.py#L65)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/logging.py#L24)
 
-Wraps function into a "Filter" function.
+Configure "quixstreams" logger.
 
-The result of a Filter function is interpreted as boolean.
-If it's `True`, the input will be return downstream.
-If it's `False`, the `Filtered` exception will be raised to signal that the
-value is filtered out.
+>***NOTE:*** If "quixstreams" logger already has pre-defined handlers
+(e.g. logging has already been configured via `logging`, or the function
+is called twice), it will skip configuration and return `False`.
 
 **Arguments**:
 
-- `func`: a function to filter value
+- `loglevel`: a valid log level as a string or None.
+If None passed, this function is no-op and no logging will be configured.
 
 **Returns**:
 
-a Filter function
+True if logging config has been updated, otherwise False.
 
-<a id="quixstreams.core.stream.functions.Update"></a>
+<a id="quixstreams.error_callbacks"></a>
 
-#### Update
+## quixstreams.error\_callbacks
+
+<a id="quixstreams.platforms"></a>
+
+## quixstreams.platforms
+
+<a id="quixstreams.platforms.quix.config"></a>
+
+## quixstreams.platforms.quix.config
+
+<a id="quixstreams.platforms.quix.config.TopicCreationConfigs"></a>
+
+### TopicCreationConfigs
 
 ```python
-def Update(func: StreamCallable) -> StreamCallable
+@dataclasses.dataclass
+class TopicCreationConfigs()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/functions.py#L88)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L24)
 
-Wrap a function into "Update" function.
+<a id="quixstreams.platforms.quix.config.TopicCreationConfigs.name"></a>
 
-The provided function is expected to mutate the value.
-Its result will always be ignored, and its input is passed
-downstream.
+#### name
+
+Required when not created by a Quix App.
+
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder"></a>
+
+### QuixKafkaConfigsBuilder
+
+```python
+class QuixKafkaConfigsBuilder()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L33)
+
+Retrieves all the necessary information from the Quix API and builds all the
+objects required to connect a confluent-kafka client to the Quix Platform.
+
+If not executed within the Quix platform directly, you must provide a Quix
+"streaming" (aka "sdk") token, or Personal Access Token.
+
+Ideally you also know your workspace name or id. If not, you can search for it
+using a known topic name, but note the search space is limited to the access level
+of your token.
+
+It also currently handles the app_auto_create_topics setting for Application.Quix.
+
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.__init__"></a>
+
+#### QuixKafkaConfigsBuilder.\_\_init\_\_
+
+```python
+def __init__(quix_portal_api_service: Optional[QuixPortalApiService] = None,
+             workspace_id: Optional[str] = None,
+             workspace_cert_path: Optional[str] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L49)
 
 **Arguments**:
 
-- `func`: a function to mutate values
+- `quix_portal_api_service`: A QuixPortalApiService instance (else generated)
+- `workspace_id`: A valid Quix Workspace ID (else searched for)
+- `workspace_cert_path`: path to an existing workspace cert (else retrieved)
 
-**Returns**:
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.append_workspace_id"></a>
 
-an Update function
-
-<a id="quixstreams.core.stream.functions.Apply"></a>
-
-#### Apply
+#### QuixKafkaConfigsBuilder.append\_workspace\_id
 
 ```python
-def Apply(func: StreamCallable) -> StreamCallable
+def append_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/functions.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L149)
 
-Wrap a function into "Apply" function.
-
-The provided function is expected to return a new value based on input,
-and its result will always be passed downstream.
+Add the workspace ID to a given string, typically a topic or consumer group id
 
 **Arguments**:
 
-- `func`: a function to generate a new value
+- `s`: the string to append to
 
 **Returns**:
 
-an Apply function
+the string with workspace_id appended
 
-<a id="quixstreams.core.stream.stream"></a>
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.search_for_workspace"></a>
 
-## quixstreams.core.stream.stream
-
-<a id="quixstreams.core.stream.stream.Stream"></a>
-
-### Stream
+#### QuixKafkaConfigsBuilder.search\_for\_workspace
 
 ```python
-class Stream()
+def search_for_workspace(
+        workspace_name_or_id: Optional[str] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L16)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L158)
 
-<a id="quixstreams.core.stream.stream.Stream.__init__"></a>
-
-#### Stream.\_\_init\_\_
-
-```python
-def __init__(func: Optional[Callable[[Any], Any]] = None,
-             parent: Optional[Self] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L17)
-
-A base class for all streaming operations.
-
-`Stream` is an abstraction of a function pipeline.
-Each Stream has a function and a parent (None by default).
-When adding new function to the stream, it creates a new `Stream` object and
-sets "parent" to the previous `Stream` to maintain an order of execution.
-
-Streams supports 3 types of functions:
-- "Apply" - generate new values based on a previous one.
-    The result of an Apply function is passed downstream to the next functions.
-- "Update" - update values in-place.
-    The result of an Update function is always ignored, and its input is passed
-    downstream.
-- "Filter" - to filter values from the Stream.
-    The result of a Filter function is interpreted as boolean.
-    If it's `True`, the input will be passed downstream.
-    If it's `False`, the `Filtered` exception will be raised to signal that the
-    value is filtered out.
-
-To execute functions accumulated on the `Stream` instance, it must be compiled
-using `.compile()` method, which returns a function closure executing all the
-functions in the tree.
+Search for a workspace given an expected workspace name or id.
 
 **Arguments**:
 
-- `func`: a function to be called on the stream.
-It is expected to be wrapped into one of "Apply", "Filter" or "Update" from
-`quixstreams.core.stream.functions` package.
-Default - "Apply(lambda v: v)".
-- `parent`: a parent `Stream`
+- `workspace_name_or_id`: the expected name or id of a workspace
 
-<a id="quixstreams.core.stream.stream.Stream.add_filter"></a>
+**Returns**:
 
-#### Stream.add\_filter
+the workspace data dict if search success, else None
+
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_workspace_info"></a>
+
+#### QuixKafkaConfigsBuilder.get\_workspace\_info
 
 ```python
-def add_filter(func: Callable[[T], R]) -> Self
+def get_workspace_info(known_workspace_topic: Optional[str] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L181)
 
-Add a function to filter values from the Stream.
+Queries for workspace data from the Quix API, regardless of instance cache,
 
-The return value of the function will be interpreted as `bool`.
-If the function returns `False`-like result, the Stream will raise `Filtered`
-exception during execution.
+and updates instance attributes from query result.
 
 **Arguments**:
 
-- `func`: a function to filter values from the stream
+- `known_workspace_topic`: a topic you know to exist in some workspace
 
-**Returns**:
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.search_workspace_for_topic"></a>
 
-a new `Stream` derived from the current one
-
-<a id="quixstreams.core.stream.stream.Stream.add_apply"></a>
-
-#### Stream.add\_apply
+#### QuixKafkaConfigsBuilder.search\_workspace\_for\_topic
 
 ```python
-def add_apply(func: Callable[[T], R]) -> Self
+def search_workspace_for_topic(workspace_id: str, topic: str) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L208)
 
-Add an "apply" function to the Stream.
+Search through all the topics in the given workspace id to see if there is a
 
-The function is supposed to return a new value, which will be passed
-further during execution.
+match with the provided topic.
 
 **Arguments**:
 
-- `func`: a function to generate a new value
+- `workspace_id`: the workspace to search in
+- `topic`: the topic to search for
 
 **Returns**:
 
-a new `Stream` derived from the current one
+the workspace_id if success, else None
 
-<a id="quixstreams.core.stream.stream.Stream.add_update"></a>
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.search_for_topic_workspace"></a>
 
-#### Stream.add\_update
+#### QuixKafkaConfigsBuilder.search\_for\_topic\_workspace
 
 ```python
-def add_update(func: Callable[[T], object]) -> Self
+def search_for_topic_workspace(topic: str) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L224)
 
-Add an "update" function to the Stream, that will mutate the input value.
+Find what workspace a topic belongs to.
 
-The return of this function will be ignored and its input
-will be passed downstream.
+If there is only one workspace altogether, it is assumed to be the workspace.
+More than one means each workspace will be searched until the first hit.
 
 **Arguments**:
 
-- `func`: a function to mutate the value
+- `topic`: the topic to search for
 
 **Returns**:
 
-a new Stream derived from the current one
+workspace data dict if topic search success, else None
 
-<a id="quixstreams.core.stream.stream.Stream.diff"></a>
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_workspace_ssl_cert"></a>
 
-#### Stream.diff
+#### QuixKafkaConfigsBuilder.get\_workspace\_ssl\_cert
 
 ```python
-def diff(other: "Stream") -> Self
+def get_workspace_ssl_cert(extract_to_folder: Optional[Path] = None) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L119)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L245)
 
-Takes the difference between Streams `self` and `other` based on their last
+Gets and extracts zipped certificate from the API to provided folder.
 
-common parent, and returns a new `Stream` that includes only this difference.
-
-It's impossible to calculate a diff when:
- - Streams don't have a common parent.
- - When the `self` Stream already includes all the nodes from
-    the `other` Stream, and the resulting diff is empty.
+If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
 
 **Arguments**:
 
-- `other`: a `Stream` to take a diff from.
-
-**Raises**:
-
-- `ValueError`: if Streams don't have a common parent
-or if the diff is empty.
+- `extract_to_folder`: path to folder to dump zipped cert file to
 
 **Returns**:
 
-new `Stream` instance including all the Streams from the diff
+full cert filepath as string
 
-<a id="quixstreams.core.stream.stream.Stream.tree"></a>
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.create_topics"></a>
 
-#### Stream.tree
-
-```python
-def tree() -> List[Self]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L148)
-
-Return a list of all parent Streams including the node itself.
-
-The tree is ordered from child to parent (current node comes first).
-
-**Returns**:
-
-a list of `Stream` objects
-
-<a id="quixstreams.core.stream.stream.Stream.compile"></a>
-
-#### Stream.compile
+#### QuixKafkaConfigsBuilder.create\_topics
 
 ```python
-def compile(allow_filters: bool = True,
-            allow_updates: bool = True) -> Callable[[T], R]
+def create_topics(topics: Iterable[TopicCreationConfigs],
+                  finalize_timeout_seconds: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L308)
 
-Compile a list of functions from this `Stream` and its parents into a single
-
-big closure using a "compiler" function.
-
-Closures are more performant than calling all the functions in the
-`Stream.tree()` one-by-one.
+Create topics in a Quix cluster.
 
 **Arguments**:
 
-- `allow_filters`: If False, this function will fail with ValueError if
-the stream has filter functions in the tree. Default - True.
-- `allow_updates`: If False, this function will fail with ValueError if
-the stream has update functions in the tree. Default - True.
+- `topics`: an iterable with TopicCreationConfigs instances
+- `finalize_timeout_seconds`: How long to wait for the topics to be
+marked as "Ready" (and thus ready to produce to/consume from).
 
-**Raises**:
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.confirm_topics_exist"></a>
 
-- `ValueError`: if disallowed functions are present in the stream tree.
-
-<a id="quixstreams.core.stream.stream.compiler"></a>
-
-#### compiler
+#### QuixKafkaConfigsBuilder.confirm\_topics\_exist
 
 ```python
-def compiler(outer_func: Callable[[T], R]) -> Callable[[T], R]
+def confirm_topics_exist(topics: Iterable[Union[Topic, TopicCreationConfigs]])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/core/stream/stream.py#L219)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L354)
 
-A function that wraps two other functions into a closure.
-
-It passes the result of thje inner function as an input to the outer function.
-
-It is used to transform (aka "compile") a list of functions into one large closure
-like this:
-```
-[func, func, func] -> func(func(func()))
-```
-
-**Returns**:
-
-a function with one argument (value)
-
-<a id="quixstreams.dataframe"></a>
-
-## quixstreams.dataframe
-
-<a id="quixstreams.dataframe.base"></a>
-
-## quixstreams.dataframe.base
-
-<a id="quixstreams.dataframe.series"></a>
-
-## quixstreams.dataframe.series
-
-<a id="quixstreams.dataframe.series.StreamingSeries"></a>
-
-### StreamingSeries
-
-```python
-class StreamingSeries(BaseStreaming)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L16)
-
-`StreamingSeries` are typically generated by `StreamingDataframes` when getting
-elements from, or performing certain operations on, a `StreamingDataframe`,
-thus acting as a representation of "column" value.
-
-They share some operations with the `StreamingDataframe`, but also provide some
-additional functionality.
-
-Most column value operations are handled by this class, and `StreamingSeries` can
-generate other `StreamingSeries` as a result of said operations.
-
-
-What it Does:
-
-- Allows ways to do simple operations with dataframe "column"/dictionary values:
-    - Basic ops like add, subtract, modulo, etc
-- Enables comparisons/inequalities:
-    - Greater than, equals, etc
-    - and/or, is/not operations
-- Can check for existence of columns in `StreamingDataFrames`
-- Enables chaining of various operations together
-
-
-How to Use:
-
-For the most part, you may not even notice this class exists!
-They will naturally be created as a result of typical `StreamingDataFrame` use.
-
-Auto-complete should help you with valid methods and type-checking should alert
-you to invalid operations between `StreamingSeries`.
-
-In general, any typical Pands dataframe operation between columns should be valid
-with `StreamingSeries`, and you shouldn't have to think about them explicitly.
-
-
-Example Snippet:
-
-<blockquote>
-Random methods for example purposes. More detailed explanations found under
-various methods or in the docs folder.
-```python
-sdf = StreamingDataframe()
-sdf = sdf["column_a"].apply(a_func).apply(diff_func, stateful=True)
-sdf["my_new_bool_field"] = sdf["column_b"].contains("this_string")
-sdf["new_sum_field"] = sdf["column_c"] + sdf["column_d"] + 2
-sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
-```
-</blockquote>
-
-<a id="quixstreams.dataframe.series.StreamingSeries.from_func"></a>
-
-#### StreamingSeries.from\_func
-
-```python
-@classmethod
-def from_func(cls, func: StreamCallable) -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L77)
-
-Create a StreamingSeries from a function.
-
-The provided function will be wrapped into `Apply`
+Confirm whether the desired set of topics exists in the Quix workspace.
 
 **Arguments**:
 
-- `func`: a function to apply
+- `topics`: an iterable with Either Topic or TopicCreationConfigs instances
 
-**Returns**:
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_confluent_broker_config"></a>
 
-instance of `StreamingSeries`
-
-<a id="quixstreams.dataframe.series.StreamingSeries.apply"></a>
-
-#### StreamingSeries.apply
+#### QuixKafkaConfigsBuilder.get\_confluent\_broker\_config
 
 ```python
-def apply(func: StreamCallable) -> Self
+def get_confluent_broker_config(known_topic: Optional[str] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L394)
 
-Add a callable to the execution list for this series.
+Get the full client config dictionary required to authenticate a confluent-kafka
 
-The provided callable should accept a single argument, which will be its input.
-The provided callable should similarly return one output, or None
+client to a Quix platform broker/workspace.
 
-They can be chained together or included with other operations.
-
-
-Example Snippet:
-
-<blockquote>
-The `StreamingSeries` are generated when `sdf["COLUMN_NAME"]` is called.
-<br>
-This stores a string in state and capitalizes the column value; the result is
-assigned to a new column.
-<br>
-Another apply converts a str column to an int, assigning it to a new column.
-
-```python
-def func(value: str, state: State):
-    if value != state.get("my_store_key"):
-        state.set("my_store_key") = value
-    return v.upper()
-
-sdf = StreamingDataframe()
-sdf["new_col"] = sdf["a_column"]["nested_dict_key"].apply(func, stateful=True)
-sdf["new_col_2"] = sdf["str_col"].apply(lambda v: int(v)) + sdf["str_col2"] + 2
-```
-</blockquote>
+The returned config can be used directly by any confluent-kafka-python consumer/
+producer (add your producer/consumer-specific configs afterward).
 
 **Arguments**:
 
-- `func`: a callable with one argument and one output
+- `known_topic`: a topic known to exist in some workspace
 
 **Returns**:
 
-a new `StreamingSeries` with the new callable added
+a dict of confluent-kafka-python client settings (see librdkafka
+config for more details)
 
-<a id="quixstreams.dataframe.series.StreamingSeries.compile"></a>
+<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_confluent_client_configs"></a>
 
-#### StreamingSeries.compile
-
-```python
-def compile(allow_filters: bool = True,
-            allow_updates: bool = True) -> StreamCallable
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L130)
-
-Compile all functions of this StreamingSeries into one big closure.
-
-Closures are more performant than calling all the functions in the
-`StreamingDataFrame` one-by-one.
-
-Generally not required by users; the `quixstreams.app.Application` class will
-compile automatically for you (along with calling it with values, of course)!
-
-
-Example Snippet:
-
-<blockquote>
-After all sdf commands have been made we then compile, which can then be called
-with any values we desire to process them.
-
-When calling `.compile()` on the `StreamingDataFrame`, it calls `.compile()`
-on all subsequently generated `StreamingSeries`.
+#### QuixKafkaConfigsBuilder.get\_confluent\_client\_configs
 
 ```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf = sdf["column_a"].apply(apply_func)
-sdf = sdf["column_b"].contains(filter_func)
-sdf = sdf.compile()
-
-result_0 = sdf({"my": "record"})
-result_1 = sdf({"other": "record"})
+def get_confluent_client_configs(
+    topics: list,
+    consumer_group_id: Optional[str] = None
+) -> Tuple[dict, List[str], Optional[str]]
 ```
-</blockquote>
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/config.py#L416)
+
+Get all the values you need in order to use a confluent_kafka-based client
+
+with a topic on a Quix platform broker/workspace.
+
+The returned config can be used directly by any confluent-kafka-python consumer/
+producer (add your producer/consumer-specific configs afterward).
+
+The topics and consumer group are appended with any necessary values.
 
 **Arguments**:
 
-- `allow_filters`: If False, this function will fail with ValueError if
-the stream has filter functions in the tree. Default - True.
-- `allow_updates`: If False, this function will fail with ValueError if
-the stream has update functions in the tree. Default - True.
-
-**Raises**:
-
-- `ValueError`: if disallowed functions are present in the tree of
-underlying `Stream`.
+- `topics`: list of topics
+- `consumer_group_id`: consumer group id, if needed
 
 **Returns**:
 
-a function that accepts "value"
-and returns a result of StreamingDataFrame
+a tuple with configs and altered versions of the topics
+and consumer group name
 
-<a id="quixstreams.dataframe.series.StreamingSeries.test"></a>
+<a id="quixstreams.platforms.quix.env"></a>
 
-#### StreamingSeries.test
+## quixstreams.platforms.quix.env
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment"></a>
+
+### QuixEnvironment
 
 ```python
-def test(value: Any, ctx: Optional[MessageContext] = None) -> Any
+class QuixEnvironment()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L183)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L7)
 
-A shorthand to test `StreamingSeries` with provided value
+Class to access various Quix platform environment settings
 
-and `MessageContext`.
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.state_management_enabled"></a>
+
+#### QuixEnvironment.state\_management\_enabled
+
+```python
+@property
+def state_management_enabled() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L19)
+
+Check whether "State management" is enabled for the current deployment
+
+**Returns**:
+
+True if state management is enabled, otherwise False
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.deployment_id"></a>
+
+#### QuixEnvironment.deployment\_id
+
+```python
+@property
+def deployment_id() -> Optional[str]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L27)
+
+Return current Quix deployment id.
+
+This variable is meant to be set only by Quix Platform and only
+when the application is deployed.
+
+**Returns**:
+
+deployment id or None
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.workspace_id"></a>
+
+#### QuixEnvironment.workspace\_id
+
+```python
+@property
+def workspace_id() -> Optional[str]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L39)
+
+Return Quix workspace id if set
+
+**Returns**:
+
+workspace id or None
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.portal_api"></a>
+
+#### QuixEnvironment.portal\_api
+
+```python
+@property
+def portal_api() -> Optional[str]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L47)
+
+Return Quix Portal API url if set
+
+**Returns**:
+
+portal API URL or None
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.sdk_token"></a>
+
+#### QuixEnvironment.sdk\_token
+
+```python
+@property
+def sdk_token() -> Optional[str]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L56)
+
+Return Quix SDK token if set
+
+**Returns**:
+
+sdk token or None
+
+<a id="quixstreams.platforms.quix.env.QuixEnvironment.state_dir"></a>
+
+#### QuixEnvironment.state\_dir
+
+```python
+@property
+def state_dir() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/env.py#L64)
+
+Return application state directory on Quix.
+
+**Returns**:
+
+path to state dir
+
+<a id="quixstreams.platforms.quix.checks"></a>
+
+## quixstreams.platforms.quix.checks
+
+<a id="quixstreams.platforms.quix.checks.check_state_management_enabled"></a>
+
+#### check\_state\_management\_enabled
+
+```python
+def check_state_management_enabled()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/checks.py#L11)
+
+Check if State Management feature is enabled for the current deployment on
+Quix platform.
+If it's disabled, the exception will be raised.
+
+<a id="quixstreams.platforms.quix.checks.check_state_dir"></a>
+
+#### check\_state\_dir
+
+```python
+def check_state_dir(state_dir: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/checks.py#L28)
+
+Check if Application "state_dir" matches the state dir on Quix platform.
+
+If it doesn't match, the warning will be logged.
 
 **Arguments**:
 
-- `value`: value to pass through `StreamingSeries`
-- `ctx`: instance of `MessageContext`, optional.
-Provide it if the StreamingSeries instance has
-functions calling `get_current_key()`.
-Default - `None`.
+- `state_dir`: application state_dir path
 
-**Returns**:
+<a id="quixstreams.platforms.quix"></a>
 
-result of `StreamingSeries`
+## quixstreams.platforms.quix
 
-<a id="quixstreams.dataframe.series.StreamingSeries.isin"></a>
+<a id="quixstreams.platforms.quix.api"></a>
 
-#### StreamingSeries.isin
+## quixstreams.platforms.quix.api
 
-```python
-def isin(other: Container) -> Self
-```
+<a id="quixstreams.platforms.quix.api.QuixPortalApiService"></a>
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L214)
-
-Check if series value is in "other".
-
-Same as "StreamingSeries in other".
-
-Runtime result will be a `bool`.
-
-
-Example Snippet:
-
-<blockquote>
-Check if "str_column" is contained in a column with a list of strings and
-assign the resulting `bool` to a new column: "has_my_str".
+### QuixPortalApiService
 
 ```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["has_my_str"] = sdf["str_column"].isin(sdf["column_with_list_of_strs"])
-```
-</blockquote>
-
-**Arguments**:
-
-- `other`: a container to check
-
-**Returns**:
-
-new StreamingSeries
-
-<a id="quixstreams.dataframe.series.StreamingSeries.contains"></a>
-
-#### StreamingSeries.contains
-
-```python
-def contains(other: object) -> Self
+class QuixPortalApiService()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L243)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/platforms/quix/api.py#L14)
 
-Check if series value contains "other"
+A light wrapper around the Quix Portal Api. If used in the Quix Platform, it will
+use that workspaces auth token and portal endpoint, else you must provide it.
 
-Same as "other in StreamingSeries".
+Function names closely reflect the respective API endpoint,
+each starting with the method [GET, POST, etc.] followed by the endpoint path.
 
-Runtime result will be a `bool`.
+Results will be returned in the form of request's Response.json(), unless something
+else is required. Non-200's will raise exceptions.
 
-
-Example Snippet:
-
-<blockquote>
-Check if "column_a" contains "my_substring" and assign the resulting
-`bool` to a new column: "has_my_substr".
-
-```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["has_my_substr"] = sdf["column_a"].contains("my_substring")
-```
-</blockquote>
-
-**Arguments**:
-
-- `other`: object to check
-
-**Returns**:
-
-new StreamingSeries
-
-<a id="quixstreams.dataframe.series.StreamingSeries.is_"></a>
-
-#### StreamingSeries.is\_
-
-```python
-def is_(other: object) -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L270)
-
-Check if series value refers to the same object as `other`
-
-Runtime result will be a `bool`.
-
-
-Example Snippet:
-
-<blockquote>
-Check if "column_a" is the same as "column_b" and assign the resulting `bool`
-to a new column: "is_same"
-
-```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["is_same"] = sdf["column_a"].is_(sdf["column_b"])
-```
-</blockquote>
-
-**Arguments**:
-
-- `other`: object to check for "is"
-
-**Returns**:
-
-new StreamingSeries
-
-<a id="quixstreams.dataframe.series.StreamingSeries.isnot"></a>
-
-#### StreamingSeries.isnot
-
-```python
-def isnot(other: object) -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L296)
-
-Check if series value does not refer to the same object as `other`
-
-Runtime result will be a `bool`.
-
-
-Example Snippet:
-
-<blockquote>
-Check if "column_a" is the same as "column_b" and assign the resulting `bool`
-to a new column: "is_not_same"
-
-```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["is_not_same"] = sdf["column_a"].isnot(sdf["column_b"])
-```
-</blockquote>
-
-**Arguments**:
-
-- `other`: object to check for "is_not"
-
-**Returns**:
-
-new StreamingSeries
-
-<a id="quixstreams.dataframe.series.StreamingSeries.isnull"></a>
-
-#### StreamingSeries.isnull
-
-```python
-def isnull() -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L323)
-
-Check if series value is None.
-
-Runtime result will be a `bool`.
-
-
-Example Snippet:
-
-<blockquote>
-Check if "column_a" is null and assign the resulting `bool` to a new column:
-"is_null"
-
-```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["is_null"] = sdf["column_a"].isnull()
-```
-</blockquote>
-
-**Returns**:
-
-new StreamingSeries
-
-<a id="quixstreams.dataframe.series.StreamingSeries.notnull"></a>
-
-#### StreamingSeries.notnull
-
-```python
-def notnull() -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L349)
-
-Check if series value is not None.
-
-Runtime result will be a `bool`.
-
-
-Example Snippet:
-
-<blockquote>
-Check if "column_a" is not null and assign the resulting `bool` to a new column:
-"is_not_null"
-
-```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["is_not_null"] = sdf["column_a"].notnull()
-```
-</blockquote>
-
-**Returns**:
-
-new StreamingSeries
-
-<a id="quixstreams.dataframe.series.StreamingSeries.abs"></a>
-
-#### StreamingSeries.abs
-
-```python
-def abs() -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/series.py#L374)
-
-Get absolute value of the series value.
-
-Example Snippet:
-
-<blockquote>
-Get absolute value of "int_col" and add it to "other_int_col". Finally, assign
-the result to a new column: "abs_col_sum".
-
-```python
-from quixstreams import Application
-sdf = app.dataframe()
-sdf["abs_col_sum"] = sdf["int_col"].abs() + sdf["other_int_col"]
-```
-</blockquote>
-
-**Returns**:
-
-new StreamingSeries
+See the swagger documentation for more info about the endpoints.
 
 <a id="quixstreams.dataframe.dataframe"></a>
 
@@ -793,7 +518,7 @@ new StreamingSeries
 class StreamingDataFrame(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L26)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L26)
 
 `StreamingDataFrame` is the main object you will use for ETL work.
 
@@ -832,16 +557,12 @@ usage, see `streamingdataframe.md` under the `docs/` folder.
 
 Example Snippet:
 
-<blockquote>
-Random methods for example purposes. More detailed explanations found under
-various methods or in the docs folder.
 ```python
 sdf = StreamingDataframe()
 sdf = sdf.apply(a_func)
 sdf = sdf.filter(another_func)
 sdf = sdf.to_topic(topic_obj)
 ```
-</blockquote>
 
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.apply"></a>
 
@@ -849,10 +570,11 @@ sdf = sdf.to_topic(topic_obj)
 
 ```python
 def apply(func: Union[DataFrameFunc, DataFrameStatefulFunc],
-          stateful: bool = False) -> Self
+          stateful: bool = False,
+          expand: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L98)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L92)
 
 Apply a function to transform the value and return a new value.
 
@@ -861,12 +583,9 @@ The result will be passed downstream as an input value.
 
 Example Snippet:
 
-<blockquote>
-This stores a string in state and capitalizes every column with a string value.
-<br>
-A second apply then keeps only the string value columns (shows non-stateful).
-
 ```python
+# This stores a string in state and capitalizes every column with a string value.
+# A second apply then keeps only the string value columns (shows non-stateful).
 def func(d: dict, state: State):
     value = d["store_field"]
     if value != state.get("my_store_key"):
@@ -878,13 +597,15 @@ sdf = sdf.apply(func, stateful=True)
 sdf = sdf.apply(lambda d: {k: v for k,v in d.items() if isinstance(v, str)})
 
 ```
-</blockquote>
 
 **Arguments**:
 
 - `func`: a function to apply
 - `stateful`: if `True`, the function will be provided with a second argument
 of type `State` to perform stateful operations.
+- `expand`: if True, expand the returned iterable into individual values
+downstream. If returned value is not iterable, `TypeError` will be raised.
+Default - `False`.
 
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.update"></a>
 
@@ -895,7 +616,7 @@ def update(func: Union[DataFrameFunc, DataFrameStatefulFunc],
            stateful: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L140)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L135)
 
 Apply a function to mutate value in-place or to perform a side effect
 
@@ -907,12 +628,10 @@ passed downstream.
 
 Example Snippet:
 
-<blockquote>
-Stores a value and mutates a list by appending a new item to it.
-<br>
-Also prints to console.
-
 ```python
+# Stores a value and mutates a list by appending a new item to it.
+# Also prints to console.
+
 def func(values: list, state: State):
     value = values[0]
     if value != state.get("my_store_key"):
@@ -923,7 +642,6 @@ sdf = StreamingDataframe()
 sdf = sdf.update(func, stateful=True)
 sdf = sdf.update(lambda value: print("Received value: ", value))
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -940,7 +658,7 @@ def filter(func: Union[DataFrameFunc, DataFrameStatefulFunc],
            stateful: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L182)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L174)
 
 Filter value using provided function.
 
@@ -952,11 +670,10 @@ message will be skipped).
 
 Example Snippet:
 
-<blockquote>
-Stores a value and allows further processing only if the value is greater than
-what was previously stored.
-
 ```python
+# Stores a value and allows further processing only if the value is greater than
+# what was previously stored.
+
 def func(d: dict, state: State):
     value = d["my_value"]
     if value > state.get("my_store_key"):
@@ -967,7 +684,6 @@ def func(d: dict, state: State):
 sdf = StreamingDataframe()
 sdf = sdf.filter(func, stateful=True)
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -984,21 +700,19 @@ of type `State` to perform stateful operations.
 def contains(key: str) -> StreamingSeries
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L237)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L227)
 
 Check if the key is present in the Row value.
 
 Example Snippet:
 
-<blockquote>
-Add new column 'has_column' which contains a boolean indicating the presence of
-'column_x'.
-
 ```python
+# Add new column 'has_column' which contains a boolean indicating
+# the presence of 'column_x'
+
 sdf = StreamingDataframe()
 sdf['has_column'] = sdf.contains('column_x')
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -1006,8 +720,8 @@ sdf['has_column'] = sdf.contains('column_x')
 
 **Returns**:
 
-a Column object that evaluates to True if the key is present or
-False otherwise.
+a Column object that evaluates to True if the key is present
+or False otherwise.
 
 <a id="quixstreams.dataframe.dataframe.StreamingDataFrame.to_topic"></a>
 
@@ -1018,7 +732,7 @@ def to_topic(topic: Topic,
              key: Optional[Callable[[object], object]] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L262)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L250)
 
 Produce current value to a topic. You can optionally specify a new key.
 
@@ -1029,14 +743,11 @@ Produce current value to a topic. You can optionally specify a new key.
 
 Example Snippet:
 
-<blockquote>
-Produce to two different topics, changing the key for one of them.
-<br>
-Uses the Application class (sans arguments) to showcase how you'd commonly
-use this.
-
 ```python
 from quixstreams import Application
+
+# Produce to two different topics, changing the key for one of them.
+
 app = Application()
 input_topic = app.topic("input_x")
 output_topic_0 = app.topic("output_a")
@@ -1046,7 +757,6 @@ sdf = app.dataframe(input_topic)
 sdf = sdf.to_topic(output_topic_0)
 sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -1056,42 +766,37 @@ If passed, the return type of this callable must be serializable
 by `key_serializer` defined for this Topic object.
 By default, the current message key will be used.
 
-<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.compile"></a>
+<a id="quixstreams.dataframe.dataframe.StreamingDataFrame.compose"></a>
 
-#### StreamingDataFrame.compile
+#### StreamingDataFrame.compose
 
 ```python
-def compile() -> StreamCallable
+def compose() -> StreamCallable
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L305)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L289)
 
-Compile all functions of this StreamingDataFrame into one big closure.
+Compose all functions of this StreamingDataFrame into one big closure.
 
 Closures are more performant than calling all the functions in the
 `StreamingDataFrame` one-by-one.
 
 Generally not required by users; the `quixstreams.app.Application` class will
-compile automatically for you (along with calling it with values, of course)!
+do this automatically.
 
 
 Example Snippet:
-
-<blockquote>
-After all sdf commands have been made we then compile, which can then be called
-with any values we desire to process them.
 
 ```python
 from quixstreams import Application
 sdf = app.dataframe()
 sdf = sdf.apply(apply_func)
 sdf = sdf.filter(filter_func)
-sdf = sdf.compile()
+sdf = sdf.compose()
 
 result_0 = sdf({"my": "record"})
 result_1 = sdf({"other": "record"})
 ```
-</blockquote>
 
 **Returns**:
 
@@ -1106,7 +811,7 @@ and returns a result of StreamingDataFrame
 def test(value: object, ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/dataframe/dataframe.py#L340)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/dataframe.py#L319)
 
 A shorthand to test `StreamingDataFrame` with provided value
 
@@ -1124,2049 +829,453 @@ Default - `None`.
 
 result of `StreamingDataFrame`
 
-<a id="quixstreams.error_callbacks"></a>
+<a id="quixstreams.dataframe.series"></a>
 
-## quixstreams.error\_callbacks
+## quixstreams.dataframe.series
 
-<a id="quixstreams.exceptions"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries"></a>
 
-## quixstreams.exceptions
+### StreamingSeries
 
-<a id="quixstreams.exceptions.assignment"></a>
-
-## quixstreams.exceptions.assignment
-
-<a id="quixstreams.exceptions.assignment.PartitionAssignmentError"></a>
-
-### PartitionAssignmentError
-
-```python
-class PartitionAssignmentError(QuixException)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/exceptions/assignment.py#L6)
-
-Error happened during partition rebalancing.
-Raised from `on_assign`, `on_revoke` and `on_lost` callbacks
-
-<a id="quixstreams.exceptions.base"></a>
-
-## quixstreams.exceptions.base
-
-<a id="quixstreams.kafka"></a>
-
-## quixstreams.kafka
-
-<a id="quixstreams.kafka.consumer"></a>
-
-## quixstreams.kafka.consumer
-
-<a id="quixstreams.kafka.consumer.Consumer"></a>
-
-### Consumer
-
-```python
-class Consumer()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L66)
-
-<a id="quixstreams.kafka.consumer.Consumer.__init__"></a>
-
-#### Consumer.\_\_init\_\_
-
-```python
-def __init__(broker_address: str,
-             consumer_group: Optional[str],
-             auto_offset_reset: AutoOffsetReset,
-             auto_commit_enable: bool = True,
-             assignment_strategy: AssignmentStrategy = "range",
-             on_commit: Callable[[Optional[KafkaError], List[TopicPartition]],
-                                 None] = None,
-             extra_config: Optional[dict] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L67)
-
-A wrapper around `confluent_kafka.Consumer`.
-
-It initializes `confluent_kafka.Consumer` on demand
-avoiding network calls during `__init__`, provides typing info for methods
-and some reasonable defaults.
-
-**Arguments**:
-
-- `broker_address`: Kafka broker host and port in format `<host>:<port>`.
-Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
-- `consumer_group`: Kafka consumer group.
-Passed as `group.id` to `confluent_kafka.Consumer`
-- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
-Available values:
-- "earliest" - automatically reset the offset to the smallest offset
-- "latest" - automatically reset the offset to the largest offset
-- "error" - trigger an error (ERR__AUTO_OFFSET_RESET) which is retrieved
-  by consuming messages (used for testing)
-- `auto_commit_enable`: If true, periodically commit offset of
-the last message handed to the application. Default - `True`.
-- `assignment_strategy`: The name of a partition assignment strategy.
-Available values: "range", "roundrobin", "cooperative-sticky".
-- `on_commit`: Offset commit result propagation callback.
-Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
-- `extra_config`: A dictionary with additional options that
-will be passed to `confluent_kafka.Consumer` as is.
-Note: values passed as arguments override values in `extra_config`.
-
-<a id="quixstreams.kafka.consumer.Consumer.poll"></a>
-
-#### Consumer.poll
-
-```python
-def poll(timeout: float = None) -> Optional[Message]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L124)
-
-Consumes a single message, calls callbacks and returns events.
-
-The application must check the returned :py:class:`Message`
-object's :py:func:`Message.error()` method to distinguish between proper
-messages (error() returns None), or an event or error.
-
-Note: Callbacks may be called from this method, such as
-``on_assign``, ``on_revoke``, et al.
-
-**Arguments**:
-
-- `timeout` (`float`): Maximum time in seconds to block waiting for message,
-event or callback. Default: infinite.
-
-**Raises**:
-
-- `None`: RuntimeError if called on a closed consumer
-
-**Returns**:
-
-A Message object or None on timeout
-
-<a id="quixstreams.kafka.consumer.Consumer.subscribe"></a>
-
-#### Consumer.subscribe
-
-```python
-def subscribe(topics: List[str],
-              on_assign: Optional[RebalancingCallback] = None,
-              on_revoke: Optional[RebalancingCallback] = None,
-              on_lost: Optional[RebalancingCallback] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L143)
-
-Set subscription to supplied list of topics
-
-This replaces a previous subscription.
-
-**Arguments**:
-
-- `topics` (`list(str)`): List of topics (strings) to subscribe to.
-- `on_assign` (`callable`): callback to provide handling of customized offsets
-on completion of a successful partition re-assignment.
-- `on_revoke` (`callable`): callback to provide handling of offset commits to
-a customized store on the start of a rebalance operation.
-- `on_lost` (`callable`): callback to provide handling in the case the partition
-assignment has been lost. Partitions that have been lost may already be
-owned by other members in the group and therefore committing offsets,
-for example, may fail.
-
-**Raises**:
-
-- `KafkaException`: 
-- `None`: RuntimeError if called on a closed consumer
-.. py:function:: on_assign(consumer, partitions)
-.. py:function:: on_revoke(consumer, partitions)
-.. py:function:: on_lost(consumer, partitions)
-
-  :param Consumer consumer: Consumer instance.
-  :param list(TopicPartition) partitions: Absolute list of partitions being
-  assigned or revoked.
-
-<a id="quixstreams.kafka.consumer.Consumer.unsubscribe"></a>
-
-#### Consumer.unsubscribe
-
-```python
-def unsubscribe()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L237)
-
-Remove current subscription.
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-<a id="quixstreams.kafka.consumer.Consumer.store_offsets"></a>
-
-#### Consumer.store\_offsets
-
-```python
-def store_offsets(message: Optional[Message] = None,
-                  offsets: List[TopicPartition] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L245)
-
-.. py:function:: store_offsets([message=None], [offsets=None])
-
-Store offsets for a message or a list of offsets.
-
-``message`` and ``offsets`` are mutually exclusive. The stored offsets
-will be committed according to 'auto.commit.interval.ms' or manual
-offset-less `commit`.
-Note that 'enable.auto.offset.store' must be set to False when using this API.
-
-**Arguments**:
-
-- `message` (`confluent_kafka.Message`): Store message's offset+1.
-- `offsets` (`list(TopicPartition)`): List of topic+partitions+offsets to store.
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-<a id="quixstreams.kafka.consumer.Consumer.commit"></a>
-
-#### Consumer.commit
-
-```python
-def commit(message: Message = None,
-           offsets: List[TopicPartition] = None,
-           asynchronous: bool = True) -> Optional[List[TopicPartition]]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L279)
-
-Commit a message or a list of offsets.
-
-The ``message`` and ``offsets`` parameters are mutually exclusive.
-If neither is set, the current partition assignment's offsets are used instead.
-Use this method to commit offsets if you have 'enable.auto.commit' set to False.
-
-**Arguments**:
-
-- `message` (`confluent_kafka.Message`): Commit the message's offset+1.
-Note: By convention, committed offsets reflect the next message
-to be consumed, **not** the last message consumed.
-- `offsets` (`list(TopicPartition)`): List of topic+partitions+offsets to commit.
-- `asynchronous` (`bool`): If true, asynchronously commit, returning None
-immediately. If False, the commit() call will block until the commit
-succeeds or fails and the committed offsets will be returned (on success).
-Note that specific partitions may have failed and the .err field of
-each partition should be checked for success.
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-<a id="quixstreams.kafka.consumer.Consumer.committed"></a>
-
-#### Consumer.committed
-
-```python
-def committed(partitions: List[TopicPartition],
-              timeout: float = None) -> List[TopicPartition]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L319)
-
-.. py:function:: committed(partitions, [timeout=None])
-
-Retrieve committed offsets for the specified partitions.
-
-**Arguments**:
-
-- `partitions` (`list(TopicPartition)`): List of topic+partitions to query for stored offsets.
-- `timeout` (`float`): Request timeout (seconds).
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-**Returns**:
-
-`list(TopicPartition)`: List of topic+partitions with offset and possibly error set.
-
-<a id="quixstreams.kafka.consumer.Consumer.get_watermark_offsets"></a>
-
-#### Consumer.get\_watermark\_offsets
-
-```python
-def get_watermark_offsets(partition: TopicPartition,
-                          timeout: float = None,
-                          cached: bool = False) -> Tuple[int, int]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L339)
-
-Retrieve low and high offsets for the specified partition.
-
-**Arguments**:
-
-- `partition` (`TopicPartition`): Topic+partition to return offsets for.
-- `timeout` (`float`): Request timeout (seconds). Ignored if cached=True.
-- `cached` (`bool`): Instead of querying the broker, use cached information.
-Cached values: The low offset is updated periodically
-(if statistics.interval.ms is set) while the high offset is updated on each
-message fetched from the broker for this partition.
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-**Returns**:
-
-`tuple(int,int)`: Tuple of (low,high) on success or None on timeout.
-The high offset is the offset of the last message + 1.
-
-<a id="quixstreams.kafka.consumer.Consumer.list_topics"></a>
-
-#### Consumer.list\_topics
-
-```python
-def list_topics(topic: Optional[str] = None,
-                timeout: float = -1) -> ClusterMetadata
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L365)
-
-.. py:function:: list_topics([topic=None], [timeout=-1])
-
-Request metadata from the cluster.
-This method provides the same information as
-listTopics(), describeTopics() and describeCluster() in  the Java Admin client.
-
-**Arguments**:
-
-- `topic` (`str`): If specified, only request information about this topic,
-else return results for all topics in cluster.
-Warning: If auto.create.topics.enable is set to true on the broker and
-an unknown topic is specified, it will be created.
-- `timeout` (`float`): The maximum response time before timing out,
-or -1 for infinite timeout.
-
-**Raises**:
-
-- `None`: KafkaException
-
-<a id="quixstreams.kafka.consumer.Consumer.memberid"></a>
-
-#### Consumer.memberid
-
-```python
-def memberid() -> str
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L386)
-
-Return this client's broker-assigned group member id.
-
-The member id is assigned by the group coordinator and is propagated to
-the consumer during rebalance.
-
- :returns: Member id string or None
- :rtype: string
- :raises: RuntimeError if called on a closed consumer
-
-
-<a id="quixstreams.kafka.consumer.Consumer.offsets_for_times"></a>
-
-#### Consumer.offsets\_for\_times
-
-```python
-def offsets_for_times(partitions: List[TopicPartition],
-                      timeout: float = None) -> List[TopicPartition]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L399)
-
-Look up offsets by timestamp for the specified partitions.
-
-The returned offset for each partition is the earliest offset whose
-timestamp is greater than or equal to the given timestamp in the
-corresponding partition. If the provided timestamp exceeds that of the
-last message in the partition, a value of -1 will be returned.
-
- :param list(TopicPartition) partitions: topic+partitions with timestamps
-    in the TopicPartition.offset field.
- :param float timeout: Request timeout (seconds).
- :returns: List of topic+partition with offset field set and possibly error set
- :rtype: list(TopicPartition)
- :raises: KafkaException
- :raises: RuntimeError if called on a closed consumer
-
-
-<a id="quixstreams.kafka.consumer.Consumer.pause"></a>
-
-#### Consumer.pause
-
-```python
-def pause(partitions: List[TopicPartition])
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L427)
-
-Pause consumption for the provided list of partitions.
-
-**Arguments**:
-
-- `partitions` (`list(TopicPartition)`): List of topic+partitions to pause.
-
-**Raises**:
-
-- `None`: KafkaException
-
-<a id="quixstreams.kafka.consumer.Consumer.resume"></a>
-
-#### Consumer.resume
-
-```python
-def resume(partitions: List[TopicPartition])
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L437)
-
-.. py:function:: resume(partitions)
-
-Resume consumption for the provided list of partitions.
-
-**Arguments**:
-
-- `partitions` (`list(TopicPartition)`): List of topic+partitions to resume.
-
-**Raises**:
-
-- `None`: KafkaException
-
-<a id="quixstreams.kafka.consumer.Consumer.position"></a>
-
-#### Consumer.position
-
-```python
-def position(partitions: List[TopicPartition]) -> List[TopicPartition]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L449)
-
-Retrieve current positions (offsets) for the specified partitions.
-
-**Arguments**:
-
-- `partitions` (`list(TopicPartition)`): List of topic+partitions to return
-current offsets for. The current offset is the offset of
-the last consumed message + 1.
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-**Returns**:
-
-`list(TopicPartition)`: List of topic+partitions with offset and possibly error set.
-
-<a id="quixstreams.kafka.consumer.Consumer.seek"></a>
-
-#### Consumer.seek
-
-```python
-def seek(partition: TopicPartition)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L463)
-
-Set consume position for partition to offset.
-
-The offset may be an absolute (>=0) or a
-logical offset (:py:const:`OFFSET_BEGINNING` et.al).
-
-seek() may only be used to update the consume offset of an
-actively consumed partition (i.e., after :py:const:`assign()`),
-to set the starting offset of partition not being consumed instead
-pass the offset in an `assign()` call.
-
-**Arguments**:
-
-- `partition` (`TopicPartition`): Topic+partition+offset to seek to.
-
-**Raises**:
-
-- `None`: KafkaException
-
-<a id="quixstreams.kafka.consumer.Consumer.assignment"></a>
-
-#### Consumer.assignment
-
-```python
-def assignment() -> List[TopicPartition]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L480)
-
-Returns the current partition assignment.
-
-**Raises**:
-
-- `None`: KafkaException
-- `None`: RuntimeError if called on a closed consumer
-
-**Returns**:
-
-`list(TopicPartition)`: List of assigned topic+partitions.
-
-<a id="quixstreams.kafka.consumer.Consumer.set_sasl_credentials"></a>
-
-#### Consumer.set\_sasl\_credentials
-
-```python
-def set_sasl_credentials(username: str, password: str)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L493)
-
-Sets the SASL credentials used for this client.
-These credentials will overwrite the old ones, and will be used the next
-time the client needs to authenticate.
-This method will not disconnect existing broker connections that have been
-established with the old credentials.
-This method is applicable only to SASL PLAIN and SCRAM mechanisms.
-
-<a id="quixstreams.kafka.consumer.Consumer.close"></a>
-
-#### Consumer.close
-
-```python
-def close()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/consumer.py#L505)
-
-Close down and terminate the Kafka Consumer.
-
-Actions performed:
-
-- Stops consuming.
-- Commits offsets, unless the consumer property 'enable.auto.commit' is set to False.
-- Leaves the consumer group.
-
-Registered callbacks may be called from this method,
-see `poll()` for more info.
-
-
-<a id="quixstreams.kafka.producer"></a>
-
-## quixstreams.kafka.producer
-
-<a id="quixstreams.kafka.producer.Producer"></a>
-
-### Producer
-
-```python
-class Producer()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/producer.py#L54)
-
-<a id="quixstreams.kafka.producer.Producer.__init__"></a>
-
-#### Producer.\_\_init\_\_
-
-```python
-def __init__(broker_address: str,
-             partitioner: Partitioner = "murmur2",
-             extra_config: dict = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/producer.py#L55)
-
-A wrapper around `confluent_kafka.Producer`.
-
-It initializes `confluent_kafka.Producer` on demand
-avoiding network calls during `__init__`, provides typing info for methods
-and some reasonable defaults.
-
-**Arguments**:
-
-- `broker_address`: Kafka broker host and port in format `<host>:<port>`.
-Passed as `bootstrap.servers` to `confluent_kafka.Producer`.
-- `partitioner`: A function to be used to determine the outgoing message
-partition.
-Available values: "random", "consistent_random", "murmur2", "murmur2_random",
-"fnv1a", "fnv1a_random"
-Default - "murmur2".
-- `extra_config`: A dictionary with additional options that
-will be passed to `confluent_kafka.Producer` as is.
-Note: values passed as arguments override values in `extra_config`.
-
-<a id="quixstreams.kafka.producer.Producer.produce"></a>
-
-#### Producer.produce
-
-```python
-def produce(topic: str,
-            value: Union[str, bytes],
-            key: Optional[Union[str, bytes]] = None,
-            headers: Optional[Headers] = None,
-            partition: Optional[int] = None,
-            timestamp: Optional[int] = None,
-            poll_timeout: float = 5.0,
-            buffer_error_max_tries: int = 3)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/producer.py#L94)
-
-Produce message to topic.
-
-It also polls Kafka for callbacks before producing in order to minimize
-the probability of `BufferError`.
-If `BufferError` still happens, the method will poll Kafka with timeout
-to free up the buffer and try again.
-
-**Arguments**:
-
-- `topic`: topic name
-- `value`: message value
-- `key`: message key
-- `headers`: message headers
-- `partition`: topic partition
-- `timestamp`: message timestamp
-- `poll_timeout`: timeout for `poll()` call in case of `BufferError`
-- `buffer_error_max_tries`: max retries for `BufferError`.
-Pass `0` to not retry after `BufferError`.
-
-<a id="quixstreams.kafka.producer.Producer.poll"></a>
-
-#### Producer.poll
-
-```python
-def poll(timeout: float = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/producer.py#L152)
-
-Polls the producer for events and calls `on_delivery` callbacks.
-
-**Arguments**:
-
-- `timeout`: poll timeout seconds
-
-<a id="quixstreams.kafka.producer.Producer.flush"></a>
-
-#### Producer.flush
-
-```python
-def flush(timeout: float = None) -> int
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/kafka/producer.py#L159)
-
-Wait for all messages in the Producer queue to be delivered.
-
-**Arguments**:
-
-- `timeout`: timeout is seconds
-
-**Returns**:
-
-number of messages delivered
-
-<a id="quixstreams.models"></a>
-
-## quixstreams.models
-
-<a id="quixstreams.models.messagecontext"></a>
-
-## quixstreams.models.messagecontext
-
-<a id="quixstreams.models.messagecontext.MessageContext"></a>
-
-### MessageContext
-
-```python
-class MessageContext()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/messagecontext.py#L7)
-
-An object with Kafka message properties.
-
-It is made pseudo-immutable (i.e. public attributes don't have setters), and
-it should not be mutated during message processing.
-
-<a id="quixstreams.models.messages"></a>
-
-## quixstreams.models.messages
-
-<a id="quixstreams.models.rows"></a>
-
-## quixstreams.models.rows
-
-<a id="quixstreams.models.rows.Row"></a>
-
-### Row
-
-```python
-class Row()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/rows.py#L11)
-
-Row is a dict-like interface on top of the message data + some Kafka props
-
-<a id="quixstreams.models.rows.Row.keys"></a>
-
-#### Row.keys
-
-```python
-def keys() -> KeysView
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/rows.py#L73)
-
-Also allows unpacking row.value via **row
-
-<a id="quixstreams.models.rows.Row.clone"></a>
-
-#### Row.clone
-
-```python
-def clone(value: dict) -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/rows.py#L85)
-
-Manually clone the Row; doing it this way is much faster than doing a deepcopy
-on the entire Row object.
-
-<a id="quixstreams.models.serializers"></a>
-
-## quixstreams.models.serializers
-
-<a id="quixstreams.models.serializers.base"></a>
-
-## quixstreams.models.serializers.base
-
-<a id="quixstreams.models.serializers.base.SerializationContext"></a>
-
-### SerializationContext
-
-```python
-class SerializationContext()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L22)
-
-Provides additional context for message serialization/deserialization.
-
-Every `Serializer` and `Deserializer` receives an instance of `SerializationContext`
-
-<a id="quixstreams.models.serializers.base.SerializationContext.to_confluent_ctx"></a>
-
-#### SerializationContext.to\_confluent\_ctx
-
-```python
-def to_confluent_ctx(field: MessageField) -> _SerializationContext
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L35)
-
-Convert `SerializationContext` to `confluent_kafka.SerializationContext`
-
-in order to re-use serialization already provided by `confluent_kafka` library.
-
-**Arguments**:
-
-- `field`: instance of `confluent_kafka.serialization.MessageField`
-
-**Returns**:
-
-instance of `confluent_kafka.serialization.SerializationContext`
-
-<a id="quixstreams.models.serializers.base.Deserializer"></a>
-
-### Deserializer
-
-```python
-class Deserializer(abc.ABC)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L47)
-
-<a id="quixstreams.models.serializers.base.Deserializer.__init__"></a>
-
-#### Deserializer.\_\_init\_\_
-
-```python
-def __init__(column_name: Optional[str] = None, *args, **kwargs)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L48)
-
-A base class for all Deserializers
-
-**Arguments**:
-
-- `column_name`: if provided, the deserialized value will be wrapped into
-dictionary with `column_name` as a key.
-
-<a id="quixstreams.models.serializers.base.Deserializer.split_values"></a>
-
-#### Deserializer.split\_values
-
-```python
-@property
-def split_values() -> bool
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L58)
-
-Return True if the deserialized message should be considered as Iterable
-and each item in it should be processed as a separate message.
-
-<a id="quixstreams.models.serializers.base.Serializer"></a>
-
-### Serializer
-
-```python
-class Serializer(abc.ABC)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L75)
-
-A base class for all Serializers
-
-<a id="quixstreams.models.serializers.base.Serializer.extra_headers"></a>
-
-#### Serializer.extra\_headers
-
-```python
-@property
-def extra_headers() -> MessageHeadersMapping
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/base.py#L81)
-
-Informs producer to set additional headers
-
-for the message it will be serializing
-
-Must return a dictionary with headers.
-Keys must be strings, and values must be strings, bytes or None.
-
-**Returns**:
-
-dict with headers
-
-<a id="quixstreams.models.serializers.exceptions"></a>
-
-## quixstreams.models.serializers.exceptions
-
-<a id="quixstreams.models.serializers.exceptions.IgnoreMessage"></a>
-
-### IgnoreMessage
-
-```python
-class IgnoreMessage(exceptions.QuixException)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/exceptions.py#L51)
-
-Raise this exception from Deserializer.__call__ in order to ignore the processing
-of the particular message.
-
-<a id="quixstreams.models.serializers.json"></a>
-
-## quixstreams.models.serializers.json
-
-<a id="quixstreams.models.serializers.json.JSONSerializer"></a>
-
-### JSONSerializer
-
-```python
-class JSONSerializer(Serializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/json.py#L13)
-
-<a id="quixstreams.models.serializers.json.JSONSerializer.__init__"></a>
-
-#### JSONSerializer.\_\_init\_\_
-
-```python
-def __init__(dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/json.py#L14)
-
-Serializer that returns data in json format.
-
-**Arguments**:
-
-- `dumps`: a function to serialize objects to json.
-Default - :py:func:`quixstreams.utils.json.dumps`
-
-<a id="quixstreams.models.serializers.json.JSONDeserializer"></a>
-
-### JSONDeserializer
-
-```python
-class JSONDeserializer(Deserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/json.py#L35)
-
-<a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
-
-#### JSONDeserializer.\_\_init\_\_
-
-```python
-def __init__(column_name: Optional[str] = None,
-             loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/json.py#L36)
-
-Deserializer that parses data from JSON
-
-**Arguments**:
-
-- `column_name`: if provided, the deserialized value will be wrapped into
-dictionary with `column_name` as a key.
-- `loads`: function to parse json from bytes.
-Default - :py:func:`quixstreams.utils.json.loads`.
-
-<a id="quixstreams.models.serializers.simple_types"></a>
-
-## quixstreams.models.serializers.simple\_types
-
-<a id="quixstreams.models.serializers.simple_types.BytesDeserializer"></a>
-
-### BytesDeserializer
-
-```python
-class BytesDeserializer(Deserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L44)
-
-A deserializer to bypass bytes without any changes
-
-<a id="quixstreams.models.serializers.simple_types.BytesSerializer"></a>
-
-### BytesSerializer
-
-```python
-class BytesSerializer(Serializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L55)
-
-A serializer to bypass bytes without any changes
-
-<a id="quixstreams.models.serializers.simple_types.StringDeserializer"></a>
-
-### StringDeserializer
-
-```python
-class StringDeserializer(Deserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L64)
-
-<a id="quixstreams.models.serializers.simple_types.StringDeserializer.__init__"></a>
-
-#### StringDeserializer.\_\_init\_\_
-
-```python
-def __init__(column_name: Optional[str] = None, codec: str = "utf_8")
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L65)
-
-Deserializes bytes to strings using the specified encoding.
-
-**Arguments**:
-
-- `codec`: string encoding
-A wrapper around `confluent_kafka.serialization.StringDeserializer`.
-
-<a id="quixstreams.models.serializers.simple_types.IntegerDeserializer"></a>
-
-### IntegerDeserializer
-
-```python
-class IntegerDeserializer(Deserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L84)
-
-Deserializes bytes to integers.
-
-A wrapper around `confluent_kafka.serialization.IntegerDeserializer`.
-
-<a id="quixstreams.models.serializers.simple_types.DoubleDeserializer"></a>
-
-### DoubleDeserializer
-
-```python
-class DoubleDeserializer(Deserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L103)
-
-Deserializes float to IEEE 764 binary64.
-
-A wrapper around `confluent_kafka.serialization.DoubleDeserializer`.
-
-<a id="quixstreams.models.serializers.simple_types.StringSerializer"></a>
-
-### StringSerializer
-
-```python
-class StringSerializer(Serializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L122)
-
-<a id="quixstreams.models.serializers.simple_types.StringSerializer.__init__"></a>
-
-#### StringSerializer.\_\_init\_\_
-
-```python
-def __init__(codec: str = "utf_8")
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L123)
-
-Serializes strings to bytes using the specified encoding.
-
-**Arguments**:
-
-- `codec`: string encoding
-
-<a id="quixstreams.models.serializers.simple_types.IntegerSerializer"></a>
-
-### IntegerSerializer
-
-```python
-class IntegerSerializer(Serializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L135)
-
-Serializes integers to bytes
-
-<a id="quixstreams.models.serializers.simple_types.DoubleSerializer"></a>
-
-### DoubleSerializer
-
-```python
-class DoubleSerializer(Serializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/simple_types.py#L148)
-
-Serializes floats to bytes
-
-<a id="quixstreams.models.serializers.quix"></a>
-
-## quixstreams.models.serializers.quix
-
-<a id="quixstreams.models.serializers.quix.QuixDeserializer"></a>
-
-### QuixDeserializer
-
-```python
-class QuixDeserializer(JSONDeserializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L70)
-
-Handles Deserialization for any Quix-formatted topic.
-
-Parses JSON data from either `TimeseriesData` and `EventData` (ignores the rest).
-
-<a id="quixstreams.models.serializers.quix.QuixDeserializer.__init__"></a>
-
-#### QuixDeserializer.\_\_init\_\_
-
-```python
-def __init__(column_name: Optional[str] = None,
-             loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L77)
-
-**Arguments**:
-
-- `column_name`: if provided, the deserialized value will be wrapped into
-dictionary with `column_name` as a key.
-- `loads`: function to parse json from bytes.
-Default - :py:func:`quixstreams.utils.json.loads`.
-
-<a id="quixstreams.models.serializers.quix.QuixDeserializer.split_values"></a>
-
-#### QuixDeserializer.split\_values
-
-```python
-@property
-def split_values() -> bool
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L97)
-
-Each Quix message might contain data for multiple Rows.
-This property informs the downstream processors about that, so they can
-expect an Iterable instead of Mapping.
-
-<a id="quixstreams.models.serializers.quix.QuixDeserializer.deserialize"></a>
-
-#### QuixDeserializer.deserialize
-
-```python
-def deserialize(model_key: str, value: Union[List[Mapping],
-                                             Mapping]) -> Iterable[Mapping]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L150)
-
-Deserialization function for particular data types (Timeseries or EventData).
-
-**Arguments**:
-
-- `model_key`: value of "__Q_ModelKey" message header
-- `value`: deserialized JSON value of the message, list or dict
-
-**Returns**:
-
-Iterable of dicts
-
-<a id="quixstreams.models.serializers.quix.QuixSerializer"></a>
-
-### QuixSerializer
-
-```python
-class QuixSerializer(JSONSerializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L268)
-
-<a id="quixstreams.models.serializers.quix.QuixSerializer.__init__"></a>
-
-#### QuixSerializer.\_\_init\_\_
-
-```python
-def __init__(as_legacy: bool = True,
-             dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L272)
-
-Serializer that returns data in json format.
-
-**Arguments**:
-
-- `as_legacy`: parse as the legacy format; Default = True
-- `dumps`: a function to serialize objects to json.
-Default - :py:func:`quixstreams.utils.json.dumps`
-
-<a id="quixstreams.models.serializers.quix.QuixTimeseriesSerializer"></a>
-
-### QuixTimeseriesSerializer
-
-```python
-class QuixTimeseriesSerializer(QuixSerializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L315)
-
-Serialize data to JSON formatted according to Quix Timeseries format.
-
-The serializable object must be dictionary, and each item must be of `str`, `int`,
-`float`, `bytes` or `bytearray` type.
-Otherwise, the `SerializationError` will be raised.
-
-Example of the format:
-    Input:
-    ```
-        {'a': 1, 'b': 1.1, 'c': "string", 'd': b'bytes', 'Tags': {'tag1': 'tag'}}
-    ```
-
-    Output:
-    ```
-    {
-        "Timestamps" [123123123],
-        "NumericValues: {"a": [1], "b": [1.1]},
-        "StringValues": {"c": ["string"]},
-        "BinaryValues: {"d": ["Ynl0ZXM="]},
-        "TagValues": {"tag1": ["tag']}
-    }
-    ```
-
-<a id="quixstreams.models.serializers.quix.QuixEventsSerializer"></a>
-
-### QuixEventsSerializer
-
-```python
-class QuixEventsSerializer(QuixSerializer)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/serializers/quix.py#L404)
-
-Serialize data to JSON formatted according to Quix EventData format.
-The input value is expected to be a dictionary with the following keys:
-- "Id" (type `str`, default - "")
-- "Value" (type `str`, default - ""),
-- "Tags" (type `dict`, default - {})
-
-Note: All the other fields will be ignored.
-
-**Example**:
-
-  Input:
-    ```
-    {
-        "Id": "an_event",
-        "Value": "any_string"
-        "Tags": {"tag1": "tag"}},
-    }
-    ```
-  
-  Output:
-    ```
-    {
-        "Id": "an_event",
-        "Value": "any_string",
-        "Tags": {"tag1": "tag"}},
-        "Timestamp":1692703362840389000
-    }
-    ```
-
-<a id="quixstreams.models.timestamps"></a>
-
-## quixstreams.models.timestamps
-
-<a id="quixstreams.models.timestamps.TimestampType"></a>
-
-### TimestampType
-
-```python
-class TimestampType(enum.IntEnum)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/timestamps.py#L9)
-
-<a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_NOT_AVAILABLE"></a>
-
-#### TIMESTAMP\_NOT\_AVAILABLE
-
-timestamps not supported by broker
-
-<a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_CREATE_TIME"></a>
-
-#### TIMESTAMP\_CREATE\_TIME
-
-message creation time (or source / producer time)
-
-<a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_LOG_APPEND_TIME"></a>
-
-#### TIMESTAMP\_LOG\_APPEND\_TIME
-
-broker receive time
-
-<a id="quixstreams.models.timestamps.MessageTimestamp"></a>
-
-### MessageTimestamp
-
 ```python
-class MessageTimestamp()
+class StreamingSeries(BaseStreaming)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/timestamps.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L16)
 
-Represents a timestamp of incoming Kafka message.
+`StreamingSeries` are typically generated by `StreamingDataframes` when getting
+elements from, or performing certain operations on, a `StreamingDataframe`,
+thus acting as a representation of "column" value.
 
-It is made pseudo-immutable (i.e. public attributes don't have setters), and
-it should not be mutated during message processing.
+They share some operations with the `StreamingDataframe`, but also provide some
+additional functionality.
 
-<a id="quixstreams.models.timestamps.MessageTimestamp.create"></a>
+Most column value operations are handled by this class, and `StreamingSeries` can
+generate other `StreamingSeries` as a result of said operations.
 
-#### MessageTimestamp.create
 
-```python
-@classmethod
-def create(cls, timestamp_type: int, milliseconds: int) -> Self
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/timestamps.py#L42)
-
-Create a Timestamp object based on data
-
-from `confluent_kafka.Message.timestamp()`.
-
-If timestamp type is "TIMESTAMP_NOT_AVAILABLE", the milliseconds are set to None
-
-**Arguments**:
-
-- `timestamp_type`: a timestamp type represented as a number
-Can be one of:
-- "0" - TIMESTAMP_NOT_AVAILABLE, timestamps not supported by broker.
-- "1" - TIMESTAMP_CREATE_TIME, message creation time (or source / producer time).
-- "2" - TIMESTAMP_LOG_APPEND_TIME, broker receive time.
-- `milliseconds`: the number of milliseconds since the epoch (UTC).
-
-**Returns**:
-
-Timestamp object
-
-<a id="quixstreams.models.types"></a>
-
-## quixstreams.models.types
-
-<a id="quixstreams.models.types.ConfluentKafkaMessageProto"></a>
-
-### ConfluentKafkaMessageProto
-
-```python
-class ConfluentKafkaMessageProto(Protocol)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/types.py#L10)
-
-An interface of `confluent_kafka.Message`.
-
-Use it to not depend on exact implementation and simplify testing.
-
-Instances of `confluent_kafka.Message` cannot be directly created from Python,
-see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
-
-<a id="quixstreams.models.topics"></a>
-
-## quixstreams.models.topics
-
-<a id="quixstreams.models.topics.Topic"></a>
+What it Does:
 
-### Topic
+- Allows ways to do simple operations with dataframe "column"/dictionary values:
+    - Basic ops like add, subtract, modulo, etc.
+- Enables comparisons/inequalities:
+    - Greater than, equals, etc.
+    - and/or, is/not operations
+- Can check for existence of columns in `StreamingDataFrames`
+- Enables chaining of various operations together
 
-```python
-class Topic()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/topics.py#L58)
-
-A representation of a Kafka topic and its expected data format via
-designated key and value serializers/deserializers.
 
-Typically created with an `app = quixstreams.app.Application()` instance via
-`app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
-instance.
-
-<a id="quixstreams.models.topics.Topic.__init__"></a>
-
-#### Topic.\_\_init\_\_
-
-```python
-def __init__(
-    name: str,
-    value_deserializer: Optional[DeserializerType] = None,
-    key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
-    value_serializer: Optional[SerializerType] = None,
-    key_serializer: Optional[SerializerType] = BytesSerializer())
-```
+How to Use:
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/topics.py#L68)
+For the most part, you may not even notice this class exists!
+They will naturally be created as a result of typical `StreamingDataFrame` use.
 
-Can specify serialization that should be used when consuming/producing
+Auto-complete should help you with valid methods and type-checking should alert
+you to invalid operations between `StreamingSeries`.
 
-to the topic in the form of a string name (i.e. "json" for JSON) or a
-serialization class instance directly, like JSONSerializer().
+In general, any typical Pands dataframe operation between columns should be valid
+with `StreamingSeries`, and you shouldn't have to think about them explicitly.
 
 
 Example Snippet:
 
-<blockquote>
-Specify an input and output topic for a `StreamingDataFrame` instance,
-where the output topic requires adjusting the key serializer.
+```python
+# Random methods for example purposes. More detailed explanations found under
+# various methods or in the docs folder.
+
+sdf = StreamingDataframe()
+sdf = sdf["column_a"].apply(a_func).apply(diff_func, stateful=True)
+sdf["my_new_bool_field"] = sdf["column_b"].contains("this_string")
+sdf["new_sum_field"] = sdf["column_c"] + sdf["column_d"] + 2
+sdf = sdf[["column_a"] & (sdf["new_sum_field"] >= 10)]
+```
+
+<a id="quixstreams.dataframe.series.StreamingSeries.from_func"></a>
+
+#### StreamingSeries.from\_func
 
 ```python
-from quixstreams.dataframe import StreamingDataFrame
-from quixstreams.models import Topic, JSONSerializer
-
-input_topic = Topic("input-topic", value_deserializer="json")
-output_topic = Topic(
-    "output-topic", key_serializer="str", value_serializer=JSONSerializer()
-)
-sdf = StreamingDataFrame(input_topic)
-sdf.to_topic(output_topic)
+@classmethod
+def from_func(cls, func: StreamCallable) -> Self
 ```
-</blockquote>
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L76)
+
+Create a StreamingSeries from a function.
+
+The provided function will be wrapped into `Apply`
 
 **Arguments**:
 
-- `name`: topic name
-- `value_deserializer`: a deserializer type for values
-- `key_deserializer`: a deserializer type for keys
-- `value_serializer`: a serializer type for values
-- `key_serializer`: a serializer type for keys
-
-<a id="quixstreams.models.topics.Topic.name"></a>
-
-#### Topic.name
-
-```python
-@property
-def name() -> str
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/topics.py#L115)
-
-Topic name
-
-<a id="quixstreams.models.topics.Topic.row_serialize"></a>
-
-#### Topic.row\_serialize
-
-```python
-def row_serialize(row: Row, key: Optional[Any] = None) -> KafkaMessage
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/topics.py#L121)
-
-Serialize Row to a Kafka message structure
-
-**Arguments**:
-
-- `row`: Row to serialize
-- `key`: message key to serialize, optional. Default - current Row key.
+- `func`: a function to apply
 
 **Returns**:
 
-KafkaMessage object with serialized values
+instance of `StreamingSeries`
 
-<a id="quixstreams.models.topics.Topic.row_deserialize"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.apply"></a>
 
-#### Topic.row\_deserialize
+#### StreamingSeries.apply
 
 ```python
-def row_deserialize(
-        message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
+def apply(func: StreamCallable) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/models/topics.py#L144)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L90)
 
-Deserialize incoming Kafka message to a Row.
+Add a callable to the execution list for this series.
+
+The provided callable should accept a single argument, which will be its input.
+The provided callable should similarly return one output, or None
+
+They can be chained together or included with other operations.
+
+
+Example Snippet:
+
+```python
+# The `StreamingSeries` are generated when `sdf["COLUMN_NAME"]` is called.
+# This stores a string in state and capitalizes the column value; the result is
+# assigned to a new column.
+#  Another apply converts a str column to an int, assigning it to a new column.
+
+def func(value: str, state: State):
+    if value != state.get("my_store_key"):
+        state.set("my_store_key") = value
+    return v.upper()
+
+sdf = StreamingDataframe()
+sdf["new_col"] = sdf["a_column"]["nested_dict_key"].apply(func, stateful=True)
+sdf["new_col_2"] = sdf["str_col"].apply(lambda v: int(v)) + sdf["str_col2"] + 2
+```
 
 **Arguments**:
 
-- `message`: an object with interface of `confluent_kafka.Message`
+- `func`: a callable with one argument and one output
 
 **Returns**:
 
-Row, list of Rows or None if the message is ignored.
+a new `StreamingSeries` with the new callable added
 
-<a id="quixstreams.platforms"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.compose"></a>
 
-## quixstreams.platforms
-
-<a id="quixstreams.platforms.quix"></a>
-
-## quixstreams.platforms.quix
-
-<a id="quixstreams.platforms.quix.api"></a>
-
-## quixstreams.platforms.quix.api
-
-<a id="quixstreams.platforms.quix.api.QuixPortalApiService"></a>
-
-### QuixPortalApiService
+#### StreamingSeries.compose
 
 ```python
-class QuixPortalApiService()
+def compose(allow_filters: bool = True,
+            allow_updates: bool = True) -> StreamCallable
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/api.py#L14)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L124)
 
-A light wrapper around the Quix Portal Api. If used in the Quix Platform, it will
-use that workspaces auth token and portal endpoint, else you must provide it.
+Compose all functions of this StreamingSeries into one big closure.
 
-Function names closely reflect the respective API endpoint,
-each starting with the method [GET, POST, etc.] followed by the endpoint path.
+Closures are more performant than calling all the functions in the
+`StreamingDataFrame` one-by-one.
 
-Results will be returned in the form of request's Response.json(), unless something
-else is required. Non-200's will raise exceptions.
+Generally not required by users; the `quixstreams.app.Application` class will
+do this automatically.
 
-See the swagger documentation for more info about the endpoints.
 
-<a id="quixstreams.platforms.quix.checks"></a>
-
-## quixstreams.platforms.quix.checks
-
-<a id="quixstreams.platforms.quix.checks.check_state_management_enabled"></a>
-
-#### check\_state\_management\_enabled
+Example Snippet:
 
 ```python
-def check_state_management_enabled()
+from quixstreams import Application
+
+app = Application(...)
+
+sdf = app.dataframe()
+sdf = sdf["column_a"].apply(apply_func)
+sdf = sdf["column_b"].contains(filter_func)
+sdf = sdf.compose()
+
+result_0 = sdf({"my": "record"})
+result_1 = sdf({"other": "record"})
 ```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/checks.py#L11)
-
-Check if State Management feature is enabled for the current deployment on
-Quix platform.
-If it's disabled, the exception will be raised.
-
-<a id="quixstreams.platforms.quix.checks.check_state_dir"></a>
-
-#### check\_state\_dir
-
-```python
-def check_state_dir(state_dir: str)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/checks.py#L28)
-
-Check if Application "state_dir" matches the state dir on Quix platform.
-
-If it doesn't match, the warning will be logged.
 
 **Arguments**:
 
-- `state_dir`: application state_dir path
+- `allow_filters`: If False, this function will fail with ValueError if
+the stream has filter functions in the tree. Default - True.
+- `allow_updates`: If False, this function will fail with ValueError if
+the stream has update functions in the tree. Default - True.
 
-<a id="quixstreams.platforms.quix.config"></a>
+**Raises**:
 
-## quixstreams.platforms.quix.config
-
-<a id="quixstreams.platforms.quix.config.TopicCreationConfigs"></a>
-
-### TopicCreationConfigs
-
-```python
-@dataclasses.dataclass
-class TopicCreationConfigs()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L24)
-
-<a id="quixstreams.platforms.quix.config.TopicCreationConfigs.name"></a>
-
-#### name
-
-Required when not created by a Quix App.
-
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder"></a>
-
-### QuixKafkaConfigsBuilder
-
-```python
-class QuixKafkaConfigsBuilder()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L33)
-
-Retrieves all the necessary information from the Quix API and builds all the
-objects required to connect a confluent-kafka client to the Quix Platform.
-
-If not executed within the Quix platform directly, you must provide a Quix
-"streaming" (aka "sdk") token, or Personal Access Token.
-
-Ideally you also know your workspace name or id. If not, you can search for it
-using a known topic name, but note the search space is limited to the access level
-of your token.
-
-It also currently handles the app_auto_create_topics setting for Application.Quix.
-
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.__init__"></a>
-
-#### QuixKafkaConfigsBuilder.\_\_init\_\_
-
-```python
-def __init__(quix_portal_api_service: Optional[QuixPortalApiService] = None,
-             workspace_id: Optional[str] = None,
-             workspace_cert_path: Optional[str] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L49)
-
-**Arguments**:
-
-- `quix_portal_api_service`: A QuixPortalApiService instance (else generated)
-- `workspace_id`: A valid Quix Workspace ID (else searched for)
-- `workspace_cert_path`: path to an existing workspace cert (else retrieved)
-
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.append_workspace_id"></a>
-
-#### QuixKafkaConfigsBuilder.append\_workspace\_id
-
-```python
-def append_workspace_id(s: str) -> str
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L149)
-
-Add the workspace ID to a given string, typically a topic or consumer group id
-
-**Arguments**:
-
-- `s`: the string to append to
+- `ValueError`: if disallowed functions are present in the tree of
+underlying `Stream`.
 
 **Returns**:
 
-the string with workspace_id appended
+a function that accepts "value"
+and returns a result of `StreamingSeries`
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.search_for_workspace"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.test"></a>
 
-#### QuixKafkaConfigsBuilder.search\_for\_workspace
+#### StreamingSeries.test
 
 ```python
-def search_for_workspace(
-        workspace_name_or_id: Optional[str] = None) -> Optional[dict]
+def test(value: Any, ctx: Optional[MessageContext] = None) -> Any
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L158)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L171)
 
-Search for a workspace given an expected workspace name or id.
+A shorthand to test `StreamingSeries` with provided value
+
+and `MessageContext`.
 
 **Arguments**:
 
-- `workspace_name_or_id`: the expected name or id of a workspace
+- `value`: value to pass through `StreamingSeries`
+- `ctx`: instance of `MessageContext`, optional.
+Provide it if the StreamingSeries instance has
+functions calling `get_current_key()`.
+Default - `None`.
 
 **Returns**:
 
-the workspace data dict if search success, else None
+result of `StreamingSeries`
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_workspace_info"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.isin"></a>
 
-#### QuixKafkaConfigsBuilder.get\_workspace\_info
+#### StreamingSeries.isin
 
 ```python
-def get_workspace_info(known_workspace_topic: Optional[str] = None)
+def isin(other: Container) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L181)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L202)
 
-Queries for workspace data from the Quix API, regardless of instance cache,
+Check if series value is in "other".
 
-and updates instance attributes from query result.
+Same as "StreamingSeries in other".
+
+Runtime result will be a `bool`.
+
+
+Example Snippet:
+
+```python
+from quixstreams import Application
+
+# Check if "str_column" is contained in a column with a list of strings and
+# assign the resulting `bool` to a new column: "has_my_str".
+
+sdf = app.dataframe()
+sdf["has_my_str"] = sdf["str_column"].isin(sdf["column_with_list_of_strs"])
+```
 
 **Arguments**:
 
-- `known_workspace_topic`: a topic you know to exist in some workspace
+- `other`: a container to check
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.search_workspace_for_topic"></a>
+**Returns**:
 
-#### QuixKafkaConfigsBuilder.search\_workspace\_for\_topic
+new StreamingSeries
+
+<a id="quixstreams.dataframe.series.StreamingSeries.contains"></a>
+
+#### StreamingSeries.contains
 
 ```python
-def search_workspace_for_topic(workspace_id: str, topic: str) -> Optional[str]
+def contains(other: object) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L208)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L229)
 
-Search through all the topics in the given workspace id to see if there is a
+Check if series value contains "other"
 
-match with the provided topic.
+Same as "other in StreamingSeries".
+
+Runtime result will be a `bool`.
+
+
+Example Snippet:
+
+```python
+from quixstreams import Application
+
+# Check if "column_a" contains "my_substring" and assign the resulting
+# `bool` to a new column: "has_my_substr"
+
+sdf = app.dataframe()
+sdf["has_my_substr"] = sdf["column_a"].contains("my_substring")
+```
 
 **Arguments**:
 
-- `workspace_id`: the workspace to search in
-- `topic`: the topic to search for
+- `other`: object to check
 
 **Returns**:
 
-the workspace_id if success, else None
+new StreamingSeries
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.search_for_topic_workspace"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.is_"></a>
 
-#### QuixKafkaConfigsBuilder.search\_for\_topic\_workspace
+#### StreamingSeries.is\_
 
 ```python
-def search_for_topic_workspace(topic: str) -> Optional[dict]
+def is_(other: object) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L224)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L254)
 
-Find what workspace a topic belongs to.
+Check if series value refers to the same object as `other`
 
-If there is only one workspace altogether, it is assumed to be the workspace.
-More than one means each workspace will be searched until the first hit.
+Runtime result will be a `bool`.
+
+
+Example Snippet:
+
+```python
+# Check if "column_a" is the same as "column_b" and assign the resulting `bool`
+#  to a new column: "is_same"
+
+from quixstreams import Application
+sdf = app.dataframe()
+sdf["is_same"] = sdf["column_a"].is_(sdf["column_b"])
+```
 
 **Arguments**:
 
-- `topic`: the topic to search for
+- `other`: object to check for "is"
 
 **Returns**:
 
-workspace data dict if topic search success, else None
+new StreamingSeries
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_workspace_ssl_cert"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.isnot"></a>
 
-#### QuixKafkaConfigsBuilder.get\_workspace\_ssl\_cert
+#### StreamingSeries.isnot
 
 ```python
-def get_workspace_ssl_cert(extract_to_folder: Optional[Path] = None) -> str
+def isnot(other: object) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L245)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L277)
 
-Gets and extracts zipped certificate from the API to provided folder.
+Check if series value does not refer to the same object as `other`
 
-If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
+Runtime result will be a `bool`.
+
+
+Example Snippet:
+
+```python
+from quixstreams import Application
+
+# Check if "column_a" is the same as "column_b" and assign the resulting `bool`
+# to a new column: "is_not_same"
+
+sdf = app.dataframe()
+sdf["is_not_same"] = sdf["column_a"].isnot(sdf["column_b"])
+```
 
 **Arguments**:
 
-- `extract_to_folder`: path to folder to dump zipped cert file to
+- `other`: object to check for "is_not"
 
 **Returns**:
 
-full cert filepath as string
+new StreamingSeries
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.create_topics"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.isnull"></a>
 
-#### QuixKafkaConfigsBuilder.create\_topics
-
-```python
-def create_topics(topics: Iterable[TopicCreationConfigs],
-                  finalize_timeout_seconds: Optional[int] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L308)
-
-Create topics in a Quix cluster.
-
-**Arguments**:
-
-- `topics`: an iterable with TopicCreationConfigs instances
-- `finalize_timeout_seconds`: How long to wait for the topics to be
-marked as "Ready" (and thus ready to produce to/consume from).
-
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.confirm_topics_exist"></a>
-
-#### QuixKafkaConfigsBuilder.confirm\_topics\_exist
+#### StreamingSeries.isnull
 
 ```python
-def confirm_topics_exist(topics: Iterable[Union[Topic, TopicCreationConfigs]])
+def isnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L354)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L301)
 
-Confirm whether the desired set of topics exists in the Quix workspace.
+Check if series value is None.
 
-**Arguments**:
+Runtime result will be a `bool`.
 
-- `topics`: an iterable with Either Topic or TopicCreationConfigs instances
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_confluent_broker_config"></a>
-
-#### QuixKafkaConfigsBuilder.get\_confluent\_broker\_config
+Example Snippet:
 
 ```python
-def get_confluent_broker_config(known_topic: Optional[str] = None) -> dict
+from quixstreams import Application
+
+# Check if "column_a" is null and assign the resulting `bool` to a new column:
+# "is_null"
+
+sdf = app.dataframe()
+sdf["is_null"] = sdf["column_a"].isnull()
 ```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L394)
-
-Get the full client config dictionary required to authenticate a confluent-kafka
-
-client to a Quix platform broker/workspace.
-
-The returned config can be used directly by any confluent-kafka-python consumer/
-producer (add your producer/consumer-specific configs afterward).
-
-**Arguments**:
-
-- `known_topic`: a topic known to exist in some workspace
 
 **Returns**:
 
-a dict of confluent-kafka-python client settings (see librdkafka
-config for more details)
+new StreamingSeries
 
-<a id="quixstreams.platforms.quix.config.QuixKafkaConfigsBuilder.get_confluent_client_configs"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.notnull"></a>
 
-#### QuixKafkaConfigsBuilder.get\_confluent\_client\_configs
+#### StreamingSeries.notnull
 
 ```python
-def get_confluent_client_configs(
-    topics: list,
-    consumer_group_id: Optional[str] = None
-) -> Tuple[dict, List[str], Optional[str]]
+def notnull() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/config.py#L416)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L324)
 
-Get all the values you need in order to use a confluent_kafka-based client
+Check if series value is not None.
 
-with a topic on a Quix platform broker/workspace.
+Runtime result will be a `bool`.
 
-The returned config can be used directly by any confluent-kafka-python consumer/
-producer (add your producer/consumer-specific configs afterward).
 
-The topics and consumer group are appended with any necessary values.
+Example Snippet:
 
-**Arguments**:
+```python
+from quixstreams import Application
 
-- `topics`: list of topics
-- `consumer_group_id`: consumer group id, if needed
+# Check if "column_a" is not null and assign the resulting `bool` to a new column:
+# "is_not_null"
+
+sdf = app.dataframe()
+sdf["is_not_null"] = sdf["column_a"].notnull()
+```
 
 **Returns**:
 
-a tuple with configs and altered versions of the topics
-and consumer group name
+new StreamingSeries
 
-<a id="quixstreams.platforms.quix.env"></a>
+<a id="quixstreams.dataframe.series.StreamingSeries.abs"></a>
 
-## quixstreams.platforms.quix.env
-
-<a id="quixstreams.platforms.quix.env.QuixEnvironment"></a>
-
-### QuixEnvironment
+#### StreamingSeries.abs
 
 ```python
-class QuixEnvironment()
+def abs() -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L7)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/dataframe/series.py#L347)
 
-Class to access various Quix platform environment settings
+Get absolute value of the series value.
 
-<a id="quixstreams.platforms.quix.env.QuixEnvironment.state_management_enabled"></a>
-
-#### QuixEnvironment.state\_management\_enabled
+Example Snippet:
 
 ```python
-@property
-def state_management_enabled() -> bool
+from quixstreams import Application
+
+# Get absolute value of "int_col" and add it to "other_int_col".
+# Finally, assign the result to a new column: "abs_col_sum".
+
+sdf = app.dataframe()
+sdf["abs_col_sum"] = sdf["int_col"].abs() + sdf["other_int_col"]
 ```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L19)
-
-Check whether "State management" is enabled for the current deployment
 
 **Returns**:
 
-True if state management is enabled, otherwise False
+new StreamingSeries
 
-<a id="quixstreams.platforms.quix.env.QuixEnvironment.deployment_id"></a>
+<a id="quixstreams.dataframe"></a>
 
-#### QuixEnvironment.deployment\_id
+## quixstreams.dataframe
 
-```python
-@property
-def deployment_id() -> Optional[str]
-```
+<a id="quixstreams.dataframe.base"></a>
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L27)
-
-Return current Quix deployment id.
-
-This variable is meant to be set only by Quix Platform and only
-when the application is deployed.
-
-**Returns**:
-
-deployment id or None
-
-<a id="quixstreams.platforms.quix.env.QuixEnvironment.workspace_id"></a>
-
-#### QuixEnvironment.workspace\_id
-
-```python
-@property
-def workspace_id() -> Optional[str]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L39)
-
-Return Quix workspace id if set
-
-**Returns**:
-
-workspace id or None
-
-<a id="quixstreams.platforms.quix.env.QuixEnvironment.portal_api"></a>
-
-#### QuixEnvironment.portal\_api
-
-```python
-@property
-def portal_api() -> Optional[str]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L47)
-
-Return Quix Portal API url if set
-
-**Returns**:
-
-portal API URL or None
-
-<a id="quixstreams.platforms.quix.env.QuixEnvironment.sdk_token"></a>
-
-#### QuixEnvironment.sdk\_token
-
-```python
-@property
-def sdk_token() -> Optional[str]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L56)
-
-Return Quix SDK token if set
-
-**Returns**:
-
-sdk token or None
-
-<a id="quixstreams.platforms.quix.env.QuixEnvironment.state_dir"></a>
-
-#### QuixEnvironment.state\_dir
-
-```python
-@property
-def state_dir() -> str
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/platforms/quix/env.py#L64)
-
-Return application state directory on Quix.
-
-**Returns**:
-
-path to state dir
-
-<a id="quixstreams.rowconsumer"></a>
-
-## quixstreams.rowconsumer
-
-<a id="quixstreams.rowconsumer.RowConsumer"></a>
-
-### RowConsumer
-
-```python
-class RowConsumer(Consumer, RowConsumerProto)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowconsumer.py#L59)
-
-<a id="quixstreams.rowconsumer.RowConsumer.__init__"></a>
-
-#### RowConsumer.\_\_init\_\_
-
-```python
-def __init__(broker_address: str,
-             consumer_group: str,
-             auto_offset_reset: AutoOffsetReset,
-             auto_commit_enable: bool = True,
-             assignment_strategy: AssignmentStrategy = "range",
-             on_commit: Callable[[Optional[KafkaError], List[TopicPartition]],
-                                 None] = None,
-             extra_config: Optional[dict] = None,
-             on_error: Optional[ConsumerErrorCallback] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowconsumer.py#L60)
-
-A consumer class that is capable of deserializing Kafka messages to Rows
-
-according to the Topics deserialization settings.
-
-It overrides `.subscribe()` method of Consumer class to accept `Topic`
-objects instead of strings.
-
-**Arguments**:
-
-- `broker_address`: Kafka broker host and port in format `<host>:<port>`.
-Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
-- `consumer_group`: Kafka consumer group.
-Passed as `group.id` to `confluent_kafka.Consumer`
-- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
-Available values:
-- "earliest" - automatically reset the offset to the smallest offset
-- "latest" - automatically reset the offset to the largest offset
-- `auto_commit_enable`: If true, periodically commit offset of
-the last message handed to the application. Default - `True`.
-- `assignment_strategy`: The name of a partition assignment strategy.
-Available values: "range", "roundrobin", "cooperative-sticky".
-- `on_commit`: Offset commit result propagation callback.
-Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
-- `extra_config`: A dictionary with additional options that
-will be passed to `confluent_kafka.Consumer` as is.
-Note: values passed as arguments override values in `extra_config`.
-- `on_error`: a callback triggered when `RowConsumer.poll_row` fails.
-If consumer fails and the callback returns `True`, the exception
-will be logged but not propagated.
-The default callback logs an exception and returns `False`.
-
-<a id="quixstreams.rowconsumer.RowConsumer.subscribe"></a>
-
-#### RowConsumer.subscribe
-
-```python
-def subscribe(topics: List[Topic],
-              on_assign: Optional[RebalancingCallback] = None,
-              on_revoke: Optional[RebalancingCallback] = None,
-              on_lost: Optional[RebalancingCallback] = None)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowconsumer.py#L115)
-
-Set subscription to supplied list of topics.
-
-This replaces a previous subscription.
-
-This method also updates the internal mapping with topics that is used
-to deserialize messages to Rows.
-
-**Arguments**:
-
-- `topics`: list of `Topic` instances to subscribe to.
-- `on_assign` (`callable`): callback to provide handling of customized offsets
-on completion of a successful partition re-assignment.
-- `on_revoke` (`callable`): callback to provide handling of offset commits to
-a customized store on the start of a rebalance operation.
-- `on_lost` (`callable`): callback to provide handling in the case the partition
-assignment has been lost. Partitions that have been lost may already be
-owned by other members in the group and therefore committing offsets,
-for example, may fail.
-
-<a id="quixstreams.rowconsumer.RowConsumer.poll_row"></a>
-
-#### RowConsumer.poll\_row
-
-```python
-def poll_row(timeout: float = None) -> Union[Row, List[Row], None]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowconsumer.py#L149)
-
-Consumes a single message and deserialize it to Row or a list of Rows.
-
-The message is deserialized according to the corresponding Topic.
-If deserializer raises `IgnoreValue` exception, this method will return None.
-If Kafka returns an error, it will be raised as exception.
-
-**Arguments**:
-
-- `timeout`: poll timeout seconds
-
-**Returns**:
-
-single Row, list of Rows or None
+## quixstreams.dataframe.base
 
 <a id="quixstreams.rowproducer"></a>
 
@@ -3180,7 +1289,7 @@ single Row, list of Rows or None
 class RowProducer(Producer, RowProducerProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowproducer.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowproducer.py#L25)
 
 A producer class that is capable of serializing Rows to bytes and send them to Kafka.
 
@@ -3218,7 +1327,7 @@ def produce_row(row: Row,
                 timestamp: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowproducer.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowproducer.py#L66)
 
 Serialize Row to bytes according to the Topic serialization settings
 
@@ -3242,7 +1351,7 @@ If this method fails, it will trigger the provided "on_error" callback.
 def poll(timeout: float = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/rowproducer.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowproducer.py#L103)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -3252,241 +1361,1249 @@ If poll fails, it will trigger the provided "on_error" callback
 
 - `timeout`: timeout in seconds
 
-<a id="quixstreams.state"></a>
+<a id="quixstreams.core.stream.functions"></a>
 
-## quixstreams.state
+## quixstreams.core.stream.functions
 
-<a id="quixstreams.state.exceptions"></a>
+<a id="quixstreams.core.stream.functions.StreamFunction"></a>
 
-## quixstreams.state.exceptions
-
-<a id="quixstreams.state.manager"></a>
-
-## quixstreams.state.manager
-
-<a id="quixstreams.state.manager.StateStoreManager"></a>
-
-### StateStoreManager
+### StreamFunction
 
 ```python
-class StateStoreManager()
+class StreamFunction(abc.ABC)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L27)
 
-Class for managing state stores and partitions.
+A base class for all the streaming operations in Quix Streams.
 
-StateStoreManager is responsible for:
- - reacting to rebalance callbacks
- - managing the individual state stores
- - providing access to store transactions
+It provides two methods that return closures to be called on the input values:
+- `get_executor` - a wrapper to execute on a single value
+- `get_executor_expanded` - a wrapper to execute on an expanded value.
+    Expanded value is a list, where each item should be treated as a separate value.
 
-<a id="quixstreams.state.manager.StateStoreManager.stores"></a>
+<a id="quixstreams.core.stream.functions.StreamFunction.func"></a>
 
-#### StateStoreManager.stores
+#### StreamFunction.func
 
 ```python
 @property
-def stores() -> Dict[str, Dict[str, Store]]
+def func() -> StreamCallable
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L63)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L44)
 
-Map of registered state stores
+The original function
+
+<a id="quixstreams.core.stream.functions.StreamFunction.get_executor"></a>
+
+#### StreamFunction.get\_executor
+
+```python
+@abc.abstractmethod
+def get_executor() -> StreamCallable
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L51)
+
+Returns a wrapper to be called on a single value.
+
+<a id="quixstreams.core.stream.functions.StreamFunction.get_executor_expanded"></a>
+
+#### StreamFunction.get\_executor\_expanded
+
+```python
+@abc.abstractmethod
+def get_executor_expanded() -> StreamCallable
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L57)
+
+Returns a wrapper to be called on a list of expanded values.
+
+<a id="quixstreams.core.stream.functions.ApplyFunction"></a>
+
+### ApplyFunction
+
+```python
+class ApplyFunction(StreamFunction)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L63)
+
+Wrap a function into "Apply" function.
+
+The provided function is expected to return a new value based on input,
+and its result will always be passed downstream.
+
+<a id="quixstreams.core.stream.functions.ApplyExpandFunction"></a>
+
+### ApplyExpandFunction
+
+```python
+class ApplyExpandFunction(StreamFunction)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L86)
+
+Wrap a function into "Apply" function and expand the returned iterable
+into separate values downstream.
+
+The provided function is expected to return an `Iterable`.
+If the returned value is not `Iterable`, `TypeError` will be raised.
+
+<a id="quixstreams.core.stream.functions.FilterFunction"></a>
+
+### FilterFunction
+
+```python
+class FilterFunction(StreamFunction)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L115)
+
+Wraps a function into a "Filter" function.
+The result of a Filter function is interpreted as boolean.
+If it's `True`, the input will be return downstream.
+If it's `False`, the `Filtered` exception will be raised to signal that the
+value is filtered out.
+
+<a id="quixstreams.core.stream.functions.UpdateFunction"></a>
+
+### UpdateFunction
+
+```python
+class UpdateFunction(StreamFunction)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L147)
+
+Wrap a function into an "Update" function.
+
+The provided function is expected to mutate the value
+or to perform some side effect.
+Its result will always be ignored, and its input is passed
+downstream.
+
+<a id="quixstreams.core.stream.functions.compose"></a>
+
+#### compose
+
+```python
+def compose(functions: List[StreamFunction],
+            allow_filters: bool = True,
+            allow_updates: bool = True,
+            allow_expands: bool = True) -> StreamCallable
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L176)
+
+Composes a list of functions and its parents into a single
+
+big closure like this:
+```
+[func, func, func] -> func(func(func()))
+```
+
+Closures are more performant than calling all functions one by one in a loop.
+
+**Arguments**:
+
+- `functions`: list of `StreamFunction` objects to compose
+- `allow_filters`: If False, will fail with `ValueError` if
+the list has `FilterFunction`. Default - True.
+- `allow_updates`: If False, will fail with `ValueError` if
+the list has `UpdateFunction`. Default - True.
+- `allow_expands`: If False, will fail with `ValueError` if
+the list has `ApplyFunction` with "expand=True". Default - True.
+
+**Raises**:
+
+- `ValueError`: if disallowed functions are present in the list of functions.
+
+<a id="quixstreams.core.stream.functions.composer"></a>
+
+#### composer
+
+```python
+def composer(outer_func: StreamCallable,
+             inner_func: StreamCallable) -> Callable[[T], R]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/functions.py#L226)
+
+A function that wraps two other functions into a closure.
+
+It passes the result of the inner function as an input to the outer function.
 
 **Returns**:
 
-dict in format {topic: {store_name: store}}
+a function with one argument (value)
 
-<a id="quixstreams.state.manager.StateStoreManager.get_store"></a>
+<a id="quixstreams.core.stream"></a>
 
-#### StateStoreManager.get\_store
+## quixstreams.core.stream
+
+<a id="quixstreams.core.stream.stream"></a>
+
+## quixstreams.core.stream.stream
+
+<a id="quixstreams.core.stream.stream.Stream"></a>
+
+### Stream
 
 ```python
-def get_store(topic: str,
-              store_name: str = _DEFAULT_STATE_STORE_NAME) -> Store
+class Stream()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L70)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L22)
 
-Get a store for given name and topic
+<a id="quixstreams.core.stream.stream.Stream.__init__"></a>
+
+#### Stream.\_\_init\_\_
+
+```python
+def __init__(func: Optional[StreamFunction] = None,
+             parent: Optional[Self] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L23)
+
+A base class for all streaming operations.
+
+`Stream` is an abstraction of a function pipeline.
+Each Stream has a function and a parent (None by default).
+When adding new function to the stream, it creates a new `Stream` object and
+sets "parent" to the previous `Stream` to maintain an order of execution.
+
+Streams supports 3 types of functions:
+- "Apply" - generate new values based on a previous one.
+    The result of an Apply function is passed downstream to the next functions.
+    If "expand=True" is passed and the function returns an `Iterable`,
+    each item of it will be treated as a separate value downstream.
+- "Update" - update values in-place.
+    The result of an Update function is always ignored, and its input is passed
+    downstream.
+- "Filter" - to filter values from the Stream.
+    The result of a Filter function is interpreted as boolean.
+    If it's `True`, the input will be passed downstream.
+    If it's `False`, the `Filtered` exception will be raised to signal that the
+    value is filtered out.
+
+To execute the functions on the `Stream`, call `.compose()` method, and
+it will return a closure to execute all the functions accumulated in the Stream
+and its parents.
 
 **Arguments**:
 
-- `topic`: topic name
-- `store_name`: store name
+- `func`: a function to be called on the stream.
+It is expected to be wrapped into one of "Apply", "Filter" or "Update" from
+`quixstreams.core.stream.functions` package.
+Default - "Apply(lambda v: v)".
+- `parent`: a parent `Stream`
+
+<a id="quixstreams.core.stream.stream.Stream.add_filter"></a>
+
+#### Stream.add\_filter
+
+```python
+def add_filter(func: Callable[[T], R]) -> Self
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L79)
+
+Add a function to filter values from the Stream.
+
+The return value of the function will be interpreted as `bool`.
+If the function returns `False`-like result, the Stream will raise `Filtered`
+exception during execution.
+
+**Arguments**:
+
+- `func`: a function to filter values from the stream
 
 **Returns**:
 
-instance of `Store`
+a new `Stream` derived from the current one
 
-<a id="quixstreams.state.manager.StateStoreManager.register_store"></a>
+<a id="quixstreams.core.stream.stream.Stream.add_apply"></a>
 
-#### StateStoreManager.register\_store
+#### Stream.add\_apply
 
 ```python
-def register_store(topic_name: str,
-                   store_name: str = _DEFAULT_STATE_STORE_NAME)
+def add_apply(func: Callable[[T], R], expand: bool = False) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L86)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L92)
 
-Register a state store to be managed by StateStoreManager.
+Add an "apply" function to the Stream.
 
-During processing, the StateStoreManager will react to rebalancing callbacks
-and assign/revoke the partitions for registered stores.
-
-Each store can be registered only once for each topic.
+The function is supposed to return a new value, which will be passed
+further during execution.
 
 **Arguments**:
 
-- `topic_name`: topic name
-- `store_name`: store name
-
-<a id="quixstreams.state.manager.StateStoreManager.clear_stores"></a>
-
-#### StateStoreManager.clear\_stores
-
-```python
-def clear_stores()
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L109)
-
-Delete all state stores managed by StateStoreManager.
-
-<a id="quixstreams.state.manager.StateStoreManager.on_partition_assign"></a>
-
-#### StateStoreManager.on\_partition\_assign
-
-```python
-def on_partition_assign(tp: TopicPartition) -> List[StorePartition]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L124)
-
-Assign store partitions for each registered store for the given `TopicPartition`
-
-and return a list of assigned `StorePartition` objects.
-
-**Arguments**:
-
-- `tp`: `TopicPartition` from Kafka consumer
+- `func`: a function to generate a new value
+- `expand`: if True, expand the returned iterable into individual values
+downstream. If returned value is not iterable, `TypeError` will be raised.
+Default - `False`.
 
 **Returns**:
 
-list of assigned `StorePartition`
+a new `Stream` derived from the current one
 
-<a id="quixstreams.state.manager.StateStoreManager.on_partition_revoke"></a>
+<a id="quixstreams.core.stream.stream.Stream.add_update"></a>
 
-#### StateStoreManager.on\_partition\_revoke
+#### Stream.add\_update
 
 ```python
-def on_partition_revoke(tp: TopicPartition)
+def add_update(func: Callable[[T], object]) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L109)
 
-Revoke store partitions for each registered store for the given `TopicPartition`
+Add an "update" function to the Stream, that will mutate the input value.
+
+The return of this function will be ignored and its input
+will be passed downstream.
 
 **Arguments**:
 
-- `tp`: `TopicPartition` from Kafka consumer
+- `func`: a function to mutate the value
 
-<a id="quixstreams.state.manager.StateStoreManager.on_partition_lost"></a>
+**Returns**:
 
-#### StateStoreManager.on\_partition\_lost
+a new Stream derived from the current one
+
+<a id="quixstreams.core.stream.stream.Stream.diff"></a>
+
+#### Stream.diff
 
 ```python
-def on_partition_lost(tp: TopicPartition)
+def diff(other: "Stream") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L147)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L121)
 
-Revoke and close store partitions for each registered store for the given
+Takes the difference between Streams `self` and `other` based on their last
 
-`TopicPartition`
+common parent, and returns a new `Stream` that includes only this difference.
+
+It's impossible to calculate a diff when:
+ - Streams don't have a common parent.
+ - When the `self` Stream already includes all the nodes from
+    the `other` Stream, and the resulting diff is empty.
 
 **Arguments**:
 
-- `tp`: `TopicPartition` from Kafka consumer
+- `other`: a `Stream` to take a diff from.
 
-<a id="quixstreams.state.manager.StateStoreManager.init"></a>
+**Raises**:
 
-#### StateStoreManager.init
+- `ValueError`: if Streams don't have a common parent
+or if the diff is empty.
 
-```python
-def init()
-```
+**Returns**:
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L157)
+new `Stream` instance including all the Streams from the diff
 
-Initialize `StateStoreManager` and create a store directory
+<a id="quixstreams.core.stream.stream.Stream.tree"></a>
 
-
-<a id="quixstreams.state.manager.StateStoreManager.close"></a>
-
-#### StateStoreManager.close
+#### Stream.tree
 
 ```python
-def close()
+def tree() -> List[Self]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L164)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L150)
 
-Close all registered stores
+Return a list of all parent Streams including the node itself.
 
-<a id="quixstreams.state.manager.StateStoreManager.get_store_transaction"></a>
+The tree is ordered from child to parent (current node comes first).
 
-#### StateStoreManager.get\_store\_transaction
+**Returns**:
+
+a list of `Stream` objects
+
+<a id="quixstreams.core.stream.stream.Stream.compose"></a>
+
+#### Stream.compose
 
 ```python
-def get_store_transaction(
-        store_name: str = _DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
+def compose(allow_filters: bool = True,
+            allow_updates: bool = True,
+            allow_expands: bool = True) -> Callable[[T], R]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L172)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/core/stream/stream.py#L164)
 
-Get active `PartitionTransaction` for the store
+Compose a list of functions from this `Stream` and its parents into one
+
+big closure using a "composer" function.
+
+Closures are more performant than calling all the functions in the
+`Stream.tree()` one-by-one.
 
 **Arguments**:
 
-- `store_name`: 
+- `allow_filters`: If False, this function will fail with `ValueError` if
+the stream has filter functions in the tree. Default - True.
+- `allow_updates`: If False, this function will fail with `ValueError` if
+the stream has update functions in the tree. Default - True.
+- `allow_expands`: If False, this function will fail with `ValueError` if
+the stream has functions with "expand=True" in the tree. Default - True.
 
-<a id="quixstreams.state.manager.StateStoreManager.start_store_transaction"></a>
+**Raises**:
 
-#### StateStoreManager.start\_store\_transaction
+- `ValueError`: if disallowed functions are present in the stream tree.
+
+<a id="quixstreams.core"></a>
+
+## quixstreams.core
+
+<a id="quixstreams.utils"></a>
+
+## quixstreams.utils
+
+<a id="quixstreams.utils.json"></a>
+
+## quixstreams.utils.json
+
+<a id="quixstreams.utils.json.dumps"></a>
+
+#### dumps
 
 ```python
-@contextlib.contextmanager
-def start_store_transaction(topic: str, partition: int,
-                            offset: int) -> Iterator["_MultiStoreTransaction"]
+def dumps(value: Any) -> bytes
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/manager.py#L187)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/utils/json.py#L8)
 
-Starting the multi-store transaction for the Kafka message.
-
-This transaction will keep track of all used stores and flush them in the end.
-If any exception is catched during this transaction, none of them
-will be flushed as a best effort to keep stores consistent in "at-least-once" setting.
-
-There can be only one active transaction at a time. Starting a new transaction
-before the end of the current one will fail.
+Serialize to JSON using `orjson` package.
 
 **Arguments**:
 
-- `topic`: message topic
-- `partition`: message partition
-- `offset`: message offset
+- `value`: value to serialize to JSON
 
-<a id="quixstreams.state.rocksdb"></a>
+**Returns**:
 
-## quixstreams.state.rocksdb
+bytes
 
-<a id="quixstreams.state.rocksdb.exceptions"></a>
+<a id="quixstreams.utils.json.loads"></a>
 
-## quixstreams.state.rocksdb.exceptions
+#### loads
+
+```python
+def loads(value: bytes) -> Any
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/utils/json.py#L18)
+
+Deserialize from JSON using `orjson` package.
+
+Main differences:
+- It returns `bytes`
+- It doesn't allow non-str keys in dictionaries
+
+**Arguments**:
+
+- `value`: value to deserialize from
+
+**Returns**:
+
+object
+
+<a id="quixstreams.types"></a>
+
+## quixstreams.types
+
+<a id="quixstreams.models.timestamps"></a>
+
+## quixstreams.models.timestamps
+
+<a id="quixstreams.models.timestamps.TimestampType"></a>
+
+### TimestampType
+
+```python
+class TimestampType(enum.IntEnum)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/timestamps.py#L9)
+
+<a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_NOT_AVAILABLE"></a>
+
+#### TIMESTAMP\_NOT\_AVAILABLE
+
+timestamps not supported by broker
+
+<a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_CREATE_TIME"></a>
+
+#### TIMESTAMP\_CREATE\_TIME
+
+message creation time (or source / producer time)
+
+<a id="quixstreams.models.timestamps.TimestampType.TIMESTAMP_LOG_APPEND_TIME"></a>
+
+#### TIMESTAMP\_LOG\_APPEND\_TIME
+
+broker receive time
+
+<a id="quixstreams.models.timestamps.MessageTimestamp"></a>
+
+### MessageTimestamp
+
+```python
+class MessageTimestamp()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/timestamps.py#L15)
+
+Represents a timestamp of incoming Kafka message.
+
+It is made pseudo-immutable (i.e. public attributes don't have setters), and
+it should not be mutated during message processing.
+
+<a id="quixstreams.models.timestamps.MessageTimestamp.create"></a>
+
+#### MessageTimestamp.create
+
+```python
+@classmethod
+def create(cls, timestamp_type: int, milliseconds: int) -> Self
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/timestamps.py#L42)
+
+Create a Timestamp object based on data
+
+from `confluent_kafka.Message.timestamp()`.
+
+If timestamp type is "TIMESTAMP_NOT_AVAILABLE", the milliseconds are set to None
+
+**Arguments**:
+
+- `timestamp_type`: a timestamp type represented as a number
+Can be one of:
+- "0" - TIMESTAMP_NOT_AVAILABLE, timestamps not supported by broker.
+- "1" - TIMESTAMP_CREATE_TIME, message creation time (or source / producer time).
+- "2" - TIMESTAMP_LOG_APPEND_TIME, broker receive time.
+- `milliseconds`: the number of milliseconds since the epoch (UTC).
+
+**Returns**:
+
+Timestamp object
+
+<a id="quixstreams.models"></a>
+
+## quixstreams.models
+
+<a id="quixstreams.models.messagecontext"></a>
+
+## quixstreams.models.messagecontext
+
+<a id="quixstreams.models.messagecontext.MessageContext"></a>
+
+### MessageContext
+
+```python
+class MessageContext()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/messagecontext.py#L7)
+
+An object with Kafka message properties.
+
+It is made pseudo-immutable (i.e. public attributes don't have setters), and
+it should not be mutated during message processing.
+
+<a id="quixstreams.models.types"></a>
+
+## quixstreams.models.types
+
+<a id="quixstreams.models.types.ConfluentKafkaMessageProto"></a>
+
+### ConfluentKafkaMessageProto
+
+```python
+class ConfluentKafkaMessageProto(Protocol)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/types.py#L10)
+
+An interface of `confluent_kafka.Message`.
+
+Use it to not depend on exact implementation and simplify testing.
+
+Instances of `confluent_kafka.Message` cannot be directly created from Python,
+see https://github.com/confluentinc/confluent-kafka-python/issues/1535.
+
+<a id="quixstreams.models.serializers"></a>
+
+## quixstreams.models.serializers
+
+<a id="quixstreams.models.serializers.exceptions"></a>
+
+## quixstreams.models.serializers.exceptions
+
+<a id="quixstreams.models.serializers.exceptions.IgnoreMessage"></a>
+
+### IgnoreMessage
+
+```python
+class IgnoreMessage(exceptions.QuixException)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/exceptions.py#L51)
+
+Raise this exception from Deserializer.__call__ in order to ignore the processing
+of the particular message.
+
+<a id="quixstreams.models.serializers.quix"></a>
+
+## quixstreams.models.serializers.quix
+
+<a id="quixstreams.models.serializers.quix.QuixDeserializer"></a>
+
+### QuixDeserializer
+
+```python
+class QuixDeserializer(JSONDeserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L70)
+
+Handles Deserialization for any Quix-formatted topic.
+
+Parses JSON data from either `TimeseriesData` and `EventData` (ignores the rest).
+
+<a id="quixstreams.models.serializers.quix.QuixDeserializer.__init__"></a>
+
+#### QuixDeserializer.\_\_init\_\_
+
+```python
+def __init__(column_name: Optional[str] = None,
+             loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L77)
+
+**Arguments**:
+
+- `column_name`: if provided, the deserialized value will be wrapped into
+dictionary with `column_name` as a key.
+- `loads`: function to parse json from bytes.
+Default - :py:func:`quixstreams.utils.json.loads`.
+
+<a id="quixstreams.models.serializers.quix.QuixDeserializer.split_values"></a>
+
+#### QuixDeserializer.split\_values
+
+```python
+@property
+def split_values() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L97)
+
+Each Quix message might contain data for multiple Rows.
+This property informs the downstream processors about that, so they can
+expect an Iterable instead of Mapping.
+
+<a id="quixstreams.models.serializers.quix.QuixDeserializer.deserialize"></a>
+
+#### QuixDeserializer.deserialize
+
+```python
+def deserialize(model_key: str, value: Union[List[Mapping],
+                                             Mapping]) -> Iterable[Mapping]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L150)
+
+Deserialization function for particular data types (Timeseries or EventData).
+
+**Arguments**:
+
+- `model_key`: value of "__Q_ModelKey" message header
+- `value`: deserialized JSON value of the message, list or dict
+
+**Returns**:
+
+Iterable of dicts
+
+<a id="quixstreams.models.serializers.quix.QuixSerializer"></a>
+
+### QuixSerializer
+
+```python
+class QuixSerializer(JSONSerializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L268)
+
+<a id="quixstreams.models.serializers.quix.QuixSerializer.__init__"></a>
+
+#### QuixSerializer.\_\_init\_\_
+
+```python
+def __init__(as_legacy: bool = True,
+             dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L272)
+
+Serializer that returns data in json format.
+
+**Arguments**:
+
+- `as_legacy`: parse as the legacy format; Default = True
+- `dumps`: a function to serialize objects to json.
+Default - :py:func:`quixstreams.utils.json.dumps`
+
+<a id="quixstreams.models.serializers.quix.QuixTimeseriesSerializer"></a>
+
+### QuixTimeseriesSerializer
+
+```python
+class QuixTimeseriesSerializer(QuixSerializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L315)
+
+Serialize data to JSON formatted according to Quix Timeseries format.
+
+The serializable object must be dictionary, and each item must be of `str`, `int`,
+`float`, `bytes` or `bytearray` type.
+Otherwise, the `SerializationError` will be raised.
+
+Input:
+```python
+{'a': 1, 'b': 1.1, 'c': "string", 'd': b'bytes', 'Tags': {'tag1': 'tag'}}
+```
+
+Output:
+```json
+{
+    "Timestamps": [123123123],
+    "NumericValues": {"a": [1], "b": [1.1]},
+    "StringValues": {"c": ["string"]},
+    "BinaryValues": {"d": ["Ynl0ZXM="]},
+    "TagValues": {"tag1": ["tag"]}
+}
+```
+
+<a id="quixstreams.models.serializers.quix.QuixEventsSerializer"></a>
+
+### QuixEventsSerializer
+
+```python
+class QuixEventsSerializer(QuixSerializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/quix.py#L403)
+
+Serialize data to JSON formatted according to Quix EventData format.
+The input value is expected to be a dictionary with the following keys:
+    - "Id" (type `str`, default - "")
+    - "Value" (type `str`, default - ""),
+    - "Tags" (type `dict`, default - {})
+
+>***NOTE:*** All the other fields will be ignored.
+
+Input:
+```python
+{
+    "Id": "an_event",
+    "Value": "any_string",
+    "Tags": {"tag1": "tag"}}
+}
+```
+
+Output:
+```json
+{
+    "Id": "an_event",
+    "Value": "any_string",
+    "Tags": {"tag1": "tag"}},
+    "Timestamp":1692703362840389000
+}
+```
+
+<a id="quixstreams.models.serializers.simple_types"></a>
+
+## quixstreams.models.serializers.simple\_types
+
+<a id="quixstreams.models.serializers.simple_types.BytesDeserializer"></a>
+
+### BytesDeserializer
+
+```python
+class BytesDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L44)
+
+A deserializer to bypass bytes without any changes
+
+<a id="quixstreams.models.serializers.simple_types.BytesSerializer"></a>
+
+### BytesSerializer
+
+```python
+class BytesSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L55)
+
+A serializer to bypass bytes without any changes
+
+<a id="quixstreams.models.serializers.simple_types.StringDeserializer"></a>
+
+### StringDeserializer
+
+```python
+class StringDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L64)
+
+<a id="quixstreams.models.serializers.simple_types.StringDeserializer.__init__"></a>
+
+#### StringDeserializer.\_\_init\_\_
+
+```python
+def __init__(column_name: Optional[str] = None, codec: str = "utf_8")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L65)
+
+Deserializes bytes to strings using the specified encoding.
+
+**Arguments**:
+
+- `codec`: string encoding
+A wrapper around `confluent_kafka.serialization.StringDeserializer`.
+
+<a id="quixstreams.models.serializers.simple_types.IntegerDeserializer"></a>
+
+### IntegerDeserializer
+
+```python
+class IntegerDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L84)
+
+Deserializes bytes to integers.
+
+A wrapper around `confluent_kafka.serialization.IntegerDeserializer`.
+
+<a id="quixstreams.models.serializers.simple_types.DoubleDeserializer"></a>
+
+### DoubleDeserializer
+
+```python
+class DoubleDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L103)
+
+Deserializes float to IEEE 764 binary64.
+
+A wrapper around `confluent_kafka.serialization.DoubleDeserializer`.
+
+<a id="quixstreams.models.serializers.simple_types.StringSerializer"></a>
+
+### StringSerializer
+
+```python
+class StringSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L122)
+
+<a id="quixstreams.models.serializers.simple_types.StringSerializer.__init__"></a>
+
+#### StringSerializer.\_\_init\_\_
+
+```python
+def __init__(codec: str = "utf_8")
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L123)
+
+Serializes strings to bytes using the specified encoding.
+
+**Arguments**:
+
+- `codec`: string encoding
+
+<a id="quixstreams.models.serializers.simple_types.IntegerSerializer"></a>
+
+### IntegerSerializer
+
+```python
+class IntegerSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L135)
+
+Serializes integers to bytes
+
+<a id="quixstreams.models.serializers.simple_types.DoubleSerializer"></a>
+
+### DoubleSerializer
+
+```python
+class DoubleSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/simple_types.py#L148)
+
+Serializes floats to bytes
+
+<a id="quixstreams.models.serializers.json"></a>
+
+## quixstreams.models.serializers.json
+
+<a id="quixstreams.models.serializers.json.JSONSerializer"></a>
+
+### JSONSerializer
+
+```python
+class JSONSerializer(Serializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/json.py#L13)
+
+<a id="quixstreams.models.serializers.json.JSONSerializer.__init__"></a>
+
+#### JSONSerializer.\_\_init\_\_
+
+```python
+def __init__(dumps: Callable[[Any], Union[str, bytes]] = default_dumps)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/json.py#L14)
+
+Serializer that returns data in json format.
+
+**Arguments**:
+
+- `dumps`: a function to serialize objects to json.
+Default - :py:func:`quixstreams.utils.json.dumps`
+
+<a id="quixstreams.models.serializers.json.JSONDeserializer"></a>
+
+### JSONDeserializer
+
+```python
+class JSONDeserializer(Deserializer)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/json.py#L35)
+
+<a id="quixstreams.models.serializers.json.JSONDeserializer.__init__"></a>
+
+#### JSONDeserializer.\_\_init\_\_
+
+```python
+def __init__(column_name: Optional[str] = None,
+             loads: Callable[[Union[bytes, bytearray]], Any] = default_loads)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/json.py#L36)
+
+Deserializer that parses data from JSON
+
+**Arguments**:
+
+- `column_name`: if provided, the deserialized value will be wrapped into
+dictionary with `column_name` as a key.
+- `loads`: function to parse json from bytes.
+Default - :py:func:`quixstreams.utils.json.loads`.
+
+<a id="quixstreams.models.serializers.base"></a>
+
+## quixstreams.models.serializers.base
+
+<a id="quixstreams.models.serializers.base.SerializationContext"></a>
+
+### SerializationContext
+
+```python
+class SerializationContext()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L22)
+
+Provides additional context for message serialization/deserialization.
+
+Every `Serializer` and `Deserializer` receives an instance of `SerializationContext`
+
+<a id="quixstreams.models.serializers.base.SerializationContext.to_confluent_ctx"></a>
+
+#### SerializationContext.to\_confluent\_ctx
+
+```python
+def to_confluent_ctx(field: MessageField) -> _SerializationContext
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L35)
+
+Convert `SerializationContext` to `confluent_kafka.SerializationContext`
+
+in order to re-use serialization already provided by `confluent_kafka` library.
+
+**Arguments**:
+
+- `field`: instance of `confluent_kafka.serialization.MessageField`
+
+**Returns**:
+
+instance of `confluent_kafka.serialization.SerializationContext`
+
+<a id="quixstreams.models.serializers.base.Deserializer"></a>
+
+### Deserializer
+
+```python
+class Deserializer(abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L47)
+
+<a id="quixstreams.models.serializers.base.Deserializer.__init__"></a>
+
+#### Deserializer.\_\_init\_\_
+
+```python
+def __init__(column_name: Optional[str] = None, *args, **kwargs)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L48)
+
+A base class for all Deserializers
+
+**Arguments**:
+
+- `column_name`: if provided, the deserialized value will be wrapped into
+dictionary with `column_name` as a key.
+
+<a id="quixstreams.models.serializers.base.Deserializer.split_values"></a>
+
+#### Deserializer.split\_values
+
+```python
+@property
+def split_values() -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L58)
+
+Return True if the deserialized message should be considered as Iterable
+and each item in it should be processed as a separate message.
+
+<a id="quixstreams.models.serializers.base.Serializer"></a>
+
+### Serializer
+
+```python
+class Serializer(abc.ABC)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L75)
+
+A base class for all Serializers
+
+<a id="quixstreams.models.serializers.base.Serializer.extra_headers"></a>
+
+#### Serializer.extra\_headers
+
+```python
+@property
+def extra_headers() -> MessageHeadersMapping
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/serializers/base.py#L81)
+
+Informs producer to set additional headers
+
+for the message it will be serializing
+
+Must return a dictionary with headers.
+Keys must be strings, and values must be strings, bytes or None.
+
+**Returns**:
+
+dict with headers
+
+<a id="quixstreams.models.topics"></a>
+
+## quixstreams.models.topics
+
+<a id="quixstreams.models.topics.Topic"></a>
+
+### Topic
+
+```python
+class Topic()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/topics.py#L58)
+
+A representation of a Kafka topic and its expected data format via
+designated key and value serializers/deserializers.
+
+Typically created with an `app = quixstreams.app.Application()` instance via
+`app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
+instance.
+
+<a id="quixstreams.models.topics.Topic.__init__"></a>
+
+#### Topic.\_\_init\_\_
+
+```python
+def __init__(
+    name: str,
+    value_deserializer: Optional[DeserializerType] = None,
+    key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
+    value_serializer: Optional[SerializerType] = None,
+    key_serializer: Optional[SerializerType] = BytesSerializer())
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/topics.py#L68)
+
+Can specify serialization that should be used when consuming/producing
+
+to the topic in the form of a string name (i.e. "json" for JSON) or a
+serialization class instance directly, like JSONSerializer().
+
+
+Example Snippet:
+
+```python
+from quixstreams.dataframe import StreamingDataFrame
+from quixstreams.models import Topic, JSONSerializer
+
+# Specify an input and output topic for a `StreamingDataFrame` instance,
+# where the output topic requires adjusting the key serializer.
+input_topic = Topic("input-topic", value_deserializer="json")
+output_topic = Topic(
+    "output-topic", key_serializer="str", value_serializer=JSONSerializer()
+)
+sdf = StreamingDataFrame(input_topic)
+sdf.to_topic(output_topic)
+```
+
+**Arguments**:
+
+- `name`: topic name
+- `value_deserializer`: a deserializer type for values
+- `key_deserializer`: a deserializer type for keys
+- `value_serializer`: a serializer type for values
+- `key_serializer`: a serializer type for keys
+
+<a id="quixstreams.models.topics.Topic.name"></a>
+
+#### Topic.name
+
+```python
+@property
+def name() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/topics.py#L112)
+
+Topic name
+
+<a id="quixstreams.models.topics.Topic.row_serialize"></a>
+
+#### Topic.row\_serialize
+
+```python
+def row_serialize(row: Row, key: Optional[Any] = None) -> KafkaMessage
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/topics.py#L118)
+
+Serialize Row to a Kafka message structure
+
+**Arguments**:
+
+- `row`: Row to serialize
+- `key`: message key to serialize, optional. Default - current Row key.
+
+**Returns**:
+
+KafkaMessage object with serialized values
+
+<a id="quixstreams.models.topics.Topic.row_deserialize"></a>
+
+#### Topic.row\_deserialize
+
+```python
+def row_deserialize(
+        message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/topics.py#L141)
+
+Deserialize incoming Kafka message to a Row.
+
+**Arguments**:
+
+- `message`: an object with interface of `confluent_kafka.Message`
+
+**Returns**:
+
+Row, list of Rows or None if the message is ignored.
+
+<a id="quixstreams.models.messages"></a>
+
+## quixstreams.models.messages
+
+<a id="quixstreams.models.rows"></a>
+
+## quixstreams.models.rows
+
+<a id="quixstreams.models.rows.Row"></a>
+
+### Row
+
+```python
+class Row()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/rows.py#L11)
+
+Row is a dict-like interface on top of the message data + some Kafka props
+
+<a id="quixstreams.models.rows.Row.keys"></a>
+
+#### Row.keys
+
+```python
+def keys() -> KeysView
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/rows.py#L73)
+
+Also allows unpacking row.value via **row
+
+<a id="quixstreams.models.rows.Row.clone"></a>
+
+#### Row.clone
+
+```python
+def clone(value: dict) -> Self
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/models/rows.py#L85)
+
+Manually clone the Row; doing it this way is much faster than doing a deepcopy
+on the entire Row object.
 
 <a id="quixstreams.state.rocksdb.options"></a>
 
@@ -3501,7 +2618,7 @@ before the end of the current one will fail.
 class RocksDBOptions(RocksDBOptionsType)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/options.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/options.py#L25)
 
 Common RocksDB database options.
 
@@ -3536,17 +2653,13 @@ to override it and specify the additional values.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/options.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/options.py#L46)
 
 Convert parameters to `rocksdict.Options`
 
 **Returns**:
 
 instance of `rocksdict.Options`
-
-<a id="quixstreams.state.rocksdb.serialization"></a>
-
-## quixstreams.state.rocksdb.serialization
 
 <a id="quixstreams.state.rocksdb.store"></a>
 
@@ -3560,7 +2673,7 @@ instance of `rocksdict.Options`
 class RocksDBStore(Store)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L18)
 
 <a id="quixstreams.state.rocksdb.store.RocksDBStore.__init__"></a>
 
@@ -3575,7 +2688,7 @@ def __init__(name: str,
              open_retry_backoff: float = 3.0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L19)
 
 RocksDB-based state store.
 
@@ -3601,7 +2714,7 @@ if it's locked by another process. To disable retrying, pass 0.
 def topic() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L52)
 
 Store topic name
 
@@ -3614,7 +2727,7 @@ Store topic name
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L59)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L59)
 
 Store name
 
@@ -3627,7 +2740,7 @@ Store name
 def partitions() -> Dict[int, RocksDBStorePartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L66)
 
 Mapping of assigned store partitions
 
@@ -3639,7 +2752,7 @@ Mapping of assigned store partitions
 def assign_partition(partition: int) -> RocksDBStorePartition
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L72)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L72)
 
 Open and assign store partition.
 
@@ -3662,7 +2775,7 @@ instance of`RocksDBStorePartition`
 def revoke_partition(partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L107)
 
 Revoke and close the assigned store partition.
 
@@ -3680,7 +2793,7 @@ If the partition is not assigned, it will log the message and return.
 def start_partition_transaction(partition: int) -> RocksDBPartitionTransaction
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L128)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L128)
 
 Start a new partition transaction.
 
@@ -3703,13 +2816,9 @@ instance of `RocksDBPartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/store.py#L150)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/store.py#L150)
 
 Close the store and revoke all assigned partitions
-
-<a id="quixstreams.state.rocksdb.types"></a>
-
-## quixstreams.state.rocksdb.types
 
 <a id="quixstreams.state.rocksdb.partition"></a>
 
@@ -3723,7 +2832,7 @@ Close the store and revoke all assigned partitions
 class RocksDBStorePartition(StorePartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L50)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L50)
 
 A base class to access state in RocksDB.
 
@@ -3753,7 +2862,7 @@ if it's locked by another process. To disable retrying, pass 0.
 def begin() -> "RocksDBPartitionTransaction"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L83)
 
 Create a new `RocksDBTransaction` object.
 
@@ -3771,7 +2880,7 @@ an instance of `RocksDBTransaction`
 def write(batch: rocksdict.WriteBatch)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L94)
 
 Write `WriteBatch` to RocksDB
 
@@ -3787,7 +2896,7 @@ Write `WriteBatch` to RocksDB
 def get(key: bytes, default: Any = None) -> Union[None, bytes, Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L101)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L101)
 
 Get a key from RocksDB.
 
@@ -3808,7 +2917,7 @@ a value if the key is present in the DB. Otherwise, `None` or `default`
 def exists(key: bytes) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L111)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L111)
 
 Check if a key is present in the DB.
 
@@ -3828,7 +2937,7 @@ Check if a key is present in the DB.
 def get_processed_offset() -> Optional[int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L120)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L120)
 
 Get last processed offset for the given partition
 
@@ -3844,7 +2953,7 @@ offset or `None` if there's no processed offset yet
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L129)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L129)
 
 Close the underlying RocksDB
 
@@ -3857,7 +2966,7 @@ Close the underlying RocksDB
 def path() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L138)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L138)
 
 Get absolute path to RocksDB database folder
 
@@ -3874,7 +2983,7 @@ file path
 def destroy(cls, path: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L146)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L146)
 
 Delete underlying RocksDB database
 
@@ -3892,7 +3001,7 @@ The database must be closed first.
 class RocksDBPartitionTransaction(PartitionTransaction)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L221)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L221)
 
 A transaction class to perform simple key-value operations like
 
@@ -3939,7 +3048,7 @@ the underlying RocksDB
 def with_prefix(prefix: Any = b"") -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L289)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L289)
 
 A context manager set the prefix for all keys in the scope.
 
@@ -3967,7 +3076,7 @@ is not empty.
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L320)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L320)
 
 Get a key from the store.
 
@@ -3995,7 +3104,7 @@ value or `default`
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L349)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L349)
 
 Set a key to the store.
 
@@ -4015,7 +3124,7 @@ It first updates the key in the update cache.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L370)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L370)
 
 Delete a key from the store.
 
@@ -4034,7 +3143,7 @@ It first deletes the key from the update cache.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L387)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L387)
 
 Check if a key exists in the store.
 
@@ -4057,7 +3166,7 @@ It first looks up the key in the update cache.
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L403)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L403)
 
 Check if the transaction is completed.
 
@@ -4079,7 +3188,7 @@ The completed transaction should not be re-used.
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L417)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L417)
 
 Check if the transaction has failed.
 
@@ -4099,7 +3208,7 @@ and
 def maybe_flush(offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/rocksdb/partition.py#L429)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/rocksdb/partition.py#L429)
 
 Flush the recent updates to the database and empty the update cache.
 
@@ -4117,111 +3226,25 @@ cannot be used anymore.
 
 - `offset`: offset of the last processed message, optional.
 
-<a id="quixstreams.state.state"></a>
+<a id="quixstreams.state.rocksdb"></a>
 
-## quixstreams.state.state
+## quixstreams.state.rocksdb
 
-<a id="quixstreams.state.state.TransactionState"></a>
+<a id="quixstreams.state.rocksdb.types"></a>
 
-### TransactionState
+## quixstreams.state.rocksdb.types
 
-```python
-class TransactionState(State)
-```
+<a id="quixstreams.state.rocksdb.exceptions"></a>
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/state.py#L6)
+## quixstreams.state.rocksdb.exceptions
 
-<a id="quixstreams.state.state.TransactionState.__init__"></a>
+<a id="quixstreams.state.rocksdb.serialization"></a>
 
-#### TransactionState.\_\_init\_\_
+## quixstreams.state.rocksdb.serialization
 
-```python
-def __init__(transaction: PartitionTransaction)
-```
+<a id="quixstreams.state"></a>
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/state.py#L7)
-
-Simple key-value state to be provided into `StreamingDataFrame` functions
-
-**Arguments**:
-
-- `transaction`: instance of `PartitionTransaction`
-
-<a id="quixstreams.state.state.TransactionState.get"></a>
-
-#### TransactionState.get
-
-```python
-def get(key: Any, default: Any = None) -> Optional[Any]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/state.py#L15)
-
-Get the value for key if key is present in the state, else default
-
-**Arguments**:
-
-- `key`: key
-- `default`: default value to return if the key is not found
-
-**Returns**:
-
-value or None if the key is not found and `default` is not provided
-
-<a id="quixstreams.state.state.TransactionState.set"></a>
-
-#### TransactionState.set
-
-```python
-def set(key: Any, value: Any)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/state.py#L25)
-
-Set value for the key.
-
-**Arguments**:
-
-- `key`: key
-- `value`: value
-
-<a id="quixstreams.state.state.TransactionState.delete"></a>
-
-#### TransactionState.delete
-
-```python
-def delete(key: Any)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/state.py#L33)
-
-Delete value for the key.
-
-This function always returns `None`, even if value is not found.
-
-**Arguments**:
-
-- `key`: key
-
-<a id="quixstreams.state.state.TransactionState.exists"></a>
-
-#### TransactionState.exists
-
-```python
-def exists(key: Any) -> bool
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/state.py#L42)
-
-Check if the key exists in state.
-
-**Arguments**:
-
-- `key`: key
-
-**Returns**:
-
-True if key exists, False otherwise
+## quixstreams.state
 
 <a id="quixstreams.state.types"></a>
 
@@ -4235,7 +3258,7 @@ True if key exists, False otherwise
 class Store(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L9)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L9)
 
 Abstract state store.
 
@@ -4251,7 +3274,7 @@ partitions' transactions.
 def topic() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L18)
 
 Topic name
 
@@ -4264,7 +3287,7 @@ Topic name
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L24)
 
 Store name
 
@@ -4277,7 +3300,7 @@ Store name
 def partitions() -> Dict[int, "StorePartition"]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L30)
 
 Mapping of assigned store partitions
 
@@ -4293,7 +3316,7 @@ dict of "{partition: <StorePartition>}"
 def assign_partition(partition: int) -> "StorePartition"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L37)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L37)
 
 Assign new store partition
 
@@ -4313,7 +3336,7 @@ instance of `StorePartition`
 def revoke_partition(partition: int)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L46)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L46)
 
 Revoke assigned store partition
 
@@ -4330,7 +3353,7 @@ def start_partition_transaction(
         partition: int) -> Optional["PartitionTransaction"]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L55)
 
 Start a new partition transaction.
 
@@ -4352,7 +3375,7 @@ instance of `PartitionTransaction`
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L66)
 
 Close store and revoke all store partitions
 
@@ -4364,7 +3387,7 @@ Close store and revoke all store partitions
 class StorePartition(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L78)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L78)
 
 A base class to access state in the underlying storage.
 It represents a single instance of some storage (e.g. a single database for
@@ -4378,7 +3401,7 @@ the persistent storage).
 def begin() -> "PartitionTransaction"
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L86)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L86)
 
 State new `PartitionTransaction`
 
@@ -4390,7 +3413,7 @@ State new `PartitionTransaction`
 class State(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L95)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -4402,7 +3425,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L100)
 
 Get the value for key if key is present in the state, else default
 
@@ -4423,7 +3446,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L109)
 
 Set value for the key.
 
@@ -4440,7 +3463,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L116)
 
 Delete value for the key.
 
@@ -4458,7 +3481,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L124)
 
 Check if the key exists in state.
 
@@ -4478,7 +3501,7 @@ True if key exists, False otherwise
 class PartitionTransaction(State)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L132)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L132)
 
 A transaction class to perform simple key-value operations like
 "get", "set", "delete" and "exists" on a single storage partition.
@@ -4492,7 +3515,7 @@ A transaction class to perform simple key-value operations like
 def state() -> State
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L139)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L139)
 
 An instance of State to be provided to `StreamingDataFrame` functions
 
@@ -4506,7 +3529,7 @@ An instance of State to be provided to `StreamingDataFrame` functions
 def failed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L146)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L146)
 
 Return `True` if transaction failed to update data at some point.
 
@@ -4525,7 +3548,7 @@ bool
 def completed() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L155)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L155)
 
 Return `True` if transaction is completed.
 
@@ -4543,7 +3566,7 @@ bool
 def with_prefix(prefix: Any = b"") -> Iterator[Self]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L164)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L164)
 
 A context manager set the prefix for all keys in the scope.
 
@@ -4566,7 +3589,7 @@ context maager
 def maybe_flush(offset: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/state/types.py#L174)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L174)
 
 Flush the recent updates and last processed offset to the storage.
 
@@ -4574,90 +3597,1095 @@ Flush the recent updates and last processed offset to the storage.
 
 - `offset`: offset of the last processed message, optional.
 
-<a id="quixstreams.types"></a>
+<a id="quixstreams.state.exceptions"></a>
 
-## quixstreams.types
+## quixstreams.state.exceptions
 
-<a id="quixstreams.utils"></a>
+<a id="quixstreams.state.manager"></a>
 
-## quixstreams.utils
+## quixstreams.state.manager
 
-<a id="quixstreams.utils.json"></a>
+<a id="quixstreams.state.manager.StateStoreManager"></a>
 
-## quixstreams.utils.json
-
-<a id="quixstreams.utils.json.dumps"></a>
-
-#### dumps
+### StateStoreManager
 
 ```python
-def dumps(value: Any) -> bytes
+class StateStoreManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/utils/json.py#L8)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L27)
 
-Serialize to JSON using `orjson` package.
+Class for managing state stores and partitions.
 
-**Arguments**:
+StateStoreManager is responsible for:
+ - reacting to rebalance callbacks
+ - managing the individual state stores
+ - providing access to store transactions
 
-- `value`: value to serialize to JSON
+<a id="quixstreams.state.manager.StateStoreManager.stores"></a>
+
+#### StateStoreManager.stores
+
+```python
+@property
+def stores() -> Dict[str, Dict[str, Store]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L63)
+
+Map of registered state stores
 
 **Returns**:
 
-bytes
+dict in format {topic: {store_name: store}}
 
-<a id="quixstreams.utils.json.loads"></a>
+<a id="quixstreams.state.manager.StateStoreManager.get_store"></a>
 
-#### loads
+#### StateStoreManager.get\_store
 
 ```python
-def loads(value: bytes) -> Any
+def get_store(topic: str,
+              store_name: str = _DEFAULT_STATE_STORE_NAME) -> Store
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/utils/json.py#L18)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L70)
 
-Deserialize from JSON using `orjson` package.
-
-Main differences:
-- It returns `bytes`
-- It doesn't allow non-str keys in dictionaries
+Get a store for given name and topic
 
 **Arguments**:
 
-- `value`: value to deserialize from
+- `topic`: topic name
+- `store_name`: store name
 
 **Returns**:
 
-object
+instance of `Store`
 
-<a id="quixstreams.logging"></a>
+<a id="quixstreams.state.manager.StateStoreManager.register_store"></a>
 
-## quixstreams.logging
-
-<a id="quixstreams.logging.configure_logging"></a>
-
-#### configure\_logging
+#### StateStoreManager.register\_store
 
 ```python
-def configure_logging(loglevel: Optional[LogLevel]) -> bool
+def register_store(topic_name: str,
+                   store_name: str = _DEFAULT_STATE_STORE_NAME)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/logging.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L86)
 
-Configure "quixstreams" logger.
+Register a state store to be managed by StateStoreManager.
 
->***NOTE:*** If "quixstreams" logger already has pre-defined handlers
-(e.g. logging has already been configured via `logging`, or the function
-is called twice), it will skip configuration and return `False`.
+During processing, the StateStoreManager will react to rebalancing callbacks
+and assign/revoke the partitions for registered stores.
+
+Each store can be registered only once for each topic.
 
 **Arguments**:
 
-- `loglevel`: a valid log level as a string or None.
-If None passed, this function is no-op and no logging will be configured.
+- `topic_name`: topic name
+- `store_name`: store name
+
+<a id="quixstreams.state.manager.StateStoreManager.clear_stores"></a>
+
+#### StateStoreManager.clear\_stores
+
+```python
+def clear_stores()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L109)
+
+Delete all state stores managed by StateStoreManager.
+
+<a id="quixstreams.state.manager.StateStoreManager.on_partition_assign"></a>
+
+#### StateStoreManager.on\_partition\_assign
+
+```python
+def on_partition_assign(tp: TopicPartition) -> List[StorePartition]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L124)
+
+Assign store partitions for each registered store for the given `TopicPartition`
+
+and return a list of assigned `StorePartition` objects.
+
+**Arguments**:
+
+- `tp`: `TopicPartition` from Kafka consumer
 
 **Returns**:
 
-True if logging config has been updated, otherwise False.
+list of assigned `StorePartition`
+
+<a id="quixstreams.state.manager.StateStoreManager.on_partition_revoke"></a>
+
+#### StateStoreManager.on\_partition\_revoke
+
+```python
+def on_partition_revoke(tp: TopicPartition)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L138)
+
+Revoke store partitions for each registered store for the given `TopicPartition`
+
+**Arguments**:
+
+- `tp`: `TopicPartition` from Kafka consumer
+
+<a id="quixstreams.state.manager.StateStoreManager.on_partition_lost"></a>
+
+#### StateStoreManager.on\_partition\_lost
+
+```python
+def on_partition_lost(tp: TopicPartition)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L147)
+
+Revoke and close store partitions for each registered store for the given
+
+`TopicPartition`
+
+**Arguments**:
+
+- `tp`: `TopicPartition` from Kafka consumer
+
+<a id="quixstreams.state.manager.StateStoreManager.init"></a>
+
+#### StateStoreManager.init
+
+```python
+def init()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L157)
+
+Initialize `StateStoreManager` and create a store directory
+
+
+<a id="quixstreams.state.manager.StateStoreManager.close"></a>
+
+#### StateStoreManager.close
+
+```python
+def close()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L164)
+
+Close all registered stores
+
+<a id="quixstreams.state.manager.StateStoreManager.get_store_transaction"></a>
+
+#### StateStoreManager.get\_store\_transaction
+
+```python
+def get_store_transaction(
+        store_name: str = _DEFAULT_STATE_STORE_NAME) -> PartitionTransaction
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L172)
+
+Get active `PartitionTransaction` for the store
+
+**Arguments**:
+
+- `store_name`: 
+
+<a id="quixstreams.state.manager.StateStoreManager.start_store_transaction"></a>
+
+#### StateStoreManager.start\_store\_transaction
+
+```python
+@contextlib.contextmanager
+def start_store_transaction(topic: str, partition: int,
+                            offset: int) -> Iterator["_MultiStoreTransaction"]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/manager.py#L187)
+
+Starting the multi-store transaction for the Kafka message.
+
+This transaction will keep track of all used stores and flush them in the end.
+If any exception is catched during this transaction, none of them
+will be flushed as a best effort to keep stores consistent in "at-least-once" setting.
+
+There can be only one active transaction at a time. Starting a new transaction
+before the end of the current one will fail.
+
+**Arguments**:
+
+- `topic`: message topic
+- `partition`: message partition
+- `offset`: message offset
+
+<a id="quixstreams.state.state"></a>
+
+## quixstreams.state.state
+
+<a id="quixstreams.state.state.TransactionState"></a>
+
+### TransactionState
+
+```python
+class TransactionState(State)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/state.py#L6)
+
+<a id="quixstreams.state.state.TransactionState.__init__"></a>
+
+#### TransactionState.\_\_init\_\_
+
+```python
+def __init__(transaction: PartitionTransaction)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/state.py#L7)
+
+Simple key-value state to be provided into `StreamingDataFrame` functions
+
+**Arguments**:
+
+- `transaction`: instance of `PartitionTransaction`
+
+<a id="quixstreams.state.state.TransactionState.get"></a>
+
+#### TransactionState.get
+
+```python
+def get(key: Any, default: Any = None) -> Optional[Any]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/state.py#L15)
+
+Get the value for key if key is present in the state, else default
+
+**Arguments**:
+
+- `key`: key
+- `default`: default value to return if the key is not found
+
+**Returns**:
+
+value or None if the key is not found and `default` is not provided
+
+<a id="quixstreams.state.state.TransactionState.set"></a>
+
+#### TransactionState.set
+
+```python
+def set(key: Any, value: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/state.py#L25)
+
+Set value for the key.
+
+**Arguments**:
+
+- `key`: key
+- `value`: value
+
+<a id="quixstreams.state.state.TransactionState.delete"></a>
+
+#### TransactionState.delete
+
+```python
+def delete(key: Any)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/state.py#L33)
+
+Delete value for the key.
+
+This function always returns `None`, even if value is not found.
+
+**Arguments**:
+
+- `key`: key
+
+<a id="quixstreams.state.state.TransactionState.exists"></a>
+
+#### TransactionState.exists
+
+```python
+def exists(key: Any) -> bool
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/state.py#L42)
+
+Check if the key exists in state.
+
+**Arguments**:
+
+- `key`: key
+
+**Returns**:
+
+True if key exists, False otherwise
+
+<a id="quixstreams.exceptions"></a>
+
+## quixstreams.exceptions
+
+<a id="quixstreams.exceptions.assignment"></a>
+
+## quixstreams.exceptions.assignment
+
+<a id="quixstreams.exceptions.assignment.PartitionAssignmentError"></a>
+
+### PartitionAssignmentError
+
+```python
+class PartitionAssignmentError(QuixException)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/exceptions/assignment.py#L6)
+
+Error happened during partition rebalancing.
+Raised from `on_assign`, `on_revoke` and `on_lost` callbacks
+
+<a id="quixstreams.exceptions.base"></a>
+
+## quixstreams.exceptions.base
+
+<a id="quixstreams.context"></a>
+
+## quixstreams.context
+
+<a id="quixstreams.context.set_message_context"></a>
+
+#### set\_message\_context
+
+```python
+def set_message_context(context: Optional[MessageContext])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/context.py#L22)
+
+Set a MessageContext for the current message in the given `contextvars.Context`
+
+>***NOTE:*** This is for advanced usage only. If you need to change the message key,
+`StreamingDataFrame.to_topic()` has an argument for it.
+
+
+Example Snippet:
+
+```python
+from quixstreams import Application, set_message_context, message_context
+
+# Changes the current sdf value based on what the message partition is.
+def alter_context(value):
+    context = message_context()
+    if value > 1:
+        context.headers = context.headers + (b"cool_new_header", value.encode())
+        set_message_context(context)
+
+app = Application()
+sdf = app.dataframe()
+sdf = sdf.update(lambda value: alter_context(value))
+```
+
+**Arguments**:
+
+- `context`: instance of `MessageContext`
+
+<a id="quixstreams.context.message_context"></a>
+
+#### message\_context
+
+```python
+def message_context() -> MessageContext
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/context.py#L53)
+
+Get a MessageContext for the current message, which houses most of the message
+
+metadata, like:
+    - key
+    - timestamp
+    - partition
+    - offset
+
+
+Example Snippet:
+
+```python
+from quixstreams import Application, message_context
+
+# Changes the current sdf value based on what the message partition is.
+
+app = Application()
+sdf = app.dataframe()
+sdf = sdf.apply(lambda value: 1 if message_context().partition == 2 else 0)
+```
+
+**Returns**:
+
+instance of `MessageContext`
+
+<a id="quixstreams.context.message_key"></a>
+
+#### message\_key
+
+```python
+def message_key() -> Any
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/context.py#L84)
+
+Get the current message's key.
+
+Example Snippet:
+
+```python
+from quixstreams import Application, message_key
+
+# Changes the current sdf value based on what the message key is.
+
+app = Application()
+sdf = app.dataframe()
+sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
+```
+
+**Returns**:
+
+a deserialized message key
+
+<a id="quixstreams.kafka"></a>
+
+## quixstreams.kafka
+
+<a id="quixstreams.kafka.producer"></a>
+
+## quixstreams.kafka.producer
+
+<a id="quixstreams.kafka.producer.Producer"></a>
+
+### Producer
+
+```python
+class Producer()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/producer.py#L54)
+
+<a id="quixstreams.kafka.producer.Producer.__init__"></a>
+
+#### Producer.\_\_init\_\_
+
+```python
+def __init__(broker_address: str,
+             partitioner: Partitioner = "murmur2",
+             extra_config: dict = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/producer.py#L55)
+
+A wrapper around `confluent_kafka.Producer`.
+
+It initializes `confluent_kafka.Producer` on demand
+avoiding network calls during `__init__`, provides typing info for methods
+and some reasonable defaults.
+
+**Arguments**:
+
+- `broker_address`: Kafka broker host and port in format `<host>:<port>`.
+Passed as `bootstrap.servers` to `confluent_kafka.Producer`.
+- `partitioner`: A function to be used to determine the outgoing message
+partition.
+Available values: "random", "consistent_random", "murmur2", "murmur2_random",
+"fnv1a", "fnv1a_random"
+Default - "murmur2".
+- `extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Producer` as is.
+Note: values passed as arguments override values in `extra_config`.
+
+<a id="quixstreams.kafka.producer.Producer.produce"></a>
+
+#### Producer.produce
+
+```python
+def produce(topic: str,
+            value: Union[str, bytes],
+            key: Optional[Union[str, bytes]] = None,
+            headers: Optional[Headers] = None,
+            partition: Optional[int] = None,
+            timestamp: Optional[int] = None,
+            poll_timeout: float = 5.0,
+            buffer_error_max_tries: int = 3)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/producer.py#L94)
+
+Produce message to topic.
+
+It also polls Kafka for callbacks before producing in order to minimize
+the probability of `BufferError`.
+If `BufferError` still happens, the method will poll Kafka with timeout
+to free up the buffer and try again.
+
+**Arguments**:
+
+- `topic`: topic name
+- `value`: message value
+- `key`: message key
+- `headers`: message headers
+- `partition`: topic partition
+- `timestamp`: message timestamp
+- `poll_timeout`: timeout for `poll()` call in case of `BufferError`
+- `buffer_error_max_tries`: max retries for `BufferError`.
+Pass `0` to not retry after `BufferError`.
+
+<a id="quixstreams.kafka.producer.Producer.poll"></a>
+
+#### Producer.poll
+
+```python
+def poll(timeout: float = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/producer.py#L152)
+
+Polls the producer for events and calls `on_delivery` callbacks.
+
+**Arguments**:
+
+- `timeout`: poll timeout seconds
+
+<a id="quixstreams.kafka.producer.Producer.flush"></a>
+
+#### Producer.flush
+
+```python
+def flush(timeout: float = None) -> int
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/producer.py#L159)
+
+Wait for all messages in the Producer queue to be delivered.
+
+**Arguments**:
+
+- `timeout`: timeout is seconds
+
+**Returns**:
+
+number of messages delivered
+
+<a id="quixstreams.kafka.consumer"></a>
+
+## quixstreams.kafka.consumer
+
+<a id="quixstreams.kafka.consumer.Consumer"></a>
+
+### Consumer
+
+```python
+class Consumer()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L66)
+
+<a id="quixstreams.kafka.consumer.Consumer.__init__"></a>
+
+#### Consumer.\_\_init\_\_
+
+```python
+def __init__(broker_address: str,
+             consumer_group: Optional[str],
+             auto_offset_reset: AutoOffsetReset,
+             auto_commit_enable: bool = True,
+             assignment_strategy: AssignmentStrategy = "range",
+             on_commit: Callable[[Optional[KafkaError], List[TopicPartition]],
+                                 None] = None,
+             extra_config: Optional[dict] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L67)
+
+A wrapper around `confluent_kafka.Consumer`.
+
+It initializes `confluent_kafka.Consumer` on demand
+avoiding network calls during `__init__`, provides typing info for methods
+and some reasonable defaults.
+
+**Arguments**:
+
+- `broker_address`: Kafka broker host and port in format `<host>:<port>`.
+Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+- `consumer_group`: Kafka consumer group.
+Passed as `group.id` to `confluent_kafka.Consumer`
+- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
+Available values:
+- "earliest" - automatically reset the offset to the smallest offset
+- "latest" - automatically reset the offset to the largest offset
+- "error" - trigger an error (ERR__AUTO_OFFSET_RESET) which is retrieved
+  by consuming messages (used for testing)
+- `auto_commit_enable`: If true, periodically commit offset of
+the last message handed to the application. Default - `True`.
+- `assignment_strategy`: The name of a partition assignment strategy.
+Available values: "range", "roundrobin", "cooperative-sticky".
+- `on_commit`: Offset commit result propagation callback.
+Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
+- `extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Consumer` as is.
+Note: values passed as arguments override values in `extra_config`.
+
+<a id="quixstreams.kafka.consumer.Consumer.poll"></a>
+
+#### Consumer.poll
+
+```python
+def poll(timeout: float = None) -> Optional[Message]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L124)
+
+Consumes a single message, calls callbacks and returns events.
+
+The application must check the returned :py:class:`Message`
+object's :py:func:`Message.error()` method to distinguish between proper
+messages (error() returns None), or an event or error.
+
+Note: Callbacks may be called from this method, such as
+``on_assign``, ``on_revoke``, et al.
+
+**Arguments**:
+
+- `timeout` (`float`): Maximum time in seconds to block waiting for message,
+event or callback. Default: infinite.
+
+**Raises**:
+
+- `None`: RuntimeError if called on a closed consumer
+
+**Returns**:
+
+A Message object or None on timeout
+
+<a id="quixstreams.kafka.consumer.Consumer.subscribe"></a>
+
+#### Consumer.subscribe
+
+```python
+def subscribe(topics: List[str],
+              on_assign: Optional[RebalancingCallback] = None,
+              on_revoke: Optional[RebalancingCallback] = None,
+              on_lost: Optional[RebalancingCallback] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L143)
+
+Set subscription to supplied list of topics
+
+This replaces a previous subscription.
+
+**Arguments**:
+
+- `topics` (`list(str)`): List of topics (strings) to subscribe to.
+- `on_assign` (`callable`): callback to provide handling of customized offsets
+on completion of a successful partition re-assignment.
+- `on_revoke` (`callable`): callback to provide handling of offset commits to
+a customized store on the start of a rebalance operation.
+- `on_lost` (`callable`): callback to provide handling in the case the partition
+assignment has been lost. Partitions that have been lost may already be
+owned by other members in the group and therefore committing offsets,
+for example, may fail.
+
+**Raises**:
+
+- `KafkaException`: 
+- `None`: RuntimeError if called on a closed consumer
+.. py:function:: on_assign(consumer, partitions)
+.. py:function:: on_revoke(consumer, partitions)
+.. py:function:: on_lost(consumer, partitions)
+
+  :param Consumer consumer: Consumer instance.
+  :param list(TopicPartition) partitions: Absolute list of partitions being
+  assigned or revoked.
+
+<a id="quixstreams.kafka.consumer.Consumer.unsubscribe"></a>
+
+#### Consumer.unsubscribe
+
+```python
+def unsubscribe()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L237)
+
+Remove current subscription.
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+<a id="quixstreams.kafka.consumer.Consumer.store_offsets"></a>
+
+#### Consumer.store\_offsets
+
+```python
+def store_offsets(message: Optional[Message] = None,
+                  offsets: List[TopicPartition] = None)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L245)
+
+.. py:function:: store_offsets([message=None], [offsets=None])
+
+Store offsets for a message or a list of offsets.
+
+``message`` and ``offsets`` are mutually exclusive. The stored offsets
+will be committed according to 'auto.commit.interval.ms' or manual
+offset-less `commit`.
+Note that 'enable.auto.offset.store' must be set to False when using this API.
+
+**Arguments**:
+
+- `message` (`confluent_kafka.Message`): Store message's offset+1.
+- `offsets` (`list(TopicPartition)`): List of topic+partitions+offsets to store.
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+<a id="quixstreams.kafka.consumer.Consumer.commit"></a>
+
+#### Consumer.commit
+
+```python
+def commit(message: Message = None,
+           offsets: List[TopicPartition] = None,
+           asynchronous: bool = True) -> Optional[List[TopicPartition]]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L279)
+
+Commit a message or a list of offsets.
+
+The ``message`` and ``offsets`` parameters are mutually exclusive.
+If neither is set, the current partition assignment's offsets are used instead.
+Use this method to commit offsets if you have 'enable.auto.commit' set to False.
+
+**Arguments**:
+
+- `message` (`confluent_kafka.Message`): Commit the message's offset+1.
+Note: By convention, committed offsets reflect the next message
+to be consumed, **not** the last message consumed.
+- `offsets` (`list(TopicPartition)`): List of topic+partitions+offsets to commit.
+- `asynchronous` (`bool`): If true, asynchronously commit, returning None
+immediately. If False, the commit() call will block until the commit
+succeeds or fails and the committed offsets will be returned (on success).
+Note that specific partitions may have failed and the .err field of
+each partition should be checked for success.
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+<a id="quixstreams.kafka.consumer.Consumer.committed"></a>
+
+#### Consumer.committed
+
+```python
+def committed(partitions: List[TopicPartition],
+              timeout: float = None) -> List[TopicPartition]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L319)
+
+.. py:function:: committed(partitions, [timeout=None])
+
+Retrieve committed offsets for the specified partitions.
+
+**Arguments**:
+
+- `partitions` (`list(TopicPartition)`): List of topic+partitions to query for stored offsets.
+- `timeout` (`float`): Request timeout (seconds).
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+**Returns**:
+
+`list(TopicPartition)`: List of topic+partitions with offset and possibly error set.
+
+<a id="quixstreams.kafka.consumer.Consumer.get_watermark_offsets"></a>
+
+#### Consumer.get\_watermark\_offsets
+
+```python
+def get_watermark_offsets(partition: TopicPartition,
+                          timeout: float = None,
+                          cached: bool = False) -> Tuple[int, int]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L339)
+
+Retrieve low and high offsets for the specified partition.
+
+**Arguments**:
+
+- `partition` (`TopicPartition`): Topic+partition to return offsets for.
+- `timeout` (`float`): Request timeout (seconds). Ignored if cached=True.
+- `cached` (`bool`): Instead of querying the broker, use cached information.
+Cached values: The low offset is updated periodically
+(if statistics.interval.ms is set) while the high offset is updated on each
+message fetched from the broker for this partition.
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+**Returns**:
+
+`tuple(int,int)`: Tuple of (low,high) on success or None on timeout.
+The high offset is the offset of the last message + 1.
+
+<a id="quixstreams.kafka.consumer.Consumer.list_topics"></a>
+
+#### Consumer.list\_topics
+
+```python
+def list_topics(topic: Optional[str] = None,
+                timeout: float = -1) -> ClusterMetadata
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L365)
+
+.. py:function:: list_topics([topic=None], [timeout=-1])
+
+Request metadata from the cluster.
+This method provides the same information as
+listTopics(), describeTopics() and describeCluster() in  the Java Admin client.
+
+**Arguments**:
+
+- `topic` (`str`): If specified, only request information about this topic,
+else return results for all topics in cluster.
+Warning: If auto.create.topics.enable is set to true on the broker and
+an unknown topic is specified, it will be created.
+- `timeout` (`float`): The maximum response time before timing out,
+or -1 for infinite timeout.
+
+**Raises**:
+
+- `None`: KafkaException
+
+<a id="quixstreams.kafka.consumer.Consumer.memberid"></a>
+
+#### Consumer.memberid
+
+```python
+def memberid() -> str
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L386)
+
+Return this client's broker-assigned group member id.
+
+The member id is assigned by the group coordinator and is propagated to
+the consumer during rebalance.
+
+ :returns: Member id string or None
+ :rtype: string
+ :raises: RuntimeError if called on a closed consumer
+
+
+<a id="quixstreams.kafka.consumer.Consumer.offsets_for_times"></a>
+
+#### Consumer.offsets\_for\_times
+
+```python
+def offsets_for_times(partitions: List[TopicPartition],
+                      timeout: float = None) -> List[TopicPartition]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L399)
+
+Look up offsets by timestamp for the specified partitions.
+
+The returned offset for each partition is the earliest offset whose
+timestamp is greater than or equal to the given timestamp in the
+corresponding partition. If the provided timestamp exceeds that of the
+last message in the partition, a value of -1 will be returned.
+
+ :param list(TopicPartition) partitions: topic+partitions with timestamps
+    in the TopicPartition.offset field.
+ :param float timeout: Request timeout (seconds).
+ :returns: List of topic+partition with offset field set and possibly error set
+ :rtype: list(TopicPartition)
+ :raises: KafkaException
+ :raises: RuntimeError if called on a closed consumer
+
+
+<a id="quixstreams.kafka.consumer.Consumer.pause"></a>
+
+#### Consumer.pause
+
+```python
+def pause(partitions: List[TopicPartition])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L427)
+
+Pause consumption for the provided list of partitions.
+
+**Arguments**:
+
+- `partitions` (`list(TopicPartition)`): List of topic+partitions to pause.
+
+**Raises**:
+
+- `None`: KafkaException
+
+<a id="quixstreams.kafka.consumer.Consumer.resume"></a>
+
+#### Consumer.resume
+
+```python
+def resume(partitions: List[TopicPartition])
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L437)
+
+.. py:function:: resume(partitions)
+
+Resume consumption for the provided list of partitions.
+
+**Arguments**:
+
+- `partitions` (`list(TopicPartition)`): List of topic+partitions to resume.
+
+**Raises**:
+
+- `None`: KafkaException
+
+<a id="quixstreams.kafka.consumer.Consumer.position"></a>
+
+#### Consumer.position
+
+```python
+def position(partitions: List[TopicPartition]) -> List[TopicPartition]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L449)
+
+Retrieve current positions (offsets) for the specified partitions.
+
+**Arguments**:
+
+- `partitions` (`list(TopicPartition)`): List of topic+partitions to return
+current offsets for. The current offset is the offset of
+the last consumed message + 1.
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+**Returns**:
+
+`list(TopicPartition)`: List of topic+partitions with offset and possibly error set.
+
+<a id="quixstreams.kafka.consumer.Consumer.seek"></a>
+
+#### Consumer.seek
+
+```python
+def seek(partition: TopicPartition)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L463)
+
+Set consume position for partition to offset.
+
+The offset may be an absolute (>=0) or a
+logical offset (:py:const:`OFFSET_BEGINNING` et.al).
+
+seek() may only be used to update the consume offset of an
+actively consumed partition (i.e., after :py:const:`assign()`),
+to set the starting offset of partition not being consumed instead
+pass the offset in an `assign()` call.
+
+**Arguments**:
+
+- `partition` (`TopicPartition`): Topic+partition+offset to seek to.
+
+**Raises**:
+
+- `None`: KafkaException
+
+<a id="quixstreams.kafka.consumer.Consumer.assignment"></a>
+
+#### Consumer.assignment
+
+```python
+def assignment() -> List[TopicPartition]
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L480)
+
+Returns the current partition assignment.
+
+**Raises**:
+
+- `None`: KafkaException
+- `None`: RuntimeError if called on a closed consumer
+
+**Returns**:
+
+`list(TopicPartition)`: List of assigned topic+partitions.
+
+<a id="quixstreams.kafka.consumer.Consumer.set_sasl_credentials"></a>
+
+#### Consumer.set\_sasl\_credentials
+
+```python
+def set_sasl_credentials(username: str, password: str)
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L493)
+
+Sets the SASL credentials used for this client.
+These credentials will overwrite the old ones, and will be used the next
+time the client needs to authenticate.
+This method will not disconnect existing broker connections that have been
+established with the old credentials.
+This method is applicable only to SASL PLAIN and SCRAM mechanisms.
+
+<a id="quixstreams.kafka.consumer.Consumer.close"></a>
+
+#### Consumer.close
+
+```python
+def close()
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/kafka/consumer.py#L505)
+
+Close down and terminate the Kafka Consumer.
+
+Actions performed:
+
+- Stops consuming.
+- Commits offsets, unless the consumer property 'enable.auto.commit' is set to False.
+- Leaves the consumer group.
+
+Registered callbacks may be called from this method,
+see `poll()` for more info.
+
 
 <a id="quixstreams.app"></a>
 
@@ -4671,7 +4699,7 @@ True if logging config has been updated, otherwise False.
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L42)
 
 The main Application class.
 
@@ -4695,11 +4723,11 @@ What it Does:
 
 Example Snippet:
 
-<blockquote>
-Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything.
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
@@ -4708,7 +4736,6 @@ df.apply(lambda value, context: print('New message', value)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 <a id="quixstreams.app.Application.__init__"></a>
 
@@ -4734,7 +4761,7 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L81)
 
 **Arguments**:
 
@@ -4760,7 +4787,15 @@ If `None`, the default options will be used.
 - `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - 0s.
 - `on_message_processed`: a callback triggered when message is successfully
 processed.
-<br><br>***Error Handlers***<br>
+- `loglevel`: a log level for "quixstreams" logger.
+Should be a string or None.
+    If `None` is passed, no logging will be configured.
+    You may pass `None` and configure "quixstreams" logger
+    externally using `logging` library.
+    Default - "INFO".
+
+***Error Handlers***
+
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
@@ -4771,12 +4806,6 @@ to poll Kafka or cannot deserialize a message.
 `StreamingDataFrame.process()`.
 - `on_producer_error`: triggered when RowProducer fails to serialize
 or to produce a message to Kafka.
-- `loglevel`: a log level for "quixstreams" logger.
-Should be a string or None.
-If `None` is passed, no logging will be configured.
-You may pass `None` and configure "quixstreams" logger
-externally using `logging` library.
-Default - "INFO".
 
 <a id="quixstreams.app.Application.Quix"></a>
 
@@ -4805,7 +4834,7 @@ def Quix(cls,
          auto_create_topics: bool = True) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L177)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L178)
 
 Initialize an Application to work with Quix platform,
 
@@ -4824,13 +4853,12 @@ producer to properly connect to the Quix platform.
 
 Example Snippet:
 
-<blockquote>
-Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything. Also shows off how to
-use the quix-specific serializers and deserializers.
-
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything. Also shows off how to
+# use the quix-specific serializers and deserializers.
 
 app = Application.Quix()
 input_topic = app.topic("topic-in", value_deserializer="quix")
@@ -4840,7 +4868,6 @@ df = df.to_topic(output_topic)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -4871,7 +4898,9 @@ Should be a string or None.
     You may pass `None` and configure "quixstreams" logger
     externally using `logging` library.
     Default - "INFO".
-<br><br>***Error Handlers***<br>
+
+***Error Handlers***
+
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
@@ -4882,7 +4911,9 @@ Kafka or cannot deserialize a message.
 `StreamingDataFrame.process()`.
 - `on_producer_error`: triggered when RowProducer fails to serialize
 or to produce a message to Kafka.
-<br><br>***Quix-specific Parameters***<br>
+
+
+***Quix-specific Parameters***
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
 instead of the default one.
 - `auto_create_topics`: Whether to auto-create any topics handed to a
@@ -4905,7 +4936,7 @@ def topic(name: str,
           creation_configs: Optional[TopicCreationConfigs] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L321)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L324)
 
 Create a topic definition.
 
@@ -4916,12 +4947,11 @@ serialization class instance directly, like JSONSerializer().
 
 Example Snippet:
 
-<blockquote>
-Specify an input and output topic for a `StreamingDataFrame` instance,
-where the output topic requires adjusting the key serializer.
-
 ```python
 from quixstreams import Application
+
+# Specify an input and output topic for a `StreamingDataFrame` instance,
+# where the output topic requires adjusting the key serializer.
 
 app = Application()
 input_topic = app.topic("input-topic", value_deserializer="json")
@@ -4931,7 +4961,6 @@ output_topic = app.topic(
 sdf = app.dataframe(input_topic)
 sdf.to_topic(output_topic)
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -4958,7 +4987,7 @@ Its name will be overridden by this method's 'name' param.
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L387)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L387)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -4969,12 +4998,11 @@ See :class:`quixstreams.dataframe.StreamingDataFrame` for more details.
 
 Example Snippet:
 
-<blockquote>
-Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything.
-
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
@@ -4983,7 +5011,6 @@ df.apply(lambda value, context: print('New message', value)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 **Arguments**:
 
@@ -5002,7 +5029,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L425)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L423)
 
 Stop the internal poll loop and the message processing.
 
@@ -5020,7 +5047,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L437)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L435)
 
 Clear the state of the application.
 
@@ -5032,7 +5059,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/app.py#L466)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L464)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -5042,12 +5069,11 @@ One started, can be safely terminated with a `SIGTERM` signal
 
 Example Snippet:
 
-<blockquote>
-Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-add some operations to `sdf` and then run everything.
-
 ```python
 from quixstreams import Application
+
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+# add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
@@ -5056,117 +5082,127 @@ df.apply(lambda value, context: print('New message', value)
 
 app.run(dataframe=df)
 ```
-</blockquote>
 
 **Arguments**:
 
 - `dataframe`: instance of `StreamingDataFrame`
 
-<a id="quixstreams.context"></a>
+<a id="quixstreams.rowconsumer"></a>
 
-## quixstreams.context
+## quixstreams.rowconsumer
 
-<a id="quixstreams.context.set_message_context"></a>
+<a id="quixstreams.rowconsumer.RowConsumer"></a>
 
-#### set\_message\_context
+### RowConsumer
 
 ```python
-def set_message_context(context: Optional[MessageContext])
+class RowConsumer(Consumer, RowConsumerProto)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/context.py#L22)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowconsumer.py#L59)
 
-Set a MessageContext for the current message in the given `contextvars.Context`
+<a id="quixstreams.rowconsumer.RowConsumer.__init__"></a>
 
->***NOTE:*** This is for advanced usage only. If you need to change the message key,
-`StreamingDataFrame.to_topic()` has an argument for it.
+#### RowConsumer.\_\_init\_\_
 
-
-Example Snippet:
-
-<blockquote>
-Changes the current sdf value based on what the message partition is.
 ```python
-from quixstreams import Application, set_message_context, message_context
-
-def alter_context(value):
-    context = message_context()
-    if value > 1:
-        context.headers = context.headers + (b"cool_new_header", value.encode())
-        set_message_context(context)
-
-app = Application()
-sdf = app.dataframe()
-sdf = sdf.update(lambda value: alter_context(value))
+def __init__(broker_address: str,
+             consumer_group: str,
+             auto_offset_reset: AutoOffsetReset,
+             auto_commit_enable: bool = True,
+             assignment_strategy: AssignmentStrategy = "range",
+             on_commit: Callable[[Optional[KafkaError], List[TopicPartition]],
+                                 None] = None,
+             extra_config: Optional[dict] = None,
+             on_error: Optional[ConsumerErrorCallback] = None)
 ```
-</blockquote>
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowconsumer.py#L60)
+
+A consumer class that is capable of deserializing Kafka messages to Rows
+
+according to the Topics deserialization settings.
+
+It overrides `.subscribe()` method of Consumer class to accept `Topic`
+objects instead of strings.
 
 **Arguments**:
 
-- `context`: instance of `MessageContext`
+- `broker_address`: Kafka broker host and port in format `<host>:<port>`.
+Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+- `consumer_group`: Kafka consumer group.
+Passed as `group.id` to `confluent_kafka.Consumer`
+- `auto_offset_reset`: Consumer `auto.offset.reset` setting.
+Available values:
+- "earliest" - automatically reset the offset to the smallest offset
+- "latest" - automatically reset the offset to the largest offset
+- `auto_commit_enable`: If true, periodically commit offset of
+the last message handed to the application. Default - `True`.
+- `assignment_strategy`: The name of a partition assignment strategy.
+Available values: "range", "roundrobin", "cooperative-sticky".
+- `on_commit`: Offset commit result propagation callback.
+Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
+- `extra_config`: A dictionary with additional options that
+will be passed to `confluent_kafka.Consumer` as is.
+Note: values passed as arguments override values in `extra_config`.
+- `on_error`: a callback triggered when `RowConsumer.poll_row` fails.
+If consumer fails and the callback returns `True`, the exception
+will be logged but not propagated.
+The default callback logs an exception and returns `False`.
 
-<a id="quixstreams.context.message_context"></a>
+<a id="quixstreams.rowconsumer.RowConsumer.subscribe"></a>
 
-#### message\_context
+#### RowConsumer.subscribe
 
 ```python
-def message_context() -> MessageContext
+def subscribe(topics: List[Topic],
+              on_assign: Optional[RebalancingCallback] = None,
+              on_revoke: Optional[RebalancingCallback] = None,
+              on_lost: Optional[RebalancingCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/context.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowconsumer.py#L115)
 
-Get a MessageContext for the current message, which houses most of the message
+Set subscription to supplied list of topics.
 
-metadata, like:
-    - key
-    - timestamp
-    - partition
-    - offset
+This replaces a previous subscription.
 
+This method also updates the internal mapping with topics that is used
+to deserialize messages to Rows.
 
-Example Snippet:
+**Arguments**:
 
-<blockquote>
-Changes the current sdf value based on what the message partition is.
+- `topics`: list of `Topic` instances to subscribe to.
+- `on_assign` (`callable`): callback to provide handling of customized offsets
+on completion of a successful partition re-assignment.
+- `on_revoke` (`callable`): callback to provide handling of offset commits to
+a customized store on the start of a rebalance operation.
+- `on_lost` (`callable`): callback to provide handling in the case the partition
+assignment has been lost. Partitions that have been lost may already be
+owned by other members in the group and therefore committing offsets,
+for example, may fail.
+
+<a id="quixstreams.rowconsumer.RowConsumer.poll_row"></a>
+
+#### RowConsumer.poll\_row
+
 ```python
-from quixstreams import Application, message_context
-
-app = Application()
-sdf = app.dataframe()
-sdf = sdf.apply(lambda value: 1 if message_context().partition == 2 else 0)
+def poll_row(timeout: float = None) -> Union[Row, List[Row], None]
 ```
-</blockquote>
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/rowconsumer.py#L149)
+
+Consumes a single message and deserialize it to Row or a list of Rows.
+
+The message is deserialized according to the corresponding Topic.
+If deserializer raises `IgnoreValue` exception, this method will return None.
+If Kafka returns an error, it will be raised as exception.
+
+**Arguments**:
+
+- `timeout`: poll timeout seconds
 
 **Returns**:
 
-instance of `MessageContext`
-
-<a id="quixstreams.context.message_key"></a>
-
-#### message\_key
-
-```python
-def message_key() -> Any
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/123df9e2a57d55896cee82167108c4bafce1c554/quixstreams/context.py#L88)
-
-Get the current message's key.
-
-Example Snippet:
-
-<blockquote>
-Changes the current sdf value based on what the message key is.
-```python
-from quixstreams import Application, message_key
-
-app = Application()
-sdf = app.dataframe()
-sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
-```
-</blockquote>
-
-**Returns**:
-
-a deserialized message key
+single Row, list of Rows or None
 

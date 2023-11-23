@@ -204,6 +204,30 @@ sdf = sdf[sdf.apply(lambda value: value['field_a'] > 0)]
 
 <br>
 
+### Expanding a list of values into individual items with `StreamingDataFrame.apply(expand=True)`
+`StreamingDataFrame.apply()` with `expand=True` will expand the returned iterable (e.g. list or tuple) into individual values downstream, so the 
+next steps in `StreamingDataFrame` will work with individual items from this list instead of the whole list.
+
+For example, you get a sentence, and you need to apply transformations to individual words and produce them:
+```python
+# Split imaginary sentences into words
+sdf = sdf.apply(lambda sentence: sentence.split(' '), expand=True)
+# Get the length of each word
+sdf = sdf.apply(lambda word: len(word))
+# Send these lengths to the output topic as separate messages
+sdf = sdf.to_topic(words_topic)
+```
+
+After using `StreamingDataFrame.apply(expand=True)`, each downstream function will be applied
+to the item of the returned iterable.
+<br/>
+The items will be processed in the same order as they are returned.
+
+There are certain limitations coming with this API:
+- `StreamingDataFrame.apply(expand=True)` cannot be used to filter values via `sdf[sdf.apply(func, expand=True)]`
+- `StreamingDataFrame.apply(expand=True)` cannot be set back to the `StreamingDataFrame` via `sdf['column'] = sdf[sdf.apply(func, expand=True)]`
+
+
 ### Using custom functions with StreamingSeries
 The `.apply()` function is also valid for `StreamingSeries`.
 But instead of receiving an entire message value, it will receive only a value of the particular key:

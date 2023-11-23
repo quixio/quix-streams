@@ -63,11 +63,11 @@ class Application:
 
     Example Snippet:
 
-    <blockquote>
-    Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-    add some operations to `sdf` and then run everything.
     ```python
     from quixstreams import Application
+
+    # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+    # add some operations to `sdf` and then run everything.
 
     app = Application(broker_address='localhost:9092', consumer_group='group')
     topic = app.topic('test-topic')
@@ -76,7 +76,6 @@ class Application:
 
     app.run(dataframe=df)
     ```
-    </blockquote>
     """
 
     def __init__(
@@ -123,7 +122,15 @@ class Application:
         :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
-        <br><br>***Error Handlers***<br>
+        :param loglevel: a log level for "quixstreams" logger.
+            Should be a string or None.
+            If `None` is passed, no logging will be configured.
+            You may pass `None` and configure "quixstreams" logger
+            externally using `logging` library.
+            Default - "INFO".
+
+        ***Error Handlers***
+
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
@@ -134,12 +141,6 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-        :param loglevel: a log level for "quixstreams" logger.
-            Should be a string or None.
-            If `None` is passed, no logging will be configured.
-            You may pass `None` and configure "quixstreams" logger
-            externally using `logging` library.
-            Default - "INFO".
         """
         configure_logging(loglevel=loglevel)
         self._consumer = RowConsumer(
@@ -212,13 +213,12 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
-        add some operations to `sdf` and then run everything. Also shows off how to
-        use the quix-specific serializers and deserializers.
-
         ```python
         from quixstreams import Application
+
+        # Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything. Also shows off how to
+        # use the quix-specific serializers and deserializers.
 
         app = Application.Quix()
         input_topic = app.topic("topic-in", value_deserializer="quix")
@@ -228,8 +228,6 @@ class Application:
 
         app.run(dataframe=df)
         ```
-        </blockquote>
-
 
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
@@ -258,7 +256,9 @@ class Application:
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
             Default - "INFO".
-        <br><br>***Error Handlers***<br>
+
+        ***Error Handlers***
+
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
@@ -269,7 +269,10 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-        <br><br>***Quix-specific Parameters***<br>
+
+
+        ***Quix-specific Parameters***
+
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
         :param auto_create_topics: Whether to auto-create any topics handed to a
@@ -337,12 +340,11 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Specify an input and output topic for a `StreamingDataFrame` instance,
-        where the output topic requires adjusting the key serializer.
-
         ```python
         from quixstreams import Application
+
+        # Specify an input and output topic for a `StreamingDataFrame` instance,
+        # where the output topic requires adjusting the key serializer.
 
         app = Application()
         input_topic = app.topic("input-topic", value_deserializer="json")
@@ -352,8 +354,6 @@ class Application:
         sdf = app.dataframe(input_topic)
         sdf.to_topic(output_topic)
         ```
-        </blockquote>
-
 
         :param name: topic name
             >***NOTE:*** If the application is created via `Quix.Application()`,
@@ -397,12 +397,11 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-        add some operations to `sdf` and then run everything.
-
         ```python
         from quixstreams import Application
+
+        # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything.
 
         app = Application(broker_address='localhost:9092', consumer_group='group')
         topic = app.topic('test-topic')
@@ -411,7 +410,6 @@ class Application:
 
         app.run(dataframe=df)
         ```
-        </blockquote>
 
 
         :param topic: a `quixstreams.models.Topic` instance
@@ -476,12 +474,11 @@ class Application:
 
         Example Snippet:
 
-        <blockquote>
-        Set up an `app = Application` and  `sdf = StreamingDataFrame`;
-        add some operations to `sdf` and then run everything.
-
         ```python
         from quixstreams import Application
+
+        # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything.
 
         app = Application(broker_address='localhost:9092', consumer_group='group')
         topic = app.topic('test-topic')
@@ -490,8 +487,6 @@ class Application:
 
         app.run(dataframe=df)
         ```
-        </blockquote>
-
 
         :param dataframe: instance of `StreamingDataFrame`
         """
@@ -531,7 +526,7 @@ class Application:
             # Start polling Kafka for messages and callbacks
             self._running = True
 
-            dataframe_compiled = dataframe.compile()
+            dataframe_composed = dataframe.compose()
             while self._running:
                 # Serve producer callbacks
                 self._producer.poll(self._producer_poll_timeout)
@@ -562,7 +557,7 @@ class Application:
                     for row in rows:
                         try:
                             # Execute StreamingDataFrame in a context
-                            context.run(dataframe_compiled, row.value)
+                            context.run(dataframe_composed, row.value)
                         except Filtered:
                             # The message was filtered by StreamingDataFrame
                             continue
