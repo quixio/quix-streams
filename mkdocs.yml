@@ -14,6 +14,9 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
+exclude_docs: |
+  build/*
+
 nav:
   - Example Applications: example.md
   - Defining your Streaming Pipeline: streamingdataframe.md
