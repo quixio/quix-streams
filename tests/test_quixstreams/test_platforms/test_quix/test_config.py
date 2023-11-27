@@ -8,6 +8,7 @@ import pytest
 from requests import HTTPError, Response
 
 from quixstreams.models.topics import Topic
+from quixstreams.platforms.quix.config import QUIX_CONNECTIONS_MAX_IDLE_MS
 
 
 class TestQuixKafkaConfigsBuilder:
@@ -404,6 +405,7 @@ class TestQuixKafkaConfigsBuilder:
             "sasl.password": "my-password",
             "ssl.ca.location": "/mock/dir/ca.cert",
             "ssl.endpoint.identification.algorithm": "none",
+            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
         }
 
     def test_append_workspace_id(self, quix_kafka_config_factory):

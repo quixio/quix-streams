@@ -19,6 +19,8 @@ __all__ = (
     "TopicCreationConfigs",
 )
 
+QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
+
 
 @dataclasses.dataclass
 class TopicCreationConfigs:
@@ -410,6 +412,16 @@ class QuixKafkaConfigsBuilder:
             cfg_out[c_cfg] = self.QuixApiKafkaAuthConfigMap.values.get(value, value)
         cfg_out["ssl.endpoint.identification.algorithm"] = "none"
         cfg_out["ssl.ca.location"] = self._set_workspace_cert()
+
+        # Set the connection idle timeout to be less than Azure's default 4 minutes
+        # (Azure is the default environment).
+        # It will make librdkafka to close idle connections itself periodically
+        # when no producing or consuming happens, so the Azure LB doesn't silently
+        # kill them.
+        # This value can be overwritten on the Application level by passing
+        # `extra_consumer_config` or `extra_producer_config` parameters.
+        # More about this issue - https://github.com/confluentinc/librdkafka/issues/3109
+        cfg_out["connections.max.idle.ms"] = QUIX_CONNECTIONS_MAX_IDLE_MS
         self._confluent_broker_config = cfg_out
         return self._confluent_broker_config
 
