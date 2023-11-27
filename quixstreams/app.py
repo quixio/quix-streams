@@ -164,7 +164,6 @@ class Application:
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
-        self._state_manager: Optional[StateStoreManager] = None
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
