@@ -20,6 +20,7 @@ __all__ = (
 )
 
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
+QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
 
 @dataclasses.dataclass
@@ -413,15 +414,17 @@ class QuixKafkaConfigsBuilder:
         cfg_out["ssl.endpoint.identification.algorithm"] = "none"
         cfg_out["ssl.ca.location"] = self._set_workspace_cert()
 
-        # Set the connection idle timeout to be less than Azure's default 4 minutes
-        # (Azure is the default environment).
-        # It will make librdkafka to close idle connections itself periodically
-        # when no producing or consuming happens, so the Azure LB doesn't silently
-        # kill them.
-        # This value can be overwritten on the Application level by passing
+        # Set the connection idle timeout and metadata max age to be less than
+        # Azure's default 4 minutes.
+        # Azure LB kills the inbound TCP connections after 4 mins and these settings
+        # help to handle that.
+        # More about this issue:
+        # - https://github.com/confluentinc/librdkafka/issues/3109
+        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
+        # These values can be overwritten on the Application level by passing
         # `extra_consumer_config` or `extra_producer_config` parameters.
-        # More about this issue - https://github.com/confluentinc/librdkafka/issues/3109
         cfg_out["connections.max.idle.ms"] = QUIX_CONNECTIONS_MAX_IDLE_MS
+        cfg_out["metadata.max.age.ms"] = QUIX_METADATA_MAX_AGE_MS
         self._confluent_broker_config = cfg_out
         return self._confluent_broker_config
 
