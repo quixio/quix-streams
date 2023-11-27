@@ -2,14 +2,13 @@
 # `StreamingDataFrame`: Detailed Overview
 
 
-> ***NOTE***: If you just need to see more general/full examples, [check out our various examples](example.md).
+> ***NOTE***: If you just need to see more general/full examples, [check out our various examples](https://github.com/quixio/quix-streams/blob/main/docs/example.md).
 
 `StreamingDataFrame` and `StreamingSeries` are the primary objects to define the stream processing pipelines.
 
 Changes to instances of `StreamingDataFrame` and `StreamingSeries` update the processing pipeline, but the actual
 data changes happen only when it's executed via `Application.run()`
 
-If you just need to see more general/full examples, [check out our various examples](example.md).
 
 ## Data Types
 
@@ -289,7 +288,7 @@ sdf = sdf.update(edit_data, stateful=True)
 ```
 
 For more information about stateful processing in general, see 
-[**Stateful Applications**](./stateful-processing.md).
+[**Stateful Applications**](https://github.com/quixio/quix-streams/blob/main/docs/stateful-processing.md).
 
 
 ## Accessing the Kafka Message Keys and Metadata
