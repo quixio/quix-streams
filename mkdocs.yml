@@ -15,6 +15,7 @@ markdown_extensions:
       alternate_style: true
 
 nav:
+  - 'Introduction': '../quix-streams-intro.html'
   - Example Applications: example.md
   - Defining your Streaming Pipeline: streamingdataframe.md
   - Serialization: serialization.md
