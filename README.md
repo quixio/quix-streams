@@ -55,7 +55,7 @@ python -m pip install "quixstreams>=2.0a"
 #### Requirements
 Python 3.8+, Apache Kafka 0.10+
 
-See [requirements.txt](requirements.txt) for the full list of requirements
+See [requirements.txt](https://github.com/quixio/quix-streams/blob/main/requirements.txt) for the full list of requirements
 
 
 ### Example Application
@@ -140,17 +140,17 @@ Under the hood, the `Application` will:
 - Handle OS signals and gracefully exit the application.
 
 ### More Examples
-> You may find more examples in the `examples` folder **[here](examples)**.
+> You may find more examples in the `examples` folder **[here](https://github.com/quixio/quix-streams/tree/main/examples)**.
 
 ### Advanced Usage
 
 For more in-depth description of Quix Streams components, please
 follow these links:
-- ***[StreamingDataFrame](docs/streamingdataframe.md)***.
-- ***[Serialization](docs/serialization.md)***.
-- ***[Stateful Processing](docs/stateful-processing.md)***.
-- ***[Usage with Quix SaaS Platform](docs/quix-platform.md)***.
-- ***[Upgrading from Quix Streams <2.0](docs/upgrading-legacy.md)***.
+- ***[StreamingDataFrame](https://github.com/quixio/quix-streams/blob/main/docs/streamingdataframe.md)***.
+- ***[Serialization](https://github.com/quixio/quix-streams/blob/main/docs/serialization.md)***.
+- ***[Stateful Processing](https://github.com/quixio/quix-streams/blob/main/docs/stateful-processing.md)***.
+- ***[Usage with Quix SaaS Platform](https://github.com/quixio/quix-streams/blob/main/docs/quix-platform.md)***.
+- ***[Upgrading from Quix Streams <2.0](https://github.com/quixio/quix-streams/blob/main/docs/upgrading-legacy.md)***.
 
 
 ### Using the [Quix Platform](https://quix.io/) - `Application.Quix()`
@@ -172,7 +172,7 @@ If you are running this within the Quix platform it will be configured
 automatically.
 <br>
 Otherwise, please see 
-[**Quix Platform Configuration**](docs/quix-platform.md).
+[**Quix Platform Configuration**](https://github.com/quixio/quix-streams/blob/main/docs/quix-platform.md).
 
 
 ### What's Next

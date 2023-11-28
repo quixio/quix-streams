@@ -18,7 +18,7 @@ The Quix Platform/topics use their own messaging formats, known as `TimeseriesDa
 - `QuixEventsSerializer`
 - `QuixTimeseriesSerializer`
 
-See [**Migrating from Legacy Quix Streams**](./upgrading-legacy.md) 
+See [**Migrating from Legacy Quix Streams**](https://github.com/quixio/quix-streams/blob/main/docs/upgrading-legacy.md) 
 for more detail around the Quix format.
 
 You may use any serialization method you like instead of the Quix 
