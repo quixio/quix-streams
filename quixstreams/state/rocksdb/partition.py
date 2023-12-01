@@ -38,6 +38,8 @@ _DEFAULT_PREFIX = b""
 
 _PROCESSED_OFFSET_KEY = b"__topic_offset__"
 
+_METADATA_CF_NAME = "__metadata__"
+
 
 def _int_to_int64_bytes(value: int) -> bytes:
     return struct.pack(">q", value)
@@ -78,7 +80,7 @@ class RocksDBStorePartition(StorePartition):
         self._options = options or RocksDBOptions()
         self._open_max_retries = open_max_retries
         self._open_retry_backoff = open_retry_backoff
-        self._db = self._init_db()
+        self._db = self._init_rocksdb()
 
     def begin(self) -> "RocksDBPartitionTransaction":
         """
@@ -98,31 +100,40 @@ class RocksDBStorePartition(StorePartition):
         """
         self._db.write(batch)
 
-    def get(self, key: bytes, default: Any = None) -> Union[None, bytes, Any]:
+    def get(
+        self, key: bytes, default: Any = None, cf_name: str = "default"
+    ) -> Union[None, bytes, Any]:
         """
         Get a key from RocksDB.
 
         :param key: a key encoded to `bytes`
         :param default: a default value to return if the key is not found.
+        :param cf_name: rocksdb column family name. Default - "default"
         :return: a value if the key is present in the DB. Otherwise, `None` or `default`
         """
-        return self._db.get(key, default)
+        cf_dict = self._db.get_column_family(cf_name)
+        return cf_dict.get(key, default)
 
-    def exists(self, key: bytes) -> bool:
+    def exists(self, key: bytes, cf_name: str = "default") -> bool:
         """
         Check if a key is present in the DB.
 
         :param key: a key encoded to `bytes`.
+        :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key is present, `False` otherwise.
         """
-        return key in self._db
+        cf_dict = self._db.get_column_family(cf_name)
+        return key in cf_dict
 
     def get_processed_offset(self) -> Optional[int]:
         """
         Get last processed offset for the given partition
         :return: offset or `None` if there's no processed offset yet
         """
-        offset_bytes = self._db.get(_PROCESSED_OFFSET_KEY)
+        metadata_cf = self._db.get_column_family(_METADATA_CF_NAME)
+        offset_bytes = metadata_cf.get(_PROCESSED_OFFSET_KEY)
+        if offset_bytes is None:
+            offset_bytes = self._db.get(_PROCESSED_OFFSET_KEY)
         if offset_bytes is not None:
             return _int_from_int64_bytes(offset_bytes)
 
@@ -153,22 +164,32 @@ class RocksDBStorePartition(StorePartition):
         """
         rocksdict.Rdict.destroy(path=path)  # noqa
 
-    def _init_db(self) -> rocksdict.Rdict:
-        db = self._open_rocksdb()
-        return db
+    def get_column_family_handle(self, cf_name: str) -> rocksdict.ColumnFamily:
+        return self._db.get_column_family_handle(cf_name)
 
-    def _open_rocksdb(self) -> rocksdict.Rdict:
+    def get_column_family(self, cf_name: str) -> rocksdict.Rdict:
+        return self._db.get_column_family(cf_name)
+
+    def _open_rocksdict(self) -> rocksdict.Rdict:
+        options = self._options.to_options()
+        options.create_if_missing(True)
+        options.create_missing_column_families(True)
+        rdict = rocksdict.Rdict(
+            path=self._path,
+            options=options,
+            access_type=rocksdict.AccessType.read_write(),  # noqa
+            column_families={_METADATA_CF_NAME: options},
+        )
+        return rdict
+
+    def _init_rocksdb(self) -> rocksdict.Rdict:
         attempt = 1
         while True:
             logger.debug(
                 f'Opening rocksdb partition on "{self._path}" attempt={attempt}',
             )
             try:
-                db = rocksdict.Rdict(
-                    path=self._path,
-                    options=self._options.to_options(),
-                    access_type=rocksdict.AccessType.read_write(),  # noqa
-                )
+                db = self._open_rocksdict()
                 logger.debug(
                     f'Successfully opened rocksdb partition on "{self._path}"',
                 )
@@ -317,7 +338,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             self._prefix = _DEFAULT_PREFIX
 
     @_validate_transaction_state
-    def get(self, key: Any, default: Any = None) -> Optional[Any]:
+    def get(
+        self, key: Any, default: Any = None, cf_name: str = "default"
+    ) -> Optional[Any]:
         """
         Get a key from the store.
 
@@ -329,24 +352,25 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param key: a key to get from DB
         :param default: value to return if the key is not present in the state.
             It can be of any type.
+        :param cf_name: rocksdb column family name. Default - "default"
         :return: value or `default`
         """
 
         # First, check the update cache in case the value was previously written
         # Use sentinel as default because the actual value can be "None"
         key_serialized = self._serialize_key(key)
-        cached = self._update_cache.get(key_serialized, _sentinel)
+        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _sentinel)
         if cached is not _sentinel:
             return self._deserialize_value(cached)
 
         # The value is not found in cache, check the db
-        stored = self._partition.get(key_serialized, _sentinel)
+        stored = self._partition.get(key_serialized, _sentinel, cf_name=cf_name)
         if stored is not _sentinel:
             return self._deserialize_value(stored)
         return default
 
     @_validate_transaction_state
-    def set(self, key: Any, value: Any):
+    def set(self, key: Any, value: Any, cf_name: str = "default"):
         """
         Set a key to the store.
 
@@ -354,50 +378,57 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         :param key: key to store in DB
         :param value: value to store in DB
+        :param cf_name: rocksdb column family name. Default - "default"
         """
 
         key_serialized = self._serialize_key(key)
         value_serialized = self._serialize_value(value)
 
         try:
-            self._batch.put(key_serialized, value_serialized)
-            self._update_cache[key_serialized] = value_serialized
+            cf_handle = self._partition.get_column_family_handle(cf_name)
+            self._batch.put(key_serialized, value_serialized, cf_handle)
+            self._update_cache.setdefault(cf_name, {})[
+                key_serialized
+            ] = value_serialized
         except Exception:
             self._failed = True
             raise
 
     @_validate_transaction_state
-    def delete(self, key: Any):
+    def delete(self, key: Any, cf_name: str = "default"):
         """
         Delete a key from the store.
 
         It first deletes the key from the update cache.
 
         :param key: key to delete from DB
+        :param cf_name: rocksdb column family name. Default - "default"
         """
         key_serialized = self._serialize_key(key)
         try:
-            self._batch.delete(key_serialized)
-            self._update_cache.pop(key_serialized, None)
+            cf_handle = self._partition.get_column_family_handle(cf_name)
+            self._batch.delete(key_serialized, cf_handle)
+            self._update_cache.get(cf_name, {}).pop(key_serialized, None)
         except Exception:
             self._failed = True
             raise
 
     @_validate_transaction_state
-    def exists(self, key: Any) -> bool:
+    def exists(self, key: Any, cf_name: str = "default") -> bool:
         """
         Check if a key exists in the store.
 
         It first looks up the key in the update cache.
 
         :param key: a key to check in DB
+        :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key exists, `False` otherwise.
         """
 
         key_serialized = self._serialize_key(key)
-        if key_serialized in self._update_cache:
+        if key_serialized in self._update_cache.get(cf_name, {}):
             return True
-        return self._partition.exists(key_serialized)
+        return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @property
     def completed(self) -> bool:
@@ -445,7 +476,12 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             # Don't write batches if this transaction doesn't change any keys
             if len(self._batch):
                 if offset is not None:
-                    self._batch.put(_PROCESSED_OFFSET_KEY, _int_to_int64_bytes(offset))
+                    cf_handle = self._partition.get_column_family_handle(
+                        _METADATA_CF_NAME
+                    )
+                    self._batch.put(
+                        _PROCESSED_OFFSET_KEY, _int_to_int64_bytes(offset), cf_handle
+                    )
                 self._partition.write(self._batch)
         except Exception:
             self._failed = True
