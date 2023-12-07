@@ -163,6 +163,11 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
     ):
         super().__init__(partition=partition, dumps=dumps, loads=loads)
         self._latest_timestamp = latest_timestamp
+        self._state = WindowedTransactionState(transaction=self)
+
+    @property
+    def state(self) -> "WindowedTransactionState":
+        return self._state
 
     def get_latest_timestamp(self) -> float:
         return self._latest_timestamp
@@ -190,3 +195,58 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         # Allow bytes keys in WindowedStore
         key_bytes = key if isinstance(key, bytes) else serialize(key, dumps=self._dumps)
         return self._prefix + PREFIX_SEPARATOR + key_bytes
+
+
+class WindowedTransactionState:
+    __slots__ = ("_transaction",)
+
+    def __init__(self, transaction: WindowedRocksDBPartitionTransaction):
+        """
+        A windowed state to be provided into `StreamingDataFrame` window functions.
+
+        :param transaction: instance of `WindowedRocksDBPartitionTransaction`
+        """
+        self._transaction = transaction
+
+    def get_window(
+        self, start: float, end: float, default: Any = None
+    ) -> Optional[Any]:
+        """
+        Get the value of the window defined by `start` and `end` timestamps
+        if the window is present in the state, else default
+
+        :param start: start of the window
+        :param end: end of the window
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        return self._transaction.get_window(start=start, end=end, default=default)
+
+    def update_window(self, start: float, end: float, value: Any, timestamp: float):
+        """
+        Set a value for the window.
+
+        This method will also update the latest observed timestamp in state partition
+        using the provided `timestamp`.
+
+
+        :param start: start of the window
+        :param end: end of the window
+        :param value: value of the window
+        :param timestamp: current message timestamp
+        """
+        return self._transaction.update_window(
+            start=start, end=end, timestamp=timestamp, value=value
+        )
+
+    def get_latest_timestamp(self) -> float:
+        """
+        Get the latest observed timestamp for the current state partition.
+
+        Use this timestamp to determine if the arriving event is late and should be
+        discarded from the processing.
+
+        :return: latest observed event timestamp
+        """
+
+        return self._transaction.get_latest_timestamp()
