@@ -1,7 +1,6 @@
 import contextlib
 import functools
 import logging
-import struct
 import time
 from typing import Any, Union, Optional
 
@@ -19,7 +18,12 @@ from .exceptions import (
     NestedPrefixError,
 )
 from .options import RocksDBOptions
-from .serialization import serialize, deserialize, serialize_key
+from .serialization import (
+    serialize,
+    deserialize,
+    int_from_int64_bytes,
+    int_to_int64_bytes,
+)
 from .types import RocksDBOptionsType
 from ..state import TransactionState
 
@@ -329,8 +333,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         self._prefix = (
             prefix if isinstance(prefix, bytes) else self._serialize_value(prefix)
         )
-        if self._prefix:
-            self._prefix += _PREFIX_SEPARATOR
 
         try:
             yield self
@@ -496,7 +498,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         return deserialize(value, loads=self._loads)
 
     def _serialize_key(self, key: Any) -> bytes:
-        return serialize_key(key, prefix=self._prefix, dumps=self._dumps)
+        key_bytes = serialize(key, dumps=self._dumps)
+        prefix = self._prefix + PREFIX_SEPARATOR if self._prefix else b""
+        return prefix + key_bytes
 
     def __enter__(self):
         return self
