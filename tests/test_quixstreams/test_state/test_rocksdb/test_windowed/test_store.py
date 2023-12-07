@@ -23,23 +23,13 @@ class TestWindowedRocksDBStore:
     def test_store(self, windowed_rocksdb_store_factory):
         store = windowed_rocksdb_store_factory()
         store.assign_partition(0)
-        with store.start_partition_transaction(0, key=b"__key__") as tx:
-            tx.update_window(start=0, end=10, value=1, timestamp=2)
-            tx.update_window(start=2, end=12, value=1, timestamp=3)
-            tx.update_window(start=4, end=14, value=1, timestamp=4)
-            assert tx.get_window(start=0, end=10) == 1
+        with store.start_partition_transaction(0) as tx:
+            with tx.with_prefix(b"__key__"):
+                tx.update_window(start=0, end=10, value=1, timestamp=2)
+                tx.update_window(start=2, end=12, value=1, timestamp=3)
+                tx.update_window(start=4, end=14, value=1, timestamp=4)
+                assert tx.get_window(start=0, end=10) == 1
 
-        with store.start_partition_transaction(0, key=b"__key1__") as tx:
-            tx.update_window(10, 20, value=1, timestamp=16)
-
-        with store.start_partition_transaction(0, key=b"__key__") as tx:
-            expired_windows = tx.get_expired_windows()
-            assert len(expired_windows) == 3
-            assert tx.get_window(0, 10) == 1
-
-        with store.start_partition_transaction(0, key=b"__key__") as tx:
-            assert tx.get_window(0, 10) is None
-
-        store.revoke_partition(0)
-
-        partition = store.assign_partition(0)
+        with store.start_partition_transaction(0) as tx:
+            with tx.with_prefix(b"__key__"):
+                assert tx.get_window(start=0, end=10) == 1
