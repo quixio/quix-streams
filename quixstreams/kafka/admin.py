@@ -74,15 +74,6 @@ class TopicAdmin:
             config_resource.name: {c.name: c.value for c in config.result().values()}
             for config_resource, config in futures_dict.items()
         }
-        # return {
-        #     topic: {
-        #         'partitions': len(cluster_topics[topic].partitions),
-        #         'replication_factor': len(cluster_topics[topic].partitions[0].replicas),
-        #         'configs': configs[topic]
-        #     }
-        #     if topic in existing_topics else None
-        #     for topic in topics
-        # }
         return {
             topic: TopicKafkaConfigs(
                 name=topic,
@@ -162,50 +153,6 @@ class TopicAdmin:
         )
         self._topics[name] = topic
         return topic
-
-    # def changelog_topic(
-    #     self,
-    #     source_topic_name: str,
-    #     suffix: str,
-    #     configs_to_import: tuple = ("retention.bytes", "retention.ms")
-    # ) -> Topic:
-    #     kafka_configs = self.inspect_topics([source_topic_name])[source_topic_name]
-    #     changelog_name = f"{source_topic_name}_{suffix}__changelog"
-    #     base_optionals = {} if self.has_quix_builder else {'cleanup.policy': 'compact'}
-    #     # TODO: have topic inspection return TopicKafkaConfigs
-    #     if kafka_configs:
-    #         creation_config = TopicKafkaConfigs(
-    #             name=changelog_name,
-    #             num_partitions=kafka_configs.num_partitions,
-    #             replication_factor=kafka_configs.replication_factor,
-    #             optionals={
-    #                 **{k: kafka_configs.optionals[k] for k in configs_to_import},
-    #                 **base_optionals
-    #             },
-    #             is_quix_topic=self.has_quix_builder
-    #         )
-    #     else:
-    #         cfgs = self._topics[source_topic_name].kafka_configs
-    #         creation_config = TopicKafkaConfigs(
-    #             name=changelog_name,
-    #             is_quix_topic=self.has_quix_builder,
-    #             num_partitions=cfgs.num_partitions,
-    #             replication_factor=cfgs.replication_factor,
-    #             optionals={
-    #                 **{k: cfgs.optionals[k] for k in configs_to_import if k in cfgs.optionals},
-    #                 **base_optionals
-    #             },
-    #         )
-    #     topic = Topic(
-    #         name=changelog_name,
-    #         key_serializer='bytes',
-    #         value_serializer='bytes',
-    #         key_deserializer='bytes',
-    #         value_deserializer='bytes',
-    #         kafka_configs=creation_config
-    #     )
-    #     self._changelog_topics.setdefault(source_topic_name, {}).setdefault(suffix, topic)
-    #     return topic
 
     def changelog_topic(
         self,
