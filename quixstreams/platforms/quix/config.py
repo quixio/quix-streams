@@ -1,36 +1,22 @@
-import dataclasses
 import logging
 import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional, Tuple, List, Iterable, Set, Mapping, Union, Dict
+from typing import Optional, Tuple, List, Iterable, Set, Union
 
 from requests import HTTPError
 
 from quixstreams.exceptions import QuixException
-from quixstreams.models import Topic
+from quixstreams.models import Topic, TopicKafkaConfigs
 from .api import QuixPortalApiService
 
 logger = logging.getLogger(__name__)
 
-__all__ = (
-    "QuixKafkaConfigsBuilder",
-    "TopicCreationConfigs",
-)
+__all__ = ("QuixKafkaConfigsBuilder",)
 
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
-
-
-@dataclasses.dataclass
-class TopicCreationConfigs:
-    name: Optional[str] = None  # Required when not created by a Quix App.
-    num_partitions: int = 2
-    replication_factor: int = 2
-    retention_bytes: int = 52428800
-    retention_minutes: int = 10080
-    optionals: Optional[Mapping] = None
 
 
 class QuixKafkaConfigsBuilder:
@@ -79,12 +65,6 @@ class QuixKafkaConfigsBuilder:
         self._quix_broker_config = None
         self._quix_broker_settings = None
         self._workspace_meta = None
-
-        # TODO: consider a class extension with stuff that's only for Application.Quix
-        # since this is slowly building up.
-        # Application.Quix only
-        self.app_auto_create_topics: bool = True
-        self.create_topic_configs: Dict[str, TopicCreationConfigs] = {}
 
     class NoWorkspaceFound(QuixException):
         ...
@@ -263,21 +243,22 @@ class QuixKafkaConfigsBuilder:
                 )
         return full_path.as_posix()
 
-    def _create_topic(self, topic: TopicCreationConfigs):
+    def _create_topic(self, topic: TopicKafkaConfigs):
         """
         The actual API call to create the topic
 
-        :param topic: a TopicCreationConfigs instance
+        :param topic: a TopicKafkaConfigs instance
         """
         topic_name = self.strip_workspace_id(topic.name)
+
         # an exception is raised (status code) if topic is not created successfully
         self.api.post_topic(
             topic_name=topic_name,
             workspace_id=self.workspace_id,
             topic_partitions=topic.num_partitions,
             topic_rep_factor=topic.replication_factor,
-            topic_ret_bytes=topic.retention_bytes,
-            topic_ret_minutes=topic.retention_minutes,
+            topic_ret_bytes=int(topic.optionals["retention.bytes"]),
+            topic_ret_minutes=int(topic.optionals["retention.ms"]) // 60000,
         )
         logger.info(
             f"Creation of topic {topic_name} acknowledged by broker. Must wait "
@@ -310,13 +291,13 @@ class QuixKafkaConfigsBuilder:
 
     def create_topics(
         self,
-        topics: Iterable[TopicCreationConfigs],
+        topics: Iterable[TopicKafkaConfigs],
         finalize_timeout_seconds: Optional[int] = None,
     ):
         """
         Create topics in a Quix cluster.
 
-        :param topics: an iterable with TopicCreationConfigs instances
+        :param topics: an iterable with TopicKafkaConfigs instances
         :param finalize_timeout_seconds: How long to wait for the topics to be
         marked as "Ready" (and thus ready to produce to/consume from).
         """
@@ -354,13 +335,11 @@ class QuixKafkaConfigsBuilder:
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
 
-    def confirm_topics_exist(
-        self, topics: Iterable[Union[Topic, TopicCreationConfigs]]
-    ):
+    def confirm_topics_exist(self, topics: Iterable[Union[Topic, TopicKafkaConfigs]]):
         """
         Confirm whether the desired set of topics exists in the Quix workspace.
 
-        :param topics: an iterable with Either Topic or TopicCreationConfigs instances
+        :param topics: an iterable with Either Topic or TopicKafkaConfigs instances
         """
         logger.info("Confirming required topics exist...")
         current_topics = [t["id"] for t in self.get_topics()]
