@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any, Union, Optional
 
-import rocksdict
+from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from typing_extensions import Self
 
 from quixstreams.state.types import (
@@ -17,6 +17,7 @@ from .exceptions import (
     StateTransactionError,
     NestedPrefixError,
 )
+from .metadata import METADATA_CF_NAME, PROCESSED_OFFSET_KEY, PREFIX_SEPARATOR
 from .options import RocksDBOptions
 from .serialization import (
     serialize,
@@ -36,21 +37,7 @@ logger = logging.getLogger(__name__)
 
 _sentinel = object()
 
-_PREFIX_SEPARATOR = b"|"
-
 _DEFAULT_PREFIX = b""
-
-_PROCESSED_OFFSET_KEY = b"__topic_offset__"
-
-_METADATA_CF_NAME = "__metadata__"
-
-
-def _int_to_int64_bytes(value: int) -> bytes:
-    return struct.pack(">q", value)
-
-
-def _int_from_int64_bytes(value: bytes) -> int:
-    return struct.unpack(">q", value)[0]
 
 
 class RocksDBStorePartition(StorePartition):
@@ -82,9 +69,13 @@ class RocksDBStorePartition(StorePartition):
     ):
         self._path = path
         self._options = options or RocksDBOptions()
+        self._dumps = self._options.dumps
+        self._loads = self._options.loads
         self._open_max_retries = open_max_retries
         self._open_retry_backoff = open_retry_backoff
         self._db = self._init_rocksdb()
+        self._cf_cache = {}
+        self._cf_handle_cache = {}
 
     def begin(self) -> "RocksDBPartitionTransaction":
         """
@@ -94,10 +85,10 @@ class RocksDBStorePartition(StorePartition):
         :return: an instance of `RocksDBTransaction`
         """
         return RocksDBPartitionTransaction(
-            partition=self, dumps=self._options.dumps, loads=self._options.loads
+            partition=self, dumps=self._dumps, loads=self._loads
         )
 
-    def write(self, batch: rocksdict.WriteBatch):
+    def write(self, batch: WriteBatch):
         """
         Write `WriteBatch` to RocksDB
         :param batch: an instance of `rocksdict.WriteBatch`
@@ -113,9 +104,9 @@ class RocksDBStorePartition(StorePartition):
         :param key: a key encoded to `bytes`
         :param default: a default value to return if the key is not found.
         :param cf_name: rocksdb column family name. Default - "default"
-        :return: a value if the key is present in the DB. Otherwise, `None` or `default`
+        :return: a value if the key is present in the DB. Otherwise, `default`
         """
-        cf_dict = self._db.get_column_family(cf_name)
+        cf_dict = self._get_column_family(cf_name)
         return cf_dict.get(key, default)
 
     def exists(self, key: bytes, cf_name: str = "default") -> bool:
@@ -126,7 +117,7 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key is present, `False` otherwise.
         """
-        cf_dict = self._db.get_column_family(cf_name)
+        cf_dict = self._get_column_family(cf_name)
         return key in cf_dict
 
     def get_processed_offset(self) -> Optional[int]:
@@ -134,18 +125,22 @@ class RocksDBStorePartition(StorePartition):
         Get last processed offset for the given partition
         :return: offset or `None` if there's no processed offset yet
         """
-        metadata_cf = self._db.get_column_family(_METADATA_CF_NAME)
-        offset_bytes = metadata_cf.get(_PROCESSED_OFFSET_KEY)
+        metadata_cf = self._get_column_family(METADATA_CF_NAME)
+        offset_bytes = metadata_cf.get(PROCESSED_OFFSET_KEY)
         if offset_bytes is None:
-            offset_bytes = self._db.get(_PROCESSED_OFFSET_KEY)
+            offset_bytes = self._db.get(PROCESSED_OFFSET_KEY)
         if offset_bytes is not None:
-            return _int_from_int64_bytes(offset_bytes)
+            return int_from_int64_bytes(offset_bytes)
 
     def close(self):
         """
         Close the underlying RocksDB
         """
         logger.debug(f'Closing rocksdb partition on "{self._path}"')
+        # Clean the column family caches to drop references
+        # Otherwise the Rocksdb won't close properly
+        self._cf_handle_cache = {}
+        self._cf_cache = {}
         self._db.close()
         logger.debug(f'Closed rocksdb partition on "{self._path}"')
 
@@ -166,27 +161,52 @@ class RocksDBStorePartition(StorePartition):
 
         :param path: an absolute path to the RocksDB folder
         """
-        rocksdict.Rdict.destroy(path=path)  # noqa
+        Rdict.destroy(path=path)
 
-    def get_column_family_handle(self, cf_name: str) -> rocksdict.ColumnFamily:
-        return self._db.get_column_family_handle(cf_name)
+    def get_column_family_handle(self, cf_name: str) -> ColumnFamily:
+        """
+        Get a column family handle to pass to it WriteBatch.
+        This method will cache the CF handle instance to avoid creating them
+        repeatedly.
 
-    def get_column_family(self, cf_name: str) -> rocksdict.Rdict:
-        return self._db.get_column_family(cf_name)
+        :param cf_name: column family name
+        :return: instance of `rocksdict.ColumnFamily`
+        """
+        cached_cf_handle = self._cf_handle_cache.get(cf_name)
+        if cached_cf_handle is not None:
+            return cached_cf_handle
+        new_cf_handle = self._db.get_column_family_handle(cf_name)
+        self._cf_handle_cache[cf_name] = new_cf_handle
+        return new_cf_handle
 
-    def _open_rocksdict(self) -> rocksdict.Rdict:
+    def _get_column_family(self, cf_name: str) -> Rdict:
+        """
+        Get a column family instance.
+        This method will cache the CF instance to avoid creating them repeatedly.
+
+        :param cf_name: column family name
+        :return: instance of `rocksdict.Rdict` for the given column family
+        """
+        cached_cf = self._cf_cache.get(cf_name)
+        if cached_cf is not None:
+            return cached_cf
+        new_cf = self._db.get_column_family(cf_name)
+        self._cf_cache[cf_name] = new_cf
+        return new_cf
+
+    def _open_rocksdict(self) -> Rdict:
         options = self._options.to_options()
         options.create_if_missing(True)
         options.create_missing_column_families(True)
-        rdict = rocksdict.Rdict(
+        rdict = Rdict(
             path=self._path,
             options=options,
-            access_type=rocksdict.AccessType.read_write(),  # noqa
-            column_families={_METADATA_CF_NAME: options},
+            access_type=AccessType.read_write(),
+            column_families={METADATA_CF_NAME: options},
         )
         return rdict
 
-    def _init_rocksdb(self) -> rocksdict.Rdict:
+    def _init_rocksdb(self) -> Rdict:
         attempt = 1
         while True:
             logger.debug(
@@ -288,6 +308,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         "_completed",
         "_dumps",
         "_loads",
+        "_state",
     )
 
     def __init__(
@@ -298,7 +319,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     ):
         self._partition = partition
         self._update_cache = {}
-        self._batch = rocksdict.WriteBatch(raw_mode=True)
+        self._batch = WriteBatch(raw_mode=True)
         self._prefix = _DEFAULT_PREFIX
         self._failed = False
         self._completed = False
@@ -479,10 +500,10 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             if len(self._batch):
                 if offset is not None:
                     cf_handle = self._partition.get_column_family_handle(
-                        _METADATA_CF_NAME
+                        METADATA_CF_NAME
                     )
                     self._batch.put(
-                        _PROCESSED_OFFSET_KEY, _int_to_int64_bytes(offset), cf_handle
+                        PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
                     )
                 self._partition.write(self._batch)
         except Exception:
