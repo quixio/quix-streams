@@ -2,9 +2,12 @@ import contextlib
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional, Iterator
+from typing import List, Dict, Optional, Iterator, Set
 
 from quixstreams.types import TopicPartition
+
+# from quixstreams.models.topics import Topic
+from quixstreams.kafka.admin import TopicAdmin
 from .exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
@@ -39,11 +42,13 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
+        topic_admin: Optional[TopicAdmin] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
+        self._topic_admin = topic_admin
         self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
@@ -104,6 +109,11 @@ class StateStoreManager:
                 topic=topic_name,
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
+            )
+        if self._topic_admin:
+            self._topic_admin.changelog_topic(
+                source_topic_name=topic_name,
+                suffix=store_name,
             )
 
     def clear_stores(self):
@@ -191,7 +201,7 @@ class StateStoreManager:
         Starting the multi-store transaction for the Kafka message.
 
         This transaction will keep track of all used stores and flush them in the end.
-        If any exception is catched during this transaction, none of them
+        If any exception is caught during this transaction, none of them
         will be flushed as a best effort to keep stores consistent in "at-least-once" setting.
 
         There can be only one active transaction at a time. Starting a new transaction

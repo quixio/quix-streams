@@ -1,5 +1,10 @@
 import logging
-from typing import Union, List, Mapping, Optional, Any
+import warnings
+from copy import deepcopy
+from typing import Union, List, Dict, Optional, Any, Mapping
+from typing_extensions import Self
+
+from confluent_kafka.admin import NewTopic  # type: ignore
 
 from .messagecontext import MessageContext
 from .messages import KafkaMessage
@@ -28,7 +33,79 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("Topic",)
+__all__ = ("Topic", "TopicKafkaConfigs")
+
+
+class TopicKafkaConfigs:
+    _quix_optionals_defaults = {
+        "retention.ms": f"{10080 * 60000}",  # minutes converted to ms
+        "retention.bytes": "52428800",
+    }
+
+    def __init__(
+        self,
+        name: Optional[str] = None,  # Required when not created by a Quix App.
+        num_partitions: Optional[int] = None,
+        replication_factor: Optional[int] = None,
+        optionals: Optional[dict] = None,
+        is_quix_topic: bool = False,
+    ):
+        # TODO: make as properties
+        self._is_quix_topic = is_quix_topic
+        self.name = name
+        self.num_partitions = num_partitions or 2
+        self.replication_factor = replication_factor or (2 if is_quix_topic else 1)
+        self._optionals = optionals or {}
+
+    @property
+    def is_quix_topic(self) -> bool:
+        return self._is_quix_topic
+
+    @property
+    def optionals(self) -> Dict[str, str]:
+        return self._optionals
+
+    def _set_quix_optional_defaults(self):
+        for k in self._quix_optionals_defaults:
+            self._optionals.setdefault(k, self._quix_optionals_defaults[k])
+
+    def _filter_quix_optionals(self):
+        invalid_optionals = [
+            k for k in self.optionals if k not in self._quix_optionals_defaults
+        ]
+        self._optionals = {
+            k: v
+            for k, v in self.optionals.items()
+            if k in self._quix_optionals_defaults
+        }
+        if invalid_optionals:
+            warnings.warn(
+                f"There are optionals provided that are not supported by "
+                f"the Quix API and thus will be removed from the optionals:"
+                f"{invalid_optionals}"
+            )
+
+    def _as_quix_create(self) -> Self:
+        new = deepcopy(self)
+        new._filter_quix_optionals()
+        new._set_quix_optional_defaults()
+        return new
+
+    def _as_create(self) -> NewTopic:
+        if self.is_quix_topic:
+            raise Exception(
+                "This option is not supported for Quix topics; use the"
+                "Quix API to generate topics on the Quix platform"
+            )
+        return NewTopic(
+            topic=self.name,
+            num_partitions=self.num_partitions,
+            replication_factor=self.replication_factor,
+            config=self.optionals,
+        )
+
+    def as_creation_config(self) -> Union[Self, NewTopic]:
+        return self._as_quix_create() if self.is_quix_topic else self._as_create()
 
 
 def _get_serializer(serializer: SerializerType) -> Serializer:
@@ -72,6 +149,7 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
+        kafka_configs: Optional[TopicKafkaConfigs] = None,
     ):
         """
         Can specify serialization that should be used when consuming/producing
@@ -107,6 +185,7 @@ class Topic:
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
+        self._kafka_configs = kafka_configs
 
     @property
     def name(self) -> str:
@@ -114,6 +193,10 @@ class Topic:
         Topic name
         """
         return self._name
+
+    @property
+    def kafka_configs(self) -> TopicKafkaConfigs:
+        return self._kafka_configs
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
         """

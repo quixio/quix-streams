@@ -15,16 +15,16 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
+from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner, TopicAdmin
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
+    TopicKafkaConfigs,
     SerializerType,
     DeserializerType,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
-    TopicCreationConfigs,
     check_state_dir,
     check_state_management_enabled,
 )
@@ -97,6 +97,8 @@ class Application:
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
         loglevel: Optional[LogLevel] = "INFO",
+        auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
     ):
         """
 
@@ -164,14 +166,21 @@ class Application:
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
+        self._auto_create_topics = auto_create_topics
+        self._topic_admin = TopicAdmin(
+            broker_address=broker_address,
+            extra_config=producer_extra_config,
+        )
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
+            topic_admin=self._topic_admin if use_changelog_topics else None,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
         self._quix_config_builder = config_builder
+        self._topic_admin.quix_config_builder = self._quix_config_builder
 
     @classmethod
     def Quix(
@@ -194,6 +203,7 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
     ) -> Self:
         """
         Initialize an Application to work with Quix platform,
@@ -281,7 +291,6 @@ class Application:
         """
         configure_logging(loglevel=loglevel)
         quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
-        quix_config_builder.app_auto_create_topics = auto_create_topics
         quix_configs = quix_config_builder.get_confluent_broker_config()
 
         # Check if the state dir points to the mounted PVC while running on Quix
@@ -311,6 +320,8 @@ class Application:
             producer_poll_timeout=producer_poll_timeout,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
+            auto_create_topics=auto_create_topics,
+            use_changelog_topics=use_changelog_topics,
         )
         # Inject Quix config builder to use it in other methods
         app._set_quix_config_builder(quix_config_builder)
@@ -327,7 +338,7 @@ class Application:
         key_deserializer: DeserializerType = "bytes",
         value_serializer: SerializerType = "json",
         key_serializer: SerializerType = "bytes",
-        creation_configs: Optional[TopicCreationConfigs] = None,
+        kafka_configs: Optional[TopicKafkaConfigs] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -362,25 +373,19 @@ class Application:
         :param key_deserializer: a deserializer type for keys; default="bytes"
         :param value_serializer: a serializer type for values; default="json"
         :param key_serializer: a serializer type for keys; default="bytes"
-        :param creation_configs: settings for auto topic creation (Quix platform only)
+        :param kafka_configs: settings for auto topic creation (Quix platform only)
             Its name will be overridden by this method's 'name' param.
 
 
         :return: `Topic` object
         """
-        if self.is_quix_app:
-            name = self._quix_config_builder.append_workspace_id(name)
-            if creation_configs:
-                creation_configs.name = name
-            else:
-                creation_configs = TopicCreationConfigs(name=name)
-            self._quix_config_builder.create_topic_configs[name] = creation_configs
-        return Topic(
+        return self._topic_admin.topic(
             name=name,
-            value_serializer=value_serializer,
-            value_deserializer=value_deserializer,
             key_serializer=key_serializer,
+            value_serializer=value_serializer,
             key_deserializer=key_deserializer,
+            value_deserializer=value_deserializer,
+            kafka_configs=kafka_configs,
         )
 
     def dataframe(
@@ -440,21 +445,9 @@ class Application:
     def _quix_runtime_init(self):
         """
         Do a runtime setup only applicable to an Application.Quix instance
-
-        In particular:
-        - Create topics in Quix if `auto_create_topics` is True and ensure that all
-          necessary topics are created
         - Ensure that "State management" flag is enabled for deployment if the app
           is stateful and is running on Quix platform
         """
-
-        logger.debug("Ensure that all topics are present in Quix")
-        topics = self._quix_config_builder.create_topic_configs.values()
-        if self._quix_config_builder.app_auto_create_topics:
-            self._quix_config_builder.create_topics(topics)
-        else:
-            self._quix_config_builder.confirm_topics_exist(topics)
-
         # Ensure that state management is enabled if application is stateful
         # and is running on Quix platform
         if self._state_manager.stores:
@@ -492,8 +485,8 @@ class Application:
         self._setup_signal_handlers()
 
         logger.info("Initializing processing of StreamingDataFrame")
-        if self.is_quix_app:
-            self._quix_runtime_init()
+
+        self._topic_admin.auto_create_or_validate_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)
@@ -510,7 +503,7 @@ class Application:
             # during processing
             start_state_transaction = self._state_manager.start_store_transaction
         else:
-            # Application is stateless, use dummy state transactionss
+            # Application is stateless, use dummy state transactions
             start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
