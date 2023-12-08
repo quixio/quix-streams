@@ -72,7 +72,7 @@ class Application:
     app = Application(broker_address='localhost:9092', consumer_group='group')
     topic = app.topic('test-topic')
     df = app.dataframe(topic)
-    df.apply(lambda value, context: print('New message', value)
+    df.apply(lambda value, context: print('New message', value))
 
     app.run(dataframe=df)
     ```
@@ -169,6 +169,7 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._topic_admin = TopicAdmin(
             broker_address=broker_address,
+            consumer_group=consumer_group,
             extra_config=producer_extra_config,
         )
         self._state_manager = StateStoreManager(
