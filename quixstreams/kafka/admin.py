@@ -30,6 +30,7 @@ class TopicAdmin:
     def __init__(
         self,
         broker_address: str,
+        consumer_group: str,
         extra_config: Optional[Mapping] = None,
         auto_create_topics: bool = True,
     ):
@@ -38,6 +39,7 @@ class TopicAdmin:
             "bootstrap.servers": broker_address,
             **(extra_config or {}),
         }
+        self._consumer_group = consumer_group
         self.quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._topics: Dict[str:Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
@@ -164,16 +166,16 @@ class TopicAdmin:
             self.inspect_topics([source_topic_name])[source_topic_name]
             or self._topics[source_topic_name].kafka_configs
         )
-        changelog_name = f"{source_topic_name}_{suffix}__changelog"
+        name = f"__changelog--{self._consumer_group}--{source_topic_name}--{suffix}"
         base_optionals = {} if self.has_quix_builder else {"cleanup.policy": "compact"}
         topic = Topic(
-            name=changelog_name,
+            name=name,
             key_serializer="bytes",
             value_serializer="bytes",
             key_deserializer="bytes",
             value_deserializer="bytes",
             kafka_configs=TopicKafkaConfigs(
-                name=changelog_name,
+                name=name,
                 is_quix_topic=self.has_quix_builder,
                 num_partitions=topic_configs.num_partitions,
                 replication_factor=topic_configs.replication_factor,

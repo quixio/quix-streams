@@ -2,12 +2,10 @@ import contextlib
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional, Iterator, Set
+from typing import List, Dict, Optional, Iterator
 
-from quixstreams.types import TopicPartition
-
-# from quixstreams.models.topics import Topic
 from quixstreams.kafka.admin import TopicAdmin
+from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
