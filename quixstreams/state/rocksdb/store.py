@@ -9,6 +9,7 @@ from .partition import (
     RocksDBPartitionTransaction,
 )
 from .types import RocksDBOptionsType
+from ..changelog import ChangelogWriter
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class RocksDBStore(Store):
         name: str,
         topic: str,
         base_dir: str,
+        changelog_writer: Optional[ChangelogWriter] = None,
         options: Optional[RocksDBOptionsType] = None,
         open_max_retries: int = 10,
         open_retry_backoff: float = 3.0,
@@ -42,8 +44,8 @@ class RocksDBStore(Store):
         self._name = name
         self._topic = topic
         self._partitions_dir = Path(base_dir).absolute() / self._name / self._topic
-        self._transactions: Dict[int, RocksDBPartitionTransaction] = {}
         self._partitions: Dict[int, RocksDBStorePartition] = {}
+        self._changelog_writer = changelog_writer
         self._options = options
         self._open_max_retries = open_max_retries
         self._open_retry_backoff = open_retry_backoff
@@ -145,7 +147,7 @@ class RocksDBStore(Store):
             )
 
         store_partition = self._partitions[partition]
-        return store_partition.begin()
+        return store_partition.begin(self._changelog_writer)
 
     def close(self):
         """
