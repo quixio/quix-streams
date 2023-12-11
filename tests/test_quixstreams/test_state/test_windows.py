@@ -141,7 +141,7 @@ class TestTumblingWindow:
 
         tw = TumblingWindow(10, 5, "test", lambda st, ed, ts, value, state: value, None)
 
-        result = tw.process_window(value=5, state=state_mock, timestamp=timestamp)
+        result = tw._process_window(value=5, state=state_mock, timestamp=timestamp)
         expected_windows = expected_output[0]
 
         if expected_windows:

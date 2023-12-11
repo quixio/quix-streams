@@ -371,7 +371,7 @@ class StreamingDataFrame(BaseStreaming):
         sdf = app.dataframe()
         tumbling_window_def = sdf.tumbling_window(duration=60.0, grace=10.0)
 
-        # Apply aggregation functions like sum or count to the tumbling window
+        # Choose an aggregation functions from 'sum', 'count', 'reduce', 'mean', 'min' and 'max' for the tumbling window
         tumbling_window = tumbling_window_def.sum()
 
         # Choose the appropriate method based on the desired output behavior
@@ -390,8 +390,8 @@ class StreamingDataFrame(BaseStreaming):
             Can be specified as either a float representing seconds or a timedelta object.
 
         :return: TumblingWindowDefinition instance representing the tumbling window configuration.
-            This object can be further configured with aggregation functions like sum, count, reduce, mean, min and max,
-            and applied to the StreamingDataFrame
+            This object can be further configured with aggregation functions like sum or count and
+            applied to the StreamingDataFrame
 
         """
         return TumblingWindowDefinition(duration=duration, grace=grace, dataframe=self)

@@ -44,6 +44,11 @@ class TumblingWindowDefinition:
         return self._name or f"tumbling_window_{self._duration}_{func_name}"
 
     def sum(self) -> "TumblingWindow":
+        """
+        Configure the tumbling window to aggregate data by summing up values within each window period.
+
+        :return: TumblingWindow instance configured to perform sum aggregation.
+        """
         name = self._get_name(func_name="sum")
 
         def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
@@ -62,6 +67,11 @@ class TumblingWindowDefinition:
         )
 
     def count(self) -> "TumblingWindow":
+        """
+        Configure the tumbling window to aggregate data by counting the number of records within each window period.
+
+        :return: TumblingWindow instance configured to perform record count.
+        """
         name = self._get_name(func_name="count")
 
         def func(start, end, timestamp, _: Any, state: WindowedTransactionState):
@@ -80,6 +90,11 @@ class TumblingWindowDefinition:
         )
 
     def mean(self) -> "TumblingWindow":
+        """
+        Configure the tumbling window to aggregate data by calculating the mean of the values within each window period.
+
+        :return: TumblingWindow instance configured to calculate the mean of the data values.
+        """
         name = self._get_name(func_name="mean")
 
         def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
@@ -104,6 +119,17 @@ class TumblingWindowDefinition:
         )
 
     def reduce(self, reduce_func: Callable[[Any, Any], Any]) -> "TumblingWindow":
+        """
+        Configure the tumbling window to perform a custom aggregation using a user-provided reduce function.
+
+        :param reduce_func: A Callable function that takes two arguments (the accumulated value and the current value)
+        and returns a single value. This function is used for aggregating data within the window.
+
+        :return: TumblingWindow instance configured to perform custom reduce aggregation on the data.
+
+        Note: The initial value for the reduce operation within each window is the first element of that window, and
+        subsequent elements are combined using the reduce function.
+        """
         name = self._get_name(func_name="reduce")
 
         def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
@@ -126,6 +152,11 @@ class TumblingWindowDefinition:
         )
 
     def max(self) -> "TumblingWindow":
+        """
+        Configure the tumbling window to find the maximum value within each window period.
+
+        :return: TumblingWindow instance configured to find the maximum value within each window period.
+        """
         name = self._get_name(func_name="max")
 
         def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
@@ -148,6 +179,11 @@ class TumblingWindowDefinition:
         )
 
     def min(self) -> "TumblingWindow":
+        """
+        Configure the tumbling window to find the minimum value within each window period.
+
+        :return: TumblingWindow instance configured to find the minimum value within each window period.
+        """
         name = self._get_name(func_name="min")
 
         def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
@@ -199,7 +235,7 @@ class TumblingWindow:
     def _stale(self, timestamp: float, latest_timestamp: float) -> bool:
         return timestamp + self._grace <= latest_timestamp
 
-    def process_window(
+    def _process_window(
         self, value, state: WindowedTransactionState, timestamp: float
     ) -> (list[WindowResult], list[WindowResult]):
         latest_timestamp = state.get_latest_timestamp() or 0
@@ -220,8 +256,14 @@ class TumblingWindow:
         return [updated_window], expired_windows
 
     def latest(self) -> StreamingDataFrame:
+        """
+        Apply the window transformation to the StreamingDataFrame to return the latest result from the latest window.
+
+        This method processes streaming data and returns the most recent value from the latest window.
+        It is useful when you need the latest aggregated result up to the current moment in a streaming data context.
+        """
         return self._dataframe.apply_window(
-            lambda value, state, process_window=self.process_window: process_window(
+            lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
@@ -230,8 +272,14 @@ class TumblingWindow:
         )
 
     def final(self) -> StreamingDataFrame:
+        """
+        Apply the window transformation to the StreamingDataFrame to return the results when a window closes.
+
+        This method processes streaming data and returns results at the closure of each window.
+        It's ideal for scenarios where you need the aggregated results after the complete data for a window is received.
+        """
         return self._dataframe.apply_window(
-            lambda value, state, process_window=self.process_window: process_window(
+            lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
@@ -241,8 +289,16 @@ class TumblingWindow:
         )
 
     def all(self) -> StreamingDataFrame:
+        """
+        Apply the window transformation to the StreamingDataFrame to return results for each window update.
+
+        This method processes streaming data and returns results for every update within each window,
+        regardless of whether the window is closed or not.
+        It's suitable for scenarios where you need continuous feedback the aggregated data throughout the window's
+        duration.
+        """
         return self._dataframe.apply_window(
-            lambda value, state, process_window=self.process_window: process_window(
+            lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
