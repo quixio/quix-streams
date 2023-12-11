@@ -40,11 +40,11 @@ class TumblingWindowDefinition:
         self._dataframe = dataframe
         self._name = name
 
-    def get_name(self, func_name: str) -> str:
+    def _get_name(self, func_name: str) -> str:
         return self._name or f"tumbling_window_{self._duration}_{func_name}"
 
     def sum(self) -> "TumblingWindow":
-        name = self.get_name(func_name="sum")
+        name = self._get_name(func_name="sum")
 
         def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
             current_value = state.get_window(start=start, end=end) or 0
@@ -62,11 +62,101 @@ class TumblingWindowDefinition:
         )
 
     def count(self) -> "TumblingWindow":
-        name = self.get_name(func_name="count")
+        name = self._get_name(func_name="count")
 
         def func(start, end, timestamp, _: Any, state: WindowedTransactionState):
             current_value = state.get_window(start=start, end=end) or 0
             updated_value = current_value + 1
+
+            state.update_window(start, end, timestamp=timestamp, value=updated_value)
+            return updated_value
+
+        return TumblingWindow(
+            duration=self._duration,
+            grace=self._grace,
+            name=name,
+            func=func,
+            dataframe=self._dataframe,
+        )
+
+    def mean(self) -> "TumblingWindow":
+        name = self._get_name(func_name="mean")
+
+        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+            current_window_value = state.get_window(start=start, end=end) or (0.0, 0)
+
+            agg = current_window_value[0] + value
+            count = current_window_value[1] + 1
+
+            updated_window_value = (agg, count)
+
+            state.update_window(
+                start, end, timestamp=timestamp, value=updated_window_value
+            )
+            return agg / count
+
+        return TumblingWindow(
+            duration=self._duration,
+            grace=self._grace,
+            name=name,
+            func=func,
+            dataframe=self._dataframe,
+        )
+
+    def reduce(self, reduce_func: Callable[[Any, Any], Any]) -> "TumblingWindow":
+        name = self._get_name(func_name="reduce")
+
+        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+            current_value = state.get_window(start=start, end=end)
+
+            if current_value is None:
+                updated_value = value
+            else:
+                updated_value = reduce_func(current_value, value)
+
+            state.update_window(start, end, timestamp=timestamp, value=updated_value)
+            return updated_value
+
+        return TumblingWindow(
+            duration=self._duration,
+            grace=self._grace,
+            name=name,
+            func=func,
+            dataframe=self._dataframe,
+        )
+
+    def max(self) -> "TumblingWindow":
+        name = self._get_name(func_name="max")
+
+        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+            current_value = state.get_window(start=start, end=end)
+
+            if current_value is None:
+                updated_value = value
+            else:
+                updated_value = max(current_value, value)
+
+            state.update_window(start, end, timestamp=timestamp, value=updated_value)
+            return updated_value
+
+        return TumblingWindow(
+            duration=self._duration,
+            grace=self._grace,
+            name=name,
+            func=func,
+            dataframe=self._dataframe,
+        )
+
+    def min(self) -> "TumblingWindow":
+        name = self._get_name(func_name="min")
+
+        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+            current_value = state.get_window(start=start, end=end)
+
+            if current_value is None:
+                updated_value = value
+            else:
+                updated_value = min(current_value, value)
 
             state.update_window(start, end, timestamp=timestamp, value=updated_value)
             return updated_value
@@ -128,8 +218,6 @@ class TumblingWindow:
         expired_windows = []  # state.get_expired_windows(timestamp)
 
         return [updated_window], expired_windows
-
-    # mean, reduce, max, min, count, sum
 
     def latest(self) -> StreamingDataFrame:
         return self._dataframe.apply_window(
