@@ -99,6 +99,13 @@ class Topic:
     instance.
     """
 
+    _serialize_map = {
+        "key": "_key_serializer",
+        "value": "_value_serializer",
+    }
+
+    _deserialize_map = {"key": "_key_deserializer", "value": "_value_deserializer"}
+
     def __init__(
         self,
         name: str,
@@ -251,8 +258,14 @@ class Topic:
         headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
         timestamp_ms: int = None,
     ) -> KafkaMessage:
-        # TODO: Implement SerDes for raw messages (also to produce primitive values)
-        raise NotImplementedError
+        # TODO: confirm this is a valid context
+        ctx = SerializationContext(topic="", headers=headers)
+        return KafkaMessage(
+            key=self._key_serializer(key, ctx=ctx) if key else None,
+            value=self._value_serializer(value, ctx=ctx) if value else None,
+            headers=headers,
+            timestamp=timestamp_ms,
+        )
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
         # TODO: Implement SerDes for raw messages

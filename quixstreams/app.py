@@ -30,7 +30,7 @@ from .platforms.quix import (
 )
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
-from .state import StateStoreManager
+from .state import StateStoreManager, ChangelogManager
 from .state.rocksdb import RocksDBOptionsType
 from .topic_manager import TopicManager, TopicManagerType
 
@@ -196,7 +196,11 @@ class Application:
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            topic_manager=self._topic_manager if use_changelog_topics else None,
+            changelog_manager=ChangelogManager(
+                topic_admin=self._topic_manager, producer=self._producer
+            )
+            if use_changelog_topics
+            else None,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
