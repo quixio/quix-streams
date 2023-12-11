@@ -1,6 +1,7 @@
 import contextvars
 import functools
 import operator
+from datetime import timedelta
 from typing import Optional, Callable, Union, List, TypeVar, Any
 
 from typing_extensions import Self
@@ -16,11 +17,14 @@ from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
 from .series import StreamingSeries
+from ..state.rocksdb.windowed.store import WindowedTransactionState
+from ..state.windows import TumblingWindowDefinition, TumblingWindow
 
 T = TypeVar("T")
 R = TypeVar("R")
 DataFrameFunc = Callable[[T], R]
 DataFrameStatefulFunc = Callable[[T, State], R]
+DataFrameWindowFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]  # TODO: WinResult
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -91,7 +95,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def apply(
         self,
-        func: Union[DataFrameFunc, DataFrameStatefulFunc],
+        func: Union[DataFrameFunc, DataFrameStatefulFunc, DataFrameWindowFunc],
         stateful: bool = False,
         expand: bool = False,
     ) -> Self:
@@ -128,6 +132,18 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             func = _as_stateful(func=func, state_manager=self._state_manager)
+
+        stream = self.stream.add_apply(func, expand=expand)
+        return self._clone(stream=stream)
+
+    def apply_window(
+        self,
+        func: DataFrameWindowFunc,
+        name: str,
+        expand: bool = False,
+    ) -> Self:
+        self._register_window_store(name=name)
+        func = _as_window(func=func, state_manager=self._state_manager, store_name=name)
 
         stream = self.stream.add_apply(func, expand=expand)
         return self._clone(stream=stream)
@@ -334,6 +350,12 @@ class StreamingDataFrame(BaseStreaming):
         composed = self.compose()
         return context.run(composed, value)
 
+    def tumbling_window(self, duration: Union[float, timedelta] = 30.0, grace: Optional[Union[float, timedelta]] = 0) -> TumblingWindowDefinition:
+        """Create a tumbling window transformation on the StreamingDataFrame.
+        Tumbling windows split the stream into fixed-sized, non-overlapping windows.
+        """
+        return TumblingWindowDefinition(duration=duration, grace=grace, dataframe=self)
+
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(
             stream=stream, topic=self._topic, state_manager=self._state_manager
@@ -353,6 +375,12 @@ class StreamingDataFrame(BaseStreaming):
         Register the default store for input topic in StateStoreManager
         """
         self._state_manager.register_store(topic_name=self._topic.name)
+
+    def _register_window_store(self, name: str):
+        """
+        Register a windowed store for input topic in StateStoreManager
+        """
+        self._state_manager.register_windowed_store(topic_name=self._topic.name, store_name=name)
 
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
@@ -402,6 +430,21 @@ def _as_stateful(
     @functools.wraps(func)
     def wrapper(value: object) -> object:
         transaction = state_manager.get_store_transaction()
+        key = message_key()
+        # Prefix all the state keys by the message key
+        with transaction.with_prefix(prefix=key):
+            # Pass a State object with an interface limited to the key updates only
+            return func(value, transaction.state)
+
+    return wrapper
+
+
+def _as_window(
+    func: DataFrameWindowFunc, state_manager: StateStoreManager, store_name: str
+) -> DataFrameFunc:
+    @functools.wraps(func)
+    def wrapper(value: object) -> object:
+        transaction = state_manager.get_store_transaction(store_name=store_name)
         key = message_key()
         # Prefix all the state keys by the message key
         with transaction.with_prefix(prefix=key):

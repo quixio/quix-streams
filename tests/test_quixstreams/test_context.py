@@ -11,21 +11,6 @@ from quixstreams.context import (
 )
 
 
-@pytest.fixture()
-def message_context_factory():
-    def factory(key: object = "test") -> MessageContext:
-        return MessageContext(
-            key=key,
-            topic="test",
-            partition=0,
-            offset=0,
-            size=0,
-            timestamp=MessageTimestamp.create(0, 0),
-        )
-
-    return factory
-
-
 class TestContext:
     def test_get_current_context_not_set_fails(self):
         ctx = contextvars.copy_context()

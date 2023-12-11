@@ -6,6 +6,7 @@ from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
 from quixstreams.models import MessageTimestamp
 from quixstreams.models.topics import Topic
+from quixstreams.state.windows import WindowResult
 from tests.utils import TopicPartitionStub
 
 
@@ -645,3 +646,36 @@ class TestStreamingDataframeStateful:
                     pass
         assert len(results) == 1
         assert results[0]["max"] == 3
+
+
+class TestStreamingDataFrameWindows:
+    def test_tumbling_window(self, dataframe_factory, state_manager, message_context_factory):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.tumbling_window(duration=100, grace=0).sum().all()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        values = [
+            (2, message_context_factory(key="test", timestamp_ms=100)),
+            (0, message_context_factory(key="test", timestamp_ms=200)),
+            (3, message_context_factory(key="test", timestamp_ms=300)),
+        ]
+
+        results = []
+        for value in values:
+            ctx = value[1]
+            with state_manager.start_store_transaction(
+                    topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                try:
+                    results.append(sdf.test(value[0], ctx))
+                except Filtered:
+                    pass
+        assert len(results) == 3
+        assert results[0] == [WindowResult(value=2, start=0, end=99.9)]
+        assert results[1] == [WindowResult(value=2, start=0, end=99.9)]
+        assert results[2] == [WindowResult(value=5, start=0, end=99.9)]
+
