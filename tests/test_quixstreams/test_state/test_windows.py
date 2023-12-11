@@ -150,30 +150,3 @@ class TestTumblingWindow:
             assert result == ([expected_updated_window], expired_windows)
         else:
             assert result == expected_output
-
-    # def test_tumbling_window_latest(self, tumbling_window, mock_state):
-    #     mock_state.get_latest_timestamp.return_value = 100
-    #     tumbling_window._dataframe.apply_window.return_value = ["processed_value"]
-    #
-    #     result = tumbling_window.latest()
-    #
-    #     assert result == "processed_value"
-    #     tumbling_window._dataframe.apply_window.assert_called_once()
-    #
-    # def test_tumbling_window_all(self, tumbling_window, mock_state):
-    #     mock_state.get_latest_timestamp.return_value = 100
-    #     tumbling_window._dataframe.apply_window.return_value = ["processed_values"]
-    #
-    #     result = tumbling_window.all()
-    #
-    #     assert result == ["processed_values"]
-    #     tumbling_window._dataframe.apply_window.assert_called_once()
-    #
-    # def test_tumbling_window_final(self, tumbling_window, mock_state):
-    #     mock_state.get_latest_timestamp.return_value = 100
-    #     tumbling_window._dataframe.apply_window.return_value = ["final_values"]
-    #
-    #     result = tumbling_window.final()
-    #
-    #     assert result == ["final_values"]
-    #     tumbling_window._dataframe.apply_window.assert_called_once()
