@@ -355,8 +355,40 @@ class StreamingDataFrame(BaseStreaming):
         duration: Union[float, timedelta] = 30.0,
         grace: Optional[Union[float, timedelta]] = 0,
     ) -> TumblingWindowDefinition:
-        """Create a tumbling window transformation on the StreamingDataFrame.
-        Tumbling windows split the stream into fixed-sized, non-overlapping windows.
+        """
+        Create a tumbling window transformation on this StreamingDataFrame.
+
+        Tumbling windows divide the data stream into fixed-sized, non-overlapping windows based on time.
+        This method is typically used in stream processing to perform aggregations or other operations over
+        specific time slices of the data.
+
+        It is particularly useful in scenarios where data needs to be aggregated or analyzed over specific periods.
+
+        ```python
+        from quixstreams import Application, StreamingDataFrame
+
+        app = Application()
+        sdf = app.dataframe()
+        tumbling_window_def = sdf.tumbling_window(duration=60.0, grace=10.0)
+
+        # Apply aggregation functions like sum or count to the tumbling window
+        tumbling_window_config = tumbling_window_config.sum()
+
+        # Process streaming data using the configured tumbling window
+        # The tumbling window will aggregate data in 60-second windows with a 10-second grace period
+
+        ```
+
+        :param duration: The length of each window. It defines the time span for which each window aggregates data.
+            Can be specified as either a float representing seconds or a timedelta object.
+        :param grace: The grace period for data arrival. It allows late-arriving data (data arriving after the window
+            has theoretically closed) to be included in the window.
+            Can be specified as either a float representing seconds or a timedelta object.
+
+        :return: TumblingWindowDefinition instance representing the tumbling window configuration.
+            This object can be further configured with aggregation functions like sum, count, reduce, mean, min and max,
+            and applied to the StreamingDataFrame
+
         """
         return TumblingWindowDefinition(duration=duration, grace=grace, dataframe=self)
 

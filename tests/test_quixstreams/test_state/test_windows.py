@@ -37,7 +37,6 @@ class TestTumblingWindow:
             (10, 5, "custom_window", "sum", "custom_window"),
             (10, 5, None, "sum", "tumbling_window_10_sum"),
             (15, 5, None, "count", "tumbling_window_15_count"),
-            # Add more test cases if needed
         ],
     )
     def test_tumbling_window_definition_get_name(
