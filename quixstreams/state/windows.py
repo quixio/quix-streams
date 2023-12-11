@@ -1,5 +1,3 @@
-import typing
-
 from datetime import timedelta
 from typing_extensions import TypedDict
 from typing import Any, Optional, Callable, TypeVar, List
@@ -35,7 +33,9 @@ class TumblingWindowDefinition:
         dataframe: StreamingDataFrame,
         name: Optional[str] = None,
     ):
-        self._duration = duration.total_seconds() if isinstance(duration, timedelta) else duration
+        self._duration = (
+            duration.total_seconds() if isinstance(duration, timedelta) else duration
+        )
         self._grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
         self._dataframe = dataframe
         self._name = name
@@ -53,7 +53,13 @@ class TumblingWindowDefinition:
             state.update_window(start, end, timestamp=timestamp, value=updated_value)
             return updated_value
 
-        return TumblingWindow(duration=self._duration, grace=self._grace, name=name, func=func, dataframe=self._dataframe)
+        return TumblingWindow(
+            duration=self._duration,
+            grace=self._grace,
+            name=name,
+            func=func,
+            dataframe=self._dataframe,
+        )
 
     def count(self) -> "TumblingWindow":
         name = self.get_name(func_name="count")
@@ -65,7 +71,13 @@ class TumblingWindowDefinition:
             state.update_window(start, end, timestamp=timestamp, value=updated_value)
             return updated_value
 
-        return TumblingWindow(duration=self._duration, grace=self._grace, name=name, func=func, dataframe=self._dataframe)
+        return TumblingWindow(
+            duration=self._duration,
+            grace=self._grace,
+            name=name,
+            func=func,
+            dataframe=self._dataframe,
+        )
 
 
 class TumblingWindow:
@@ -77,7 +89,7 @@ class TumblingWindow:
         grace: float,
         name: str,
         func: DataFrameWindowFunc,
-        dataframe: StreamingDataFrame
+        dataframe: StreamingDataFrame,
     ):
         self._duration = duration
         self._grace = grace
@@ -110,7 +122,9 @@ class TumblingWindow:
 
         start, end = get_window_range(timestamp, self._duration)
 
-        updated_window = WindowResult(value=self._func(start, end, timestamp, value, state), start=start, end=end)
+        updated_window = WindowResult(
+            value=self._func(start, end, timestamp, value, state), start=start, end=end
+        )
         expired_windows = []  # state.get_expired_windows(timestamp)
 
         return [updated_window], expired_windows
@@ -124,7 +138,7 @@ class TumblingWindow:
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
             )[0][-1],
-            name=self._name
+            name=self._name,
         )
 
     def final(self) -> StreamingDataFrame:
@@ -135,7 +149,7 @@ class TumblingWindow:
                 timestamp=message_context().timestamp.milliseconds / 1000,
             )[1],
             expand=True,
-            name=self._name
+            name=self._name,
         )
 
     def all(self) -> StreamingDataFrame:
@@ -145,5 +159,5 @@ class TumblingWindow:
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
             )[0],
-            name=self._name
+            name=self._name,
         )

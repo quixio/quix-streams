@@ -649,7 +649,9 @@ class TestStreamingDataframeStateful:
 
 
 class TestStreamingDataFrameWindows:
-    def test_tumbling_window(self, dataframe_factory, state_manager, message_context_factory):
+    def test_tumbling_window(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
         topic = Topic("test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
@@ -668,7 +670,7 @@ class TestStreamingDataFrameWindows:
         for value in values:
             ctx = value[1]
             with state_manager.start_store_transaction(
-                    topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
             ):
                 try:
                     results.append(sdf.test(value[0], ctx))
@@ -678,4 +680,3 @@ class TestStreamingDataFrameWindows:
         assert results[0] == [WindowResult(value=2, start=0, end=99.9)]
         assert results[1] == [WindowResult(value=2, start=0, end=99.9)]
         assert results[2] == [WindowResult(value=5, start=0, end=99.9)]
-

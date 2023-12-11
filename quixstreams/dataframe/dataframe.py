@@ -24,7 +24,7 @@ T = TypeVar("T")
 R = TypeVar("R")
 DataFrameFunc = Callable[[T], R]
 DataFrameStatefulFunc = Callable[[T, State], R]
-DataFrameWindowFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]  # TODO: WinResult
+DataFrameWindowFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -350,7 +350,11 @@ class StreamingDataFrame(BaseStreaming):
         composed = self.compose()
         return context.run(composed, value)
 
-    def tumbling_window(self, duration: Union[float, timedelta] = 30.0, grace: Optional[Union[float, timedelta]] = 0) -> TumblingWindowDefinition:
+    def tumbling_window(
+        self,
+        duration: Union[float, timedelta] = 30.0,
+        grace: Optional[Union[float, timedelta]] = 0,
+    ) -> TumblingWindowDefinition:
         """Create a tumbling window transformation on the StreamingDataFrame.
         Tumbling windows split the stream into fixed-sized, non-overlapping windows.
         """
@@ -380,7 +384,9 @@ class StreamingDataFrame(BaseStreaming):
         """
         Register a windowed store for input topic in StateStoreManager
         """
-        self._state_manager.register_windowed_store(topic_name=self._topic.name, store_name=name)
+        self._state_manager.register_windowed_store(
+            topic_name=self._topic.name, store_name=name
+        )
 
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
