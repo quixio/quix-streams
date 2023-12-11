@@ -70,6 +70,10 @@ class StateStoreManager:
         """
         return self._stores
 
+    @property
+    def changelog_manager(self):
+        return self._changelog_manager
+
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ) -> Store:
@@ -107,7 +111,13 @@ class StateStoreManager:
                     suffix=store_name,
                     consumer_group=self._group_id,
                 )
-            self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
+            writer = None
+            if self._changelog_manager:
+                writer = self._changelog_manager.add_changelog_topic(
+                    source_topic_name=topic_name,
+                    suffix=store_name,
+                )
+            store = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
                 changelog_manager=self._changelog_manager,
