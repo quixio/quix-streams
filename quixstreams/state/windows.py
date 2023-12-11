@@ -1,9 +1,14 @@
+import functools
 from datetime import timedelta
 from typing_extensions import TypedDict
-from typing import Any, Optional, Callable, TypeVar, List
+from typing import Any, Optional, Callable, TypeVar, Tuple
 
+from quixstreams.state import StateStoreManager
 from quixstreams.state.rocksdb.windowed.store import WindowedTransactionState
-from quixstreams.context import message_context
+from quixstreams.context import (
+    message_context,
+    message_key,
+)
 
 
 class WindowResult(TypedDict):
@@ -13,19 +18,17 @@ class WindowResult(TypedDict):
 
 
 T = TypeVar("T")
-DataFrameWindowFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]
-
-
-def get_window_range(timestamp: float, duration: float):
-    closest_step = (timestamp // duration) * duration
-    left = closest_step - duration + duration
-    right = left + duration - 0.1
-    return left, right
+WindowedAggregateFunc = Callable[
+    [float, float, float, T, WindowedTransactionState], Any
+]
+WindowedDataFrameFunc = Callable[
+    [T, WindowedTransactionState, Optional[Callable]],
+    Tuple[list[WindowResult], list[WindowResult]],
+]
+StreamingDataFrame = TypeVar("StreamingDataFrame")
 
 
 class TumblingWindowDefinition:
-    StreamingDataFrame = TypeVar("StreamingDataFrame")
-
     def __init__(
         self,
         duration: float | timedelta,
@@ -207,14 +210,12 @@ class TumblingWindowDefinition:
 
 
 class TumblingWindow:
-    StreamingDataFrame = TypeVar("StreamingDataFrame")
-
     def __init__(
         self,
         duration: float,
         grace: float,
         name: str,
-        func: DataFrameWindowFunc,
+        func: WindowedAggregateFunc,
         dataframe: StreamingDataFrame,
     ):
         self._duration = duration
@@ -262,7 +263,7 @@ class TumblingWindow:
         This method processes streaming data and returns the most recent value from the latest window.
         It is useful when you need the latest aggregated result up to the current moment in a streaming data context.
         """
-        return self._dataframe.apply_window(
+        return self._apply_window(
             lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
@@ -271,24 +272,28 @@ class TumblingWindow:
             name=self._name,
         )
 
-    def final(self) -> StreamingDataFrame:
+    def final(self, expand: bool = True) -> StreamingDataFrame:
         """
         Apply the window transformation to the StreamingDataFrame to return the results when a window closes.
 
         This method processes streaming data and returns results at the closure of each window.
         It's ideal for scenarios where you need the aggregated results after the complete data for a window is received.
+
+        :param expand: if True, expand the returned iterable into individual values
+            downstream. If returned value is not iterable, `TypeError` will be raised.
+            Default - `True`
         """
-        return self._dataframe.apply_window(
+        return self._apply_window(
             lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
             )[1],
-            expand=True,
+            expand=expand,
             name=self._name,
         )
 
-    def all(self) -> StreamingDataFrame:
+    def all(self, expand: bool = True) -> StreamingDataFrame:
         """
         Apply the window transformation to the StreamingDataFrame to return results for each window update.
 
@@ -296,12 +301,55 @@ class TumblingWindow:
         regardless of whether the window is closed or not.
         It's suitable for scenarios where you need continuous feedback the aggregated data throughout the window's
         duration.
+
+        :param expand: if True, expand the returned iterable into individual values
+            downstream. If returned value is not iterable, `TypeError` will be raised.
+            Default - `True`.
         """
-        return self._dataframe.apply_window(
+        return self._apply_window(
             lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
                 timestamp=message_context().timestamp.milliseconds / 1000,
             )[0],
+            expand=expand,
             name=self._name,
         )
+
+    def _apply_window(
+        self,
+        func: WindowedDataFrameFunc,
+        name: str,
+        expand: bool = False,
+    ) -> StreamingDataFrame:
+        self._dataframe.state_manager.register_windowed_store(
+            topic_name=self._dataframe.topic.name, store_name=name
+        )
+
+        func = _as_window(
+            func=func, state_manager=self._dataframe.state_manager, store_name=name
+        )
+
+        return self._dataframe.apply(func=func, expand=expand)
+
+
+def get_window_range(timestamp: float, duration: float):
+    closest_step = (timestamp // duration) * duration
+    left = closest_step - duration + duration
+    right = left + duration - 0.1
+    return left, right
+
+
+def _as_window(
+    func: WindowedDataFrameFunc, state_manager: StateStoreManager, store_name: str
+) -> WindowedAggregateFunc:
+    @functools.wraps(func)
+    def wrapper(value: object) -> object:
+        transaction = state_manager.get_store_transaction(store_name=store_name)
+        key = message_key()
+        # Prefix all the state keys by the message key
+        with transaction.with_prefix(prefix=key):
+            # Pass a State object with an interface limited to the key updates only
+            return func(value, transaction.state)
+
+    return wrapper

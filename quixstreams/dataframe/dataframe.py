@@ -93,6 +93,10 @@ class StreamingDataFrame(BaseStreaming):
     def topic(self) -> Topic:
         return self._topic
 
+    @property
+    def state_manager(self) -> StateStoreManager:
+        return self._state_manager
+
     def apply(
         self,
         func: Union[DataFrameFunc, DataFrameStatefulFunc, DataFrameWindowFunc],
@@ -132,18 +136,6 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             func = _as_stateful(func=func, state_manager=self._state_manager)
-
-        stream = self.stream.add_apply(func, expand=expand)
-        return self._clone(stream=stream)
-
-    def apply_window(
-        self,
-        func: DataFrameWindowFunc,
-        name: str,
-        expand: bool = False,
-    ) -> Self:
-        self._register_window_store(name=name)
-        func = _as_window(func=func, state_manager=self._state_manager, store_name=name)
 
         stream = self.stream.add_apply(func, expand=expand)
         return self._clone(stream=stream)
@@ -375,9 +367,9 @@ class StreamingDataFrame(BaseStreaming):
         tumbling_window = tumbling_window_def.sum()
 
         # Choose the appropriate method based on the desired output behavior
-        # 'all' publishes on all window value updates, whether the window is closed or not
-        # 'final' publishes the window value whenever a window closes (duration + grace)
-        # 'latest' publishes the window value of the last updated window
+        # 'all' outputs on all window value updates, whether the window is closed or not
+        # 'final' outputs the window value whenever a window closes (duration + grace)
+        # 'latest' outputs the window value of the last updated window
         sdf = tumbling_window.all()
 
         # The tumbling window will aggregate data in 60-second windows with a 10-second grace period
@@ -415,14 +407,6 @@ class StreamingDataFrame(BaseStreaming):
         Register the default store for input topic in StateStoreManager
         """
         self._state_manager.register_store(topic_name=self._topic.name)
-
-    def _register_window_store(self, name: str):
-        """
-        Register a windowed store for input topic in StateStoreManager
-        """
-        self._state_manager.register_windowed_store(
-            topic_name=self._topic.name, store_name=name
-        )
 
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
@@ -472,21 +456,6 @@ def _as_stateful(
     @functools.wraps(func)
     def wrapper(value: object) -> object:
         transaction = state_manager.get_store_transaction()
-        key = message_key()
-        # Prefix all the state keys by the message key
-        with transaction.with_prefix(prefix=key):
-            # Pass a State object with an interface limited to the key updates only
-            return func(value, transaction.state)
-
-    return wrapper
-
-
-def _as_window(
-    func: DataFrameWindowFunc, state_manager: StateStoreManager, store_name: str
-) -> DataFrameFunc:
-    @functools.wraps(func)
-    def wrapper(value: object) -> object:
-        transaction = state_manager.get_store_transaction(store_name=store_name)
         key = message_key()
         # Prefix all the state keys by the message key
         with transaction.with_prefix(prefix=key):

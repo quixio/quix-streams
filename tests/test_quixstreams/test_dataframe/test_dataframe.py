@@ -1,4 +1,5 @@
 import operator
+from datetime import timedelta
 
 import pytest
 
@@ -655,7 +656,13 @@ class TestStreamingDataFrameWindows:
         topic = Topic("test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
-        sdf = sdf.tumbling_window(duration=100, grace=0).sum().all()
+        sdf = (
+            sdf.tumbling_window(
+                duration=timedelta(seconds=5), grace=timedelta(seconds=1)
+            )
+            .sum()
+            .all(expand=False)
+        )
 
         state_manager.on_partition_assign(
             tp=TopicPartitionStub(topic=topic.name, partition=0)
@@ -677,6 +684,6 @@ class TestStreamingDataFrameWindows:
                 except Filtered:
                     pass
         assert len(results) == 3
-        assert results[0] == [WindowResult(value=2, start=0, end=99.9)]
-        assert results[1] == [WindowResult(value=2, start=0, end=99.9)]
-        assert results[2] == [WindowResult(value=5, start=0, end=99.9)]
+        assert results[0] == [WindowResult(value=2, start=0, end=4.9)]
+        assert results[1] == [WindowResult(value=2, start=0, end=4.9)]
+        assert results[2] == [WindowResult(value=5, start=0, end=4.9)]
