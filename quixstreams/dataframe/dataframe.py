@@ -372,11 +372,15 @@ class StreamingDataFrame(BaseStreaming):
         tumbling_window_def = sdf.tumbling_window(duration=60.0, grace=10.0)
 
         # Apply aggregation functions like sum or count to the tumbling window
-        tumbling_window_config = tumbling_window_config.sum()
+        tumbling_window = tumbling_window_def.sum()
 
-        # Process streaming data using the configured tumbling window
+        # Choose the appropriate method based on the desired output behavior
+        # 'all' publishes on all window value updates, whether the window is closed or not
+        # 'final' publishes the window value whenever a window closes (duration + grace)
+        # 'latest' publishes the window value of the last updated window
+        sdf = tumbling_window.all()
+
         # The tumbling window will aggregate data in 60-second windows with a 10-second grace period
-
         ```
 
         :param duration: The length of each window. It defines the time span for which each window aggregates data.
