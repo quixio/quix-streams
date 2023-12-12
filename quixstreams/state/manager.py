@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
-from quixstreams.kafka.admin import TopicAdmin
+from quixstreams.topic_manager import TopicManager
 from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
@@ -40,13 +40,13 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
-        topic_admin: Optional[TopicAdmin] = None,
+        topic_manager: Optional[TopicManager] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
-        self._topic_admin = topic_admin
+        self._topic_manager = topic_manager
         self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
@@ -108,11 +108,12 @@ class StateStoreManager:
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
-        if self._topic_admin:
-            self._topic_admin.changelog_topic(
-                source_topic_name=topic_name,
-                suffix=store_name,
-            )
+            if self._topic_manager:
+                self._topic_manager.changelog_topic(
+                    source_topic_name=topic_name,
+                    suffix=store_name,
+                    consumer_group=self._group_id,
+                )
 
     def clear_stores(self):
         """

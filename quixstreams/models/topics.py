@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Union, List, Dict, Optional, Any, Mapping
 from typing_extensions import Self
 
-from confluent_kafka.admin import NewTopic  # type: ignore
+from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
 from .messagecontext import MessageContext
 from .messages import KafkaMessage
