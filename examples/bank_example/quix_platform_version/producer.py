@@ -10,7 +10,8 @@ from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
     SerializationContext,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
+from quixstreams.models.topics import TopicKafkaConfigs
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
@@ -20,7 +21,7 @@ topic = "qts__purchase_events"
 cfg_builder = QuixKafkaConfigsBuilder()
 cfgs, topics, _ = cfg_builder.get_confluent_client_configs([topic])
 topic = topics[0]
-cfg_builder.create_topics([TopicCreationConfigs(name=topic)])
+cfg_builder.create_topics([TopicKafkaConfigs(name=topic)])
 serialize = QuixTimeseriesSerializer()
 
 

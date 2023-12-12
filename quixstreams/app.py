@@ -15,7 +15,7 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner, TopicAdmin
+from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner, Admin
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
@@ -27,11 +27,13 @@ from .platforms.quix import (
     QuixKafkaConfigsBuilder,
     check_state_dir,
     check_state_management_enabled,
+    QuixTopicManager,
 )
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.rocksdb import RocksDBOptionsType
+from .topic_manager import TopicManager
 
 __all__ = ("Application",)
 
@@ -99,6 +101,7 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        topic_manager: Optional[TopicManager] = None,
     ):
         """
 
@@ -167,21 +170,24 @@ class Application:
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
-        self._topic_admin = TopicAdmin(
-            broker_address=broker_address,
-            consumer_group=consumer_group,
-            extra_config=producer_extra_config,
-        )
+        if not topic_manager:
+            topic_manager = TopicManager(
+                admin_client=Admin(
+                    broker_address=broker_address,
+                    extra_config=producer_extra_config,
+                ),
+                auto_create_topics=auto_create_topics,
+            )
+        self._topic_manager = topic_manager
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            topic_admin=self._topic_admin if use_changelog_topics else None,
+            topic_manager=self._topic_manager if use_changelog_topics else None,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
         self._quix_config_builder = config_builder
-        self._topic_admin.quix_config_builder = self._quix_config_builder
 
     @classmethod
     def Quix(
@@ -323,8 +329,15 @@ class Application:
             rocksdb_options=rocksdb_options,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
+            topic_manager=QuixTopicManager(
+                admin_client=Admin(
+                    broker_address=broker_address,
+                    extra_config=producer_extra_config,
+                ),
+                auto_create_topics=auto_create_topics,
+                quix_config_builder=quix_config_builder,
+            ),
         )
-        # Inject Quix config builder to use it in other methods
         app._set_quix_config_builder(quix_config_builder)
         return app
 
@@ -380,7 +393,7 @@ class Application:
 
         :return: `Topic` object
         """
-        return self._topic_admin.topic(
+        return self._topic_manager.topic(
             name=name,
             key_serializer=key_serializer,
             value_serializer=value_serializer,
@@ -487,7 +500,7 @@ class Application:
 
         logger.info("Initializing processing of StreamingDataFrame")
 
-        self._topic_admin.auto_create_or_validate_topics()
+        self._topic_manager.auto_create_or_validate_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)
