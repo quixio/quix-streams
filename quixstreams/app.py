@@ -27,7 +27,6 @@ from .platforms.quix import (
     QuixKafkaConfigsBuilder,
     check_state_dir,
     check_state_management_enabled,
-    QuixTopicManager,
 )
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
@@ -224,7 +223,7 @@ class Application:
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
-        topic_manager: Optional[QuixTopicManager] = None,
+        topic_manager: Optional[TopicManager.Quix] = None,
     ) -> Self:
         """
         Initialize an Application to work with Quix platform,
@@ -354,7 +353,7 @@ class Application:
             use_changelog_topics=use_changelog_topics,
             topic_validation=topic_validation,
             topic_manager=topic_manager
-            or QuixTopicManager(
+            or TopicManager.Quix(
                 admin_client=Admin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
