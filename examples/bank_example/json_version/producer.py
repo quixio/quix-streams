@@ -14,10 +14,11 @@ load_dotenv("./env_vars.env")
 topic_manager = TopicManager(
     admin_client=Admin(broker_address=environ["BROKER_ADDRESS"])
 )
-topic = topic_manager.topic(
+topic_name = topic_manager.topic(
     name="json__purchase_events",
-    topic_config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
-)
+    # "config" only needed if you wish to not use the defaults!
+    config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
+).name
 topic_manager.create_all_topics()
 
 retailers = [
@@ -45,7 +46,7 @@ with Producer(
         }
         print(f"Producing value {value}")
         producer.produce(
-            topic=topic.name,
+            topic=topic_name,
             headers=[("uuid", str(uuid.uuid4()))],  # a dict is also allowed here
             key=account_id,
             value=json.dumps(value),  # needs to be a string

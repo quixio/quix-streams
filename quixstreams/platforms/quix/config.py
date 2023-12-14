@@ -250,7 +250,7 @@ class QuixKafkaConfigsBuilder:
         :param topic: a TopicConfig instance
         """
         topic_name = self.strip_workspace_id(topic.name)
-        cfg = topic.topic_config
+        cfg = topic.config
 
         # an exception is raised (status code) if topic is not created successfully
         self.api.post_topic(

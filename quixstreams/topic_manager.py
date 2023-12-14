@@ -1,6 +1,6 @@
 import logging
 import pprint
-from typing import Dict, List, Mapping, Optional, Set, Union, Literal
+from typing import Dict, List, Mapping, Optional, Set, Literal
 
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from .kafka.admin import Admin
@@ -38,7 +38,7 @@ def affirm_ready_for_create(topics: TopicList):
 
     :param topics: list of `Topic`s
     """
-    if invalid := [topic.name for topic in topics if not topic.topic_config]:
+    if invalid := [topic.name for topic in topics if not topic.config]:
         raise ValueError(f"configs for Topics {invalid} were NoneTypes")
 
 
@@ -108,7 +108,7 @@ class TopicManager:
     @property
     def pretty_formatted_topic_configs(self):
         return pprint.pformat(
-            {topic.name: topic.topic_config.__dict__ for topic in self.all_topics}
+            {topic.name: topic.config.__dict__ for topic in self.all_topics}
         )
 
     def _topic_config_with_defaults(
@@ -186,7 +186,7 @@ class TopicManager:
 
     def create_topics(self, topics: TopicList):
         """
-        Creates topics via a list of provided `Topics`.
+        Creates topics via an explicit list of provided `Topics`.
 
         Exists as a way to manually specify what topics to create; otherwise,
         `create_all_topics()` is generally simpler.
@@ -201,7 +201,7 @@ class TopicManager:
         """
         A convenience method to create all Topic objects stored on this TopicManager.
         """
-        self._create_topics(self.all_topics)
+        self.create_topics(self.all_topics)
 
     def validate_topics(
         self,
@@ -209,7 +209,7 @@ class TopicManager:
         validation_level: Optional[Literal["exists", "required", "all"]] = "exists",
     ):
         """
-        Validates topics via a list of provided `Topic`s.
+        Validates topics via an explicit list of `Topic`s.
 
         Issues are pooled and raised as an Exception once all inspections are completed.
 
@@ -233,7 +233,7 @@ class TopicManager:
         issues = {}
         actual_configs = self._admin_client.inspect_topics([t.name for t in topics])
         for topic in topics:
-            expected = topic.topic_config
+            expected = topic.config
             actual = actual_configs[topic.name]
             if topic.name in actual_configs:
                 if not exists_only:
@@ -314,7 +314,7 @@ class TopicManager:
         key_deserializer: Optional[DeserializerType] = "bytes",
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = "bytes",
-        topic_config: Optional[TopicConfig] = None,
+        config: Optional[TopicConfig] = None,
         auto_create_config: bool = True,
     ) -> Topic:
         """
@@ -326,7 +326,7 @@ class TopicManager:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
-        :param topic_config: optional topic configurations (for creation/validation)
+        :param config: optional topic configurations (for creation/validation)
         :param auto_create_config: if no "topic_config", create one; Default - True
             > NOTE: this setting is generally manipulated by the Application class via
               its "auto_create_topics" option.
@@ -340,8 +340,8 @@ class TopicManager:
             value_deserializer=value_deserializer,
             key_serializer=key_serializer,
             key_deserializer=key_deserializer,
-            topic_config=self._process_topic_configs(
-                topic_config, auto_create_config=auto_create_config
+            config=self._process_topic_configs(
+                config, auto_create_config=auto_create_config
             ),
         )
         self._topics[name] = topic
@@ -404,7 +404,7 @@ class TopicManager:
         configs_to_import.discard("cleanup.policy")
         topic_config = (
             self._admin_client.inspect_topics([source_topic_name])[source_topic_name]
-            or self._topics[source_topic_name].topic_config
+            or self._topics[source_topic_name].config
         )
         if not topic_config:
             raise self.MissingTopicForChangelog(
@@ -420,7 +420,7 @@ class TopicManager:
             value_serializer="bytes",
             key_deserializer="bytes",
             value_deserializer="bytes",
-            topic_config=self._process_topic_configs(
+            config=self._process_topic_configs(
                 topic_config,
                 extra_config_defaults=self._changelog_extra_config_defaults,
             ),

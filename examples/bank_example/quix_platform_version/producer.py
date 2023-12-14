@@ -20,7 +20,11 @@ load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 cfg_builder = QuixKafkaConfigsBuilder()
 cfgs = cfg_builder.get_confluent_broker_config()
 topic_manager = TopicManager.Quix(quix_config_builder=cfg_builder)
-topic_name = topic_manager.topic("qts__purchase_events").name
+topic_name = topic_manager.topic(
+    name="qts__purchase_events",
+    # "config" only needed if you wish to not use the defaults!
+    config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
+).name
 topic_manager.create_all_topics()
 serialize = QuixTimeseriesSerializer()
 
