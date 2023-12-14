@@ -1,8 +1,6 @@
+import dataclasses
 import logging
-import warnings
-from copy import deepcopy
-from typing import Union, List, Dict, Optional, Any, Mapping
-from typing_extensions import Self
+from typing import Union, List, Optional, Any, Mapping, Iterable
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
@@ -33,79 +31,38 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("Topic", "TopicKafkaConfigs")
+__all__ = ("Topic", "TopicConfig")
 
 
-class TopicKafkaConfigs:
-    _quix_optionals_defaults = {
-        "retention.ms": f"{10080 * 60000}",  # minutes converted to ms
-        "retention.bytes": "52428800",
-    }
+@dataclasses.dataclass(eq=True)
+class TopicConfig:
+    """
+    Represents all kafka-level configuration for a kafka topic.
 
-    def __init__(
-        self,
-        name: Optional[str] = None,  # Required when not created by a Quix App.
-        num_partitions: Optional[int] = None,
-        replication_factor: Optional[int] = None,
-        optionals: Optional[dict] = None,
-        is_quix_topic: bool = False,
+    Generally used by Topic and any topic creation procedures.
+    """
+
+    name: str
+    num_partitions: int
+    replication_factor: int
+    extra_config: Optional[Mapping] = None
+
+    def update_extra_config(
+        self, defaults: Mapping = None, allowed: Optional[Iterable[str]] = None
     ):
-        # TODO: make as properties
-        self._is_quix_topic = is_quix_topic
-        self.name = name
-        self.num_partitions = num_partitions or 2
-        self.replication_factor = replication_factor or (2 if is_quix_topic else 1)
-        self._optionals = optionals or {}
+        """
+        A convenience method for updating self.extra_config in specific ways.
 
-    @property
-    def is_quix_topic(self) -> bool:
-        return self._is_quix_topic
-
-    @property
-    def optionals(self) -> Dict[str, str]:
-        return self._optionals
-
-    def _set_quix_optional_defaults(self):
-        for k in self._quix_optionals_defaults:
-            self._optionals.setdefault(k, self._quix_optionals_defaults[k])
-
-    def _filter_quix_optionals(self):
-        invalid_optionals = [
-            k for k in self.optionals if k not in self._quix_optionals_defaults
-        ]
-        self._optionals = {
-            k: v
-            for k, v in self.optionals.items()
-            if k in self._quix_optionals_defaults
+        :param defaults: Add these new configs without replacing any current
+        :param allowed: Remove any keys that are not in this provided list
+        """
+        extra_update = {
+            **(defaults or {}),
+            **(self.extra_config or {}),
         }
-        if invalid_optionals:
-            warnings.warn(
-                f"There are optionals provided that are not supported by "
-                f"the Quix API and thus will be removed from the optionals:"
-                f"{invalid_optionals}"
-            )
-
-    def _as_quix_create(self) -> Self:
-        new = deepcopy(self)
-        new._filter_quix_optionals()
-        new._set_quix_optional_defaults()
-        return new
-
-    def _as_create(self) -> NewTopic:
-        if self.is_quix_topic:
-            raise Exception(
-                "This option is not supported for Quix topics; use the"
-                "Quix API to generate topics on the Quix platform"
-            )
-        return NewTopic(
-            topic=self.name,
-            num_partitions=self.num_partitions,
-            replication_factor=self.replication_factor,
-            config=self.optionals,
-        )
-
-    def as_creation_config(self) -> Union[Self, NewTopic]:
-        return self._as_quix_create() if self.is_quix_topic else self._as_create()
+        if allowed:
+            extra_update = {k: v for k, v in extra_update.items() if k in allowed}
+        self.extra_config = extra_update
 
 
 def _get_serializer(serializer: SerializerType) -> Serializer:
@@ -149,7 +106,7 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        kafka_configs: Optional[TopicKafkaConfigs] = None,
+        topic_config: Optional[TopicConfig] = None,
     ):
         """
         Can specify serialization that should be used when consuming/producing
@@ -179,13 +136,14 @@ class Topic:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
+        :param topic_config: optional topic configurations (for creation/validation)
         """
         self._name = name
         self._key_serializer = _get_serializer(key_serializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
-        self._kafka_configs = kafka_configs
+        self._topic_config = topic_config
 
     @property
     def name(self) -> str:
@@ -195,8 +153,8 @@ class Topic:
         return self._name
 
     @property
-    def kafka_configs(self) -> TopicKafkaConfigs:
-        return self._kafka_configs
+    def topic_config(self) -> TopicConfig:
+        return self._topic_config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
         """

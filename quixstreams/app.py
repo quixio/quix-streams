@@ -1,7 +1,7 @@
 import contextlib
 import logging
 import signal
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Literal, Mapping
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -19,7 +19,7 @@ from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner, Admin
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
-    TopicKafkaConfigs,
+    TopicConfig,
     SerializerType,
     DeserializerType,
 )
@@ -101,6 +101,7 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
         topic_manager: Optional[TopicManager] = None,
     ):
         """
@@ -133,6 +134,17 @@ class Application:
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
             Default - "INFO".
+        :param auto_create_topics: Create all `Topic`s made via Application.topic()
+            Default - `True`
+        :param use_changelog_topics: Use changelog topics to back stateful operations
+            Default - `True`
+        :param topic_validation: The degree of topic validation; Default - "exists"
+            None - No validation.
+            "exists" - Confirm expected topics exist.
+            "required" - Confirm topics match your provided
+                `Topic` partition + replication factor
+            "all" - Confirm topic settings are EXACT.
+        :param topic_manager: A TopicManager instance
 
         ***Error Handlers***
 
@@ -170,13 +182,13 @@ class Application:
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
+        self._topic_validation = topic_validation
         if not topic_manager:
             topic_manager = TopicManager(
                 admin_client=Admin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
                 ),
-                auto_create_topics=auto_create_topics,
             )
         self._topic_manager = topic_manager
         self._state_manager = StateStoreManager(
@@ -211,6 +223,8 @@ class Application:
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
+        topic_manager: Optional[QuixTopicManager] = None,
     ) -> Self:
         """
         Initialize an Application to work with Quix platform,
@@ -272,6 +286,17 @@ class Application:
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
             Default - "INFO".
+        :param auto_create_topics: Create all `Topic`s made via Application.topic()
+            Default - `True`
+        :param use_changelog_topics: Use changelog topics to back stateful operations
+            Default - `True`
+        :param topic_validation: The degree of topic validation; Default - "exists"
+            None - No validation.
+            "exists" - Confirm expected topics exist.
+            "required" - Confirm topics match your provided `Topic`
+                partition + replication factor
+            "all" - Confirm topic settings are EXACT.
+        :param topic_manager: A QuixTopicManager instance
 
         ***Error Handlers***
 
@@ -291,8 +316,6 @@ class Application:
 
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
-        :param auto_create_topics: Whether to auto-create any topics handed to a
-            StreamingDataFrame instance (topics_in + topics_out).
 
         :return: `Application` object
         """
@@ -329,12 +352,13 @@ class Application:
             rocksdb_options=rocksdb_options,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
-            topic_manager=QuixTopicManager(
+            topic_validation=topic_validation,
+            topic_manager=topic_manager
+            or QuixTopicManager(
                 admin_client=Admin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
                 ),
-                auto_create_topics=auto_create_topics,
                 quix_config_builder=quix_config_builder,
             ),
         )
@@ -352,7 +376,7 @@ class Application:
         key_deserializer: DeserializerType = "bytes",
         value_serializer: SerializerType = "json",
         key_serializer: SerializerType = "bytes",
-        kafka_configs: Optional[TopicKafkaConfigs] = None,
+        topic_config: Optional[TopicConfig] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -387,9 +411,9 @@ class Application:
         :param key_deserializer: a deserializer type for keys; default="bytes"
         :param value_serializer: a serializer type for values; default="json"
         :param key_serializer: a serializer type for keys; default="bytes"
-        :param kafka_configs: settings for auto topic creation (Quix platform only)
-            Its name will be overridden by this method's 'name' param.
-
+        :param topic_config: optional topic configurations (for creation/validation)
+            >***NOTE:*** will not create without Application's auto_create_topics set
+            to True (is True by default)
 
         :return: `Topic` object
         """
@@ -399,7 +423,32 @@ class Application:
             value_serializer=value_serializer,
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
-            kafka_configs=kafka_configs,
+            topic_config=topic_config,
+            auto_create_config=self._auto_create_topics,
+        )
+
+    def topic_config(
+        self,
+        name: str,
+        num_partitions: Optional[int] = None,
+        replication_factor: Optional[int] = None,
+        extra_config: Optional[Mapping] = None,
+    ) -> TopicConfig:
+        """
+        Convenience method for generating a `TopicConfig` with default settings
+
+        :param name: the topic name
+        :param num_partitions: the number of topic partitions
+        :param replication_factor: the topic replication factor
+        :param extra_config: other optional configuration settings
+
+        :return: a TopicConfig object
+        """
+        return self._topic_manager.topic_config(
+            name=name,
+            num_partitions=num_partitions,
+            replication_factor=replication_factor,
+            extra_config=extra_config,
         )
 
     def dataframe(
@@ -500,7 +549,14 @@ class Application:
 
         logger.info("Initializing processing of StreamingDataFrame")
 
-        self._topic_manager.auto_create_or_validate_topics()
+        logger.info(
+            "topics required for app operation:\n"
+            f"{self._topic_manager.pretty_formatted_topic_configs}"
+        )
+        if self._auto_create_topics:
+            logger.info("auto-create topics enabled. Initializing topic creation...")
+            self._topic_manager.create_all_topics()
+        self._topic_manager.validate_all_topics(validation_level=self._topic_validation)
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)
