@@ -134,9 +134,4 @@ class QuixPortalApiService:
                 "retentionInBytes": topic_ret_bytes,
             },
         }
-        print(d)
-        try:
-            return self.session.post(f"/{workspace_id}/topics", json=d).json()
-        except requests.HTTPError as e:
-            print(e.response)
-            raise
+        return self.session.post(f"/{workspace_id}/topics", json=d).json()

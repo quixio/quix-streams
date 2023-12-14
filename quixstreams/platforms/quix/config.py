@@ -8,7 +8,7 @@ from typing import Optional, Tuple, List, Iterable, Set, Union
 from requests import HTTPError
 
 from quixstreams.exceptions import QuixException
-from quixstreams.models import Topic, TopicKafkaConfigs
+from quixstreams.models import Topic, TopicConfig
 from .api import QuixPortalApiService
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ class QuixKafkaConfigsBuilder:
         self, workspace_name_or_id: Optional[str] = None
     ) -> Optional[dict]:
         # TODO: there is more to do here to accommodate the new "environments" in v2
-        # as it stands now, the search wont work with Quix v2 platform correctly if
+        # as it stands now, the search won't work with Quix v2 platform correctly if
         # it's not a workspace_id
         """
         Search for a workspace given an expected workspace name or id.
@@ -243,11 +243,11 @@ class QuixKafkaConfigsBuilder:
                 )
         return full_path.as_posix()
 
-    def _create_topic(self, topic: TopicKafkaConfigs):
+    def _create_topic(self, topic: TopicConfig):
         """
         The actual API call to create the topic
 
-        :param topic: a TopicKafkaConfigs instance
+        :param topic: a TopicConfig instance
         """
         topic_name = self.strip_workspace_id(topic.name)
 
@@ -257,8 +257,8 @@ class QuixKafkaConfigsBuilder:
             workspace_id=self.workspace_id,
             topic_partitions=topic.num_partitions,
             topic_rep_factor=topic.replication_factor,
-            topic_ret_bytes=int(topic.optionals["retention.bytes"]),
-            topic_ret_minutes=int(topic.optionals["retention.ms"]) // 60000,
+            topic_ret_bytes=int(topic.extra_config["retention.bytes"]),
+            topic_ret_minutes=int(topic.extra_config["retention.ms"]) // 60000,
         )
         logger.info(
             f"Creation of topic {topic_name} acknowledged by broker. Must wait "
@@ -291,13 +291,13 @@ class QuixKafkaConfigsBuilder:
 
     def create_topics(
         self,
-        topics: Iterable[TopicKafkaConfigs],
+        topics: Iterable[TopicConfig],
         finalize_timeout_seconds: Optional[int] = None,
     ):
         """
         Create topics in a Quix cluster.
 
-        :param topics: an iterable with TopicKafkaConfigs instances
+        :param topics: an iterable with TopicConfig instances
         :param finalize_timeout_seconds: How long to wait for the topics to be
         marked as "Ready" (and thus ready to produce to/consume from).
         """
@@ -316,6 +316,9 @@ class QuixKafkaConfigsBuilder:
                 else:
                     try:
                         self._create_topic(topic)
+                    # TODO: more robust error handling to better identify issues
+                    # See how it's handled in the admin client and maybe consolidate
+                    # logic via TopicManager
                     except HTTPError as e:
                         # Topic was maybe created by another instance
                         if "already exists" not in e.response.text:
@@ -335,11 +338,11 @@ class QuixKafkaConfigsBuilder:
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
 
-    def confirm_topics_exist(self, topics: Iterable[Union[Topic, TopicKafkaConfigs]]):
+    def confirm_topics_exist(self, topics: Iterable[Union[Topic, TopicConfig]]):
         """
         Confirm whether the desired set of topics exists in the Quix workspace.
 
-        :param topics: an iterable with Either Topic or TopicKafkaConfigs instances
+        :param topics: an iterable with Either Topic or TopicConfig instances
         """
         logger.info("Confirming required topics exist...")
         current_topics = [t["id"] for t in self.get_topics()]
