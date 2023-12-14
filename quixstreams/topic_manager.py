@@ -5,7 +5,7 @@ from typing import Dict, List, Mapping, Optional, Set, Union, Literal
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from .kafka.admin import Admin
 from .models.serializers import DeserializerType, SerializerType
-from .models.topics import Topic, TopicConfig
+from .models.topics import Topic, TopicConfig, TopicList, TopicMap
 
 logger = logging.getLogger(__name__)
 
@@ -32,20 +32,14 @@ def dict_values(d: object) -> List:
     return []
 
 
-def get_topic_configs(
-    topics: Union[List[Topic], List[TopicConfig]]
-) -> List[TopicConfig]:
+def affirm_ready_for_create(topics: TopicList):
     """
-    If given a list of Topics, return their configs instead
+    Validate a list of topics is ready for creation attempt
 
-    :param topics: a list of `Topic` OR list of `TopicConfig`
-    :return: a list of `TopicConfig`
+    :param topics: list of `Topic`s
     """
-    if isinstance(topics[0], Topic):
-        if invalid := [topic.name for topic in topics if not topic.topic_config]:
-            raise ValueError(f"configs for Topics {invalid} were NoneTypes")
-        return [topic.topic_config for topic in topics]
-    return topics
+    if invalid := [topic.name for topic in topics if not topic.topic_config]:
+        raise ValueError(f"configs for Topics {invalid} were NoneTypes")
 
 
 class TopicManager:
@@ -76,8 +70,8 @@ class TopicManager:
         :param create_timeout: timeout for topic creation
         """
         self._admin_client = admin_client
-        self._topics: Dict[str:Topic] = {}
-        self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
+        self._topics: TopicMap = {}
+        self._changelog_topics: Dict[str, TopicMap] = {}
         self._create_timeout = create_timeout
 
     @classmethod
@@ -100,24 +94,25 @@ class TopicManager:
         ...
 
     @property
-    def topics(self) -> List[Topic]:
+    def topics(self) -> TopicList:
         return dict_values(self._topics)
 
     @property
-    def changelog_topics(self) -> List[Topic]:
+    def changelog_topics(self) -> TopicList:
         return dict_values(self._changelog_topics)
 
     @property
-    def all_topic_configs(self) -> List[TopicConfig]:
-        return get_topic_configs(self.topics + self.changelog_topics)
+    def all_topics(self) -> TopicList:
+        return self.topics + self.changelog_topics
 
     @property
     def pretty_formatted_topic_configs(self):
-        return pprint.pformat({t.name: t.__dict__ for t in self.all_topic_configs})
+        return pprint.pformat(
+            {topic.name: topic.topic_config.__dict__ for topic in self.all_topics}
+        )
 
     def _topic_config_with_defaults(
         self,
-        name: str,
         num_partitions: Optional[int] = None,
         replication_factor: Optional[int] = None,
         extra_config: Optional[Mapping] = None,
@@ -127,7 +122,6 @@ class TopicManager:
         Generates a TopicConfig with default settings. Also hides unneeded user
         option "extra_config_defaults"
 
-        :param name: the topic name
         :param num_partitions: the number of topic partitions
         :param replication_factor: the topic replication factor
         :param extra_config: other optional configuration settings
@@ -137,7 +131,6 @@ class TopicManager:
         :return: a TopicConfig object
         """
         topic_config = TopicConfig(
-            name=name,
             num_partitions=num_partitions or self._topic_partitions,
             replication_factor=replication_factor or self._topic_replication,
             extra_config=extra_config,
@@ -149,7 +142,6 @@ class TopicManager:
 
     def topic_config(
         self,
-        name: str,
         num_partitions: Optional[int] = None,
         replication_factor: Optional[int] = None,
         extra_config: Optional[Mapping] = None,
@@ -157,7 +149,6 @@ class TopicManager:
         """
         Convenience method for generating a `TopicConfig` with default settings
 
-        :param name: the topic name
         :param num_partitions: the number of topic partitions
         :param replication_factor: the topic replication factor
         :param extra_config: other optional configuration settings
@@ -165,7 +156,6 @@ class TopicManager:
         :return: a TopicConfig object
         """
         return self._topic_config_with_defaults(
-            name=name,
             num_partitions=num_partitions,
             replication_factor=replication_factor,
             extra_config=extra_config,
@@ -183,49 +173,50 @@ class TopicManager:
         """
         return name
 
-    def _create_topics(self, topics: List[TopicConfig]):
+    def _create_topics(self, topics: TopicList):
         """
         Method that actually creates the topics in Kafka via an `Admin` instance.
 
         Intended for easy replacement via inheritance (QuixTopicManager).
 
-        :param topics: list of TopicConfig
+        :param topics: list of `Topic`s
         """
         # TODO: have create topics return list of topics created to speed up validation
         self._admin_client.create_topics(topics, timeout=self._create_timeout)
 
-    def create_topics(self, topics: Union[List[Topic], List[TopicConfig]]):
+    def create_topics(self, topics: TopicList):
         """
-        Creates topics via a list of provided `Topics` or `TopicConfigs`.
+        Creates topics via a list of provided `Topics`.
 
         Exists as a way to manually specify what topics to create; otherwise,
         `create_all_topics()` is generally simpler.
 
-        :param topics: list of `Topic`, OR list of `TopicConfig`
+        :param topics: list of `Topic`s
         """
         logger.info("Creating topics...")
-        return self._create_topics(get_topic_configs(topics))
+        affirm_ready_for_create(topics)
+        return self._create_topics(topics)
 
     def create_all_topics(self):
         """
         A convenience method to create all Topic objects stored on this TopicManager.
         """
-        self._create_topics(self.all_topic_configs)
+        self._create_topics(self.all_topics)
 
     def validate_topics(
         self,
-        topics: Union[List[Topic], List[TopicConfig]],
+        topics: List[Topic],
         validation_level: Optional[Literal["exists", "required", "all"]] = "exists",
     ):
         """
-        Validates topics via a list of provided `Topic`s or `TopicConfig`s.
+        Validates topics via a list of provided `Topic`s.
 
         Issues are pooled and raised as an Exception once all inspections are completed.
 
         Can specify the degree of validation, but the default behavior is checking
         that the partition counts and replication factors match what is in Kafka.
 
-        :param topics: list of `Topic`, OR list of `TopicConfig`
+        :param topics: list of `Topic`s
         :param validation_level: The degree of topic validation; Default - "exists"
             None - No validation.
             "exists" - Confirm expected topics exist.
@@ -241,19 +232,20 @@ class TopicManager:
         extras = validation_level == "all"
         issues = {}
         actual_configs = self._admin_client.inspect_topics([t.name for t in topics])
-        for topic in get_topic_configs(topics):
+        for topic in topics:
+            expected = topic.topic_config
             actual = actual_configs[topic.name]
             if topic.name in actual_configs:
                 if not exists_only:
                     if extras:
                         actual.update_extra_config(
-                            allowed={k for k in topic.extra_config}
+                            allowed={k for k in expected.extra_config}
                         )
                     else:
-                        actual.extra_config = topic.extra_config
-                    if topic != actual:
+                        actual.extra_config = expected.extra_config
+                    if expected != actual:
                         issues[topic.name] = {
-                            "expected": topic.__dict__,
+                            "expected": expected.__dict__,
                             "actual": actual.__dict__,
                         }
             else:
@@ -280,13 +272,10 @@ class TopicManager:
                 partition + replication factor
             "all" - Confirm topic settings are EXACT.
         """
-        self.validate_topics(
-            topics=self.all_topic_configs, validation_level=validation_level
-        )
+        self.validate_topics(topics=self.all_topics, validation_level=validation_level)
 
     def _process_topic_configs(
         self,
-        name: str,
         topic_config: Optional[TopicConfig] = None,
         extra_config_defaults: Optional[Mapping] = None,
         auto_create_config: bool = True,
@@ -295,7 +284,6 @@ class TopicManager:
         Helps parse `TopicConfigs` by creating them if needed and adding swapping
         out extra_config defaults (for changelog topics).
 
-        :param name: topic name
         :param topic_config: a starting `TopicConfig` object, else generate one based
             on "auto_create_config"
         :param extra_config_defaults: override class extra_config defaults with these
@@ -307,7 +295,6 @@ class TopicManager:
         """
         if topic_config:
             return self._topic_config_with_defaults(
-                name=name,
                 num_partitions=topic_config.num_partitions,
                 replication_factor=topic_config.replication_factor,
                 extra_config=topic_config.extra_config,
@@ -317,7 +304,6 @@ class TopicManager:
             if not auto_create_config:
                 return
             return self._topic_config_with_defaults(
-                name=name,
                 extra_config_defaults=extra_config_defaults,
             )
 
@@ -355,7 +341,7 @@ class TopicManager:
             key_serializer=key_serializer,
             key_deserializer=key_deserializer,
             topic_config=self._process_topic_configs(
-                name, topic_config, auto_create_config=auto_create_config
+                topic_config, auto_create_config=auto_create_config
             ),
         )
         self._topics[name] = topic
@@ -435,7 +421,6 @@ class TopicManager:
             key_deserializer="bytes",
             value_deserializer="bytes",
             topic_config=self._process_topic_configs(
-                name,
                 topic_config,
                 extra_config_defaults=self._changelog_extra_config_defaults,
             ),
@@ -492,12 +477,12 @@ class QuixTopicManager(TopicManager):
         )
         self._quix_config_builder = quix_config_builder
 
-    def _create_topics(self, topics: List[TopicConfig]):
+    def _create_topics(self, topics: TopicList):
         """
         Method that actually creates the topics in Kafka via the
         QuixConfigBuilder instance.
 
-        :param topics: list of TopicConfig
+        :param topics: list of `Topic`s
         """
         self._quix_config_builder.create_topics(
             topics, finalize_timeout_seconds=self._create_timeout

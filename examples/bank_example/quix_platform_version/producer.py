@@ -20,7 +20,7 @@ load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 cfg_builder = QuixKafkaConfigsBuilder()
 cfgs = cfg_builder.get_confluent_broker_config()
 topic_manager = TopicManager.Quix(quix_config_builder=cfg_builder)
-topic = topic_manager.topic("qts__purchase_events").name
+topic_name = topic_manager.topic("qts__purchase_events").name
 topic_manager.create_all_topics()
 serialize = QuixTimeseriesSerializer()
 
@@ -53,11 +53,11 @@ with Producer(
         }
         print(f"Producing value {value}")
         producer.produce(
-            topic=topic,
+            topic=topic_name,
             headers=headers,
             key=account_id,
             value=serialize(
-                value=value, ctx=SerializationContext(topic=topic, headers=headers)
+                value=value, ctx=SerializationContext(topic=topic_name, headers=headers)
             ),
         )
         i += 1

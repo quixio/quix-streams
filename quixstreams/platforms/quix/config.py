@@ -3,12 +3,12 @@ import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional, Tuple, List, Iterable, Set, Union
+from typing import Optional, Tuple, List, Set, Union
 
 from requests import HTTPError
 
 from quixstreams.exceptions import QuixException
-from quixstreams.models import Topic, TopicConfig
+from quixstreams.models.topics import Topic, TopicList
 from .api import QuixPortalApiService
 
 logger = logging.getLogger(__name__)
@@ -243,22 +243,23 @@ class QuixKafkaConfigsBuilder:
                 )
         return full_path.as_posix()
 
-    def _create_topic(self, topic: TopicConfig):
+    def _create_topic(self, topic: Topic):
         """
         The actual API call to create the topic
 
         :param topic: a TopicConfig instance
         """
         topic_name = self.strip_workspace_id(topic.name)
+        cfg = topic.topic_config
 
         # an exception is raised (status code) if topic is not created successfully
         self.api.post_topic(
             topic_name=topic_name,
             workspace_id=self.workspace_id,
-            topic_partitions=topic.num_partitions,
-            topic_rep_factor=topic.replication_factor,
-            topic_ret_bytes=int(topic.extra_config["retention.bytes"]),
-            topic_ret_minutes=int(topic.extra_config["retention.ms"]) // 60000,
+            topic_partitions=cfg.num_partitions,
+            topic_rep_factor=cfg.replication_factor,
+            topic_ret_bytes=int(cfg.extra_config["retention.bytes"]),
+            topic_ret_minutes=int(cfg.extra_config["retention.ms"]) // 60000,
         )
         logger.info(
             f"Creation of topic {topic_name} acknowledged by broker. Must wait "
@@ -291,13 +292,13 @@ class QuixKafkaConfigsBuilder:
 
     def create_topics(
         self,
-        topics: Iterable[TopicConfig],
+        topics: TopicList,
         finalize_timeout_seconds: Optional[int] = None,
     ):
         """
         Create topics in a Quix cluster.
 
-        :param topics: an iterable with TopicConfig instances
+        :param topics: a list of `Topic` objects
         :param finalize_timeout_seconds: How long to wait for the topics to be
         marked as "Ready" (and thus ready to produce to/consume from).
         """
@@ -338,20 +339,22 @@ class QuixKafkaConfigsBuilder:
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
 
-    def confirm_topics_exist(self, topics: Iterable[Union[Topic, TopicConfig]]):
+    def confirm_topics_exist(self, topics: Union[List[Topic], List[str]]):
         """
         Confirm whether the desired set of topics exists in the Quix workspace.
 
-        :param topics: an iterable with Either Topic or TopicConfig instances
+        :param topics: a list of `Topic` or topic names
         """
+        if isinstance(topics[0], Topic):
+            topics = [topic.name for topic in topics]
         logger.info("Confirming required topics exist...")
         current_topics = [t["id"] for t in self.get_topics()]
         missing_topics = []
-        for topic in topics:
-            if topic.name not in current_topics:
-                missing_topics.append(self.strip_workspace_id(topic.name))
+        for name in topics:
+            if name not in current_topics:
+                missing_topics.append(self.strip_workspace_id(name))
             else:
-                logger.debug(f"Topic {self.strip_workspace_id(topic.name)} confirmed!")
+                logger.debug(f"Topic {self.strip_workspace_id(name)} confirmed!")
         if missing_topics:
             raise self.MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
