@@ -31,7 +31,7 @@ def convert_topic_list(topics: TopicList) -> List[NewTopic]:
             topic=topic.name,
             num_partitions=topic.config.num_partitions,
             replication_factor=topic.config.num_partitions,
-            config=topic.config.num_partitions,
+            config=topic.config.extra_config,
         )
         for topic in topics
     ]
