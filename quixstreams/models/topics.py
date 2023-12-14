@@ -106,7 +106,7 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        topic_config: Optional[TopicConfig] = None,
+        config: Optional[TopicConfig] = None,
     ):
         """
         Can specify serialization that should be used when consuming/producing
@@ -136,14 +136,14 @@ class Topic:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
-        :param topic_config: optional topic configurations (for creation/validation)
+        :param config: optional topic configs via `TopicConfig` (creation/validation)
         """
         self._name = name
         self._key_serializer = _get_serializer(key_serializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
-        self._topic_config = topic_config
+        self._config = config
 
     @property
     def name(self) -> str:
@@ -153,8 +153,8 @@ class Topic:
         return self._name
 
     @property
-    def topic_config(self) -> TopicConfig:
-        return self._topic_config
+    def config(self) -> TopicConfig:
+        return self._config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
         """

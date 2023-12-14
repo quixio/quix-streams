@@ -375,7 +375,7 @@ class Application:
         key_deserializer: DeserializerType = "bytes",
         value_serializer: SerializerType = "json",
         key_serializer: SerializerType = "bytes",
-        topic_config: Optional[TopicConfig] = None,
+        config: Optional[TopicConfig] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -410,7 +410,7 @@ class Application:
         :param key_deserializer: a deserializer type for keys; default="bytes"
         :param value_serializer: a serializer type for values; default="json"
         :param key_serializer: a serializer type for keys; default="bytes"
-        :param topic_config: optional topic configurations (for creation/validation)
+        :param config: optional topic configurations (for creation/validation)
             >***NOTE:*** will not create without Application's auto_create_topics set
             to True (is True by default)
 
@@ -422,7 +422,7 @@ class Application:
             value_serializer=value_serializer,
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
-            topic_config=topic_config,
+            config=config,
             auto_create_config=self._auto_create_topics,
         )
 
@@ -444,7 +444,6 @@ class Application:
         :return: a TopicConfig object
         """
         return self._topic_manager.topic_config(
-            name=name,
             num_partitions=num_partitions,
             replication_factor=replication_factor,
             extra_config=extra_config,

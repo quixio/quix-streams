@@ -29,9 +29,9 @@ def convert_topic_list(topics: TopicList) -> List[NewTopic]:
     return [
         NewTopic(
             topic=topic.name,
-            num_partitions=topic.topic_config.num_partitions,
-            replication_factor=topic.topic_config.num_partitions,
-            config=topic.topic_config.num_partitions,
+            num_partitions=topic.config.num_partitions,
+            replication_factor=topic.config.num_partitions,
+            config=topic.config.num_partitions,
         )
         for topic in topics
     ]
@@ -170,7 +170,7 @@ class Admin:
             failure = {
                 topic.name: {
                     "failure_reason": e.args[0][topic.name],
-                    "topic_config": topic.topic_config.__dict__,
+                    "topic_config": topic.config.__dict__,
                 }
                 for topic in topics
                 if topic.name in e.args[0]
