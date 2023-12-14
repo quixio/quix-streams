@@ -16,9 +16,7 @@ topic_manager = TopicManager(
 )
 topic = topic_manager.topic(
     name="json__purchase_events",
-    topic_config=topic_manager.topic_config(
-        name="json__purchase_events", extra_config={"retention.ms": "3600000"}
-    ),
+    topic_config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
 )
 topic_manager.create_all_topics()
 

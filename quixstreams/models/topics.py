@@ -1,6 +1,7 @@
 import dataclasses
 import logging
-from typing import Union, List, Optional, Any, Mapping, Iterable
+from typing import Union, List, Optional, Any, Mapping, Iterable, Dict
+from typing_extensions import TypeAlias
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
@@ -42,7 +43,6 @@ class TopicConfig:
     Generally used by Topic and any topic creation procedures.
     """
 
-    name: str
     num_partitions: int
     replication_factor: int
     extra_config: Optional[Mapping] = None
@@ -260,3 +260,7 @@ class Topic:
 
     def __repr__(self):
         return f'<{self.__class__} name="{self._name}"> '
+
+
+TopicList: TypeAlias = List[Topic]
+TopicMap: TypeAlias = Dict[str, Topic]

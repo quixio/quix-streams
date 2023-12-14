@@ -12,26 +12,29 @@ from confluent_kafka.admin import (
     TopicMetadata,
 )
 
-from quixstreams.models import TopicConfig
+from quixstreams.models.topics import TopicConfig, TopicList
 
 logger = logging.getLogger(__name__)
 
 __all__ = ("Admin",)
 
 
-def convert_topic_config(topic: TopicConfig) -> NewTopic:
+def convert_topic_list(topics: TopicList) -> List[NewTopic]:
     """
     Converts a TopicConfig to a NewTopic for Confluent's `AdminClient.create_topic()`.
 
-    :param topic: A `TopicConfig`
-    :return: A confluent_kafka `NewTopic`
+    :param topics: list of `Topic`s
+    :return: A list of confluent_kafka `NewTopic`
     """
-    return NewTopic(
-        topic=topic.name,
-        num_partitions=topic.num_partitions,
-        replication_factor=topic.replication_factor,
-        config=topic.extra_config,
-    )
+    return [
+        NewTopic(
+            topic=topic.name,
+            num_partitions=topic.topic_config.num_partitions,
+            replication_factor=topic.topic_config.num_partitions,
+            config=topic.topic_config.num_partitions,
+        )
+        for topic in topics
+    ]
 
 
 class Admin:
@@ -97,7 +100,6 @@ class Admin:
         }
         return {
             topic: TopicConfig(
-                name=topic,
                 num_partitions=len(cluster_topics[topic].partitions),
                 replication_factor=len(cluster_topics[topic].partitions[0].replicas),
                 extra_config=configs[topic],
@@ -119,29 +121,29 @@ class Admin:
         stop_time = time.time() + timeout
         while futures and time.time() < stop_time:
             time.sleep(1)
-            for topic in list(futures.keys()):
-                future = futures[topic]
+            for topic_name in list(futures.keys()):
+                future = futures[topic_name]
                 if future.done():
                     try:
                         future.result()
                     except KafkaException as e:
                         # Topic was maybe created by another instance
                         if e.args[0].name() != "TOPIC_ALREADY_EXISTS":
-                            exceptions[topic] = e.args[0].str()
+                            exceptions[topic_name] = e.args[0].str()
                     # Not sure how these get raised, but they are supposedly possible
                     except (TypeError, ValueError) as e:
-                        exceptions[topic] = e
-                    del futures[topic]
+                        exceptions[topic_name] = e
+                    del futures[topic_name]
         if exceptions:
             raise self.CreateTopicFailure(exceptions)
         if futures:
             raise self.CreateTopicTimeout(
                 f"Timed out waiting for creation status for topics:\n"
-                f"{pprint.pformat([topic for topic in futures])}"
+                f"{pprint.pformat([topic_name for topic_name in futures])}"
             )
 
     def create_topics(
-        self, topics: List[TopicConfig], timeout: int = 10, finalize_timeout: int = 20
+        self, topics: TopicList, timeout: int = 10, finalize_timeout: int = 20
     ):
         """
         Create the given list of topics and confirm they are ready.
@@ -149,7 +151,7 @@ class Admin:
         Also raises an exception with detailed printout should the creation
         fail (it ignores issues for a topic already existing).
 
-        :param topics: a list of `TopicConfig`
+        :param topics: a list of `Topic`
         :param timeout: timeout of the creation broker request
         :param finalize_timeout: the timeout of the topic finalizing ("ready")
         """
@@ -159,7 +161,7 @@ class Admin:
         try:
             self._finalize_create(
                 self._admin_client.create_topics(
-                    [convert_topic_config(topic) for topic in topics],
+                    convert_topic_list(topics),
                     request_timeout=timeout,
                 ),
                 finalize_timeout,
@@ -168,7 +170,7 @@ class Admin:
             failure = {
                 topic.name: {
                     "failure_reason": e.args[0][topic.name],
-                    "topic_config": topic.__dict__,
+                    "topic_config": topic.topic_config.__dict__,
                 }
                 for topic in topics
                 if topic.name in e.args[0]
