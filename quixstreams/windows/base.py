@@ -39,7 +39,10 @@ def get_window_ranges(
     while current_window_start + window_duration <= timestamp:
         current_window_start += step
 
-    while current_window_start >= timestamp - window_duration + 0.1:
+    while (
+        current_window_start >= timestamp - window_duration + 0.1
+        and current_window_start >= 0
+    ):
         window_end = current_window_start + window_duration - 0.1
         window_ranges.insert(0, (current_window_start, window_end))
         current_window_start -= step
@@ -68,9 +71,9 @@ class FixedWindowDefinition(ABC):
         if self._grace < 0:
             raise ValueError(f"Window grace must be positive, got {self._grace}")
 
-        if self._step and self._step >= duration:
+        if self._step is not None and (self._step <= 0 or self._step >= duration):
             raise ValueError(
-                f"Window step size must be smaller than duration, got {self._step}"
+                f"Window step size must be smaller than duration and bigger than zero, got {self._step}"
             )
 
     @abstractmethod

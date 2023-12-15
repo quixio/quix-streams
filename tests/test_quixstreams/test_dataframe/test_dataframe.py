@@ -658,7 +658,7 @@ class TestStreamingDataFrameWindows:
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = (
             sdf.tumbling_window(
-                duration=timedelta(seconds=5), grace=timedelta(seconds=1)
+                duration=timedelta(seconds=10), grace=timedelta(seconds=1)
             )
             .sum()
             .all(expand=False)
@@ -668,25 +668,29 @@ class TestStreamingDataFrameWindows:
             tp=TopicPartitionStub(topic=topic.name, partition=0)
         )
         values = [
-            (2, message_context_factory(key="test", timestamp_ms=100)),
-            (0, message_context_factory(key="test", timestamp_ms=200)),
-            (3, message_context_factory(key="test", timestamp_ms=300)),
+            # Message early in the window
+            (1, message_context_factory(key="test", timestamp_ms=1000)),
+            # Message towards the end of the window
+            (2, message_context_factory(key="test", timestamp_ms=9000)),
+            # Should start a new window
+            (3, message_context_factory(key="test", timestamp_ms=20010)),
         ]
 
-        results = []
+        update_results = []
         for value in values:
             ctx = value[1]
             with state_manager.start_store_transaction(
                 topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
             ):
                 try:
-                    results.append(sdf.test(value[0], ctx))
+                    update_results.append(sdf.test(value[0], ctx))
                 except Filtered:
                     pass
-        assert len(results) == 3
-        assert results[0] == [WindowResult(value=2, start=0, end=4.9)]
-        assert results[1] == [WindowResult(value=2, start=0, end=4.9)]
-        assert results[2] == [WindowResult(value=5, start=0, end=4.9)]
+
+        assert len(update_results) == 3
+        assert update_results[0] == [WindowResult(value=1, start=0, end=9.9)]
+        assert update_results[1] == [WindowResult(value=3, start=0, end=9.9)]
+        assert update_results[2] == [WindowResult(value=3, start=20, end=29.9)]
 
     def test_hopping_window(
         self, dataframe_factory, state_manager, message_context_factory
@@ -697,10 +701,10 @@ class TestStreamingDataFrameWindows:
         sdf = (
             sdf.hopping_window(
                 duration=timedelta(seconds=10),
-                step=timedelta(seconds=5),
+                step=timedelta(seconds=6),
                 grace=timedelta(seconds=1),
             )
-            .sum()
+            .count()
             .all(expand=False)
         )
 
@@ -711,39 +715,41 @@ class TestStreamingDataFrameWindows:
             # Message at the start of a window
             (1, message_context_factory(key="test", timestamp_ms=1)),
             # Message within the same window and the next due to stepping
-            (2, message_context_factory(key="test", timestamp_ms=6000)),
-            # Message at the end of a window
-            (3, message_context_factory(key="test", timestamp_ms=9000)),
-            # New window with a Message just within the grace period
-            (4, message_context_factory(key="test", timestamp_ms=15001)),
-            # Message just outside the grace period
-            (5, message_context_factory(key="test", timestamp_ms=20001)),
+            (2, message_context_factory(key="test", timestamp_ms=7000)),
+            # Message that updates the just second window but is withing the grace period of the first
+            (3, message_context_factory(key="test", timestamp_ms=10500)),
+            # Message that updates the just first window
+            (4, message_context_factory(key="test", timestamp_ms=3000)),
+            # New window with a gap
+            (5, message_context_factory(key="test", timestamp_ms=35000)),
+            # Just update the latest window
+            (6, message_context_factory(key="test", timestamp_ms=35001)),
         ]
 
-        results = []
+        update_results = []
         for value in values:
             ctx = value[1]
             with state_manager.start_store_transaction(
                 topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
             ):
                 try:
-                    results.append(sdf.test(value[0], ctx))
+                    update_results.append(sdf.test(value[0], ctx))
                 except Filtered:
                     pass
 
         # Assertions considering the stepping, duration, and grace period
-        assert len(results) == 5
+        assert len(update_results) == 6
         # Modify the assertions based on expected window calculation
-        assert results[0] == [WindowResult(value=1, start=0, end=9.9)]
-        assert results[1] == [
+        assert update_results[0] == [WindowResult(value=1, start=0, end=9.9)]
+        assert update_results[1] == [
+            WindowResult(value=2, start=0, end=9.9),
+            WindowResult(value=1, start=6, end=15.9),
+        ]
+        assert update_results[2] == [
+            WindowResult(value=2, start=6, end=15.9),
+        ]
+        assert update_results[3] == [
             WindowResult(value=3, start=0, end=9.9),
-            WindowResult(value=2, start=5, end=14.9),
         ]
-        assert results[2] == [
-            WindowResult(value=5, start=5, end=14.9),
-            WindowResult(value=3, start=10, end=19.9),
-        ]
-        assert results[3] == [WindowResult(value=7, start=10, end=19.9)]
-        assert results[4] == [
-            WindowResult(value=5, start=20, end=29.9)
-        ]  # Outside grace period, starts a new window
+        assert update_results[4] == [WindowResult(value=1, start=30, end=39.9)]
+        assert update_results[5] == [WindowResult(value=2, start=30, end=39.9)]

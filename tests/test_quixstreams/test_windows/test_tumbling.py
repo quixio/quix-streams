@@ -120,30 +120,29 @@ class TestTumblingWindow:
             )
 
     @pytest.mark.parametrize(
-        "timestamp, latest_timestamp, expired_windows, expected_output",
+        "timestamp, latest_timestamp, expired_windows_input, expected_output",
         [
             # Case: stale timestamp
             (100, 200, [{}], ([], [])),
             # Case: fresh timestamp
-            (100, 90, [{}], ([{"value": "test_value", "start": 90, "end": 100}], [])),
+            (100, 90, [{}], ([WindowResult(value=5, start=100, end=109.9)], [])),
         ],
     )
     def test_tumbling_window_process_window(
-        self, timestamp, latest_timestamp, expired_windows, expected_output
+        self, timestamp, latest_timestamp, expired_windows_input, expected_output
     ):
         state_mock = MagicMock(spec=WindowedTransactionState)
         state_mock.get_latest_timestamp.return_value = latest_timestamp
         # state_mock.get_expired_windows.return_value = expired_windows
-        expired_windows = []  # delete this line when get_expired_windows is implemented
+        expired_windows = expired_windows_input  # delete this line when get_expired_windows is implemented
 
-        tw = TumblingWindow(10, 5, "test", lambda st, ed, ts, value, state: value, None)
+        tw = TumblingWindow(
+            duration=10,
+            grace=5,
+            name="test",
+            func=lambda st, ed, ts, value, state: value,
+            dataframe=None,
+        )
 
         result = tw._process_window(value=5, state=state_mock, timestamp=timestamp)
-        expected_windows = expected_output[0]
-
-        if expected_windows:
-            start, end = get_window_ranges(timestamp, tw._duration)[0]
-            expected_updated_window = WindowResult(value=5, start=start, end=end)
-            assert result == ([expected_updated_window], expired_windows)
-        else:
-            assert result == expected_output
+        assert result == expected_output

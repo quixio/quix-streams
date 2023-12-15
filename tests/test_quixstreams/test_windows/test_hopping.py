@@ -26,6 +26,7 @@ class TestHoppingWindow:
             (85, 15, 0, [(75, 89.9)]),  # Zero step (defaults to duration)
             (123, 10.5, 5.5, [(115.5, 125.9), (121.0, 131.4)]),  # Fractional values
             (100, 20, 20, [(100, 119.9)]),  # Timestamp on step boundary
+            (0.1, 20, 20, [(0.0, 19.9)]),  # Timestamp shouldn't go below zero
         ],
     )
     def test_get_window_ranges(self, timestamp, duration, step, expected):
@@ -35,18 +36,22 @@ class TestHoppingWindow:
         )
 
     @pytest.mark.parametrize(
-        "duration, grace, provided_name, func_name, expected_name",
+        "duration, grace, step, provided_name, func_name, expected_name",
         [
-            (10, 5, "custom_window", "sum", "custom_window"),
-            (10, 5, None, "sum", "hopping_window_10_sum"),
-            (15, 5, None, "count", "hopping_window_15_count"),
+            (10, 5, 3, "custom_window", "sum", "custom_window"),
+            (10, 5, 3, None, "sum", "hopping_window_10_3_sum"),
+            (15, 5, 3, None, "count", "hopping_window_15_3_count"),
         ],
     )
     def test_hopping_window_definition_get_name(
-        self, duration, grace, provided_name, func_name, expected_name
+        self, duration, grace, step, provided_name, func_name, expected_name
     ):
         twd = HoppingWindowDefinition(
-            duration=duration, grace=grace, dataframe=None, name=provided_name
+            duration=duration,
+            grace=grace,
+            step=step,
+            dataframe=None,
+            name=provided_name,
         )
         name = twd._get_name(func_name)
         assert name == expected_name
@@ -114,16 +119,20 @@ class TestHoppingWindow:
         state_mock.update_window.assert_called_with(0, 10, timestamp=100, value=5)
 
     @pytest.mark.parametrize(
-        "duration, grace, name",
+        "duration, grace, step, name",
         [
-            (-10, 5, "test"),  # duration < 0
-            (10, -5, "test"),  # grace < 0
+            (-10, 5, 3, "test"),  # duration < 0
+            (10, -5, 3, "test"),  # grace < 0
+            (10, 5, -1, "test"),  # step < 0
+            (10, 5, 0, "test"),  # step == 0
+            (10, 5, 10, "test"),  # step == duration
+            (10, 5, 11, "test"),  # step > duration
         ],
     )
-    def test_hopping_window_def_init_invalid(self, duration, grace, name):
+    def test_hopping_window_def_init_invalid(self, duration, grace, step, name):
         with pytest.raises(ValueError):
             HoppingWindowDefinition(
-                duration=duration, grace=grace, name=name, dataframe=None
+                duration=duration, grace=grace, step=step, name=name, dataframe=None
             )
 
     @pytest.mark.parametrize(
@@ -165,6 +174,5 @@ class TestHoppingWindow:
         )
 
         result = tw._process_window(value=5, state=state_mock, timestamp=timestamp)
-        expected_windows = expected_output[0]
 
         assert result == expected_output
