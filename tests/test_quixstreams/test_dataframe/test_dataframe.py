@@ -7,7 +7,7 @@ from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
 from quixstreams.models import MessageTimestamp
 from quixstreams.models.topics import Topic
-from quixstreams.state.windows import WindowResult
+from quixstreams.windows.base import WindowResult
 from tests.utils import TopicPartitionStub
 
 
@@ -687,3 +687,63 @@ class TestStreamingDataFrameWindows:
         assert results[0] == [WindowResult(value=2, start=0, end=4.9)]
         assert results[1] == [WindowResult(value=2, start=0, end=4.9)]
         assert results[2] == [WindowResult(value=5, start=0, end=4.9)]
+
+    def test_hopping_window(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = (
+            sdf.hopping_window(
+                duration=timedelta(seconds=10),
+                step=timedelta(seconds=5),
+                grace=timedelta(seconds=1),
+            )
+            .sum()
+            .all(expand=False)
+        )
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        values = [
+            # Message at the start of a window
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Message within the same window and the next due to stepping
+            (2, message_context_factory(key="test", timestamp_ms=6000)),
+            # Message at the end of a window
+            (3, message_context_factory(key="test", timestamp_ms=9000)),
+            # New window with a Message just within the grace period
+            (4, message_context_factory(key="test", timestamp_ms=15001)),
+            # Message just outside the grace period
+            (5, message_context_factory(key="test", timestamp_ms=20001)),
+        ]
+
+        results = []
+        for value in values:
+            ctx = value[1]
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                try:
+                    results.append(sdf.test(value[0], ctx))
+                except Filtered:
+                    pass
+
+        # Assertions considering the stepping, duration, and grace period
+        assert len(results) == 5
+        # Modify the assertions based on expected window calculation
+        assert results[0] == [WindowResult(value=1, start=0, end=9.9)]
+        assert results[1] == [
+            WindowResult(value=3, start=0, end=9.9),
+            WindowResult(value=2, start=5, end=14.9),
+        ]
+        assert results[2] == [
+            WindowResult(value=5, start=5, end=14.9),
+            WindowResult(value=3, start=10, end=19.9),
+        ]
+        assert results[3] == [WindowResult(value=7, start=10, end=19.9)]
+        assert results[4] == [
+            WindowResult(value=5, start=20, end=29.9)
+        ]  # Outside grace period, starts a new window

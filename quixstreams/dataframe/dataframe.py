@@ -18,7 +18,7 @@ from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
 from .series import StreamingSeries
 from ..state.rocksdb.windowed.store import WindowedTransactionState
-from ..state.windows import TumblingWindowDefinition, TumblingWindow
+from ..windows import TumblingWindowDefinition, HoppingWindowDefinition
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -344,7 +344,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def tumbling_window(
         self,
-        duration: Union[float, timedelta] = 30.0,
+        duration: Union[float, timedelta],
         grace: Optional[Union[float, timedelta]] = 0,
     ) -> TumblingWindowDefinition:
         """
@@ -386,7 +386,67 @@ class StreamingDataFrame(BaseStreaming):
             applied to the StreamingDataFrame
 
         """
-        return TumblingWindowDefinition(duration=duration, grace=grace, dataframe=self)
+        _duration = (
+            duration.total_seconds() if isinstance(duration, timedelta) else duration
+        )
+        _grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
+
+        return TumblingWindowDefinition(
+            duration=_duration, grace=_grace, dataframe=self
+        )
+
+    def hopping_window(
+        self,
+        duration: Union[float, timedelta],
+        step: Union[float, timedelta],
+        grace: Optional[Union[float, timedelta]] = 0,
+    ) -> HoppingWindowDefinition:
+        """
+        Create a hopping window transformation on this StreamingDataFrame.
+
+        Hopping windows, divide the data stream into overlapping windows based on time.
+        The overlap is controlled by the 'step' parameter. This method is used in stream processing for performing
+        aggregations or other operations where a continuous update over sliding time slices of data is needed.
+
+        It is particularly useful in scenarios where data needs to be aggregated or analyzed over specific periods.
+
+        ```python
+        from quixstreams import Application, StreamingDataFrame
+
+        app = Application()
+        sdf = app.dataframe()
+        hopping_window_def = sdf.hopping_window(duration=60.0, step=30.0, grace=10.0)
+
+        # Choose an aggregation function for the hopping window, like 'sum', 'count', 'reduce', 'mean', 'min', 'max'
+        hopping_window = hopping_window_def.sum()
+
+        # The output behavior methods - 'all', 'final', 'latest' - determine how the window values are emitted
+        sdf = hopping_window.all()
+
+        # The hopping window will aggregate data in 60-second windows, moving forward every 30 seconds,
+        with a 10-second grace period
+        ```
+
+        :param duration: The length of each window. It defines the time span for which each window aggregates data.
+            Can be specified as either a float representing seconds or a timedelta object.
+        :param step: The step size for the window. It determines how much each successive window moves forward in time.
+            Can be specified as either a float representing seconds or a timedelta object.
+        :param grace: The grace period for data arrival. It allows late-arriving data to be included in the window,
+            even if it arrives after the window has theoretically moved forward.
+            Can be specified as either a float representing seconds or a timedelta object.
+
+        :return: HoppingWindowDefinition instance representing the hopping window configuration.
+            This object can be further configured with aggregation functions and applied to the StreamingDataFrame.
+        """
+        _duration = (
+            duration.total_seconds() if isinstance(duration, timedelta) else duration
+        )
+        _step = step.total_seconds() if isinstance(step, timedelta) else step
+        _grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
+
+        return HoppingWindowDefinition(
+            duration=_duration, grace=_grace, step=_step, dataframe=self
+        )
 
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(
