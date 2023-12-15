@@ -1,10 +1,14 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from typing import Optional, Literal
 from unittest.mock import create_autospec
 
 import pytest
-from confluent_kafka.admin import AdminClient, NewTopic, NewPartitions
+from confluent_kafka.admin import (
+    AdminClient,
+    NewTopic,  # type: ignore
+    NewPartitions,  # type: ignore
+)
 
 from quixstreams.app import Application, MessageProcessedCallback
 from quixstreams.error_callbacks import (
@@ -29,10 +33,15 @@ from quixstreams.models.timestamps import (
     MessageTimestamp,
 )
 from quixstreams.models.topics import Topic
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.platforms.quix.config import (
+    QuixKafkaConfigsBuilder,
+    prepend_workspace_id,
+    strip_workspace_id_prefix,
+)
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
+from quixstreams.topic_manager import TopicManager
 
 
 @pytest.fixture()
@@ -257,6 +266,10 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_message_processed: Optional[MessageProcessedCallback] = None,
         state_dir: Optional[str] = None,
+        auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
+        topic_validation: Optional[Literal["exists", "required", "all"]] = None,
+        topic_manager: Optional[TopicManager] = None,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -270,6 +283,10 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             on_processing_error=on_processing_error,
             on_message_processed=on_message_processed,
             state_dir=state_dir,
+            auto_create_topics=auto_create_topics,
+            use_changelog_topics=use_changelog_topics,
+            topic_validation=topic_validation,
+            topic_manager=topic_manager,
         )
 
     return factory
@@ -305,19 +322,24 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
         on_producer_error: Optional[ProducerErrorCallback] = None,
         on_processing_error: Optional[ProcessingErrorCallback] = None,
         on_message_processed: Optional[MessageProcessedCallback] = None,
-        auto_create_topics: bool = True,
         state_dir: Optional[str] = None,
+        auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
+        topic_validation: Optional[Literal["exists", "required", "all"]] = None,
+        topic_manager: Optional[TopicManager] = None,
         workspace_id: str = "my_ws",
     ) -> Application:
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
-        cfg_builder.create_topic_configs = {}
         cfg_builder.get_confluent_broker_config.return_value = {
             "bootstrap.servers": kafka_container.broker_address
         }
-        cfg_builder.append_workspace_id.side_effect = (
-            lambda s: f"{workspace_id}-{s}" if workspace_id else s
+        cfg_builder.prepend_workspace_id.side_effect = lambda s: prepend_workspace_id(
+            workspace_id, s
+        )
+        cfg_builder.strip_workspace_id_prefix.side_effect = (
+            lambda s: strip_workspace_id_prefix(workspace_id, s)
         )
         state_dir = state_dir or (tmp_path / "state").absolute()
 
@@ -333,6 +355,9 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
             on_processing_error=on_processing_error,
             on_message_processed=on_message_processed,
             auto_create_topics=auto_create_topics,
+            use_changelog_topics=use_changelog_topics,
+            topic_validation=topic_validation,
+            topic_manager=topic_manager,
         )
 
     return factory

@@ -21,16 +21,17 @@ __all__ = ("Admin",)
 
 def convert_topic_list(topics: TopicList) -> List[NewTopic]:
     """
-    Converts a TopicConfig to a NewTopic for Confluent's `AdminClient.create_topic()`.
+    Converts `Topic`s to `NewTopic`s as required for Confluent's
+    `AdminClient.create_topic()`.
 
     :param topics: list of `Topic`s
-    :return: A list of confluent_kafka `NewTopic`
+    :return: list of confluent_kafka `NewTopic`s
     """
     return [
         NewTopic(
             topic=topic.name,
             num_partitions=topic.config.num_partitions,
-            replication_factor=topic.config.num_partitions,
+            replication_factor=topic.config.replication_factor,
             config=topic.config.extra_config,
         )
         for topic in topics
@@ -118,6 +119,7 @@ class Admin:
         :param timeout: How long to confirm topics before raising exception
         """
         exceptions = {}
+        successful = []
         stop_time = time.time() + timeout
         while futures and time.time() < stop_time:
             time.sleep(1)
@@ -133,7 +135,9 @@ class Admin:
                     # Not sure how these get raised, but they are supposedly possible
                     except (TypeError, ValueError) as e:
                         exceptions[topic_name] = e
+                    successful.append(topic_name)
                     del futures[topic_name]
+        logger.info(f"Successfully created topics {pprint.pformat(successful)}")
         if exceptions:
             raise self.CreateTopicFailure(exceptions)
         if futures:
@@ -157,6 +161,7 @@ class Admin:
         """
         existing = self.list_topics().keys()
         if not (topics := [topic for topic in topics if topic.name not in existing]):
+            logger.info("All topics already exist!")
             return
         try:
             self._finalize_create(
