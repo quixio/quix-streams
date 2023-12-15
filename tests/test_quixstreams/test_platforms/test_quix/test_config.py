@@ -412,15 +412,15 @@ class TestQuixKafkaConfigsBuilder:
             "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
         }
 
-    def test_append_workspace_id(self, quix_kafka_config_factory):
+    def test_prepend_workspace_id(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
-        assert cfg_factory.append_workspace_id("topic") == "12345-topic"
-        assert cfg_factory.append_workspace_id("12345-topic") == "12345-topic"
+        assert cfg_factory.prepend_workspace_id("topic") == "12345-topic"
+        assert cfg_factory.prepend_workspace_id("12345-topic") == "12345-topic"
 
-    def test_strip_workspace_id(self, quix_kafka_config_factory):
+    def test_strip_workspace_id_prefix(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
-        assert cfg_factory.strip_workspace_id("12345-topic") == "topic"
-        assert cfg_factory.strip_workspace_id("topic") == "topic"
+        assert cfg_factory.strip_workspace_id_prefix("12345-topic") == "topic"
+        assert cfg_factory.strip_workspace_id_prefix("topic") == "topic"
 
     def test_get_confluent_client_config(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")

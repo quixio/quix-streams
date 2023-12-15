@@ -94,21 +94,32 @@ class TopicManager:
         ...
 
     @property
-    def topics(self) -> TopicList:
+    def topics(self) -> TopicMap:
+        return self._topics
+
+    @property
+    def topics_list(self) -> TopicList:
         return dict_values(self._topics)
 
     @property
-    def changelog_topics(self) -> TopicList:
+    def changelog_topics(self) -> Dict[str, TopicMap]:
+        return self._changelog_topics
+
+    @property
+    def changelog_topics_list(self) -> TopicList:
         return dict_values(self._changelog_topics)
 
     @property
     def all_topics(self) -> TopicList:
-        return self.topics + self.changelog_topics
+        return self.topics_list + self.changelog_topics_list
 
     @property
     def pretty_formatted_topic_configs(self):
         return pprint.pformat(
-            {topic.name: topic.config.__dict__ for topic in self.all_topics}
+            {
+                topic.name: topic.config.__dict__ if topic.config else "NO CONFIG"
+                for topic in self.all_topics
+            }
         )
 
     def _topic_config_with_defaults(
@@ -194,6 +205,9 @@ class TopicManager:
         :param topics: list of `Topic`s
         """
         logger.info("Creating topics...")
+        if not topics:
+            logger.warning("No topics provided for creation...skipping!")
+            return
         affirm_ready_for_create(topics)
         return self._create_topics(topics)
 
@@ -206,7 +220,7 @@ class TopicManager:
     def validate_topics(
         self,
         topics: List[Topic],
-        validation_level: Optional[Literal["exists", "required", "all"]] = "exists",
+        validation_level: Literal["exists", "required", "all"] = "exists",
     ):
         """
         Validates topics via an explicit list of `Topic`s.
@@ -218,15 +232,11 @@ class TopicManager:
 
         :param topics: list of `Topic`s
         :param validation_level: The degree of topic validation; Default - "exists"
-            None - No validation.
             "exists" - Confirm expected topics exist.
             "required" - Confirm topics match your provided `Topic`
                 partition + replication factor
             "all" - Confirm topic settings are EXACT.
         """
-        if not validation_level:
-            logger.info("Skipping topic validation...")
-            return
         logger.info(f"Validating topics at level '{validation_level}'...")
         exists_only = validation_level == "exists"
         extras = validation_level == "all"
@@ -258,7 +268,7 @@ class TopicManager:
 
     def validate_all_topics(
         self,
-        validation_level: Optional[Literal["exists", "required", "all"]] = "exists",
+        validation_level: Literal["exists", "required", "all"] = "exists",
     ):
         """
         A convenience method for validating all `Topic`s stored on this TopicManager.
@@ -266,7 +276,6 @@ class TopicManager:
         See `TopicManager.validate_topics()` for more details.
 
         :param validation_level: The degree of topic validation; Default - "exists"
-            None - No validation.
             "exists" - Confirm expected topics exist.
             "required" - Confirm topics match your provided `Topic`
                 partition + replication factor
@@ -496,7 +505,7 @@ class QuixTopicManager(TopicManager):
 
         :return: name with workspace ID prepended
         """
-        return self._quix_config_builder.append_workspace_id(name)
+        return self._quix_config_builder.prepend_workspace_id(name)
 
     # TODO: remove this once 43 char limit is removed
     def _strip_changelog_chars(self, value: str):
@@ -508,7 +517,7 @@ class QuixTopicManager(TopicManager):
 
         :return: a string with only its first few and last chars
         """
-        stripped = self._quix_config_builder.strip_workspace_id(value)
+        stripped = self._quix_config_builder.strip_workspace_id_prefix(value)
         return f"{stripped[:5]}{stripped[-5:]}"
 
     def _format_changelog_name(
@@ -525,13 +534,13 @@ class QuixTopicManager(TopicManager):
 
         :return: formatted topic name
         """
-        # TODO: "strip" should be `self._quix_config_builder.strip_workspace_id` once
+        # TODO: "strip" should be `self._quix_config_builder.strip_workspace_id_prefix` once
         # We fix the 43 char limit
 
         # TODO: remove suffix limitation and standardize the topic name template to
         # match the non-quix counterpart
 
         strip = self._strip_changelog_chars
-        return self._quix_config_builder.append_workspace_id(
+        return self._quix_config_builder.prepend_workspace_id(
             f"changelog__{strip(consumer_group)}-{strip(source_topic_name)}-{suffix[:9]}"
         )

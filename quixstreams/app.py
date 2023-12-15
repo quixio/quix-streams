@@ -329,7 +329,7 @@ class Application:
 
         broker_address = quix_configs.pop("bootstrap.servers")
         # Quix platform prefixes consumer group with workspace id
-        consumer_group = quix_config_builder.append_workspace_id(consumer_group)
+        consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
         consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
         producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
         app = cls(
@@ -514,6 +514,20 @@ class Application:
         if self._state_manager.stores:
             check_state_management_enabled()
 
+    def _setup_topics(self):
+        logger.info(
+            "topics (with provided configs) required for app operation:\n"
+            f"{self._topic_manager.pretty_formatted_topic_configs}"
+        )
+        if self._auto_create_topics:
+            logger.info("Auto-create topics enabled. Initializing topic creation...")
+            self._topic_manager.create_all_topics()
+        if self._topic_validation:
+            logger.info("Topic validation enabled. Initializing topic validation...")
+            self._topic_manager.validate_all_topics(
+                validation_level=self._topic_validation
+            )
+
     def run(
         self,
         dataframe: StreamingDataFrame,
@@ -546,15 +560,10 @@ class Application:
         self._setup_signal_handlers()
 
         logger.info("Initializing processing of StreamingDataFrame")
+        if self.is_quix_app:
+            self._quix_runtime_init()
 
-        logger.info(
-            "topics required for app operation:\n"
-            f"{self._topic_manager.pretty_formatted_topic_configs}"
-        )
-        if self._auto_create_topics:
-            logger.info("auto-create topics enabled. Initializing topic creation...")
-            self._topic_manager.create_all_topics()
-        self._topic_manager.validate_all_topics(validation_level=self._topic_validation)
+        self._setup_topics()
 
         exit_stack = contextlib.ExitStack()
         exit_stack.enter_context(self._producer)
