@@ -35,15 +35,10 @@ def get_window_ranges(
     window_ranges = []
     current_window_start = timestamp - (timestamp % step)
 
-    # Adjust the start of the first window if it does not intersect with the timestamp
-    while current_window_start + window_duration <= timestamp:
-        current_window_start += step
-
     while (
-        current_window_start >= timestamp - window_duration + 0.1
-        and current_window_start >= 0
+        current_window_start > timestamp - window_duration and current_window_start >= 0
     ):
-        window_end = current_window_start + window_duration - 0.1
+        window_end = current_window_start + window_duration
         window_ranges.insert(0, (current_window_start, window_end))
         current_window_start -= step
 

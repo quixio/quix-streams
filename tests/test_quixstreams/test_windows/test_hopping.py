@@ -20,13 +20,13 @@ class TestHoppingWindow:
     @pytest.mark.parametrize(
         "timestamp, duration, step, expected",
         [
-            (100, 30, 10, [(80, 109.9), (90, 119.9), (100, 129.9)]),  # Standard case
-            (50, 30, 10, [(30, 59.9), (40, 69.9), (50, 79.9)]),  # Standard case
-            (75, 20, 20, [(60, 79.9)]),  # Step equals duration
-            (85, 15, 0, [(75, 89.9)]),  # Zero step (defaults to duration)
-            (123, 10.5, 5.5, [(115.5, 125.9), (121.0, 131.4)]),  # Fractional values
-            (100, 20, 20, [(100, 119.9)]),  # Timestamp on step boundary
-            (0.1, 20, 20, [(0.0, 19.9)]),  # Timestamp shouldn't go below zero
+            (100, 30, 10, [(80, 110), (90, 120), (100, 130)]),  # Standard case
+            (50, 30, 10, [(30, 60), (40, 70), (50, 80)]),  # Standard case
+            (75, 20, 20, [(60, 80)]),  # Step equals duration
+            (85, 15, 0, [(75, 90)]),  # Zero step (defaults to duration)
+            (123, 10.5, 5.5, [(115.5, 126), (121.0, 131.5)]),  # Fractional values
+            (100, 20, 20, [(100, 120)]),  # Timestamp on step boundary
+            (0.1, 20, 20, [(0.0, 20)]),  # Timestamp shouldn't go below zero
         ],
     )
     def test_get_window_ranges(self, timestamp, duration, step, expected):
@@ -147,9 +147,11 @@ class TestHoppingWindow:
                 [],
                 (
                     [  # updated_output
-                        WindowResult(start=93, end=102.9, value=5),
-                        WindowResult(start=96, end=105.9, value=5),
-                        WindowResult(start=99, end=108.9, value=5),
+                        WindowResult(start=92, end=102, value=5),
+                        WindowResult(start=94, end=104, value=5),
+                        WindowResult(start=96, end=106, value=5),
+                        WindowResult(start=98, end=108, value=5),
+                        WindowResult(start=100, end=110, value=5),
                     ],
                     [],  # expired_output
                 ),
@@ -167,7 +169,7 @@ class TestHoppingWindow:
         tw = HoppingWindow(
             duration=10,
             grace=5,
-            step=3,
+            step=2,
             name="test",
             func=lambda st, ed, ts, value, state: value,
             dataframe=None,

@@ -688,9 +688,9 @@ class TestStreamingDataFrameWindows:
                     pass
 
         assert len(update_results) == 3
-        assert update_results[0] == [WindowResult(value=1, start=0, end=9.9)]
-        assert update_results[1] == [WindowResult(value=3, start=0, end=9.9)]
-        assert update_results[2] == [WindowResult(value=3, start=20, end=29.9)]
+        assert update_results[0] == [WindowResult(value=1, start=0, end=10)]
+        assert update_results[1] == [WindowResult(value=3, start=0, end=10)]
+        assert update_results[2] == [WindowResult(value=3, start=20, end=30)]
 
     def test_hopping_window(
         self, dataframe_factory, state_manager, message_context_factory
@@ -740,16 +740,16 @@ class TestStreamingDataFrameWindows:
         # Assertions considering the stepping, duration, and grace period
         assert len(update_results) == 6
         # Modify the assertions based on expected window calculation
-        assert update_results[0] == [WindowResult(value=1, start=0, end=9.9)]
+        assert update_results[0] == [WindowResult(value=1, start=0, end=10)]
         assert update_results[1] == [
-            WindowResult(value=2, start=0, end=9.9),
-            WindowResult(value=1, start=6, end=15.9),
+            WindowResult(value=2, start=0, end=10),
+            WindowResult(value=1, start=6, end=16),
         ]
         assert update_results[2] == [
-            WindowResult(value=2, start=6, end=15.9),
+            WindowResult(value=2, start=6, end=16),
         ]
         assert update_results[3] == [
-            WindowResult(value=3, start=0, end=9.9),
+            WindowResult(value=3, start=0, end=10),
         ]
-        assert update_results[4] == [WindowResult(value=1, start=30, end=39.9)]
-        assert update_results[5] == [WindowResult(value=2, start=30, end=39.9)]
+        assert update_results[4] == [WindowResult(value=1, start=30, end=40)]
+        assert update_results[5] == [WindowResult(value=2, start=30, end=40)]

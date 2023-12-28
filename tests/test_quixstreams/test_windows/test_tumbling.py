@@ -20,8 +20,8 @@ class TestTumblingWindow:
     @pytest.mark.parametrize(
         "timestamp, duration, expected",
         [
-            (100, 10, [(100, 109.9)]),
-            (100, 60, [(60, 119.9)]),
+            (100, 10, [(100, 110)]),
+            (100, 60, [(60, 120)]),
         ],
     )
     def test_get_window_ranges(self, timestamp, duration, expected):
@@ -125,7 +125,7 @@ class TestTumblingWindow:
             # Case: stale timestamp
             (100, 200, [{}], ([], [])),
             # Case: fresh timestamp
-            (100, 90, [{}], ([WindowResult(value=5, start=100, end=109.9)], [])),
+            (100, 90, [{}], ([WindowResult(value=5, start=100, end=110)], [])),
         ],
     )
     def test_tumbling_window_process_window(
