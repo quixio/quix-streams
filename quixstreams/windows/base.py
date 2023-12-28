@@ -21,7 +21,7 @@ T = TypeVar("T")
 WindowAggregateFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]
 WindowedDataFrameFunc = Callable[
     [T, WindowedTransactionState, Optional[Callable]],
-    Tuple[list[WindowResult], list[WindowResult]],
+    Tuple[List[WindowResult], List[WindowResult]],
 ]
 StreamingDataFrame = TypeVar("StreamingDataFrame")
 
@@ -224,7 +224,7 @@ class FixedWindow(ABC):
 
     def _process_window(
         self, value, state: WindowedTransactionState, timestamp: float
-    ) -> (list[WindowResult], list[WindowResult]):
+    ) -> (List[WindowResult], List[WindowResult]):
         latest_timestamp = state.get_latest_timestamp() or 0
         ranges = get_window_ranges(
             timestamp=timestamp, window_duration=self._duration, step=self._step
