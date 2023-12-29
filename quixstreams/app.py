@@ -545,15 +545,13 @@ class Application:
                     first_row.partition,
                     first_row.offset,
                 )
-                # Create a new contextvars.Context and set the current MessageContext
-                # (it's the same across multiple rows)
-                context = copy_context()
-                context.run(set_message_context, first_row.context)
 
                 with start_state_transaction(
                     topic=topic_name, partition=partition, offset=offset
                 ):
                     for row in rows:
+                        context = copy_context()
+                        context.run(set_message_context, row.context)
                         try:
                             # Execute StreamingDataFrame in a context
                             context.run(dataframe_composed, row.value)

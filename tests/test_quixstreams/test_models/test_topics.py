@@ -1,9 +1,9 @@
 import json
-from typing import Optional, Any
+from typing import Optional, Any, Callable, List
 
 import pytest
 
-from quixstreams.models import Topic, StringSerializer
+from quixstreams.models import Topic, StringSerializer, TimestampType
 from quixstreams.models.serializers import (
     Deserializer,
     Serializer,
@@ -162,6 +162,44 @@ class TestTopic:
         assert rows[0].topic == rows[1].topic
         assert rows[0].partition == rows[1].partition
         assert rows[0].offset == rows[1].offset
+
+    @pytest.mark.parametrize(
+        "value_deserializer, value, timestamp_extractor, expected_timestamps",
+        [
+            (
+                JSONDeserializer(),
+                json.dumps({"some": "thing", "ts": 123}).encode(),
+                lambda v: v["ts"],
+                [123],
+            ),
+            (
+                JSONListDeserializer(),
+                json.dumps([{"ts": 123}, {"ts": 456}]).encode(),
+                lambda v: v["ts"],
+                [123, 456],
+            ),
+        ],
+    )
+    def test_row_deserialize_timestamp_extractor(
+        self,
+        value_deserializer: Deserializer,
+        value: Optional[bytes],
+        timestamp_extractor: Callable[[dict], int],
+        expected_timestamps: List[int],
+    ):
+        topic = Topic(
+            "topic",
+            value_deserializer=value_deserializer,
+            timestamp_extractor=timestamp_extractor,
+        )
+        message = ConfluentKafkaMessageStub(value=value)
+        row_or_rows = topic.row_deserialize(message=message)
+
+        rows = row_or_rows if isinstance(row_or_rows, list) else [row_or_rows]
+
+        for index, row in enumerate(rows):
+            assert row.timestamp.type == TimestampType.TIMESTAMP_FROM_MESSAGE
+            assert row.timestamp.milliseconds == expected_timestamps[index]
 
     @pytest.mark.parametrize(
         "key_deserializer, value_deserializer",

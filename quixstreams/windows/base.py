@@ -299,7 +299,7 @@ class FixedWindow(ABC):
             lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
-                timestamp=message_context().timestamp.milliseconds / 1000,
+                timestamp=message_context().timestamp.seconds,
             )[0],
             expand=expand,
             name=self._name,

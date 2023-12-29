@@ -1,5 +1,5 @@
 import logging
-from typing import Union, List, Mapping, Optional, Any
+from typing import Union, List, Mapping, Optional, Any, Callable
 
 from .messagecontext import MessageContext
 from .messages import KafkaMessage
@@ -18,7 +18,7 @@ from .serializers import (
     Serializer,
     Deserializer,
 )
-from .timestamps import MessageTimestamp
+from .timestamps import MessageTimestamp, TimestampType
 from .types import (
     ConfluentKafkaMessageProto,
     MessageKey,
@@ -72,6 +72,7 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
+        timestamp_extractor: Callable[[dict], int] = None,
     ):
         """
         Can specify serialization that should be used when consuming/producing
@@ -101,12 +102,14 @@ class Topic:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
+        :param timestamp_extractor: a callable that returns a timestamp in milliseconds from a message value
         """
         self._name = name
         self._key_serializer = _get_serializer(key_serializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
+        self._timestamp_extractor = timestamp_extractor
 
     @property
     def name(self) -> str:
@@ -160,23 +163,6 @@ class Topic:
         ctx = SerializationContext(topic=message.topic(), headers=headers)
         key = self._key_deserializer(value=message.key(), ctx=ctx)
 
-        timestamp_type, timestamp_ms = message.timestamp()
-        timestamp = MessageTimestamp.create(
-            timestamp_type=timestamp_type, milliseconds=timestamp_ms
-        )
-
-        context = MessageContext(
-            key=key,
-            headers=headers,
-            topic=message.topic(),
-            partition=message.partition(),
-            offset=message.offset(),
-            size=len(message),
-            timestamp=timestamp,
-            latency=message.latency(),
-            leader_epoch=message.leader_epoch(),
-        )
-
         try:
             value = self._value_deserializer(value=message.value(), ctx=ctx)
         except IgnoreMessage:
@@ -196,12 +182,24 @@ class Topic:
             for item in value:
                 if not isinstance(item, dict):
                     raise TypeError(f'Row value must be a dict, but got "{type(item)}"')
-                rows.append(Row(value=item, context=context))
+                rows.append(
+                    Row(
+                        value=item,
+                        context=self._create_message_context(
+                            message=message, key=key, headers=headers, value=item
+                        ),
+                    )
+                )
             return rows
 
         if not isinstance(value, dict):
             raise TypeError(f'Row value must be a dict, but got "{type(value)}"')
-        return Row(value=value, context=context)
+        return Row(
+            value=value,
+            context=self._create_message_context(
+                message=message, key=key, headers=headers, value=value
+            ),
+        )
 
     def serialize(
         self,
@@ -219,3 +217,28 @@ class Topic:
 
     def __repr__(self):
         return f'<{self.__class__} name="{self._name}"> '
+
+    def _create_message_context(
+        self, message: ConfluentKafkaMessageProto, key, headers, value: dict
+    ) -> MessageContext:
+        if self._timestamp_extractor:
+            timestamp_ms = self._timestamp_extractor(value)
+            timestamp_type = TimestampType.TIMESTAMP_FROM_MESSAGE.value
+        else:
+            timestamp_type, timestamp_ms = message.timestamp()
+
+        timestamp = MessageTimestamp.create(
+            timestamp_type=timestamp_type, milliseconds=timestamp_ms
+        )
+
+        return MessageContext(
+            key=key,
+            headers=headers,
+            topic=message.topic(),
+            partition=message.partition(),
+            offset=message.offset(),
+            size=len(message),
+            timestamp=timestamp,
+            latency=message.latency(),
+            leader_epoch=message.leader_epoch(),
+        )
