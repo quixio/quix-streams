@@ -21,6 +21,7 @@ from quixstreams.kafka import (
     AutoOffsetReset,
     Consumer,
     Producer,
+    Admin,
 )
 from quixstreams.models import MessageContext
 from quixstreams.models.rows import Row
@@ -293,13 +294,19 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
 
 
 @pytest.fixture()
-def state_manager_factory(tmp_path):
+def state_manager_factory(tmp_path, topic_manager_factory):
     def factory(
-        group_id: Optional[str] = None, state_dir: Optional[str] = None
+        group_id: Optional[str] = None,
+        state_dir: Optional[str] = None,
+        topic_manager: Optional[TopicManager] = topic_manager_factory(),
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())
-        return StateStoreManager(group_id=group_id, state_dir=str(tmp_path / state_dir))
+        return StateStoreManager(
+            group_id=group_id,
+            state_dir=str(tmp_path / state_dir),
+            topic_manager=topic_manager,
+        )
 
     return factory
 
@@ -332,7 +339,7 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
-        cfg_builder.get_confluent_broker_config.return_value = {
+        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
             "bootstrap.servers": kafka_container.broker_address
         }
         cfg_builder.prepend_workspace_id.side_effect = lambda s: prepend_workspace_id(
@@ -359,5 +366,20 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
             topic_validation=topic_validation,
             topic_manager=topic_manager,
         )
+
+    return factory
+
+
+@pytest.fixture()
+def admin(kafka_container):
+    return Admin(broker_address=kafka_container.broker_address)
+
+
+@pytest.fixture()
+def topic_manager_factory():
+    def factory(
+        admin: Optional[Admin] = None, create_timeout: int = 10
+    ) -> TopicManager:
+        return TopicManager(admin=admin, create_timeout=create_timeout)
 
     return factory

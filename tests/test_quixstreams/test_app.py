@@ -389,17 +389,19 @@ class TestApplication:
 
 class TestQuixApplication:
     def test_init(self):
+        def cfg():
+            return {
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "bootstrap.servers": "address1,address2",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+                "ssl.endpoint.identification.algorithm": "none",
+            }
+
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg = {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
-            "bootstrap.servers": "address1,address2",
-            "sasl.username": "my-username",
-            "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
-            "ssl.endpoint.identification.algorithm": "none",
-        }
-        cfg_builder.get_confluent_broker_config.return_value = cfg
+        cfg_builder.get_confluent_broker_config.side_effect = cfg
         cfg_builder.prepend_workspace_id.return_value = "my_ws-c_group"
         cfg_builder.strip_workspace_id_prefix.return_value = "c_group"
         app = Application.Quix(
@@ -411,8 +413,8 @@ class TestQuixApplication:
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        assert cfg.items() <= app._producer._producer_config.items()
-        assert cfg.items() <= app._consumer._consumer_config.items()
+        assert cfg().items() <= app._producer._producer_config.items()
+        assert cfg().items() <= app._consumer._consumer_config.items()
 
         assert app._producer._producer_config["extra"] == "config"
         assert app._consumer._consumer_config["extra"] == "config"

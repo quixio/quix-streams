@@ -26,7 +26,7 @@ LOGGING_CONFIG = {
         "quixstreams": {
             "handlers": ["default"],
             "level": "DEBUG",
-            "propagate": False,
+            "propagate": True,  # True allows pytest "caplog" fixture to work
         },
     },
 }
