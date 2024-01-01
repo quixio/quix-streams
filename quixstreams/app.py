@@ -183,11 +183,13 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._topic_validation = topic_validation
         if not topic_manager:
-            topic_manager = TopicManager(
-                admin_client=Admin(
+            topic_manager = TopicManager()
+        if not topic_manager.has_admin:
+            topic_manager.set_admin(
+                Admin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
-                ),
+                )
             )
         self._topic_manager = topic_manager
         self._state_manager = StateStoreManager(
@@ -353,13 +355,7 @@ class Application:
             use_changelog_topics=use_changelog_topics,
             topic_validation=topic_validation,
             topic_manager=topic_manager
-            or TopicManager.Quix(
-                admin_client=Admin(
-                    broker_address=broker_address,
-                    extra_config=producer_extra_config,
-                ),
-                quix_config_builder=quix_config_builder,
-            ),
+            or TopicManager.Quix(quix_config_builder=quix_config_builder),
         )
         app._set_quix_config_builder(quix_config_builder)
         return app

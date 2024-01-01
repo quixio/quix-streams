@@ -1,4 +1,5 @@
 import logging
+import warnings
 import pprint
 from typing import Dict, List, Mapping, Optional, Set, Literal
 
@@ -62,14 +63,14 @@ class TopicManager:
 
     def __init__(
         self,
-        admin_client: Admin,
+        admin: Optional[Admin] = None,
         create_timeout: int = 60,
     ):
         """
-        :param admin_client: an `Admin` instance
+        :param admin: an `Admin` instance (required for some functionality)
         :param create_timeout: timeout for topic creation
         """
-        self._admin_client = admin_client
+        self._admin = admin
         self._topics: TopicMap = {}
         self._changelog_topics: Dict[str, TopicMap] = {}
         self._create_timeout = create_timeout
@@ -77,15 +78,18 @@ class TopicManager:
     @classmethod
     def Quix(
         cls,
-        admin_client: Optional[Admin] = None,
+        admin: Optional[Admin] = None,
         create_timeout: int = 60,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ) -> "QuixTopicManager":
         return QuixTopicManager(
-            admin_client=admin_client,
+            admin=admin,
             create_timeout=create_timeout,
             quix_config_builder=quix_config_builder,
         )
+
+    class MissingAdmin(Exception):
+        ...
 
     class TopicValidationError(Exception):
         ...
@@ -114,13 +118,58 @@ class TopicManager:
         return self.topics_list + self.changelog_topics_list
 
     @property
-    def pretty_formatted_topic_configs(self):
+    def pretty_formatted_topic_configs(self) -> str:
+        """
+        Returns a print-friendly version of all the topics and their configs
+
+        :return: a pprint-formatted string of all the topics
+        """
         return pprint.pformat(
             {
                 topic.name: topic.config.__dict__ if topic.config else "NO CONFIG"
                 for topic in self.all_topics
             }
         )
+
+    @property
+    def admin(self) -> Admin:
+        """
+        Raises an exception so that things that require an Admin instance fail.
+        """
+        if not self._admin:
+            raise self.MissingAdmin(
+                "No Admin client has been defined; add one with 'set_admin()'"
+            )
+        return self._admin
+
+    @property
+    def has_admin(self) -> bool:
+        """
+        Whether an admin client has been defined or not.
+
+        :return: bool
+        """
+        return bool(self._admin)
+
+    def set_admin(self, admin: Admin):
+        """
+        Allows for adding an Admin class post-init.
+
+        :param admin: an Admin instance
+        """
+        self._admin = admin
+
+    def _apply_topic_prefix(self, name: str) -> str:
+        """
+        Apply a prefix to the given name
+
+        Intended for easy replacement via inheritance (QuixTopicManager).
+
+        :param name: topic name
+
+        :return: name with added prefix (no change in this case)
+        """
+        return name
 
     def _topic_config_with_defaults(
         self,
@@ -171,117 +220,6 @@ class TopicManager:
             replication_factor=replication_factor,
             extra_config=extra_config,
         )
-
-    def _apply_topic_prefix(self, name: str) -> str:
-        """
-        Apply a prefix to the given name
-
-        Intended for easy replacement via inheritance (QuixTopicManager).
-
-        :param name: topic name
-
-        :return: name with added prefix (no change in this case)
-        """
-        return name
-
-    def _create_topics(self, topics: TopicList):
-        """
-        Method that actually creates the topics in Kafka via an `Admin` instance.
-
-        Intended for easy replacement via inheritance (QuixTopicManager).
-
-        :param topics: list of `Topic`s
-        """
-        # TODO: have create topics return list of topics created to speed up validation
-        self._admin_client.create_topics(topics, timeout=self._create_timeout)
-
-    def create_topics(self, topics: TopicList):
-        """
-        Creates topics via an explicit list of provided `Topics`.
-
-        Exists as a way to manually specify what topics to create; otherwise,
-        `create_all_topics()` is generally simpler.
-
-        :param topics: list of `Topic`s
-        """
-        logger.info("Creating topics...")
-        if not topics:
-            logger.warning("No topics provided for creation...skipping!")
-            return
-        affirm_ready_for_create(topics)
-        return self._create_topics(topics)
-
-    def create_all_topics(self):
-        """
-        A convenience method to create all Topic objects stored on this TopicManager.
-        """
-        self.create_topics(self.all_topics)
-
-    def validate_topics(
-        self,
-        topics: List[Topic],
-        validation_level: Literal["exists", "required", "all"] = "exists",
-    ):
-        """
-        Validates topics via an explicit list of `Topic`s.
-
-        Issues are pooled and raised as an Exception once all inspections are completed.
-
-        Can specify the degree of validation, but the default behavior is checking
-        that the partition counts and replication factors match what is in Kafka.
-
-        :param topics: list of `Topic`s
-        :param validation_level: The degree of topic validation; Default - "exists"
-            "exists" - Confirm expected topics exist.
-            "required" - Confirm topics match your provided `Topic`
-                partition + replication factor
-            "all" - Confirm topic settings are EXACT.
-        """
-        logger.info(f"Validating topics at level '{validation_level}'...")
-        exists_only = validation_level == "exists"
-        extras = validation_level == "all"
-        issues = {}
-        actual_configs = self._admin_client.inspect_topics([t.name for t in topics])
-        for topic in topics:
-            expected = topic.config
-            actual = actual_configs[topic.name]
-            if topic.name in actual_configs:
-                if not exists_only:
-                    if extras:
-                        actual.update_extra_config(
-                            allowed={k for k in expected.extra_config}
-                        )
-                    else:
-                        actual.extra_config = expected.extra_config
-                    if expected != actual:
-                        issues[topic.name] = {
-                            "expected": expected.__dict__,
-                            "actual": actual.__dict__,
-                        }
-            else:
-                issues[topic.name] = "TOPIC MISSING"
-        if issues:
-            raise self.TopicValidationError(
-                f"the following topics had issues:\n{pprint.pformat(issues)}"
-            )
-        logger.info("All topics validated!")
-
-    def validate_all_topics(
-        self,
-        validation_level: Literal["exists", "required", "all"] = "exists",
-    ):
-        """
-        A convenience method for validating all `Topic`s stored on this TopicManager.
-
-        See `TopicManager.validate_topics()` for more details.
-
-        :param validation_level: The degree of topic validation; Default - "exists"
-            "exists" - Confirm expected topics exist.
-            "required" - Confirm topics match your provided `Topic`
-                partition + replication factor
-            "all" - Confirm topic settings are EXACT.
-        """
-        self.validate_topics(topics=self.all_topics, validation_level=validation_level)
 
     def _process_topic_configs(
         self,
@@ -391,11 +329,12 @@ class TopicManager:
         stored on the TopicManager.
 
         If source topic already exists, defers to the existing topic settings, else
-        uses the settings as defined by the Application.
+        uses the settings as defined by the `Topic` (and its defaults) as generated
+        by the `TopicManager`.
 
-        In general, users should NOT need this; an Application will know
-        when to generate changelog topics. To turn off changelogs, init an
-        Application with "use_changelog_topics"=`False`
+        In general, users should NOT need this; an Application knows when/how to
+        generate changelog topics. To turn off changelogs, init an Application with
+        "use_changelog_topics"=`False`.
 
         :param consumer_group: name of consumer group (for this app)
         :param source_topic_name: name of consumed topic (app input topic)
@@ -407,14 +346,23 @@ class TopicManager:
         """
         # TODO: consider removing configs_to_import as changelog settings management
         # around retention, quix compact settings, etc matures.
+        if not self._admin:
+            warnings.warn(
+                "No Admin class was defined; will default to the source topic "
+                "configs to generate the changelog configs, which may lead to "
+                "inaccurate creation settings if the source topic already "
+                "exists with different configs (i.e. partitions). To guarantee correct "
+                "functionality, add an Admin class and re-run this function."
+            )
         name = self._format_changelog_name(consumer_group, source_topic_name, suffix)
         if not configs_to_import:
             configs_to_import = self._changelog_extra_config_imports_defaults
         configs_to_import.discard("cleanup.policy")
         topic_config = (
-            self._admin_client.inspect_topics([source_topic_name])[source_topic_name]
-            or self._topics[source_topic_name].config
-        )
+            self.admin.inspect_topics([source_topic_name])[source_topic_name]
+            if self._admin
+            else None
+        ) or self._topics[source_topic_name].config
         if not topic_config:
             raise self.MissingTopicForChangelog(
                 f"There is no Topic object or existing topic in Kafka for topic "
@@ -436,6 +384,105 @@ class TopicManager:
         )
         self._changelog_topics.setdefault(source_topic_name, {})[suffix] = topic
         return topic
+
+    def _create_topics(self, topics: TopicList):
+        """
+        Method that actually creates the topics in Kafka via an `Admin` instance.
+
+        Intended for easy replacement via inheritance (QuixTopicManager).
+
+        :param topics: list of `Topic`s
+        """
+        # TODO: have create topics return list of topics created to speed up validation
+        self.admin.create_topics(topics, timeout=self._create_timeout)
+
+    def create_topics(self, topics: TopicList):
+        """
+        Creates topics via an explicit list of provided `Topics`.
+
+        Exists as a way to manually specify what topics to create; otherwise,
+        `create_all_topics()` is generally simpler.
+
+        :param topics: list of `Topic`s
+        """
+        logger.info("Creating topics...")
+        if not topics:
+            logger.warning("No topics provided for creation...skipping!")
+            return
+        affirm_ready_for_create(topics)
+        self._create_topics(topics)
+
+    def create_all_topics(self):
+        """
+        A convenience method to create all Topic objects stored on this TopicManager.
+        """
+        self.create_topics(self.all_topics)
+
+    def validate_topics(
+        self,
+        topics: List[Topic],
+        validation_level: Literal["exists", "required", "all"] = "exists",
+    ):
+        """
+        Validates topics via an explicit list of `Topic`s.
+
+        Issues are pooled and raised as an Exception once all inspections are completed.
+
+        Can specify the degree of validation, but the default behavior is checking
+        that the partition counts and replication factors match what is in Kafka.
+
+        :param topics: list of `Topic`s
+        :param validation_level: The degree of topic validation; Default - "exists"
+            "exists" - Confirm expected topics exist.
+            "required" - Confirm topics match your provided `Topic`
+                partition + replication factor
+            "all" - Confirm topic settings are EXACT.
+        """
+        logger.info(f"Validating topics at level '{validation_level}'...")
+        exists_only = validation_level == "exists"
+        extras = validation_level == "all"
+        issues = {}
+        actual_configs = self.admin.inspect_topics([t.name for t in topics])
+        for topic in topics:
+            expected = topic.config
+            actual = actual_configs[topic.name]
+            if topic.name in actual_configs:
+                if not exists_only:
+                    if extras:
+                        actual.update_extra_config(
+                            allowed={k for k in expected.extra_config}
+                        )
+                    else:
+                        actual.extra_config = expected.extra_config
+                    if expected != actual:
+                        issues[topic.name] = {
+                            "expected": expected.__dict__,
+                            "actual": actual.__dict__,
+                        }
+            else:
+                issues[topic.name] = "TOPIC MISSING"
+        if issues:
+            raise self.TopicValidationError(
+                f"the following topics had issues:\n{pprint.pformat(issues)}"
+            )
+        logger.info("All topics validated!")
+
+    def validate_all_topics(
+        self,
+        validation_level: Literal["exists", "required", "all"] = "exists",
+    ):
+        """
+        A convenience method for validating all `Topic`s stored on this TopicManager.
+
+        See `TopicManager.validate_topics()` for more details.
+
+        :param validation_level: The degree of topic validation; Default - "exists"
+            "exists" - Confirm expected topics exist.
+            "required" - Confirm topics match your provided `Topic`
+                partition + replication factor
+            "all" - Confirm topic settings are EXACT.
+        """
+        self.validate_topics(topics=self.all_topics, validation_level=validation_level)
 
 
 class QuixTopicManager(TopicManager):
@@ -463,25 +510,25 @@ class QuixTopicManager(TopicManager):
 
     def __init__(
         self,
-        admin_client: Optional[Admin] = None,
+        admin: Optional[Admin] = None,
         create_timeout: int = 60,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ):
         """
-        :param admin_client: an `Admin` instance
+        :param admin: an `Admin` instance
         :param create_timeout: timeout for topic creation
         :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
             generated for you.
         """
         quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
-        if not admin_client:
+        if not admin:
             admin_configs = quix_config_builder.get_confluent_broker_config()
-            admin_client = Admin(
+            admin = Admin(
                 broker_address=admin_configs.pop("bootstrap.servers"),
                 extra_config=admin_configs,
             )
         super().__init__(
-            admin_client=admin_client,
+            admin=admin,
             create_timeout=create_timeout,
         )
         self._quix_config_builder = quix_config_builder
@@ -534,8 +581,8 @@ class QuixTopicManager(TopicManager):
 
         :return: formatted topic name
         """
-        # TODO: "strip" should be `self._quix_config_builder.strip_workspace_id_prefix` once
-        # We fix the 43 char limit
+        # TODO: "strip" should be `self._quix_config_builder.strip_workspace_id_prefix`
+        # once we fix the 43 char limit
 
         # TODO: remove suffix limitation and standardize the topic name template to
         # match the non-quix counterpart

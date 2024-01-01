@@ -120,6 +120,7 @@ class Admin:
         """
         exceptions = {}
         successful = []
+        existed = []
         stop_time = time.time() + timeout
         while futures and time.time() < stop_time:
             time.sleep(1)
@@ -128,16 +129,21 @@ class Admin:
                 if future.done():
                     try:
                         future.result()
+                        successful.append(topic_name)
                     except KafkaException as e:
                         # Topic was maybe created by another instance
-                        if e.args[0].name() != "TOPIC_ALREADY_EXISTS":
+                        if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
+                            existed.append(topic_name)
+                        else:
                             exceptions[topic_name] = e.args[0].str()
                     # Not sure how these get raised, but they are supposedly possible
                     except (TypeError, ValueError) as e:
                         exceptions[topic_name] = e
-                    successful.append(topic_name)
                     del futures[topic_name]
-        logger.info(f"Successfully created topics {pprint.pformat(successful)}")
+        if successful:
+            logger.info(f"Successfully created topics: {successful}")
+        if existed:
+            logger.info(f"These topics already exist: {existed}")
         if exceptions:
             raise self.CreateTopicFailure(exceptions)
         if futures:

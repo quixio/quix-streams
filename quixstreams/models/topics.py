@@ -60,7 +60,7 @@ class TopicConfig:
             **(defaults or {}),
             **(self.extra_config or {}),
         }
-        if allowed:
+        if allowed is not None:
             extra_update = {k: v for k, v in extra_update.items() if k in allowed}
         self.extra_config = extra_update
 
