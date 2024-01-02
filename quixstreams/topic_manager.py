@@ -1,7 +1,8 @@
 import logging
 import warnings
 import pprint
-from typing import Dict, List, Mapping, Optional, Set, Literal
+from abc import abstractmethod
+from typing import Dict, List, Mapping, Optional, Set, Literal, Protocol, ClassVar
 
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from .kafka.admin import Admin
@@ -43,50 +44,22 @@ def affirm_ready_for_create(topics: TopicList):
         raise ValueError(f"configs for Topics {invalid} were NoneTypes")
 
 
-class TopicManager:
+class TopicManagerType(Protocol):
     """
-    The source of all topic management with quixstreams.
-
-    Generally initialized and managed automatically by an `Application`,
-    but allows a user to work with it directly when needed, such as using it alongside
-    a plain `Producer` to create its topics.
-
-    See methods for details.
+    Outlines interface for any intended "TopicManager" instance along with defining
+    any simple shared functionality across all implementations.
     """
 
-    _topic_partitions = 2
-    _topic_replication = 1
+    _topic_partitions: ClassVar[int]
+    _topic_replication: ClassVar[int]
+    _topic_extra_config_defaults: ClassVar[dict]
+    _changelog_extra_config_defaults: ClassVar[dict]
+    _changelog_extra_config_imports_defaults: ClassVar[Set]
 
-    _topic_extra_config_defaults = {}
-    _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
-    _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
-
-    def __init__(
-        self,
-        admin: Optional[Admin] = None,
-        create_timeout: int = 60,
-    ):
-        """
-        :param admin: an `Admin` instance (required for some functionality)
-        :param create_timeout: timeout for topic creation
-        """
-        self._admin = admin
-        self._topics: TopicMap = {}
-        self._changelog_topics: Dict[str, TopicMap] = {}
-        self._create_timeout = create_timeout
-
-    @classmethod
-    def Quix(
-        cls,
-        admin: Optional[Admin] = None,
-        create_timeout: int = 60,
-        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
-    ) -> "QuixTopicManager":
-        return QuixTopicManager(
-            admin=admin,
-            create_timeout=create_timeout,
-            quix_config_builder=quix_config_builder,
-        )
+    _admin: Optional[Admin]
+    _topics: TopicMap
+    _changelog_topics: Dict[str, TopicMap]
+    _create_timeout: int
 
     class MissingAdmin(Exception):
         ...
@@ -159,17 +132,160 @@ class TopicManager:
         """
         self._admin = admin
 
+    @abstractmethod
+    def topic_config(
+        self,
+        num_partitions: Optional[int] = None,
+        replication_factor: Optional[int] = None,
+        extra_config: Optional[Mapping] = None,
+    ) -> TopicConfig:
+        """
+        Convenience method for generating a `TopicConfig` with default settings
+
+        :param num_partitions: the number of topic partitions
+        :param replication_factor: the topic replication factor
+        :param extra_config: other optional configuration settings
+
+        :return: a TopicConfig object
+        """
+        ...
+
+    @abstractmethod
+    def topic(
+        self,
+        name: str,
+        value_deserializer: Optional[DeserializerType] = None,
+        key_deserializer: Optional[DeserializerType] = "bytes",
+        value_serializer: Optional[SerializerType] = None,
+        key_serializer: Optional[SerializerType] = "bytes",
+        config: Optional[TopicConfig] = None,
+        auto_create_config: bool = True,
+    ) -> Topic:
+        """
+        A convenience method for generating a `Topic`. Will use default config options
+        as dictated by the TopicManager.
+
+        :param name: topic name
+        :param value_deserializer: a deserializer type for values
+        :param key_deserializer: a deserializer type for keys
+        :param value_serializer: a serializer type for values
+        :param key_serializer: a serializer type for keys
+        :param config: optional topic configurations (for creation/validation)
+        :param auto_create_config: if no "topic_config", create one; Default - True
+            > NOTE: this setting is generally manipulated by the Application class via
+              its "auto_create_topics" option.
+
+        :return: Topic object with creation configs
+        """
+        ...
+
+    @abstractmethod
+    def changelog_topic(
+        self,
+        source_topic_name: str,
+        suffix: str,
+        consumer_group: str,
+        configs_to_import: Set[str] = None,
+    ) -> Topic:
+        """
+        Performs all the logic necessary to generate a changelog topic based on a
+        "source topic" (aka input/consumed topic).
+
+        Its main goal is to ensure partition counts of the to-be generated changelog
+        match the source topic, and ensure the changelog topic is compacted. Also
+        enforces the serialization type. All `Topic` objects generated with this are
+        stored on the TopicManager.
+
+        If source topic already exists, defers to the existing topic settings, else
+        uses the settings as defined by the `Topic` (and its defaults) as generated
+        by the `TopicManager`.
+
+        In general, users should NOT need this; an Application knows when/how to
+        generate changelog topics. To turn off changelogs, init an Application with
+        "use_changelog_topics"=`False`.
+
+        :param consumer_group: name of consumer group (for this app)
+        :param source_topic_name: name of consumed topic (app input topic)
+        :param suffix: name of storage type (default, rolling10s, etc.)
+        :param configs_to_import: what extra_configs should be allowed when importing
+            settings from the source topic.
+
+        :return: `Topic` object (which is also stored on the TopicManager)
+        """
+        # TODO: consider removing configs_to_import as changelog settings management
+        # around retention, quix compact settings, etc. matures.
+        ...
+
+    @abstractmethod
+    def create_all_topics(self):
+        """
+        A convenience method to create all Topic objects stored on this TopicManager.
+        """
+        ...
+
+    @abstractmethod
+    def validate_all_topics(
+        self,
+        validation_level: Literal["exists", "required", "all"] = "exists",
+    ):
+        """
+        A convenience method for validating all `Topic`s stored on this TopicManager.
+
+        See `TopicManager.validate_topics()` for more details.
+
+        :param validation_level: The degree of topic validation; Default - "exists"
+            "exists" - Confirm expected topics exist.
+            "required" - Confirm topics match your provided `Topic`
+                partition + replication factor
+            "all" - Confirm topic settings are EXACT.
+        """
+        ...
+
+
+class TopicManagerBase(TopicManagerType, Protocol):
+    """
+    Defines all `TopicManagerType`s required `abstractmethod`s while also
+    adding some new ones; these new `abstractmethod`s conveniently highlight the
+    differences between `TopicManager` and `QuixTopicManager`.
+    """
+
+    @abstractmethod
     def _apply_topic_prefix(self, name: str) -> str:
         """
         Apply a prefix to the given name
-
-        Intended for easy replacement via inheritance (QuixTopicManager).
 
         :param name: topic name
 
         :return: name with added prefix (no change in this case)
         """
-        return name
+        ...
+
+    @abstractmethod
+    def _format_changelog_name(
+        self, consumer_group: str, source_topic_name: str, suffix: str
+    ):
+        """
+        Generate the name of the changelog topic based on the following parameters.
+
+        This naming scheme guarantees uniqueness across all independent `Application`s.
+
+        :param consumer_group: name of consumer group (for this app)
+        :param source_topic_name: name of consumed topic (app input topic)
+        :param suffix: name of storage type (default, rolling10s, etc.)
+
+        :return: formatted topic name
+        """
+        ...
+
+    @abstractmethod
+    def _create_topics(self, topics: TopicList):
+        """
+        Method that actually creates the topics in Kafka via an `Admin` instance.
+
+        :param topics: list of `Topic`s
+        """
+        # TODO: have create topics return list of topics created to speed up validation
+        ...
 
     def _topic_config_with_defaults(
         self,
@@ -294,24 +410,6 @@ class TopicManager:
         self._topics[name] = topic
         return topic
 
-    def _format_changelog_name(
-        self, consumer_group: str, source_topic_name: str, suffix: str
-    ):
-        """
-        Generate the name of the changelog topic based on the following parameters.
-
-        This naming scheme guarantees uniqueness across all independent `Application`s.
-
-        Intended for easy replacement via inheritance (QuixTopicManager).
-
-        :param consumer_group: name of consumer group (for this app)
-        :param source_topic_name: name of consumed topic (app input topic)
-        :param suffix: name of storage type (default, rolling10s, etc.)
-
-        :return: formatted topic name
-        """
-        return f"changelog__{consumer_group}--{source_topic_name}--{suffix}"
-
     def changelog_topic(
         self,
         source_topic_name: str,
@@ -385,17 +483,6 @@ class TopicManager:
         self._changelog_topics.setdefault(source_topic_name, {})[suffix] = topic
         return topic
 
-    def _create_topics(self, topics: TopicList):
-        """
-        Method that actually creates the topics in Kafka via an `Admin` instance.
-
-        Intended for easy replacement via inheritance (QuixTopicManager).
-
-        :param topics: list of `Topic`s
-        """
-        # TODO: have create topics return list of topics created to speed up validation
-        self.admin.create_topics(topics, timeout=self._create_timeout)
-
     def create_topics(self, topics: TopicList):
         """
         Creates topics via an explicit list of provided `Topics`.
@@ -420,7 +507,7 @@ class TopicManager:
 
     def validate_topics(
         self,
-        topics: List[Topic],
+        topics: TopicList,
         validation_level: Literal["exists", "required", "all"] = "exists",
     ):
         """
@@ -444,10 +531,9 @@ class TopicManager:
         issues = {}
         actual_configs = self.admin.inspect_topics([t.name for t in topics])
         for topic in topics:
-            expected = topic.config
-            actual = actual_configs[topic.name]
-            if topic.name in actual_configs:
+            if (actual := actual_configs[topic.name]) is not None:
                 if not exists_only:
+                    expected = topic.config
                     if extras:
                         actual.update_extra_config(
                             allowed={k for k in expected.extra_config}
@@ -485,7 +571,98 @@ class TopicManager:
         self.validate_topics(topics=self.all_topics, validation_level=validation_level)
 
 
-class QuixTopicManager(TopicManager):
+class TopicManager(TopicManagerBase):
+    """
+    The source of all topic management with quixstreams.
+
+    Generally initialized and managed automatically by an `Application`,
+    but allows a user to work with it directly when needed, such as using it alongside
+    a plain `Producer` to create its topics.
+
+    See methods for details.
+    """
+
+    _topic_partitions = 2
+    _topic_replication = 1
+
+    _topic_extra_config_defaults = {}
+    _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
+    _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
+
+    def __init__(
+        self,
+        admin: Optional[Admin] = None,
+        create_timeout: int = 60,
+    ):
+        """
+        :param admin: an `Admin` instance (required for some functionality)
+        :param create_timeout: timeout for topic creation
+        """
+        self._admin = admin
+        self._topics: TopicMap = {}
+        self._changelog_topics: Dict[str, TopicMap] = {}
+        self._create_timeout = create_timeout
+
+    @classmethod
+    def Quix(
+        cls,
+        admin: Optional[Admin] = None,
+        create_timeout: int = 60,
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
+    ) -> "QuixTopicManager":
+        """
+        Return a Quix version of the `TopicManager` similar to `Application.Quix`.
+
+        :param admin: an `Admin` instance
+        :param create_timeout: timeout for topic creation
+        :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
+            generated for you.
+
+        :return: a `QuixTopicManager` instance
+        """
+        return QuixTopicManager(
+            admin=admin,
+            create_timeout=create_timeout,
+            quix_config_builder=quix_config_builder,
+        )
+
+    def _create_topics(self, topics: TopicList):
+        """
+        Method that actually creates the topics in Kafka via an `Admin` instance.
+
+        :param topics: list of `Topic`s
+        """
+        # TODO: have create topics return list of topics created to speed up validation
+        self.admin.create_topics(topics, timeout=self._create_timeout)
+
+    def _apply_topic_prefix(self, name: str) -> str:
+        """
+        Apply a prefix to the given name
+
+        :param name: topic name
+
+        :return: name with added prefix (no change in this case)
+        """
+        return name
+
+    def _format_changelog_name(
+        self, consumer_group: str, source_topic_name: str, suffix: str
+    ):
+        """
+        Generate the name of the changelog topic based on the following parameters.
+
+        This naming scheme guarantees uniqueness across all independent `Application`s.
+
+        :param consumer_group: name of consumer group (for this app)
+        :param source_topic_name: name of consumed topic (app input topic)
+        :param suffix: name of storage type (default, rolling10s, etc.)
+
+        :return: formatted topic name
+        """
+        return f"changelog__{consumer_group}--{source_topic_name}--{suffix}"
+
+
+class QuixTopicManager(TopicManagerBase):
     """
     The source of all topic management with quixstreams.
 
@@ -527,10 +704,10 @@ class QuixTopicManager(TopicManager):
                 broker_address=admin_configs.pop("bootstrap.servers"),
                 extra_config=admin_configs,
             )
-        super().__init__(
-            admin=admin,
-            create_timeout=create_timeout,
-        )
+        self._admin = admin
+        self._topics: TopicMap = {}
+        self._changelog_topics: Dict[str, TopicMap] = {}
+        self._create_timeout = create_timeout
         self._quix_config_builder = quix_config_builder
 
     def _create_topics(self, topics: TopicList):

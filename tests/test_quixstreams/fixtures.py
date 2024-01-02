@@ -42,7 +42,7 @@ from quixstreams.platforms.quix.config import (
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
-from quixstreams.topic_manager import TopicManager
+from quixstreams.topic_manager import TopicManager, TopicManagerType
 
 
 @pytest.fixture()
@@ -294,11 +294,11 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
 
 
 @pytest.fixture()
-def state_manager_factory(tmp_path, topic_manager_factory):
+def state_manager_factory(tmp_path):
     def factory(
         group_id: Optional[str] = None,
         state_dir: Optional[str] = None,
-        topic_manager: Optional[TopicManager] = topic_manager_factory(),
+        topic_manager: Optional[TopicManager] = None,
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())
@@ -314,6 +314,16 @@ def state_manager_factory(tmp_path, topic_manager_factory):
 @pytest.fixture()
 def state_manager(state_manager_factory) -> StateStoreManager:
     manager = state_manager_factory()
+    manager.init()
+    yield manager
+    manager.close()
+
+
+@pytest.fixture()
+def state_manager_changelogs(
+    state_manager_factory, admin, topic_manager_factory
+) -> StateStoreManager:
+    manager = state_manager_factory(topic_manager=topic_manager_factory(admin=admin))
     manager.init()
     yield manager
     manager.close()

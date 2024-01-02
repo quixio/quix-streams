@@ -1,3 +1,8 @@
+from unittest.mock import create_autospec
+
+import pytest
+
+from quixstreams.kafka.admin import Admin
 from quixstreams.topic_manager import TopicConfig
 from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
 
@@ -157,3 +162,155 @@ class TestTopicManager:
 
         assert changelog.config.num_partitions == partitions == 5
         assert "ignore.this" not in changelog.config.extra_config
+
+    def test_create_topics(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [topic_manager.topic(name=n) for n in ["topic1", "topic2"]]
+        topic_manager.create_topics(topics)
+
+        admin.create_topics.assert_called_with(
+            topics, timeout=topic_manager._create_timeout
+        )
+
+    def test_create_topics_invalid_config(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [topic_manager.topic(name="topic1", auto_create_config=False)]
+
+        with pytest.raises(ValueError):
+            topic_manager.create_topics(topics)
+        admin.create_topics.assert_not_called()
+
+    def test_validate_topics_exists(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [
+            topic_manager.topic(
+                name=n,
+                config=topic_manager.topic_config(
+                    num_partitions=2, extra_config={"my.setting": "woo"}
+                ),
+            )
+            for n in ["topic1", "topic2", "topic3"]
+        ]
+        admin.inspect_topics.return_value = {
+            "topic1": topic_manager.topic_config(
+                num_partitions=5, extra_config=topics[0].config.extra_config
+            ),
+            "topic2": topic_manager.topic_config(
+                num_partitions=5, extra_config={"my.setting": "derp"}
+            ),
+            "topic3": topics[2].config,
+        }
+
+        topic_manager.validate_topics(topics=topics, validation_level="exists")
+
+    def test_validate_topics_exists_fails(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [
+            topic_manager.topic(
+                name=n,
+                config=topic_manager.topic_config(
+                    num_partitions=2, extra_config={"my.setting": "woo"}
+                ),
+            )
+            for n in ["topic1", "topic2", "topic3"]
+        ]
+        admin.inspect_topics.return_value = {
+            "topic1": None,
+            "topic2": topic_manager.topic_config(
+                num_partitions=5, extra_config={"my.setting": "derp"}
+            ),
+            "topic3": topics[2].config,
+        }
+
+        with pytest.raises(topic_manager.TopicValidationError) as e:
+            topic_manager.validate_topics(topics=topics, validation_level="exists")
+        assert "topic1" in e.value.args[0]
+
+    def test_validate_topics_required(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [
+            topic_manager.topic(
+                name=n,
+                config=topic_manager.topic_config(extra_config={"my.setting": "woo"}),
+            )
+            for n in ["topic1", "topic2", "topic3"]
+        ]
+        admin.inspect_topics.return_value = {
+            "topic1": topics[0].config,
+            "topic2": topic_manager.topic_config(extra_config={"my.setting": "derp"}),
+            "topic3": topics[2].config,
+        }
+        topic_manager.validate_topics(topics=topics, validation_level="required")
+
+    def test_validate_topics_required_fails(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [
+            topic_manager.topic(
+                name=n,
+                config=topic_manager.topic_config(
+                    num_partitions=2, extra_config={"my.setting": "woo"}
+                ),
+            )
+            for n in ["topic1", "topic2", "topic3"]
+        ]
+        admin.inspect_topics.return_value = {
+            "topic1": topic_manager.topic_config(
+                num_partitions=5, extra_config=topics[0].config.extra_config
+            ),
+            "topic2": topic_manager.topic_config(
+                num_partitions=5, extra_config={"my.setting": "derp"}
+            ),
+            "topic3": topics[2].config,
+        }
+
+        with pytest.raises(topic_manager.TopicValidationError) as e:
+            topic_manager.validate_topics(topics=topics, validation_level="required")
+        for topic in ["topic1", "topic2"]:
+            assert topic in e.value.args[0]
+
+    def test_validate_topics_all(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [
+            topic_manager.topic(
+                name=n,
+                config=topic_manager.topic_config(extra_config={"my.setting": "woo"}),
+            )
+            for n in ["topic1", "topic2", "topic3"]
+        ]
+        admin.inspect_topics.return_value = topics
+        topic_manager.validate_topics(topics=topics, validation_level="all")
+
+    def test_validate_topics_all_fails(self, topic_manager_factory):
+        admin = create_autospec(Admin)
+        topic_manager = topic_manager_factory(admin=admin)
+        topics = [
+            topic_manager.topic(
+                name=n,
+                config=topic_manager.topic_config(
+                    num_partitions=2, extra_config={"my.setting": "woo"}
+                ),
+            )
+            for n in ["topic1", "topic2", "topic3"]
+        ]
+        admin.inspect_topics.return_value = {
+            "topic1": topic_manager.topic_config(
+                num_partitions=5, extra_config=topics[0].config.extra_config
+            ),
+            "topic2": topic_manager.topic_config(
+                num_partitions=topics[2].config.num_partitions,
+                extra_config={"my.setting": "derp"},
+            ),
+            "topic3": topics[2].config,
+        }
+
+        with pytest.raises(topic_manager.TopicValidationError) as e:
+            topic_manager.validate_topics(topics=topics, validation_level="all")
+        for topic in ["topic1", "topic2"]:
+            assert topic in e.value.args[0]
