@@ -787,3 +787,11 @@ class TestApplicationWithState:
                 # All keys in state must be prefixed with the message key
                 with tx.with_prefix(tx_prefix):
                     assert tx.get("my_state") is None
+
+    def test_app_use_changelog_false(self, app_factory):
+        """
+        `Application`s StateStoreManager should not have a TopicManager if
+        use_changelog_topics is set to `False`.
+        """
+        app = app_factory(use_changelog_topics=False)
+        assert app._state_manager._topic_manager is None
