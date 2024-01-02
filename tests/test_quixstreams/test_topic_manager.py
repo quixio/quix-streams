@@ -284,7 +284,7 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        admin.inspect_topics.return_value = topics
+        admin.inspect_topics.return_value = {t.name: t.config for t in topics}
         topic_manager.validate_topics(topics=topics, validation_level="all")
 
     def test_validate_topics_all_fails(self, topic_manager_factory):
