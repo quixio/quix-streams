@@ -32,7 +32,7 @@ from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.rocksdb import RocksDBOptionsType
-from .topic_manager import TopicManager
+from .topic_manager import TopicManager, TopicManagerType
 
 __all__ = ("Application",)
 
@@ -101,7 +101,7 @@ class Application:
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
-        topic_manager: Optional[TopicManager] = None,
+        topic_manager: Optional[TopicManagerType] = None,
     ):
         """
 

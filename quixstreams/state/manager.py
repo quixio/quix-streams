@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
-from quixstreams.topic_manager import TopicManager
+from quixstreams.topic_manager import TopicManagerType
 from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
@@ -40,7 +40,7 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
-        topic_manager: Optional[TopicManager] = None,
+        topic_manager: Optional[TopicManagerType] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()

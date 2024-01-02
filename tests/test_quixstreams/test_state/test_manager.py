@@ -47,18 +47,17 @@ class TestStateStoreManager:
         state_manager.on_partition_revoke(tp)
         state_manager.on_partition_lost(tp)
 
-    def test_register_store(self, state_manager_factory, topic_manager_factory):
-        topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(name="topic1")
+    def test_register_store(self, state_manager_changelogs):
+        manager = state_manager_changelogs
+        topic = manager._topic_manager.topic(name="topic1")
         store_name = "default"
-        state_manager = state_manager_factory(topic_manager=topic_manager)
-        state_manager.register_store(topic.name, store_name=store_name)
+        manager.register_store(topic.name, store_name=store_name)
 
-        assert topic.name in state_manager._stores[topic.name]
-        assert store_name in state_manager._topic_manager.changelog_topics[topic.name]
+        assert topic.name in manager._stores
+        assert store_name in manager._topic_manager.changelog_topics[topic.name]
 
-    def test_register_store_no_topic_manager(self, state_manager_factory):
-        state_manager = state_manager_factory(topic_manager=None)
+    def test_register_store_no_topic_manager(self, state_manager):
+        state_manager = state_manager
         state_manager.register_store("my_topic", store_name="default")
 
         assert state_manager._topic_manager is None
