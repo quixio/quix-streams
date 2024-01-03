@@ -11,9 +11,7 @@ from quixstreams import TopicManager
 
 load_dotenv("./env_vars.env")
 
-topic_manager = TopicManager(
-    admin_client=Admin(broker_address=environ["BROKER_ADDRESS"])
-)
+topic_manager = TopicManager(admin=Admin(broker_address=environ["BROKER_ADDRESS"]))
 topic_name = topic_manager.topic(
     name="json__purchase_events",
     # "config" only needed if you wish to not use the defaults!
