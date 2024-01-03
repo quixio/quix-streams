@@ -182,6 +182,7 @@ class Application:
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
         self._topic_validation = topic_validation
+
         if not topic_manager:
             topic_manager = TopicManager()
         if not topic_manager.has_admin:
@@ -192,15 +193,25 @@ class Application:
                 )
             )
         self._topic_manager = topic_manager
+
+        changelog_manager = (
+            ChangelogManager(
+                topic_manager=self._topic_manager,
+                producer=RowProducer(
+                    broker_address=broker_address,
+                    partitioner=partitioner,
+                    extra_config=producer_extra_config,
+                    on_error=on_producer_error,
+                ),
+            )
+            if use_changelog_topics
+            else None
+        )
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            changelog_manager=ChangelogManager(
-                topic_admin=self._topic_manager, producer=self._producer
-            )
-            if use_changelog_topics
-            else None,
+            changelog_manager=changelog_manager,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):

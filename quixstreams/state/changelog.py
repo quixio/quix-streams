@@ -1,44 +1,55 @@
-from quixstreams.kafka import TopicAdmin
+from quixstreams.topic_manager import TopicManagerType
 from quixstreams.rowproducer import RowProducer
-from quixstreams.context import message_context
 from quixstreams.models import Topic
 
-from typing import Dict, Optional
-
-
-class ChangelogManager:
-    # TODO: simplify this?
-    def __init__(self, topic_admin: TopicAdmin, producer: RowProducer):
-        self._topic_admin = topic_admin
-        self._producer = producer
-        self._changelog_writers: Dict[str, ChangelogWriter] = {}
-
-    def add_changelog_topic(self, source_topic_name, suffix):
-        print(f"TOPIC ADMIN: {self._topic_admin.quix_config_builder}")
-        topic = self._topic_admin.changelog_topic(source_topic_name, suffix)
-        writer = ChangelogWriter(topic=topic, producer=self._producer)
-        self._changelog_writers[topic.name] = writer
-        return writer
+from typing import Optional
 
 
 class ChangelogWriter:
-    def __init__(self, topic: Topic, producer: RowProducer):
+    """
+    Typically created and handed to `PartitionTransaction`s to produce state changes to
+    a changelog topic.
+    """
+
+    def __init__(self, topic: Topic, partition_num: int, producer: RowProducer):
         self._topic = topic
+        self._partition_num = partition_num
         self._producer = producer
-
-    @property
-    def key(self):
-        return message_context().key
-
-    @property
-    def partition(self):
-        return message_context().partition
-
-    @property
-    def topic(self):
-        return self._topic
 
     def produce(self, key: bytes, value: Optional[bytes] = None):
         # TODO: stuff with column families in the headers
-        msg = self.topic.serialize(key=key, value=value)
-        self._producer.produce(key=msg.key, value=msg.value, topic=self.topic.name)
+        msg = self._topic.serialize(key=key, value=value)
+        self._producer.produce(
+            key=msg.key,
+            value=msg.value,
+            topic=self._topic.name,
+            partition=self._partition_num,
+        )
+
+
+class ChangelogManager:
+    """
+    A simple interface for adding changelog topics during store init and
+    generating changelog writers (generally for each new `Store` transaction).
+    """
+
+    def __init__(self, topic_manager: TopicManagerType, producer: RowProducer):
+        self._topic_manager = topic_manager
+        self._producer = producer
+
+    def add_changelog(self, source_topic_name: str, suffix: str, consumer_group: str):
+        self._topic_manager.changelog_topic(
+            source_topic_name=source_topic_name,
+            suffix=suffix,
+            consumer_group=consumer_group,
+        )
+
+    def get_writer(
+        self, source_topic_name: str, suffix: str, partition_num: int
+    ) -> ChangelogWriter:
+        # TODO: maybe store and re-use writers by changing the partition via a context?
+        return ChangelogWriter(
+            topic=self._topic_manager.changelog_topics[source_topic_name][suffix],
+            partition_num=partition_num,
+            producer=self._producer,
+        )

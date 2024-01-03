@@ -155,11 +155,14 @@ class RocksDBStorePartition(StorePartition):
 
     def get_changelog_offset(self) -> Optional[int]:
         """
-        Get last produced offset for the given partition
+        Get last produced offset for the given changelog partition
         :return: offset or `None` if there's no produced offset yet
         """
-        changelog_bytes = self._db.get(_CHANGELOG_OFFSET_KEY, b"0")
-        return _int_from_int64_bytes(changelog_bytes) if changelog_bytes else 0
+        # TODO: this is an incomplete placeholder until recovery is implemented.
+        #   End functionality should be similar to "get_processed_offset"; recovery
+        #   ensures the offset is valid and sets it to a proper value if not
+        offset_bytes = self._db.get(_CHANGELOG_OFFSET_KEY)
+        return _int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
 
     def close(self):
         """

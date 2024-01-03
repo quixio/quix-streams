@@ -4,7 +4,6 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
-from quixstreams.topic_manager import TopicManagerType
 from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
@@ -105,22 +104,20 @@ class StateStoreManager:
         :param topic_name: topic name
         :param store_name: store name
         """
-        store = self._stores.get(topic_name, {}).get(store_name)
-        if store is None:
-            writer = None
+        if self._stores.get(topic_name, {}).get(store_name) is None:
             if self._changelog_manager:
-                writer = self._changelog_manager.add_changelog_topic(
+                self._changelog_manager.add_changelog(
                     source_topic_name=topic_name,
                     suffix=store_name,
+                    consumer_group=self._group_id,
                 )
-            store = RocksDBStore(
+            self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
-                changelog_writer=writer,
+                changelog_manager=self._changelog_manager,
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
-            self._stores.setdefault(topic_name, {})[store_name] = store
 
     def clear_stores(self):
         """
