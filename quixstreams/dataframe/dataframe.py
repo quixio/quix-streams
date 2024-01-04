@@ -99,7 +99,7 @@ class StreamingDataFrame(BaseStreaming):
 
     def apply(
         self,
-        func: Union[DataFrameFunc, DataFrameStatefulFunc, DataFrameWindowFunc],
+        func: Union[DataFrameFunc, DataFrameStatefulFunc],
         stateful: bool = False,
         expand: bool = False,
     ) -> Self:

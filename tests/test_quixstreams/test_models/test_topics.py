@@ -3,7 +3,12 @@ from typing import Optional, Any, Callable, List
 
 import pytest
 
-from quixstreams.models import Topic, StringSerializer, TimestampType
+from quixstreams.models import (
+    Topic,
+    StringSerializer,
+    TimestampType,
+    MessageHeadersTuples,
+)
 from quixstreams.models.serializers import (
     Deserializer,
     Serializer,
@@ -164,19 +169,44 @@ class TestTopic:
         assert rows[0].offset == rows[1].offset
 
     @pytest.mark.parametrize(
-        "value_deserializer, value, timestamp_extractor, expected_timestamps",
+        "value_deserializer, value, headers, timestamp_extractor, expected_timestamps",
         [
             (
                 JSONDeserializer(),
                 json.dumps({"some": "thing", "ts": 123}).encode(),
-                lambda v: v["ts"],
+                None,
+                lambda v, *_: v["ts"],
                 [123],
             ),
             (
                 JSONListDeserializer(),
                 json.dumps([{"ts": 123}, {"ts": 456}]).encode(),
-                lambda v: v["ts"],
+                None,
+                lambda v, *_: v["ts"],
                 [123, 456],
+            ),
+            (
+                JSONListDeserializer(),
+                json.dumps([{"ts": 456}]).encode(),
+                [("header_ts", 333)],
+                lambda v, headers, *_: headers[0][1],
+                [333],
+            ),
+            (
+                JSONListDeserializer(),
+                json.dumps([{"ts": 456}]).encode(),
+                None,
+                lambda v, headers, ts, *_: ts + 1,  # 123 is default ts in tests
+                [124],
+            ),
+            (
+                JSONListDeserializer(),
+                json.dumps([{"ts": 456}]).encode(),
+                None,
+                lambda v, headers, ts, ts_type: 101
+                if ts_type == TimestampType.TIMESTAMP_CREATE_TIME
+                else 0,
+                [101],
             ),
         ],
     )
@@ -184,7 +214,8 @@ class TestTopic:
         self,
         value_deserializer: Deserializer,
         value: Optional[bytes],
-        timestamp_extractor: Callable[[dict], int],
+        headers: Optional[MessageHeadersTuples],
+        timestamp_extractor: Callable,
         expected_timestamps: List[int],
     ):
         topic = Topic(
@@ -192,13 +223,13 @@ class TestTopic:
             value_deserializer=value_deserializer,
             timestamp_extractor=timestamp_extractor,
         )
-        message = ConfluentKafkaMessageStub(value=value)
+        message = ConfluentKafkaMessageStub(value=value, headers=headers)
         row_or_rows = topic.row_deserialize(message=message)
 
         rows = row_or_rows if isinstance(row_or_rows, list) else [row_or_rows]
 
         for index, row in enumerate(rows):
-            assert row.timestamp.type == TimestampType.TIMESTAMP_FROM_MESSAGE
+            assert row.timestamp.type == TimestampType.TIMESTAMP_CREATE_TIME
             assert row.timestamp.milliseconds == expected_timestamps[index]
 
     @pytest.mark.parametrize(

@@ -84,8 +84,14 @@ class FixedWindowDefinition(ABC):
         :return: A window configured to perform sum aggregation.
         """
 
-        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
-            current_value = state.get_window(start=start, end=end) or 0
+        def func(
+            start: float,
+            end: float,
+            timestamp: float,
+            value: Any,
+            state: WindowedTransactionState,
+        ):
+            current_value = state.get_window(start=start, end=end, default=0)
             updated_value = current_value + value
 
             state.update_window(start, end, timestamp=timestamp, value=updated_value)
@@ -100,8 +106,14 @@ class FixedWindowDefinition(ABC):
         :return: A window configured to perform record count.
         """
 
-        def func(start, end, timestamp, _: Any, state: WindowedTransactionState):
-            current_value = state.get_window(start=start, end=end) or 0
+        def func(
+            start: float,
+            end: float,
+            timestamp: float,
+            _: Any,
+            state: WindowedTransactionState,
+        ):
+            current_value = state.get_window(start=start, end=end, default=0)
             updated_value = current_value + 1
 
             state.update_window(start, end, timestamp=timestamp, value=updated_value)
@@ -116,8 +128,16 @@ class FixedWindowDefinition(ABC):
         :return: A window configured to calculate the mean of the data values.
         """
 
-        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
-            current_window_value = state.get_window(start=start, end=end) or (0.0, 0)
+        def func(
+            start: float,
+            end: float,
+            timestamp: float,
+            value: Any,
+            state: WindowedTransactionState,
+        ):
+            current_window_value = state.get_window(
+                start=start, end=end, default=(0.0, 0)
+            )
 
             agg = current_window_value[0] + value
             count = current_window_value[1] + 1
@@ -145,7 +165,13 @@ class FixedWindowDefinition(ABC):
         :return: A window configured to perform custom reduce aggregation on the data.
         """
 
-        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+        def func(
+            start: float,
+            end: float,
+            timestamp: float,
+            value: Any,
+            state: WindowedTransactionState,
+        ):
             current_value = state.get_window(start=start, end=end)
 
             if current_value is None:
@@ -165,7 +191,13 @@ class FixedWindowDefinition(ABC):
         :return: A window instance configured to find the maximum value within each window period.
         """
 
-        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+        def func(
+            start: float,
+            end: float,
+            timestamp: float,
+            value: Any,
+            state: WindowedTransactionState,
+        ):
             current_value = state.get_window(start=start, end=end)
 
             if current_value is None:
@@ -185,7 +217,13 @@ class FixedWindowDefinition(ABC):
         :return: A window instance configured to find the minimum value within each window period.
         """
 
-        def func(start, end, timestamp, value: Any, state: WindowedTransactionState):
+        def func(
+            start: float,
+            end: float,
+            timestamp: float,
+            value: Any,
+            state: WindowedTransactionState,
+        ):
             current_value = state.get_window(start=start, end=end)
 
             if current_value is None:
@@ -256,7 +294,7 @@ class FixedWindow(ABC):
             lambda value, state, process_window=self._process_window: process_window(
                 value=value,
                 state=state,
-                timestamp=message_context().timestamp.milliseconds / 1000,
+                timestamp=message_context().timestamp.seconds,
             )[0][-1],
             name=self._name,
         )
@@ -274,9 +312,7 @@ class FixedWindow(ABC):
         """
         return self._apply_window(
             lambda value, state, process_window=self._process_window: process_window(
-                value=value,
-                state=state,
-                timestamp=message_context().timestamp.milliseconds / 1000,
+                value=value, state=state, timestamp=message_context().timestamp.seconds
             )[1],
             expand=expand,
             name=self._name,

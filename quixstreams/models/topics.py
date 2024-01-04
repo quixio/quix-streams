@@ -72,7 +72,10 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        timestamp_extractor: Callable[[dict], int] = None,
+        timestamp_extractor: Callable[
+            [Any, Optional[MessageHeadersTuples], float, TimestampType],
+            int,
+        ] = None,
     ):
         """
         Can specify serialization that should be used when consuming/producing
@@ -102,7 +105,19 @@ class Topic:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
-        :param timestamp_extractor: a callable that returns a timestamp in milliseconds from a message value
+        :param timestamp_extractor: a callable that returns a timestamp in milliseconds from a deserialized message
+         Example Usage:
+
+        ```python
+        def custom_ts_extractor(
+            value: Any,
+            headers: Optional[List[Tuple[str, bytes]]],
+            timestamp: float,
+            timestamp_type: TimestampType,
+        ) -> int:
+            return value["timestamp"]
+        topic = Topic("input-topic", timestamp_extractor=custom_ts_extractor)
+        ```
         """
         self._name = name
         self._key_serializer = _get_serializer(key_serializer)
@@ -219,13 +234,18 @@ class Topic:
         return f'<{self.__class__} name="{self._name}"> '
 
     def _create_message_context(
-        self, message: ConfluentKafkaMessageProto, key, headers, value: dict
+        self,
+        message: ConfluentKafkaMessageProto,
+        key: Any,
+        headers: Optional[MessageHeadersTuples],
+        value: Any,
     ) -> MessageContext:
+        timestamp_type, timestamp_ms = message.timestamp()
+
         if self._timestamp_extractor:
-            timestamp_ms = self._timestamp_extractor(value)
-            timestamp_type = TimestampType.TIMESTAMP_FROM_MESSAGE.value
-        else:
-            timestamp_type, timestamp_ms = message.timestamp()
+            timestamp_ms = self._timestamp_extractor(
+                value, headers, timestamp_ms, timestamp_type
+            )
 
         timestamp = MessageTimestamp.create(
             timestamp_type=timestamp_type, milliseconds=timestamp_ms
