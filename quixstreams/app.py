@@ -443,13 +443,13 @@ class Application:
 
     def get_producer(self) -> Producer:
         """
-        Create and return a disposable producer instance.
+        Create and return a pre-configured Producer instance.
+        The Producer is initialized with params passed to Application.
 
-        This method is intended for use cases where producing data to Kafka is required
-        outside the standard Application processing flow. It is not recommended to
-        use this within StreamingDataFrame functions, as it creates a new producer
-        instance each time, which is not optimized for repeated use in a streaming
-        data pipeline.
+        It's useful for producing data to Kafka outside the standard Application processing flow,
+        (e.g. to produce test data into a topic).
+        Using it within the StreamingDataFrame functions is not recommended, as it creates a new Producer instance
+        each time, which is not optimized for repeated use in a streaming pipeline.
 
         Example Usage:
             ```python
@@ -478,13 +478,16 @@ class Application:
 
     def get_consumer(self) -> Consumer:
         """
-        Create and return a disposable consumer instance.
+        Create and return a pre-configured Consumer instance.
+        The Consumer is initialized with params passed to Application.
 
-        This method is intended for use cases where consuming data from Kafka is
-        required outside the standard Application processing flow. It is not
-        recommended to use this within StreamingDataFrame functions, as it creates
-        a new consumer instance on each call, leading to inefficient resource usage
-        in a streaming data context.
+        It's useful for consuming data from Kafka outside the standard Application processing flow.
+        (e.g. to consume test data from a topic).
+        Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
+        each time, which is not optimized for repeated use in a streaming pipeline.
+
+        Note: The Consumer does not autocommit consumed offsets. If needed,
+        after processing a message, you can mark it as processed by calling store_offsets().
 
         Example Usage:
             ```python
@@ -498,6 +501,9 @@ class Application:
                     msg = consumer.poll(timeout=1.0)
                     if msg is not None:
                         # Process message
+                        # Optionally commit the offset
+                        # consumer.store_offsets(msg)
+
             ```
         """
         if self.is_quix_app:
