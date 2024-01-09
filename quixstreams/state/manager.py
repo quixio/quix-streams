@@ -148,10 +148,18 @@ class StateStoreManager:
         :param tp: `TopicPartition` from Kafka consumer
         :return: list of assigned `StorePartition`
         """
-
+        if not tp:
+            print("NO PARTITIONS ADDED")
+            return []
         store_partitions = []
         for store in self._stores.get(tp.topic, {}).values():
-            store_partitions.append(store.assign_partition(tp.partition))
+            print(f"STATE MANAGER: ASSIGN PARTITION: {tp.topic, tp.partition}")
+            store_partition = store.assign_partition(tp.partition)
+            store_partitions.append(store_partition)
+            if self._changelog_manager:
+                self._changelog_manager.assign_partition(
+                    tp.topic, tp.partition, store_partition
+                )
         return store_partitions
 
     def on_partition_revoke(self, tp: TopicPartition):
@@ -161,6 +169,9 @@ class StateStoreManager:
         :param tp: `TopicPartition` from Kafka consumer
         """
         for store in self._stores.get(tp.topic, {}).values():
+            if self._changelog_manager:
+                print(f"STATE MANAGER: REVOKE PARTITION: {tp.topic, tp.partition}")
+                self._changelog_manager.revoke_partition(tp.topic, tp.partition)
             store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
@@ -170,8 +181,7 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        self.on_partition_revoke(tp)
 
     def init(self):
         """

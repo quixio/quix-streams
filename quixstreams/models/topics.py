@@ -271,8 +271,18 @@ class Topic:
         )
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
-        # TODO: Implement SerDes for raw messages
-        raise NotImplementedError
+        # TODO: confirm this is a valid context
+        ctx = SerializationContext(topic="", headers=message.headers())
+        return KafkaMessage(
+            key=self._key_deserializer(key, ctx=ctx)
+            if (key := message.key())
+            else None,
+            value=self._value_serializer(value, ctx=ctx)
+            if (value := message.value())
+            else None,
+            headers=message.headers(),
+            timestamp=message.timestamp(),
+        )
 
     def __repr__(self):
         return f'<{self.__class__} name="{self._name}"> '
