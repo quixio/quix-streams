@@ -41,8 +41,18 @@ In general, we follow the ["fork-and-pull" Git workflow](https://github.com/susa
 
 ## Coding standards
 
-To keep the code as consistent as possible, please familiarize yourself with the existing style of the project. If you're contributing to the Python code base, follow the [PEP 8 - Style Guide for Python Code](https://peps.python.org/pep-0008/). If contributing to the C# code base, follow the [Microsoft&reg; C# Coding Conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions).
+To keep the code as consistent as possible, please familiarize yourself with the existing style of the project. If you're contributing to the Python code base, follow the [PEP 8 - Style Guide for Python Code](https://peps.python.org/pep-0008/). 
 
->  Consistency within a project is more important. Consistency within one module or function is the most important.
+>  Consistency within a project is important. Consistency within one module or function is the most important.
 
-Note that the biggest deviation from the Microsoft&reg; standards is that this project does not use `_` to indicate private members. Instead, you should use the format `this.abc`.
+## Setting up the project locally
+
+This guide will assume you're using Visual Studio Code, but most of the guide is applicable if you're using other IDEs also.
+
+1. Navigate to root of the project
+2. Execute `python3 -m pip install -r requirements.txt -r requirements-dev.txt -r tests/requirements.txt`
+3. Ensure you don't have `quixstreams` installed using `python3 -m pip uninstall quixstreams` to avoid using that when testing
+4. By executing `python3 -m pip install --editable .` you will be able to use the source code as a module for local testing without having to install new versions
+5. Add commit pre-hook: `pre-commit install`
+6. Configure Black code formatter.
+7. Run test from project root with `pytest`
