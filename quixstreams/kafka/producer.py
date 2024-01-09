@@ -25,8 +25,14 @@ Headers = Union[
 logger = logging.getLogger(__name__)
 
 
-def _pre_flight_configuration_none(producer_extra_params):
-    pass
+def _default_error_cb(error: KafkaError):
+    error_code = error.code()
+    if str(error_code) == str(KafkaError._ALL_BROKERS_DOWN):
+        logger.debug(error.str())
+        return
+    logger.error(
+        f'Kafka producer error: {error.str()} code="{error_code}"',
+    )
 
 
 def _on_delivery_cb(err: Optional[KafkaError], msg: Message):
@@ -47,21 +53,6 @@ def _on_delivery_cb(err: Optional[KafkaError], msg: Message):
             msg.key(),
             msg.value(),
         )
-
-
-def _error_cb_all_broker_down(
-    err: Optional[KafkaError], msg: Message, orig_err: Optional[KafkaError], other_cb
-):
-    try:
-        if err is not None:
-            logger.error(
-                f'Kafka producer error: {orig_err.str()} code="{orig_err.code()}"',
-            )
-        else:
-            logger.debug("Recovered from all brokers down")
-    finally:
-        if other_cb is not None:
-            other_cb(err, msg)
 
 
 class Producer:
@@ -95,7 +86,7 @@ class Producer:
                 "bootstrap.servers": broker_address,
                 "partitioner": partitioner,
                 "logger": logger,
-                "error_cb": self._default_error_cb,
+                "error_cb": _default_error_cb,
             },
         )
         self._producer_config = config
@@ -103,7 +94,6 @@ class Producer:
         # Optimization: pass `on_delivery` callbacks only in "debug" mode, otherwise
         # it significantly reduces a throughput because of additional function calls
         self._enable_delivery_callbacks = logger.isEnabledFor(logging.DEBUG)
-        self.__pre_flight_configuration = _pre_flight_configuration_none
 
     def produce(
         self,
@@ -143,8 +133,6 @@ class Producer:
         if self._enable_delivery_callbacks:
             kwargs["on_delivery"] = _on_delivery_cb
 
-        self.__pre_flight_configuration(kwargs)
-
         # confluent_kafka doesn't like None for optional parameters
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
@@ -181,34 +169,6 @@ class Producer:
         """
         args_ = [arg for arg in (timeout,) if arg is not None]
         return self._producer.flush(*args_)
-
-    def _default_error_cb(self, error: KafkaError) -> None:
-        error_code = error.code()
-        if str(error_code) == str(KafkaError._ALL_BROKERS_DOWN):
-            logger.debug(
-                "All brokers are down, configuring callback to log it if we fail to publish"
-            )
-            self.__pre_flight_configuration = (
-                lambda dic: self._pre_flight_configuration_all_broker_down(dic, error)
-            )
-            return
-        logger.error(
-            f'Kafka producer error: {error.str()} code="{error_code}"',
-        )
-
-    def _pre_flight_configuration_all_broker_down(
-        self, producer_extra_params, original_exception
-    ):
-        self.__pre_flight_configuration = _pre_flight_configuration_none
-        existing_cb = None
-        if "on_delivery" in producer_extra_params:
-            existing_cb = producer_extra_params["on_delivery"]
-
-        producer_extra_params[
-            "on_delivery"
-        ] = lambda err, msg: _error_cb_all_broker_down(
-            err, msg, original_exception, existing_cb
-        )
 
     @property
     def _producer(self) -> ConfluentProducer:
