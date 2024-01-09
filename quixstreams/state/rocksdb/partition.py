@@ -12,6 +12,7 @@ from quixstreams.state.types import (
     DumpsFunc,
     LoadsFunc,
     PartitionTransaction,
+    PartitionRecovery,
     StorePartition,
 )
 from .exceptions import (
@@ -98,6 +99,18 @@ class RocksDBStorePartition(StorePartition):
             dumps=self._options.dumps,
             loads=self._options.loads,
             changelog_writer=changelog_writer,
+        )
+
+    def recover(self, offset) -> "RocksDBPartitionRecovery":
+        """
+        Create a new `RocksDBTransaction` object.
+        Using `RocksDBTransaction` is a recommended way for accessing the data.
+
+        :return: an instance of `RocksDBTransaction`
+        """
+        return RocksDBPartitionRecovery(
+            partition=self,
+            offset=offset,
         )
 
     def write(self, batch: rocksdict.WriteBatch):
@@ -519,3 +532,103 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val is None and not self._failed:
             self.maybe_flush()
+
+
+class RocksDBPartitionRecovery(PartitionRecovery):
+    __slots__ = ("_partition", "_batch", "_failed", "_completed", "_offset")
+
+    def __init__(
+        self,
+        partition: RocksDBStorePartition,
+        offset: int,
+    ):
+        self._partition = partition
+        self._batch = rocksdict.WriteBatch(raw_mode=True)
+        self._offset = offset
+        self._failed = False
+        self._completed = False
+
+    @_validate_transaction_state
+    def set(self, key: bytes, value: bytes):
+        """
+        Set a key to the store.
+
+        :param key: key to store in DB
+        :param value: value to store in DB
+        """
+        try:
+            self._batch.put(key, value)
+        except Exception:
+            self._failed = True
+            raise
+
+    @_validate_transaction_state
+    def delete(self, key: bytes):
+        """
+        Delete a key to the store.
+
+        :param key: key to delete from DB
+        """
+        try:
+            self._batch.delete(key)
+        except Exception:
+            self._failed = True
+            raise
+
+    @property
+    def completed(self) -> bool:
+        """
+        Check if the transaction is completed.
+
+        It doesn't indicate whether transaction is successful or not.
+        Use `RocksDBTransaction.failed` for that.
+
+        The completed transaction should not be re-used.
+
+        :return: `True` if transaction is completed, `False` otherwise.
+        """
+        return self._completed
+
+    @property
+    def failed(self) -> bool:
+        """
+        Check if the transaction has failed.
+
+        The failed transaction should not be re-used because the update cache
+        and
+
+        :return: `True` if transaction is failed, `False` otherwise.
+        """
+        return self._failed
+
+    @_validate_transaction_state
+    def flush(self):
+        """
+        Flush the recent updates to the database and empty the update cache.
+        It writes the WriteBatch to RocksDB and marks itself as finished.
+
+        If writing fails, the transaction will be also marked as "failed" and
+        cannot be used anymore.
+
+        >***NOTE:*** If no keys have been modified during the transaction
+            (i.e no "set" or "delete" have been called at least once), it will
+            not flush ANY data to the database including the offset in order to optimize
+            I/O.
+        """
+        try:
+            self._batch.put(
+                _CHANGELOG_OFFSET_KEY, _int_to_int64_bytes(self._offset + 1)
+            )
+            self._partition.write(self._batch)
+        except Exception:
+            self._failed = True
+            raise
+        finally:
+            self._completed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_val is None and not self._failed:
+            self.flush()

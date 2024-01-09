@@ -88,7 +88,13 @@ class StorePartition(Protocol):
         State new `PartitionTransaction`
         """
 
+    def recover(self, offset) -> "PartitionRecovery":
+        ...
+
     def get_processed_offset(self) -> Optional[int]:
+        ...
+
+    def get_changelog_offset(self) -> int:
         ...
 
 
@@ -176,6 +182,50 @@ class PartitionTransaction(State):
         Flush the recent updates and last processed offset to the storage.
         :param offset: offset of the last processed message, optional.
         """
+
+    def __enter__(self):
+        ...
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        ...
+
+
+class PartitionRecovery(Protocol):
+    """
+    A transaction class to perform simple key-value operations like
+    "get", "set", "delete" and "exists" on a single storage partition.
+    """
+
+    @property
+    def failed(self) -> bool:
+        """
+        Return `True` if transaction failed to update data at some point.
+
+        Failed transactions cannot be re-used.
+        :return: bool
+        """
+
+    @property
+    def completed(self) -> bool:
+        """
+        Return `True` if transaction is completed.
+
+        Completed transactions cannot be re-used.
+        :return: bool
+        """
+        ...
+
+    def set(self, key: bytes, value: bytes):
+        ...
+
+    def delete(self, key: bytes):
+        ...
+
+    def flush(self):
+        """
+        Flush the recent updates and last processed offset to the storage.
+        """
+        ...
 
     def __enter__(self):
         ...

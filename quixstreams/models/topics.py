@@ -99,11 +99,7 @@ class Topic:
     instance.
     """
 
-    _serialize_map = {
-        "key": "_key_serializer",
-        "value": "_value_serializer",
-    }
-
+    _serialize_map = {"key": "_key_serializer", "value": "_value_serializer"}
     _deserialize_map = {"key": "_key_deserializer", "value": "_value_deserializer"}
 
     def __init__(
@@ -268,8 +264,18 @@ class Topic:
         )
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
-        # TODO: Implement SerDes for raw messages
-        raise NotImplementedError
+        # TODO: confirm this is a valid context
+        ctx = SerializationContext(topic="", headers=message.headers())
+        return KafkaMessage(
+            key=self._key_deserializer(key, ctx=ctx)
+            if (key := message.key())
+            else None,
+            value=self._value_serializer(value, ctx=ctx)
+            if (value := message.value())
+            else None,
+            headers=message.headers(),
+            timestamp=message.timestamp(),
+        )
 
     def __repr__(self):
         return f'<{self.__class__} name="{self._name}"> '
