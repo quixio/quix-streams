@@ -31,8 +31,12 @@ class MessageTimestamp:
         self._type = type
 
     @property
-    def milliseconds(self) -> Optional[int]:
+    def milliseconds(self) -> int:
         return self._milliseconds
+
+    @property
+    def seconds(self) -> float:
+        return self._milliseconds / 1000
 
     @property
     def type(self) -> TimestampType:
@@ -55,6 +59,4 @@ class MessageTimestamp:
         :return: Timestamp object
         """
         type_enum = TimestampType(timestamp_type)
-        if type_enum == TimestampType.TIMESTAMP_NOT_AVAILABLE:
-            milliseconds = None
         return cls(type=type_enum, milliseconds=milliseconds)

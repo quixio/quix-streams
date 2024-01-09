@@ -11,6 +11,7 @@ from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
     PartitionStoreIsUsed,
+    WindowedStoreAlreadyRegisteredError,
 )
 
 
@@ -105,6 +106,11 @@ class TestStateStoreManager:
     def test_register_store_twice(self, state_manager):
         state_manager.register_store("topic", "store")
         state_manager.register_store("topic", "store")
+
+    def test_register_windowed_store_twice(self, state_manager):
+        state_manager.register_windowed_store("topic", "store")
+        with pytest.raises(WindowedStoreAlreadyRegisteredError):
+            state_manager.register_windowed_store("topic", "store")
 
     def test_get_store_not_registered(self, state_manager):
         with pytest.raises(StoreNotRegisteredError):

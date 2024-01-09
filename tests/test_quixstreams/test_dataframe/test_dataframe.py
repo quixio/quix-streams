@@ -1,4 +1,5 @@
 import operator
+from datetime import timedelta
 
 import pytest
 
@@ -6,6 +7,7 @@ from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
 from quixstreams.models import MessageTimestamp
 from quixstreams.models.topics import Topic
+from quixstreams.windows.base import WindowResult
 from tests.utils import TopicPartitionStub
 
 
@@ -645,3 +647,109 @@ class TestStreamingDataframeStateful:
                     pass
         assert len(results) == 1
         assert results[0]["max"] == 3
+
+
+class TestStreamingDataFrameWindows:
+    def test_tumbling_window(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = (
+            sdf.tumbling_window(
+                duration=timedelta(seconds=10), grace=timedelta(seconds=1)
+            )
+            .sum()
+            .all(expand=False)
+        )
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        values = [
+            # Message early in the window
+            (1, message_context_factory(key="test", timestamp_ms=1000)),
+            # Message towards the end of the window
+            (2, message_context_factory(key="test", timestamp_ms=9000)),
+            # Should start a new window
+            (3, message_context_factory(key="test", timestamp_ms=20010)),
+        ]
+
+        update_results = []
+        for value in values:
+            ctx = value[1]
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                try:
+                    update_results.append(sdf.test(value[0], ctx))
+                except Filtered:
+                    pass
+
+        assert len(update_results) == 3
+        assert update_results[0] == [WindowResult(value=1, start=0, end=10)]
+        assert update_results[1] == [WindowResult(value=3, start=0, end=10)]
+        assert update_results[2] == [WindowResult(value=3, start=20, end=30)]
+
+    def test_hopping_window(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = (
+            sdf.hopping_window(
+                duration=timedelta(seconds=10),
+                step=timedelta(seconds=6),
+                grace=timedelta(seconds=1),
+            )
+            .count()
+            .all(expand=False)
+        )
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        values = [
+            # Message at the start of a window
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Message within the same window and the next due to stepping
+            (2, message_context_factory(key="test", timestamp_ms=7000)),
+            # Message that updates the just second window but is withing the grace period of the first
+            (3, message_context_factory(key="test", timestamp_ms=10500)),
+            # Message that updates the just first window
+            (4, message_context_factory(key="test", timestamp_ms=3000)),
+            # New window with a gap
+            (5, message_context_factory(key="test", timestamp_ms=35000)),
+            # Just update the latest window
+            (6, message_context_factory(key="test", timestamp_ms=35001)),
+        ]
+
+        update_results = []
+        for value in values:
+            ctx = value[1]
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                try:
+                    update_results.append(sdf.test(value[0], ctx))
+                except Filtered:
+                    pass
+
+        # Assertions considering the stepping, duration, and grace period
+        assert len(update_results) == 6
+        # Modify the assertions based on expected window calculation
+        assert update_results[0] == [WindowResult(value=1, start=0, end=10)]
+        assert update_results[1] == [
+            WindowResult(value=2, start=0, end=10),
+            WindowResult(value=1, start=6, end=16),
+        ]
+        assert update_results[2] == [
+            WindowResult(value=2, start=6, end=16),
+        ]
+        assert update_results[3] == [
+            WindowResult(value=3, start=0, end=10),
+        ]
+        assert update_results[4] == [WindowResult(value=1, start=30, end=40)]
+        assert update_results[5] == [WindowResult(value=2, start=30, end=40)]

@@ -1,6 +1,7 @@
 import contextvars
 import functools
 import operator
+from datetime import timedelta
 from typing import Optional, Callable, Union, List, TypeVar, Any
 
 from typing_extensions import Self
@@ -16,11 +17,14 @@ from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
 from .series import StreamingSeries
+from ..state.rocksdb.windowed.store import WindowedTransactionState
+from ..windows import TumblingWindowDefinition, HoppingWindowDefinition
 
 T = TypeVar("T")
 R = TypeVar("R")
 DataFrameFunc = Callable[[T], R]
 DataFrameStatefulFunc = Callable[[T, State], R]
+DataFrameWindowFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -88,6 +92,10 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
+
+    @property
+    def state_manager(self) -> StateStoreManager:
+        return self._state_manager
 
     def apply(
         self,
@@ -333,6 +341,112 @@ class StreamingDataFrame(BaseStreaming):
         context.run(set_message_context, ctx)
         composed = self.compose()
         return context.run(composed, value)
+
+    def tumbling_window(
+        self,
+        duration: Union[float, timedelta],
+        grace: Optional[Union[float, timedelta]] = 0,
+    ) -> TumblingWindowDefinition:
+        """
+        Create a tumbling window transformation on this StreamingDataFrame.
+
+        Tumbling windows divide the data stream into fixed-sized, non-overlapping windows based on time.
+        This method is typically used in stream processing to perform aggregations or other operations over
+        specific time slices of the data.
+
+        It is particularly useful in scenarios where data needs to be aggregated or analyzed over specific periods.
+
+        ```python
+        from quixstreams import Application, StreamingDataFrame
+
+        app = Application()
+        sdf = app.dataframe()
+        tumbling_window_def = sdf.tumbling_window(duration=60.0, grace=10.0)
+
+        # Choose an aggregation functions from 'sum', 'count', 'reduce', 'mean', 'min' and 'max' for the tumbling window
+        tumbling_window = tumbling_window_def.sum()
+
+        # Choose the appropriate method based on the desired output behavior
+        # 'all' outputs on all window value updates, whether the window is closed or not
+        # 'final' outputs the window value whenever a window closes (duration + grace)
+        # 'latest' outputs the window value of the last updated window
+        sdf = tumbling_window.all()
+
+        # The tumbling window will aggregate data in 60-second windows with a 10-second grace period
+        ```
+
+        :param duration: The length of each window. It defines the time span for which each window aggregates data.
+            Can be specified as either a float representing seconds or a timedelta object.
+        :param grace: The grace period for data arrival. It allows late-arriving data (data arriving after the window
+            has theoretically closed) to be included in the window.
+            Can be specified as either a float representing seconds or a timedelta object.
+
+        :return: TumblingWindowDefinition instance representing the tumbling window configuration.
+            This object can be further configured with aggregation functions like sum or count and
+            applied to the StreamingDataFrame
+
+        """
+        _duration = (
+            duration.total_seconds() if isinstance(duration, timedelta) else duration
+        )
+        _grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
+
+        return TumblingWindowDefinition(
+            duration=_duration, grace=_grace, dataframe=self
+        )
+
+    def hopping_window(
+        self,
+        duration: Union[float, timedelta],
+        step: Union[float, timedelta],
+        grace: Optional[Union[float, timedelta]] = 0,
+    ) -> HoppingWindowDefinition:
+        """
+        Create a hopping window transformation on this StreamingDataFrame.
+
+        Hopping windows, divide the data stream into overlapping windows based on time.
+        The overlap is controlled by the 'step' parameter. This method is used in stream processing for performing
+        aggregations or other operations where a continuous update over sliding time slices of data is needed.
+
+        It is particularly useful in scenarios where data needs to be aggregated or analyzed over specific periods.
+
+        ```python
+        from quixstreams import Application, StreamingDataFrame
+
+        app = Application()
+        sdf = app.dataframe()
+        hopping_window_def = sdf.hopping_window(duration=60.0, step=30.0, grace=10.0)
+
+        # Choose an aggregation function for the hopping window, like 'sum', 'count', 'reduce', 'mean', 'min', 'max'
+        hopping_window = hopping_window_def.sum()
+
+        # The output behavior methods - 'all', 'final', 'latest' - determine how the window values are emitted
+        sdf = hopping_window.all()
+
+        # The hopping window will aggregate data in 60-second windows, moving forward every 30 seconds,
+        with a 10-second grace period
+        ```
+
+        :param duration: The length of each window. It defines the time span for which each window aggregates data.
+            Can be specified as either a float representing seconds or a timedelta object.
+        :param step: The step size for the window. It determines how much each successive window moves forward in time.
+            Can be specified as either a float representing seconds or a timedelta object.
+        :param grace: The grace period for data arrival. It allows late-arriving data to be included in the window,
+            even if it arrives after the window has theoretically moved forward.
+            Can be specified as either a float representing seconds or a timedelta object.
+
+        :return: HoppingWindowDefinition instance representing the hopping window configuration.
+            This object can be further configured with aggregation functions and applied to the StreamingDataFrame.
+        """
+        _duration = (
+            duration.total_seconds() if isinstance(duration, timedelta) else duration
+        )
+        _step = step.total_seconds() if isinstance(step, timedelta) else step
+        _grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
+
+        return HoppingWindowDefinition(
+            duration=_duration, grace=_grace, step=_step, dataframe=self
+        )
 
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(
