@@ -40,6 +40,7 @@ class RocksDBOptions(RocksDBOptionsType):
     enable_pipelined_write: bool = False
     compression_type: CompressionType = "lz4"
     wal_dir: Optional[str] = None
+    max_total_wal_size: int = 128 * 1024 * 1024  # 128MB
     db_log_dir: Optional[str] = None
     dumps: DumpsFunc = dumps
     loads: LoadsFunc = loads
@@ -68,4 +69,5 @@ class RocksDBOptions(RocksDBOptionsType):
         opts.set_block_based_table_factory(table_factory_options)
         compression_type = COMPRESSION_TYPES[self.compression_type]
         opts.set_compression_type(compression_type)
+        opts.set_max_total_wal_size(size=self.max_total_wal_size)
         return opts
