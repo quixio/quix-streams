@@ -4,6 +4,8 @@ from quixstreams.models import Topic
 
 from typing import Optional
 
+_COLUMN_FAMILY_HEADER = "__column_family__"
+
 
 class ChangelogWriter:
     """
@@ -16,14 +18,17 @@ class ChangelogWriter:
         self._partition_num = partition_num
         self._producer = producer
 
-    def produce(self, key: bytes, value: Optional[bytes] = None):
-        # TODO: stuff with column families in the headers
+    def produce(
+        self, key: bytes, cf_name: str = "default", value: Optional[bytes] = None
+    ):
+        # TODO-CF: remove default cf_name to ensure its passed?
         msg = self._topic.serialize(key=key, value=value)
         self._producer.produce(
             key=msg.key,
             value=msg.value,
             topic=self._topic.name,
             partition=self._partition_num,
+            headers={_COLUMN_FAMILY_HEADER: cf_name},
         )
 
 
@@ -47,7 +52,6 @@ class ChangelogManager:
     def get_writer(
         self, source_topic_name: str, suffix: str, partition_num: int
     ) -> ChangelogWriter:
-        # TODO: maybe store and re-use writers by changing the partition via a context?
         return ChangelogWriter(
             topic=self._topic_manager.changelog_topics[source_topic_name][suffix],
             partition_num=partition_num,
