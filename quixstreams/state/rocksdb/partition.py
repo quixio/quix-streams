@@ -557,6 +557,8 @@ class RocksDBPartitionRecovery(PartitionRecovery):
         :param value: value to store in DB
         """
         try:
+            # TODO-CF: ADD cf_name ARG AND UNCOMMENT/REPLACE
+            # self._batch.put(key, value, cf_name)
             self._batch.put(key, value)
         except Exception:
             self._failed = True
@@ -570,6 +572,8 @@ class RocksDBPartitionRecovery(PartitionRecovery):
         :param key: key to delete from DB
         """
         try:
+            # TODO-CF: ADD cf_name ARG AND UNCOMMENT/REPLACE
+            # self._batch.delete(key, cf_name)
             self._batch.delete(key)
         except Exception:
             self._failed = True

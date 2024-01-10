@@ -1,7 +1,7 @@
 from quixstreams.topic_manager import TopicManagerType
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.models import Topic
+from quixstreams.models import Topic, MessageHeadersTuples
 from quixstreams.state.types import StorePartition
 
 from confluent_kafka import TopicPartition as ConfluentPartition
@@ -49,6 +49,7 @@ class RecoveryPartition:
     def set_watermarks(self, lowwater: int, highwater: int):
         self._changelog_lowwater = lowwater
         self._changelog_highwater = highwater
+
 
 _COLUMN_FAMILY_HEADER = "__column_family__"
 
@@ -127,14 +128,11 @@ class ChangelogManager:
     def get_writer(
         self, source_topic_name: str, suffix: str, partition_num: int
     ) -> ChangelogWriter:
-        if not self._recovery_manager.in_recovery_mode:  # DOES THIS NEED TO BE HERE?
-            return ChangelogWriter(
-                topic=self._get_changelog(
-                    source_topic=source_topic_name, suffix=suffix
-                ),
-                partition_num=partition_num,
-                producer=self._producer,
-            )
+        return ChangelogWriter(
+            topic=self._get_changelog(source_topic=source_topic_name, suffix=suffix),
+            partition_num=partition_num,
+            producer=self._producer,
+        )
 
     def do_recovery(self):
         print("DO RECOVERY")
@@ -151,6 +149,9 @@ class RecoveryManager:
         self._topic_changelog_map: Dict[str, str] = {}
 
     class RecoveryComplete(Exception):
+        ...
+
+    class MissingColumnFamilyHeader(Exception):
         ...
 
     @property
@@ -247,6 +248,14 @@ class RecoveryManager:
         self._consumer.resume(self._consumer.assignment())
         raise self.RecoveryComplete
 
+    def _get_column_family_header(self, headers: MessageHeadersTuples) -> str:
+        for t in headers:
+            if t[0] == _COLUMN_FAMILY_HEADER:
+                return t[1].decode()
+        raise self.MissingColumnFamilyHeader(
+            f"Header '{_COLUMN_FAMILY_HEADER}' was missing from the changelog message!"
+        )
+
     def _recover(self):
         print("RECOVERY: RECOVER")
         if not self.in_recovery_mode:
@@ -266,6 +275,12 @@ class RecoveryManager:
 
         partition = self._partitions[p_num][changelog]
         with partition.state_store.recover(msg.offset()) as transaction:
+            # TODO-CF: UNCOMMENT AND REPLACE BELOW
+            # cf_name = self._get_column_family_header(msg.headers())
+            # if msg.value():
+            #     transaction.set(cf_name=cf_name, key=msg.key(), value=msg.value())
+            # else:
+            #     transaction.delete(cf_name=cfg_name, key=msg.key())
             if msg.value():
                 transaction.set(key=msg.key(), value=msg.value())
             else:
