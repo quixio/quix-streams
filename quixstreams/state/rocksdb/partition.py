@@ -158,9 +158,12 @@ class RocksDBStorePartition(StorePartition):
         Get last produced offset for the given changelog partition
         :return: offset or `None` if there's no produced offset yet
         """
-        # TODO: this is an incomplete placeholder until recovery is implemented.
-        #   End functionality should be similar to "get_processed_offset"; recovery
-        #   ensures the offset is valid and sets it to a proper value if not
+        # TODO-CF: UNCOMMENT AND REPLACE ALL BELOW
+        # metadata_cf = self.get_column_family(METADATA_CF_NAME)
+        # offset_bytes = metadata_cf.get(_CHANGELOG_OFFSET_KEY)
+        # if offset_bytes is None:
+        #     offset_bytes = self._db.get(_CHANGELOG_OFFSET_KEY)
+        # return int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
         offset_bytes = self._db.get(_CHANGELOG_OFFSET_KEY)
         return _int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
 
@@ -561,16 +564,24 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
         return self._failed
 
-    def _update_changelog(self):
+    def _update_changelog(self, cf_handle=None):
         logger.debug("Flushing state changes to the changelog topic...")
         offset = self._partition.get_changelog_offset() or 0
         offset += len(self._update_cache) + len(self._delete_cache)
+
+        # TODO-CF: UNCOMMENT AND REPLACE ALL BELOW, ADD CF_HANDLE_TYPE
+        # TODO-CF: Need to add delete cache back for clearing keys out in changelog
+        # self._batch.put(_CHANGELOG_OFFSET_KEY, _int_to_int64_bytes(offset), cf_handle)
+        # logger.debug(f"Changelog offset set to {offset}")
+        # for cf_name in self._update_cache:
+        #     for k, v in self._update_cache[cf_name].items():
+        #         self._changelog_writer.produce(key=k, cf_name=cf_name, value=v)
         self._batch.put(_CHANGELOG_OFFSET_KEY, _int_to_int64_bytes(offset))
         logger.debug(f"Changelog offset set to {offset}")
         for k, v in self._update_cache.items():
-            self._changelog_writer.produce(key=k, value=v)
+            self._changelog_writer.produce(key=k, cf_name="default", value=v)
         for k in self._delete_cache:
-            self._changelog_writer.produce(key=k)  # tombstone record
+            self._changelog_writer.produce(key=k, cf_name="default")  # tombstone record
 
     @_validate_transaction_state
     def maybe_flush(self, offset: Optional[int] = None):
@@ -582,7 +593,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         cannot be used anymore.
 
         >***NOTE:*** If no keys have been modified during the transaction
-            (i.e no "set" or "delete" have been called at least once), it will
+            (i.e. no "set" or "delete" have been called at least once), it will
             not flush ANY data to the database including the offset in order to optimize
             I/O.
 
@@ -599,7 +610,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                         PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
                     )
                 if self._changelog_writer:
-                    self._update_changelog()
+                    self._update_changelog(cf_handle=None)  # TODO-CF: CF_HANDLE LOGIC
                 self._partition.write(self._batch)
         except Exception:
             self._failed = True
