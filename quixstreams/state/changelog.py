@@ -3,7 +3,7 @@ from typing import Optional, Dict, List
 from quixstreams.topic_manager import TopicManagerType, BytesTopic
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.models import Topic
+from quixstreams.models import Topic, MessageHeadersTuples
 from quixstreams.state.types import StorePartition
 from quixstreams.types import Headers
 
@@ -51,6 +51,7 @@ class RecoveryPartition:
         self._changelog_lowwater = lowwater
         self._changelog_highwater = highwater
 
+
 _COLUMN_FAMILY_HEADER = "__column_family__"
 
 
@@ -97,10 +98,6 @@ class ChangelogManager:
     A simple interface for adding changelog topics during store init and
     generating changelog writers (generally for each new `Store` transaction).
     """
-
-    def __init__(self, topic_manager: TopicManagerType, producer: RowProducer):
-        self._topic_manager = topic_manager
-        self._producer = producer
 
     def add_changelog(self, source_topic_name: str, suffix: str, consumer_group: str):
         self._topic_manager.changelog_topic(
@@ -152,6 +149,9 @@ class RecoveryManager:
         self._topic_changelog_map: Dict[str, str] = {}
 
     class RecoveryComplete(Exception):
+        ...
+
+    class MissingColumnFamilyHeader(Exception):
         ...
 
     @property
@@ -248,6 +248,14 @@ class RecoveryManager:
         self._consumer.resume(self._consumer.assignment())
         raise self.RecoveryComplete
 
+    def _get_column_family_header(self, headers: MessageHeadersTuples) -> str:
+        for t in headers:
+            if t[0] == _COLUMN_FAMILY_HEADER:
+                return t[1].decode()
+        raise self.MissingColumnFamilyHeader(
+            f"Header '{_COLUMN_FAMILY_HEADER}' was missing from the changelog message!"
+        )
+
     def _recover(self):
         print("RECOVERY: RECOVER")
         if not self.in_recovery_mode:
@@ -267,6 +275,12 @@ class RecoveryManager:
 
         partition = self._partitions[p_num][changelog]
         with partition.state_store.recover(msg.offset()) as transaction:
+            # TODO-CF: UNCOMMENT AND REPLACE BELOW
+            # cf_name = self._get_column_family_header(msg.headers())
+            # if msg.value():
+            #     transaction.set(cf_name=cf_name, key=msg.key(), value=msg.value())
+            # else:
+            #     transaction.delete(cf_name=cfg_name, key=msg.key())
             if msg.value():
                 transaction.set(key=msg.key(), value=msg.value())
             else:
