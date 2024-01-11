@@ -26,8 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 def _default_error_cb(error: KafkaError):
+    error_code = error.code()
+    if str(error_code) == str(KafkaError._ALL_BROKERS_DOWN):
+        logger.debug(error.str())
+        return
     logger.error(
-        f'Kafka producer error: {error.str()} code="{error.code()}"',
+        f'Kafka producer error: {error.str()} code="{error_code}"',
     )
 
 
