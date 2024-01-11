@@ -4,6 +4,8 @@ from .types import State, PartitionTransaction
 
 
 class TransactionState(State):
+    __slots__ = ("_transaction",)
+
     def __init__(self, transaction: PartitionTransaction):
         """
         Simple key-value state to be provided into `StreamingDataFrame` functions
