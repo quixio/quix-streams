@@ -15,6 +15,8 @@ from quixstreams.state.rocksdb import (
     RocksDBStorePartition,
     NestedPrefixError,
     RocksDBOptions,
+    ColumnFamilyAlreadyExists,
+    ColumnFamilyDoesNotExist,
 )
 from quixstreams.state.rocksdb.serialization import serialize
 from quixstreams.utils.json import dumps
@@ -89,8 +91,14 @@ class TestRocksDBStorePartition:
         with pytest.raises(Exception):
             storage.get(b"key")
 
-    def test_get_key_doesnt_exist(self, rocksdb_partition):
-        assert rocksdb_partition.get(b"key") is None
+    @pytest.mark.parametrize("cf_name", ["default", "cf"])
+    def test_get_key_doesnt_exist(self, cf_name, rocksdb_partition):
+        try:
+            rocksdb_partition.create_column_family(cf_name=cf_name)
+        except ColumnFamilyAlreadyExists:
+            pass
+
+        assert rocksdb_partition.get(b"key", cf_name=cf_name) is None
 
     def test_destroy(self, rocksdb_partition_factory):
         with rocksdb_partition_factory() as storage:
@@ -108,6 +116,55 @@ class TestRocksDBStorePartition:
         with rocksdb_partition_factory(options=options):
             assert logs_dir.is_dir()
             assert len(list(logs_dir.rglob("*"))) == 1
+
+    def test_create_and_get_column_family(self, rocksdb_partition):
+        rocksdb_partition.create_column_family("cf")
+        assert rocksdb_partition.get_column_family("cf")
+
+    def test_create_column_family_already_exists(self, rocksdb_partition):
+        rocksdb_partition.create_column_family("cf")
+        with pytest.raises(ColumnFamilyAlreadyExists):
+            rocksdb_partition.create_column_family("cf")
+
+    def test_get_column_family_doesnt_exist(self, rocksdb_partition):
+        with pytest.raises(ColumnFamilyDoesNotExist):
+            rocksdb_partition.get_column_family("cf")
+
+    def test_get_column_family_cached(self, rocksdb_partition):
+        rocksdb_partition.create_column_family("cf")
+        cf1 = rocksdb_partition.get_column_family("cf")
+        cf2 = rocksdb_partition.get_column_family("cf")
+        assert cf1 is cf2
+
+    def test_create_and_drop_column_family(self, rocksdb_partition):
+        rocksdb_partition.create_column_family("cf")
+        rocksdb_partition.drop_column_family("cf")
+
+        with pytest.raises(ColumnFamilyDoesNotExist):
+            rocksdb_partition.get_column_family("cf")
+
+    def test_drop_column_family_doesnt_exist(self, rocksdb_partition):
+        with pytest.raises(ColumnFamilyDoesNotExist):
+            rocksdb_partition.drop_column_family("cf")
+
+    def test_list_column_families(self, rocksdb_partition):
+        rocksdb_partition.create_column_family("cf1")
+        rocksdb_partition.create_column_family("cf2")
+        cfs = rocksdb_partition.list_column_families()
+        assert "cf1" in cfs
+        assert "cf2" in cfs
+
+    def test_list_column_families_defaults(self, rocksdb_partition):
+        cfs = rocksdb_partition.list_column_families()
+        assert cfs == [
+            # "default" CF is always present in RocksDB
+            "default",
+            # "__metadata__" CF is created by the RocksDBStorePartition
+            "__metadata__",
+        ]
+
+    def test_ensure_metadata_cf(self, rocksdb_partition):
+        assert rocksdb_partition.get_column_family("__metadata__")
 
 
 class TestRocksDBPartitionTransaction:
@@ -380,3 +437,42 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition.begin() as tx:
             with pytest.raises(StateSerializationError):
                 tx.set(key, value)
+
+    def test_set_get_with_column_family(self, rocksdb_partition):
+        key = "key"
+        value = "value"
+        rocksdb_partition.create_column_family("cf")
+
+        with rocksdb_partition.begin() as tx:
+            tx.set(key, value, cf_name="cf")
+            assert tx.get(key, cf_name="cf") == value
+
+        with rocksdb_partition.begin() as tx:
+            assert tx.get(key, cf_name="cf") == value
+
+    def test_set_delete_get_with_column_family(self, rocksdb_partition):
+        key = "key"
+        value = "value"
+        rocksdb_partition.create_column_family("cf")
+
+        with rocksdb_partition.begin() as tx:
+            tx.set(key, value, cf_name="cf")
+            assert tx.get(key, cf_name="cf") == value
+            tx.delete(key, cf_name="cf")
+            assert tx.get(key, cf_name="cf") is None
+
+        with rocksdb_partition.begin() as tx:
+            assert tx.get(key, cf_name="cf") is None
+
+    def test_set_exists_get_with_column_family(self, rocksdb_partition):
+        key = "key"
+        value = "value"
+        rocksdb_partition.create_column_family("cf")
+
+        with rocksdb_partition.begin() as tx:
+            assert not tx.exists(key, cf_name="cf")
+            tx.set(key, value, cf_name="cf")
+            assert tx.exists(key, cf_name="cf")
+
+        with rocksdb_partition.begin() as tx:
+            assert tx.exists(key, cf_name="cf")
