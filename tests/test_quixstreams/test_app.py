@@ -794,4 +794,4 @@ class TestApplicationWithState:
         use_changelog_topics is set to `False`.
         """
         app = app_factory(use_changelog_topics=False)
-        assert app._state_manager._topic_manager is None
+        assert app._state_manager._changelog_manager is None

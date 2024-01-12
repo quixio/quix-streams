@@ -49,18 +49,19 @@ class TestStateStoreManager:
 
     def test_register_store(self, state_manager_changelogs):
         manager = state_manager_changelogs
-        topic = manager._topic_manager.topic(name="topic1")
+        topic_manager = manager._changelog_manager._topic_manager
+        topic = topic_manager.topic(name="topic1")
         store_name = "default"
         manager.register_store(topic.name, store_name=store_name)
 
         assert topic.name in manager._stores
-        assert store_name in manager._topic_manager.changelog_topics[topic.name]
+        assert store_name in topic_manager.changelog_topics[topic.name]
 
-    def test_register_store_no_topic_manager(self, state_manager):
+    def test_register_store_no_changelog_manager(self, state_manager):
         state_manager = state_manager
         state_manager.register_store("my_topic", store_name="default")
 
-        assert state_manager._topic_manager is None
+        assert state_manager._changelog_manager is None
 
     def test_assign_revoke_partitions_stores_registered(self, state_manager):
         state_manager.register_store("topic1", store_name="store1")

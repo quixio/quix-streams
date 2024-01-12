@@ -1,6 +1,5 @@
-from quixstreams.topic_manager import TopicManagerType
+from quixstreams.topic_manager import TopicManagerType, BytesTopic
 from quixstreams.rowproducer import RowProducer
-from quixstreams.models import Topic
 
 from typing import Optional
 
@@ -13,7 +12,7 @@ class ChangelogWriter:
     a changelog topic.
     """
 
-    def __init__(self, topic: Topic, partition_num: int, producer: RowProducer):
+    def __init__(self, topic: BytesTopic, partition_num: int, producer: RowProducer):
         self._topic = topic
         self._partition_num = partition_num
         self._producer = producer

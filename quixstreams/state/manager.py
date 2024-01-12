@@ -70,10 +70,6 @@ class StateStoreManager:
         """
         return self._stores
 
-    @property
-    def changelog_manager(self):
-        return self._changelog_manager
-
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ) -> Store:

@@ -1,6 +1,6 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 from unittest.mock import create_autospec
 
 import pytest
@@ -26,6 +26,8 @@ from quixstreams.kafka import (
 from quixstreams.models import MessageContext
 from quixstreams.models.rows import Row
 from quixstreams.models.serializers import (
+    Serializer,
+    Deserializer,
     JSONSerializer,
     JSONDeserializer,
 )
@@ -41,7 +43,7 @@ from quixstreams.platforms.quix.config import (
 )
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.state import StateStoreManager
+from quixstreams.state import StateStoreManager, ChangelogManager
 from quixstreams.topic_manager import TopicManager, TopicManagerType
 
 
@@ -150,10 +152,14 @@ def topic_json_serdes_factory(topic_factory):
         topic: str = None,
         num_partitions: int = 1,
         timeout: float = 10.0,
+        create_topic: bool = True,
     ):
-        topic_name, _ = topic_factory(
-            topic=topic, num_partitions=num_partitions, timeout=timeout
-        )
+        if create_topic:
+            topic_name, _ = topic_factory(
+                topic=topic, num_partitions=num_partitions, timeout=timeout
+            )
+        else:
+            topic_name = uuid.uuid4()
         return Topic(
             name=topic or topic_name,
             value_deserializer=JSONDeserializer(),
@@ -298,14 +304,14 @@ def state_manager_factory(tmp_path):
     def factory(
         group_id: Optional[str] = None,
         state_dir: Optional[str] = None,
-        topic_manager: Optional[TopicManager] = None,
+        changelog_manager: Optional[ChangelogManager] = None,
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())
         return StateStoreManager(
             group_id=group_id,
             state_dir=str(tmp_path / state_dir),
-            topic_manager=topic_manager,
+            changelog_manager=changelog_manager,
         )
 
     return factory
@@ -320,10 +326,24 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
+def changelog_manager_factory(topic_manager_factory, row_producer_factory):
+    def factory(
+        admin: Optional[Admin] = None, producer: RowProducer = row_producer_factory()
+    ):
+        return ChangelogManager(
+            topic_manager=topic_manager_factory(admin=admin), producer=producer
+        )
+
+    return factory
+
+
+@pytest.fixture()
 def state_manager_changelogs(
-    state_manager_factory, admin, topic_manager_factory
+    state_manager_factory, admin, changelog_manager_factory
 ) -> StateStoreManager:
-    manager = state_manager_factory(topic_manager=topic_manager_factory(admin=admin))
+    manager = state_manager_factory(
+        changelog_manager=changelog_manager_factory(admin=admin)
+    )
     manager.init()
     yield manager
     manager.close()
@@ -387,9 +407,59 @@ def admin(kafka_container):
 
 @pytest.fixture()
 def topic_manager_factory():
+    """
+    TopicManager with option to add an Admin (which uses Kafka Broker)
+    """
+
     def factory(
         admin: Optional[Admin] = None, create_timeout: int = 10
     ) -> TopicManager:
         return TopicManager(admin=admin, create_timeout=create_timeout)
+
+    return factory
+
+
+@pytest.fixture()
+def topic_manager_admin_factory(admin):
+    """
+    TopicManager with working Admin instance (create topics or get topic metadata)
+    """
+
+    def factory(create_timeout: int = 10) -> TopicManager:
+        return TopicManager(admin=admin, create_timeout=create_timeout)
+
+    return factory
+
+
+@pytest.fixture()
+def topic_manager_topic_factory(topic_manager_admin_factory):
+    """
+    Uses TopicManager to generate a Topic, create it, and return the Topic object
+    """
+
+    def factory(
+        name: Optional[str] = str(uuid.uuid4()),
+        partitions: int = 1,
+        create_topic: bool = True,
+        key_serializer: Optional[Union[Serializer, str]] = None,
+        value_serializer: Optional[Union[Serializer, str]] = None,
+        key_deserializer: Optional[Union[Deserializer, str]] = None,
+        value_deserializer: Optional[Union[Deserializer, str]] = None,
+    ):
+        topic_manager = topic_manager_admin_factory()
+        topic_args = {
+            "key_serializer": key_serializer,
+            "value_serializer": value_serializer,
+            "key_deserializer": key_deserializer,
+            "value_deserializer": value_deserializer,
+            "config": topic_manager.topic_config(num_partitions=partitions),
+        }
+        topic_manager = topic_manager_admin_factory()
+        topic = topic_manager.topic(
+            name, **{k: v for k, v in topic_args.items() if v is not None}
+        )
+        if create_topic:
+            topic_manager.create_all_topics()
+        return topic
 
     return factory

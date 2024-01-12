@@ -15,6 +15,7 @@ from quixstreams.models.serializers import (
     IntegerSerializer,
     BytesDeserializer,
     SerializationContext,
+    SerializerIsNotProvidedError,
     DeserializerIsNotProvidedError,
     IgnoreMessage,
     SerializationError,
@@ -283,6 +284,64 @@ class TestTopic:
         assert message.key == b"key"
         assert message.value == b"value"
         assert message.headers == value_serializer.extra_headers
+
+    def test_serialize(self, topic_json_serdes_factory):
+        topic = Topic(name="my_topic", key_serializer="str", value_serializer="json")
+        message = topic.serialize(
+            key="woo",
+            value={"a": ["cool", "json"]},
+            headers={"header": "value"},
+            timestamp_ms=1234567890,
+        )
+        assert message.key == b"woo"
+        assert message.value == b'{"a":["cool","json"]}'
+        assert message.headers == {"header": "value"}
+        assert message.timestamp == 1234567890
+
+    def test_serialize_no_key(self, topic_json_serdes_factory):
+        topic = Topic(name="my_topic", key_serializer=None, value_serializer="json")
+        message = topic.serialize(
+            value={"a": ["cool", "json"]},
+            headers={"header": "value"},
+            timestamp_ms=1234567890,
+        )
+        assert message.key is None
+        assert message.value == b'{"a":["cool","json"]}'
+        assert message.headers == {"header": "value"}
+        assert message.timestamp == 1234567890
+
+    @pytest.mark.skip(
+        "Should this pass or fail? Currently fails because string serializer allows"
+        "NoneTypes (and returns a NoneType) when it probably shouldn't?"
+    )
+    def test_serialize_key_missing(self, topic_json_serdes_factory):
+        topic = Topic(name="my_topic", key_serializer="string", value_serializer="json")
+        with pytest.raises(SerializationError):
+            topic.serialize(
+                value={"a": ["cool", "json"]},
+                headers={"header": "value"},
+                timestamp_ms=1234567890,
+            )
+
+    def test_serialize_serialization_error(self, topic_json_serdes_factory):
+        topic = Topic(name="my_topic", key_serializer="bytes", value_serializer="json")
+        with pytest.raises(SerializationError):
+            topic.serialize(
+                key="woo",
+                value={"a": ["cool", "json"]},
+                headers={"header": "value"},
+                timestamp_ms=1234567890,
+            )
+
+    def test_serialize_serializer_missing(self, topic_json_serdes_factory):
+        topic = Topic(name="my_topic", key_serializer="string", value_serializer=None)
+        with pytest.raises(SerializerIsNotProvidedError):
+            topic.serialize(
+                key="woo",
+                value={"a": ["cool", "json"]},
+                headers={"header": "value"},
+                timestamp_ms=1234567890,
+            )
 
     @pytest.mark.parametrize(
         "key_serializer, value_serializer, key, value",

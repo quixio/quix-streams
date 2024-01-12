@@ -3,7 +3,7 @@ import secrets
 import time
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, call
 
 import pytest
 import rocksdict
@@ -19,6 +19,7 @@ from quixstreams.state.rocksdb import (
     ColumnFamilyDoesNotExist,
 )
 from quixstreams.state.rocksdb.serialization import serialize
+from quixstreams.state.rocksdb.partition import _CHANGELOG_OFFSET_KEY
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [
@@ -174,7 +175,35 @@ class TestRocksDBPartitionTransaction:
 
         assert tx.completed
 
-    def test_transaction_doesnt_write_empty_batch(self, rocksdb_partition):
+    def test_transaction_with_changelog(
+        self, rocksdb_partition, changelog_writer_patched
+    ):
+        key_out = "my_key"
+        value_out = "my_value"
+        db_writes = 3
+        assert rocksdb_partition.get_changelog_offset() == 0
+
+        with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+            for i in range(db_writes):
+                tx.set(f"{key_out}{i}", f"{value_out}{i}")
+
+        changelog_writer_patched.produce.assert_has_calls(
+            [
+                call(
+                    key=tx._serialize_key(key=f"{key_out}{i}"),
+                    cf_name="default",
+                    value=tx._serialize_value(value=f"{value_out}{i}"),
+                )
+                for i in range(db_writes)
+            ]
+        )
+        assert tx.completed
+        assert tx._changelog_writer == changelog_writer_patched
+        assert rocksdb_partition.get_changelog_offset() == db_writes
+
+    def test_transaction_doesnt_write_empty_batch(
+        self, rocksdb_partition, changelog_writer_patched
+    ):
         """
         Test that transaction doesn't call "StateStore.write()" if the internal
         WriteBatch is empty (i.e. no keys were updated during the transaction).
@@ -185,7 +214,13 @@ class TestRocksDBPartitionTransaction:
             with rocksdb_partition.begin() as tx:
                 tx.get("key")
 
-            assert not mocked.called
+            with rocksdb_partition.begin(
+                changelog_writer=changelog_writer_patched
+            ) as tx:
+                tx.get("key")
+
+        assert not mocked.called
+        assert not changelog_writer_patched.produce.called
 
     def test_delete_key_doesnt_exist(self, rocksdb_partition):
         with rocksdb_partition.begin() as tx:

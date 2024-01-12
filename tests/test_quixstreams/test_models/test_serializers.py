@@ -48,6 +48,7 @@ class TestSerializers:
             (DoubleSerializer(), object()),
             (StringSerializer(), 123),
             (StringSerializer(), {"a": 123}),
+            (BytesSerializer(), "abc"),
             (JSONSerializer(), object()),
             (JSONSerializer(), complex(1, 2)),
         ],
@@ -109,6 +110,7 @@ class TestDeserializers:
             (IntegerDeserializer(), b"abc"),
             (IntegerDeserializer(), b'{"abc": "abc"}'),
             (DoubleDeserializer(), b"abc"),
+            (BytesDeserializer(), "abc"),
             (JSONDeserializer(), b"{"),
         ],
     )

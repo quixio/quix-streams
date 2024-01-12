@@ -156,6 +156,8 @@ class RocksDBStore(Store):
                 suffix=self._name,
                 partition_num=partition,
             )
+            if self._changelog_manager
+            else None
         )
 
     def close(self):

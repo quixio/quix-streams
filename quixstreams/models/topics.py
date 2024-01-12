@@ -25,8 +25,6 @@ from .serializers import (
 from .timestamps import MessageTimestamp
 from .types import (
     ConfluentKafkaMessageProto,
-    MessageKey,
-    MessageValue,
     MessageHeadersTuples,
 )
 
@@ -98,13 +96,6 @@ class Topic:
     `app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
     instance.
     """
-
-    _serialize_map = {
-        "key": "_key_serializer",
-        "value": "_value_serializer",
-    }
-
-    _deserialize_map = {"key": "_key_deserializer", "value": "_value_deserializer"}
 
     def __init__(
         self,
@@ -253,16 +244,28 @@ class Topic:
 
     def serialize(
         self,
-        key: Optional[MessageKey] = None,
-        value: Optional[MessageValue] = None,
+        key: Optional[object] = None,
+        value: Optional[object] = None,
         headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
         timestamp_ms: int = None,
     ) -> KafkaMessage:
+        ctx = SerializationContext(topic=self.name, headers=headers)
+        if self._key_serializer:
+            key = self._key_serializer(key, ctx=ctx)
+        elif key is not None:
+            raise SerializerIsNotProvidedError(
+                f'Key serializer is not provided for topic "{self.name}"'
+            )
+        if self._value_serializer:
+            value = self._value_serializer(value, ctx=ctx)
+        elif value is not None:
+            raise SerializerIsNotProvidedError(
+                f'Value serializer is not provided for topic "{self.name}"'
+            )
         # TODO: confirm this is a valid context
-        ctx = SerializationContext(topic="", headers=headers)
         return KafkaMessage(
-            key=self._key_serializer(key, ctx=ctx) if key else None,
-            value=self._value_serializer(value, ctx=ctx) if value else None,
+            key=key,
+            value=value,
             headers=headers,
             timestamp=timestamp_ms,
         )
