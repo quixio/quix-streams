@@ -44,7 +44,7 @@ from quixstreams.platforms.quix.config import (
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager, ChangelogManager
-from quixstreams.topic_manager import TopicManager, TopicManagerType
+from quixstreams.topic_manager import TopicManager
 
 
 @pytest.fixture()
@@ -127,7 +127,7 @@ def topic_factory(kafka_admin_client):
     """
 
     def factory(
-        topic: str = None, num_partitions: int = 1, timeout: float = 10.0
+        topic: str = None, num_partitions: int = 1, timeout: float = 20.0
     ) -> (str, int):
         topic_name = topic or str(uuid.uuid4())
         futures = kafka_admin_client.create_topics(

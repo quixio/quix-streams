@@ -35,7 +35,7 @@ def _wrap_serialization_error(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (_SerializationError, AttributeError, TypeError) as exc:
+        except (_SerializationError, AttributeError) as exc:
             raise SerializationError(str(exc)) from exc
 
     return wrapper
@@ -46,13 +46,8 @@ class BytesDeserializer(Deserializer):
     A deserializer to bypass bytes without any changes
     """
 
-    @_wrap_serialization_error
-    def __call__(
-        self, value: bytes, ctx: SerializationContext
-    ) -> Union[bytes, Mapping[str, bytes]]:
-        if isinstance(value, bytes):
-            return self._to_dict(value)
-        raise TypeError(f"serializer expected type 'bytes', received '{type(value)}'")
+    def __call__(self, value: bytes, ctx: SerializationContext):
+        return self._to_dict(value)
 
 
 class BytesSerializer(Serializer):
@@ -60,11 +55,8 @@ class BytesSerializer(Serializer):
     A serializer to bypass bytes without any changes
     """
 
-    @_wrap_serialization_error
     def __call__(self, value: bytes, ctx: SerializationContext) -> bytes:
-        if isinstance(value, bytes):
-            return value
-        raise TypeError(f"serializer expected type 'bytes', received '{type(value)}'")
+        return value
 
 
 class StringDeserializer(Deserializer):
