@@ -451,17 +451,18 @@ class Application:
         Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
         instance each time, which is not optimized for repeated use in a streaming pipeline.
 
-        Example Usage:
-            ```python
-            from quixstreams import Application
+        Example Snippet:
 
-            app = Application.Quix(...)
-            topic = app.topic("input")
+        ```python
+        from quixstreams import Application
 
-            with app.get_producer() as producer:
-                for i in range(100):
-                    producer.produce(topic=topic.name, key=b"key", value=b"value")
-            ```
+        app = Application.Quix(...)
+        topic = app.topic("input")
+
+        with app.get_producer() as producer:
+            for i in range(100):
+                producer.produce(topic=topic.name, key=b"key", value=b"value")
+        ```
         """
         if self.is_quix_app:
             topics = self._quix_config_builder.create_topic_configs.values()
@@ -490,22 +491,23 @@ class Application:
         To store the offset call store_offsets() after processing a message.
         If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
 
-        Example Usage:
-            ```python
-            from quixstreams import Application
+        Example Snippet:
 
-            app = Application.Quix(...)
-            topic = app.topic("input")
+        ```python
+        from quixstreams import Application
 
-            with app.get_consumer() as consumer:
-                for _ in range(100):
-                    msg = consumer.poll(timeout=1.0)
-                    if msg is not None:
-                        # Process message
-                        # Optionally commit the offset
-                        # consumer.store_offsets(msg)
+        app = Application.Quix(...)
+        topic = app.topic("input")
 
-            ```
+        with app.get_consumer() as consumer:
+            for _ in range(100):
+                msg = consumer.poll(timeout=1.0)
+                if msg is not None:
+                    # Process message
+                    # Optionally commit the offset
+                    # consumer.store_offsets(msg)
+
+        ```
         """
         if self.is_quix_app:
             topics = self._quix_config_builder.create_topic_configs.values()
