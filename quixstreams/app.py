@@ -448,8 +448,8 @@ class Application:
 
         It's useful for producing data to Kafka outside the standard Application processing flow,
         (e.g. to produce test data into a topic).
-        Using it within the StreamingDataFrame functions is not recommended, as it creates a new Producer instance
-        each time, which is not optimized for repeated use in a streaming pipeline.
+        Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
+        instance each time, which is not optimized for repeated use in a streaming pipeline.
 
         Example Usage:
             ```python
