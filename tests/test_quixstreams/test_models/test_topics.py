@@ -311,8 +311,7 @@ class TestTopic:
         assert message.timestamp == 1234567890
 
     @pytest.mark.skip(
-        "Should this pass or fail? Currently fails because string serializer allows"
-        "NoneTypes (and returns a NoneType) when it probably shouldn't?"
+        "string serializer currently allows NoneTypes, probably shouldn't?"
     )
     def test_serialize_key_missing(self, topic_json_serdes_factory):
         topic = Topic(name="my_topic", key_serializer="string", value_serializer="json")

@@ -19,7 +19,6 @@ from quixstreams.state.rocksdb import (
     ColumnFamilyDoesNotExist,
 )
 from quixstreams.state.rocksdb.serialization import serialize
-from quixstreams.state.rocksdb.partition import _CHANGELOG_OFFSET_KEY
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [

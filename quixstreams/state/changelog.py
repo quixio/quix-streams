@@ -17,10 +17,7 @@ class ChangelogWriter:
         self._partition_num = partition_num
         self._producer = producer
 
-    def produce(
-        self, key: bytes, cf_name: str = "default", value: Optional[bytes] = None
-    ):
-        # TODO-CF: remove default cf_name to ensure its passed?
+    def produce(self, key: bytes, cf_name: str, value: Optional[bytes] = None):
         msg = self._topic.serialize(key=key, value=value)
         self._producer.produce(
             key=msg.key,
@@ -37,6 +34,8 @@ class ChangelogManager:
     generating changelog writers (generally for each new `Store` transaction).
     """
 
+    _writer = ChangelogWriter
+
     def __init__(self, topic_manager: TopicManagerType, producer: RowProducer):
         self._topic_manager = topic_manager
         self._producer = producer
@@ -50,8 +49,8 @@ class ChangelogManager:
 
     def get_writer(
         self, source_topic_name: str, suffix: str, partition_num: int
-    ) -> ChangelogWriter:
-        return ChangelogWriter(
+    ) -> _writer:
+        return self._writer(
             topic=self._topic_manager.changelog_topics[source_topic_name][suffix],
             partition_num=partition_num,
             producer=self._producer,

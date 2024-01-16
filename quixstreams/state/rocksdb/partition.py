@@ -2,7 +2,7 @@ import contextlib
 import functools
 import logging
 import time
-from typing import Any, Union, Optional, List
+from typing import Any, Union, Optional, List, Set, Dict
 
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
 from typing_extensions import Self
@@ -19,7 +19,12 @@ from .exceptions import (
     ColumnFamilyAlreadyExists,
     ColumnFamilyDoesNotExist,
 )
-from .metadata import METADATA_CF_NAME, PROCESSED_OFFSET_KEY, PREFIX_SEPARATOR
+from .metadata import (
+    METADATA_CF_NAME,
+    PROCESSED_OFFSET_KEY,
+    CHANGELOG_OFFSET_KEY,
+    PREFIX_SEPARATOR,
+)
 from .options import RocksDBOptions
 from .serialization import (
     serialize,
@@ -42,16 +47,6 @@ logger = logging.getLogger(__name__)
 _sentinel = object()
 
 _DEFAULT_PREFIX = b""
-
-_CHANGELOG_OFFSET_KEY = b"__changelog_offset__"
-
-
-def _int_to_int64_bytes(value: int) -> bytes:
-    return struct.pack(">q", value)
-
-
-def _int_from_int64_bytes(value: bytes) -> int:
-    return struct.unpack(">q", value)[0]
 
 
 class RocksDBStorePartition(StorePartition):
@@ -158,14 +153,11 @@ class RocksDBStorePartition(StorePartition):
         Get last produced offset for the given changelog partition
         :return: offset or `None` if there's no produced offset yet
         """
-        # TODO-CF: UNCOMMENT AND REPLACE ALL BELOW
-        # metadata_cf = self.get_column_family(METADATA_CF_NAME)
-        # offset_bytes = metadata_cf.get(_CHANGELOG_OFFSET_KEY)
-        # if offset_bytes is None:
-        #     offset_bytes = self._db.get(_CHANGELOG_OFFSET_KEY)
-        # return int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
-        offset_bytes = self._db.get(_CHANGELOG_OFFSET_KEY)
-        return _int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
+        metadata_cf = self.get_column_family(METADATA_CF_NAME)
+        offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
+        if offset_bytes is None:
+            offset_bytes = self._db.get(CHANGELOG_OFFSET_KEY)
+        return int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
 
     def close(self):
         """
@@ -399,8 +391,8 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         changelog_writer: Optional[ChangelogWriter] = None,
     ):
         self._partition = partition
-        self._update_cache = {}
-        self._delete_cache = set()
+        self._update_cache: Dict[str, Dict[bytes, bytes]] = {}
+        self._delete_cache: Dict[str, Set[bytes]] = {}
         self._batch = WriteBatch(raw_mode=True)
         self._prefix = _DEFAULT_PREFIX
         self._failed = False
@@ -496,7 +488,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             self._update_cache.setdefault(cf_name, {})[
                 key_serialized
             ] = value_serialized
-            self._delete_cache.discard(key_serialized)
+            self._delete_cache.get(cf_name, set()).discard(key_serialized)
         except Exception:
             self._failed = True
             raise
@@ -516,7 +508,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             cf_handle = self._partition.get_column_family_handle(cf_name)
             self._batch.delete(key_serialized, cf_handle)
             self._update_cache.get(cf_name, {}).pop(key_serialized, None)
-            self._delete_cache.add(key_serialized)
+            self._delete_cache.setdefault(cf_name, set()).add(key_serialized)
         except Exception:
             self._failed = True
             raise
@@ -564,24 +556,21 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
         return self._failed
 
-    def _update_changelog(self, cf_handle=None):
+    def _update_changelog(self, cf_handle):
         logger.debug("Flushing state changes to the changelog topic...")
         offset = self._partition.get_changelog_offset() or 0
-        offset += len(self._update_cache) + len(self._delete_cache)
-
-        # TODO-CF: UNCOMMENT AND REPLACE ALL BELOW, ADD CF_HANDLE_TYPE
-        # TODO-CF: Need to add delete cache back for clearing keys out in changelog
-        # self._batch.put(_CHANGELOG_OFFSET_KEY, _int_to_int64_bytes(offset), cf_handle)
-        # logger.debug(f"Changelog offset set to {offset}")
-        # for cf_name in self._update_cache:
-        #     for k, v in self._update_cache[cf_name].items():
-        #         self._changelog_writer.produce(key=k, cf_name=cf_name, value=v)
-        self._batch.put(_CHANGELOG_OFFSET_KEY, _int_to_int64_bytes(offset))
+        for cf_name in self._update_cache:
+            for k, v in self._update_cache[cf_name].items():
+                self._changelog_writer.produce(key=k, cf_name=cf_name, value=v)
+                offset += 1
+        for cf_name in self._delete_cache:
+            for k in self._delete_cache[cf_name]:
+                self._changelog_writer.produce(
+                    key=k, cf_name=cf_name
+                )  # tombstone record
+                offset += 1
+        self._batch.put(CHANGELOG_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle)
         logger.debug(f"Changelog offset set to {offset}")
-        for k, v in self._update_cache.items():
-            self._changelog_writer.produce(key=k, cf_name="default", value=v)
-        for k in self._delete_cache:
-            self._changelog_writer.produce(key=k, cf_name="default")  # tombstone record
 
     @_validate_transaction_state
     def maybe_flush(self, offset: Optional[int] = None):
@@ -602,15 +591,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         try:
             # Don't write batches if this transaction doesn't change any keys
             if len(self._batch):
+                cf_handle = self._partition.get_column_family_handle(METADATA_CF_NAME)
                 if offset is not None:
-                    cf_handle = self._partition.get_column_family_handle(
-                        METADATA_CF_NAME
-                    )
                     self._batch.put(
                         PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
                     )
                 if self._changelog_writer:
-                    self._update_changelog(cf_handle=None)  # TODO-CF: CF_HANDLE LOGIC
+                    self._update_changelog(cf_handle)
                 self._partition.write(self._batch)
         except Exception:
             self._failed = True
