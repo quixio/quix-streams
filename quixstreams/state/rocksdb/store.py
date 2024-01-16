@@ -69,6 +69,14 @@ class RocksDBStore(Store):
         """
         return self._partitions
 
+    def create_new_partition(self, path: str) -> RocksDBStorePartition:
+        return RocksDBStorePartition(
+            path=path,
+            options=self._options,
+            open_max_retries=self._open_max_retries,
+            open_retry_backoff=self._open_retry_backoff,
+        )
+
     def assign_partition(self, partition: int) -> RocksDBStorePartition:
         """
         Open and assign store partition.
@@ -88,12 +96,7 @@ class RocksDBStore(Store):
             return self._partitions[partition]
 
         path = str((self._partitions_dir / str(partition)).absolute())
-        store_partition = RocksDBStorePartition(
-            path=path,
-            options=self._options,
-            open_max_retries=self._open_max_retries,
-            open_retry_backoff=self._open_retry_backoff,
-        )
+        store_partition = self.create_new_partition(path)
 
         self._partitions[partition] = store_partition
         logger.debug(
