@@ -480,7 +480,6 @@ class TestQuixApplication:
         builder = app._quix_config_builder
         topics = [app.topic("topic_in"), app.topic("topic_out")]
 
-        # Assuming get_producer
         with app.get_producer():
             ...
 
@@ -497,7 +496,6 @@ class TestQuixApplication:
         builder = app._quix_config_builder
         topics = [app.topic("topic_in"), app.topic("topic_out")]
 
-        # Assuming get_producer
         with app.get_consumer():
             ...
 
@@ -505,6 +503,34 @@ class TestQuixApplication:
         actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
         assert actual_call_arg == list(builder.create_topic_configs.values())
         assert {c.name for c in actual_call_arg} == {t.name for t in topics}
+
+    def test_consumer_extra_config(self, app_factory):
+        """
+        Test that some configs like `enable.auto.offset.store` are overridable and others are not
+        """
+        app = app_factory(
+            auto_offset_reset="latest",
+            consumer_extra_config={
+                "auto.offset.reset": "earliest",
+                "enable.auto.offset.store": True,
+            },
+        )
+
+        with app.get_consumer() as x:
+            assert x._consumer_config["enable.auto.offset.store"] is True
+            assert x._consumer_config["auto.offset.reset"] is "latest"
+
+    def test_producer_extra_config(self, app_factory):
+        """
+        Test that setting same configs through different ways works in the expected way
+        """
+        app = app_factory(
+            auto_offset_reset="latest",
+            producer_extra_config={"auto.offset.reset": "earliest"},
+        )
+
+        with app.get_consumer() as x:
+            assert x._consumer_config["auto.offset.reset"] is "latest"
 
     def test_quix_app_stateful_quix_deployment_no_state_management_warning(
         self, quix_app_factory, monkeypatch, topic_factory, executor

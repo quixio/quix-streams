@@ -77,7 +77,7 @@ class Producer:
             Note: values passed as arguments override values in `extra_config`.
         """
         config = dict(
-            **extra_config or {},
+            extra_config or {},
             **{
                 "bootstrap.servers": broker_address,
                 "partitioner": partitioner,

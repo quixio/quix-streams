@@ -486,8 +486,9 @@ class Application:
         Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
         each time, which is not optimized for repeated use in a streaming pipeline.
 
-        Note: The Consumer does not autocommit consumed offsets. If needed,
-        after processing a message, you can mark it as processed by calling store_offsets().
+        Note: By default this consumer does not autocommit consumed offsets to allow exactly-once processing.
+        To store the offset call store_offsets() after processing a message.
+        If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
 
         Example Usage:
             ```python
