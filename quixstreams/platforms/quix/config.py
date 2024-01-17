@@ -23,6 +23,33 @@ QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
 
+# Map Kafka configuration params from Quix format to librdkafka's
+_QUIX_PARAMS_NAMES_MAP = {
+    "saslMechanism": "sasl.mechanisms",
+    "securityMode": "security.protocol",
+    "address": "bootstrap.servers",
+    "username": "sasl.username",
+    "password": "sasl.password",
+}
+
+# Map values of `sasl.mechanisms` from Quix format to librdkafka's
+_QUIX_SASL_MECHANISM_MAP = {
+    "ScramSha256": "SCRAM-SHA-256",
+    "ScramSha512": "SCRAM-SHA-512",
+    "Gssapi": "GSSAPI",
+    "Plain": "PLAIN",
+    "OAuthBearer": "OAUTHBEARER",
+}
+
+# Map values of `security.protocol` from Quix format to librdkafka's
+_QUIX_SECURITY_PROTOCOL_MAP = {
+    "Ssl": "ssl",
+    "SaslSsl": "sasl_ssl",
+    "Sasl": "sasl_plaintext",
+    "PlainText": "plaintext",
+}
+
+
 @dataclasses.dataclass
 class TopicCreationConfigs:
     name: Optional[str] = None  # Required when not created by a Quix App.
@@ -97,16 +124,6 @@ class QuixKafkaConfigsBuilder:
 
     class CreateTopicTimeout(QuixException):
         ...
-
-    class QuixApiKafkaAuthConfigMap:
-        names = {
-            "saslMechanism": "sasl.mechanisms",
-            "securityMode": "security.protocol",
-            "address": "bootstrap.servers",
-            "username": "sasl.username",
-            "password": "sasl.password",
-        }
-        values = {"ScramSha256": "SCRAM-SHA-256", "SaslSsl": "SASL_SSL"}
 
     @property
     def workspace_id(self) -> str:
@@ -408,9 +425,18 @@ class QuixKafkaConfigsBuilder:
         """
         self.get_workspace_info(known_workspace_topic=known_topic)
         cfg_out = {}
-        for q_cfg, c_cfg in self.QuixApiKafkaAuthConfigMap.names.items():
-            value = self.quix_broker_config[q_cfg]
-            cfg_out[c_cfg] = self.QuixApiKafkaAuthConfigMap.values.get(value, value)
+        for quix_param_name, rdkafka_param_name in _QUIX_PARAMS_NAMES_MAP.items():
+            # Map broker config received from Quix to librdkafka format
+            param_value = self.quix_broker_config[quix_param_name]
+
+            # Also map values of "security.protocol" and "sasl.mechanisms" from Quix
+            # to librdkafka format
+            if rdkafka_param_name == "security.protocol":
+                param_value = _QUIX_SECURITY_PROTOCOL_MAP[param_value]
+            elif rdkafka_param_name == "sasl.mechanisms":
+                param_value = _QUIX_SASL_MECHANISM_MAP[param_value]
+            cfg_out[rdkafka_param_name] = param_value
+
         cfg_out["ssl.endpoint.identification.algorithm"] = "none"
         cfg_out["ssl.ca.location"] = self._set_workspace_cert()
 
