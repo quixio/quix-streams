@@ -381,13 +381,39 @@ class TestQuixKafkaConfigsBuilder:
             get_cert.assert_called_with(extract_to_folder=tmp_path)
         assert cfg_factory.workspace_cert_path == r == expected
 
-    def test_get_confluent_broker_config(self, quix_kafka_config_factory):
+    @pytest.mark.parametrize(
+        "quix_security_protocol, rdkafka_security_protocol",
+        [
+            ("SaslSsl", "sasl_ssl"),
+            ("PlainText", "plaintext"),
+            ("Sasl", "sasl_plaintext"),
+            ("Ssl", "ssl"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "quix_sasl_mechanisms, rdkafka_sasl_mechanisms",
+        [
+            ("ScramSha256", "SCRAM-SHA-256"),
+            ("ScramSha512", "SCRAM-SHA-512"),
+            ("Gssapi", "GSSAPI"),
+            ("Plain", "PLAIN"),
+            ("OAuthBearer", "OAUTHBEARER"),
+        ],
+    )
+    def test_get_confluent_broker_config(
+        self,
+        quix_security_protocol,
+        rdkafka_security_protocol,
+        quix_sasl_mechanisms,
+        rdkafka_sasl_mechanisms,
+        quix_kafka_config_factory,
+    ):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
         cfg_factory._quix_broker_config = {
             "address": "address1,address2",
-            "securityMode": "SaslSsl",
+            "securityMode": quix_security_protocol,
             "sslPassword": "",
-            "saslMechanism": "ScramSha256",
+            "saslMechanism": quix_sasl_mechanisms,
             "username": "my-username",
             "password": "my-password",
             "hasCertificate": True,
@@ -401,8 +427,8 @@ class TestQuixKafkaConfigsBuilder:
         get_ws.assert_called_with(known_workspace_topic="topic")
         set_cert.assert_called()
         assert cfg_factory.confluent_broker_config == {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
+            "sasl.mechanisms": rdkafka_sasl_mechanisms,
+            "security.protocol": rdkafka_security_protocol,
             "bootstrap.servers": "address1,address2",
             "sasl.username": "my-username",
             "sasl.password": "my-password",
