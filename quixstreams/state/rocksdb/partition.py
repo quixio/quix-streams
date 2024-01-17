@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any, Union, Optional, List
 
-from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
+from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from typing_extensions import Self
 
 from quixstreams.state.types import (
@@ -39,6 +39,7 @@ __all__ = (
 logger = logging.getLogger(__name__)
 
 _sentinel = object()
+_deleted_key_sentinel = object()
 
 _DEFAULT_PREFIX = b""
 
@@ -430,6 +431,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         # Use sentinel as default because the actual value can be "None"
         key_serialized = self._serialize_key(key)
         cached = self._update_cache.get(cf_name, {}).get(key_serialized, _sentinel)
+        if cached is _deleted_key_sentinel:
+            return default
+
         if cached is not _sentinel:
             return self._deserialize_value(cached)
 
@@ -478,7 +482,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         try:
             cf_handle = self._partition.get_column_family_handle(cf_name)
             self._batch.delete(key_serialized, cf_handle)
-            self._update_cache.get(cf_name, {}).pop(key_serialized, None)
+
+            if cf_name not in self._update_cache:
+                self._update_cache[cf_name] = {}
+            self._update_cache[cf_name][key_serialized] = _deleted_key_sentinel
+
         except Exception:
             self._failed = True
             raise
@@ -496,8 +504,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
 
         key_serialized = self._serialize_key(key)
-        if key_serialized in self._update_cache.get(cf_name, {}):
+        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _sentinel)
+        if cached is _deleted_key_sentinel:
+            return False
+
+        if cached is not _sentinel:
             return True
+
         return self._partition.exists(key_serialized, cf_name=cf_name)
 
     @property
@@ -536,7 +549,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         cannot be used anymore.
 
         >***NOTE:*** If no keys have been modified during the transaction
-            (i.e no "set" or "delete" have been called at least once), it will
+            (i.e. no "set" or "delete" have been called at least once), it will
             not flush ANY data to the database including the offset in order to optimize
             I/O.
 
