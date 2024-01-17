@@ -17,13 +17,15 @@ __all__ = ("RocksDBStore",)
 
 
 class RocksDBStore(Store):
+    options_type = RocksDBOptionsType
+
     def __init__(
         self,
         name: str,
         topic: str,
         base_dir: str,
         changelog_manager: Optional[ChangelogManager] = None,
-        options: Optional[RocksDBOptionsType] = None,
+        options: Optional[options_type] = None,
         open_max_retries: int = 10,
         open_retry_backoff: float = 3.0,
     ):

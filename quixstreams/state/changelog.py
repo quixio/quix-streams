@@ -1,9 +1,8 @@
-from quixstreams.topic_manager import TopicManagerType, BytesTopic
-from quixstreams.rowproducer import RowProducer
-
 from typing import Optional
 
-_COLUMN_FAMILY_HEADER = "__column_family__"
+from quixstreams.rowproducer import RowProducer
+from quixstreams.topic_manager import TopicManagerType, BytesTopic
+from quixstreams.types import Headers
 
 
 class ChangelogWriter:
@@ -17,14 +16,19 @@ class ChangelogWriter:
         self._partition_num = partition_num
         self._producer = producer
 
-    def produce(self, key: bytes, cf_name: str, value: Optional[bytes] = None):
+    def produce(
+        self,
+        key: bytes,
+        value: Optional[bytes] = None,
+        headers: Optional[Headers] = None,
+    ):
         msg = self._topic.serialize(key=key, value=value)
         self._producer.produce(
             key=msg.key,
             value=msg.value,
             topic=self._topic.name,
             partition=self._partition_num,
-            headers={_COLUMN_FAMILY_HEADER: cf_name},
+            headers=headers,
         )
 
 
@@ -33,8 +37,6 @@ class ChangelogManager:
     A simple interface for adding changelog topics during store init and
     generating changelog writers (generally for each new `Store` transaction).
     """
-
-    _writer = ChangelogWriter
 
     def __init__(self, topic_manager: TopicManagerType, producer: RowProducer):
         self._topic_manager = topic_manager
@@ -49,8 +51,8 @@ class ChangelogManager:
 
     def get_writer(
         self, source_topic_name: str, suffix: str, partition_num: int
-    ) -> _writer:
-        return self._writer(
+    ) -> ChangelogWriter:
+        return ChangelogWriter(
             topic=self._topic_manager.changelog_topics[source_topic_name][suffix],
             partition_num=partition_num,
             producer=self._producer,

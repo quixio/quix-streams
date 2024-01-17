@@ -19,6 +19,7 @@ from quixstreams.state.rocksdb import (
     ColumnFamilyDoesNotExist,
 )
 from quixstreams.state.rocksdb.serialization import serialize
+from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.utils.json import dumps
 
 TEST_KEYS = [
@@ -179,19 +180,20 @@ class TestRocksDBPartitionTransaction:
     ):
         key_out = "my_key"
         value_out = "my_value"
+        cf = "default"
         db_writes = 3
         assert rocksdb_partition.get_changelog_offset() == 0
 
         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
             for i in range(db_writes):
-                tx.set(f"{key_out}{i}", f"{value_out}{i}")
+                tx.set(key=f"{key_out}{i}", value=f"{value_out}{i}", cf_name=cf)
 
         changelog_writer_patched.produce.assert_has_calls(
             [
                 call(
                     key=tx._serialize_key(key=f"{key_out}{i}"),
-                    cf_name="default",
                     value=tx._serialize_value(value=f"{value_out}{i}"),
+                    headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
                 )
                 for i in range(db_writes)
             ]
@@ -199,6 +201,91 @@ class TestRocksDBPartitionTransaction:
         assert tx.completed
         assert tx._changelog_writer == changelog_writer_patched
         assert rocksdb_partition.get_changelog_offset() == db_writes
+
+    def test_transaction_with_changelog_delete(
+        self, rocksdb_partition, changelog_writer_patched
+    ):
+        key_out = "my_key"
+        value_out = "my_value"
+        cf = "default"
+        assert rocksdb_partition.get_changelog_offset() == 0
+
+        with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+            tx.set(key=key_out, value=value_out, cf_name=cf)
+
+        with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+            tx.delete(key=key_out, cf_name=cf)
+
+        changelog_writer_patched.produce.assert_has_calls(
+            [
+                call(
+                    key=tx._serialize_key(key=key_out),
+                    value=tx._serialize_value(value=value_out),
+                    headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
+                ),
+                call(
+                    key=tx._serialize_key(key=key_out),
+                    headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
+                ),
+            ]
+        )
+        assert tx.completed
+        assert tx._changelog_writer == changelog_writer_patched
+        assert rocksdb_partition.get_changelog_offset() == 2
+
+    def test_transaction_with_changelog_delete_cached(
+        self, rocksdb_partition, changelog_writer_patched
+    ):
+        key_out = "my_key"
+        value_out = "my_value"
+        cf = "default"
+        db_writes = 3
+        delete_index = 2
+        assert rocksdb_partition.get_changelog_offset() == 0
+
+        with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+            for i in range(db_writes):
+                tx.set(key=f"{key_out}{i}", value=f"{value_out}{i}", cf_name=cf)
+            tx.delete(key=f"{key_out}{delete_index}", cf_name=cf)
+
+        changelog_writer_patched.produce.assert_has_calls(
+            [
+                call(
+                    key=tx._serialize_key(key=f"{key_out}{i}"),
+                    value=tx._serialize_value(value=f"{value_out}{i}"),
+                    headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
+                )
+                for i in range(db_writes - 1)
+            ]
+            + [
+                call(
+                    key=tx._serialize_key(key=f"{key_out}{delete_index}"),
+                    headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
+                )
+            ]
+        )
+        assert tx.completed
+        assert tx._changelog_writer == changelog_writer_patched
+        assert rocksdb_partition.get_changelog_offset() == db_writes
+
+    def test_transaction_with_changelog_delete_nonexisting_key(
+        self, rocksdb_partition, changelog_writer_patched
+    ):
+        key_out = "my_key"
+        cf = "default"
+        assert rocksdb_partition.get_changelog_offset() == 0
+
+        with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
+            tx.delete(key=key_out, cf_name=cf)
+
+        changelog_writer_patched.produce.assert_called_with(
+            key=tx._serialize_key(key=key_out),
+            headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
+        )
+
+        assert tx.completed
+        assert tx._changelog_writer == changelog_writer_patched
+        assert rocksdb_partition.get_changelog_offset() == 1
 
     def test_transaction_doesnt_write_empty_batch(
         self, rocksdb_partition, changelog_writer_patched

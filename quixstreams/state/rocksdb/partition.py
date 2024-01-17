@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any, Union, Optional, List, Set, Dict
 
-from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
+from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from typing_extensions import Self
 
 from quixstreams.state.types import (
@@ -24,6 +24,7 @@ from .metadata import (
     PROCESSED_OFFSET_KEY,
     CHANGELOG_OFFSET_KEY,
     PREFIX_SEPARATOR,
+    CHANGELOG_CF_MESSAGE_HEADER,
 )
 from .options import RocksDBOptions
 from .serialization import (
@@ -33,8 +34,8 @@ from .serialization import (
     int_to_int64_bytes,
 )
 from .types import RocksDBOptionsType
-from ..state import TransactionState
 from ..changelog import ChangelogWriter
+from ..state import TransactionState
 
 __all__ = (
     "RocksDBStorePartition",
@@ -503,12 +504,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param key: key to delete from DB
         :param cf_name: rocksdb column family name. Default - "default"
         """
+        # TODO: decide if we want more refined delete logic?
         key_serialized = self._serialize_key(key)
         try:
             cf_handle = self._partition.get_column_family_handle(cf_name)
             self._batch.delete(key_serialized, cf_handle)
-            self._update_cache.get(cf_name, {}).pop(key_serialized, None)
             self._delete_cache.setdefault(cf_name, set()).add(key_serialized)
+            self._update_cache.get(cf_name, {}).pop(key_serialized, None)
         except Exception:
             self._failed = True
             raise
@@ -559,14 +561,17 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def _update_changelog(self, cf_handle):
         logger.debug("Flushing state changes to the changelog topic...")
         offset = self._partition.get_changelog_offset() or 0
+
         for cf_name in self._update_cache:
             for k, v in self._update_cache[cf_name].items():
-                self._changelog_writer.produce(key=k, cf_name=cf_name, value=v)
+                self._changelog_writer.produce(
+                    key=k, value=v, headers={CHANGELOG_CF_MESSAGE_HEADER: cf_name}
+                )
                 offset += 1
         for cf_name in self._delete_cache:
             for k in self._delete_cache[cf_name]:
                 self._changelog_writer.produce(
-                    key=k, cf_name=cf_name
+                    key=k, headers={CHANGELOG_CF_MESSAGE_HEADER: cf_name}
                 )  # tombstone record
                 offset += 1
         self._batch.put(CHANGELOG_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle)

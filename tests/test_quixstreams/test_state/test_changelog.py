@@ -4,7 +4,6 @@ import uuid
 from quixstreams.state.changelog import (
     ChangelogManager,
     ChangelogWriter,
-    _COLUMN_FAMILY_HEADER,
 )
 from quixstreams.topic_manager import BytesTopic
 
@@ -14,11 +13,12 @@ class TestChangelogWriter:
         self, topic_manager_admin_factory, row_producer_factory, consumer_factory
     ):
         p_num = 2
+        cf_header = "my_cf_header"
         cf = "my_cf"
         expected = {
             "key": b"my_key",
             "value": b"10",
-            "headers": [(_COLUMN_FAMILY_HEADER, cf.encode())],
+            "headers": [(cf_header, cf.encode())],
             "partition": p_num,
         }
         topic_manager = topic_manager_admin_factory()
@@ -31,7 +31,8 @@ class TestChangelogWriter:
             topic=topic, partition_num=p_num, producer=row_producer_factory()
         )
         writer.produce(
-            **{k: v for k, v in expected.items() if k in ["key", "value"]}, cf_name=cf
+            **{k: v for k, v in expected.items() if k in ["key", "value"]},
+            headers={cf_header: cf},
         )
         writer._producer.flush(5)
 
