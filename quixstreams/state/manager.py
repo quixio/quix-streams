@@ -111,13 +111,7 @@ class StateStoreManager:
                     suffix=store_name,
                     consumer_group=self._group_id,
                 )
-            writer = None
-            if self._changelog_manager:
-                writer = self._changelog_manager.add_changelog_topic(
-                    source_topic_name=topic_name,
-                    suffix=store_name,
-                )
-            store = RocksDBStore(
+            self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
                 changelog_manager=self._changelog_manager,

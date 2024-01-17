@@ -559,7 +559,6 @@ class Application:
         print(self._consumer.assignment())
         print(f"ROW: {rows.topic, rows.partition}")
         print(f"PROCESS: CONTINUE")
-        sleep(2)
         # Deserializer may return multiple rows for a single message
         rows = rows if isinstance(rows, list) else [rows]
         if not rows:
@@ -615,6 +614,7 @@ class Application:
             self._run_mode = self._processing
 
     def _do_run_mode(self):
+        sleep(0.5)
         return self._run_mode()
 
     def run(

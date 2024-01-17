@@ -7,11 +7,12 @@ from typing import Any, Union, Optional, List, Set, Dict
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from typing_extensions import Self
 
+from quixstreams.models import MessageHeadersTuples, ConfluentKafkaMessageProto
 from quixstreams.state.types import (
     DumpsFunc,
     LoadsFunc,
     PartitionTransaction,
-    PartitionRecovery,
+    PartitionRecoveryTransaction,
     StorePartition,
 )
 from .exceptions import (
@@ -106,17 +107,18 @@ class RocksDBStorePartition(StorePartition):
             changelog_writer=changelog_writer,
         )
 
-    def recover(self, offset) -> "RocksDBPartitionRecovery":
+    def recover(self, changelog_message: ConfluentKafkaMessageProto):
         """
         Create a new `RocksDBTransaction` object.
         Using `RocksDBTransaction` is a recommended way for accessing the data.
 
         :return: an instance of `RocksDBTransaction`
         """
-        return RocksDBPartitionRecovery(
+        with RocksDBPartitionRecoveryTransaction(
             partition=self,
-            offset=offset,
-        )
+            changelog_message=changelog_message,
+        ) as partition:
+            partition.recover()
 
     def write(self, batch: WriteBatch):
         """
@@ -642,47 +644,40 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             self.maybe_flush()
 
 
-class RocksDBPartitionRecovery(PartitionRecovery):
-    __slots__ = ("_partition", "_batch", "_failed", "_completed", "_offset")
+class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
+    __slots__ = ("_partition", "_batch", "_failed", "_completed", "_message")
 
     def __init__(
         self,
         partition: RocksDBStorePartition,
-        offset: int,
+        changelog_message: ConfluentKafkaMessageProto,
     ):
         self._partition = partition
-        self._batch = rocksdict.WriteBatch(raw_mode=True)
-        self._offset = offset
+        self._batch = WriteBatch(raw_mode=True)
+        self._message = changelog_message
         self._failed = False
         self._completed = False
 
-    @_validate_transaction_state
-    def set(self, key: bytes, value: bytes):
-        """
-        Set a key to the store.
+    class MissingColumnFamilyHeader(Exception):
+        ...
 
-        :param key: key to store in DB
-        :param value: value to store in DB
-        """
-        try:
-            # TODO-CF: ADD cf_name ARG AND UNCOMMENT/REPLACE
-            # self._batch.put(key, value, cf_name)
-            self._batch.put(key, value)
-        except Exception:
-            self._failed = True
-            raise
+    def _get_header_column_family(self, headers: MessageHeadersTuples) -> ColumnFamily:
+        for t in headers:
+            if t[0] == CHANGELOG_CF_MESSAGE_HEADER:
+                return self._partition.get_column_family_handle(t[1].decode())
+        raise self.MissingColumnFamilyHeader(
+            f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
+        )
 
     @_validate_transaction_state
-    def delete(self, key: bytes):
-        """
-        Delete a key to the store.
-
-        :param key: key to delete from DB
-        """
+    def recover(self):
+        cf_handle = self._get_header_column_family(self._message.headers())
+        key = self._message.key()
         try:
-            # TODO-CF: ADD cf_name ARG AND UNCOMMENT/REPLACE
-            # self._batch.delete(key, cf_name)
-            self._batch.delete(key)
+            if value := self._message.value():
+                self._batch.put(key, value, cf_handle)
+            else:
+                self._batch.delete(key, cf_handle)
         except Exception:
             self._failed = True
             raise
@@ -729,7 +724,7 @@ class RocksDBPartitionRecovery(PartitionRecovery):
         """
         try:
             self._batch.put(
-                _CHANGELOG_OFFSET_KEY, _int_to_int64_bytes(self._offset + 1)
+                CHANGELOG_OFFSET_KEY, int_to_int64_bytes(self._message.offset() + 1)
             )
             self._partition.write(self._batch)
         except Exception:

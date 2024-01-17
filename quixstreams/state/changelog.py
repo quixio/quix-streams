@@ -1,29 +1,33 @@
 from typing import Optional, Dict, List
 
-from quixstreams.topic_manager import TopicManagerType, BytesTopic
+from confluent_kafka import TopicPartition as ConfluentPartition
+
+from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.models import Topic, MessageHeadersTuples
 from quixstreams.state.types import StorePartition
+from quixstreams.topic_manager import TopicManagerType, BytesTopic
 from quixstreams.types import Headers
-
-from confluent_kafka import TopicPartition as ConfluentPartition
 
 
 class RecoveryPartition:
     def __init__(
-        self, topic: str, changelog: str, partition: int, state_store: StorePartition
+        self,
+        topic: str,
+        changelog: str,
+        partition: int,
+        store_partition: StorePartition,
     ):
         self.topic = topic
         self.changelog = changelog
         self.partition = partition
-        self.state_store = state_store
+        self.store_partition = store_partition
         self._changelog_lowwater: Optional[int] = None
         self._changelog_highwater: Optional[int] = None
 
     @property
     def offset(self) -> int:
-        return self.state_store.get_changelog_offset()
+        return self.store_partition.get_changelog_offset()
 
     @property
     def as_partition(self) -> ConfluentPartition:
@@ -47,12 +51,12 @@ class RecoveryPartition:
         state_is_behind = self._changelog_highwater - self.offset
         return has_consumable_offsets and state_is_behind
 
+    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+        self.store_partition.recover(changelog_message=changelog_message)
+
     def set_watermarks(self, lowwater: int, highwater: int):
         self._changelog_lowwater = lowwater
         self._changelog_highwater = highwater
-
-
-_COLUMN_FAMILY_HEADER = "__column_family__"
 
 
 class ChangelogWriter:
@@ -107,7 +111,7 @@ class ChangelogManager:
         )
 
     def assign_partition(
-        self, source_topic_name: str, partition: int, state_store: StorePartition
+        self, source_topic_name: str, partition: int, store_partition: StorePartition
     ):
         for topic in self._topic_manager.changelog_topics[source_topic_name].values():
             print(f"CHANGELOG: ADDING PARTITION {topic.name}: {partition}")
@@ -115,7 +119,7 @@ class ChangelogManager:
                 source_topic_name=source_topic_name,
                 changelog=topic.name,
                 partition=partition,
-                state_store=state_store,
+                store_partition=store_partition,
             )
 
     def revoke_partition(self, source_topic_name, partition):
@@ -151,9 +155,6 @@ class RecoveryManager:
     class RecoveryComplete(Exception):
         ...
 
-    class MissingColumnFamilyHeader(Exception):
-        ...
-
     @property
     def in_recovery_mode(self) -> bool:
         return bool(self._partitions)
@@ -166,14 +167,14 @@ class RecoveryManager:
         source_topic_name: str,
         changelog: str,
         partition: int,
-        state_store: StorePartition,
+        store_partition: StorePartition,
     ):
         print("RECOVERY: ADD PARTITION")
         p = RecoveryPartition(
             topic=source_topic_name,
             changelog=changelog,
             partition=partition,
-            state_store=state_store,
+            store_partition=store_partition,
         )
         topic_p = p.topic_partition
         # Assign manually to immediately pause it (would assign unpaused automatically)
@@ -248,14 +249,6 @@ class RecoveryManager:
         self._consumer.resume(self._consumer.assignment())
         raise self.RecoveryComplete
 
-    def _get_column_family_header(self, headers: MessageHeadersTuples) -> str:
-        for t in headers:
-            if t[0] == _COLUMN_FAMILY_HEADER:
-                return t[1].decode()
-        raise self.MissingColumnFamilyHeader(
-            f"Header '{_COLUMN_FAMILY_HEADER}' was missing from the changelog message!"
-        )
-
     def _recover(self):
         print("RECOVERY: RECOVER")
         if not self.in_recovery_mode:
@@ -274,17 +267,7 @@ class RecoveryManager:
         p_num = msg.partition()
 
         partition = self._partitions[p_num][changelog]
-        with partition.state_store.recover(msg.offset()) as transaction:
-            # TODO-CF: UNCOMMENT AND REPLACE BELOW
-            # cf_name = self._get_column_family_header(msg.headers())
-            # if msg.value():
-            #     transaction.set(cf_name=cf_name, key=msg.key(), value=msg.value())
-            # else:
-            #     transaction.delete(cf_name=cfg_name, key=msg.key())
-            if msg.value():
-                transaction.set(key=msg.key(), value=msg.value())
-            else:
-                transaction.delete(key=msg.key())
+        partition.recover(changelog_message=msg)
 
         if not partition.needs_recovery:
             print(f"RECOVERY FOR {msg.topic()}: {msg.partition()} finished!")

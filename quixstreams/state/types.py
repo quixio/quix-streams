@@ -2,6 +2,8 @@ from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
 
 from typing_extensions import Self
 
+from quixstreams.models import ConfluentKafkaMessageProto
+
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
 
@@ -90,7 +92,7 @@ class StorePartition(Protocol):
         State new `PartitionTransaction`
         """
 
-    def recover(self, offset) -> "PartitionRecovery":
+    def recover(self, changelog_message: ConfluentKafkaMessageProto):
         ...
 
     def get_processed_offset(self) -> Optional[int]:
@@ -192,10 +194,9 @@ class PartitionTransaction(State):
         ...
 
 
-class PartitionRecovery(Protocol):
+class PartitionRecoveryTransaction(Protocol):
     """
-    A transaction class to perform simple key-value operations like
-    "get", "set", "delete" and "exists" on a single storage partition.
+    A class for managing recovery for a StorePartition from a changelog message
     """
 
     @property
@@ -217,10 +218,7 @@ class PartitionRecovery(Protocol):
         """
         ...
 
-    def set(self, key: bytes, value: bytes):
-        ...
-
-    def delete(self, key: bytes):
+    def recover(self):
         ...
 
     def flush(self):
