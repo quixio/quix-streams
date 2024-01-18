@@ -38,8 +38,8 @@ __all__ = (
 
 logger = logging.getLogger(__name__)
 
-_sentinel = object()
-_deleted_key_sentinel = object()
+_undefined = object()
+_deleted = object()
 
 _DEFAULT_PREFIX = b""
 
@@ -428,18 +428,18 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
 
         # First, check the update cache in case the value was previously written
-        # Use sentinel as default because the actual value can be "None"
+        # Use _undefined sentinel as default because the actual value can be "None"
         key_serialized = self._serialize_key(key)
-        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _sentinel)
-        if cached is _deleted_key_sentinel:
+        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _undefined)
+        if cached is _deleted:
             return default
 
-        if cached is not _sentinel:
+        if cached is not _undefined:
             return self._deserialize_value(cached)
 
         # The value is not found in cache, check the db
-        stored = self._partition.get(key_serialized, _sentinel, cf_name=cf_name)
-        if stored is not _sentinel:
+        stored = self._partition.get(key_serialized, _undefined, cf_name=cf_name)
+        if stored is not _undefined:
             return self._deserialize_value(stored)
         return default
 
@@ -485,7 +485,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
             if cf_name not in self._update_cache:
                 self._update_cache[cf_name] = {}
-            self._update_cache[cf_name][key_serialized] = _deleted_key_sentinel
+            self._update_cache[cf_name][key_serialized] = _deleted
 
         except Exception:
             self._failed = True
@@ -504,11 +504,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
 
         key_serialized = self._serialize_key(key)
-        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _sentinel)
-        if cached is _deleted_key_sentinel:
+        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _undefined)
+        if cached is _deleted:
             return False
 
-        if cached is not _sentinel:
+        if cached is not _undefined:
             return True
 
         return self._partition.exists(key_serialized, cf_name=cf_name)
