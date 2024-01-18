@@ -500,7 +500,8 @@ class Application:
         topic = app.topic("input")
 
         with app.get_consumer() as consumer:
-            for _ in range(100):
+            consumer.subscribe([topic.name])
+            while True:
                 msg = consumer.poll(timeout=1.0)
                 if msg is not None:
                     # Process message
