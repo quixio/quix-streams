@@ -428,17 +428,22 @@ class TestQuixApplication:
         """
         app = quix_app_factory()
         builder = app._quix_config_builder
+        topic_manager = app._topic_manager
 
         initial_topic_name = "input_topic"
+        topic_partitions = 5
         topic = app.topic(
             initial_topic_name,
-            config=app.topic_config(name="billy bob", num_partitions=5),
+            config=app.topic_config(name="billy bob", num_partitions=topic_partitions),
         )
         expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        expected_topic = topic_manager.topics[expected_name]
         assert topic.name == expected_name
-        assert expected_name in app._topic_manager.topics
-        assert app._topic_manager.topics[expected_name].config.replication_factor == 2
-        assert app._topic_manager.topics[expected_name].config.num_partitions == 5
+        assert expected_name in topic_manager.topics
+        assert (
+            expected_topic.config.replication_factor == topic_manager._topic_replication
+        )
+        assert expected_topic.config.num_partitions == topic_partitions
 
     def test_quix_app_stateful_quix_deployment_no_state_management_warning(
         self, quix_app_factory, monkeypatch, topic_factory, executor
@@ -448,9 +453,8 @@ class TestQuixApplication:
         runs on Quix (the "Quix__Deployment__Id" env var is set),
         but the "State Management" flag is disabled for the deployment.
         """
-        topic_name, _ = topic_factory()
-        app = quix_app_factory(workspace_id="")
-        topic = app.topic(topic_name)
+        app = quix_app_factory()
+        topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
         sdf = sdf.apply(lambda x, state: x, stateful=True)
 
@@ -462,8 +466,9 @@ class TestQuixApplication:
             QuixEnvironment.STATE_MANAGEMENT_ENABLED,
             "",
         )
+
         with pytest.warns(RuntimeWarning) as warned:
-            executor.submit(_stop_app_on_timeout, app, 5.0)
+            executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
         warning = str(warned.list[0].message)

@@ -1,10 +1,8 @@
 from unittest.mock import patch
 
 import uuid
-from quixstreams.state.changelog import (
-    ChangelogManager,
-    ChangelogWriter,
-)
+
+from quixstreams.state.changelog import ChangelogWriter
 from quixstreams.topic_manager import BytesTopic
 
 
@@ -45,11 +43,9 @@ class TestChangelogWriter:
 
 
 class TestChangelogManager:
-    def test_add_changelog(self, topic_manager_factory, row_producer_factory):
-        topic_manager = topic_manager_factory()
-        changelog_manager = ChangelogManager(
-            topic_manager=topic_manager, producer=row_producer_factory()
-        )
+    def test_add_changelog(self, changelog_manager_factory):
+        changelog_manager = changelog_manager_factory()
+        topic_manager = changelog_manager._topic_manager
         kwargs = dict(
             source_topic_name="my_source_topic",
             suffix="my_suffix",
@@ -59,12 +55,10 @@ class TestChangelogManager:
             changelog_manager.add_changelog(**kwargs)
         make_changelog.assert_called_with(**kwargs)
 
-    def test_get_writer(self, topic_manager_factory, row_producer_factory):
-        topic_manager = topic_manager_factory()
+    def test_get_writer(self, row_producer_factory, changelog_manager_factory):
         producer = row_producer_factory()
-        changelog_manager = ChangelogManager(
-            topic_manager=topic_manager, producer=producer
-        )
+        changelog_manager = changelog_manager_factory(producer=producer)
+        topic_manager = changelog_manager._topic_manager
 
         topic_name = "my_topic"
         suffix = "my_suffix"
