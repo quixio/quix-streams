@@ -225,9 +225,18 @@ class TestRocksDBPartitionTransaction:
             value = tx.get("key", default=123)
             assert value == 123
 
+    def test_delete_key_cached_no_flush(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
+            tx.set("key", "value")
+            assert tx.get("key") == "value"
+            tx.delete("key")
+            assert tx.get("key") is None
+
     def test_delete_key_cached(self, rocksdb_partition):
         with rocksdb_partition.begin() as tx:
             tx.set("key", "value")
+
+        with rocksdb_partition.begin() as tx:
             assert tx.get("key") == "value"
             tx.delete("key")
             assert tx.get("key") is None
@@ -255,6 +264,15 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition.begin() as tx:
             assert tx.exists("key")
             assert not tx.exists("key123")
+
+    def test_key_exists_deleted_in_cache(self, rocksdb_partition):
+        with rocksdb_partition.begin() as tx:
+            tx.set("key", "value")
+
+        with rocksdb_partition.begin() as tx:
+            assert tx.exists("key")
+            tx.delete("key")
+            assert not tx.exists("key")
 
     @pytest.mark.parametrize(
         "key, value",
