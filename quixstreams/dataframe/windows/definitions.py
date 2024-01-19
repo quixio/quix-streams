@@ -32,27 +32,17 @@ class FixedTimeWindowDefinition(abc.ABC):
             raise ValueError("Window size cannot be smaller than 1ms")
         if grace_ms < 0:
             raise ValueError("Window grace cannot be smaller than 0ms")
+
+        if step_ms is not None and (step_ms <= 0 or step_ms >= duration_ms):
+            raise ValueError(
+                f"Window step size must be smaller than duration and bigger than 0ms, "
+                f"got {step_ms}ms"
+            )
         self._duration_ms = duration_ms
         self._grace_ms = grace_ms
         self._dataframe = dataframe
         self._name = name
         self._step_ms = step_ms
-
-        if self._duration_ms <= 0:
-            raise ValueError(
-                f"Window duration must be bigger than zero, got {self._duration_ms}"
-            )
-
-        if self._grace_ms < 0:
-            raise ValueError(f"Window grace must be positive, got {self._grace_ms}")
-
-        if self._step_ms is not None and (
-            self._step_ms <= 0 or self._step_ms >= duration_ms
-        ):
-            raise ValueError(
-                f"Window step size must be smaller than duration and bigger than zero, "
-                f"got {self._step_ms}"
-            )
 
     @abstractmethod
     def _create_window(
