@@ -69,7 +69,7 @@ class TestRocksDBStorePartition:
         _ = rocksdb_partition_factory("db")
 
         with pytest.raises(Exception):
-            rocksdb_partition_factory("db", open_max_retries=0)
+            rocksdb_partition_factory("db", options=RocksDBOptions(open_max_retries=0))
 
     def test_open_db_locked_retries_exhausted_fails(
         self, rocksdb_partition_factory, executor
@@ -77,7 +77,9 @@ class TestRocksDBStorePartition:
         _ = rocksdb_partition_factory("db")
 
         with pytest.raises(Exception):
-            rocksdb_partition_factory("db", open_max_retries=3, open_retry_backoff=1)
+            rocksdb_partition_factory(
+                "db", options=RocksDBOptions(open_max_retries=3, open_retry_backoff=1)
+            )
 
     def test_open_arbitrary_exception_fails(self, rocksdb_partition_factory):
         err = Exception("some exception")

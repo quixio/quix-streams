@@ -13,24 +13,18 @@ class WindowedRocksDBStore(RocksDBStore):
         topic: str,
         base_dir: str,
         options: Optional[RocksDBOptionsType] = None,
-        open_max_retries: int = 10,
-        open_retry_backoff: float = 3.0,
     ):
         super().__init__(
             name=name,
             topic=topic,
             base_dir=base_dir,
             options=options,
-            open_max_retries=open_max_retries,
-            open_retry_backoff=open_retry_backoff,
         )
 
     def create_new_partition(self, path: str) -> WindowedRocksDBStorePartition:
         db_partition = WindowedRocksDBStorePartition(
             path=path,
             options=self._options,
-            open_max_retries=self._open_max_retries,
-            open_retry_backoff=self._open_retry_backoff,
         )
         return db_partition
 
