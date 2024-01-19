@@ -17,14 +17,13 @@ from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
 from .series import StreamingSeries
-from ..state.rocksdb.windowed.store import WindowedTransactionState
-from ..windows import TumblingWindowDefinition, HoppingWindowDefinition
+from .utils import ensure_milliseconds
+from .windows import TumblingWindowDefinition, HoppingWindowDefinition
 
 T = TypeVar("T")
 R = TypeVar("R")
 DataFrameFunc = Callable[[T], R]
 DataFrameStatefulFunc = Callable[[T, State], R]
-DataFrameWindowFunc = Callable[[float, float, float, T, WindowedTransactionState], Any]
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -344,17 +343,12 @@ class StreamingDataFrame(BaseStreaming):
 
     def tumbling_window(
         self,
-        duration: Union[float, timedelta],
-        grace: Optional[Union[float, timedelta]] = 0,
+        duration_ms: Union[int, timedelta],
+        grace_ms: Optional[Union[int, timedelta]] = 0,
     ) -> TumblingWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
-
-        Tumbling windows divide the data stream into fixed-sized, non-overlapping windows based on time.
-        This method is typically used in stream processing to perform aggregations or other operations over
-        specific time slices of the data.
-
-        It is particularly useful in scenarios where data needs to be aggregated or analyzed over specific periods.
+        Tumbling windows divide time into fixed-sized, non-overlapping windows.
 
         ```python
         from quixstreams import Application, StreamingDataFrame
@@ -363,7 +357,8 @@ class StreamingDataFrame(BaseStreaming):
         sdf = app.dataframe()
         tumbling_window_def = sdf.tumbling_window(duration=60.0, grace=10.0)
 
-        # Choose an aggregation functions from 'sum', 'count', 'reduce', 'mean', 'min' and 'max' for the tumbling window
+        # Choose an aggregation function from 'sum', 'count', 'reduce', 'mean', 'min'
+        # and 'max' for the tumbling window
         tumbling_window = tumbling_window_def.sum()
 
         # Choose the appropriate method based on the desired output behavior
@@ -375,31 +370,38 @@ class StreamingDataFrame(BaseStreaming):
         # The tumbling window will aggregate data in 60-second windows with a 10-second grace period
         ```
 
-        :param duration: The length of each window. It defines the time span for which each window aggregates data.
-            Can be specified as either a float representing seconds or a timedelta object.
-        :param grace: The grace period for data arrival. It allows late-arriving data (data arriving after the window
-            has theoretically closed) to be included in the window.
-            Can be specified as either a float representing seconds or a timedelta object.
+        :param duration_ms: The length of each window.
+            Can be specified as either an `int` representing milliseconds or a
+            `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
 
-        :return: TumblingWindowDefinition instance representing the tumbling window configuration.
-            This object can be further configured with aggregation functions like sum or count and
-            applied to the StreamingDataFrame
+        :param grace_ms: The grace period for data arrival.
+            It allows late-arriving data (data arriving after the window
+            has theoretically closed) to be included in the window.
+            Can be specified as either an `int` representing milliseconds
+            or as a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :return: `TumblingWindowDefinition` instance representing the tumbling window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
 
         """
-        _duration = (
-            duration.total_seconds() if isinstance(duration, timedelta) else duration
-        )
-        _grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
+        duration_ms = ensure_milliseconds(duration_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
 
         return TumblingWindowDefinition(
-            duration=_duration, grace=_grace, dataframe=self
+            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self
         )
 
     def hopping_window(
         self,
-        duration: Union[float, timedelta],
-        step: Union[float, timedelta],
-        grace: Optional[Union[float, timedelta]] = 0,
+        duration_ms: Union[int, timedelta],
+        step_ms: Union[int, timedelta],
+        grace_ms: Optional[Union[int, timedelta]] = 0,
     ) -> HoppingWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
@@ -427,25 +429,40 @@ class StreamingDataFrame(BaseStreaming):
         with a 10-second grace period
         ```
 
-        :param duration: The length of each window. It defines the time span for which each window aggregates data.
-            Can be specified as either a float representing seconds or a timedelta object.
-        :param step: The step size for the window. It determines how much each successive window moves forward in time.
-            Can be specified as either a float representing seconds or a timedelta object.
-        :param grace: The grace period for data arrival. It allows late-arriving data to be included in the window,
-            even if it arrives after the window has theoretically moved forward.
-            Can be specified as either a float representing seconds or a timedelta object.
+        :param duration_ms: The length of each window. It defines the time span for
+            which each window aggregates data.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
 
-        :return: HoppingWindowDefinition instance representing the hopping window configuration.
-            This object can be further configured with aggregation functions and applied to the StreamingDataFrame.
+        :param step_ms: The step size for the window.
+            It determines how much each successive window moves forward in time.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: The grace period for data arrival.
+            It allows late-arriving data to be included in the window,
+            even if it arrives after the window has theoretically moved forward.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :return: `HoppingWindowDefinition` instance representing the hopping
+            window configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. and applied to the StreamingDataFrame.
         """
-        _duration = (
-            duration.total_seconds() if isinstance(duration, timedelta) else duration
-        )
-        _step = step.total_seconds() if isinstance(step, timedelta) else step
-        _grace = grace.total_seconds() if isinstance(grace, timedelta) else grace
+
+        duration_ms = ensure_milliseconds(duration_ms)
+        step_ms = ensure_milliseconds(step_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
 
         return HoppingWindowDefinition(
-            duration=_duration, grace=_grace, step=_step, dataframe=self
+            duration_ms=duration_ms, grace_ms=grace_ms, step_ms=step_ms, dataframe=self
         )
 
     def _clone(self, stream: Stream) -> Self:

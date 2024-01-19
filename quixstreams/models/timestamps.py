@@ -35,10 +35,6 @@ class MessageTimestamp:
         return self._milliseconds
 
     @property
-    def seconds(self) -> float:
-        return self._milliseconds / 1000
-
-    @property
     def type(self) -> TimestampType:
         return self._type
 

@@ -21,6 +21,7 @@ from .models import (
     Topic,
     SerializerType,
     DeserializerType,
+    TimestampExtractor,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -338,6 +339,7 @@ class Application:
         value_serializer: SerializerType = "json",
         key_serializer: SerializerType = "bytes",
         creation_configs: Optional[TopicCreationConfigs] = None,
+        timestamp_extractor: Optional[TimestampExtractor] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -378,6 +380,7 @@ class Application:
 
         :return: `Topic` object
         """
+
         if self.is_quix_app:
             name = self._quix_config_builder.append_workspace_id(name)
             if creation_configs:
@@ -391,6 +394,7 @@ class Application:
             value_deserializer=value_deserializer,
             key_serializer=key_serializer,
             key_deserializer=key_deserializer,
+            timestamp_extractor=timestamp_extractor,
         )
 
     def dataframe(

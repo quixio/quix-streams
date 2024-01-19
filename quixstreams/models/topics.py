@@ -26,9 +26,15 @@ from .types import (
     MessageHeadersTuples,
 )
 
+__all__ = ("Topic", "TimestampExtractor")
+
 logger = logging.getLogger(__name__)
 
-__all__ = ("Topic",)
+
+TimestampExtractor = Callable[
+    [Any, Optional[MessageHeadersTuples], float, TimestampType],
+    int,
+]
 
 
 def _get_serializer(serializer: SerializerType) -> Serializer:
@@ -72,10 +78,7 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        timestamp_extractor: Callable[
-            [Any, Optional[MessageHeadersTuples], float, TimestampType],
-            int,
-        ] = None,
+        timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         """
         Can specify serialization that should be used when consuming/producing
@@ -105,7 +108,9 @@ class Topic:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
-        :param timestamp_extractor: a callable that returns a timestamp in milliseconds from a deserialized message
+        :param timestamp_extractor: a callable that returns a timestamp in
+            milliseconds from a deserialized message.
+
          Example Usage:
 
         ```python
@@ -244,7 +249,7 @@ class Topic:
 
         if self._timestamp_extractor:
             timestamp_ms = self._timestamp_extractor(
-                value, headers, timestamp_ms, timestamp_type
+                value, headers, timestamp_ms, TimestampType(timestamp_type)
             )
 
         timestamp = MessageTimestamp.create(
