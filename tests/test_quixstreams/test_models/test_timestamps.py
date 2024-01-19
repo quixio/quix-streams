@@ -6,7 +6,7 @@ from quixstreams.models import MessageTimestamp, TimestampType
 @pytest.mark.parametrize(
     "timestamp_type, milliseconds, expected",
     [
-        (0, 123, MessageTimestamp(type=TimestampType(0), milliseconds=None)),
+        (0, 0, MessageTimestamp(type=TimestampType(0), milliseconds=0)),
         (1, 123, MessageTimestamp(type=TimestampType(1), milliseconds=123)),
         (2, 123, MessageTimestamp(type=TimestampType(2), milliseconds=123)),
     ],

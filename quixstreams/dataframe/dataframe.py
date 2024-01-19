@@ -1,6 +1,7 @@
 import contextvars
 import functools
 import operator
+from datetime import timedelta
 from typing import Optional, Callable, Union, List, TypeVar, Any
 
 from typing_extensions import Self
@@ -16,6 +17,8 @@ from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
 from .series import StreamingSeries
+from .utils import ensure_milliseconds
+from .windows import TumblingWindowDefinition, HoppingWindowDefinition
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -88,6 +91,10 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
+
+    @property
+    def state_manager(self) -> StateStoreManager:
+        return self._state_manager
 
     def apply(
         self,
@@ -333,6 +340,151 @@ class StreamingDataFrame(BaseStreaming):
         context.run(set_message_context, ctx)
         composed = self.compose()
         return context.run(composed, value)
+
+    def tumbling_window(
+        self,
+        duration_ms: Union[int, timedelta],
+        grace_ms: Optional[Union[int, timedelta]] = 0,
+    ) -> TumblingWindowDefinition:
+        """
+        Create a tumbling window transformation on this StreamingDataFrame.
+        Tumbling windows divide time into fixed-sized, non-overlapping windows.
+
+        They allow to perform stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        The time windows always use the current event time.
+
+        Example Snippet:
+
+        ```python
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a tumbling window of 60s and grace period of 10s
+            sdf.tumbling_window(
+                duration_ms=timedelta(seconds=60), grace_ms=timedelta(seconds=10.0)
+            )
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "all()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .all()
+        )
+        ```
+
+        :param duration_ms: The length of each window.
+            Can be specified as either an `int` representing milliseconds or a
+            `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: The grace period for data arrival.
+            It allows late-arriving data (data arriving after the window
+            has theoretically closed) to be included in the window.
+            Can be specified as either an `int` representing milliseconds
+            or as a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :return: `TumblingWindowDefinition` instance representing the tumbling window
+            configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. applied to the StreamingDataFrame.
+
+        """
+        duration_ms = ensure_milliseconds(duration_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
+
+        return TumblingWindowDefinition(
+            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self
+        )
+
+    def hopping_window(
+        self,
+        duration_ms: Union[int, timedelta],
+        step_ms: Union[int, timedelta],
+        grace_ms: Optional[Union[int, timedelta]] = 0,
+    ) -> HoppingWindowDefinition:
+        """
+        Create a hopping window transformation on this StreamingDataFrame.
+        Hopping windows divide the data stream into overlapping windows based on time.
+        The overlap is controlled by the `step_ms` parameter.
+
+        They allow to perform stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        The time windows always use the current event time.
+
+        Example Snippet:
+
+        Example Snippet:
+        ```python
+
+        app = Application()
+        sdf = app.dataframe(...)
+
+        sdf = (
+            # Define a a hopping window of 60s with step 30s and grace period of 10s
+            sdf.hopping_window(
+                duration_ms=timedelta(seconds=60),
+                step_ms=timedelta(seconds=30),
+                grace_ms=timedelta(seconds=10)
+            )
+
+            # Specify the aggregation function
+            .sum()
+
+            # Specify how the results should be emitted downstream.
+            # "all()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .all()
+        )
+        ```
+
+        :param duration_ms: The length of each window. It defines the time span for
+            which each window aggregates data.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param step_ms: The step size for the window.
+            It determines how much each successive window moves forward in time.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :param grace_ms: The grace period for data arrival.
+            It allows late-arriving data to be included in the window,
+            even if it arrives after the window has theoretically moved forward.
+            Can be specified as either an `int` representing milliseconds
+            or a `timedelta` object.
+            >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
+            value.
+
+        :return: `HoppingWindowDefinition` instance representing the hopping
+            window configuration.
+            This object can be further configured with aggregation functions
+            like `sum`, `count`, etc. and applied to the StreamingDataFrame.
+        """
+
+        duration_ms = ensure_milliseconds(duration_ms)
+        step_ms = ensure_milliseconds(step_ms)
+        grace_ms = ensure_milliseconds(grace_ms)
+
+        return HoppingWindowDefinition(
+            duration_ms=duration_ms, grace_ms=grace_ms, step_ms=step_ms, dataframe=self
+        )
 
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(

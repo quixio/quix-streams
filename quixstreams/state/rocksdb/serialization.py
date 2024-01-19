@@ -7,16 +7,9 @@ from .exceptions import StateSerializationError
 __all__ = (
     "serialize",
     "deserialize",
-    "float_to_double_bytes",
-    "float_from_double_bytes",
     "int_to_int64_bytes",
     "int_from_int64_bytes",
 )
-
-
-_float_packer = struct.Struct(">d")
-_float_pack = _float_packer.pack
-_float_unpack = _float_packer.unpack
 
 _int_packer = struct.Struct(">q")
 _int_pack = _int_packer.pack
@@ -37,14 +30,6 @@ def deserialize(value: bytes, loads: LoadsFunc) -> Any:
         raise StateSerializationError(
             f'Failed to deserialize value: "{value}"'
         ) from exc
-
-
-def float_to_double_bytes(value: float) -> bytes:
-    return _float_pack(value)
-
-
-def float_from_double_bytes(value: bytes) -> int:
-    return _float_unpack(value)[0]
 
 
 def int_to_int64_bytes(value: int) -> bytes:

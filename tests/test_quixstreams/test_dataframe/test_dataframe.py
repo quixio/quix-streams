@@ -1,9 +1,11 @@
 import operator
+from datetime import timedelta
 
 import pytest
 
 from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
+from quixstreams.dataframe.windows import WindowResult
 from quixstreams.models import MessageTimestamp
 from quixstreams.models.topics import Topic
 from tests.utils import TopicPartitionStub
@@ -645,3 +647,347 @@ class TestStreamingDataframeStateful:
                     pass
         assert len(results) == 1
         assert results[0]["max"] == 3
+
+
+class TestStreamingDataFrameTumblingWindow:
+    def test_tumbling_window_define_from_milliseconds(
+        self, dataframe_factory, state_manager
+    ):
+        sdf = dataframe_factory(state_manager=state_manager)
+        window_definition = sdf.tumbling_window(duration_ms=2000, grace_ms=1000)
+        assert window_definition.duration_ms == 2000
+        assert window_definition.grace_ms == 1000
+
+    @pytest.mark.parametrize(
+        "duration_delta, grace_delta, duration_ms, grace_ms",
+        [
+            (timedelta(seconds=10), timedelta(seconds=0), 10_000, 0),
+            (timedelta(seconds=10), timedelta(seconds=1), 10_000, 1000),
+            (timedelta(milliseconds=10.1), timedelta(milliseconds=1.1), 10, 1),
+            (timedelta(milliseconds=10.9), timedelta(milliseconds=1.9), 11, 2),
+        ],
+    )
+    def test_tumbling_window_define_from_timedelta(
+        self,
+        duration_delta,
+        grace_delta,
+        duration_ms,
+        grace_ms,
+        dataframe_factory,
+        state_manager,
+    ):
+        sdf = dataframe_factory(state_manager=state_manager)
+        window_definition = sdf.tumbling_window(
+            duration_ms=duration_delta, grace_ms=grace_delta
+        )
+        assert window_definition.duration_ms == duration_ms
+        assert window_definition.grace_ms == grace_ms
+
+    def test_tumbling_window_current(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = (
+            sdf.tumbling_window(
+                duration_ms=timedelta(seconds=10), grace_ms=timedelta(seconds=1)
+            )
+            .sum()
+            .current()
+        )
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Message early in the window
+            (1, message_context_factory(key="test", timestamp_ms=1000)),
+            # Message towards the end of the window
+            (2, message_context_factory(key="test", timestamp_ms=9000)),
+            # Should start a new window
+            (3, message_context_factory(key="test", timestamp_ms=20010)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                results += sdf.test(value=value, ctx=ctx)
+        assert len(results) == 3
+        assert results == [
+            WindowResult(value=1, start=0, end=10000),
+            WindowResult(value=3, start=0, end=10000),
+            WindowResult(value=3, start=20000, end=30000),
+        ]
+
+    def test_tumbling_window_current_out_of_order_late(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        """
+        Test that window with "latest" doesn't output the result if incoming timestamp
+        is late
+        """
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().current()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Create window [0, 10)
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Create window [20,30)
+            (2, message_context_factory(key="test", timestamp_ms=20)),
+            # Late message - it belongs to window [0,10) but this window
+            # is already closed. This message should be skipped from processing
+            (3, message_context_factory(key="test", timestamp_ms=9)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                result = sdf.test(value=value, ctx=ctx)
+                results += result
+
+        assert len(results) == 2
+        assert results == [
+            WindowResult(value=1, start=0, end=10),
+            WindowResult(value=2, start=20, end=30),
+        ]
+
+    def test_tumbling_window_final(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().final()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Create window [0, 10)
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Update window [0, 10)
+            (1, message_context_factory(key="test", timestamp_ms=2)),
+            # Create window [20,30). Window [0, 10) is expired now.
+            (2, message_context_factory(key="test", timestamp_ms=20)),
+            # Create window [30, 40). Window [20, 30) is expired now.
+            (3, message_context_factory(key="test", timestamp_ms=39)),
+            # Update window [30, 40). Nothing should be returned.
+            (4, message_context_factory(key="test", timestamp_ms=38)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                result = sdf.test(value=value, ctx=ctx)
+                results += result
+
+        assert len(results) == 2
+        assert results == [
+            WindowResult(value=2, start=0, end=10),
+            WindowResult(value=2, start=20, end=30),
+        ]
+
+
+class TestStreamingDataFrameHoppingWindow:
+    def test_hopping_window_define_from_milliseconds(
+        self, dataframe_factory, state_manager
+    ):
+        sdf = dataframe_factory(state_manager=state_manager)
+        window_definition = sdf.hopping_window(
+            duration_ms=2000, grace_ms=1000, step_ms=1000
+        )
+        assert window_definition.duration_ms == 2000
+        assert window_definition.grace_ms == 1000
+        assert window_definition.step_ms == 1000
+
+    @pytest.mark.parametrize(
+        "duration_delta, step_delta, grace_delta, duration_ms, step_ms, grace_ms",
+        [
+            (
+                timedelta(seconds=10),
+                timedelta(seconds=1),
+                timedelta(seconds=0),
+                10_000,
+                1000,
+                0,
+            ),
+            (
+                timedelta(seconds=10),
+                timedelta(seconds=1),
+                timedelta(seconds=1),
+                10_000,
+                1000,
+                1000,
+            ),
+            (
+                timedelta(milliseconds=10.1),
+                timedelta(milliseconds=1.1),
+                timedelta(milliseconds=1.1),
+                10,
+                1,
+                1,
+            ),
+            (
+                timedelta(milliseconds=10.9),
+                timedelta(milliseconds=1.9),
+                timedelta(milliseconds=1.9),
+                11,
+                2,
+                2,
+            ),
+        ],
+    )
+    def test_hopping_window_define_from_timedelta(
+        self,
+        duration_delta,
+        step_delta,
+        grace_delta,
+        duration_ms,
+        step_ms,
+        grace_ms,
+        dataframe_factory,
+        state_manager,
+    ):
+        sdf = dataframe_factory(state_manager=state_manager)
+        window_definition = sdf.hopping_window(
+            duration_ms=duration_delta, grace_ms=grace_delta, step_ms=step_delta
+        )
+        assert window_definition.duration_ms == duration_ms
+        assert window_definition.grace_ms == grace_ms
+        assert window_definition.step_ms == step_ms
+
+    def test_hopping_window_current(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Create window [0,10)
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Update window [0,10) and create window [5,15)
+            (2, message_context_factory(key="test", timestamp_ms=7)),
+            # Update window [5,15) and create window [10,20)
+            (3, message_context_factory(key="test", timestamp_ms=10)),
+            # Create windows [30, 40) and [35, 45)
+            (4, message_context_factory(key="test", timestamp_ms=35)),
+            # Update windows [30, 40) and [35, 45)
+            (5, message_context_factory(key="test", timestamp_ms=35)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                results += sdf.test(value=value, ctx=ctx)
+
+        assert len(results) == 9
+        # Ensure that the windows are returned with correct values and order
+        assert results == [
+            WindowResult(value=1, start=0, end=10),
+            WindowResult(value=3, start=0, end=10),
+            WindowResult(value=2, start=5, end=15),
+            WindowResult(value=5, start=5, end=15),
+            WindowResult(value=3, start=10, end=20),
+            WindowResult(value=4, start=30, end=40),
+            WindowResult(value=4, start=35, end=45),
+            WindowResult(value=9, start=30, end=40),
+            WindowResult(value=9, start=35, end=45),
+        ]
+
+    def test_hopping_window_current_out_of_order_late(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Create window [0,10)
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Update window [0,10) and create window [5,15)
+            (2, message_context_factory(key="test", timestamp_ms=7)),
+            # Create windows [30, 40) and [35, 45)
+            (4, message_context_factory(key="test", timestamp_ms=35)),
+            # Timestamp "10" is late and should not be processed
+            (3, message_context_factory(key="test", timestamp_ms=10)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                results += sdf.test(value=value, ctx=ctx)
+
+        assert len(results) == 5
+        # Ensure that the windows are returned with correct values and order
+        assert results == [
+            WindowResult(value=1, start=0, end=10),
+            WindowResult(value=3, start=0, end=10),
+            WindowResult(value=2, start=5, end=15),
+            WindowResult(value=4, start=30, end=40),
+            WindowResult(value=4, start=35, end=45),
+        ]
+
+    def test_hopping_window_final(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().final()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Create window [0,10)
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Update window [0,10) and create window [5,15)
+            (2, message_context_factory(key="test", timestamp_ms=7)),
+            # Update window [5,15) and create window [10,20)
+            (3, message_context_factory(key="test", timestamp_ms=10)),
+            # Create windows [30, 40) and [35, 45).
+            # Windows [0,10), [5,15) and [10,20) should be expired
+            (4, message_context_factory(key="test", timestamp_ms=35)),
+            # Update windows [30, 40) and [35, 45)
+            (5, message_context_factory(key="test", timestamp_ms=35)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                results += sdf.test(value=value, ctx=ctx)
+
+        assert len(results) == 3
+        # Ensure that the windows are returned with correct values and order
+        assert results == [
+            WindowResult(value=3, start=0, end=10),
+            WindowResult(value=5, start=5, end=15),
+            WindowResult(value=3, start=10, end=20),
+        ]

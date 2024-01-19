@@ -15,12 +15,13 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner
+from .kafka import AutoOffsetReset, AssignmentStrategy, Partitioner, Producer, Consumer
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
     SerializerType,
     DeserializerType,
+    TimestampExtractor,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -143,6 +144,15 @@ class Application:
             or to produce a message to Kafka.
         """
         configure_logging(loglevel=loglevel)
+        self._broker_address = broker_address
+        self._consumer_group = consumer_group
+        self._auto_offset_reset = auto_offset_reset
+        self._auto_commit_enable = auto_commit_enable
+        self._assignment_strategy = assignment_strategy
+        self._partitioner = partitioner
+        self._producer_extra_config = producer_extra_config
+        self._consumer_extra_config = consumer_extra_config
+
         self._consumer = RowConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -158,6 +168,7 @@ class Application:
             extra_config=producer_extra_config,
             on_error=on_producer_error,
         )
+
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._running = False
@@ -328,6 +339,7 @@ class Application:
         value_serializer: SerializerType = "json",
         key_serializer: SerializerType = "bytes",
         creation_configs: Optional[TopicCreationConfigs] = None,
+        timestamp_extractor: Optional[TimestampExtractor] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -368,6 +380,7 @@ class Application:
 
         :return: `Topic` object
         """
+
         if self.is_quix_app:
             name = self._quix_config_builder.append_workspace_id(name)
             if creation_configs:
@@ -381,6 +394,7 @@ class Application:
             value_deserializer=value_deserializer,
             key_serializer=key_serializer,
             key_deserializer=key_deserializer,
+            timestamp_extractor=timestamp_extractor,
         )
 
     def dataframe(
@@ -430,6 +444,91 @@ class Application:
         (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
         """
         self._running = False
+
+    def get_producer(self) -> Producer:
+        """
+        Create and return a pre-configured Producer instance.
+        The Producer is initialized with params passed to Application.
+
+        It's useful for producing data to Kafka outside the standard Application processing flow,
+        (e.g. to produce test data into a topic).
+        Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
+        instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+
+        app = Application.Quix(...)
+        topic = app.topic("input")
+
+        with app.get_producer() as producer:
+            for i in range(100):
+                producer.produce(topic=topic.name, key=b"key", value=b"value")
+        ```
+        """
+        if self.is_quix_app:
+            topics = self._quix_config_builder.create_topic_configs.values()
+            if self._quix_config_builder.app_auto_create_topics:
+                self._quix_config_builder.create_topics(topics)
+            else:
+                self._quix_config_builder.confirm_topics_exist(topics)
+
+        return Producer(
+            broker_address=self._broker_address,
+            partitioner=self._partitioner,
+            extra_config=self._producer_extra_config,
+        )
+
+    def get_consumer(self) -> Consumer:
+        """
+        Create and return a pre-configured Consumer instance.
+        The Consumer is initialized with params passed to Application.
+
+        It's useful for consuming data from Kafka outside the standard Application processing flow.
+        (e.g. to consume test data from a topic).
+        Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
+        each time, which is not optimized for repeated use in a streaming pipeline.
+
+        Note: By default this consumer does not autocommit consumed offsets to allow exactly-once processing.
+        To store the offset call store_offsets() after processing a message.
+        If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
+
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+
+        app = Application.Quix(...)
+        topic = app.topic("input")
+
+        with app.get_consumer() as consumer:
+            consumer.subscribe([topic.name])
+            while True:
+                msg = consumer.poll(timeout=1.0)
+                if msg is not None:
+                    # Process message
+                    # Optionally commit the offset
+                    # consumer.store_offsets(msg)
+
+        ```
+        """
+        if self.is_quix_app:
+            topics = self._quix_config_builder.create_topic_configs.values()
+            if self._quix_config_builder.app_auto_create_topics:
+                self._quix_config_builder.create_topics(topics)
+            else:
+                self._quix_config_builder.confirm_topics_exist(topics)
+
+        return Consumer(
+            broker_address=self._broker_address,
+            consumer_group=self._consumer_group,
+            auto_offset_reset=self._auto_offset_reset,
+            auto_commit_enable=self._auto_commit_enable,
+            assignment_strategy=self._assignment_strategy,
+            extra_config=self._consumer_extra_config,
+        )
 
     def clear_state(self):
         """
@@ -545,15 +644,13 @@ class Application:
                     first_row.partition,
                     first_row.offset,
                 )
-                # Create a new contextvars.Context and set the current MessageContext
-                # (it's the same across multiple rows)
-                context = copy_context()
-                context.run(set_message_context, first_row.context)
 
                 with start_state_transaction(
                     topic=topic_name, partition=partition, offset=offset
                 ):
                     for row in rows:
+                        context = copy_context()
+                        context.run(set_message_context, row.context)
                         try:
                             # Execute StreamingDataFrame in a context
                             context.run(dataframe_composed, row.value)
