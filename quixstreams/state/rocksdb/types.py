@@ -18,6 +18,8 @@ class RocksDBOptionsType(Protocol):
     db_log_dir: Optional[str]
     dumps: DumpsFunc
     loads: LoadsFunc
+    open_max_retries: int
+    open_retry_backoff: float
 
     def to_options(self) -> rocksdict.Options:
         ...

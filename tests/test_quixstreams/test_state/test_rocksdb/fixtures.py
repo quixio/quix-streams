@@ -13,15 +13,12 @@ def rocksdb_partition_factory(tmp_path):
     def factory(
         name: str = "db",
         options: Optional[RocksDBOptions] = None,
-        open_max_retries: int = 0,
-        open_retry_backoff: float = 3.0,
     ) -> RocksDBStorePartition:
         path = (tmp_path / name).as_posix()
+        _options = options or RocksDBOptions(open_max_retries=0, open_retry_backoff=3.0)
         return RocksDBStorePartition(
             path,
-            options=options,
-            open_max_retries=open_max_retries,
-            open_retry_backoff=open_retry_backoff,
+            options=_options,
         )
 
     return factory

@@ -61,7 +61,9 @@ class TestRocksDBStorePartition:
 
         executor.submit(_close_db)
 
-        rocksdb_partition_factory("db", open_max_retries=10, open_retry_backoff=1)
+        rocksdb_partition_factory(
+            "db", options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1)
+        )
 
     def test_open_db_locked_no_retries_fails(self, rocksdb_partition_factory, executor):
         _ = rocksdb_partition_factory("db")

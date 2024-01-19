@@ -22,8 +22,6 @@ class RocksDBStore(Store):
         topic: str,
         base_dir: str,
         options: Optional[RocksDBOptionsType] = None,
-        open_max_retries: int = 10,
-        open_retry_backoff: float = 3.0,
     ):
         """
         RocksDB-based state store.
@@ -35,9 +33,6 @@ class RocksDBStore(Store):
         :param topic: a topic name for this store
         :param base_dir: path to a directory with the state
         :param options: RocksDB options. If `None`, the default options will be used.
-        :param open_max_retries: number of times to retry opening the database
-            if it's locked by another process. To disable retrying, pass 0.
-        :param open_retry_backoff: number of seconds to wait between each retry.
         """
         self._name = name
         self._topic = topic
@@ -45,8 +40,6 @@ class RocksDBStore(Store):
         self._transactions: Dict[int, RocksDBPartitionTransaction] = {}
         self._partitions: Dict[int, RocksDBStorePartition] = {}
         self._options = options
-        self._open_max_retries = open_max_retries
-        self._open_retry_backoff = open_retry_backoff
 
     @property
     def topic(self) -> str:
@@ -70,12 +63,7 @@ class RocksDBStore(Store):
         return self._partitions
 
     def create_new_partition(self, path: str) -> RocksDBStorePartition:
-        return RocksDBStorePartition(
-            path=path,
-            options=self._options,
-            open_max_retries=self._open_max_retries,
-            open_retry_backoff=self._open_retry_backoff,
-        )
+        return RocksDBStorePartition(path=path, options=self._options)
 
     def assign_partition(self, partition: int) -> RocksDBStorePartition:
         """

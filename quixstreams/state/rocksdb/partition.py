@@ -54,29 +54,24 @@ class RocksDBStorePartition(StorePartition):
      3. Flushing WriteBatches to the RocksDB
 
     It opens the RocksDB on `__init__`. If the db is locked by another process,
-    it will retry according to `open_max_retries` and `open_retry_backoff`.
+    it will retry according to `open_max_retries` and `open_retry_backoff` options.
 
     :param path: an absolute path to the RocksDB folder
     :param options: RocksDB options. If `None`, the default options will be used.
-    :param open_max_retries: number of times to retry opening the database
-        if it's locked by another process. To disable retrying, pass 0.
-    :param open_retry_backoff: number of seconds to wait between each retry.
     """
 
     def __init__(
         self,
         path: str,
         options: Optional[RocksDBOptionsType] = None,
-        open_max_retries: int = 10,
-        open_retry_backoff: float = 3.0,
     ):
         self._path = path
         self._options = options or RocksDBOptions()
         self._rocksdb_options = self._options.to_options()
         self._dumps = self._options.dumps
         self._loads = self._options.loads
-        self._open_max_retries = open_max_retries
-        self._open_retry_backoff = open_retry_backoff
+        self._open_max_retries = self._options.open_max_retries
+        self._open_retry_backoff = self._options.open_retry_backoff
         self._db = self._init_rocksdb()
         self._cf_cache = {}
         self._cf_handle_cache = {}
@@ -266,7 +261,7 @@ class RocksDBStorePartition(StorePartition):
                 )
                 return db
             except Exception as exc:
-                is_locked = str(exc).lower().startswith("io error: lock")
+                is_locked = str(exc).lower().startswith("io error")
                 if not is_locked:
                     raise
 
