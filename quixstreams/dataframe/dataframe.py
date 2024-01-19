@@ -356,6 +356,7 @@ class StreamingDataFrame(BaseStreaming):
         The time windows always use the current event time.
 
         Example Snippet:
+
         ```python
         app = Application()
         sdf = app.dataframe(...)
@@ -420,6 +421,8 @@ class StreamingDataFrame(BaseStreaming):
         on top of the data and emit results downstream.
 
         The time windows always use the current event time.
+
+        Example Snippet:
 
         Example Snippet:
         ```python

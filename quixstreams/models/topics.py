@@ -111,7 +111,7 @@ class Topic:
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
 
-        Example snippet:
+        Example Snippet:
 
         ```python
         def custom_ts_extractor(
