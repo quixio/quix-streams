@@ -336,3 +336,19 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
         )
 
     return factory
+
+
+@pytest.fixture()
+def message_context_factory():
+    def factory(key: object = "test", timestamp_ms: int = 0) -> MessageContext:
+        timestamp_type = 0 if timestamp_ms == 0 else 1
+        return MessageContext(
+            key=key,
+            topic="test",
+            partition=0,
+            offset=0,
+            size=0,
+            timestamp=MessageTimestamp.create(timestamp_type, timestamp_ms),
+        )
+
+    return factory

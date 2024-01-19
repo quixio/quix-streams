@@ -152,7 +152,7 @@ class RocksDBStorePartition(StorePartition):
     @property
     def path(self) -> str:
         """
-        Get absolute path to RocksDB database folder
+        Absolute path to RocksDB database folder
         :return: file path
         """
         return self._path

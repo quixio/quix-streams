@@ -13,5 +13,9 @@ class StoreNotRegisteredError(QuixException):
     ...
 
 
+class WindowedStoreAlreadyRegisteredError(QuixException):
+    ...
+
+
 class InvalidStoreTransactionStateError(QuixException):
     ...

@@ -21,6 +21,7 @@ from .models import (
     Topic,
     SerializerType,
     DeserializerType,
+    TimestampExtractor,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -338,6 +339,7 @@ class Application:
         value_serializer: SerializerType = "json",
         key_serializer: SerializerType = "bytes",
         creation_configs: Optional[TopicCreationConfigs] = None,
+        timestamp_extractor: Optional[TimestampExtractor] = None,
     ) -> Topic:
         """
         Create a topic definition.
@@ -378,6 +380,7 @@ class Application:
 
         :return: `Topic` object
         """
+
         if self.is_quix_app:
             name = self._quix_config_builder.append_workspace_id(name)
             if creation_configs:
@@ -391,6 +394,7 @@ class Application:
             value_deserializer=value_deserializer,
             key_serializer=key_serializer,
             key_deserializer=key_deserializer,
+            timestamp_extractor=timestamp_extractor,
         )
 
     def dataframe(
@@ -640,15 +644,13 @@ class Application:
                     first_row.partition,
                     first_row.offset,
                 )
-                # Create a new contextvars.Context and set the current MessageContext
-                # (it's the same across multiple rows)
-                context = copy_context()
-                context.run(set_message_context, first_row.context)
 
                 with start_state_transaction(
                     topic=topic_name, partition=partition, offset=offset
                 ):
                     for row in rows:
+                        context = copy_context()
+                        context.run(set_message_context, row.context)
                         try:
                             # Execute StreamingDataFrame in a context
                             context.run(dataframe_composed, row.value)

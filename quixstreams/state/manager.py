@@ -9,8 +9,10 @@ from .exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
     PartitionStoreIsUsed,
+    WindowedStoreAlreadyRegisteredError,
 )
 from .rocksdb import RocksDBStore, RocksDBOptionsType
+from .rocksdb.windowed.store import WindowedRocksDBStore
 from .types import (
     Store,
     PartitionTransaction,
@@ -105,6 +107,29 @@ class StateStoreManager:
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
+
+    def register_windowed_store(self, topic_name: str, store_name: str):
+        """
+        Register a windowed state store to be managed by StateStoreManager.
+
+        During processing, the StateStoreManager will react to rebalancing callbacks
+        and assign/revoke the partitions for registered stores.
+
+        Each window store can be registered only once for each topic.
+
+        :param topic_name: topic name
+        :param store_name: store name
+        """
+        store = self._stores.get(topic_name, {}).get(store_name)
+        if store:
+            raise WindowedStoreAlreadyRegisteredError()
+
+        self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
+            name=store_name,
+            topic=topic_name,
+            base_dir=str(self._state_dir),
+            options=self._rocksdb_options,
+        )
 
     def clear_stores(self):
         """

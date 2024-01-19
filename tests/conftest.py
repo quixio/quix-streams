@@ -13,6 +13,7 @@ pytest_plugins = [
     "tests.test_quixstreams.test_models.fixtures",
     "tests.test_quixstreams.test_platforms.test_quix.fixtures",
     "tests.test_quixstreams.test_state.test_rocksdb.fixtures",
+    "tests.test_quixstreams.test_state.test_rocksdb.test_windowed.fixtures",
 ]
 
 KafkaContainer = namedtuple("KafkaContainer", ("broker_address",))
