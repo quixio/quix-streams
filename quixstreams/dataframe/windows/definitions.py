@@ -157,7 +157,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         Configure the window to perform a custom aggregation using `reducer`
         and `initializer` functions.
 
-        Example:
+        Example Snippet:
         ```python
         sdf = StreamingDataFrame(...)
 

@@ -350,24 +350,32 @@ class StreamingDataFrame(BaseStreaming):
         Create a tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
 
+        They allow to perform stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
+
+        The time windows always use the current event time.
+
+        Example Snippet:
         ```python
-        from quixstreams import Application, StreamingDataFrame
-
         app = Application()
-        sdf = app.dataframe()
-        tumbling_window_def = sdf.tumbling_window(duration=60.0, grace=10.0)
+        sdf = app.dataframe(...)
 
-        # Choose an aggregation function from 'sum', 'count', 'reduce', 'mean', 'min'
-        # and 'max' for the tumbling window
-        tumbling_window = tumbling_window_def.sum()
+        sdf = (
+            # Define a tumbling window of 60s and grace period of 10s
+            sdf.tumbling_window(
+                duration_ms=timedelta(seconds=60), grace_ms=timedelta(seconds=10.0)
+            )
 
-        # Choose the appropriate method based on the desired output behavior
-        # 'all' outputs on all window value updates, whether the window is closed or not
-        # 'final' outputs the window value whenever a window closes (duration + grace)
-        # 'latest' outputs the window value of the last updated window
-        sdf = tumbling_window.all()
+            # Specify the aggregation function
+            .sum()
 
-        # The tumbling window will aggregate data in 60-second windows with a 10-second grace period
+            # Specify how the results should be emitted downstream.
+            # "all()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .all()
+        )
         ```
 
         :param duration_ms: The length of each window.
@@ -405,28 +413,38 @@ class StreamingDataFrame(BaseStreaming):
     ) -> HoppingWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
+        Hopping windows divide the data stream into overlapping windows based on time.
+        The overlap is controlled by the `step_ms` parameter.
 
-        Hopping windows, divide the data stream into overlapping windows based on time.
-        The overlap is controlled by the 'step' parameter. This method is used in stream processing for performing
-        aggregations or other operations where a continuous update over sliding time slices of data is needed.
+        They allow to perform stateful aggregations like `sum`, `reduce`, etc.
+        on top of the data and emit results downstream.
 
-        It is particularly useful in scenarios where data needs to be aggregated or analyzed over specific periods.
+        The time windows always use the current event time.
 
+        Example Snippet:
         ```python
-        from quixstreams import Application, StreamingDataFrame
 
         app = Application()
-        sdf = app.dataframe()
-        hopping_window_def = sdf.hopping_window(duration=60.0, step=30.0, grace=10.0)
+        sdf = app.dataframe(...)
 
-        # Choose an aggregation function for the hopping window, like 'sum', 'count', 'reduce', 'mean', 'min', 'max'
-        hopping_window = hopping_window_def.sum()
+        sdf = (
+            # Define a a hopping window of 60s with step 30s and grace period of 10s
+            sdf.hopping_window(
+                duration_ms=timedelta(seconds=60),
+                step_ms=timedelta(seconds=30),
+                grace_ms=timedelta(seconds=10)
+            )
 
-        # The output behavior methods - 'all', 'final', 'latest' - determine how the window values are emitted
-        sdf = hopping_window.all()
+            # Specify the aggregation function
+            .sum()
 
-        # The hopping window will aggregate data in 60-second windows, moving forward every 30 seconds,
-        with a 10-second grace period
+            # Specify how the results should be emitted downstream.
+            # "all()" will emit results as they come for each updated window,
+            # possibly producing multiple messages per key-window pair
+            # "final()" will emit windows only when they are closed and cannot
+            # receive any updates anymore.
+            .all()
+        )
         ```
 
         :param duration_ms: The length of each window. It defines the time span for
