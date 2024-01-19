@@ -102,16 +102,16 @@ class Consumer:
             Note: values passed as arguments override values in `extra_config`.
         """
         self._consumer_config = dict(
-            **extra_config or {},
+            {
+                "enable.auto.offset.store": False,
+                **(extra_config or {}),
+            },
             **{
                 "bootstrap.servers": broker_address,
                 "group.id": consumer_group,
                 "enable.auto.commit": auto_commit_enable,
                 "auto.offset.reset": auto_offset_reset,
                 "partition.assignment.strategy": assignment_strategy,
-                # Always store offsets manually to avoid committing messages
-                # before they're processed
-                "enable.auto.offset.store": False,
                 "logger": logger,
                 "error_cb": _default_error_cb,
                 "on_commit": functools.partial(

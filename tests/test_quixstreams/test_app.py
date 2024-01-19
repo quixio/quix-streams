@@ -48,6 +48,53 @@ def _stop_app_on_timeout(app: Application, timeout: float):
 
 
 class TestApplication:
+    def test_produce_and_consume(self, app_factory, topic_factory):
+        """
+        Test that the basic producer can produce messages to a Kafka topic and the consumer
+        can consume them.
+        """
+        total_messages = 3
+        consumer_timeout_seconds = 10
+        messages_to_produce = [
+            {"key": f"key-{i}", "value": f"value-{i}"} for i in range(total_messages)
+        ]
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+        )
+
+        topic_name, _ = topic_factory()
+
+        # Produce messages
+        with app.get_producer() as producer:
+            for msg in messages_to_produce:
+                producer.produce(
+                    topic_name,
+                    key=msg["key"].encode(),
+                    value=msg["value"].encode(),
+                )
+            producer.flush()
+
+        # Consume messages
+        consumed_messages = []
+        start_time = time.time()
+        with app.get_consumer() as consumer:
+            consumer.subscribe([topic_name])
+            while (
+                len(consumed_messages) < total_messages
+                and time.time() - start_time < consumer_timeout_seconds
+            ):
+                msg = consumer.poll(timeout=5.0)
+                if msg is not None and not msg.error():
+                    consumed_messages.append(
+                        {"key": msg.key().decode(), "value": msg.value().decode()}
+                    )
+
+        # Check that all messages have been produced and consumed correctly
+        assert len(consumed_messages) == total_messages
+        for msg in consumed_messages:
+            assert msg in messages_to_produce
+
     def test_run_consume_and_produce(
         self,
         app_factory,
@@ -424,6 +471,66 @@ class TestQuixApplication:
         actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
         assert actual_call_arg == list(builder.create_topic_configs.values())
         assert {c.name for c in actual_call_arg} == {t.name for t in topics}
+
+    def test_topic_auto_create_on_get_producer(self, quix_app_factory):
+        """
+        Test that topics are auto-created when calling get_producer with auto_create_topics=True in a Quix app.
+        """
+        app = quix_app_factory(auto_create_topics=True)
+        builder = app._quix_config_builder
+        topics = [app.topic("topic_in"), app.topic("topic_out")]
+
+        with app.get_producer():
+            ...
+
+        # Verify that create_topics was called with the expected topics
+        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
+        assert actual_call_arg == list(builder.create_topic_configs.values())
+        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
+
+    def test_topic_auto_create_on_get_consumer(self, quix_app_factory):
+        """
+        Test that topics are auto-created when calling get_consumer with auto_create_topics=True in a Quix app.
+        """
+        app = quix_app_factory(auto_create_topics=True)
+        builder = app._quix_config_builder
+        topics = [app.topic("topic_in"), app.topic("topic_out")]
+
+        with app.get_consumer():
+            ...
+
+        # Verify that create_topics was called with the expected topics
+        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
+        assert actual_call_arg == list(builder.create_topic_configs.values())
+        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
+
+    def test_consumer_extra_config(self, app_factory):
+        """
+        Test that some configs like `enable.auto.offset.store` are overridable and others are not
+        """
+        app = app_factory(
+            auto_offset_reset="latest",
+            consumer_extra_config={
+                "auto.offset.reset": "earliest",
+                "enable.auto.offset.store": True,
+            },
+        )
+
+        with app.get_consumer() as x:
+            assert x._consumer_config["enable.auto.offset.store"] is True
+            assert x._consumer_config["auto.offset.reset"] is "latest"
+
+    def test_producer_extra_config(self, app_factory):
+        """
+        Test that setting same configs through different ways works in the expected way
+        """
+        app = app_factory(
+            auto_offset_reset="latest",
+            producer_extra_config={"auto.offset.reset": "earliest"},
+        )
+
+        with app.get_consumer() as x:
+            assert x._consumer_config["auto.offset.reset"] is "latest"
 
     def test_quix_app_stateful_quix_deployment_no_state_management_warning(
         self, quix_app_factory, monkeypatch, topic_factory, executor

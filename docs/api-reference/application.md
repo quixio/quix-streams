@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L42)
 
 The main Application class.
 
@@ -78,7 +78,7 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO")
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L81)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L81)
 
 
 <br>
@@ -155,7 +155,7 @@ def Quix(cls,
          auto_create_topics: bool = True) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L178)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L187)
 
 Initialize an Application to work with Quix platform,
 
@@ -265,7 +265,7 @@ def topic(name: str,
           creation_configs: Optional[TopicCreationConfigs] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L324)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L333)
 
 Create a topic definition.
 
@@ -324,7 +324,7 @@ Its name will be overridden by this method's 'name' param.
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L387)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L396)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -374,7 +374,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L423)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L432)
 
 Stop the internal poll loop and the message processing.
 
@@ -383,6 +383,86 @@ likely through some sort of threading).
 
 To otherwise stop an application, either send a `SIGTERM` to the process
 (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+<a id="quixstreams.app.Application.get_producer"></a>
+
+<br><br>
+
+#### Application.get\_producer
+
+```python
+def get_producer() -> Producer
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L444)
+
+Create and return a pre-configured Producer instance.
+The Producer is initialized with params passed to Application.
+
+It's useful for producing data to Kafka outside the standard Application processing flow,
+(e.g. to produce test data into a topic).
+Using this within the StreamingDataFrame functions is not recommended, as it creates a new Producer
+instance each time, which is not optimized for repeated use in a streaming pipeline.
+
+
+<br>
+***Example Snippet:***
+
+```python
+from quixstreams import Application
+
+app = Application.Quix(...)
+topic = app.topic("input")
+
+with app.get_producer() as producer:
+    for i in range(100):
+        producer.produce(topic=topic.name, key=b"key", value=b"value")
+```
+
+<a id="quixstreams.app.Application.get_consumer"></a>
+
+<br><br>
+
+#### Application.get\_consumer
+
+```python
+def get_consumer() -> Consumer
+```
+
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L480)
+
+Create and return a pre-configured Consumer instance.
+The Consumer is initialized with params passed to Application.
+
+It's useful for consuming data from Kafka outside the standard Application processing flow.
+(e.g. to consume test data from a topic).
+Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
+each time, which is not optimized for repeated use in a streaming pipeline.
+
+Note: By default this consumer does not autocommit consumed offsets to allow exactly-once processing.
+To store the offset call store_offsets() after processing a message.
+If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
+
+
+<br>
+***Example Snippet:***
+
+```python
+from quixstreams import Application
+
+app = Application.Quix(...)
+topic = app.topic("input")
+
+with app.get_consumer() as consumer:
+    consumer.subscribe([topic.name])
+    while True:
+        msg = consumer.poll(timeout=1.0)
+        if msg is not None:
+            # Process message
+            # Optionally commit the offset
+            # consumer.store_offsets(msg)
+
+```
 
 <a id="quixstreams.app.Application.clear_state"></a>
 
@@ -394,7 +474,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L435)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L529)
 
 Clear the state of the application.
 
@@ -408,7 +488,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/app.py#L464)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/app.py#L558)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -452,7 +532,7 @@ app.run(dataframe=df)
 class State(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L95)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/state/types.py#L95)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -466,7 +546,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/state/types.py#L100)
 
 Get the value for key if key is present in the state, else default
 
@@ -493,7 +573,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L109)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/state/types.py#L109)
 
 Set value for the key.
 
@@ -514,7 +594,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/state/types.py#L116)
 
 Delete value for the key.
 
@@ -536,7 +616,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/780d6ed95124b27f911a7a7d8cd68572fd6d7f2a/quixstreams/state/types.py#L124)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7bb0b4e47d690ffe285f34c87c3bbe7d39c6b397/quixstreams/state/types.py#L124)
 
 Check if the key exists in state.
 

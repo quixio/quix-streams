@@ -7,5 +7,5 @@ To generate new API docs
 
 - Go to `docs/build`
 - Install requirements via `python -m pip install -r requirements.txt`
-- do `python build.py`
+- do `./build.sh`
 - Check the generated docs in `docs/` folder
