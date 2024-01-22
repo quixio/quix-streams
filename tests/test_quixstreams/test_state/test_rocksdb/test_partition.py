@@ -65,6 +65,21 @@ class TestRocksDBStorePartition:
             "db", options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1)
         )
 
+    def test_open_io_error_retries(self, rocksdb_partition_factory, executor):
+        err = Exception("io error")
+        patcher = patch.object(Rdict, "__init__", side_effect=err)
+        patcher.start()
+
+        def _close_db():
+            time.sleep(3)
+            patcher.stop()
+
+        executor.submit(_close_db)
+
+        rocksdb_partition_factory(
+            "db", options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1)
+        )
+
     def test_open_db_locked_no_retries_fails(self, rocksdb_partition_factory, executor):
         _ = rocksdb_partition_factory("db")
 
