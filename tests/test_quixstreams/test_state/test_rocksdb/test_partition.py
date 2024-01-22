@@ -70,11 +70,11 @@ class TestRocksDBStorePartition:
         patcher = patch.object(Rdict, "__init__", side_effect=err)
         patcher.start()
 
-        def _close_db():
+        def _stop_raising_on_db_open():
             time.sleep(3)
             patcher.stop()
 
-        executor.submit(_close_db)
+        executor.submit(_stop_raising_on_db_open)
 
         rocksdb_partition_factory(
             "db", options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1)
