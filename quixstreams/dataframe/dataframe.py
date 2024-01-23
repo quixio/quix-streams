@@ -255,7 +255,10 @@ class StreamingDataFrame(BaseStreaming):
         return StreamingSeries.from_func(lambda value: key in value)
 
     def to_topic(
-        self, topic: Topic, key: Optional[Callable[[object], object]] = None
+        self,
+        topic: Topic,
+        key: Optional[Callable[[object], object]] = None,
+        timestamp: Optional[Callable[[object], int]] = None,
     ) -> Self:
         """
         Produce current value to a topic. You can optionally specify a new key.
@@ -270,16 +273,18 @@ class StreamingDataFrame(BaseStreaming):
         ```python
         from quixstreams import Application
 
-        # Produce to two different topics, changing the key for one of them.
+        # Produce to different topics with an example of changing the key and setting custom timestamp
 
         app = Application()
         input_topic = app.topic("input_x")
-        output_topic_0 = app.topic("output_a")
-        output_topic_1 = app.topic("output_b")
+        output_topic_1 = app.topic("output_a")
+        output_topic_2 = app.topic("output_b")
+        output_topic_3 = app.topic("output_c")
 
         sdf = app.dataframe(input_topic)
-        sdf = sdf.to_topic(output_topic_0)
-        sdf = sdf.to_topic(output_topic_1, key=lambda data: data["a_field"])
+        sdf = sdf.to_topic(output_topic_1)
+        sdf = sdf.to_topic(output_topic_2, key=lambda data: data["a_field"])
+        sdf = sdf.to_topic(output_topic_3, timestamp=lambda data: data["ts_field"])
         ```
 
         :param topic: instance of `Topic`
@@ -287,10 +292,16 @@ class StreamingDataFrame(BaseStreaming):
             If passed, the return type of this callable must be serializable
             by `key_serializer` defined for this Topic object.
             By default, the current message key will be used.
-
+        :param timestamp: a callable that takes a message as input and returns a timestamp (in milliseconds).
+            If not provided, the current epoch time will be used.
         """
         return self.update(
-            lambda value: self._produce(topic, value, key=key(value) if key else None)
+            lambda value: self._produce(
+                topic,
+                value,
+                key=key(value) if key else None,
+                timestamp=timestamp(value) if timestamp else None,
+            )
         )
 
     def compose(self) -> StreamCallable:
@@ -494,11 +505,17 @@ class StreamingDataFrame(BaseStreaming):
             clone.producer = self._real_producer
         return clone
 
-    def _produce(self, topic: Topic, value: object, key: Optional[object] = None):
+    def _produce(
+        self,
+        topic: Topic,
+        value: object,
+        key: Optional[object] = None,
+        timestamp: Optional[int] = None,
+    ):
         ctx = message_context()
         key = key or ctx.key
         row = Row(value=value, context=ctx)  # noqa
-        self.producer.produce_row(row, topic, key=key)
+        self.producer.produce_row(row, topic, key=key, timestamp=timestamp)
 
     def _register_store(self):
         """

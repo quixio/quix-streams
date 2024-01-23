@@ -400,6 +400,44 @@ class TestStreamingDataFrameToTopic:
         assert consumed_row.value == value
         assert consumed_row.key == value["x"]
 
+    def test_to_topic_custom_timestamp(
+        self,
+        dataframe_factory,
+        row_consumer_factory,
+        row_producer_factory,
+        topic_factory,
+    ):
+        topic_name, _ = topic_factory()
+        topic = Topic(topic_name, value_serializer="json", value_deserializer="json")
+        producer = row_producer_factory()
+
+        sdf = dataframe_factory()
+        sdf.producer = producer
+
+        # Use value["ts"] as a new timestamp
+        sdf = sdf.to_topic(topic, timestamp=lambda v: v["ts"])
+
+        value = {"ts": 567, "a_field": 1}
+        ctx = MessageContext(
+            topic="test",
+            partition=0,
+            offset=0,
+            size=0,
+            timestamp=MessageTimestamp.create(1, 0),
+        )
+
+        with producer:
+            sdf.test(value, ctx=ctx)
+
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([topic])
+            consumed_row = consumer.poll_row(timeout=5.0)
+
+        assert consumed_row
+        assert consumed_row.topic == topic.name
+        assert consumed_row.value == value
+        assert consumed_row.timestamp.milliseconds == value["ts"]
+
     def test_to_topic_multiple_topics_out(
         self,
         dataframe_factory,
