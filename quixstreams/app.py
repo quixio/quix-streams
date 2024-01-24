@@ -36,7 +36,6 @@ from .state.changelog import ChangelogManager, RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .topic_manager import TopicManager, TopicManagerType
 
-from time import sleep
 
 __all__ = ("Application",)
 
@@ -608,13 +607,12 @@ class Application:
 
     def _recovery(self):
         try:
-            self._state_manager.changelog_manager.do_recovery()
+            self._state_manager.do_recovery()
         except RecoveryManager.RecoveryComplete:
             print("FINISHED RECOVERING")
             self._run_mode = self._processing
 
     def _do_run_mode(self):
-        sleep(0.5)
         return self._run_mode()
 
     def run(
@@ -702,7 +700,7 @@ class Application:
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
         if self._state_manager.stores:
-            if self._state_manager.changelog_manager:
+            if self._state_manager.using_changelogs:
                 self._run_mode = self._recovery
             logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
@@ -737,7 +735,7 @@ class Application:
         """
         print(f"CONSUMER REVOKE: {topic_partitions}")
         if self._state_manager.stores:
-            if self._state_manager.changelog_manager:
+            if self._state_manager.using_changelogs:
                 self._run_mode = self._recovery
             logger.debug(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:
@@ -749,7 +747,7 @@ class Application:
         """
         print(f"CONSUMER LOST: {topic_partitions}")
         if self._state_manager.stores:
-            if self._state_manager.changelog_manager:
+            if self._state_manager.using_changelogs:
                 self._run_mode = self._recovery
             logger.debug(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:

@@ -3,14 +3,26 @@ from typing import Optional, Dict, List
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.models import ConfluentKafkaMessageProto
-from quixstreams.rowconsumer import RowConsumer
+from quixstreams.kafka import Consumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.types import StorePartition
 from quixstreams.topic_manager import TopicManagerType, BytesTopic
 from quixstreams.types import Headers
+from quixstreams.utils.dicts import dict_values
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RecoveryPartition:
+    """
+    A changelog partition mapped to a respective StorePartition with helper methods
+    to determine its current recovery status.
+
+    Since `StorePartition`s do recovery directly, it also handles recovery transactions.
+    """
+
     def __init__(
         self,
         topic: str,
@@ -25,13 +37,16 @@ class RecoveryPartition:
         self._changelog_lowwater: Optional[int] = None
         self._changelog_highwater: Optional[int] = None
 
-    @property
-    def offset(self) -> int:
-        return self.store_partition.get_changelog_offset()
+    class OffsetUpdate(ConfluentKafkaMessageProto):
+        def __init__(self, offset):
+            self._offset = offset
+
+        def offset(self):
+            return self._offset
 
     @property
-    def as_partition(self) -> ConfluentPartition:
-        return ConfluentPartition(self.topic, self.partition)
+    def offset(self) -> int:
+        return self.store_partition.get_changelog_offset() or 0
 
     @property
     def topic_partition(self) -> ConfluentPartition:
@@ -48,8 +63,35 @@ class RecoveryPartition:
     @property
     def needs_recovery(self):
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
-        state_is_behind = self._changelog_highwater - self.offset
+        state_is_behind = (self._changelog_highwater - self.offset) > 0
         return has_consumable_offsets and state_is_behind
+
+    @property
+    def needs_offset_update(self):
+        return self._changelog_highwater and (self.offset != self._changelog_highwater)
+
+    def _warn_bad_offset(self):
+        logger.warning(
+            f"The recorded changelog offset in state for "
+            f"{self.changelog}: p{self.partition} was larger than the actual offset "
+            f"available on that topic-partition, likely as a result of some "
+            f"sort of error (mostly likely Kafka or network related). "
+            f"It is possible that the state of any affected message keys may end "
+            f"up inaccurate due to potential double processing. This is an "
+            f"unfortunate possibility with 'at least once' processing guarantees. "
+            f"The offset will now be corrected."
+        )
+
+    def update_offset(self):
+        logger.info(
+            f"topic:partition {self.changelog}:{self.partition} "
+            f"requires an offset update"
+        )
+        if self.offset > self._changelog_highwater:
+            self._warn_bad_offset()
+        self.store_partition.set_changelog_offset(
+            changelog_message=self.OffsetUpdate(self.offset)
+        )
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):
         self.store_partition.recover(changelog_message=changelog_message)
@@ -87,21 +129,23 @@ class ChangelogWriter:
 
 
 class ChangelogManager:
+    """
+    A simple interface for managing all things related to changelog topics and is
+    primarily used by the StateStoreManager.
+
+    Facilitates creation of changelog topics and assigning their partitions during
+    rebalances, and handles recovery process loop calls from `Application`.
+    """
+
     def __init__(
         self,
         topic_manager: TopicManagerType,
-        consumer: RowConsumer,
+        consumer: Consumer,
         producer: RowProducer,
     ):
         self._topic_manager = topic_manager
-        self._consumer = consumer
         self._producer = producer
         self._recovery_manager = RecoveryManager(consumer)
-
-    """
-    A simple interface for adding changelog topics during store init and
-    generating changelog writers (generally for each new `Store` transaction).
-    """
 
     def add_changelog(self, source_topic_name: str, suffix: str, consumer_group: str):
         self._topic_manager.changelog_topic(
@@ -111,23 +155,26 @@ class ChangelogManager:
         )
 
     def assign_partition(
-        self, source_topic_name: str, partition: int, store_partition: StorePartition
+        self,
+        source_topic_name: str,
+        partition: int,
+        store_partitions: Dict[str, StorePartition],
     ):
-        for topic in self._topic_manager.changelog_topics[source_topic_name].values():
-            print(f"CHANGELOG: ADDING PARTITION {topic.name}: {partition}")
-            self._recovery_manager.assign_partition(
-                source_topic_name=source_topic_name,
-                changelog=topic.name,
-                partition=partition,
-                store_partition=store_partition,
-            )
+        self._recovery_manager.assign_partitions(
+            source_topic_name=source_topic_name,
+            partition=partition,
+            store_partitions={
+                self._topic_manager.changelog_topics[source_topic_name][
+                    suffix
+                ].name: store_partition
+                for suffix, store_partition in store_partitions.items()
+            },
+        )
 
     def revoke_partition(self, source_topic_name, partition):
-        for topic in self._topic_manager.changelog_topics[source_topic_name].values():
-            print(f"CHANGELOG: REVOKING PARTITION {topic.name}: {partition}")
-            self._recovery_manager.revoke_partition(
-                topic=source_topic_name, changelog=topic.name, partition=partition
-            )
+        self._recovery_manager.revoke_partitions(
+            topic=source_topic_name, partition=partition
+        )
 
     def get_writer(
         self, source_topic_name: str, suffix: str, partition_num: int
@@ -139,18 +186,36 @@ class ChangelogManager:
         )
 
     def do_recovery(self):
-        print("DO RECOVERY")
         self._recovery_manager.do_recovery()
 
 
 class RecoveryManager:
-    def __init__(self, consumer: RowConsumer):
+    """
+    Manages all aspects of recovery, including managing all topic partition assignments
+    (both source topic and changelogs), generating `RecoveryPartition`s when recovery
+    is required for a given changelog partition, and stopping/revoking said partitions
+    when it determines recovery is complete.
+
+    Important to note that a RecoveryPartition is only generated (and assigned to the
+    consumer) when recovery is necessary, else the partition in question is ignored.
+
+    It will revoke these partitions throughout recovery, which will NOT kick off
+    a rebalance of the consumer since this is done outside the consumer group protocol.
+
+    Recovery is always triggered from any source topic rebalance, which then the
+    `Application` switches its processing loop over to the `RecoveryManager`. The
+    `RecoveryManager` throws the `RecoveryComplete` exception when finished,
+     which is gracefully caught by the `Application`, resuming normal processing.
+    """
+
+    def __init__(self, consumer: Consumer):
         self._consumer = consumer
         self._pending_assigns: List[RecoveryPartition] = []
         self._pending_revokes: List[RecoveryPartition] = []
         self._partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
         self._recovery_method = self._recover
-        self._topic_changelog_map: Dict[str, str] = {}
+        self._poll_attempts: int = 2
+        self._polls_remaining: int = self._poll_attempts
 
     class RecoveryComplete(Exception):
         ...
@@ -160,109 +225,121 @@ class RecoveryManager:
         return bool(self._partitions)
 
     def do_recovery(self):
-        return self._recovery_method()
+        self._recovery_method()
 
-    def assign_partition(
+    def assign_partitions(
         self,
         source_topic_name: str,
-        changelog: str,
         partition: int,
-        store_partition: StorePartition,
+        store_partitions: Dict[str, StorePartition],
     ):
-        print("RECOVERY: ADD PARTITION")
-        p = RecoveryPartition(
-            topic=source_topic_name,
-            changelog=changelog,
-            partition=partition,
-            store_partition=store_partition,
-        )
-        topic_p = p.topic_partition
+        p = None
+        for changelog, store_partition in store_partitions.items():
+            logger.debug(f"Assigning changelog:partition {changelog}:{partition}")
+            p = RecoveryPartition(
+                topic=source_topic_name,
+                changelog=changelog,
+                partition=partition,
+                store_partition=store_partition,
+            )
+            self._pending_assigns.append(p)
         # Assign manually to immediately pause it (would assign unpaused automatically)
         # TODO: consider doing all topic (not changelog) assign(s) during the
         #  Application on_assign call (rather than one at a time here)
-        self._consumer.incremental_assign([topic_p])
-        self._consumer.pause([topic_p])
-        self._pending_assigns.append(p)
+        topic_p = [p.topic_partition]
+        self._consumer.incremental_assign(topic_p)
+        self._consumer.pause(topic_p)
         self._recovery_method = self._rebalance
 
     def _partition_cleanup(self, partition: int):
         if not self._partitions[partition]:
             del self._partitions[partition]
 
-    def revoke_partition(self, topic: str, changelog: str, partition: int):
-        print("RECOVERY: REVOKE PARTITION")
+    def revoke_partitions(self, topic: str, partition: int):
         # TODO: consider doing all topic (not changelog) unassign(s) during the
         #  Application on_revoke call (rather than one at a time here)
         self._consumer.incremental_unassign([ConfluentPartition(topic, partition)])
-        print(f"CURRENT PARTITIONS: {self._partitions}")
-        if recovery_p := self._partitions.get(partition, {}).pop(changelog, None):
-            # pause for later revoke (will revoke all partitions at the same time)
-            self._consumer.pause([recovery_p.changelog_partition])
-            self._pending_revokes.append(recovery_p)
-            print(f"PENDING REVOKES: {self._pending_revokes}")
-            if self._pending_revokes:
-                self._partition_cleanup(partition)
-                self._recovery_method = self._rebalance
+        if changelogs := self._partitions.get(partition, {}):
+            for changelog in list(changelogs.keys()):
+                self._pending_revokes.append(changelogs.pop(changelog))
+            self._consumer.pause([p.changelog_partition for p in self._pending_revokes])
+            self._partition_cleanup(partition)
+            self._recovery_method = self._rebalance
 
     def _handle_pending_assigns(self):
-        print("RECOVERY: HANDLE PENDING ASSIGNS")
-        if self._pending_assigns:
-            assigns = []
-            self._consumer.pause([p.as_partition for p in self._pending_assigns])
-            while self._pending_assigns:
-                p = self._pending_assigns.pop()
-                p.set_watermarks(
-                    *self._consumer.get_watermark_offsets(
-                        p.changelog_partition, timeout=10
-                    )
+        assigns = []
+        # TODO: confirm pause needs to be here; if so, refine it to not pause the same
+        #  partition a bunch
+        self._consumer.pause([p.topic_partition for p in self._pending_assigns])
+        while self._pending_assigns:
+            p = self._pending_assigns.pop()
+            p.set_watermarks(
+                *self._consumer.get_watermark_offsets(p.changelog_partition, timeout=10)
+            )
+            if p.needs_recovery:
+                logger.info(
+                    f"topic:partition {p.changelog}:{p.partition} requires recovery"
                 )
-                if p.needs_recovery:
-                    print(f"ADDING PARTITION {p.changelog}: {p.partition}")
-                    assigns.append(p)
-                    self._partitions.setdefault(p.partition, {})[p.changelog] = p
-            if assigns:
-                self._consumer.incremental_assign(
-                    [p.changelog_assignable_partition for p in assigns]
-                )
-        self._recovery_method = self._recover
+                assigns.append(p)
+                self._partitions.setdefault(p.partition, {})[p.changelog] = p
+            elif p.needs_offset_update:
+                # >0 changelog offset, but none are actually consumable
+                # this is unlikely to happen with At Least Once, but just in case...
+                p.update_offset()
+        if assigns:
+            self._consumer.incremental_assign(
+                [p.changelog_assignable_partition for p in assigns]
+            )
 
     def _handle_pending_revokes(self):
-        print("RECOVERY: HANDLE PENDING REVOKES")
-        if self._pending_revokes:
-            self._consumer.incremental_unassign(
-                [p.changelog_partition for p in self._pending_revokes]
-            )
-            print(
-                f"REVOKED PARTITIONS {[(p.changelog, p.partition) for p in self._pending_revokes]}"
-            )
-            self._pending_revokes = []
+        self._consumer.incremental_unassign(
+            [p.changelog_partition for p in self._pending_revokes]
+        )
+        self._pending_revokes = []
 
     def _rebalance(self):
         """ """
-        print("RECOVERY: REBALANCE")
-        self._handle_pending_revokes()
-        self._handle_pending_assigns()
+        logger.debug("performing a recovery rebalance...")
+        if self._pending_revokes:
+            self._handle_pending_revokes()
+        if self._pending_assigns:
+            self._handle_pending_assigns()
         self._recovery_method = self._recover
+        self._polls_remaining = self._poll_attempts
+
+    def _update_partition_offsets(self):
+        """
+        update the offsets for assigned partitions, and then revoke them.
+
+        This is a safety measure for when, while recovering, the highwater and
+        changelog consumable offsets don't align: in this case, from failed
+        transactions with Exactly Once processing (stored offset < changelog highwater).
+        """
+        for p in (p_out := dict_values(self._partitions)):
+            if p.needs_offset_update:
+                p.update_offset()
+        self._pending_revokes.extend(p_out)
+        self._partitions = {}
+        self._handle_pending_revokes()
 
     def _finalize_recovery(self):
-        print("RECOVERY: FINALIZE RECOVERY")
+        logger.info("Finalizing recovery and resuming normal processing...")
+        if self._partitions:
+            self._update_partition_offsets()
         self._consumer.resume(self._consumer.assignment())
+        self._polls_remaining = self._poll_attempts
         raise self.RecoveryComplete
 
     def _recover(self):
-        print("RECOVERY: RECOVER")
         if not self.in_recovery_mode:
-            self._finalize_recovery()
+            return self._finalize_recovery()
 
-        print("POLLING")
-        if not (msg := self._consumer.poll(5)):
-            print("NO MESSAGES")
+        if (msg := self._consumer.poll(5)) is None:
+            self._polls_remaining -= 1
+            if not self._polls_remaining:
+                return self._finalize_recovery()
             return
 
-        print(self._consumer.assignment())
-        print(
-            f"RECOVERY MESSAGE: {msg.key()}, {msg.value()}, {msg.topic()}: {msg.partition()}"
-        )
         changelog = msg.topic()
         p_num = msg.partition()
 
@@ -270,7 +347,7 @@ class RecoveryManager:
         partition.recover(changelog_message=msg)
 
         if not partition.needs_recovery:
-            print(f"RECOVERY FOR {msg.topic()}: {msg.partition()} finished!")
+            logger.debug(f"recovery for {msg.topic()}: {msg.partition()} finished!")
             self._pending_revokes.append(self._partitions[p_num].pop(changelog))
             self._partition_cleanup(p_num)
             self._handle_pending_revokes()

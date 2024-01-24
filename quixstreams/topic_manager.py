@@ -5,6 +5,7 @@ from abc import abstractmethod
 from typing import Dict, List, Mapping, Optional, Set, Literal, Protocol, ClassVar
 
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.utils.dicts import dict_values
 from .kafka.admin import Admin
 from .models.serializers import DeserializerType, SerializerType
 from .models.topics import Topic, TopicConfig, TopicList, TopicMap
@@ -24,26 +25,6 @@ class BytesTopic(Topic):
             value_deserializer="bytes",
             config=config,
         )
-
-
-def dict_values(d: object) -> List:
-    """
-    Recursively unpacks a set of nested dicts to get a flattened list of leaves,
-    where "leaves" are the first non-dict item.
-
-    i.e {"a": {"b": {"c": 1}, "d": 2}, "e": 3} becomes [1, 2, 3]
-
-    :param d: initially, a dict (with potentially nested dicts)
-
-    :return: a list with all the leaves of the various contained dicts
-    """
-    if d:
-        if isinstance(d, dict):
-            return [i for v in d.values() for i in dict_values(v)]
-        elif isinstance(d, list):
-            return d
-        return [d]
-    return []
 
 
 def affirm_ready_for_create(topics: TopicList):
@@ -92,6 +73,11 @@ class TopicManagerType(Protocol):
 
     @property
     def changelog_topics(self) -> Dict[str, Dict[str, BytesTopic]]:
+        """
+        Changelogs stored as {source_topic_name: {suffix: Topic}}
+
+        returns:
+        """
         return self._changelog_topics
 
     @property

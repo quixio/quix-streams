@@ -21,6 +21,7 @@ from quixstreams.state.rocksdb import (
 from quixstreams.state.rocksdb.serialization import serialize
 from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.utils.json import dumps
+from ...utils import ConfluentKafkaMessageStub
 
 TEST_KEYS = [
     "string",
@@ -167,6 +168,26 @@ class TestRocksDBStorePartition:
     def test_ensure_metadata_cf(self, rocksdb_partition):
         assert rocksdb_partition.get_column_family("__metadata__")
 
+    def test_recover(self, rocksdb_partition):
+        """
+        Perform a recovery from a changelog message.
+        """
+        key = "my_key"
+        value = "my_value"
+        changelog_msg = ConfluentKafkaMessageStub(
+            offset=10,
+            key=dumps(key),
+            value=dumps(value),
+            headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
+        )
+
+        assert rocksdb_partition.get_changelog_offset() is None
+        rocksdb_partition.recover(changelog_message=changelog_msg)
+
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
+        with rocksdb_partition.begin() as tx:
+            assert tx.get(key) == value
+
 
 class TestRocksDBPartitionTransaction:
     def test_transaction_complete(self, rocksdb_partition):
@@ -182,7 +203,7 @@ class TestRocksDBPartitionTransaction:
         value_out = "my_value"
         cf = "default"
         db_writes = 3
-        assert rocksdb_partition.get_changelog_offset() == 0
+        assert rocksdb_partition.get_changelog_offset() is None
 
         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
             for i in range(db_writes):
@@ -208,7 +229,7 @@ class TestRocksDBPartitionTransaction:
         key_out = "my_key"
         value_out = "my_value"
         cf = "default"
-        assert rocksdb_partition.get_changelog_offset() == 0
+        assert rocksdb_partition.get_changelog_offset() is None
 
         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
             tx.set(key=key_out, value=value_out, cf_name=cf)
@@ -241,7 +262,7 @@ class TestRocksDBPartitionTransaction:
         cf = "default"
         db_writes = 3
         delete_index = 2
-        assert rocksdb_partition.get_changelog_offset() == 0
+        assert rocksdb_partition.get_changelog_offset() is None
 
         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
             for i in range(db_writes):
@@ -273,7 +294,7 @@ class TestRocksDBPartitionTransaction:
     ):
         key_out = "my_key"
         cf = "default"
-        assert rocksdb_partition.get_changelog_offset() == 0
+        assert rocksdb_partition.get_changelog_offset() is None
 
         with rocksdb_partition.begin(changelog_writer=changelog_writer_patched) as tx:
             tx.delete(key=key_out, cf_name=cf)
@@ -597,3 +618,8 @@ class TestRocksDBPartitionTransaction:
 
         with rocksdb_partition.begin() as tx:
             assert tx.exists(key, cf_name="cf")
+
+
+class TestRocksDBPartitionRecoveryTransaction:
+    # TODO: finish this
+    ...

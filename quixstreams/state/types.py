@@ -98,7 +98,10 @@ class StorePartition(Protocol):
     def get_processed_offset(self) -> Optional[int]:
         ...
 
-    def get_changelog_offset(self) -> int:
+    def get_changelog_offset(self) -> Optional[int]:
+        ...
+
+    def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
         ...
 
 

@@ -109,16 +109,22 @@ class RocksDBStorePartition(StorePartition):
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):
         """
-        Create a new `RocksDBTransaction` object.
-        Using `RocksDBTransaction` is a recommended way for accessing the data.
-
-        :return: an instance of `RocksDBTransaction`
+        Completes a stateful recovery from a given changelog message.
         """
         with RocksDBPartitionRecoveryTransaction(
             partition=self,
             changelog_message=changelog_message,
         ) as partition:
             partition.recover()
+
+    def set_changelog_offset(self, offset_only_message: ConfluentKafkaMessageProto):
+        """
+        Set the changelog offset only; usually when the stored offset is "behind" but
+        no messages are left on the changelog.
+        """
+        RocksDBPartitionRecoveryTransaction(
+            partition=self, changelog_message=offset_only_message
+        ).flush()
 
     def write(self, batch: WriteBatch):
         """
@@ -173,7 +179,8 @@ class RocksDBStorePartition(StorePartition):
         offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
         if offset_bytes is None:
             offset_bytes = self._db.get(CHANGELOG_OFFSET_KEY)
-        return int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
+        if offset_bytes is not None:
+            return int_from_int64_bytes(offset_bytes)
 
     def close(self):
         """
@@ -671,6 +678,13 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
 
     @_validate_transaction_state
     def recover(self):
+        """
+        Update the respective db k/v from the changelog message.
+
+        Should only be called once over the lifetime of this object.
+
+        Should flush afterward, which additionally updates the stored offset.
+        """
         cf_handle = self._get_header_column_family(self._message.headers())
         key = self._message.key()
         try:
@@ -701,8 +715,7 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
         """
         Check if the transaction has failed.
 
-        The failed transaction should not be re-used because the update cache
-        and
+        The failed transaction should not be re-used.
 
         :return: `True` if transaction is failed, `False` otherwise.
         """
@@ -716,11 +729,6 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
 
         If writing fails, the transaction will be also marked as "failed" and
         cannot be used anymore.
-
-        >***NOTE:*** If no keys have been modified during the transaction
-            (i.e no "set" or "delete" have been called at least once), it will
-            not flush ANY data to the database including the offset in order to optimize
-            I/O.
         """
         try:
             self._batch.put(

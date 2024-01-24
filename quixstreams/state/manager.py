@@ -71,8 +71,11 @@ class StateStoreManager:
         return self._stores
 
     @property
-    def changelog_manager(self):
-        return self._changelog_manager
+    def using_changelogs(self) -> bool:
+        return bool(self._changelog_manager)
+
+    def do_recovery(self):
+        return self._changelog_manager.do_recovery()
 
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
@@ -142,19 +145,17 @@ class StateStoreManager:
         :param tp: `TopicPartition` from Kafka consumer
         :return: list of assigned `StorePartition`
         """
-        if not tp:
-            print("NO PARTITIONS ADDED")
-            return []
-        store_partitions = []
-        for store in self._stores.get(tp.topic, {}).values():
-            print(f"STATE MANAGER: ASSIGN PARTITION: {tp.topic, tp.partition}")
+
+        store_partitions = {}
+        logger.debug(f"Assigning topic:partition {tp.topic}:{tp.partition}")
+        for name, store in self._stores.get(tp.topic, {}).items():
             store_partition = store.assign_partition(tp.partition)
-            store_partitions.append(store_partition)
+            store_partitions[name] = store_partition
             if self._changelog_manager:
                 self._changelog_manager.assign_partition(
-                    tp.topic, tp.partition, store_partition
+                    tp.topic, tp.partition, store_partitions
                 )
-        return store_partitions
+        return list(store_partitions.values())
 
     def on_partition_revoke(self, tp: TopicPartition):
         """
@@ -162,11 +163,12 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
+        logger.debug(f"Revoking topic:partition {tp.topic}:{tp.partition}")
+        if stores := self._stores.get(tp.topic, {}).values():
             if self._changelog_manager:
-                print(f"STATE MANAGER: REVOKE PARTITION: {tp.topic, tp.partition}")
                 self._changelog_manager.revoke_partition(tp.topic, tp.partition)
-            store.revoke_partition(tp.partition)
+            for store in stores:
+                store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
         """
