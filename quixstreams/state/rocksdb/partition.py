@@ -2,15 +2,17 @@ import contextlib
 import functools
 import logging
 import time
-from typing import Any, Union, Optional, List
+from typing import Any, Union, Optional, List, Set, Dict
 
-from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
+from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from typing_extensions import Self
 
+from quixstreams.models import MessageHeadersTuples, ConfluentKafkaMessageProto
 from quixstreams.state.types import (
     DumpsFunc,
     LoadsFunc,
     PartitionTransaction,
+    PartitionRecoveryTransaction,
     StorePartition,
 )
 from .exceptions import (
@@ -19,7 +21,13 @@ from .exceptions import (
     ColumnFamilyAlreadyExists,
     ColumnFamilyDoesNotExist,
 )
-from .metadata import METADATA_CF_NAME, PROCESSED_OFFSET_KEY, PREFIX_SEPARATOR
+from .metadata import (
+    METADATA_CF_NAME,
+    PROCESSED_OFFSET_KEY,
+    CHANGELOG_OFFSET_KEY,
+    PREFIX_SEPARATOR,
+    CHANGELOG_CF_MESSAGE_HEADER,
+)
 from .options import RocksDBOptions
 from .serialization import (
     serialize,
@@ -28,6 +36,7 @@ from .serialization import (
     int_to_int64_bytes,
 )
 from .types import RocksDBOptionsType
+from ..changelog import ChangelogWriter
 from ..state import TransactionState
 
 __all__ = (
@@ -81,7 +90,10 @@ class RocksDBStorePartition(StorePartition):
         self._cf_cache = {}
         self._cf_handle_cache = {}
 
-    def begin(self) -> "RocksDBPartitionTransaction":
+    def begin(
+        self,
+        changelog_writer: Optional[ChangelogWriter] = None,
+    ) -> "RocksDBPartitionTransaction":
         """
         Create a new `RocksDBTransaction` object.
         Using `RocksDBTransaction` is a recommended way for accessing the data.
@@ -89,8 +101,30 @@ class RocksDBStorePartition(StorePartition):
         :return: an instance of `RocksDBTransaction`
         """
         return RocksDBPartitionTransaction(
-            partition=self, dumps=self._dumps, loads=self._loads
+            partition=self,
+            dumps=self._dumps,
+            loads=self._loads,
+            changelog_writer=changelog_writer,
         )
+
+    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+        """
+        Completes a stateful recovery from a given changelog message.
+        """
+        with RocksDBPartitionRecoveryTransaction(
+            partition=self,
+            changelog_message=changelog_message,
+        ) as partition:
+            partition.recover()
+
+    def set_changelog_offset(self, offset_only_message: ConfluentKafkaMessageProto):
+        """
+        Set the changelog offset only; usually when the stored offset is "behind" but
+        no messages are left on the changelog.
+        """
+        RocksDBPartitionRecoveryTransaction(
+            partition=self, changelog_message=offset_only_message
+        ).flush()
 
     def write(self, batch: WriteBatch):
         """
@@ -133,6 +167,18 @@ class RocksDBStorePartition(StorePartition):
         offset_bytes = metadata_cf.get(PROCESSED_OFFSET_KEY)
         if offset_bytes is None:
             offset_bytes = self._db.get(PROCESSED_OFFSET_KEY)
+        if offset_bytes is not None:
+            return int_from_int64_bytes(offset_bytes)
+
+    def get_changelog_offset(self) -> Optional[int]:
+        """
+        Get last produced offset for the given changelog partition
+        :return: offset or `None` if there's no produced offset yet
+        """
+        metadata_cf = self.get_column_family(METADATA_CF_NAME)
+        offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
+        if offset_bytes is None:
+            offset_bytes = self._db.get(CHANGELOG_OFFSET_KEY)
         if offset_bytes is not None:
             return int_from_int64_bytes(offset_bytes)
 
@@ -349,6 +395,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     __slots__ = (
         "_partition",
         "_update_cache",
+        "_delete_cache",
         "_batch",
         "_prefix",
         "_failed",
@@ -356,6 +403,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         "_dumps",
         "_loads",
         "_state",
+        "_changelog_writer",
     )
 
     def __init__(
@@ -363,15 +411,18 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         partition: RocksDBStorePartition,
         dumps: DumpsFunc,
         loads: LoadsFunc,
+        changelog_writer: Optional[ChangelogWriter] = None,
     ):
         self._partition = partition
-        self._update_cache = {}
+        self._update_cache: Dict[str, Dict[bytes, bytes]] = {}
+        self._delete_cache: Dict[str, Set[bytes]] = {}
         self._batch = WriteBatch(raw_mode=True)
         self._prefix = _DEFAULT_PREFIX
         self._failed = False
         self._completed = False
         self._dumps = dumps
         self._loads = loads
+        self._changelog_writer = changelog_writer
         self._state = TransactionState(transaction=self)
 
     @property
@@ -460,6 +511,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             self._update_cache.setdefault(cf_name, {})[
                 key_serialized
             ] = value_serialized
+            self._delete_cache.get(cf_name, set()).discard(key_serialized)
         except Exception:
             self._failed = True
             raise
@@ -474,10 +526,12 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param key: key to delete from DB
         :param cf_name: rocksdb column family name. Default - "default"
         """
+        # TODO: decide if we want more refined delete logic?
         key_serialized = self._serialize_key(key)
         try:
             cf_handle = self._partition.get_column_family_handle(cf_name)
             self._batch.delete(key_serialized, cf_handle)
+            self._delete_cache.setdefault(cf_name, set()).add(key_serialized)
             self._update_cache.get(cf_name, {}).pop(key_serialized, None)
         except Exception:
             self._failed = True
@@ -526,6 +580,25 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
         return self._failed
 
+    def _update_changelog(self, cf_handle):
+        logger.debug("Flushing state changes to the changelog topic...")
+        offset = self._partition.get_changelog_offset() or 0
+
+        for cf_name in self._update_cache:
+            for k, v in self._update_cache[cf_name].items():
+                self._changelog_writer.produce(
+                    key=k, value=v, headers={CHANGELOG_CF_MESSAGE_HEADER: cf_name}
+                )
+                offset += 1
+        for cf_name in self._delete_cache:
+            for k in self._delete_cache[cf_name]:
+                self._changelog_writer.produce(
+                    key=k, headers={CHANGELOG_CF_MESSAGE_HEADER: cf_name}
+                )  # tombstone record
+                offset += 1
+        self._batch.put(CHANGELOG_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle)
+        logger.debug(f"Changelog offset set to {offset}")
+
     @_validate_transaction_state
     def maybe_flush(self, offset: Optional[int] = None):
         """
@@ -536,7 +609,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         cannot be used anymore.
 
         >***NOTE:*** If no keys have been modified during the transaction
-            (i.e no "set" or "delete" have been called at least once), it will
+            (i.e. no "set" or "delete" have been called at least once), it will
             not flush ANY data to the database including the offset in order to optimize
             I/O.
 
@@ -545,13 +618,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         try:
             # Don't write batches if this transaction doesn't change any keys
             if len(self._batch):
+                cf_handle = self._partition.get_column_family_handle(METADATA_CF_NAME)
                 if offset is not None:
-                    cf_handle = self._partition.get_column_family_handle(
-                        METADATA_CF_NAME
-                    )
                     self._batch.put(
                         PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
                     )
+                if self._changelog_writer:
+                    self._update_changelog(cf_handle)
                 self._partition.write(self._batch)
         except Exception:
             self._failed = True
@@ -576,3 +649,101 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val is None and not self._failed:
             self.maybe_flush()
+
+
+class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
+    __slots__ = ("_partition", "_batch", "_failed", "_completed", "_message")
+
+    def __init__(
+        self,
+        partition: RocksDBStorePartition,
+        changelog_message: ConfluentKafkaMessageProto,
+    ):
+        self._partition = partition
+        self._batch = WriteBatch(raw_mode=True)
+        self._message = changelog_message
+        self._failed = False
+        self._completed = False
+
+    class MissingColumnFamilyHeader(Exception):
+        ...
+
+    def _get_header_column_family(self, headers: MessageHeadersTuples) -> ColumnFamily:
+        for t in headers:
+            if t[0] == CHANGELOG_CF_MESSAGE_HEADER:
+                return self._partition.get_column_family_handle(t[1].decode())
+        raise self.MissingColumnFamilyHeader(
+            f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
+        )
+
+    @_validate_transaction_state
+    def recover(self):
+        """
+        Update the respective db k/v from the changelog message.
+
+        Should only be called once over the lifetime of this object.
+
+        Should flush afterward, which additionally updates the stored offset.
+        """
+        cf_handle = self._get_header_column_family(self._message.headers())
+        key = self._message.key()
+        try:
+            if value := self._message.value():
+                self._batch.put(key, value, cf_handle)
+            else:
+                self._batch.delete(key, cf_handle)
+        except Exception:
+            self._failed = True
+            raise
+
+    @property
+    def completed(self) -> bool:
+        """
+        Check if the transaction is completed.
+
+        It doesn't indicate whether transaction is successful or not.
+        Use `RocksDBTransaction.failed` for that.
+
+        The completed transaction should not be re-used.
+
+        :return: `True` if transaction is completed, `False` otherwise.
+        """
+        return self._completed
+
+    @property
+    def failed(self) -> bool:
+        """
+        Check if the transaction has failed.
+
+        The failed transaction should not be re-used.
+
+        :return: `True` if transaction is failed, `False` otherwise.
+        """
+        return self._failed
+
+    @_validate_transaction_state
+    def flush(self):
+        """
+        Flush the recent updates to the database and empty the update cache.
+        It writes the WriteBatch to RocksDB and marks itself as finished.
+
+        If writing fails, the transaction will be also marked as "failed" and
+        cannot be used anymore.
+        """
+        try:
+            self._batch.put(
+                CHANGELOG_OFFSET_KEY, int_to_int64_bytes(self._message.offset() + 1)
+            )
+            self._partition.write(self._batch)
+        except Exception:
+            self._failed = True
+            raise
+        finally:
+            self._completed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_val is None and not self._failed:
+            self.flush()

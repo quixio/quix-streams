@@ -4,13 +4,13 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
-from quixstreams.topic_manager import TopicManagerType
 from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
     PartitionStoreIsUsed,
 )
+from .changelog import ChangelogManager
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .types import (
     Store,
@@ -40,13 +40,13 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
-        topic_manager: Optional[TopicManagerType] = None,
+        changelog_manager: Optional[ChangelogManager] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
-        self._topic_manager = topic_manager
+        self._changelog_manager = changelog_manager
         self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
@@ -69,6 +69,13 @@ class StateStoreManager:
         :return: dict in format {topic: {store_name: store}}
         """
         return self._stores
+
+    @property
+    def using_changelogs(self) -> bool:
+        return bool(self._changelog_manager)
+
+    def do_recovery(self):
+        return self._changelog_manager.do_recovery()
 
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
@@ -100,20 +107,20 @@ class StateStoreManager:
         :param topic_name: topic name
         :param store_name: store name
         """
-        store = self._stores.get(topic_name, {}).get(store_name)
-        if store is None:
-            self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
-                name=store_name,
-                topic=topic_name,
-                base_dir=str(self._state_dir),
-                options=self._rocksdb_options,
-            )
-            if self._topic_manager:
-                self._topic_manager.changelog_topic(
+        if self._stores.get(topic_name, {}).get(store_name) is None:
+            if self._changelog_manager:
+                self._changelog_manager.add_changelog(
                     source_topic_name=topic_name,
                     suffix=store_name,
                     consumer_group=self._group_id,
                 )
+            self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
+                name=store_name,
+                topic=topic_name,
+                changelog_manager=self._changelog_manager,
+                base_dir=str(self._state_dir),
+                options=self._rocksdb_options,
+            )
 
     def clear_stores(self):
         """
@@ -139,10 +146,16 @@ class StateStoreManager:
         :return: list of assigned `StorePartition`
         """
 
-        store_partitions = []
-        for store in self._stores.get(tp.topic, {}).values():
-            store_partitions.append(store.assign_partition(tp.partition))
-        return store_partitions
+        store_partitions = {}
+        logger.debug(f"Assigning topic:partition {tp.topic}:{tp.partition}")
+        for name, store in self._stores.get(tp.topic, {}).items():
+            store_partition = store.assign_partition(tp.partition)
+            store_partitions[name] = store_partition
+            if self._changelog_manager:
+                self._changelog_manager.assign_partition(
+                    tp.topic, tp.partition, store_partitions
+                )
+        return list(store_partitions.values())
 
     def on_partition_revoke(self, tp: TopicPartition):
         """
@@ -150,8 +163,12 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        logger.debug(f"Revoking topic:partition {tp.topic}:{tp.partition}")
+        if stores := self._stores.get(tp.topic, {}).values():
+            if self._changelog_manager:
+                self._changelog_manager.revoke_partition(tp.topic, tp.partition)
+            for store in stores:
+                store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
         """
@@ -160,8 +177,7 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        self.on_partition_revoke(tp)
 
     def init(self):
         """
@@ -243,7 +259,7 @@ class _MultiStoreTransaction:
     processed message.
 
     It is responsible for:
-    - Keeping track of actual DBTransactions for the individiual stores
+    - Keeping track of actual DBTransactions for the individual stores
     - Flushing of the opened transactions in the end
 
     """

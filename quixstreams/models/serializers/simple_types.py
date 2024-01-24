@@ -46,9 +46,7 @@ class BytesDeserializer(Deserializer):
     A deserializer to bypass bytes without any changes
     """
 
-    def __call__(
-        self, value: bytes, ctx: SerializationContext
-    ) -> Union[bytes, Mapping[str, bytes]]:
+    def __call__(self, value: bytes, ctx: SerializationContext):
         return self._to_dict(value)
 
 
