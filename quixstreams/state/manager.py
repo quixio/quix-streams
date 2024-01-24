@@ -70,6 +70,13 @@ class StateStoreManager:
         """
         return self._stores
 
+    @property
+    def using_changelogs(self) -> bool:
+        return bool(self._changelog_manager)
+
+    def do_recovery(self):
+        return self._changelog_manager.do_recovery()
+
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ) -> Store:
@@ -139,10 +146,16 @@ class StateStoreManager:
         :return: list of assigned `StorePartition`
         """
 
-        store_partitions = []
-        for store in self._stores.get(tp.topic, {}).values():
-            store_partitions.append(store.assign_partition(tp.partition))
-        return store_partitions
+        store_partitions = {}
+        logger.debug(f"Assigning topic:partition {tp.topic}:{tp.partition}")
+        for name, store in self._stores.get(tp.topic, {}).items():
+            store_partition = store.assign_partition(tp.partition)
+            store_partitions[name] = store_partition
+            if self._changelog_manager:
+                self._changelog_manager.assign_partition(
+                    tp.topic, tp.partition, store_partitions
+                )
+        return list(store_partitions.values())
 
     def on_partition_revoke(self, tp: TopicPartition):
         """
@@ -150,8 +163,12 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        logger.debug(f"Revoking topic:partition {tp.topic}:{tp.partition}")
+        if stores := self._stores.get(tp.topic, {}).values():
+            if self._changelog_manager:
+                self._changelog_manager.revoke_partition(tp.topic, tp.partition)
+            for store in stores:
+                store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
         """
@@ -160,8 +177,7 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        self.on_partition_revoke(tp)
 
     def init(self):
         """

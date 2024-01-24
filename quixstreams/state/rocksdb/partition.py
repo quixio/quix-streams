@@ -7,10 +7,12 @@ from typing import Any, Union, Optional, List, Set, Dict
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 from typing_extensions import Self
 
+from quixstreams.models import MessageHeadersTuples, ConfluentKafkaMessageProto
 from quixstreams.state.types import (
     DumpsFunc,
     LoadsFunc,
     PartitionTransaction,
+    PartitionRecoveryTransaction,
     StorePartition,
 )
 from .exceptions import (
@@ -105,6 +107,25 @@ class RocksDBStorePartition(StorePartition):
             changelog_writer=changelog_writer,
         )
 
+    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+        """
+        Completes a stateful recovery from a given changelog message.
+        """
+        with RocksDBPartitionRecoveryTransaction(
+            partition=self,
+            changelog_message=changelog_message,
+        ) as partition:
+            partition.recover()
+
+    def set_changelog_offset(self, offset_only_message: ConfluentKafkaMessageProto):
+        """
+        Set the changelog offset only; usually when the stored offset is "behind" but
+        no messages are left on the changelog.
+        """
+        RocksDBPartitionRecoveryTransaction(
+            partition=self, changelog_message=offset_only_message
+        ).flush()
+
     def write(self, batch: WriteBatch):
         """
         Write `WriteBatch` to RocksDB
@@ -158,7 +179,8 @@ class RocksDBStorePartition(StorePartition):
         offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
         if offset_bytes is None:
             offset_bytes = self._db.get(CHANGELOG_OFFSET_KEY)
-        return int_from_int64_bytes(offset_bytes) if offset_bytes is not None else 0
+        if offset_bytes is not None:
+            return int_from_int64_bytes(offset_bytes)
 
     def close(self):
         """
@@ -627,3 +649,101 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val is None and not self._failed:
             self.maybe_flush()
+
+
+class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
+    __slots__ = ("_partition", "_batch", "_failed", "_completed", "_message")
+
+    def __init__(
+        self,
+        partition: RocksDBStorePartition,
+        changelog_message: ConfluentKafkaMessageProto,
+    ):
+        self._partition = partition
+        self._batch = WriteBatch(raw_mode=True)
+        self._message = changelog_message
+        self._failed = False
+        self._completed = False
+
+    class MissingColumnFamilyHeader(Exception):
+        ...
+
+    def _get_header_column_family(self, headers: MessageHeadersTuples) -> ColumnFamily:
+        for t in headers:
+            if t[0] == CHANGELOG_CF_MESSAGE_HEADER:
+                return self._partition.get_column_family_handle(t[1].decode())
+        raise self.MissingColumnFamilyHeader(
+            f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
+        )
+
+    @_validate_transaction_state
+    def recover(self):
+        """
+        Update the respective db k/v from the changelog message.
+
+        Should only be called once over the lifetime of this object.
+
+        Should flush afterward, which additionally updates the stored offset.
+        """
+        cf_handle = self._get_header_column_family(self._message.headers())
+        key = self._message.key()
+        try:
+            if value := self._message.value():
+                self._batch.put(key, value, cf_handle)
+            else:
+                self._batch.delete(key, cf_handle)
+        except Exception:
+            self._failed = True
+            raise
+
+    @property
+    def completed(self) -> bool:
+        """
+        Check if the transaction is completed.
+
+        It doesn't indicate whether transaction is successful or not.
+        Use `RocksDBTransaction.failed` for that.
+
+        The completed transaction should not be re-used.
+
+        :return: `True` if transaction is completed, `False` otherwise.
+        """
+        return self._completed
+
+    @property
+    def failed(self) -> bool:
+        """
+        Check if the transaction has failed.
+
+        The failed transaction should not be re-used.
+
+        :return: `True` if transaction is failed, `False` otherwise.
+        """
+        return self._failed
+
+    @_validate_transaction_state
+    def flush(self):
+        """
+        Flush the recent updates to the database and empty the update cache.
+        It writes the WriteBatch to RocksDB and marks itself as finished.
+
+        If writing fails, the transaction will be also marked as "failed" and
+        cannot be used anymore.
+        """
+        try:
+            self._batch.put(
+                CHANGELOG_OFFSET_KEY, int_to_int64_bytes(self._message.offset() + 1)
+            )
+            self._partition.write(self._batch)
+        except Exception:
+            self._failed = True
+            raise
+        finally:
+            self._completed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_val is None and not self._failed:
+            self.flush()

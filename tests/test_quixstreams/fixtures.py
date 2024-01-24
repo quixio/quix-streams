@@ -1,7 +1,7 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Literal, Union
-from unittest.mock import create_autospec
+from unittest.mock import create_autospec, patch
 
 import pytest
 from confluent_kafka.admin import (
@@ -43,7 +43,8 @@ from quixstreams.platforms.quix.config import (
 )
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
-from quixstreams.state import StateStoreManager, ChangelogManager
+from quixstreams.state import StateStoreManager
+from quixstreams.state.changelog import ChangelogManager, RecoveryManager
 from quixstreams.topic_manager import TopicManager
 
 
@@ -326,15 +327,32 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
-def changelog_manager_factory(topic_manager_factory, row_producer_factory):
+def changelog_manager_factory(
+    topic_manager_factory,
+    row_producer_factory,
+    row_consumer_factory,
+):
     def factory(
-        admin: Optional[Admin] = None, producer: RowProducer = row_producer_factory()
+        admin: Optional[Admin] = None,
+        producer: RowProducer = row_producer_factory(),
+        recovery_manager: Optional[RecoveryManager] = None,
     ):
-        return ChangelogManager(
-            topic_manager=topic_manager_factory(admin=admin), producer=producer
+        changelog_manager = ChangelogManager(
+            topic_manager=topic_manager_factory(admin=admin),
+            producer=producer,
+            consumer=row_consumer_factory(),
         )
+        if recovery_manager:
+            changelog_manager._recovery_manager = recovery_manager
+        return changelog_manager
 
     return factory
+
+
+@pytest.fixture()
+def changelog_manager_mock_recovery(changelog_manager_factory):
+    with patch("quixstreams.state.changelog.RecoveryManager", spec=RecoveryManager):
+        return changelog_manager_factory()
 
 
 @pytest.fixture()
@@ -350,7 +368,66 @@ def state_manager_changelogs(
 
 
 @pytest.fixture()
-def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
+def quix_mock_config_builder_factory(kafka_container):
+    def factory(workspace_id: Optional[str] = None):
+        if not workspace_id:
+            workspace_id = "my_ws"
+        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+        cfg_builder._workspace_id = workspace_id
+        cfg_builder.workspace_id = workspace_id
+        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
+            "bootstrap.servers": kafka_container.broker_address
+        }
+        # Slight change to ws stuff in case you pass a blank workspace (which makes
+        #  some things easier
+        cfg_builder.prepend_workspace_id.side_effect = (
+            lambda s: prepend_workspace_id(workspace_id, s) if workspace_id else s
+        )
+        cfg_builder.strip_workspace_id_prefix.side_effect = (
+            lambda s: strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
+        )
+        return cfg_builder
+
+    return factory
+
+
+@pytest.fixture()
+def quix_topic_manager_factory(quix_mock_config_builder_factory, topic_manager_factory):
+    """
+    Allows for creating topics with a test cluster while keeping the workspace aspects
+    """
+
+    def factory(admin: Optional[Admin] = None, workspace_id: Optional[str] = None):
+        topic_manager = topic_manager_factory(admin)
+        quix_topic_manager = topic_manager_factory(admin).Quix(
+            quix_config_builder=quix_mock_config_builder_factory(
+                workspace_id=workspace_id
+            )
+        )
+        quix_topic_manager._create_topics = topic_manager._create_topics
+        patcher = patch.object(quix_topic_manager, "_topic_replication", 1)
+        patcher.start()
+        return quix_topic_manager
+
+    return factory
+
+
+@pytest.fixture()
+def quix_app_factory(
+    random_consumer_group,
+    kafka_container,
+    tmp_path,
+    admin,
+    quix_mock_config_builder_factory,
+    quix_topic_manager_factory,
+):
+    """
+    For doing testing with Application.Quix() against a local cluster.
+
+    Almost all behavior is standard, except the quix_config_builder is mocked out, and
+    thus topic creation is handled with the Admin client.
+    """
+
     def factory(
         auto_offset_reset: AutoOffsetReset = "latest",
         consumer_extra_config: Optional[dict] = None,
@@ -363,27 +440,15 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_validation: Optional[Literal["exists", "required", "all"]] = None,
-        topic_manager: Optional[TopicManager] = None,
         workspace_id: str = "my_ws",
     ) -> Application:
-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg_builder._workspace_id = workspace_id
-        cfg_builder.workspace_id = workspace_id
-        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
-            "bootstrap.servers": kafka_container.broker_address
-        }
-        cfg_builder.prepend_workspace_id.side_effect = lambda s: prepend_workspace_id(
-            workspace_id, s
-        )
-        cfg_builder.strip_workspace_id_prefix.side_effect = (
-            lambda s: strip_workspace_id_prefix(workspace_id, s)
-        )
         state_dir = state_dir or (tmp_path / "state").absolute()
-
         return Application.Quix(
             consumer_group=random_consumer_group,
             state_dir=state_dir,
-            quix_config_builder=cfg_builder,
+            quix_config_builder=quix_mock_config_builder_factory(
+                workspace_id=workspace_id
+            ),
             auto_offset_reset=auto_offset_reset,
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
@@ -394,7 +459,9 @@ def quix_app_factory(random_consumer_group, kafka_container, tmp_path):
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_validation=topic_validation,
-            topic_manager=topic_manager,
+            topic_manager=quix_topic_manager_factory(
+                admin=admin, workspace_id=workspace_id
+            ),
         )
 
     return factory
@@ -454,7 +521,6 @@ def topic_manager_topic_factory(topic_manager_admin_factory):
             "value_deserializer": value_deserializer,
             "config": topic_manager.topic_config(num_partitions=partitions),
         }
-        topic_manager = topic_manager_admin_factory()
         topic = topic_manager.topic(
             name, **{k: v for k, v in topic_args.items() if v is not None}
         )
