@@ -548,16 +548,11 @@ class Application:
     def _process_messages(self, dataframe_composed, start_state_transaction):
         # Serve producer callbacks
         self._producer.poll(self._producer_poll_timeout)
-        print(f"PROCESS: POLL ROW")
         rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
 
         if rows is None:
-            print("PROCESS: NO ROW; DONE")
             return
 
-        print(self._consumer.assignment())
-        print(f"ROW: {rows.topic, rows.partition}")
-        print(f"PROCESS: CONTINUE")
         # Deserializer may return multiple rows for a single message
         rows = rows if isinstance(rows, list) else [rows]
         if not rows:
@@ -609,7 +604,6 @@ class Application:
         try:
             self._state_manager.do_recovery()
         except RecoveryManager.RecoveryComplete:
-            print("FINISHED RECOVERING")
             self._run_mode = self._processing
 
     def _do_run_mode(self):
@@ -733,7 +727,6 @@ class Application:
         """
         Revoke partitions from consumer and state
         """
-        print(f"CONSUMER REVOKE: {topic_partitions}")
         if self._state_manager.stores:
             if self._state_manager.using_changelogs:
                 self._run_mode = self._recovery
@@ -745,7 +738,6 @@ class Application:
         """
         Dropping lost partitions from consumer and state
         """
-        print(f"CONSUMER LOST: {topic_partitions}")
         if self._state_manager.stores:
             if self._state_manager.using_changelogs:
                 self._run_mode = self._recovery
