@@ -19,7 +19,7 @@ QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
 
-def strip_workspace_id_prefix(workspace_id, s: str) -> str:
+def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
     """
     Remove the workspace ID from a given string if it starts with it,
     typically a topic or consumer group id
@@ -31,7 +31,7 @@ def strip_workspace_id_prefix(workspace_id, s: str) -> str:
     return s[len(workspace_id) + 1 :] if s.startswith(workspace_id) else s
 
 
-def prepend_workspace_id(workspace_id, s: str) -> str:
+def prepend_workspace_id(workspace_id: str, s: str) -> str:
     """
     Add the workspace ID as a prefix to a given string if it does not have it,
     typically a topic or consumer group it

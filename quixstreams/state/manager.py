@@ -109,6 +109,10 @@ class StateStoreManager:
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
             if self._changelog_manager:
+                logger.debug(
+                    f'State Manager: registering changelog for store "{store_name}" '
+                    f'(topic "{topic_name}")'
+                )
                 self._changelog_manager.add_changelog(
                     source_topic_name=topic_name,
                     suffix=store_name,
@@ -147,7 +151,6 @@ class StateStoreManager:
         """
 
         store_partitions = {}
-        logger.debug(f"Assigning topic:partition {tp.topic}:{tp.partition}")
         for name, store in self._stores.get(tp.topic, {}).items():
             store_partition = store.assign_partition(tp.partition)
             store_partitions[name] = store_partition
@@ -163,7 +166,6 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        logger.debug(f"Revoking topic:partition {tp.topic}:{tp.partition}")
         if stores := self._stores.get(tp.topic, {}).values():
             if self._changelog_manager:
                 self._changelog_manager.revoke_partition(tp.topic, tp.partition)

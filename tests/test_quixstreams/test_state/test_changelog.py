@@ -146,7 +146,6 @@ class TestChangelogManager:
         recovery_manager = changelog_manager._recovery_manager
 
         topic_manager.topic(source_topic)
-        calls = []
         suffix_partitions = {}
         changelog_partitions = {}
         for suffix in suffixes:
@@ -356,15 +355,6 @@ class TestRecoveryManager:
 
         recovery_manager._handle_pending_assigns()
 
-        pause_call = consumer.pause.call_args_list[0].args
-        assert len(pause_call) == 1
-        assert isinstance(pause_call[0], list)
-        assert len(pause_call[0]) == 2
-        for idx, call in enumerate(pause_call[0]):
-            assert isinstance(call, ConfluentPartition)
-            assert source_topic == call.topic
-            assert call.partition == partition_nums[idx]
-
         assign_call = consumer.incremental_assign.call_args_list[0].args
         assert len(assign_call) == 1
         assert isinstance(assign_call[0], list)
@@ -407,14 +397,6 @@ class TestRecoveryManager:
 
         recovery_manager._handle_pending_assigns()
 
-        pause_call = consumer.pause.call_args_list[0].args
-        assert len(pause_call) == 1
-        assert isinstance(pause_call[0], list)
-        assert len(pause_call[0]) == 1
-        assert isinstance(pause_call[0][0], ConfluentPartition)
-        assert source_topic == pause_call[0][0].topic
-        assert pause_call[0][0].partition == partition_num
-
         consumer.incremental_assign.assert_not_called()
         assert not_recover.partition not in recovery_manager._partitions
         assert not recovery_manager._pending_assigns
@@ -448,14 +430,6 @@ class TestRecoveryManager:
             recovery_manager._pending_assigns[0], "update_offset"
         ) as update_offset:
             recovery_manager._handle_pending_assigns()
-
-        pause_call = consumer.pause.call_args_list[0].args
-        assert len(pause_call) == 1
-        assert isinstance(pause_call[0], list)
-        assert len(pause_call[0]) == 1
-        assert isinstance(pause_call[0][0], ConfluentPartition)
-        assert source_topic == pause_call[0][0].topic
-        assert pause_call[0][0].partition == partition_num
 
         consumer.incremental_assign.assert_not_called()
         update_offset.assert_called()

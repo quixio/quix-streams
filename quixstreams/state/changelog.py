@@ -84,7 +84,7 @@ class RecoveryPartition:
 
     def update_offset(self):
         logger.info(
-            f"topic:partition {self.changelog}:{self.partition} "
+            f"changelog partition {self.changelog}[{self.partition}] "
             f"requires an offset update"
         )
         if self.offset > self._changelog_highwater:
@@ -235,7 +235,6 @@ class RecoveryManager:
     ):
         p = None
         for changelog, store_partition in store_partitions.items():
-            logger.debug(f"Assigning changelog:partition {changelog}:{partition}")
             p = RecoveryPartition(
                 topic=source_topic_name,
                 changelog=changelog,
@@ -268,9 +267,6 @@ class RecoveryManager:
 
     def _handle_pending_assigns(self):
         assigns = []
-        # TODO: confirm pause needs to be here; if so, refine it to not pause the same
-        #  partition a bunch
-        self._consumer.pause([p.topic_partition for p in self._pending_assigns])
         while self._pending_assigns:
             p = self._pending_assigns.pop()
             p.set_watermarks(
@@ -278,7 +274,8 @@ class RecoveryManager:
             )
             if p.needs_recovery:
                 logger.info(
-                    f"topic:partition {p.changelog}:{p.partition} requires recovery"
+                    f"Recovery required for changelog partition "
+                    f"{p.changelog}[{p.partition}]"
                 )
                 assigns.append(p)
                 self._partitions.setdefault(p.partition, {})[p.changelog] = p
@@ -299,7 +296,7 @@ class RecoveryManager:
 
     def _rebalance(self):
         """ """
-        logger.debug("performing a recovery rebalance...")
+        logger.debug("Recovery: rebalancing (if required)...")
         if self._pending_revokes:
             self._handle_pending_revokes()
         if self._pending_assigns:
@@ -323,11 +320,11 @@ class RecoveryManager:
         self._handle_pending_revokes()
 
     def _finalize_recovery(self):
-        logger.info("Finalizing recovery and resuming normal processing...")
         if self._partitions:
             self._update_partition_offsets()
         self._consumer.resume(self._consumer.assignment())
         self._polls_remaining = self._poll_attempts
+        logger.info("Recovery: finalized; resuming normal processing...")
         raise self.RecoveryComplete
 
     def _recover(self):
@@ -337,6 +334,9 @@ class RecoveryManager:
         if (msg := self._consumer.poll(5)) is None:
             self._polls_remaining -= 1
             if not self._polls_remaining:
+                logger.debug(
+                    f"Recovery: all poll attempts exhausted; finalizing recovery..."
+                )
                 return self._finalize_recovery()
             return
 
@@ -347,7 +347,7 @@ class RecoveryManager:
         partition.recover(changelog_message=msg)
 
         if not partition.needs_recovery:
-            logger.debug(f"recovery for {msg.topic()}: {msg.partition()} finished!")
+            logger.info(f"Recovery for {msg.topic()}[{msg.partition()}] complete!")
             self._pending_revokes.append(self._partitions[p_num].pop(changelog))
             self._partition_cleanup(p_num)
             self._handle_pending_revokes()

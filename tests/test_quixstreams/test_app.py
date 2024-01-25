@@ -434,7 +434,7 @@ class TestQuixApplication:
         topic_partitions = 5
         topic = app.topic(
             initial_topic_name,
-            config=app.topic_config(name="billy bob", num_partitions=topic_partitions),
+            config=app.topic_config(num_partitions=topic_partitions),
         )
         expected_name = f"{builder.workspace_id}-{initial_topic_name}"
         expected_topic = topic_manager.topics[expected_name]

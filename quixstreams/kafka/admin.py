@@ -8,8 +8,8 @@ from confluent_kafka.admin import (
     AdminClient,
     ConfigResource,
     KafkaException,  # type: ignore
-    NewTopic,  # type: ignore
-    TopicMetadata,
+    NewTopic as ConfluentTopic,  # type: ignore
+    TopicMetadata as ConfluentTopicMetadata,
 )
 
 from quixstreams.models.topics import TopicConfig, TopicList
@@ -19,16 +19,16 @@ logger = logging.getLogger(__name__)
 __all__ = ("Admin",)
 
 
-def convert_topic_list(topics: TopicList) -> List[NewTopic]:
+def convert_topic_list(topics: TopicList) -> List[ConfluentTopic]:
     """
-    Converts `Topic`s to `NewTopic`s as required for Confluent's
+    Converts `Topic`s to `ConfluentTopic`s as required for Confluent's
     `AdminClient.create_topic()`.
 
     :param topics: list of `Topic`s
-    :return: list of confluent_kafka `NewTopic`s
+    :return: list of confluent_kafka `ConfluentTopic`s
     """
     return [
-        NewTopic(
+        ConfluentTopic(
             topic=topic.name,
             num_partitions=topic.config.num_partitions,
             replication_factor=topic.config.replication_factor,
@@ -36,6 +36,10 @@ def convert_topic_list(topics: TopicList) -> List[NewTopic]:
         )
         for topic in topics
     ]
+
+
+def confluent_topic_config(topic: str) -> ConfigResource:
+    return ConfigResource(2, topic)
 
 
 class Admin:
@@ -72,7 +76,7 @@ class Admin:
             self._inner_admin = AdminClient(self._config)
         return self._inner_admin
 
-    def list_topics(self) -> Dict[str, TopicMetadata]:
+    def list_topics(self) -> Dict[str, ConfluentTopicMetadata]:
         """
         Get a list of topics and their metadata from a Kafka cluster
 
@@ -93,7 +97,7 @@ class Admin:
         cluster_topics = self.list_topics()
         if existing_topics := [topic for topic in topics if topic in cluster_topics]:
             futures_dict = self._admin_client.describe_configs(
-                [ConfigResource(2, topic) for topic in existing_topics]
+                [confluent_topic_config(topic) for topic in existing_topics]
             )
         configs = {
             config_resource.name: {c.name: c.value for c in config.result().values()}

@@ -445,7 +445,6 @@ class Application:
 
     def topic_config(
         self,
-        name: str,
         num_partitions: Optional[int] = None,
         replication_factor: Optional[int] = None,
         extra_config: Optional[Mapping] = None,
@@ -453,7 +452,6 @@ class Application:
         """
         Convenience method for generating a `TopicConfig` with default settings
 
-        :param name: the topic name
         :param num_partitions: the number of topic partitions
         :param replication_factor: the topic replication factor
         :param extra_config: other optional configuration settings
@@ -693,6 +691,8 @@ class Application:
 
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
+        if not topic_partitions:
+            return
         if self._state_manager.stores:
             if self._state_manager.using_changelogs:
                 self._run_mode = self._recovery
