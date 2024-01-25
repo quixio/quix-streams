@@ -439,7 +439,7 @@ class TopicManagerBase(TopicManagerType, Protocol):
         :return: `Topic` object (which is also stored on the TopicManager)
         """
         # TODO: consider removing configs_to_import as changelog settings management
-        # around retention, quix compact settings, etc matures.
+        #  around retention, quix compact settings, etc matures.
         if not self._admin:
             warnings.warn(
                 "No Admin class was defined; will default to the source topic "
