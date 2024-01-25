@@ -168,7 +168,7 @@ class StateStoreManager:
         """
         if stores := self._stores.get(tp.topic, {}).values():
             if self._changelog_manager:
-                self._changelog_manager.revoke_partition(tp.topic, tp.partition)
+                self._changelog_manager.revoke_partition(tp.partition)
             for store in stores:
                 store.revoke_partition(tp.partition)
 

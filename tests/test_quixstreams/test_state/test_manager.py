@@ -313,7 +313,7 @@ class TestStateStoreManagerChangelog:
         revoke_calls = []
         for tp in partitions:
             state_manager.on_partition_revoke(tp)
-            revoke_calls.append(call(tp.topic, tp.partition))
+            revoke_calls.append(call(tp.partition))
         changelog_revoke.assert_has_calls(revoke_calls)
 
         assert not state_manager.get_store("topic1", "store1").partitions

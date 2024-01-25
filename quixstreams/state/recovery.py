@@ -175,10 +175,8 @@ class ChangelogManager:
             },
         )
 
-    def revoke_partition(self, topic_name: str, partition_num: int):
-        self._recovery_manager.revoke_partitions(
-            topic_name=topic_name, partition_num=partition_num
-        )
+    def revoke_partition(self, partition_num: int):
+        self._recovery_manager.revoke_partitions(partition_num=partition_num)
 
     def get_writer(
         self, topic_name: str, store_name: str, partition_num: int
@@ -206,7 +204,7 @@ class RecoveryManager:
     It will revoke these partitions throughout recovery, which will NOT kick off
     a rebalance of the consumer since this is done outside the consumer group protocol.
 
-    Recovery is always triggered from any topic rebalance, which then the
+    Recovery is always triggered from any rebalance via topic assign, which then the
     `Application` switches its processing loop over to the `RecoveryManager`. The
     `RecoveryManager` throws the `RecoveryComplete` exception when finished,
      which is gracefully caught by the `Application`, resuming normal processing.
@@ -215,9 +213,8 @@ class RecoveryManager:
     def __init__(self, consumer: Consumer):
         self._consumer = consumer
         self._pending_assigns: List[RecoveryPartition] = []
-        self._pending_revokes: List[RecoveryPartition] = []
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
-        self._recovery_method = self._recover
+        self._recovery_process = self._recover
         self._poll_attempts: int = 2
         self._polls_remaining: int = self._poll_attempts
 
@@ -229,7 +226,7 @@ class RecoveryManager:
         return bool(self._recovery_partitions)
 
     def do_recovery(self):
-        self._recovery_method()
+        self._recovery_process()
 
     def assign_partitions(
         self,
@@ -246,30 +243,16 @@ class RecoveryManager:
                 store_partition=store_partition,
             )
             self._pending_assigns.append(p)
-        # Assign manually to immediately pause it (would assign unpaused automatically)
-        # TODO: consider doing all topic (not changelog) assign(s) during the
-        #  Application on_assign call (rather than one at a time here)
         topic_p = [p.topic_partition]
-        self._consumer.incremental_assign(topic_p)
         self._consumer.pause(topic_p)
-        self._recovery_method = self._rebalance
+        self._recovery_process = self._handle_pending_assigns
 
-    def _partition_cleanup(self, partition_num: int):
-        if not self._recovery_partitions[partition_num]:
-            del self._recovery_partitions[partition_num]
-
-    def revoke_partitions(self, topic_name: str, partition_num: int):
-        # TODO: consider doing all topic (not changelog) unassign(s) during the
-        #  Application on_revoke call (rather than one at a time here)
-        self._consumer.incremental_unassign(
-            [ConfluentPartition(topic_name, partition_num)]
-        )
+    def revoke_partitions(self, partition_num: int):
         if changelogs := self._recovery_partitions.get(partition_num, {}):
-            for changelog in list(changelogs.keys()):
-                self._pending_revokes.append(changelogs.pop(changelog))
-            self._consumer.pause([p.changelog_partition for p in self._pending_revokes])
-            self._partition_cleanup(partition_num)
-            self._recovery_method = self._rebalance
+            self._revoke_recovery_partitions(
+                [changelogs.pop(changelog) for changelog in list(changelogs.keys())],
+                partition_num,
+            )
 
     def _handle_pending_assigns(self):
         assigns = []
@@ -295,22 +278,19 @@ class RecoveryManager:
             self._consumer.incremental_assign(
                 [p.changelog_assignable_partition for p in assigns]
             )
-
-    def _handle_pending_revokes(self):
-        self._consumer.incremental_unassign(
-            [p.changelog_partition for p in self._pending_revokes]
-        )
-        self._pending_revokes = []
-
-    def _rebalance(self):
-        """ """
-        logger.debug("Recovery: rebalancing (if required)...")
-        if self._pending_revokes:
-            self._handle_pending_revokes()
-        if self._pending_assigns:
-            self._handle_pending_assigns()
-        self._recovery_method = self._recover
+        self._recovery_process = self._recover
         self._polls_remaining = self._poll_attempts
+
+    def _revoke_recovery_partitions(
+        self,
+        recovery_partitions: List[RecoveryPartition],
+        partition_num: Optional[int] = None,
+    ):
+        self._consumer.incremental_unassign(
+            [partition.changelog_partition for partition in recovery_partitions]
+        )
+        if partition_num is not None and not self._recovery_partitions[partition_num]:
+            del self._recovery_partitions[partition_num]
 
     def _update_partition_offsets(self):
         """
@@ -320,12 +300,11 @@ class RecoveryManager:
         changelog consumable offsets don't align: in this case, from failed
         transactions with Exactly Once processing (stored offset < changelog highwater).
         """
-        for p in (p_out := dict_values(self._recovery_partitions)):
+        for p in (recovery_partitions := dict_values(self._recovery_partitions)):
             if p.needs_offset_update:
                 p.update_offset()
-        self._pending_revokes.extend(p_out)
+        self._revoke_recovery_partitions(recovery_partitions)
         self._recovery_partitions = {}
-        self._handle_pending_revokes()
 
     def _finalize_recovery(self):
         if self._recovery_partitions:
@@ -349,15 +328,14 @@ class RecoveryManager:
             return
 
         changelog_name = msg.topic()
-        p_num = msg.partition()
+        partition_num = msg.partition()
 
-        partition = self._recovery_partitions[p_num][changelog_name]
+        partition = self._recovery_partitions[partition_num][changelog_name]
         partition.recover(changelog_message=msg)
 
         if not partition.needs_recovery:
-            logger.info(f"Recovery for {changelog_name}[{p_num}] complete!")
-            self._pending_revokes.append(
-                self._recovery_partitions[p_num].pop(changelog_name)
+            logger.info(f"Recovery for {changelog_name}[{partition_num}] complete!")
+            self._revoke_recovery_partitions(
+                [self._recovery_partitions[partition_num].pop(changelog_name)],
+                partition_num,
             )
-            self._partition_cleanup(p_num)
-            self._handle_pending_revokes()

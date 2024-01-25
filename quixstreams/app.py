@@ -690,10 +690,16 @@ class Application:
 
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
+        # sometimes "empty" calls happen, probably updating the consumer epoch
         if not topic_partitions:
             return
+        # assigning manually here (instead of allowing it handle it automatically)
+        # enables pausing them during recovery to work as expected
+        self._consumer.incremental_assign(topic_partitions)
+
         if self._state_manager.stores:
             if self._state_manager.using_changelogs:
+                # new partitions require a recovery check
                 self._run_mode = self._recovery
             logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
@@ -726,9 +732,8 @@ class Application:
         """
         Revoke partitions from consumer and state
         """
+        self._consumer.incremental_unassign(topic_partitions)
         if self._state_manager.stores:
-            if self._state_manager.using_changelogs:
-                self._run_mode = self._recovery
             logger.debug(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_revoke(tp)
@@ -738,8 +743,6 @@ class Application:
         Dropping lost partitions from consumer and state
         """
         if self._state_manager.stores:
-            if self._state_manager.using_changelogs:
-                self._run_mode = self._recovery
             logger.debug(f"Rebalancing: dropping lost state store partitions")
             for tp in topic_partitions:
                 self._state_manager.on_partition_lost(tp)

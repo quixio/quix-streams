@@ -1,4 +1,4 @@
-from unittest.mock import patch, create_autospec, call
+from unittest.mock import patch, create_autospec
 
 import pytest
 import uuid
@@ -183,16 +183,11 @@ class TestChangelogManager:
             )
 
         changelog_manager.revoke_partition(
-            topic_name=topic_name,
             partition_num=partition_num,
         )
-        calls = [
-            call(
-                topic_name=topic_name,
-                partition_num=partition_num,
-            )
-        ]
-        recovery_manager.revoke_partitions.assert_has_calls(calls)
+        recovery_manager.revoke_partitions.assert_called_with(
+            partition_num=partition_num
+        )
 
     def test_do_recovery(self, changelog_manager_mock_recovery):
         changelog_manager = changelog_manager_mock_recovery
@@ -211,7 +206,7 @@ class TestRecoveryManager:
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
         topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}"
+        changelog_name = f"changelog__{topic_name}__default"
         partition_num = 1
         store_partition = create_autospec(StorePartition)()
         recovery_manager.assign_partitions(
@@ -220,7 +215,10 @@ class TestRecoveryManager:
             store_partitions={changelog_name: store_partition},
         )
 
-        assert recovery_manager._recovery_method == recovery_manager._rebalance
+        assert (
+            recovery_manager._recovery_process
+            == recovery_manager._handle_pending_assigns
+        )
         assert len(recovery_manager._pending_assigns) == 1
         recovery_partition = recovery_manager._pending_assigns[0]
         expected_confluent_partition = recovery_partition.topic_partition
@@ -230,14 +228,6 @@ class TestRecoveryManager:
         assert recovery_partition.partition_num == partition_num
         assert recovery_partition.store_partition == store_partition
 
-        assign_call = consumer.incremental_assign.call_args_list[0].args
-        assert len(assign_call) == 1
-        assert isinstance(assign_call[0], list)
-        assert len(assign_call[0]) == 1
-        assert isinstance(assign_call[0][0], ConfluentPartition)
-        assert expected_confluent_partition.topic == assign_call[0][0].topic
-        assert expected_confluent_partition.partition == assign_call[0][0].partition
-
         pause_call = consumer.pause.call_args_list[0].args
         assert len(pause_call) == 1
         assert isinstance(pause_call[0], list)
@@ -246,85 +236,75 @@ class TestRecoveryManager:
         assert expected_confluent_partition.topic == pause_call[0][0].topic
         assert expected_confluent_partition.partition == pause_call[0][0].partition
 
-    def test_revoke_partitions(self, recovery_manager_mock_consumer):
-        """
-        Revoke a topic partition and queue up its respective changelog partitions (that
-        are currently recovering) for revoking.
-        """
+    def test__revoke_recovery_partitions(self, recovery_manager_mock_consumer):
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
         topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}"
+        changelog_names = [
+            f"changelog__{topic_name}__{store_name}"
+            for store_name in ["store_a", "store_b"]
+        ]
+
         partition_num = 1
-        store_partition = create_autospec(StorePartition)()
         recovery_manager._recovery_partitions = {
             partition_num: {
                 changelog_name: RecoveryPartition(
                     topic_name=topic_name,
                     changelog_name=changelog_name,
                     partition_num=partition_num,
-                    store_partition=store_partition,
-                ),
+                    store_partition=create_autospec(StorePartition)(),
+                )
+                for changelog_name in changelog_names
             }
         }
 
-        recovery_manager.revoke_partitions(
-            topic_name=topic_name,
-            partition_num=partition_num,
-        )
-
-        assert partition_num not in recovery_manager._recovery_partitions
-        assert recovery_manager._recovery_method == recovery_manager._rebalance
-        assert len(recovery_manager._pending_revokes) == 1
-        recovery_partition = recovery_manager._pending_revokes[0]
-        assert isinstance(recovery_partition, RecoveryPartition)
-        assert recovery_partition.topic_name == topic_name
-        assert recovery_partition.changelog_name == changelog_name
-        assert recovery_partition.partition_num == partition_num
-        assert recovery_partition.store_partition == store_partition
+        recovery_manager.revoke_partitions(partition_num=partition_num)
 
         unassign_call = consumer.incremental_unassign.call_args_list[0].args
         assert len(unassign_call) == 1
         assert isinstance(unassign_call[0], list)
-        assert len(unassign_call[0]) == 1
-        assert isinstance(unassign_call[0][0], ConfluentPartition)
-        assert topic_name == unassign_call[0][0].topic
-        assert partition_num == unassign_call[0][0].partition
+        assert len(unassign_call[0]) == 2
+        for idx, confluent_partition in enumerate(unassign_call[0]):
+            assert isinstance(confluent_partition, ConfluentPartition)
+            assert changelog_names[idx] == confluent_partition.topic
+            assert partition_num == confluent_partition.partition
+        assert not recovery_manager._recovery_partitions
 
-        pause_call = consumer.pause.call_args_list[0].args
-        assert len(pause_call) == 1
-        assert isinstance(pause_call[0], list)
-        assert len(pause_call[0]) == 1
-        assert isinstance(pause_call[0][0], ConfluentPartition)
-        assert changelog_name == pause_call[0][0].topic
-        assert partition_num == pause_call[0][0].partition
+    def test_revoke_partitions(self, recovery_manager_mock_consumer):
+        """
+        Revoke a topic partition's respective recovery partitions.
+        """
+        recovery_manager = recovery_manager_mock_consumer
+        topic_name = "topic_name"
+        changelog_name = f"changelog__{topic_name}__default"
+        partition_num = 1
+        recovery_partition = (
+            RecoveryPartition(
+                topic_name=topic_name,
+                changelog_name=changelog_name,
+                partition_num=partition_num,
+                store_partition=create_autospec(StorePartition)(),
+            ),
+        )
+        recovery_manager._recovery_partitions = {
+            partition_num: {changelog_name: recovery_partition}
+        }
+
+        with patch.object(recovery_manager, "_revoke_recovery_partitions") as revoke:
+            recovery_manager.revoke_partitions(partition_num=partition_num)
+
+        revoke.assert_called_with([recovery_partition], partition_num)
 
     def test_revoke_partition_not_assigned(self, recovery_manager_mock_consumer):
         """
-        Revoke topic partition while skipping the changelog partition revoke since
-        it was never assigned to begin with (due to not needing recovery).
+        Skip revoking any recovery partitions for a given partition since none are
+        currently assigned (due to not needing recovery).
         """
         recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        topic_name = "topic_name"
-        partition_num = 1
+        with patch.object(recovery_manager, "_revoke_recovery_partitions") as revoke:
+            recovery_manager.revoke_partitions(partition_num=1)
 
-        recovery_manager.revoke_partitions(
-            topic_name=topic_name,
-            partition_num=partition_num,
-        )
-
-        assert recovery_manager._recovery_method == recovery_manager._recover
-        assert len(recovery_manager._pending_revokes) == 0
-        consumer.pause.assert_not_called()
-
-        unassign_call = consumer.incremental_unassign.call_args_list[0].args
-        assert len(unassign_call) == 1
-        assert isinstance(unassign_call[0], list)
-        assert len(unassign_call[0]) == 1
-        assert isinstance(unassign_call[0][0], ConfluentPartition)
-        assert topic_name == unassign_call[0][0].topic
-        assert partition_num == unassign_call[0][0].partition
+        revoke.assert_not_called()
 
     def test__handle_pending_assigns(self, recovery_manager_mock_consumer):
         """
@@ -437,35 +417,6 @@ class TestRecoveryManager:
         assert not_recover.partition_num not in recovery_manager._recovery_partitions
         assert not recovery_manager._pending_assigns
 
-    def test__handle_pending_revokes(self, recovery_manager_mock_consumer):
-        """
-        Handle pending revokes of changelog partitions.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 3
-        revoke = RecoveryPartition(
-            topic_name=topic_name,
-            changelog_name=changelog_name,
-            partition_num=partition_num,
-            store_partition=create_autospec(StorePartition)(),
-        )
-        recovery_manager._pending_revokes = [revoke]
-
-        recovery_manager._handle_pending_revokes()
-
-        unassign_call = consumer.incremental_unassign.call_args_list[0].args
-        assert len(unassign_call) == 1
-        assert isinstance(unassign_call[0], list)
-        assert len(unassign_call[0]) == 1
-        assert isinstance(unassign_call[0][0], ConfluentPartition)
-        assert revoke.changelog_name == unassign_call[0][0].topic
-        assert revoke.partition_num == unassign_call[0][0].partition
-
-        assert not recovery_manager._pending_revokes
-
     def test__update_partition_offsets(self, recovery_manager_mock_consumer):
         """
         Partition offset updates are handled correctly.
@@ -489,15 +440,12 @@ class TestRecoveryManager:
             ] = rp
             expected_pending_revokes += [rp]
 
-        with patch.object(recovery_manager, "_handle_pending_revokes") as handle_revoke:
+        with patch.object(recovery_manager, "_revoke_recovery_partitions") as revoke:
             recovery_manager._update_partition_offsets()
 
+        revoke.assert_called_with(expected_pending_revokes)
         for partition in expected_pending_revokes:
             partition.store_partition.set_changelog_offset.assert_called()
-        # Confirm the revokes were added to pending successfully, though normally
-        # they'd get handled/removed right after if the method wasn't patched
-        assert recovery_manager._pending_revokes == expected_pending_revokes
-        handle_revoke.assert_called()
 
     def test__finalize_recovery(self, recovery_manager_mock_consumer):
         """
@@ -509,7 +457,7 @@ class TestRecoveryManager:
         """
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
-        assignment_result = "assignments"
+        assignment_result = "assignments_list"
         consumer.assignment.return_value = assignment_result
         topic_name = "topic_name"
         changelog_name = f"changelog__{topic_name}__default"
@@ -533,35 +481,6 @@ class TestRecoveryManager:
         consumer.incremental_unassign.assert_called()
         assert recovery_manager._polls_remaining == recovery_manager._poll_attempts
         assert not recovery_manager._recovery_partitions
-
-    def test__rebalance(self, recovery_manager_mock_consumer):
-        """
-        Handle a rebalance call (as a result of an applicable assign or revoke call).
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        recovery_manager._recovery_method = recovery_manager._rebalance
-        consumer = recovery_manager._consumer
-        consumer.get_watermark_offsets.return_value = (0, 20)
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 1
-        rp = RecoveryPartition(
-            topic_name=topic_name,
-            changelog_name=changelog_name,
-            partition_num=partition_num,
-            store_partition=create_autospec(StorePartition)(),
-        )
-        rp.store_partition.get_changelog_offset.return_value = 10
-        # just testing that pending assign or revoke is called as expected
-        recovery_manager._pending_assigns = [rp]
-        recovery_manager._pending_revokes = [rp]
-
-        recovery_manager._rebalance()
-
-        consumer.incremental_unassign.assert_called()
-        consumer.incremental_assign.assert_called()
-        assert recovery_manager._recovery_method == recovery_manager._recover
-        assert recovery_manager._polls_remaining == recovery_manager._poll_attempts
 
     def test__recover(self, recovery_manager_mock_consumer):
         """
