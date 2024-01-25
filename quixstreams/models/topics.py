@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 TimestampExtractor = Callable[
-    [Any, Optional[MessageHeadersTuples], float, TimestampType],
+    [Any, Optional[MessageHeadersTuples], int, TimestampType],
     int,
 ]
 

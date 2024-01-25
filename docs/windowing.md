@@ -108,7 +108,14 @@ sdf = (
 ```
 
 ### Transforming a result of a windowed aggregation
+Windowed aggregations return aggregation results in the following format:
+```python
+{"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>
+```
 
+Since it is rather generic, you may need to transform it into your own schema.  
+Here is how you can do that:
+ 
 ```python
 sdf = (
     # Define a tumbling window of 10 minutes
@@ -129,6 +136,48 @@ sdf = sdf.apply(
 )
 ```
 
+
+### Extracting timestamps from messages
+By default, Quix Streams uses Kafka message timestamps to determine the time of the event.  
+
+But sometimes the time information may be encoded into the message payload or headers.  
+To use a different timestamp in window aggregations, you need to provide a 
+**timestamp extractor** to `Application.topic()`.
+
+A timestamp extractor is a callable object accepting these positional arguments:
+- message value
+- message headers
+- Kafka message timestamp in milliseconds
+- Kafka timestamp type: 
+  - "0" - timestamp not available, 
+  - "1" - "create time" (specified by a producer) 
+  - "2" - "log-append time" (when broker received a message)
+
+Timestamp extractor must always return timestamp **as an integer in milliseconds**.
+
+Example:
+
+
+```python
+app = Application(...)
+
+
+def custom_ts_extractor(
+    value: Any,
+    headers: Optional[List[Tuple[str, bytes]]],
+    timestamp: float,
+    timestamp_type: TimestampType,
+) -> int:
+    """
+    Specifying a custom timestamp extractor to use the timestamp from the message payload 
+    instead of Kafka timestamp.
+    """
+    return value["timestamp"]
+
+# Passing the timestamp extractor to the topic.
+# The window functions will now use the extracted timestamp instead of the Kafka timestamp.
+topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
+```
 
 ## Implementation Details
 

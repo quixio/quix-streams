@@ -377,6 +377,26 @@ class Application:
         :param creation_configs: settings for auto topic creation (Quix platform only)
             Its name will be overridden by this method's 'name' param.
 
+        :param timestamp_extractor: a callable that returns a timestamp in
+            milliseconds from a deserialized message. Default - `None`.
+
+        Example Snippet:
+
+        ```python
+        app = Application(...)
+
+
+        def custom_ts_extractor(
+            value: Any,
+            headers: Optional[List[Tuple[str, bytes]]],
+            timestamp: float,
+            timestamp_type: TimestampType,
+        ) -> int:
+            return value["timestamp"]
+
+        topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
+        ```
+
 
         :return: `Topic` object
         """
