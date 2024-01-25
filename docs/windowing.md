@@ -10,6 +10,126 @@ With windows, you can calculate such aggregations as:
 - An average speed of a vehicle over the last 10 minutes
 - Maximum temperature of the sensor for each 30s
 
+
+## Examples
+
+### The sum of a message field over a tumbling window
+Summing values over some time interval is probably the most basic aggregation because it can tell a lot about the behavior of the underlying metric.
+
+To calculate a sum of values over a window, you can use the `sum()` aggregation function.  
+
+Note: the `sum()` function does not validate the value type, and it may fail if the values cannot be added to each other.
+
+The example below demonstrates how to extract a value from the record's dictionary and use it in the aggregation:
+
+```python
+from datetime import timedelta
+
+sdf = app.dataframe(...)
+
+sdf = (
+    # Extract the "total" field from the record
+    sdf.apply(lambda value: value["total"])
+    
+    # Define a tumbling window of 10 minutes
+    .tumbling_window(timedelta(minutes=10))
+    
+    # Specify the "sum" aggregation function
+    .sum()
+    
+    # Emit results only for closed windows
+    .final()
+)
+```
+
+
+### Multiple aggregates with "reduce"
+
+Aggregation via `reduce` provides a lot of flexibility.  
+It allows to define a custom windowed aggregation using two components:
+- an **"initializer"** function - to initialize an aggregated window state when the first message comes into the window. **The "initializer" is called only once when the window is created.** 
+- a **"reducer"** function - to combine an aggregated window state with new data. **The "reducer" is called only for the second and following incoming values.**  
+
+With `reduce()`, you can define a very wide range of aggregations, such as:
+- Aggregating over multiple message fields at once
+- Using multiple message fields to create a single aggregate
+- Aggregating multiple metrics for the same value
+
+
+Example:
+```python
+from datetime import timedelta
+
+sdf = app.dataframe(...)
+
+
+def initializer(value: dict) -> dict:
+    """
+    Initialize the state for aggregation when a new window starts.
+    
+    It will prime the aggregation when the first record arrives 
+    to the window.
+    """
+    return {
+        'min': value['total'],
+        'max': value['total'],
+        'count': 1,
+    }
+
+
+def reducer(aggregated: dict, value: dict) -> dict:
+    """
+    Calculate "min", "max" and "count" over a set of transactions.
+    
+    Reducer always receives two arguments:
+    - previously aggregated value
+    - current value
+    It combines them into a new aggregated value and returns it.
+    This aggregated value will be also returned as a result of the window.
+    """
+    return {
+        'min': min(aggregated['min'], value['total']),
+        'max': max(aggregated['max'], value['total']),
+        'count': aggregated['count'] + 1,
+    }
+
+
+sdf = (
+
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+
+    # Create a "reduce" aggregation with "reducer" and "initializer" functions
+    .reduce(reducer=reducer, initializer=initializer)
+
+    # Emit results only for closed windows
+    .final()
+)
+```
+
+### Transforming a result of a windowed aggregation
+
+```python
+sdf = (
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+    # Specify the "count" aggregation function
+    .count()
+    # Emit results only for closed windows
+    .final()
+)
+
+# Windowed aggregations return aggregation results in the following format:
+# {"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>
+#
+# Let's transform it to a different format:
+# {"count": <aggregation value>, "window": (<window start ms>, <window end ms>)}
+sdf = sdf.apply(
+    lambda value: {"count": value["value"], "window": (value["start"], value["end"])}
+)
+```
+
+
 ## Implementation Details
 
 Here are some general concepts about how windowed aggregations are implemented in Quix Streams:
@@ -236,123 +356,7 @@ Currently, windows support the following aggregation functions:
 - [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count values within a window 
 
 
-## Examples
 
-### Calculate the sum of a message field over a tumbling window
-Summing values over some time interval is probably the most basic aggregation because it can tell a lot about the behavior of the underlying metric.
-
-To calculate a sum of values over a window, you can use the `sum()` aggregation function.  
-
-Note: the `sum()` function does not validate the value type, and it may fail if the value cannot be added.
-
-The example below demonstrates how to extract a value from the record's dictionary and use it in the aggregation:
-
-```python
-from datetime import timedelta
-
-sdf = app.dataframe(...)
-
-sdf = (
-    # Extract the "total" field from the record
-    sdf.apply(lambda value: value["total"])
-    
-    # Define a tumbling window of 10 minutes
-    .tumbling_window(timedelta(minutes=10))
-    
-    # Specify the "sum" aggregation function
-    .sum()
-    
-    # Emit results only for closed windows
-    .final()
-)
-```
-
-
-### Calculate multiple aggregations at once using "reduce" 
-
-Aggregation via `reduce` provides a lot of flexibility.  
-It allows to define a custom windowed aggregation using two components:
-- an **"initializer"** function - to initialize an aggregated window state when the first message comes into the window. **The "initializer" is called only once when the window is created.** 
-- a **"reducer"** function - to combine an aggregated window state with new data. **The "reducer" is called only for the second and following incoming values.**  
-
-With `reduce()`, you can define a very wide range of aggregations, such as:
-- Aggregating over multiple message fields at once
-- Using multiple message fields to create a single aggregate
-- Aggregating multiple metrics for the same value
-
-
-Example:
-```python
-from datetime import timedelta
-
-sdf = app.dataframe(...)
-
-
-def initializer(value: dict) -> dict:
-    """
-    Initialize the state for aggregation when a new window starts.
-    
-    It will prime the aggregation when the first record arrives 
-    to the window.
-    """
-    return {
-        'min': value['total'],
-        'max': value['total'],
-        'count': 1,
-    }
-
-
-def reducer(aggregated: dict, value: dict) -> dict:
-    """
-    Calculate "min", "max" and "count" over a set of transactions.
-    
-    Reducer always receives two arguments:
-    - previously aggregated value
-    - current value
-    It combines them into a new aggregated value and returns it.
-    This aggregated value will be also returned as a result of the window.
-    """
-    return {
-        'min': min(aggregated['min'], value['total']),
-        'max': max(aggregated['max'], value['total']),
-        'count': aggregated['count'] + 1,
-    }
-
-
-sdf = (
-
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-
-    # Create a "reduce" aggregation with "reducer" and "initializer" functions
-    .reduce(reducer=reducer, initializer=initializer)
-
-    # Emit results only for closed windows
-    .final()
-)
-```
-
-### Transform a result of a windowed aggregation
-
-```python
-sdf = (
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-    # Specify the "count" aggregation function
-    .count()
-    # Emit results only for closed windows
-    .final()
-)
-
-# Windowed aggregations return aggregation results in the following format:
-# {"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>
-#
-# Let's transform it to a different format:
-# {"count": <aggregation value>, "window": (<window start ms>, <window end ms>)}
-sdf = sdf.apply(
-    lambda value: {"count": value["value"], "window": (value["start"], value["end"])}
-)
-```
 
 
 ## Operations
