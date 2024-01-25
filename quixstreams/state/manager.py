@@ -114,8 +114,8 @@ class StateStoreManager:
                     f'(topic "{topic_name}")'
                 )
                 self._changelog_manager.add_changelog(
-                    source_topic_name=topic_name,
-                    suffix=store_name,
+                    topic_name=topic_name,
+                    store_name=store_name,
                     consumer_group=self._group_id,
                 )
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(

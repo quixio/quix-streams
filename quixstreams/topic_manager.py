@@ -74,9 +74,9 @@ class TopicManagerType(Protocol):
     @property
     def changelog_topics(self) -> Dict[str, Dict[str, BytesTopic]]:
         """
-        Changelogs stored as {source_topic_name: {suffix: Topic}}
+        Note: `BytesTopic`s are the changelogs.
 
-        returns:
+        returns: the changelog topic dict, {topic_name: {suffix: BytesTopic}}
         """
         return self._changelog_topics
 
@@ -180,7 +180,7 @@ class TopicManagerType(Protocol):
     @abstractmethod
     def changelog_topic(
         self,
-        source_topic_name: str,
+        topic_name: str,
         suffix: str,
         consumer_group: str,
         configs_to_import: Set[str] = None,
@@ -203,7 +203,7 @@ class TopicManagerType(Protocol):
         "use_changelog_topics"=`False`.
 
         :param consumer_group: name of consumer group (for this app)
-        :param source_topic_name: name of consumed topic (app input topic)
+        :param topic_name: name of consumed topic (app input topic)
         :param suffix: name of storage type (default, rolling10s, etc.)
         :param configs_to_import: what extra_configs should be allowed when importing
             settings from the source topic.
@@ -259,16 +259,14 @@ class TopicManagerBase(TopicManagerType, Protocol):
         ...
 
     @abstractmethod
-    def _format_changelog_name(
-        self, consumer_group: str, source_topic_name: str, suffix: str
-    ):
+    def _format_changelog_name(self, consumer_group: str, topic_name: str, suffix: str):
         """
         Generate the name of the changelog topic based on the following parameters.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
         :param consumer_group: name of consumer group (for this app)
-        :param source_topic_name: name of consumed topic (app input topic)
+        :param topic_name: name of consumed topic (app input topic)
         :param suffix: name of storage type (default, rolling10s, etc.)
 
         :return: formatted topic name
@@ -410,7 +408,7 @@ class TopicManagerBase(TopicManagerType, Protocol):
 
     def changelog_topic(
         self,
-        source_topic_name: str,
+        topic_name: str,
         suffix: str,
         consumer_group: str,
         configs_to_import: Set[str] = None,
@@ -433,7 +431,7 @@ class TopicManagerBase(TopicManagerType, Protocol):
         "use_changelog_topics"=`False`.
 
         :param consumer_group: name of consumer group (for this app)
-        :param source_topic_name: name of consumed topic (app input topic)
+        :param topic_name: name of consumed topic (app input topic)
         :param suffix: name of storage type (default, rolling10s, etc.)
         :param configs_to_import: what extra_configs should be allowed when importing
             settings from the source topic.
@@ -450,19 +448,17 @@ class TopicManagerBase(TopicManagerType, Protocol):
                 "exists with different configs (i.e. partitions). To guarantee correct "
                 "functionality, add an Admin class and re-run this function."
             )
-        name = self._format_changelog_name(consumer_group, source_topic_name, suffix)
+        name = self._format_changelog_name(consumer_group, topic_name, suffix)
         if not configs_to_import:
             configs_to_import = self._changelog_extra_config_imports_defaults
         configs_to_import.discard("cleanup.policy")
         topic_config = (
-            self.admin.inspect_topics([source_topic_name])[source_topic_name]
-            if self._admin
-            else None
-        ) or self._topics[source_topic_name].config
+            self.admin.inspect_topics([topic_name])[topic_name] if self._admin else None
+        ) or self._topics[topic_name].config
         if not topic_config:
             raise self.MissingTopicForChangelog(
                 f"There is no Topic object or existing topic in Kafka for topic "
-                f"'{source_topic_name}' for desired changelog '{name}'; confirm "
+                f"'{topic_name}' for desired changelog '{name}'; confirm "
                 f"configs are allowed to be auto-created (for an `Application`, "
                 f"set 'auto_create_topics=True')"
             )
@@ -474,7 +470,7 @@ class TopicManagerBase(TopicManagerType, Protocol):
                 extra_config_defaults=self._changelog_extra_config_defaults,
             ),
         )
-        self._changelog_topics.setdefault(source_topic_name, {})[suffix] = topic
+        self._changelog_topics.setdefault(topic_name, {})[suffix] = topic
         return topic
 
     def create_topics(self, topics: TopicList):
@@ -639,21 +635,19 @@ class TopicManager(TopicManagerBase):
         """
         return name
 
-    def _format_changelog_name(
-        self, consumer_group: str, source_topic_name: str, suffix: str
-    ):
+    def _format_changelog_name(self, consumer_group: str, topic_name: str, suffix: str):
         """
         Generate the name of the changelog topic based on the following parameters.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
         :param consumer_group: name of consumer group (for this app)
-        :param source_topic_name: name of consumed topic (app input topic)
+        :param topic_name: name of consumed topic (app input topic)
         :param suffix: name of storage type (default, rolling10s, etc.)
 
         :return: formatted topic name
         """
-        return f"changelog__{consumer_group}--{source_topic_name}--{suffix}"
+        return f"changelog__{consumer_group}--{topic_name}--{suffix}"
 
 
 class QuixTopicManager(TopicManagerBase):
@@ -738,27 +732,25 @@ class QuixTopicManager(TopicManagerBase):
         stripped = self._quix_config_builder.strip_workspace_id_prefix(value)
         return f"{stripped[:5]}{stripped[-5:]}"
 
-    def _format_changelog_name(
-        self, consumer_group: str, source_topic_name: str, suffix: str
-    ):
+    def _format_changelog_name(self, consumer_group: str, topic_name: str, suffix: str):
         """
         Generate the name of the changelog topic based on the following parameters.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
         :param consumer_group: name of consumer group (for this app)
-        :param source_topic_name: name of consumed topic (app input topic)
+        :param topic_name: name of consumed topic (app input topic)
         :param suffix: name of storage type (default, rolling10s, etc.)
 
         :return: formatted topic name
         """
         # TODO: "strip" should be `self._quix_config_builder.strip_workspace_id_prefix`
-        # once we fix the 43 char limit
+        #  once we fix the 43 char limit
 
         # TODO: remove suffix limitation and standardize the topic name template to
-        # match the non-quix counterpart
+        #  match the non-quix counterpart
 
         strip = self._strip_changelog_chars
         return self._quix_config_builder.prepend_workspace_id(
-            f"changelog__{strip(consumer_group)}-{strip(source_topic_name)}-{suffix[:9]}"
+            f"changelog__{strip(consumer_group)}-{strip(topic_name)}-{suffix[:9]}"
         )

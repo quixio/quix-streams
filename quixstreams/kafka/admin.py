@@ -85,17 +85,21 @@ class Admin:
         # TODO: allow filtering based on a prefix ignore list?
         return self._admin_client.list_topics().topics
 
-    def inspect_topics(self, topics: List[str]) -> Dict[str, Optional[TopicConfig]]:
+    def inspect_topics(
+        self, topic_names: List[str]
+    ) -> Dict[str, Optional[TopicConfig]]:
         """
         A simplified way of getting the topic configurations of the provided topics
         from the cluster (if they exist).
 
-        :param topics: a list of topic names
+        :param topic_names: a list of topic names
         :return: a dict with topic names and their respective `TopicConfig`
         """
         futures_dict = {}
         cluster_topics = self.list_topics()
-        if existing_topics := [topic for topic in topics if topic in cluster_topics]:
+        if existing_topics := [
+            topic for topic in topic_names if topic in cluster_topics
+        ]:
             futures_dict = self._admin_client.describe_configs(
                 [confluent_topic_config(topic) for topic in existing_topics]
             )
@@ -111,7 +115,7 @@ class Admin:
             )
             if topic in existing_topics
             else None
-            for topic in topics
+            for topic in topic_names
         }
 
     def _finalize_create(self, futures: Dict[str, Future], timeout: int):

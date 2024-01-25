@@ -52,8 +52,8 @@ class TestRocksDBStore:
             with rocksdb_store.start_partition_transaction(p_num):
                 ...
         writer.assert_called_with(
-            source_topic_name=rocksdb_store.topic,
-            suffix=rocksdb_store.name,
+            topic_name=rocksdb_store.topic,
+            store_name=rocksdb_store.name,
             partition_num=p_num,
         )
         rocksdb_store.close()

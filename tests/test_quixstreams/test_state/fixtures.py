@@ -18,24 +18,23 @@ def changelog_writer_factory(changelog_manager_factory):
     """
 
     def factory(
-        source_topic_name: str = str(uuid.uuid4()),
-        suffix: str = "suffix",
+        topic_name: str = str(uuid.uuid4()),
+        store_name: str = "store_name",
         partition_num: int = 0,
         admin: Optional[Admin] = None,
     ):
         changelog_manager = changelog_manager_factory(admin=admin)
         topic_manager = changelog_manager._topic_manager
 
-        kwargs = dict(source_topic_name=source_topic_name, suffix=suffix)
-        topic_manager.topic(
-            source_topic_name
-        )  # changelogs depend on topic objects existing
+        topic_manager.topic(topic_name)  # changelogs depend on topic objects existing
         changelog_topic = topic_manager.changelog_topic(
-            **kwargs, consumer_group="group"
+            topic_name=topic_name, suffix=store_name, consumer_group="group"
         )
         if admin:
             topic_manager.create_topics([changelog_topic])
-        return changelog_manager.get_writer(**kwargs, partition_num=partition_num)
+        return changelog_manager.get_writer(
+            topic_name=topic_name, store_name=store_name, partition_num=partition_num
+        )
 
     return factory
 
@@ -54,11 +53,14 @@ def changelog_writer_with_changelog(changelog_writer_factory, admin):
 
 @pytest.fixture()
 def recovery_partition_store_mock(rocksdb_store_factory):
-    topic = str(uuid.uuid4())
+    topic_name = str(uuid.uuid4())
     store = create_autospec(StorePartition)()
     store.get_changelog_offset.return_value = 15
     recovery_partition = RecoveryPartition(
-        topic=topic, changelog=f"changelog__{topic}", partition=0, store_partition=store
+        topic_name=topic_name,
+        changelog_name=f"changelog__{topic_name}",
+        partition_num=0,
+        store_partition=store,
     )
     recovery_partition._changelog_lowwater = 10
     recovery_partition._changelog_highwater = 20

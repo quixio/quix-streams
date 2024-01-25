@@ -154,8 +154,8 @@ class RocksDBStore(Store):
         store_partition = self._partitions[partition]
         return store_partition.begin(
             changelog_writer=self._changelog_manager.get_writer(
-                source_topic_name=self._topic,
-                suffix=self._name,
+                topic_name=self._topic,
+                store_name=self._name,
                 partition_num=partition,
             )
             if self._changelog_manager

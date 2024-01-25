@@ -92,7 +92,7 @@ class TestTopicManager:
         suffix = "default"
         group = "my_consumer_group"
         changelog = topic_manager.changelog_topic(
-            source_topic_name=topic.name,
+            topic_name=topic.name,
             suffix=suffix,
             consumer_group=group,
         )
@@ -127,7 +127,7 @@ class TestTopicManager:
             ),
         )
         changelog = topic_manager.changelog_topic(
-            source_topic_name=topic.name,
+            topic_name=topic.name,
             suffix="default",
             consumer_group="my_consumer_group",
         )
@@ -155,7 +155,7 @@ class TestTopicManager:
             ),
         )
         changelog = topic_manager.changelog_topic(
-            source_topic_name=topic.name,
+            topic_name=topic.name,
             suffix="default",
             consumer_group="my_consumer_group",
         )
