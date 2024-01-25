@@ -262,7 +262,6 @@ class Topic:
             raise SerializerIsNotProvidedError(
                 f'Value serializer is not provided for topic "{self.name}"'
             )
-        # TODO: confirm this is a valid context
         return KafkaMessage(
             key=key,
             value=value,
@@ -271,8 +270,7 @@ class Topic:
         )
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
-        # TODO: confirm this is a valid context
-        ctx = SerializationContext(topic="", headers=message.headers())
+        ctx = SerializationContext(topic=message.topic(), headers=message.headers())
         return KafkaMessage(
             key=self._key_deserializer(key, ctx=ctx)
             if (key := message.key())
