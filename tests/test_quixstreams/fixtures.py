@@ -45,7 +45,7 @@ from quixstreams.platforms.quix.config import (
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
-from quixstreams.state.changelog import ChangelogManager, RecoveryManager
+from quixstreams.state.recovery import ChangelogManager, RecoveryManager
 from quixstreams.topic_manager import TopicManager
 
 
@@ -354,7 +354,7 @@ def changelog_manager_factory(
 
 @pytest.fixture()
 def changelog_manager_mock_recovery(changelog_manager_factory):
-    with patch("quixstreams.state.changelog.RecoveryManager", spec=RecoveryManager):
+    with patch("quixstreams.state.recovery.RecoveryManager", spec=RecoveryManager):
         return changelog_manager_factory()
 
 

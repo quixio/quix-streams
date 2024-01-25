@@ -3,7 +3,7 @@ from unittest.mock import patch, create_autospec, call
 import pytest
 import uuid
 
-from quixstreams.state.changelog import (
+from quixstreams.state.recovery import (
     ChangelogWriter,
     RecoveryPartition,
     ConfluentPartition,

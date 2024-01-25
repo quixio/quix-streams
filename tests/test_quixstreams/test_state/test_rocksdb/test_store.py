@@ -3,7 +3,6 @@ import pytest
 from unittest.mock import patch
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
-from quixstreams.state.changelog import ChangelogWriter
 
 
 class TestRocksDBStore:

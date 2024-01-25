@@ -36,7 +36,7 @@ from .serialization import (
     int_to_int64_bytes,
 )
 from .types import RocksDBOptionsType
-from ..changelog import ChangelogWriter
+from ..recovery import ChangelogWriter
 from ..state import TransactionState
 
 __all__ = (

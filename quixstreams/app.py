@@ -32,10 +32,9 @@ from .platforms.quix import (
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
-from .state.changelog import ChangelogManager, RecoveryManager
+from .state.recovery import ChangelogManager, RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 from .topic_manager import TopicManager, TopicManagerType
-
 
 __all__ = ("Application",)
 

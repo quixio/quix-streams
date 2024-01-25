@@ -10,7 +10,7 @@ from .exceptions import (
     InvalidStoreTransactionStateError,
     PartitionStoreIsUsed,
 )
-from .changelog import ChangelogManager
+from .recovery import ChangelogManager
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .types import (
     Store,

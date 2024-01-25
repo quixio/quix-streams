@@ -3,13 +3,13 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
+from quixstreams.state.recovery import ChangelogManager
 from quixstreams.state.types import Store
 from .partition import (
     RocksDBStorePartition,
     RocksDBPartitionTransaction,
 )
 from .types import RocksDBOptionsType
-from ..changelog import ChangelogManager
 
 logger = logging.getLogger(__name__)
 

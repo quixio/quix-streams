@@ -5,7 +5,7 @@ from typing import Optional
 from unittest.mock import patch, create_autospec
 
 from quixstreams.kafka import Admin, Consumer
-from quixstreams.state.changelog import RecoveryPartition, RecoveryManager
+from quixstreams.state.recovery import RecoveryPartition, RecoveryManager
 from quixstreams.state.types import StorePartition
 
 
