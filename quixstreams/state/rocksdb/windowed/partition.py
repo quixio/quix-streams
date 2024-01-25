@@ -28,24 +28,14 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
 
     :param path: an absolute path to the RocksDB folder
     :param options: RocksDB options. If `None`, the default options will be used.
-    :param open_max_retries: number of times to retry opening the database
-        if it's locked by another process. To disable retrying, pass 0.
-    :param open_retry_backoff: number of seconds to wait between each retry.
     """
 
     def __init__(
         self,
         path: str,
         options: Optional[RocksDBOptionsType] = None,
-        open_max_retries: int = 10,
-        open_retry_backoff: float = 3.0,
     ):
-        super().__init__(
-            path=path,
-            options=options,
-            open_max_retries=open_max_retries,
-            open_retry_backoff=open_retry_backoff,
-        )
+        super().__init__(path=path, options=options)
         self._latest_timestamp_ms = self._get_latest_timestamp_from_db()
         self._expiration_index_cf_name = f"__expiration-index__"
         self._ensure_column_family(self._expiration_index_cf_name)

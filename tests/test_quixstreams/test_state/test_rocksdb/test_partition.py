@@ -61,13 +61,30 @@ class TestRocksDBStorePartition:
 
         executor.submit(_close_db)
 
-        rocksdb_partition_factory("db", open_max_retries=10, open_retry_backoff=1)
+        rocksdb_partition_factory(
+            "db", options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1)
+        )
+
+    def test_open_io_error_retries(self, rocksdb_partition_factory, executor):
+        err = Exception("io error")
+        patcher = patch.object(Rdict, "__init__", side_effect=err)
+        patcher.start()
+
+        def _stop_raising_on_db_open():
+            time.sleep(3)
+            patcher.stop()
+
+        executor.submit(_stop_raising_on_db_open)
+
+        rocksdb_partition_factory(
+            "db", options=RocksDBOptions(open_max_retries=10, open_retry_backoff=1)
+        )
 
     def test_open_db_locked_no_retries_fails(self, rocksdb_partition_factory, executor):
         _ = rocksdb_partition_factory("db")
 
         with pytest.raises(Exception):
-            rocksdb_partition_factory("db", open_max_retries=0)
+            rocksdb_partition_factory("db", options=RocksDBOptions(open_max_retries=0))
 
     def test_open_db_locked_retries_exhausted_fails(
         self, rocksdb_partition_factory, executor
@@ -75,7 +92,9 @@ class TestRocksDBStorePartition:
         _ = rocksdb_partition_factory("db")
 
         with pytest.raises(Exception):
-            rocksdb_partition_factory("db", open_max_retries=3, open_retry_backoff=1)
+            rocksdb_partition_factory(
+                "db", options=RocksDBOptions(open_max_retries=3, open_retry_backoff=1)
+            )
 
     def test_open_arbitrary_exception_fails(self, rocksdb_partition_factory):
         err = Exception("some exception")

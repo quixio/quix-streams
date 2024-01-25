@@ -24,12 +24,15 @@ COMPRESSION_TYPES: Mapping[CompressionType, DBCompressionType] = {
 @dataclasses.dataclass(frozen=True)
 class RocksDBOptions(RocksDBOptionsType):
     """
-    Common RocksDB database options.
+    RocksDB database options.
 
-    Please see `rocksdict.Options` for a complete description of each option.
+    :param dumps: function to dump data to JSON
+    :param loads: function to load data from JSON
+    :param open_max_retries: number of times to retry opening the database
+            if it's locked by another process. To disable retrying, pass 0
+    :param open_retry_backoff: number of seconds to wait between each retry.
 
-    To provide extra options that are not presented in this class, feel free
-    to override it and specify the additional values.
+    Please see `rocksdict.Options` for a complete description of other options.
     """
 
     write_buffer_size: int = 64 * 1024 * 1024  # 64MB
@@ -44,6 +47,8 @@ class RocksDBOptions(RocksDBOptionsType):
     db_log_dir: Optional[str] = None
     dumps: DumpsFunc = dumps
     loads: LoadsFunc = loads
+    open_max_retries: int = 10
+    open_retry_backoff: float = 3.0
 
     def to_options(self) -> rocksdict.Options:
         """
