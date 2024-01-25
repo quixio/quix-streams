@@ -63,34 +63,36 @@ Quix Streams supports two ways of slicing the time:
     `00:00:00 - 01:00:00` for a tumbling window of 1 hour.
 
    The following code snippet shows how to define a tumbling window over a `StreamingDataFrame`:
-   ```python
-    from datetime import timedelta
+
+```python
+from datetime import timedelta
 
 
-    sdf = app.dataframe(...)
+sdf = app.dataframe(...)
 
-    # Create a tumbling window of 1 hour
-    sdf.tumbling_window(duration_ms=timedelta(hours=1))
+# Calculate the sum over a tumbling window of 1 hour and emit results for each  
+# incoming record
+sdf = sdf.tumbling_window(duration_ms=timedelta(hours=1)).sum().current()
 
-    # Alternative syntax to specify window duration using milliseconds
-    sdf.tumbling_window(duration_ms=60 * 60* 1000)
-   ```
+# Alternative syntax to specify window duration using milliseconds
+sdf = sdf.tumbling_window(duration_ms=60 * 60* 1000).sum().current()
+```
 
 
 ## Hopping Windows
    Hopping windows slice time into overlapping intervals of a fixed size and with a fixed step.
 
-   For example, a hopping window of 1h with a step 10m will generate the following intervals:
-   ```
-                   Hopping Windows
-                   
-   Time    
-   [00:00, 01:00):     .....
-   [00:10, 01:10):       .....
-   [00:20, 01:20):         .....
-   [00:30, 01:30):           .....
+   For example, a hopping window of 1h with a step of 10m will generate the following intervals:
+```
+               Hopping Windows
+               
+Time    
+[00:00, 01:00):     .....
+[00:10, 01:10):       .....
+[00:20, 01:20):         .....
+[00:30, 01:30):           .....
 
-   ```
+```
    
    Note that the start of the interval is inclusive and the end is exclusive.
 
@@ -103,18 +105,26 @@ Quix Streams supports two ways of slicing the time:
 
     
    The following code snippet shows how to define a hopping window over a `StreamingDataFrame`:
-   ```python
-    from datetime import timedelta
+```python
+from datetime import timedelta
 
+sdf = app.dataframe(...)
 
-    sdf = app.dataframe(...)
-
-    # Create a hopping window of 1 hour with a 10-minute step
+# Create a hopping window of 1 hour with a 10-minute step
+sdf = (
     sdf.hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
+    .sum()
+    .current()
+)
 
-    # Alternative syntax to specify window duration and step using milliseconds
+# Alternative syntax to specify window duration and step using milliseconds
+sdf = (
     sdf.hopping_window(duration_ms=60 * 60 * 1000, step_ms=10 * 60 * 1000)
-   ```
+    .sum()
+    .current()
+)
+
+```
 
     
 
@@ -157,7 +167,7 @@ The appropriate value for a grace period varies depending on the use case.
 
 ## Emitting results
 
-Windows in Quix Streams support 2 modes of emitting results:
+Windows in Quix Streams supports 2 modes of emitting results:
 
 1. `current()` - results are emitted for each processed message in the window.
 
@@ -180,13 +190,13 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
 # -> Timestamp=102, value=1 -> emit {"start": 0, "end": 10000, "value": 3} 
 ```
 
-`current()` mode may be used when you need to react on changes quickly, because the application doesn't need to wait until the window is closed. 
+`current()` mode may be used when you need to react to changes quickly because the application doesn't need to wait until the window is closed. 
 But you will likely get duplicated values for each window interval
 
 
 2. `final()` - results are emitted only after the window is expired.
 
-This mode makes the application to wait until the maximum observed timestamp for topic partition passes the window end before emitting.
+This mode makes the application wait until the maximum observed timestamp for the topic partition passes the window end before emitting.
 
 Example:
 ```python
@@ -229,6 +239,14 @@ Currently, windows support the following aggregation functions:
 ## Examples
 
 ### Calculate the sum of a message field over a tumbling window
+Summing values over some time interval is probably the most basic aggregation because it can tell a lot about the behavior of the underlying metric.
+
+To calculate a sum of values over a window, you can use the `sum()` aggregation function.  
+
+Note: the `sum()` function does not validate the value type, and it may fail if the value cannot be added.
+
+The example below demonstrates how to extract a value from the record's dictionary and use it in the aggregation:
+
 ```python
 from datetime import timedelta
 
@@ -251,11 +269,23 @@ sdf = (
 
 
 ### Calculate multiple aggregations at once using "reduce" 
+
+Aggregation via `reduce` provides a lot of flexibility.  
+It allows to define a custom windowed aggregation using two components:
+- an **"initializer"** function - to initialize an aggregated window state when the first message comes into the window. **The "initializer" is called only once when the window is created.** 
+- a **"reducer"** function - to combine an aggregated window state with new data. **The "reducer" is called only for the second and following incoming values.**  
+
+With `reduce()`, you can define a very wide range of aggregations, such as:
+- Aggregating over multiple message fields at once
+- Using multiple message fields to create a single aggregate
+- Aggregating multiple metrics for the same value
+
+
+Example:
 ```python
 from datetime import timedelta
 
 sdf = app.dataframe(...)
-
 
 
 def initializer(value: dict) -> dict:
@@ -270,6 +300,7 @@ def initializer(value: dict) -> dict:
         'max': value['total'],
         'count': 1,
     }
+
 
 def reducer(aggregated: dict, value: dict) -> dict:
     """
@@ -301,7 +332,7 @@ sdf = (
 )
 ```
 
-### Transform a result of a windowed aggregation  
+### Transform a result of a windowed aggregation
 
 ```python
 sdf = (
@@ -350,7 +381,6 @@ Quix Streams handles some of the situations, like:
 - Updating an aggregation function (except the `reduce()`)
 
 All of the above will change the name of the underlying state store, and the new window definition will use a different one.
-
 
 But in some cases, these measures are not enough.  
 For example, updating a code used in `reduce()` will not change the store name, but the data can still become inconsistent.
