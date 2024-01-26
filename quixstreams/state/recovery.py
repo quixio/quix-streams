@@ -150,6 +150,7 @@ class ChangelogManager:
         self._topic_manager = topic_manager
         self._producer = producer
         self._recovery_manager = RecoveryManager(consumer)
+        self._changelog_writers: Dict[int, Dict[str, ChangelogWriter]] = {}
 
     def add_changelog(self, topic_name: str, store_name: str, consumer_group: str):
         self._topic_manager.changelog_topic(
@@ -164,27 +165,33 @@ class ChangelogManager:
         partition_num: int,
         store_partitions: Dict[str, StorePartition],
     ):
+        changelog_stores = {
+            self._topic_manager.changelog_topics[topic_name][
+                store_name
+            ].name: store_partition
+            for store_name, store_partition in store_partitions.items()
+        }
         self._recovery_manager.assign_partitions(
             topic_name=topic_name,
             partition_num=partition_num,
-            store_partitions={
-                self._topic_manager.changelog_topics[topic_name][
-                    suffix
-                ].name: store_partition
-                for suffix, store_partition in store_partitions.items()
-            },
+            store_partitions=changelog_stores,
         )
 
     def revoke_partition(self, partition_num: int):
         self._recovery_manager.revoke_partitions(partition_num=partition_num)
+        self._changelog_writers.pop(partition_num, None)
 
     def get_writer(
         self, topic_name: str, store_name: str, partition_num: int
     ) -> ChangelogWriter:
-        return ChangelogWriter(
-            changelog=self._topic_manager.changelog_topics[topic_name][store_name],
-            partition_num=partition_num,
-            producer=self._producer,
+        changelog = self._topic_manager.changelog_topics[topic_name][store_name]
+        return self._changelog_writers.setdefault(partition_num, {}).setdefault(
+            changelog.name,
+            ChangelogWriter(
+                changelog=changelog,
+                partition_num=partition_num,
+                producer=self._producer,
+            ),
         )
 
     def do_recovery(self):
