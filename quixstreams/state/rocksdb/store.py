@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
+from quixstreams.state.recovery import ChangelogManager
 from quixstreams.state.types import Store
 from .partition import (
     RocksDBStorePartition,
@@ -16,12 +17,15 @@ __all__ = ("RocksDBStore",)
 
 
 class RocksDBStore(Store):
+    options_type = RocksDBOptionsType
+
     def __init__(
         self,
         name: str,
         topic: str,
         base_dir: str,
-        options: Optional[RocksDBOptionsType] = None,
+        changelog_manager: Optional[ChangelogManager] = None,
+        options: Optional[options_type] = None,
     ):
         """
         RocksDB-based state store.
@@ -37,8 +41,8 @@ class RocksDBStore(Store):
         self._name = name
         self._topic = topic
         self._partitions_dir = Path(base_dir).absolute() / self._name / self._topic
-        self._transactions: Dict[int, RocksDBPartitionTransaction] = {}
         self._partitions: Dict[int, RocksDBStorePartition] = {}
+        self._changelog_manager = changelog_manager
         self._options = options
 
     @property
@@ -136,7 +140,15 @@ class RocksDBStore(Store):
             )
 
         store_partition = self._partitions[partition]
-        return store_partition.begin()
+        return store_partition.begin(
+            changelog_writer=self._changelog_manager.get_writer(
+                topic_name=self._topic,
+                store_name=self._name,
+                partition_num=partition,
+            )
+            if self._changelog_manager
+            else None
+        )
 
     def close(self):
         """

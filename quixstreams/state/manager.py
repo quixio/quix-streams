@@ -11,6 +11,7 @@ from .exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
+from .recovery import ChangelogManager
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .rocksdb.windowed.store import WindowedRocksDBStore
 from .types import (
@@ -41,11 +42,13 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
+        changelog_manager: Optional[ChangelogManager] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
+        self._changelog_manager = changelog_manager
         self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
@@ -68,6 +71,13 @@ class StateStoreManager:
         :return: dict in format {topic: {store_name: store}}
         """
         return self._stores
+
+    @property
+    def using_changelogs(self) -> bool:
+        return bool(self._changelog_manager)
+
+    def do_recovery(self):
+        return self._changelog_manager.do_recovery()
 
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
@@ -99,11 +109,21 @@ class StateStoreManager:
         :param topic_name: topic name
         :param store_name: store name
         """
-        store = self._stores.get(topic_name, {}).get(store_name)
-        if store is None:
+        if self._stores.get(topic_name, {}).get(store_name) is None:
+            if self._changelog_manager:
+                logger.debug(
+                    f'State Manager: registering changelog for store "{store_name}" '
+                    f'(topic "{topic_name}")'
+                )
+                self._changelog_manager.add_changelog(
+                    topic_name=topic_name,
+                    store_name=store_name,
+                    consumer_group=self._group_id,
+                )
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
+                changelog_manager=self._changelog_manager,
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
@@ -155,10 +175,15 @@ class StateStoreManager:
         :return: list of assigned `StorePartition`
         """
 
-        store_partitions = []
-        for store in self._stores.get(tp.topic, {}).values():
-            store_partitions.append(store.assign_partition(tp.partition))
-        return store_partitions
+        store_partitions = {}
+        for name, store in self._stores.get(tp.topic, {}).items():
+            store_partition = store.assign_partition(tp.partition)
+            store_partitions[name] = store_partition
+            if self._changelog_manager:
+                self._changelog_manager.assign_partition(
+                    tp.topic, tp.partition, store_partitions
+                )
+        return list(store_partitions.values())
 
     def on_partition_revoke(self, tp: TopicPartition):
         """
@@ -166,8 +191,11 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        if stores := self._stores.get(tp.topic, {}).values():
+            if self._changelog_manager:
+                self._changelog_manager.revoke_partition(tp.partition)
+            for store in stores:
+                store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
         """
@@ -176,8 +204,7 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        self.on_partition_revoke(tp)
 
     def init(self):
         """
@@ -216,7 +243,7 @@ class StateStoreManager:
         Starting the multi-store transaction for the Kafka message.
 
         This transaction will keep track of all used stores and flush them in the end.
-        If any exception is catched during this transaction, none of them
+        If any exception is caught during this transaction, none of them
         will be flushed as a best effort to keep stores consistent in "at-least-once" setting.
 
         There can be only one active transaction at a time. Starting a new transaction
@@ -259,7 +286,7 @@ class _MultiStoreTransaction:
     processed message.
 
     It is responsible for:
-    - Keeping track of actual DBTransactions for the individiual stores
+    - Keeping track of actual DBTransactions for the individual stores
     - Flushing of the opened transactions in the end
 
     """

@@ -1,5 +1,7 @@
 import pytest
 
+from unittest.mock import patch
+
 from quixstreams.state.exceptions import PartitionNotAssignedError
 
 
@@ -35,6 +37,26 @@ class TestRocksDBStore:
         rocksdb_store.assign_partition(0)
         with rocksdb_store.start_partition_transaction(0) as tx:
             assert tx.get("key") == "value"
+        assert rocksdb_store._changelog_manager is None
+        assert tx._changelog_writer is None
+
+    def test_create_transaction_changelog(
+        self, rocksdb_store_factory, changelog_manager_factory
+    ):
+        p_num = 0
+        changelog_manager = changelog_manager_factory()
+        rocksdb_store = rocksdb_store_factory(changelog_manager=changelog_manager)
+        rocksdb_store.assign_partition(p_num)
+
+        with patch.object(changelog_manager, "get_writer") as writer:
+            with rocksdb_store.start_partition_transaction(p_num):
+                ...
+        writer.assert_called_with(
+            topic_name=rocksdb_store.topic,
+            store_name=rocksdb_store.name,
+            partition_num=p_num,
+        )
+        rocksdb_store.close()
 
     def test_get_transaction_partition_not_assigned(self, rocksdb_store):
         with pytest.raises(PartitionNotAssignedError):

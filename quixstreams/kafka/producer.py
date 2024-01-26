@@ -1,12 +1,14 @@
 import logging
-from typing import List, Dict, Tuple, Union, Optional
-from typing_extensions import Literal
+from typing import Union, Optional
 
 from confluent_kafka import (
     Producer as ConfluentProducer,
     KafkaError,
     Message,
 )
+from typing_extensions import Literal
+
+from quixstreams.types import Headers
 
 __all__ = (
     "Producer",
@@ -15,11 +17,6 @@ __all__ = (
 
 Partitioner = Literal[
     "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
-]
-HeaderValue = Optional[Union[str, bytes]]
-Headers = Union[
-    List[Tuple[str, HeaderValue]],
-    Dict[str, HeaderValue],
 ]
 
 logger = logging.getLogger(__name__)
