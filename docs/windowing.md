@@ -115,7 +115,7 @@ sdf = (
 Windowed aggregations return aggregation results in the following format:
 
 ```python
-{"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>
+{"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>}
 ```
 
 Since it is rather generic, you may need to transform it into your own schema.  
@@ -137,7 +137,10 @@ sdf = (
 # Let's transform it to a different format:
 # {"count": <aggregation value>, "window": (<window start ms>, <window end ms>)}
 sdf = sdf.apply(
-    lambda value: {"count": value["value"], "window": (value["start"], value["end"])}
+    lambda value: {
+        "count": value["value"], 
+        "window": (value["start"], value["end"]),
+    }
 )
 ```
 
@@ -162,7 +165,6 @@ A timestamp extractor is a callable object accepting these positional arguments:
 Timestamp extractor must always return timestamp **as an integer in milliseconds**.
 
 Example:
-
 
 ```python
 app = Application(...)
