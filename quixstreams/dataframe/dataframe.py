@@ -345,6 +345,7 @@ class StreamingDataFrame(BaseStreaming):
         self,
         duration_ms: Union[int, timedelta],
         grace_ms: Optional[Union[int, timedelta]] = 0,
+        name: Optional[str] = None,
     ) -> TumblingWindowDefinition:
         """
         Create a tumbling window transformation on this StreamingDataFrame.
@@ -393,6 +394,9 @@ class StreamingDataFrame(BaseStreaming):
             >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
             value.
 
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
         :return: `TumblingWindowDefinition` instance representing the tumbling window
             configuration.
             This object can be further configured with aggregation functions
@@ -403,7 +407,7 @@ class StreamingDataFrame(BaseStreaming):
         grace_ms = ensure_milliseconds(grace_ms)
 
         return TumblingWindowDefinition(
-            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self
+            duration_ms=duration_ms, grace_ms=grace_ms, dataframe=self, name=name
         )
 
     def hopping_window(
@@ -411,6 +415,7 @@ class StreamingDataFrame(BaseStreaming):
         duration_ms: Union[int, timedelta],
         step_ms: Union[int, timedelta],
         grace_ms: Optional[Union[int, timedelta]] = 0,
+        name: Optional[str] = None,
     ) -> HoppingWindowDefinition:
         """
         Create a hopping window transformation on this StreamingDataFrame.
@@ -431,7 +436,7 @@ class StreamingDataFrame(BaseStreaming):
         sdf = app.dataframe(...)
 
         sdf = (
-            # Define a a hopping window of 60s with step 30s and grace period of 10s
+            # Define a hopping window of 60s with step 30s and grace period of 10s
             sdf.hopping_window(
                 duration_ms=timedelta(seconds=60),
                 step_ms=timedelta(seconds=30),
@@ -472,6 +477,9 @@ class StreamingDataFrame(BaseStreaming):
             >***NOTE:*** `timedelta` objects will be rounded to the closest millisecond
             value.
 
+        :param name: The unique identifier for the window. If not provided, it will be
+            automatically generated based on the window's properties.
+
         :return: `HoppingWindowDefinition` instance representing the hopping
             window configuration.
             This object can be further configured with aggregation functions
@@ -483,7 +491,11 @@ class StreamingDataFrame(BaseStreaming):
         grace_ms = ensure_milliseconds(grace_ms)
 
         return HoppingWindowDefinition(
-            duration_ms=duration_ms, grace_ms=grace_ms, step_ms=step_ms, dataframe=self
+            duration_ms=duration_ms,
+            grace_ms=grace_ms,
+            step_ms=step_ms,
+            dataframe=self,
+            name=name,
         )
 
     def _clone(self, stream: Stream) -> Self:
