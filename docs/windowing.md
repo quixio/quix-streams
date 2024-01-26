@@ -8,8 +8,8 @@ In stream processing, windows are used to divide endless streams of events into 
 With windows, you can calculate such aggregations as:
 
 - Total of website visitors for every hour
-- An average speed of a vehicle over the last 10 minutes
-- Maximum temperature of the sensor for each 30s
+- The average speed of a vehicle over the last 10 minutes
+- Maximum temperature of a sensor observed over 30 second ranges
 
 
 ## Examples
@@ -35,10 +35,10 @@ sdf = (
     # Define a tumbling window of 10 minutes
     .tumbling_window(timedelta(minutes=10))
     
-    # Specify the "sum" aggregation function
+    # Specify the "sum" aggregation function to apply to values of "total"
     .sum()
     
-    # Emit results only for closed windows
+    # Emit results only when the 10 minute window has elapsed
     .final()
 )
 ```
@@ -46,11 +46,10 @@ sdf = (
 
 ### Multiple aggregates with "reduce"
 
-Aggregation via `reduce` provides a lot of flexibility.  
-It allows to define a custom windowed aggregation using two components:
+Aggregation via `reduce` provides a lot of flexibility. It enables the definition of a custom windowed aggregation using two components:
 
-- an **"initializer"** function - to initialize an aggregated window state when the first message comes into the window. **The "initializer" is called only once when the window is created.** 
-- a **"reducer"** function - to combine an aggregated window state with new data. **The "reducer" is called only for the second and following incoming values.**  
+- An **"initializer"** function to initialize an aggregated window state when the first message arrives in the window. **The "initializer" is called only once when the window is created.** 
+- A **"reducer"** function to combine an aggregated window state with new data. **The "reducer" is called only for the second and following incoming values.**  
 
 With `reduce()`, you can define a very wide range of aggregations, such as:
 
@@ -72,7 +71,7 @@ def initializer(value: dict) -> dict:
     Initialize the state for aggregation when a new window starts.
     
     It will prime the aggregation when the first record arrives 
-    to the window.
+    in the window.
     """
     return {
         'min': value['total'],
@@ -86,8 +85,8 @@ def reducer(aggregated: dict, value: dict) -> dict:
     Calculate "min", "max" and "count" over a set of transactions.
     
     Reducer always receives two arguments:
-    - previously aggregated value
-    - current value
+    - previously aggregated value (the "aggregated" argument)
+    - current value (the "value" argument)
     It combines them into a new aggregated value and returns it.
     This aggregated value will be also returned as a result of the window.
     """
@@ -106,20 +105,19 @@ sdf = (
     # Create a "reduce" aggregation with "reducer" and "initializer" functions
     .reduce(reducer=reducer, initializer=initializer)
 
-    # Emit results only for closed windows
+    # Emit results only for closed 10 minute windows
     .final()
 )
 ```
 
-### Transforming a result of a windowed aggregation
-Windowed aggregations return aggregation results in the following format:
+### Transforming the result of a windowed aggregation
+Windowed aggregations return aggregated results in the following format/schema:
 
 ```python
-{"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>}
+{"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>}
 ```
 
-Since it is rather generic, you may need to transform it into your own schema.  
-Here is how you can do that:
+Since it is rather generic, you may need to transform it into your own schema. Here is how you can do that:
  
 ```python
 sdf = (
@@ -127,15 +125,15 @@ sdf = (
     sdf.tumbling_window(timedelta(minutes=10))
     # Specify the "count" aggregation function
     .count()
-    # Emit results only for closed windows
+    # Emit results only for closed 10 minute windows
     .final()
 )
 
-# Windowed aggregations return aggregation results in the following format:
-# {"start": <window start ms>, "end": <window end ms>, "value": <aggregation value>
+# Windowed aggregations return aggregated results in the following format:
+# {"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>
 #
 # Let's transform it to a different format:
-# {"count": <aggregation value>, "window": (<window start ms>, <window end ms>)}
+# {"count": <aggregated value>, "window": (<window start ms>, <window end ms>)}
 sdf = sdf.apply(
     lambda value: {
         "count": value["value"], 
@@ -154,13 +152,13 @@ To use a different timestamp in window aggregations, you need to provide a
 
 A timestamp extractor is a callable object accepting these positional arguments:
 
-- message value
-- message headers
+- Message value
+- Message headers
 - Kafka message timestamp in milliseconds
 - Kafka timestamp type: 
   - "0" - timestamp not available, 
   - "1" - "create time" (specified by a producer) 
-  - "2" - "log-append time" (when broker received a message)
+  - "2" - "log-append time" (when the broker received a message)
 
 Timestamp extractor must always return timestamp **as an integer in milliseconds**.
 
@@ -193,8 +191,7 @@ Here are some general concepts about how windowed aggregations are implemented i
 
 - Only time-based windows are supported. 
 - Every window is grouped by the current Kafka message key. 
-- The minimal window unit is a **millisecond**.  
-More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
+- The minimal window unit is a **millisecond**. More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
 
 
 ## Types of Time in Streaming
@@ -217,12 +214,12 @@ What's important, it can never go backward.
 When the application gets an event timestamp for the event, it assigns an interval according to the window definition.
 
 
-Quix Streams supports two ways of slicing the time:
+Quix Streams supports two ways of slicing the time: tumbling windows and hopping windows.
 
 ## Tumbling Windows
    Tumbling windows slice time into non-overlapping intervals of a fixed size. 
 
-   For example, a tumbling window of 1h will generate the following intervals:
+   For example, a tumbling window of 1 hour will generate the following intervals:
     
    ```
                     Tumbling Windows
@@ -259,7 +256,7 @@ sdf = sdf.tumbling_window(duration_ms=60 * 60* 1000).sum().current()
 ## Hopping Windows
    Hopping windows slice time into overlapping intervals of a fixed size and with a fixed step.
 
-   For example, a hopping window of 1h with a step of 10m will generate the following intervals:
+   For example, a hopping window of 1 hour with a step of 10 minutes will generate the following intervals:
 
 ```
                Hopping Windows
@@ -277,7 +274,7 @@ Time
    In hopping windows, each timestamp can be assigned to multiple intervals, because these
    intervals overlap.
 
-   For example, a timestamp `00:33:13` will match two intervals for a hopping window of 1 hour with a 30-minute step:
+   For example, a timestamp `00:33:13` will match two intervals for a hopping window of 1 hour with a 30 minute step:
    - `00:00:00 - 01:00:00`
    - `00:30:00 - 01:30:00`
 
@@ -289,7 +286,7 @@ from datetime import timedelta
 
 sdf = app.dataframe(...)
 
-# Create a hopping window of 1 hour with a 10-minute step
+# Create a hopping window of 1 hour with a 10 minute step
 sdf = (
     sdf.hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
     .sum()
@@ -314,19 +311,17 @@ We call such events **"out-of-order"** because they violate the expected order o
 
 Example:
 
-- a moving vehicle sends the telemetry data, and it suddenly enters a zone without network coverage between 10:00 and 10:20
+- A moving vehicle sends telemetry data, and it suddenly enters a zone without network coverage between 10:00 and 10:20
 - At 10:21, the vehicle is back online. It can now send the telemetry for the period of 10:00 - 10:20.
 - The events that happened at 10:00 are processed only at 10:21, i.e. ~20 minutes later.
 
 
-### Processing Late Events with a "grace period"
-To account for late events, windows in Quix Streams employ the concept of **"grace period"**.
+### Processing late events with a "grace period"
+To account for late events, windows in Quix Streams employ the concept of a **"grace period"**.
 
-By default, events that arrive after the maximum observed timestamp passes the window end are dropped
-from the processing.
+By default, events are dropped (and are not processed) when they arrive after reaching the end of the window.
 
-But we can tell the window to wait for a certain period before closing itself.  
-To do that, you must specify a grace period.
+But we can tell the window to wait for a certain period before closing itself. To do that, you must specify a grace period.
 
 Example:
 
@@ -336,9 +331,9 @@ from datetime import timedelta
 
 sdf = app.dataframe(...)
 
-# Define a 1-hour tumbling window with a grace period of 10 seconds.
+# Define a 1 hour tumbling window with a grace period of 10 seconds.
 # It will inform the application to wait an additional 10 seconds of event time before considering the 
-# particular window closed.
+# particular window closed
 sdf.tumbling_window(timedelta(hours=1), grace_ms=timedelta(seconds=10))
 ```
 
@@ -372,7 +367,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
 ```
 
 `current()` mode may be used when you need to react to changes quickly because the application doesn't need to wait until the window is closed. 
-But you will likely get duplicated values for each window interval
+But you will likely get duplicated values for each window interval.
 
 
 2. `final()` - results are emitted only after the window is expired.
@@ -388,7 +383,7 @@ from datetime import timedelta
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds and emit results only when they are final
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
+sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final()
 
 
 # -> Timestamp=100, value=1   -> emit nothing (the window is not closed yet) 
@@ -415,7 +410,7 @@ Currently, windows support the following aggregation functions:
 - [`max()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
 - [`mean()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
 - [`sum()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
-- [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count values within a window 
+- [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
 
 
 
@@ -424,17 +419,17 @@ Currently, windows support the following aggregation functions:
 ## Operations
 ### How Windows are Stored in State
 
-Each window in `StreamingDataFrame` creates its own state store. 
+Each window in a `StreamingDataFrame` creates its own state store. 
 This state store will keep the aggregations for each window interval according to the
 window specification.
 
 The state store name is auto-generated by default using the following window attributes:
 
-- window type: `"tumbling"` or `"hopping"`
-- window parameters: `duration_ms` and `step_ms`
-- aggregation function name: `"sum"`, `"count"`, `"reduce"`, etc.
+- Window type: `"tumbling"` or `"hopping"`
+- Window parameters: `duration_ms` and `step_ms`
+- Aggregation function name: `"sum"`, `"count"`, `"reduce"`, etc.
 
-E.g., a store name for `sum` aggregation over a hopping window of 30sec with a 5sec step will be  `hopping_window_30000_5000_sum`.
+E.g. a store name for `sum` aggregation over a hopping window of 30 seconds with a 5 second step will be  `hopping_window_30000_5000_sum`.
 
 ### Updating Window Definitions
 
@@ -450,8 +445,6 @@ Quix Streams handles some of the situations, like:
 
 All of the above will change the name of the underlying state store, and the new window definition will use a different one.
 
-But in some cases, these measures are not enough.  
-For example, updating a code used in `reduce()` will not change the store name, but the data can still become inconsistent.
+But in some cases, these measures are not enough. For example, updating a code used in `reduce()` will not change the store name, but the data can still become inconsistent.
 
-In this case, you may need to update the `consumer_group` passed to the `Application` class.   
-It will re-create all the state stores from scratch.
+In this case, you may need to update the `consumer_group` passed to the `Application` class. It will re-create all the state stores from scratch.
