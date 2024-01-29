@@ -43,7 +43,6 @@ from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.recovery import ChangelogManager
 from .state.rocksdb import RocksDBOptionsType
-from .topic_manager import TopicManager, TopicManagerType
 
 __all__ = ("Application",)
 
