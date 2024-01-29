@@ -6,9 +6,18 @@ from random import randint, random, choice
 
 from dotenv import load_dotenv
 
-from quixstreams.kafka import Producer
+from quixstreams.kafka import Producer, Admin
+from quixstreams import TopicManager
 
 load_dotenv("./env_vars.env")
+
+topic_manager = TopicManager(admin=Admin(broker_address=environ["BROKER_ADDRESS"]))
+topic_name = topic_manager.topic(
+    name="json__purchase_events",
+    # "config" only needed if you wish to not use the defaults!
+    config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
+).name
+topic_manager.create_all_topics()
 
 retailers = [
     "Billy Bob's Shop",
@@ -23,7 +32,6 @@ retailers = [
 i = 0
 with Producer(
     broker_address=environ["BROKER_ADDRESS"],
-    extra_config={"allow.auto.create.topics": "true"},
 ) as producer:
     while i < 10000:
         account = randint(0, 10)
@@ -36,7 +44,7 @@ with Producer(
         }
         print(f"Producing value {value}")
         producer.produce(
-            topic="json__purchase_events",
+            topic=topic_name,
             headers=[("uuid", str(uuid.uuid4()))],  # a dict is also allowed here
             key=account_id,
             value=json.dumps(value),  # needs to be a string

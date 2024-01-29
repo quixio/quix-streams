@@ -1,4 +1,4 @@
-from typing import Protocol, Any, Optional, Iterator, Callable, Dict
+from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
 
 from typing_extensions import Self
 
@@ -13,6 +13,8 @@ class Store(Protocol):
     It keeps track of individual store partitions and provides access to the
     partitions' transactions.
     """
+
+    options_type: ClassVar[object]
 
     @property
     def topic(self) -> str:
@@ -175,7 +177,7 @@ class PartitionTransaction(State):
         Normally, it's called by `StreamingDataFrame` internals to ensure that every
         message key is stored separately.
         :param prefix: key prefix
-        :return: context maager
+        :return: context manager
         """
 
     def maybe_flush(self, offset: Optional[int] = None):
