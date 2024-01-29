@@ -21,12 +21,14 @@ from .kafka import (
     Partitioner,
     Producer,
     Consumer,
-    Admin,
 )
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
     TopicConfig,
+    TopicAdmin,
+    TopicManager,
+    TopicManagerType,
     SerializerType,
     DeserializerType,
     TimestampExtractor,
@@ -35,13 +37,13 @@ from .platforms.quix import (
     QuixKafkaConfigsBuilder,
     check_state_dir,
     check_state_management_enabled,
+    QuixTopicManager,
 )
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.recovery import ChangelogManager
 from .state.rocksdb import RocksDBOptionsType
-from .topic_manager import TopicManager, TopicManagerType
 
 __all__ = ("Application",)
 
@@ -206,7 +208,7 @@ class Application:
             topic_manager = TopicManager()
         if not topic_manager.has_admin:
             topic_manager.set_admin(
-                Admin(
+                TopicAdmin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
                 )
@@ -253,7 +255,7 @@ class Application:
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
-        topic_manager: Optional[TopicManager.Quix] = None,
+        topic_manager: Optional[QuixTopicManager] = None,
     ) -> Self:
         """
         Initialize an Application to work with Quix platform,
@@ -383,7 +385,7 @@ class Application:
             use_changelog_topics=use_changelog_topics,
             topic_validation=topic_validation,
             topic_manager=topic_manager
-            or TopicManager.Quix(quix_config_builder=quix_config_builder),
+            or QuixTopicManager(quix_config_builder=quix_config_builder),
         )
         app._set_quix_config_builder(quix_config_builder)
         return app

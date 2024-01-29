@@ -4,12 +4,12 @@ import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional, Tuple, List, Set, Mapping, Union
+from typing import Optional, Tuple, Set, Mapping, Union, List
 
 from requests import HTTPError
 
 from quixstreams.exceptions import QuixException
-from quixstreams.models.topics import Topic, TopicList
+from quixstreams.models.topics import Topic
 from .api import QuixPortalApiService
 
 logger = logging.getLogger(__name__)
@@ -350,7 +350,7 @@ class QuixKafkaConfigsBuilder:
 
     def create_topics(
         self,
-        topics: TopicList,
+        topics: List[Topic],
         finalize_timeout_seconds: Optional[int] = None,
     ):
         """

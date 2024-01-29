@@ -2,8 +2,7 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from quixstreams.kafka.admin import Admin
-from quixstreams.topic_manager import TopicConfig
+from quixstreams.models.topics import TopicConfig, TopicAdmin
 from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
 
 
@@ -140,7 +139,7 @@ class TestTopicManager:
     ):
         """
         `TopicConfig` is inferred from the cluster topic metadata rather than the
-        source `Topic` object if the topic already exists AND an `Admin` is provided.
+        source `Topic` object if the topic already exists AND an `TopicAdmin` is provided.
         """
 
         topic_manager = topic_manager_factory(admin=admin)
@@ -164,7 +163,7 @@ class TestTopicManager:
         assert "ignore.this" not in changelog.config.extra_config
 
     def test_create_topics(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [topic_manager.topic(name=n) for n in ["topic1", "topic2"]]
         topic_manager.create_topics(topics)
@@ -174,7 +173,7 @@ class TestTopicManager:
         )
 
     def test_create_topics_invalid_config(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [topic_manager.topic(name="topic1", auto_create_config=False)]
 
@@ -183,7 +182,7 @@ class TestTopicManager:
         admin.create_topics.assert_not_called()
 
     def test_validate_topics_exists(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [
             topic_manager.topic(
@@ -207,7 +206,7 @@ class TestTopicManager:
         topic_manager.validate_topics(topics=topics, validation_level="exists")
 
     def test_validate_topics_exists_fails(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [
             topic_manager.topic(
@@ -231,7 +230,7 @@ class TestTopicManager:
         assert "topic1" in e.value.args[0]
 
     def test_validate_topics_required(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [
             topic_manager.topic(
@@ -248,7 +247,7 @@ class TestTopicManager:
         topic_manager.validate_topics(topics=topics, validation_level="required")
 
     def test_validate_topics_required_fails(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [
             topic_manager.topic(
@@ -275,7 +274,7 @@ class TestTopicManager:
             assert topic in e.value.args[0]
 
     def test_validate_topics_all(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [
             topic_manager.topic(
@@ -288,7 +287,7 @@ class TestTopicManager:
         topic_manager.validate_topics(topics=topics, validation_level="all")
 
     def test_validate_topics_all_fails(self, topic_manager_factory):
-        admin = create_autospec(Admin)
+        admin = create_autospec(TopicAdmin)
         topic_manager = topic_manager_factory(admin=admin)
         topics = [
             topic_manager.topic(

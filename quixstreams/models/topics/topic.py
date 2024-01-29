@@ -1,14 +1,13 @@
 import dataclasses
 import logging
-from typing import Union, List, Optional, Any, Callable, Dict, Mapping, Iterable
-from typing_extensions import TypeAlias
+from typing import Union, List, Optional, Any, Mapping, Iterable
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
-from .messagecontext import MessageContext
-from .messages import KafkaMessage
-from .rows import Row
-from .serializers import (
+from quixstreams.models.messagecontext import MessageContext
+from quixstreams.models.messages import KafkaMessage
+from quixstreams.models.rows import Row
+from quixstreams.models.serializers import (
     SerializationContext,
     DeserializerIsNotProvidedError,
     SerializerIsNotProvidedError,
@@ -22,21 +21,16 @@ from .serializers import (
     Serializer,
     Deserializer,
 )
-from .timestamps import MessageTimestamp, TimestampType
-from .types import (
+from quixstreams.models.timestamps import MessageTimestamp, TimestampType
+from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
     MessageHeadersTuples,
 )
+from .types import TimestampExtractor
 
-__all__ = ("Topic", "TopicConfig", "TimestampExtractor")
+__all__ = ("Topic", "TopicConfig")
 
 logger = logging.getLogger(__name__)
-
-
-TimestampExtractor = Callable[
-    [Any, Optional[MessageHeadersTuples], int, TimestampType],
-    int,
-]
 
 
 @dataclasses.dataclass(eq=True)
@@ -332,7 +326,3 @@ class Topic:
             latency=message.latency(),
             leader_epoch=message.leader_epoch(),
         )
-
-
-TopicList: TypeAlias = List[Topic]
-TopicMap: TypeAlias = Dict[str, Topic]
