@@ -28,7 +28,6 @@ from .models import (
     TopicConfig,
     TopicAdmin,
     TopicManager,
-    TopicManagerType,
     SerializerType,
     DeserializerType,
     TimestampExtractor,
@@ -112,7 +111,7 @@ class Application:
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
-        topic_manager: Optional[TopicManagerType] = None,
+        topic_manager: Optional[TopicManager] = None,
     ):
         """
 

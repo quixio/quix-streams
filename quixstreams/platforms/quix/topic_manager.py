@@ -31,24 +31,24 @@ class QuixTopicManager(TopicManager):
 
     def __init__(
         self,
-        admin: Optional[TopicAdmin] = None,
+        topic_admin: Optional[TopicAdmin] = None,
         create_timeout: int = 60,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ):
         """
-        :param admin: an `Admin` instance
+        :param topic_admin: an `Admin` instance
         :param create_timeout: timeout for topic creation
         :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
             generated for you.
         """
         quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
-        if not admin:
+        if not topic_admin:
             admin_configs = quix_config_builder.get_confluent_broker_config()
-            admin = TopicAdmin(
+            topic_admin = TopicAdmin(
                 broker_address=admin_configs.pop("bootstrap.servers"),
                 extra_config=admin_configs,
             )
-        self._admin = admin
+        self._admin = topic_admin
         self._topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._create_timeout = create_timeout

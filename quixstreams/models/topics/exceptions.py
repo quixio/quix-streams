@@ -11,3 +11,11 @@ class TopicValidationError(QuixException):
 
 class MissingTopicForChangelog(QuixException):
     ...
+
+
+class CreateTopicTimeout(Exception):
+    ...
+
+
+class CreateTopicFailure(Exception):
+    ...
