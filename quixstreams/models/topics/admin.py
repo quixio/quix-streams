@@ -12,6 +12,7 @@ from confluent_kafka.admin import (
     TopicMetadata as ConfluentTopicMetadata,
 )
 
+from .exceptions import CreateTopicFailure, CreateTopicTimeout
 from .topic import Topic, TopicConfig
 
 logger = logging.getLogger(__name__)
@@ -63,12 +64,6 @@ class TopicAdmin:
             "bootstrap.servers": broker_address,
             **(extra_config or {}),
         }
-
-    class CreateTopicTimeout(Exception):
-        ...
-
-    class CreateTopicFailure(Exception):
-        ...
 
     @property
     def _admin_client(self) -> AdminClient:
@@ -153,9 +148,9 @@ class TopicAdmin:
         if existed:
             logger.info(f"These topics already exist: {existed}")
         if exceptions:
-            raise self.CreateTopicFailure(exceptions)
+            raise CreateTopicFailure(exceptions)
         if futures:
-            raise self.CreateTopicTimeout(
+            raise CreateTopicTimeout(
                 f"Timed out waiting for creation status for topics:\n"
                 f"{pprint.pformat([topic_name for topic_name in futures])}"
             )
@@ -185,7 +180,7 @@ class TopicAdmin:
                 ),
                 finalize_timeout,
             )
-        except self.CreateTopicFailure as e:
+        except CreateTopicFailure as e:
             failure = {
                 topic.name: {
                     "failure_reason": e.args[0][topic.name],
@@ -194,6 +189,6 @@ class TopicAdmin:
                 for topic in topics
                 if topic.name in e.args[0]
             }
-            raise self.CreateTopicFailure(
+            raise CreateTopicFailure(
                 f"failed to create topics:\n{pprint.pformat(failure)}"
             )

@@ -11,9 +11,7 @@ from .exceptions import (
     MissingTopicForChangelog,
     TopicValidationError,
 )
-from .topic import Topic, TopicConfig
-from .types import TimestampExtractor, TopicManagerType
-
+from .topic import Topic, TopicConfig, TimestampExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +28,7 @@ def affirm_ready_for_create(topics: List[Topic]):
         raise ValueError(f"configs for Topics {invalid} were NoneTypes")
 
 
-class TopicManager(TopicManagerType):
+class TopicManager:
     """
     The source of all topic management with quixstreams.
 
@@ -50,14 +48,14 @@ class TopicManager(TopicManagerType):
 
     def __init__(
         self,
-        admin: Optional[TopicAdmin] = None,
+        topic_admin: Optional[TopicAdmin] = None,
         create_timeout: int = 60,
     ):
         """
-        :param admin: an `Admin` instance (required for some functionality)
+        :param topic_admin: an `Admin` instance (required for some functionality)
         :param create_timeout: timeout for topic creation
         """
-        self._admin = admin
+        self._admin = topic_admin
         self._topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._create_timeout = create_timeout
@@ -111,6 +109,23 @@ class TopicManager(TopicManagerType):
                 "No Admin client has been defined; add one with 'set_admin()'"
             )
         return self._admin
+
+    @property
+    def has_admin(self) -> bool:
+        """
+        Whether an admin client has been defined or not.
+
+        :return: bool
+        """
+        return bool(self._admin)
+
+    def set_admin(self, admin: TopicAdmin):
+        """
+        Allows for adding an Admin class post-init.
+
+        :param admin: an Admin instance
+        """
+        self._admin = admin
 
     def _apply_topic_prefix(self, name: str) -> str:
         """

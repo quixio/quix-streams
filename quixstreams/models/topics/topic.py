@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from typing import Union, List, Optional, Any, Mapping, Iterable
+from typing import List, Optional, Any, Callable, Mapping, Iterable, Union
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
@@ -26,11 +26,16 @@ from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
     MessageHeadersTuples,
 )
-from .types import TimestampExtractor
 
-__all__ = ("Topic", "TopicConfig")
+__all__ = ("Topic", "TopicConfig", "TimestampExtractor")
 
 logger = logging.getLogger(__name__)
+
+
+TimestampExtractor = Callable[
+    [Any, Optional[MessageHeadersTuples], int, TimestampType],
+    int,
+]
 
 
 @dataclasses.dataclass(eq=True)

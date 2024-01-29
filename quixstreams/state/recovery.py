@@ -1,6 +1,6 @@
 import logging
 
-from quixstreams.topic_manager import TopicManagerType
+from quixstreams.models.topics import TopicManager
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class ChangelogManager:
 
     def __init__(
         self,
-        topic_manager: TopicManagerType,
+        topic_manager: TopicManager,
     ):
         self._topic_manager = topic_manager
 

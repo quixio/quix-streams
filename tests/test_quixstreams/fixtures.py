@@ -333,10 +333,10 @@ def changelog_manager_factory(
     topic_manager_factory,
 ):
     def factory(
-        admin: Optional[TopicAdmin] = None,
+        topic_admin: Optional[TopicAdmin] = None,
     ):
         changelog_manager = ChangelogManager(
-            topic_manager=topic_manager_factory(admin=admin),
+            topic_manager=topic_manager_factory(topic_admin=topic_admin),
         )
         return changelog_manager
 
@@ -345,10 +345,10 @@ def changelog_manager_factory(
 
 @pytest.fixture()
 def state_manager_changelogs(
-    state_manager_factory, admin, changelog_manager_factory
+    state_manager_factory, topic_admin, changelog_manager_factory
 ) -> StateStoreManager:
     manager = state_manager_factory(
-        changelog_manager=changelog_manager_factory(admin=admin)
+        changelog_manager=changelog_manager_factory(topic_admin=topic_admin)
     )
     manager.init()
     yield manager
@@ -380,17 +380,20 @@ def quix_mock_config_builder_factory(kafka_container):
 
 
 @pytest.fixture()
-def quix_topic_manager_factory(quix_mock_config_builder_factory):
+def quix_topic_manager_factory(
+    quix_mock_config_builder_factory, topic_admin, topic_manager_factory
+):
     """
     Allows for creating topics with a test cluster while keeping the workspace aspects
     """
 
-    def factory(admin: Optional[TopicAdmin] = None, workspace_id: Optional[str] = None):
-        topic_manager = QuixTopicManager(admin)
-        quix_topic_manager = topic_manager_factory(admin).Quix(
+    def factory(workspace_id: Optional[str] = None):
+        topic_manager = topic_manager_factory(topic_admin)
+        quix_topic_manager = QuixTopicManager(
+            topic_admin=topic_admin,
             quix_config_builder=quix_mock_config_builder_factory(
                 workspace_id=workspace_id
-            )
+            ),
         )
         quix_topic_manager._create_topics = topic_manager._create_topics
         patcher = patch.object(quix_topic_manager, "_topic_replication", 1)
@@ -405,7 +408,7 @@ def quix_app_factory(
     random_consumer_group,
     kafka_container,
     tmp_path,
-    admin,
+    topic_admin,
     quix_mock_config_builder_factory,
     quix_topic_manager_factory,
 ):
@@ -447,9 +450,7 @@ def quix_app_factory(
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_validation=topic_validation,
-            topic_manager=quix_topic_manager_factory(
-                admin=admin, workspace_id=workspace_id
-            ),
+            topic_manager=quix_topic_manager_factory(workspace_id=workspace_id),
         )
 
     return factory
@@ -472,7 +473,7 @@ def message_context_factory():
 
 
 @pytest.fixture()
-def admin(kafka_container):
+def topic_admin(kafka_container):
     return TopicAdmin(broker_address=kafka_container.broker_address)
 
 
@@ -483,21 +484,21 @@ def topic_manager_factory():
     """
 
     def factory(
-        admin: Optional[TopicAdmin] = None, create_timeout: int = 10
+        topic_admin: Optional[TopicAdmin] = None, create_timeout: int = 10
     ) -> TopicManager:
-        return TopicManager(admin=admin, create_timeout=create_timeout)
+        return TopicManager(topic_admin=topic_admin, create_timeout=create_timeout)
 
     return factory
 
 
 @pytest.fixture()
-def topic_manager_admin_factory(admin):
+def topic_manager_admin_factory(topic_admin):
     """
     TopicManager with working TopicAdmin instance (create topics or get topic metadata)
     """
 
     def factory(create_timeout: int = 10) -> TopicManager:
-        return TopicManager(admin=admin, create_timeout=create_timeout)
+        return TopicManager(topic_admin=topic_admin, create_timeout=create_timeout)
 
     return factory
 
