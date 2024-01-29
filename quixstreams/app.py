@@ -1,7 +1,7 @@
 import contextlib
 import logging
 import signal
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Literal
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -43,6 +43,7 @@ from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.recovery import ChangelogManager
 from .state.rocksdb import RocksDBOptionsType
+from .topic_manager import TopicManager, TopicManagerType
 
 __all__ = ("Application",)
 

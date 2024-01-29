@@ -317,3 +317,7 @@ class Topic:
             latency=message.latency(),
             leader_epoch=message.leader_epoch(),
         )
+
+
+TopicList: TypeAlias = List[Topic]
+TopicMap: TypeAlias = Dict[str, Topic]
