@@ -5,22 +5,27 @@ from time import sleep
 
 from dotenv import load_dotenv
 
+from quixstreams import TopicManager
 from quixstreams.kafka import Producer
 from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
     SerializationContext,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
 
 # For non-"Application.Quix" platform producing, config is a bit manual right now
-topic = "qts__purchase_events"
 cfg_builder = QuixKafkaConfigsBuilder()
-cfgs, topics, _ = cfg_builder.get_confluent_client_configs([topic])
-topic = topics[0]
-cfg_builder.create_topics([TopicCreationConfigs(name=topic)])
+cfgs = cfg_builder.get_confluent_broker_config()
+topic_manager = TopicManager.Quix(quix_config_builder=cfg_builder)
+topic_name = topic_manager.topic(
+    name="qts__purchase_events",
+    # "config" only needed if you wish to not use the defaults!
+    config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
+).name
+topic_manager.create_all_topics()
 serialize = QuixTimeseriesSerializer()
 
 
@@ -52,11 +57,11 @@ with Producer(
         }
         print(f"Producing value {value}")
         producer.produce(
-            topic=topic,
+            topic=topic_name,
             headers=headers,
             key=account_id,
             value=serialize(
-                value=value, ctx=SerializationContext(topic=topic, headers=headers)
+                value=value, ctx=SerializationContext(topic=topic_name, headers=headers)
             ),
         )
         i += 1
