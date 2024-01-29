@@ -5,13 +5,12 @@ from time import sleep
 
 from dotenv import load_dotenv
 
-from quixstreams import TopicManager
 from quixstreams.kafka import Producer
 from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
     SerializationContext,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixTopicManager
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
@@ -19,7 +18,7 @@ load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 # For non-"Application.Quix" platform producing, config is a bit manual right now
 cfg_builder = QuixKafkaConfigsBuilder()
 cfgs = cfg_builder.get_confluent_broker_config()
-topic_manager = TopicManager.Quix(quix_config_builder=cfg_builder)
+topic_manager = QuixTopicManager(quix_config_builder=cfg_builder)
 topic_name = topic_manager.topic(
     name="qts__purchase_events",
     # "config" only needed if you wish to not use the defaults!

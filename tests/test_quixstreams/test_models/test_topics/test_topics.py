@@ -27,7 +27,7 @@ from quixstreams.models.serializers import (
     SERIALIZERS,
     DESERIALIZERS,
 )
-from .utils import ConfluentKafkaMessageStub, int_to_bytes, float_to_bytes
+from ..utils import ConfluentKafkaMessageStub, int_to_bytes, float_to_bytes
 
 
 class JSONListDeserializer(JSONDeserializer):

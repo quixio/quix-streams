@@ -12,14 +12,14 @@ from confluent_kafka.admin import (
     TopicMetadata as ConfluentTopicMetadata,
 )
 
-from quixstreams.models.topics import TopicConfig, TopicList
+from .topic import Topic, TopicConfig
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("Admin",)
+__all__ = ("TopicAdmin",)
 
 
-def convert_topic_list(topics: TopicList) -> List[ConfluentTopic]:
+def convert_topic_list(topics: List[Topic]) -> List[ConfluentTopic]:
     """
     Converts `Topic`s to `ConfluentTopic`s as required for Confluent's
     `AdminClient.create_topic()`.
@@ -42,7 +42,7 @@ def confluent_topic_config(topic: str) -> ConfigResource:
     return ConfigResource(2, topic)
 
 
-class Admin:
+class TopicAdmin:
     """
     For performing "admin"-level operations on a Kafka cluster, mostly around topics.
 
@@ -161,7 +161,7 @@ class Admin:
             )
 
     def create_topics(
-        self, topics: TopicList, timeout: int = 10, finalize_timeout: int = 20
+        self, topics: List[Topic], timeout: int = 10, finalize_timeout: int = 20
     ):
         """
         Create the given list of topics and confirm they are ready.

@@ -21,7 +21,6 @@ from quixstreams.kafka import (
     AutoOffsetReset,
     Consumer,
     Producer,
-    Admin,
     AssignmentStrategy,
 )
 from quixstreams.models import MessageContext
@@ -36,7 +35,8 @@ from quixstreams.models.timestamps import (
     TimestampType,
     MessageTimestamp,
 )
-from quixstreams.models.topics import Topic
+from quixstreams.models.topics import Topic, TopicManager, TopicAdmin
+from quixstreams.platforms.quix import QuixTopicManager
 from quixstreams.platforms.quix.config import (
     QuixKafkaConfigsBuilder,
     prepend_workspace_id,
@@ -46,7 +46,6 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
 from quixstreams.state.recovery import ChangelogManager
-from quixstreams.topic_manager import TopicManager
 
 
 @pytest.fixture()
@@ -334,7 +333,7 @@ def changelog_manager_factory(
     topic_manager_factory,
 ):
     def factory(
-        admin: Optional[Admin] = None,
+        admin: Optional[TopicAdmin] = None,
     ):
         changelog_manager = ChangelogManager(
             topic_manager=topic_manager_factory(admin=admin),
@@ -381,13 +380,13 @@ def quix_mock_config_builder_factory(kafka_container):
 
 
 @pytest.fixture()
-def quix_topic_manager_factory(quix_mock_config_builder_factory, topic_manager_factory):
+def quix_topic_manager_factory(quix_mock_config_builder_factory):
     """
     Allows for creating topics with a test cluster while keeping the workspace aspects
     """
 
-    def factory(admin: Optional[Admin] = None, workspace_id: Optional[str] = None):
-        topic_manager = topic_manager_factory(admin)
+    def factory(admin: Optional[TopicAdmin] = None, workspace_id: Optional[str] = None):
+        topic_manager = QuixTopicManager(admin)
         quix_topic_manager = topic_manager_factory(admin).Quix(
             quix_config_builder=quix_mock_config_builder_factory(
                 workspace_id=workspace_id
@@ -414,7 +413,7 @@ def quix_app_factory(
     For doing testing with Application.Quix() against a local cluster.
 
     Almost all behavior is standard, except the quix_config_builder is mocked out, and
-    thus topic creation is handled with the Admin client.
+    thus topic creation is handled with the TopicAdmin client.
     """
 
     def factory(
@@ -474,17 +473,17 @@ def message_context_factory():
 
 @pytest.fixture()
 def admin(kafka_container):
-    return Admin(broker_address=kafka_container.broker_address)
+    return TopicAdmin(broker_address=kafka_container.broker_address)
 
 
 @pytest.fixture()
 def topic_manager_factory():
     """
-    TopicManager with option to add an Admin (which uses Kafka Broker)
+    TopicManager with option to add an TopicAdmin (which uses Kafka Broker)
     """
 
     def factory(
-        admin: Optional[Admin] = None, create_timeout: int = 10
+        admin: Optional[TopicAdmin] = None, create_timeout: int = 10
     ) -> TopicManager:
         return TopicManager(admin=admin, create_timeout=create_timeout)
 
@@ -494,7 +493,7 @@ def topic_manager_factory():
 @pytest.fixture()
 def topic_manager_admin_factory(admin):
     """
-    TopicManager with working Admin instance (create topics or get topic metadata)
+    TopicManager with working TopicAdmin instance (create topics or get topic metadata)
     """
 
     def factory(create_timeout: int = 10) -> TopicManager:
