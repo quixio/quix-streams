@@ -76,6 +76,9 @@ class StateStoreManager:
     def using_changelogs(self) -> bool:
         return bool(self._changelog_manager)
 
+    def do_recovery(self):
+        return self._changelog_manager.do_recovery()
+
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ) -> Store:
@@ -120,6 +123,7 @@ class StateStoreManager:
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
+                changelog_manager=self._changelog_manager,
                 base_dir=str(self._state_dir),
                 options=self._rocksdb_options,
             )
@@ -171,10 +175,15 @@ class StateStoreManager:
         :return: list of assigned `StorePartition`
         """
 
-        store_partitions = []
-        for store in self._stores.get(tp.topic, {}).values():
-            store_partitions.append(store.assign_partition(tp.partition))
-        return store_partitions
+        store_partitions = {}
+        for name, store in self._stores.get(tp.topic, {}).items():
+            store_partition = store.assign_partition(tp.partition)
+            store_partitions[name] = store_partition
+        if self._changelog_manager and store_partitions:
+            self._changelog_manager.assign_partition(
+                tp.topic, tp.partition, store_partitions
+            )
+        return list(store_partitions.values())
 
     def on_partition_revoke(self, tp: TopicPartition):
         """
@@ -182,8 +191,11 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        if stores := self._stores.get(tp.topic, {}).values():
+            if self._changelog_manager:
+                self._changelog_manager.revoke_partition(tp.partition)
+            for store in stores:
+                store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
         """

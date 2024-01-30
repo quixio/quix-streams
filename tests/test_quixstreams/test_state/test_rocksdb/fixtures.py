@@ -3,6 +3,7 @@ from typing import Optional
 
 import pytest
 
+from quixstreams.state import ChangelogManager
 from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.rocksdb.options import RocksDBOptions
 from quixstreams.state.rocksdb.partition import RocksDBStorePartition
@@ -33,9 +34,18 @@ def rocksdb_partition(rocksdb_partition_factory) -> RocksDBStorePartition:
 
 @pytest.fixture()
 def rocksdb_store_factory(tmp_path):
-    def factory(topic: Optional[str] = None, name: str = "default") -> RocksDBStore:
+    def factory(
+        topic: Optional[str] = None,
+        name: str = "default",
+        changelog_manager: Optional[ChangelogManager] = None,
+    ) -> RocksDBStore:
         topic = topic or str(uuid.uuid4())
-        return RocksDBStore(topic=topic, name=name, base_dir=str(tmp_path))
+        return RocksDBStore(
+            topic=topic,
+            name=name,
+            base_dir=str(tmp_path),
+            changelog_manager=changelog_manager,
+        )
 
     return factory
 

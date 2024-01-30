@@ -1,9 +1,8 @@
+import pytest
 import logging
+from confluent_kafka.admin import TopicMetadata
 from unittest.mock import patch
 from uuid import uuid4
-
-import pytest
-from confluent_kafka.admin import TopicMetadata
 
 from quixstreams.models.topics import TopicConfig
 from quixstreams.models.topics.exceptions import CreateTopicTimeout, CreateTopicFailure

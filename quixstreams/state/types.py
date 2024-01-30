@@ -2,6 +2,8 @@ from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
 
 from typing_extensions import Self
 
+from quixstreams.models import ConfluentKafkaMessageProto
+
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
 
@@ -97,7 +99,16 @@ class StorePartition(Protocol):
         State new `PartitionTransaction`
         """
 
+    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+        ...
+
     def get_processed_offset(self) -> Optional[int]:
+        ...
+
+    def get_changelog_offset(self) -> Optional[int]:
+        ...
+
+    def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
         ...
 
 
@@ -287,6 +298,46 @@ class WindowedPartitionTransaction(WindowedState):
         Flush the recent updates and last processed offset to the storage.
         :param offset: offset of the last processed message, optional.
         """
+
+    def __enter__(self):
+        ...
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        ...
+
+
+class PartitionRecoveryTransaction(Protocol):
+    """
+    A class for managing recovery for a StorePartition from a changelog message
+    """
+
+    @property
+    def failed(self) -> bool:
+        """
+        Return `True` if transaction failed to update data at some point.
+
+        Failed transactions cannot be re-used.
+        :return: bool
+        """
+
+    @property
+    def completed(self) -> bool:
+        """
+        Return `True` if transaction is completed.
+
+        Completed transactions cannot be re-used.
+        :return: bool
+        """
+        ...
+
+    def recover(self):
+        ...
+
+    def flush(self):
+        """
+        Flush the recent updates and last processed offset to the storage.
+        """
+        ...
 
     def __enter__(self):
         ...

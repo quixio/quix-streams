@@ -45,7 +45,7 @@ from quixstreams.platforms.quix.config import (
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
-from quixstreams.state.recovery import ChangelogManager
+from quixstreams.state.recovery import ChangelogManager, RecoveryManager
 
 
 @pytest.fixture()
@@ -327,16 +327,32 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
-def changelog_manager_factory(topic_manager_factory):
+def changelog_manager_factory(
+    topic_manager_factory,
+    row_producer_factory,
+    row_consumer_factory,
+):
     def factory(
         topic_admin: Optional[TopicAdmin] = None,
+        producer: RowProducer = row_producer_factory(),
+        recovery_manager: Optional[RecoveryManager] = None,
     ):
         changelog_manager = ChangelogManager(
             topic_manager=topic_manager_factory(topic_admin),
+            producer=producer,
+            consumer=row_consumer_factory(),
         )
+        if recovery_manager:
+            changelog_manager._recovery_manager = recovery_manager
         return changelog_manager
 
     return factory
+
+
+@pytest.fixture()
+def changelog_manager_mock_recovery(changelog_manager_factory):
+    with patch("quixstreams.state.recovery.RecoveryManager", spec=RecoveryManager):
+        return changelog_manager_factory()
 
 
 @pytest.fixture()

@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from rocksdict import ReadOptions, RdictItems
+from rocksdict import ReadOptions, RdictItems  # type: ignore
 
 from .transaction import WindowedRocksDBPartitionTransaction
 from .. import ColumnFamilyDoesNotExist
@@ -14,6 +14,8 @@ from ..partition import (
 )
 from ..serialization import int_from_int64_bytes
 from ..types import RocksDBOptionsType
+
+from ...recovery import ChangelogWriter
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +52,15 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         cf = self.get_column_family(cf_name=cf_name)
         return cf.items(from_key=from_key, read_opt=read_opt)
 
-    def begin(self) -> "WindowedRocksDBPartitionTransaction":
+    def begin(
+        self, changelog_writer: Optional[ChangelogWriter] = None
+    ) -> "WindowedRocksDBPartitionTransaction":
         return WindowedRocksDBPartitionTransaction(
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
             latest_timestamp_ms=self._latest_timestamp_ms,
+            changelog_writer=changelog_writer,
         )
 
     def set_latest_timestamp(self, timestamp_ms: int):

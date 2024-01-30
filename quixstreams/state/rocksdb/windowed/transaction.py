@@ -1,6 +1,6 @@
 from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
 
-from rocksdict import ReadOptions
+from rocksdict import ReadOptions, ColumnFamily
 
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
@@ -8,6 +8,7 @@ from ..metadata import METADATA_CF_NAME, LATEST_TIMESTAMP_KEY, PREFIX_SEPARATOR
 from ..partition import RocksDBPartitionTransaction
 from ..serialization import int_to_int64_bytes, serialize
 from ..types import LoadsFunc, DumpsFunc
+from ...recovery import ChangelogWriter
 
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
@@ -22,8 +23,14 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         dumps: DumpsFunc,
         loads: LoadsFunc,
         latest_timestamp_ms: int,
+        changelog_writer: Optional[ChangelogWriter] = None,
     ):
-        super().__init__(partition=partition, dumps=dumps, loads=loads)
+        super().__init__(
+            partition=partition,
+            dumps=dumps,
+            loads=loads,
+            changelog_writer=changelog_writer,
+        )
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
         self._state = WindowedTransactionState(transaction=self)
         self._latest_timestamp_ms = latest_timestamp_ms
@@ -34,6 +41,12 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
 
     def get_latest_timestamp(self) -> int:
         return self._latest_timestamp_ms
+
+    def _update_changelog(self, meta_cf_handle: ColumnFamily, timestamp: int = None):
+        super()._update_changelog(
+            meta_cf_handle=meta_cf_handle,
+            timestamp=timestamp or self._latest_timestamp_ms,
+        )
 
     def _validate_duration(self, start_ms: int, end_ms: int):
         if end_ms <= start_ms:
