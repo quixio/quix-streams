@@ -4,7 +4,10 @@ import pytest
 
 from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
 from quixstreams.models.topics import TopicConfig, TopicAdmin
-from quixstreams.models.topics.exceptions import TopicValidationError
+from quixstreams.models.topics.exceptions import (
+    TopicValidationError,
+    TopicNameLengthExceeded,
+)
 
 
 @pytest.fixture()
@@ -229,3 +232,19 @@ class TestTopicManager:
 
         for topic in ["topic1", "topic2"]:
             assert topic in e.value.args[0]
+
+    def test_topic_name_len_exceeded(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        bad_name = "a" * 300
+
+        with pytest.raises(TopicNameLengthExceeded):
+            topic_manager.topic(bad_name)
+
+    def test_changelog_name_len_exceeded(self, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+
+        topic = topic_manager.topic("good_name")
+        with pytest.raises(TopicNameLengthExceeded):
+            topic_manager.changelog_topic(
+                topic_name=topic.name, consumer_group="a" * 300, suffix="suffix"
+            )

@@ -7,6 +7,7 @@ from quixstreams.utils.dicts import dict_values
 from .admin import TopicAdmin
 from .exceptions import (
     TopicValidationError,
+    TopicNameLengthExceeded,
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
 
@@ -38,6 +39,7 @@ class TopicManager:
 
     _topic_partitions = 2
     _topic_replication = 1
+    _max_topic_name_len = 255
 
     _topic_extra_config_defaults = {}
     _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
@@ -84,11 +86,11 @@ class TopicManager:
 
     def _apply_topic_prefix(self, name: str) -> str:
         """
-        Apply a prefix to the given name
+        Apply a prefix to the given name, or return if it already contains it.
 
         :param name: topic name
 
-        :return: name with added prefix (no change in this case)
+        :return: name with prefix added as required
         """
         return name
 
@@ -228,6 +230,10 @@ class TopicManager:
         :return: Topic object with creation configs
         """
         name = self._apply_topic_prefix(name)
+        if len(name) > self._max_topic_name_len:
+            raise TopicNameLengthExceeded(
+                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
+            )
         topic = Topic(
             name=name,
             value_serializer=value_serializer,
@@ -268,6 +274,7 @@ class TopicManager:
 
         :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
+            > NOTE: normally contain any prefixes added by TopicManager.topic()
         :param suffix: name of storage type (default, rolling10s, etc.)
         :param configs_to_import: what extra_configs should be allowed when importing
             settings from the source topic.
@@ -276,7 +283,14 @@ class TopicManager:
         """
         # TODO: consider removing configs_to_import as changelog settings management
         #  around retention, quix compact settings, etc matures.
+        # via StateStoreManager, topic_name should contain the prefix already, but
+        # just in case...
+        topic_name = self._apply_topic_prefix(topic_name)
         name = self._format_changelog_name(consumer_group, topic_name, suffix)
+        if len(name) > self._max_topic_name_len:
+            raise TopicNameLengthExceeded(
+                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
+            )
         if not configs_to_import:
             configs_to_import = self._changelog_extra_config_imports_defaults
         configs_to_import.discard("cleanup.policy")

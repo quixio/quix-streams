@@ -480,26 +480,15 @@ def topic_manager_factory(topic_admin):
     def factory(
         topic_admin_: Optional[TopicAdmin] = None, create_timeout: int = 10
     ) -> TopicManager:
-        topic_admin_ = topic_admin_ or topic_admin
-        return TopicManager(topic_admin=topic_admin_, create_timeout=create_timeout)
+        return TopicManager(
+            topic_admin=topic_admin_ or topic_admin, create_timeout=create_timeout
+        )
 
     return factory
 
 
 @pytest.fixture()
-def topic_manager_admin_factory(topic_admin):
-    """
-    TopicManager with working TopicAdmin instance (create topics or get topic metadata)
-    """
-
-    def factory(create_timeout: int = 10) -> TopicManager:
-        return TopicManager(topic_admin=topic_admin, create_timeout=create_timeout)
-
-    return factory
-
-
-@pytest.fixture()
-def topic_manager_topic_factory(topic_manager_admin_factory):
+def topic_manager_topic_factory(topic_manager_factory):
     """
     Uses TopicManager to generate a Topic, create it, and return the Topic object
     """
@@ -513,7 +502,7 @@ def topic_manager_topic_factory(topic_manager_admin_factory):
         key_deserializer: Optional[Union[Deserializer, str]] = None,
         value_deserializer: Optional[Union[Deserializer, str]] = None,
     ):
-        topic_manager = topic_manager_admin_factory()
+        topic_manager = topic_manager_factory()
         topic_args = {
             "key_serializer": key_serializer,
             "value_serializer": value_serializer,

@@ -21,6 +21,7 @@ class QuixTopicManager(TopicManager):
 
     _topic_partitions = 2
     _topic_replication = 2
+    _max_topic_name_len = 249
 
     _topic_extra_config_defaults = {
         "retention.ms": f"{10080 * 60000}",  # minutes converted to ms
@@ -65,19 +66,6 @@ class QuixTopicManager(TopicManager):
         """
         return self._quix_config_builder.prepend_workspace_id(name)
 
-    # TODO: remove this once 43 char limit is removed
-    def _strip_changelog_chars(self, value: str):
-        """
-        A temporary function to capture character stripping necessary while we
-        wait for character limit in Quix to be increased.
-
-        :param value: a string
-
-        :return: a string with only its first few and last chars
-        """
-        stripped = self._quix_config_builder.strip_workspace_id_prefix(value)
-        return f"{stripped[:5]}{stripped[-5:]}"
-
     def _format_changelog_name(self, consumer_group: str, topic_name: str, suffix: str):
         """
         Generate the name of the changelog topic based on the following parameters.
@@ -90,13 +78,10 @@ class QuixTopicManager(TopicManager):
 
         :return: formatted topic name
         """
-        # TODO: "strip" should be `self._quix_config_builder.strip_workspace_id_prefix`
-        #  once we fix the 43 char limit
-
-        # TODO: remove suffix limitation and standardize the topic name template to
-        #  match the non-quix counterpart
-
-        strip = self._strip_changelog_chars
-        return self._quix_config_builder.prepend_workspace_id(
-            f"changelog__{strip(consumer_group)}-{strip(topic_name)}-{suffix[:9]}"
+        strip_wid = self._quix_config_builder.strip_workspace_id_prefix
+        base_format = super()._format_changelog_name(
+            consumer_group=strip_wid(consumer_group),
+            topic_name=strip_wid(topic_name),
+            suffix=suffix,
         )
+        return self._quix_config_builder.prepend_workspace_id(base_format)

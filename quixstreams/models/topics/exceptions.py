@@ -11,3 +11,7 @@ class CreateTopicTimeout(QuixException):
 
 class CreateTopicFailure(QuixException):
     ...
+
+
+class TopicNameLengthExceeded(QuixException):
+    ...
