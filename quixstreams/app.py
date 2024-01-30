@@ -2,7 +2,7 @@ import contextlib
 import logging
 import pprint
 import signal
-from typing import Optional, List, Callable, Literal
+from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -111,7 +111,6 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
-        topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
         topic_manager: Optional[TopicManager] = None,
     ):
         """
@@ -148,12 +147,6 @@ class Application:
             Default - `True`
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
-        :param topic_validation: The degree of topic validation; Default - "exists"
-            None - No validation.
-            "exists" - Confirm expected topics exist.
-            "required" - Confirm topics match your provided
-                `Topic` partition + replication factor
-            "all" - Confirm topic settings are EXACT.
         :param topic_manager: A TopicManager instance
 
         ***Error Handlers***
@@ -202,7 +195,6 @@ class Application:
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
-        self._topic_validation = topic_validation
 
         if not topic_manager:
             topic_manager = TopicManager(
@@ -252,7 +244,6 @@ class Application:
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
-        topic_validation: Optional[Literal["exists", "required", "all"]] = "exists",
         topic_manager: Optional[QuixTopicManager] = None,
     ) -> Self:
         """
@@ -319,12 +310,6 @@ class Application:
             Default - `True`
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
-        :param topic_validation: The degree of topic validation; Default - "exists"
-            None - No validation.
-            "exists" - Confirm expected topics exist.
-            "required" - Confirm topics match your provided `Topic`
-                partition + replication factor
-            "all" - Confirm topic settings are EXACT.
         :param topic_manager: A QuixTopicManager instance
 
         ***Error Handlers***
@@ -390,7 +375,6 @@ class Application:
             rocksdb_options=rocksdb_options,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
-            topic_validation=topic_validation,
             topic_manager=topic_manager,
         )
         app._set_quix_config_builder(quix_config_builder)
@@ -623,7 +607,7 @@ class Application:
     def _setup_topics(self):
         topic_configs_formatted = pprint.pformat(
             {
-                topic.name: topic.config.__dict__ if topic.config else "NO CONFIG"
+                topic.name: topic.config.as_dict()
                 for topic in self._topic_manager.all_topics
             }
         )
@@ -634,11 +618,7 @@ class Application:
         if self._auto_create_topics:
             logger.info("Auto-create topics enabled. Initializing topic creation...")
             self._topic_manager.create_all_topics()
-        if self._topic_validation:
-            logger.info("Topic validation enabled. Initializing topic validation...")
-            self._topic_manager.validate_all_topics(
-                validation_level=self._topic_validation
-            )
+        self._topic_manager.validate_all_topics()
 
     def run(
         self,

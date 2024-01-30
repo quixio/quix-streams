@@ -1,12 +1,11 @@
 import logging
 import pprint
-from typing import Dict, List, Mapping, Optional, Set, Literal
+from typing import Dict, List, Mapping, Optional, Set
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
 from .admin import TopicAdmin
 from .exceptions import (
-    MissingTopicForChangelog,
     TopicValidationError,
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
@@ -285,13 +284,6 @@ class TopicManager:
             self._admin.inspect_topics([topic_name])[topic_name]
             or self._topics[topic_name].config
         )
-        if not topic_config:
-            raise MissingTopicForChangelog(
-                f"There is no Topic object or existing topic in Kafka for topic "
-                f"'{topic_name}' for desired changelog '{name}'; confirm "
-                f"configs are allowed to be auto-created (for an `Application`, "
-                f"set 'auto_create_topics=True')"
-            )
         topic_config.update_extra_config(allowed=configs_to_import)
         topic = Topic(
             name=name,
@@ -329,67 +321,31 @@ class TopicManager:
         """
         self.create_topics(self.all_topics)
 
-    def validate_topics(
+    def validate_all_topics(
         self,
-        topics: List[Topic],
-        validation_level: Literal["exists", "required", "all"] = "exists",
     ):
         """
-        Validates topics via an explicit list of `Topic`s.
+        Validates all topics exist and have correct topic + replication factor.
 
-        Issues are pooled and raised as an Exception once all inspections are completed.
-
-        Can specify the degree of validation, but the default behavior is checking
-        that the partition counts and replication factors match what is in Kafka.
-
-        :param topics: list of `Topic`s
-        :param validation_level: The degree of topic validation; Default - "exists"
-            "exists" - Confirm expected topics exist.
-            "required" - Confirm topics match your provided `Topic`
-                partition + replication factor
-            "all" - Confirm topic settings are EXACT.
+        Issues are pooled and raised as an Exception once inspections are complete.
         """
-        logger.info(f"Validating topics at level '{validation_level}'...")
-        exists_only = validation_level == "exists"
-        extras = validation_level == "all"
+        logger.info(f"Validating Kafka topics have expected settings...")
         issues = {}
+        topics = self.all_topics
         actual_configs = self._admin.inspect_topics([t.name for t in topics])
         for topic in topics:
             if (actual := actual_configs[topic.name]) is not None:
-                if not exists_only:
-                    expected = topic.config
-                    if extras:
-                        actual.update_extra_config(
-                            allowed={k for k in expected.extra_config}
-                        )
-                    else:
-                        actual.extra_config = expected.extra_config
-                    if expected != actual:
-                        issues[topic.name] = {
-                            "expected": expected.__dict__,
-                            "actual": actual.__dict__,
-                        }
+                expected = topic.config
+                actual.extra_config = expected.extra_config
+                if expected != actual:
+                    issues[topic.name] = {
+                        "expected": expected.as_dict(),
+                        "actual": actual.as_dict(),
+                    }
             else:
                 issues[topic.name] = "TOPIC MISSING"
         if issues:
             raise TopicValidationError(
-                f"the following topics had issues:\n{pprint.pformat(issues)}"
+                f"the following topics failed validation:\n{pprint.pformat(issues)}"
             )
         logger.info("All topics validated!")
-
-    def validate_all_topics(
-        self,
-        validation_level: Literal["exists", "required", "all"] = "exists",
-    ):
-        """
-        A convenience method for validating all `Topic`s stored on this TopicManager.
-
-        See `TopicManager.validate_topics()` for more details.
-
-        :param validation_level: The degree of topic validation; Default - "exists"
-            "exists" - Confirm expected topics exist.
-            "required" - Confirm topics match your provided `Topic`
-                partition + replication factor
-            "all" - Confirm topic settings are EXACT.
-        """
-        self.validate_topics(topics=self.all_topics, validation_level=validation_level)

@@ -1,6 +1,6 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Literal, Union
+from typing import Optional, Union
 from unittest.mock import create_autospec, patch
 
 import pytest
@@ -278,7 +278,6 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         state_dir: Optional[str] = None,
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
-        topic_validation: Optional[Literal["exists", "required", "all"]] = None,
         topic_manager: Optional[TopicManager] = None,
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
@@ -295,7 +294,6 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             state_dir=state_dir,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
-            topic_validation=topic_validation,
             topic_manager=topic_manager,
         )
 
@@ -428,7 +426,6 @@ def quix_app_factory(
         state_dir: Optional[str] = None,
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
-        topic_validation: Optional[Literal["exists", "required", "all"]] = None,
         workspace_id: str = "my_ws",
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
@@ -447,7 +444,6 @@ def quix_app_factory(
             on_message_processed=on_message_processed,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
-            topic_validation=topic_validation,
             topic_manager=quix_topic_manager_factory(workspace_id=workspace_id),
         )
 

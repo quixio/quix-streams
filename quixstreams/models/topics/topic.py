@@ -67,6 +67,9 @@ class TopicConfig:
             extra_update = {k: v for k, v in extra_update.items() if k in allowed}
         self.extra_config = extra_update
 
+    def as_dict(self):
+        return dataclasses.asdict(self)
+
 
 def _get_serializer(serializer: SerializerType) -> Serializer:
     if isinstance(serializer, str):

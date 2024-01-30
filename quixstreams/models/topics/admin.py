@@ -184,7 +184,7 @@ class TopicAdmin:
             failure = {
                 topic.name: {
                     "failure_reason": e.args[0][topic.name],
-                    "topic_config": topic.config.__dict__,
+                    "topic_config": topic.config.as_dict(),
                 }
                 for topic in topics
                 if topic.name in e.args[0]

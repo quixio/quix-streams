@@ -5,10 +5,6 @@ class TopicValidationError(QuixException):
     ...
 
 
-class MissingTopicForChangelog(QuixException):
-    ...
-
-
 class CreateTopicTimeout(QuixException):
     ...
 
