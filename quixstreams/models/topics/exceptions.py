@@ -1,10 +1,6 @@
 from quixstreams.exceptions import QuixException
 
 
-class MissingTopicAdmin(QuixException):
-    ...
-
-
 class TopicValidationError(QuixException):
     ...
 
@@ -13,9 +9,9 @@ class MissingTopicForChangelog(QuixException):
     ...
 
 
-class CreateTopicTimeout(Exception):
+class CreateTopicTimeout(QuixException):
     ...
 
 
-class CreateTopicFailure(Exception):
+class CreateTopicFailure(QuixException):
     ...

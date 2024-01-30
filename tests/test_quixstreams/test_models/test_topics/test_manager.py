@@ -2,9 +2,14 @@ from unittest.mock import create_autospec
 
 import pytest
 
+from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
 from quixstreams.models.topics import TopicConfig, TopicAdmin
 from quixstreams.models.topics.exceptions import TopicValidationError
-from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
+
+
+@pytest.fixture()
+def topic_admin_mock():
+    return create_autospec(TopicAdmin)
 
 
 class TestTopicManager:
@@ -136,14 +141,14 @@ class TestTopicManager:
         assert "ignore.this" not in changelog.config.extra_config
 
     def test_changelog_topic_source_exists_in_cluster(
-        self, topic_manager_factory, topic_admin, topic_factory
+        self, topic_manager_factory, topic_factory
     ):
         """
         `TopicConfig` is inferred from the cluster topic metadata rather than the
         source `Topic` object if the topic already exists AND an `TopicAdmin` is provided.
         """
 
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+        topic_manager = topic_manager_factory()
         topic_manager._changelog_extra_config_imports_defaults = {"ignore.this"}
         topic_name, partitions = topic_factory(num_partitions=5, timeout=15)
 
@@ -163,28 +168,27 @@ class TestTopicManager:
         assert changelog.config.num_partitions == partitions == 5
         assert "ignore.this" not in changelog.config.extra_config
 
-    def test_create_topics(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_create_topics(self, topic_manager_factory, topic_admin_mock):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [topic_manager.topic(name=n) for n in ["topic1", "topic2"]]
         topic_manager.create_topics(topics)
 
-        topic_admin.create_topics.assert_called_with(
+        topic_admin_mock.create_topics.assert_called_with(
             topics, timeout=topic_manager._create_timeout
         )
 
-    def test_create_topics_invalid_config(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_create_topics_invalid_config(
+        self, topic_manager_factory, topic_admin_mock
+    ):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [topic_manager.topic(name="topic1", auto_create_config=False)]
 
         with pytest.raises(ValueError):
             topic_manager.create_topics(topics)
-        topic_admin.create_topics.assert_not_called()
+        topic_admin_mock.create_topics.assert_not_called()
 
-    def test_validate_topics_exists(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_validate_topics_exists(self, topic_manager_factory, topic_admin_mock):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
                 name=n,
@@ -194,7 +198,7 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        topic_admin.inspect_topics.return_value = {
+        topic_admin_mock.inspect_topics.return_value = {
             "topic1": topic_manager.topic_config(
                 num_partitions=5, extra_config=topics[0].config.extra_config
             ),
@@ -206,9 +210,10 @@ class TestTopicManager:
 
         topic_manager.validate_topics(topics=topics, validation_level="exists")
 
-    def test_validate_topics_exists_fails(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_validate_topics_exists_fails(
+        self, topic_manager_factory, topic_admin_mock
+    ):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
                 name=n,
@@ -218,7 +223,7 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        topic_admin.inspect_topics.return_value = {
+        topic_admin_mock.inspect_topics.return_value = {
             "topic1": None,
             "topic2": topic_manager.topic_config(
                 num_partitions=5, extra_config={"my.setting": "derp"}
@@ -230,9 +235,8 @@ class TestTopicManager:
             topic_manager.validate_topics(topics=topics, validation_level="exists")
         assert "topic1" in e.value.args[0]
 
-    def test_validate_topics_required(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_validate_topics_required(self, topic_manager_factory, topic_admin_mock):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
                 name=n,
@@ -240,16 +244,17 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        topic_admin.inspect_topics.return_value = {
+        topic_admin_mock.inspect_topics.return_value = {
             "topic1": topics[0].config,
             "topic2": topic_manager.topic_config(extra_config={"my.setting": "derp"}),
             "topic3": topics[2].config,
         }
         topic_manager.validate_topics(topics=topics, validation_level="required")
 
-    def test_validate_topics_required_fails(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_validate_topics_required_fails(
+        self, topic_manager_factory, topic_admin_mock
+    ):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
                 name=n,
@@ -259,7 +264,7 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        topic_admin.inspect_topics.return_value = {
+        topic_admin_mock.inspect_topics.return_value = {
             "topic1": topic_manager.topic_config(
                 num_partitions=5, extra_config=topics[0].config.extra_config
             ),
@@ -274,9 +279,8 @@ class TestTopicManager:
         for topic in ["topic1", "topic2"]:
             assert topic in e.value.args[0]
 
-    def test_validate_topics_all(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_validate_topics_all(self, topic_manager_factory, topic_admin_mock):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
                 name=n,
@@ -284,12 +288,13 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        topic_admin.inspect_topics.return_value = {t.name: t.config for t in topics}
+        topic_admin_mock.inspect_topics.return_value = {
+            t.name: t.config for t in topics
+        }
         topic_manager.validate_topics(topics=topics, validation_level="all")
 
-    def test_validate_topics_all_fails(self, topic_manager_factory):
-        topic_admin = create_autospec(TopicAdmin)
-        topic_manager = topic_manager_factory(topic_admin=topic_admin)
+    def test_validate_topics_all_fails(self, topic_manager_factory, topic_admin_mock):
+        topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
                 name=n,
@@ -299,7 +304,7 @@ class TestTopicManager:
             )
             for n in ["topic1", "topic2", "topic3"]
         ]
-        topic_admin.inspect_topics.return_value = {
+        topic_admin_mock.inspect_topics.return_value = {
             "topic1": topic_manager.topic_config(
                 num_partitions=5, extra_config=topics[0].config.extra_config
             ),

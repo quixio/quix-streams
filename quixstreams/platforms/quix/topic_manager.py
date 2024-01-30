@@ -1,4 +1,4 @@
-from typing import Optional, Dict, List
+from typing import Optional, List
 
 from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
 from .config import QuixKafkaConfigsBuilder
@@ -31,7 +31,7 @@ class QuixTopicManager(TopicManager):
 
     def __init__(
         self,
-        topic_admin: Optional[TopicAdmin] = None,
+        topic_admin: TopicAdmin,
         create_timeout: int = 60,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ):
@@ -41,19 +41,8 @@ class QuixTopicManager(TopicManager):
         :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
             generated for you.
         """
-        quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
-        if not topic_admin:
-            admin_configs = quix_config_builder.get_confluent_broker_config()
-            topic_admin = TopicAdmin(
-                broker_address=admin_configs.pop("bootstrap.servers"),
-                extra_config=admin_configs,
-            )
-        self._admin = topic_admin
-        self._topics: Dict[str, Topic] = {}
-        self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
-        self._create_timeout = create_timeout
-        self._quix_config_builder = quix_config_builder
-        super().__init__(create_timeout=create_timeout)
+        super().__init__(create_timeout=create_timeout, topic_admin=topic_admin)
+        self._quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
 
     def _create_topics(self, topics: List[Topic]):
         """

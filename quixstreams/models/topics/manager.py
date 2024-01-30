@@ -1,13 +1,11 @@
 import logging
 import pprint
-import warnings
 from typing import Dict, List, Mapping, Optional, Set, Literal
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
 from .admin import TopicAdmin
 from .exceptions import (
-    MissingTopicAdmin,
     MissingTopicForChangelog,
     TopicValidationError,
 )
@@ -48,7 +46,7 @@ class TopicManager:
 
     def __init__(
         self,
-        topic_admin: Optional[TopicAdmin] = None,
+        topic_admin: TopicAdmin,
         create_timeout: int = 60,
     ):
         """
@@ -85,48 +83,6 @@ class TopicManager:
     def all_topics(self) -> List[Topic]:
         return self.topics_list + self.changelog_topics_list
 
-    @property
-    def pretty_formatted_topic_configs(self) -> str:
-        """
-        Returns a print-friendly version of all the topics and their configs
-
-        :return: a pprint-formatted string of all the topics
-        """
-        return pprint.pformat(
-            {
-                topic.name: topic.config.__dict__ if topic.config else "NO CONFIG"
-                for topic in self.all_topics
-            }
-        )
-
-    @property
-    def admin(self) -> TopicAdmin:
-        """
-        Raises an exception so that things that require an Admin instance fail.
-        """
-        if not self._admin:
-            raise MissingTopicAdmin(
-                "No Admin client has been defined; add one with 'set_admin()'"
-            )
-        return self._admin
-
-    @property
-    def has_admin(self) -> bool:
-        """
-        Whether an admin client has been defined or not.
-
-        :return: bool
-        """
-        return bool(self._admin)
-
-    def set_admin(self, admin: TopicAdmin):
-        """
-        Allows for adding an Admin class post-init.
-
-        :param admin: an Admin instance
-        """
-        self._admin = admin
-
     def _apply_topic_prefix(self, name: str) -> str:
         """
         Apply a prefix to the given name
@@ -158,7 +114,7 @@ class TopicManager:
         :param topics: list of `Topic`s
         """
         # TODO: have create topics return list of topics created to speed up validation
-        self.admin.create_topics(topics, timeout=self._create_timeout)
+        self._admin.create_topics(topics, timeout=self._create_timeout)
 
     def _topic_config_with_defaults(
         self,
@@ -321,21 +277,14 @@ class TopicManager:
         """
         # TODO: consider removing configs_to_import as changelog settings management
         #  around retention, quix compact settings, etc matures.
-        if not self._admin:
-            warnings.warn(
-                "No Admin class was defined; will default to the source topic "
-                "configs to generate the changelog configs, which may lead to "
-                "inaccurate creation settings if the source topic already "
-                "exists with different configs (i.e. partitions). To guarantee correct "
-                "functionality, add an Admin class and re-run this function."
-            )
         name = self._format_changelog_name(consumer_group, topic_name, suffix)
         if not configs_to_import:
             configs_to_import = self._changelog_extra_config_imports_defaults
         configs_to_import.discard("cleanup.policy")
         topic_config = (
-            self.admin.inspect_topics([topic_name])[topic_name] if self._admin else None
-        ) or self._topics[topic_name].config
+            self._admin.inspect_topics([topic_name])[topic_name]
+            or self._topics[topic_name].config
+        )
         if not topic_config:
             raise MissingTopicForChangelog(
                 f"There is no Topic object or existing topic in Kafka for topic "
@@ -404,7 +353,7 @@ class TopicManager:
         exists_only = validation_level == "exists"
         extras = validation_level == "all"
         issues = {}
-        actual_configs = self.admin.inspect_topics([t.name for t in topics])
+        actual_configs = self._admin.inspect_topics([t.name for t in topics])
         for topic in topics:
             if (actual := actual_configs[topic.name]) is not None:
                 if not exists_only:

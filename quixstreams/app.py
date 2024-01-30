@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import pprint
 import signal
 from typing import Optional, List, Callable, Literal
 
@@ -204,10 +205,8 @@ class Application:
         self._topic_validation = topic_validation
 
         if not topic_manager:
-            topic_manager = TopicManager()
-        if not topic_manager.has_admin:
-            topic_manager.set_admin(
-                TopicAdmin(
+            topic_manager = TopicManager(
+                topic_admin=TopicAdmin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
                 )
@@ -363,6 +362,15 @@ class Application:
         consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
         consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
         producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
+
+        if topic_manager is None:
+            topic_admin = TopicAdmin(
+                broker_address=broker_address,
+                extra_config=producer_extra_config,
+            )
+            topic_manager = QuixTopicManager(
+                topic_admin=topic_admin, quix_config_builder=quix_config_builder
+            )
         app = cls(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -383,8 +391,7 @@ class Application:
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_validation=topic_validation,
-            topic_manager=topic_manager
-            or QuixTopicManager(quix_config_builder=quix_config_builder),
+            topic_manager=topic_manager,
         )
         app._set_quix_config_builder(quix_config_builder)
         return app
@@ -614,9 +621,15 @@ class Application:
             check_state_management_enabled()
 
     def _setup_topics(self):
+        topic_configs_formatted = pprint.pformat(
+            {
+                topic.name: topic.config.__dict__ if topic.config else "NO CONFIG"
+                for topic in self._topic_manager.all_topics
+            }
+        )
         logger.info(
             "topics (with provided configs) required for app operation:\n"
-            f"{self._topic_manager.pretty_formatted_topic_configs}"
+            f"{topic_configs_formatted}"
         )
         if self._auto_create_topics:
             logger.info("Auto-create topics enabled. Initializing topic creation...")
