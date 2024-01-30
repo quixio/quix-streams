@@ -329,14 +329,12 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
-def changelog_manager_factory(
-    topic_manager_factory,
-):
+def changelog_manager_factory(topic_manager_factory):
     def factory(
         topic_admin: Optional[TopicAdmin] = None,
     ):
         changelog_manager = ChangelogManager(
-            topic_manager=topic_manager_factory(topic_admin=topic_admin),
+            topic_manager=topic_manager_factory(topic_admin),
         )
         return changelog_manager
 
@@ -478,15 +476,16 @@ def topic_admin(kafka_container):
 
 
 @pytest.fixture()
-def topic_manager_factory():
+def topic_manager_factory(topic_admin):
     """
     TopicManager with option to add an TopicAdmin (which uses Kafka Broker)
     """
 
     def factory(
-        topic_admin: Optional[TopicAdmin] = None, create_timeout: int = 10
+        topic_admin_: Optional[TopicAdmin] = None, create_timeout: int = 10
     ) -> TopicManager:
-        return TopicManager(topic_admin=topic_admin, create_timeout=create_timeout)
+        topic_admin_ = topic_admin_ or topic_admin
+        return TopicManager(topic_admin=topic_admin_, create_timeout=create_timeout)
 
     return factory
 
