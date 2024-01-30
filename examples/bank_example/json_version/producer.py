@@ -6,12 +6,14 @@ from random import randint, random, choice
 
 from dotenv import load_dotenv
 
-from quixstreams.kafka import Producer, Admin
-from quixstreams import TopicManager
+from quixstreams.kafka import Producer
+from quixstreams.models.topics import TopicManager, TopicAdmin
 
 load_dotenv("./env_vars.env")
 
-topic_manager = TopicManager(admin=Admin(broker_address=environ["BROKER_ADDRESS"]))
+topic_manager = TopicManager(
+    topic_admin=TopicAdmin(broker_address=environ["BROKER_ADDRESS"])
+)
 topic_name = topic_manager.topic(
     name="json__purchase_events",
     # "config" only needed if you wish to not use the defaults!

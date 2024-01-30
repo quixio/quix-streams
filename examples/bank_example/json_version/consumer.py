@@ -48,7 +48,6 @@ app = Application(
     auto_offset_reset="earliest",
     consumer_extra_config={"allow.auto.create.topics": "true"},
     producer_extra_config={"allow.auto.create.topics": "true"},
-    loglevel="DEBUG",
 )
 
 # Define an input topic with JSON deserializer
