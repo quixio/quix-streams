@@ -304,21 +304,19 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
         return self._failed
 
-    def _update_changelog(
-        self, meta_cf_handle: ColumnFamily, timestamp: Optional[int] = None
-    ):
+    def _update_changelog(self, meta_cf_handle: ColumnFamily):
         logger.debug("Flushing state changes to the changelog topic...")
         offset = self._partition.get_changelog_offset() or 0
-        headers = {LATEST_TIMESTAMP_KEY: timestamp} if timestamp else {}
 
         for cf_name in self._update_cache:
-            headers[CHANGELOG_CF_MESSAGE_HEADER] = cf_name
+            headers = {CHANGELOG_CF_MESSAGE_HEADER: cf_name}
             for k, v in self._update_cache[cf_name].items():
                 if v is _deleted:
                     self._changelog_writer.produce(key=k, headers=headers)
                 else:
                     self._changelog_writer.produce(key=k, value=v, headers=headers)
                 offset += 1
+
         self._batch.put(
             CHANGELOG_OFFSET_KEY, int_to_int64_bytes(offset), meta_cf_handle
         )

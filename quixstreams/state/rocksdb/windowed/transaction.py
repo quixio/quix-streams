@@ -1,6 +1,6 @@
 from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
 
-from rocksdict import ReadOptions, ColumnFamily
+from rocksdict import ReadOptions
 
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
@@ -41,12 +41,6 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
 
     def get_latest_timestamp(self) -> int:
         return self._latest_timestamp_ms
-
-    def _update_changelog(self, meta_cf_handle: ColumnFamily, timestamp: int = None):
-        super()._update_changelog(
-            meta_cf_handle=meta_cf_handle,
-            timestamp=timestamp or self._latest_timestamp_ms,
-        )
 
     def _validate_duration(self, start_ms: int, end_ms: int):
         if end_ms <= start_ms:
