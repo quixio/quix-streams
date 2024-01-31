@@ -1,4 +1,3 @@
-import json
 import time
 import uuid
 from os import environ
@@ -6,20 +5,16 @@ from random import randint, random, choice
 
 from dotenv import load_dotenv
 
-from quixstreams.kafka import Producer
-from quixstreams.models.topics import TopicManager, TopicAdmin
+from quixstreams import Application
 
 load_dotenv("./env_vars.env")
 
-topic_manager = TopicManager(
-    topic_admin=TopicAdmin(broker_address=environ["BROKER_ADDRESS"])
+
+app = Application(
+    broker_address=environ["BROKER_ADDRESS"],
+    consumer_group="ignore",
 )
-topic_name = topic_manager.topic(
-    name="json__purchase_events",
-    # "config" only needed if you wish to not use the defaults!
-    config=topic_manager.topic_config(extra_config={"retention.ms": "3600000"}),
-).name
-topic_manager.create_all_topics()
+topic = app.topic(name="json__purchase_events", value_serializer="json")
 
 retailers = [
     "Billy Bob's Shop",
@@ -30,11 +25,9 @@ retailers = [
     "Food Emporium",
 ]
 
-# strings for key, value, and headers will be serialized to bytes by default
 i = 0
-with Producer(
-    broker_address=environ["BROKER_ADDRESS"],
-) as producer:
+# app.get_producer() automatically creates any topics made via `app.topic`
+with app.get_producer() as producer:
     while i < 10000:
         account = randint(0, 10)
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
@@ -45,11 +38,15 @@ with Producer(
             "transaction_source": choice(retailers),
         }
         print(f"Producing value {value}")
+        # with current functionality, we need to manually serialize our data
+        serialized = topic.serialize(
+            key=account_id, value=value, headers={"uuid": str(uuid.uuid4())}
+        )
         producer.produce(
-            topic=topic_name,
-            headers=[("uuid", str(uuid.uuid4()))],  # a dict is also allowed here
+            topic=topic.name,
+            headers=serialized.headers,
             key=account_id,
-            value=json.dumps(value),  # needs to be a string
+            value=serialized.value,
         )
         i += 1
         time.sleep(random())

@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Optional, List
+from typing import Optional, List, Literal
 from urllib.parse import urljoin
 from zipfile import ZipFile
 
@@ -120,18 +120,23 @@ class QuixPortalApiService:
         topic_name: str,
         topic_partitions: int,
         topic_rep_factor: int,
-        topic_ret_minutes: int,
-        topic_ret_bytes: int,
+        topic_ret_minutes: Optional[int] = None,
+        topic_ret_bytes: Optional[int] = None,
+        cleanup_policy: Optional[Literal["compact", "delete"]] = None,
         workspace_id: Optional[str] = None,
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
+        optionals = {
+            "retentionInMinutes": topic_ret_minutes,
+            "retentionInBytes": topic_ret_bytes,
+            "cleanupPolicy": cleanup_policy,
+        }
         d = {
             "name": topic_name,
             "configuration": {
                 "partitions": topic_partitions,
                 "replicationFactor": topic_rep_factor,
-                "retentionInMinutes": topic_ret_minutes,
-                "retentionInBytes": topic_ret_bytes,
+                **{k: v for k, v in optionals.items() if v is not None},
             },
         }
         return self.session.post(f"/{workspace_id}/topics", json=d).json()

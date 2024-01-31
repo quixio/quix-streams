@@ -284,23 +284,27 @@ class TopicManager:
 
     def validate_all_topics(self):
         """
-        Validates all topics exist and have correct topic + replication factor.
+        Validates all topics exist and changelogs have correct topic and rep factor.
 
         Issues are pooled and raised as an Exception once inspections are complete.
         """
         logger.info(f"Validating Kafka topics have expected settings...")
         issues = {}
         topics = self.all_topics
+        changelog_names = [topic.name for topic in self.changelog_topics_list]
         actual_configs = self._admin.inspect_topics([t.name for t in topics])
         for topic in topics:
+            # validate the topic exists
             if (actual := actual_configs[topic.name]) is not None:
-                expected = topic.config
-                actual.extra_config = expected.extra_config
-                if expected != actual:
-                    issues[topic.name] = {
-                        "expected": expected.as_dict(),
-                        "actual": actual.as_dict(),
-                    }
+                if topic.name in changelog_names:
+                    # confirm changelog partitions and rep_factor matches its Topic
+                    expected = topic.config
+                    actual.extra_config = expected.extra_config
+                    if expected != actual:
+                        issues[topic.name] = {
+                            "expected": expected.as_dict(),
+                            "actual": actual.as_dict(),
+                        }
             else:
                 issues[topic.name] = "TOPIC MISSING"
         if issues:

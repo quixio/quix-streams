@@ -167,46 +167,75 @@ class TestTopicManager:
         )
 
     def test_validate_topics(self, topic_manager_factory, topic_admin_mock):
+        """
+        Validation succeeds even when a source topic config or extra_config
+        differs from expected.
+        """
         topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
-                name=n,
-                config=topic_manager.topic_config(extra_config={"my.setting": "woo"}),
+                name=f"topic{n}",
+                config=topic_manager.topic_config(
+                    num_partitions=n, extra_config={"my.setting": "woo"}
+                ),
             )
-            for n in ["topic1", "topic2", "topic3"]
+            for n in range(3)
+        ]
+        changelogs = [
+            topic_manager.changelog_topic(
+                topic_name=topic_name, consumer_group="group", store_name="default"
+            )
+            for topic_name in topic_manager.topics
         ]
         topic_admin_mock.inspect_topics.return_value = {
-            "topic1": topics[0].config,
-            "topic2": topic_manager.topic_config(extra_config={"my.setting": "derp"}),
-            "topic3": topics[2].config,
+            topics[0].name: topics[0].config,
+            topics[1].name: topics[0].config,
+            topics[2].name: topic_manager.topic_config(
+                extra_config={"my.setting": "derp"}
+            ),
+            **{changelog.name: changelog.config for changelog in changelogs},
         }
         topic_manager.validate_all_topics()
 
     def test_validate_topics_fails(self, topic_manager_factory, topic_admin_mock):
+        """
+        Source topics and changelogs fail validation when missing, changelogs fail
+        when actual settings don't match its Topic object
+        """
         topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
-                name=n,
+                name=f"topic{n}",
                 config=topic_manager.topic_config(
-                    num_partitions=2, extra_config={"my.setting": "woo"}
+                    num_partitions=1, extra_config={"my.setting": "woo"}
                 ),
             )
-            for n in ["topic1", "topic2", "topic3"]
+            for n in range(3)
+        ]
+        changelogs = [
+            topic_manager.changelog_topic(
+                topic_name=topic_name, consumer_group="group", store_name="default"
+            )
+            for topic_name in topic_manager.topics
         ]
         topic_admin_mock.inspect_topics.return_value = {
-            "topic1": topic_manager.topic_config(
-                num_partitions=5, extra_config=topics[0].config.extra_config
+            topics[0].name: topics[0].config,
+            topics[1].name: topics[1].config,
+            topics[2].name: None,
+            changelogs[0].name: changelogs[0].config,
+            changelogs[1].name: topic_manager.topic_config(
+                num_partitions=500,
+                replication_factor=changelogs[1].config.replication_factor,
+                extra_config=changelogs[1].config.extra_config,
             ),
-            "topic2": topic_manager.topic_config(
-                num_partitions=5, extra_config={"my.setting": "derp"}
-            ),
-            "topic3": topics[2].config,
+            changelogs[2].name: None,
         }
 
         with pytest.raises(TopicValidationError) as e:
             topic_manager.validate_all_topics()
 
-        for topic in ["topic1", "topic2"]:
+        # failed topic names should show up in exception message
+        for topic in [topics[2].name, changelogs[1].name, changelogs[2].name]:
             assert topic in e.value.args[0]
 
     def test_topic_name_len_exceeded(self, topic_manager_factory):

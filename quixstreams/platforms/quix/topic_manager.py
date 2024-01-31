@@ -23,7 +23,7 @@ class QuixTopicManager(TopicManager):
     _topic_replication = 2
     _max_topic_name_len = 249
 
-    _changelog_extra_config_defaults = {}
+    _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
     _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
 
     def __init__(

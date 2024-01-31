@@ -310,14 +310,19 @@ class QuixKafkaConfigsBuilder:
         topic_name = self.strip_workspace_id_prefix(topic.name)
         cfg = topic.config
 
+        # settings that must be ints or Nones
+        ret_ms = cfg.extra_config.get("retention.ms")
+        ret_bytes = cfg.extra_config.get("retention.bytes")
+
         # an exception is raised (status code) if topic is not created successfully
         self.api.post_topic(
             topic_name=topic_name,
             workspace_id=self.workspace_id,
             topic_partitions=cfg.num_partitions,
             topic_rep_factor=cfg.replication_factor,
-            topic_ret_bytes=int(cfg.extra_config["retention.bytes"]),
-            topic_ret_minutes=int(cfg.extra_config["retention.ms"]) // 60000,
+            topic_ret_bytes=ret_bytes if ret_bytes is None else int(ret_bytes),
+            topic_ret_minutes=ret_ms if ret_ms is None else int(ret_ms) // 60000,
+            cleanup_policy=cfg.extra_config.get("cleanup.policy"),
         )
         logger.info(
             f"Creation of topic {topic_name} acknowledged by broker. Must wait "
