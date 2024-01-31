@@ -53,9 +53,6 @@ class TopicConfig:
     def as_dict(self):
         return dataclasses.asdict(self)
 
-    def as_dict(self):
-        return dataclasses.asdict(self)
-
 
 def _get_serializer(serializer: SerializerType) -> Serializer:
     if isinstance(serializer, str):
