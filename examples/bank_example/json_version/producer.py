@@ -45,7 +45,7 @@ with app.get_producer() as producer:
         producer.produce(
             topic=topic.name,
             headers=serialized.headers,
-            key=account_id,
+            key=serialized.key,
             value=serialized.value,
         )
         i += 1
