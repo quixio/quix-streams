@@ -23,7 +23,6 @@ from .metadata import (
     CHANGELOG_OFFSET_KEY,
     PREFIX_SEPARATOR,
     CHANGELOG_CF_MESSAGE_HEADER,
-    LATEST_TIMESTAMP_KEY,
 )
 from .serialization import (
     serialize,

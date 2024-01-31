@@ -95,6 +95,17 @@ class StateStoreManager:
             )
         return store
 
+    def _add_changelog(self, topic_name: str, store_name: str):
+        logger.debug(
+            f'State Manager: registering changelog for store "{store_name}" '
+            f'(topic "{topic_name}")'
+        )
+        self._changelog_manager.add_changelog(
+            topic_name=topic_name,
+            store_name=store_name,
+            consumer_group=self._group_id,
+        )
+
     def register_store(
         self, topic_name: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ):
@@ -111,20 +122,12 @@ class StateStoreManager:
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
             if self._changelog_manager:
-                logger.debug(
-                    f'State Manager: registering changelog for store "{store_name}" '
-                    f'(topic "{topic_name}")'
-                )
-                self._changelog_manager.add_changelog(
-                    topic_name=topic_name,
-                    store_name=store_name,
-                    consumer_group=self._group_id,
-                )
+                self._add_changelog(topic_name, store_name)
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
-                changelog_manager=self._changelog_manager,
                 base_dir=str(self._state_dir),
+                changelog_manager=self._changelog_manager,
                 options=self._rocksdb_options,
             )
 
@@ -143,11 +146,14 @@ class StateStoreManager:
         store = self._stores.get(topic_name, {}).get(store_name)
         if store:
             raise WindowedStoreAlreadyRegisteredError()
+        if self._changelog_manager:
+            self._add_changelog(topic_name, store_name)
 
         self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
             name=store_name,
             topic=topic_name,
             base_dir=str(self._state_dir),
+            changelog_manager=self._changelog_manager,
             options=self._rocksdb_options,
         )
 

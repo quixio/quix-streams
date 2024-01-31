@@ -4,6 +4,7 @@ from .partition import WindowedRocksDBStorePartition
 from .transaction import WindowedRocksDBPartitionTransaction
 from ..store import RocksDBStore
 from ..types import RocksDBOptionsType
+from ...recovery import ChangelogManager
 
 
 class WindowedRocksDBStore(RocksDBStore):
@@ -12,12 +13,14 @@ class WindowedRocksDBStore(RocksDBStore):
         name: str,
         topic: str,
         base_dir: str,
+        changelog_manager: Optional[ChangelogManager] = None,
         options: Optional[RocksDBOptionsType] = None,
     ):
         super().__init__(
             name=name,
             topic=topic,
             base_dir=base_dir,
+            changelog_manager=changelog_manager,
             options=options,
         )
 
