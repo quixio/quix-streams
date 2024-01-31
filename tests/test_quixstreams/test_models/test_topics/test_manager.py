@@ -31,10 +31,7 @@ class TestTopicManager:
 
         assert topic_configs.num_partitions == 5
         assert topic_configs.replication_factor == 1
-        assert topic_configs.extra_config == {
-            "a.config": "woo",
-            "another.config": "value",
-        }
+        assert topic_configs.extra_config == {"a.config": "woo"}
 
     def test_topic_with_config(self, topic_manager_factory):
         """
@@ -74,17 +71,6 @@ class TestTopicManager:
         assert topic.config.num_partitions == topic_manager._topic_partitions
         assert topic.config.replication_factor == topic_manager._topic_replication
 
-    def test_topic_no_auto_create_config(self, topic_manager_factory):
-        """
-        `Topic` is created with expected passed config.
-        """
-        topic_manager = topic_manager_factory()
-        topic_name = "my_topic"
-        topic = topic_manager.topic(name=topic_name, auto_create_config=False)
-
-        assert topic.name == topic_name
-        assert topic.config is None
-
     def test_changelog_topic(self, topic_manager_factory):
         """
         A changelog `Topic` is created with settings that match the source `Topic`
@@ -97,18 +83,18 @@ class TestTopicManager:
             config=topic_manager.topic_config(num_partitions=5),
         )
 
-        suffix = "default"
+        store_name = "default"
         group = "my_consumer_group"
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
-            suffix=suffix,
+            store_name=store_name,
             consumer_group=group,
         )
 
-        assert topic_manager.changelog_topics[topic.name][suffix] == changelog
+        assert topic_manager.changelog_topics[topic.name][store_name] == changelog
 
         assert changelog.name == topic_manager._format_changelog_name(
-            group, topic.name, suffix
+            group, topic.name, store_name
         )
         for attr in [
             "_key_serializer",
@@ -136,7 +122,7 @@ class TestTopicManager:
         )
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
-            suffix="default",
+            store_name="default",
             consumer_group="my_consumer_group",
         )
 
@@ -164,7 +150,7 @@ class TestTopicManager:
         )
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
-            suffix="default",
+            store_name="default",
             consumer_group="my_consumer_group",
         )
 
@@ -179,16 +165,6 @@ class TestTopicManager:
         topic_admin_mock.create_topics.assert_called_with(
             topics, timeout=topic_manager._create_timeout
         )
-
-    def test_create_topics_invalid_config(
-        self, topic_manager_factory, topic_admin_mock
-    ):
-        topic_manager = topic_manager_factory(topic_admin_mock)
-        topics = [topic_manager.topic(name="topic1", auto_create_config=False)]
-
-        with pytest.raises(ValueError):
-            topic_manager.create_topics(topics)
-        topic_admin_mock.create_topics.assert_not_called()
 
     def test_validate_topics(self, topic_manager_factory, topic_admin_mock):
         topic_manager = topic_manager_factory(topic_admin_mock)
@@ -246,5 +222,5 @@ class TestTopicManager:
         topic = topic_manager.topic("good_name")
         with pytest.raises(TopicNameLengthExceeded):
             topic_manager.changelog_topic(
-                topic_name=topic.name, consumer_group="a" * 300, suffix="suffix"
+                topic_name=topic.name, consumer_group="a" * 300, store_name="store"
             )

@@ -48,24 +48,7 @@ class TopicConfig:
 
     num_partitions: int
     replication_factor: int
-    extra_config: Optional[Mapping] = None
-
-    def update_extra_config(
-        self, defaults: Mapping = None, allowed: Optional[Iterable[str]] = None
-    ):
-        """
-        A convenience method for updating self.extra_config in specific ways.
-
-        :param defaults: Add these new configs without replacing any current
-        :param allowed: Remove any keys that are not in this provided list
-        """
-        extra_update = {
-            **(defaults or {}),
-            **(self.extra_config or {}),
-        }
-        if allowed is not None:
-            extra_update = {k: v for k, v in extra_update.items() if k in allowed}
-        self.extra_config = extra_update
+    extra_config: dict = dataclasses.field(default_factory=dict)
 
     def as_dict(self):
         return dataclasses.asdict(self)

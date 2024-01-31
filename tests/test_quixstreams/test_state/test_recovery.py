@@ -12,4 +12,4 @@ class TestChangelogManager:
         )
         with patch.object(topic_manager, "changelog_topic") as make_changelog:
             changelog_manager.add_changelog(**kwargs, store_name=store_name)
-        make_changelog.assert_called_with(**kwargs, suffix=store_name)
+        make_changelog.assert_called_with(**kwargs, store_name=store_name)

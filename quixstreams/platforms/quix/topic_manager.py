@@ -19,14 +19,10 @@ class QuixTopicManager(TopicManager):
     See methods for details.
     """
 
-    _topic_partitions = 2
+    _topic_partitions = 1
     _topic_replication = 2
     _max_topic_name_len = 249
 
-    _topic_extra_config_defaults = {
-        "retention.ms": f"{10080 * 60000}",  # minutes converted to ms
-        "retention.bytes": "52428800",
-    }
     _changelog_extra_config_defaults = {}
     _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
 
@@ -66,7 +62,9 @@ class QuixTopicManager(TopicManager):
         """
         return self._quix_config_builder.prepend_workspace_id(name)
 
-    def _format_changelog_name(self, consumer_group: str, topic_name: str, suffix: str):
+    def _format_changelog_name(
+        self, consumer_group: str, topic_name: str, store_name: str
+    ):
         """
         Generate the name of the changelog topic based on the following parameters.
 
@@ -74,7 +72,7 @@ class QuixTopicManager(TopicManager):
 
         :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
-        :param suffix: name of storage type (default, rolling10s, etc.)
+        :param store_name: name of storage type (default, rolling10s, etc.)
 
         :return: formatted topic name
         """
@@ -82,6 +80,6 @@ class QuixTopicManager(TopicManager):
         base_format = super()._format_changelog_name(
             consumer_group=strip_wid(consumer_group),
             topic_name=strip_wid(topic_name),
-            suffix=suffix,
+            store_name=store_name,
         )
         return self._quix_config_builder.prepend_workspace_id(base_format)

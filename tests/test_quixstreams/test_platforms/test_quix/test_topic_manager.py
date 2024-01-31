@@ -29,7 +29,7 @@ class TestQuixTopicManager:
 
         assert (
             topic_manager.changelog_topic(
-                topic_name=topic_name, suffix=store_name, consumer_group=consumer_id
+                topic_name=topic_name, store_name=store_name, consumer_group=consumer_id
             ).name
             == expected
         )
@@ -37,7 +37,7 @@ class TestQuixTopicManager:
         # also works with WID's appended in
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
-            suffix=store_name,
+            store_name=store_name,
             consumer_group=f"{workspace_id}-{consumer_id}",
         )
         assert changelog.name == expected

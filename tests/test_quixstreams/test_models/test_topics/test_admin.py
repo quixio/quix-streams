@@ -90,7 +90,7 @@ def test_create_topics_failure(
 
     topic_manager = topic_manager_factory()
     skip = topic_manager.topic(name=exist1)
-    ignore = topic_manager.topic(name=exist2)
+    exists = topic_manager.topic(name=exist2)
     create = topic_manager.topic(
         name=str(uuid4()),
         config=topic_manager.topic_config(extra_config={"retention.ms": "600000"}),
@@ -101,24 +101,30 @@ def test_create_topics_failure(
     )
 
     with pytest.raises(CreateTopicFailure) as e:
-        with caplog.at_level(level=logging.INFO):
+        with caplog.at_level(level=logging.DEBUG):
             with patch.object(topic_admin, "list_topics") as list_topics:
                 # mock "ignore" topic being created simultaneously by another instance
                 list_topics.return_value = {skip.name: "Metadata"}
-                topic_admin.create_topics([create, ignore, has_errors])
+                topic_admin.create_topics([create, exists, has_errors])
 
     error_str = str(e.value.args[0])
-    for expected in [has_errors.name, "bad_option", "not_real"]:
+    for expected in [has_errors.name, "bad_option"]:
         assert expected in error_str
 
-    assert f"created topics: ['{create.name}']" in caplog.text
-    assert f"already exist: ['{ignore.name}']" in caplog.text
+    assert f'Created topic "{create.name}"' in caplog.text
+    assert f'Topic "{exists.name}" already exists' in caplog.text
 
     cluster_topic_info = topic_admin.inspect_topics([create.name, has_errors.name])
     assert cluster_topic_info[has_errors.name] is None
     expected_topic_config = create.config
     actual_topic_config = cluster_topic_info[create.name]
-    actual_topic_config.update_extra_config(
-        allowed=list(expected_topic_config.extra_config.keys())
+
+    assert actual_topic_config.num_partitions == expected_topic_config.num_partitions
+    assert (
+        actual_topic_config.replication_factor
+        == expected_topic_config.replication_factor
     )
-    assert expected_topic_config == actual_topic_config
+    assert (
+        expected_topic_config.extra_config.items()
+        <= actual_topic_config.extra_config.items()
+    )

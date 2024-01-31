@@ -122,8 +122,6 @@ class TopicAdmin:
         :param timeout: How long to confirm topics before raising exception
         """
         exceptions = {}
-        successful = []
-        existed = []
         stop_time = time.time() + timeout
         while futures and time.time() < stop_time:
             time.sleep(1)
@@ -132,23 +130,19 @@ class TopicAdmin:
                 if future.done():
                     try:
                         future.result()
-                        successful.append(topic_name)
+                        logger.debug(f'Created topic "{topic_name}"')
                     except KafkaException as e:
                         # Topic was maybe created by another instance
                         if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
-                            existed.append(topic_name)
+                            logger.debug(f'Topic "{topic_name}" already exists')
                         else:
                             exceptions[topic_name] = e.args[0].str()
                     # Not sure how these get raised, but they are supposedly possible
                     except (TypeError, ValueError) as e:
                         exceptions[topic_name] = e
                     del futures[topic_name]
-        if successful:
-            logger.info(f"Successfully created topics: {successful}")
-        if existed:
-            logger.info(f"These topics already exist: {existed}")
         if exceptions:
-            raise CreateTopicFailure(exceptions)
+            raise CreateTopicFailure(f"Failed to create topics: {exceptions}")
         if futures:
             raise CreateTopicTimeout(
                 f"Timed out waiting for creation status for topics:\n"
@@ -156,7 +150,7 @@ class TopicAdmin:
             )
 
     def create_topics(
-        self, topics: List[Topic], timeout: int = 10, finalize_timeout: int = 20
+        self, topics: List[Topic], timeout: int = 10, finalize_timeout: int = 60
     ):
         """
         Create the given list of topics and confirm they are ready.
@@ -168,27 +162,23 @@ class TopicAdmin:
         :param timeout: timeout of the creation broker request
         :param finalize_timeout: the timeout of the topic finalizing ("ready")
         """
-        existing = self.list_topics().keys()
-        if not (topics := [topic for topic in topics if topic.name not in existing]):
-            logger.info("All topics already exist!")
+
+        existing_topics = self.list_topics().keys()
+        topics_to_create = [
+            topic for topic in topics if topic.name not in existing_topics
+        ]
+        if not topics_to_create:
             return
-        try:
-            self._finalize_create(
-                self._admin_client.create_topics(
-                    convert_topic_list(topics),
-                    request_timeout=timeout,
-                ),
-                finalize_timeout,
+
+        for topic in topics_to_create:
+            logger.debug(
+                f'Creating a new topic "{topic.name}" ({topic.config.as_dict()})'
             )
-        except CreateTopicFailure as e:
-            failure = {
-                topic.name: {
-                    "failure_reason": e.args[0][topic.name],
-                    "topic_config": topic.config.as_dict(),
-                }
-                for topic in topics
-                if topic.name in e.args[0]
-            }
-            raise CreateTopicFailure(
-                f"failed to create topics:\n{pprint.pformat(failure)}"
-            )
+
+        self._finalize_create(
+            self._admin_client.create_topics(
+                convert_topic_list(topics_to_create),
+                request_timeout=timeout,
+            ),
+            finalize_timeout,
+        )

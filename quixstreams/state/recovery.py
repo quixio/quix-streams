@@ -26,6 +26,6 @@ class ChangelogManager:
     def add_changelog(self, topic_name: str, store_name: str, consumer_group: str):
         self._topic_manager.changelog_topic(
             topic_name=topic_name,
-            suffix=store_name,
+            store_name=store_name,
             consumer_group=consumer_group,
         )
