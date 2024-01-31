@@ -168,8 +168,8 @@ class TestTopicManager:
 
     def test_validate_topics(self, topic_manager_factory, topic_admin_mock):
         """
-        Validation succeeds even when a source topic config or extra_config
-        differs from expected.
+        Validation succeeds, even when a source topic's Topic.config or extra_config
+        differs from its kafka topic settings.
         """
         topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
@@ -199,8 +199,9 @@ class TestTopicManager:
 
     def test_validate_topics_fails(self, topic_manager_factory, topic_admin_mock):
         """
-        Source topics and changelogs fail validation when missing, changelogs fail
-        when actual settings don't match its Topic object
+        Source topics and changelogs fail validation when missing.
+
+        Changelogs fail when kafka topic settings don't match it.
         """
         topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
