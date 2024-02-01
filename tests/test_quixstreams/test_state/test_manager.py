@@ -48,6 +48,11 @@ class TestStateStoreManager:
         state_manager.on_partition_revoke(tp)
         state_manager.on_partition_lost(tp)
 
+    def test_register_store(self, state_manager):
+        state_manager = state_manager
+        state_manager.register_store("my_topic", store_name="default")
+        assert "default" in state_manager.stores["my_topic"]
+
     def test_assign_revoke_partitions_stores_registered(self, state_manager):
         state_manager.register_store("topic1", store_name="store1")
         state_manager.register_store("topic1", store_name="store2")
@@ -248,3 +253,23 @@ class TestStateStoreManager:
                     "topic", partition=0, offset=0
                 ):
                     ...
+
+
+class TestStateStoreManagerChangelog:
+    def test_rebalance_partitions_stores_not_registered(self, state_manager_changelogs):
+        state_manager = state_manager_changelogs
+        tp = TopicPartitionStub("topic", 0)
+        # It's ok to rebalance partitions when there are no stores registered
+        state_manager.on_partition_assign(tp)
+        state_manager.on_partition_revoke(tp)
+        state_manager.on_partition_lost(tp)
+
+    def test_register_store(self, state_manager_changelogs):
+        state_manager = state_manager_changelogs
+        topic_manager = state_manager._changelog_manager._topic_manager
+        topic = topic_manager.topic(name="topic1")
+        store_name = "default"
+        state_manager.register_store(topic.name, store_name=store_name)
+
+        assert store_name in state_manager._stores[topic.name]
+        assert store_name in topic_manager.changelog_topics[topic.name]

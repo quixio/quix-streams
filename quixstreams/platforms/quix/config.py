@@ -4,20 +4,17 @@ import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional, Tuple, List, Iterable, Set, Mapping, Union, Dict
+from typing import Optional, Tuple, Set, Mapping, Union, List
 
 from requests import HTTPError
 
 from quixstreams.exceptions import QuixException
-from quixstreams.models import Topic
+from quixstreams.models.topics import Topic
 from .api import QuixPortalApiService
 
 logger = logging.getLogger(__name__)
 
-__all__ = (
-    "QuixKafkaConfigsBuilder",
-    "TopicCreationConfigs",
-)
+__all__ = ("QuixKafkaConfigsBuilder",)
 
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
@@ -58,6 +55,30 @@ class TopicCreationConfigs:
     retention_bytes: Optional[int] = None
     retention_minutes: Optional[int] = None
     optionals: Optional[Mapping] = None
+
+
+def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
+    """
+    Remove the workspace ID from a given string if it starts with it,
+    typically a topic or consumer group id
+
+    :param workspace_id: the workspace id
+    :param s: the string to append to
+    :return: the string with workspace_id prefix removed
+    """
+    return s[len(workspace_id) + 1 :] if s.startswith(workspace_id) else s
+
+
+def prepend_workspace_id(workspace_id: str, s: str) -> str:
+    """
+    Add the workspace ID as a prefix to a given string if it does not have it,
+    typically a topic or consumer group it
+
+    :param workspace_id: the workspace id
+    :param s: the string to append to
+    :return: the string with workspace_id prepended
+    """
+    return f"{workspace_id}-{s}" if not s.startswith(workspace_id) else s
 
 
 class QuixKafkaConfigsBuilder:
@@ -107,12 +128,6 @@ class QuixKafkaConfigsBuilder:
         self._quix_broker_settings = None
         self._workspace_meta = None
 
-        # TODO: consider a class extension with stuff that's only for Application.Quix
-        # since this is slowly building up.
-        # Application.Quix only
-        self.app_auto_create_topics: bool = True
-        self.create_topic_configs: Dict[str, TopicCreationConfigs] = {}
-
     class NoWorkspaceFound(QuixException):
         ...
 
@@ -161,25 +176,31 @@ class QuixKafkaConfigsBuilder:
             self.get_workspace_info()
         return self._workspace_meta
 
-    def strip_workspace_id(self, s: str) -> str:
-        return (
-            s[len(self._workspace_id) + 1 :] if s.startswith(self._workspace_id) else s
-        )
-
-    def append_workspace_id(self, s: str) -> str:
+    def strip_workspace_id_prefix(self, s: str) -> str:
         """
-        Add the workspace ID to a given string, typically a topic or consumer group id
+        Remove the workspace ID from a given string if it starts with it,
+        typically a topic or consumer group id
 
         :param s: the string to append to
-        :return: the string with workspace_id appended
+        :return: the string with workspace_id prefix removed
         """
-        return f"{self.workspace_id}-{s}" if not s.startswith(self.workspace_id) else s
+        return strip_workspace_id_prefix(self.workspace_id, s)
+
+    def prepend_workspace_id(self, s: str) -> str:
+        """
+        Add the workspace ID as a prefix to a given string if it does not have it,
+        typically a topic or consumer group it
+
+        :param s: the string to append to
+        :return: the string with workspace_id prepended
+        """
+        return prepend_workspace_id(self.workspace_id, s)
 
     def search_for_workspace(
         self, workspace_name_or_id: Optional[str] = None
     ) -> Optional[dict]:
         # TODO: there is more to do here to accommodate the new "environments" in v2
-        # as it stands now, the search wont work with Quix v2 platform correctly if
+        # as it stands now, the search won't work with Quix v2 platform correctly if
         # it's not a workspace_id
         """
         Search for a workspace given an expected workspace name or id.
@@ -287,21 +308,28 @@ class QuixKafkaConfigsBuilder:
                 f.write(certificate_bytes)
         return full_path.as_posix()
 
-    def _create_topic(self, topic: TopicCreationConfigs):
+    def _create_topic(self, topic: Topic):
         """
         The actual API call to create the topic
 
-        :param topic: a TopicCreationConfigs instance
+        :param topic: a TopicConfig instance
         """
-        topic_name = self.strip_workspace_id(topic.name)
+        topic_name = self.strip_workspace_id_prefix(topic.name)
+        cfg = topic.config
+
+        # settings that must be ints or Nones
+        ret_ms = cfg.extra_config.get("retention.ms")
+        ret_bytes = cfg.extra_config.get("retention.bytes")
+
         # an exception is raised (status code) if topic is not created successfully
         self.api.post_topic(
             topic_name=topic_name,
             workspace_id=self.workspace_id,
-            topic_partitions=topic.num_partitions,
-            topic_rep_factor=topic.replication_factor,
-            topic_ret_bytes=topic.retention_bytes,
-            topic_ret_minutes=topic.retention_minutes,
+            topic_partitions=cfg.num_partitions,
+            topic_rep_factor=cfg.replication_factor,
+            topic_ret_bytes=ret_bytes if ret_bytes is None else int(ret_bytes),
+            topic_ret_minutes=ret_ms if ret_ms is None else int(ret_ms) // 60000,
+            cleanup_policy=cfg.extra_config.get("cleanup.policy"),
         )
         logger.info(
             f"Creation of topic {topic_name} acknowledged by broker. Must wait "
@@ -329,18 +357,18 @@ class QuixKafkaConfigsBuilder:
         if topics:
             raise self.CreateTopicTimeout(
                 f"Creation succeeded, but waiting for 'Ready' status timed out "
-                f"for topics: {[self.strip_workspace_id(t) for t in topics]}"
+                f"for topics: {[self.strip_workspace_id_prefix(t) for t in topics]}"
             )
 
     def create_topics(
         self,
-        topics: Iterable[TopicCreationConfigs],
+        topics: List[Topic],
         finalize_timeout_seconds: Optional[int] = None,
     ):
         """
         Create topics in a Quix cluster.
 
-        :param topics: an iterable with TopicCreationConfigs instances
+        :param topics: a list of `Topic` objects
         :param finalize_timeout_seconds: How long to wait for the topics to be
         marked as "Ready" (and thus ready to produce to/consume from).
         """
@@ -348,17 +376,20 @@ class QuixKafkaConfigsBuilder:
         current_topics = {t["id"]: t for t in self.get_topics()}
         finalize = set()
         for topic in topics:
-            topic_name = self.append_workspace_id(topic.name)
-            exists = self.append_workspace_id(topic_name) in current_topics
+            topic_name = self.prepend_workspace_id(topic.name)
+            exists = self.prepend_workspace_id(topic_name) in current_topics
             if not exists or current_topics[topic_name]["status"] != "Ready":
                 if exists:
                     logger.debug(
-                        f"Topic {self.strip_workspace_id(topic_name)} exists but does "
+                        f"Topic {self.strip_workspace_id_prefix(topic_name)} exists but does "
                         f"not have 'Ready' status. Added to finalize check."
                     )
                 else:
                     try:
                         self._create_topic(topic)
+                    # TODO: more robust error handling to better identify issues
+                    # See how it's handled in the admin client and maybe consolidate
+                    # logic via TopicManager
                     except HTTPError as e:
                         # Topic was maybe created by another instance
                         if "already exists" not in e.response.text:
@@ -366,7 +397,7 @@ class QuixKafkaConfigsBuilder:
                 finalize.add(topic_name)
             else:
                 logger.debug(
-                    f"Topic {self.strip_workspace_id(topic_name)} exists and is Ready"
+                    f"Topic {self.strip_workspace_id_prefix(topic_name)} exists and is Ready"
                 )
         logger.info(
             "Topic creations acknowledged; waiting for 'Ready' statuses..."
@@ -378,22 +409,22 @@ class QuixKafkaConfigsBuilder:
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
 
-    def confirm_topics_exist(
-        self, topics: Iterable[Union[Topic, TopicCreationConfigs]]
-    ):
+    def confirm_topics_exist(self, topics: Union[List[Topic], List[str]]):
         """
         Confirm whether the desired set of topics exists in the Quix workspace.
 
-        :param topics: an iterable with Either Topic or TopicCreationConfigs instances
+        :param topics: a list of `Topic` or topic names
         """
+        if isinstance(topics[0], Topic):
+            topics = [topic.name for topic in topics]
         logger.info("Confirming required topics exist...")
         current_topics = [t["id"] for t in self.get_topics()]
         missing_topics = []
-        for topic in topics:
-            if topic.name not in current_topics:
-                missing_topics.append(self.strip_workspace_id(topic.name))
+        for name in topics:
+            if name not in current_topics:
+                missing_topics.append(self.strip_workspace_id_prefix(name))
             else:
-                logger.debug(f"Topic {self.strip_workspace_id(topic.name)} confirmed!")
+                logger.debug(f"Topic {self.strip_workspace_id_prefix(name)} confirmed!")
         if missing_topics:
             raise self.MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
@@ -483,6 +514,6 @@ class QuixKafkaConfigsBuilder:
         """
         return (
             self.get_confluent_broker_config(topics[0]),
-            [self.append_workspace_id(t) for t in topics],
-            self.append_workspace_id(consumer_group_id) if consumer_group_id else None,
+            [self.prepend_workspace_id(t) for t in topics],
+            self.prepend_workspace_id(consumer_group_id) if consumer_group_id else None,
         )
