@@ -1,8 +1,8 @@
 import contextlib
 import logging
-import pprint
 import signal
-from typing import Optional, List, Callable, Literal
+from functools import partial
+from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self

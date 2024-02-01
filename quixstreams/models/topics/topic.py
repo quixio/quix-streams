@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from typing import List, Optional, Any, Callable, Mapping, Iterable, Union
+from typing import List, Optional, Any, Callable, Mapping, Union
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
@@ -317,7 +317,3 @@ class Topic:
             latency=message.latency(),
             leader_epoch=message.leader_epoch(),
         )
-
-
-TopicList: TypeAlias = List[Topic]
-TopicMap: TypeAlias = Dict[str, Topic]
