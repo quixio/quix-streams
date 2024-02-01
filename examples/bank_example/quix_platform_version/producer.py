@@ -5,23 +5,17 @@ from time import sleep
 
 from dotenv import load_dotenv
 
-from quixstreams.kafka import Producer
+from quixstreams import Application
 from quixstreams.models.serializers import (
     QuixTimeseriesSerializer,
-    SerializationContext,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, TopicCreationConfigs
 
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
 
 
-# For non-"Application.Quix" platform producing, config is a bit manual right now
-topic = "qts__purchase_events"
-cfg_builder = QuixKafkaConfigsBuilder()
-cfgs, topics, _ = cfg_builder.get_confluent_client_configs([topic])
-topic = topics[0]
-cfg_builder.create_topics([TopicCreationConfigs(name=topic)])
-serialize = QuixTimeseriesSerializer()
+app = Application.Quix(consumer_group="ignore")
+serializer = QuixTimeseriesSerializer()
+topic = app.topic(name="qts__purchase_events", value_serializer=serializer)
 
 
 retailers = [
@@ -34,15 +28,12 @@ retailers = [
 ]
 
 
-# strings for key and headers will be serialized to bytes by default
 i = 0
-with Producer(
-    broker_address=cfgs.pop("bootstrap.servers"), extra_config=cfgs
-) as producer:
+# app.get_producer() automatically creates any topics made via `app.topic`
+with app.get_producer() as producer:
     while i < 10000:
         account = randint(0, 10)
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
-        headers = {**serialize.extra_headers, "uuid": str(uuid.uuid4())}
         value = {
             "account_id": account_id,
             "account_class": "Gold" if account >= 8 else "Silver",
@@ -51,13 +42,17 @@ with Producer(
             "Timestamp": time.time_ns(),
         }
         print(f"Producing value {value}")
-        producer.produce(
-            topic=topic,
-            headers=headers,
+        # with current functionality, we need to manually serialize our data
+        serialized = topic.serialize(
             key=account_id,
-            value=serialize(
-                value=value, ctx=SerializationContext(topic=topic, headers=headers)
-            ),
+            value=value,
+            headers={**serializer.extra_headers, "uuid": str(uuid.uuid4())},
+        )
+        producer.produce(
+            topic=topic.name,
+            headers=serialized.headers,
+            key=serialized.key,
+            value=serialized.value,
         )
         i += 1
         sleep(random())

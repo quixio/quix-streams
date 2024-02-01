@@ -502,6 +502,12 @@ class Consumer:
         """
         return self._consumer.set_sasl_credentials(username, password)
 
+    def incremental_assign(self, partitions: List[TopicPartition]):
+        return self._consumer.incremental_assign(partitions)
+
+    def incremental_unassign(self, partitions: List[TopicPartition]):
+        return self._consumer.incremental_unassign(partitions)
+
     def close(self):
         """
         Close down and terminate the Kafka Consumer.

@@ -18,7 +18,6 @@ from quixstreams.models import (
 )
 from quixstreams.platforms.quix import (
     QuixKafkaConfigsBuilder,
-    TopicCreationConfigs,
 )
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import (
@@ -59,10 +58,7 @@ class TestApplication:
             {"key": f"key-{i}", "value": f"value-{i}"} for i in range(total_messages)
         ]
 
-        app = app_factory(
-            auto_offset_reset="earliest",
-        )
-
+        app = app_factory(auto_offset_reset="earliest")
         topic_name, _ = topic_factory()
 
         # Produce messages
@@ -98,8 +94,6 @@ class TestApplication:
     def test_run_consume_and_produce(
         self,
         app_factory,
-        producer,
-        topic_factory,
         row_consumer_factory,
         executor,
         row_factory,
@@ -126,33 +120,31 @@ class TestApplication:
         )
 
         column_name = "root"
-        topic_in_name, _ = topic_factory()
-        topic_out_name, _ = topic_factory()
-
+        partition_num = 0
         topic_in = app.topic(
-            topic_in_name, value_deserializer=JSONDeserializer(column_name=column_name)
+            str(uuid.uuid4()),
+            value_deserializer=JSONDeserializer(column_name=column_name),
         )
         topic_out = app.topic(
-            topic_out_name,
+            str(uuid.uuid4()),
             value_serializer=JSONSerializer(),
             value_deserializer=JSONDeserializer(),
         )
-
         sdf = app.dataframe(topic_in)
         sdf = sdf.to_topic(topic_out)
 
         processed_count = 0
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {"key": b"key", "value": b'"value"'}
-        with producer:
+        data = {"key": b"key", "value": b'"value"', "partition": partition_num}
+        with app.get_producer() as producer:
             for _ in range(total_messages):
-                producer.produce(topic_in_name, **data)
+                producer.produce(topic_in.name, **data)
 
         done = Future()
 
         # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 10.0)
+        executor.submit(_stop_app_on_future, app, done, 15.0)
         app.run(sdf)
 
         # Check that all messages have been processed
@@ -160,7 +152,9 @@ class TestApplication:
 
         # Ensure that the right offset is committed
         with row_consumer_factory(auto_offset_reset="latest") as row_consumer:
-            committed, *_ = row_consumer.committed([TopicPartition(topic_in.name, 0)])
+            committed, *_ = row_consumer.committed(
+                [TopicPartition(topic_in.name, partition_num)]
+            )
             assert committed.offset == total_messages
 
         # confirm messages actually ended up being produced by the app
@@ -176,12 +170,11 @@ class TestApplication:
             assert row.key == data["key"]
             assert row.value == {column_name: loads(data["value"].decode())}
 
-    def test_run_consumer_error_raised(self, app_factory, topic_factory, executor):
+    def test_run_consumer_error_raised(self, app_factory, executor):
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         app = app_factory(auto_offset_reset="error")
-        topic_name, _ = topic_factory()
         topic = app.topic(
-            topic_name, value_deserializer=JSONDeserializer(column_name="root")
+            str(uuid.uuid4()), value_deserializer=JSONDeserializer(column_name="root")
         )
         sdf = app.dataframe(topic)
 
@@ -190,16 +183,13 @@ class TestApplication:
         with pytest.raises(KafkaMessageError):
             app.run(sdf)
 
-    def test_run_deserialization_error_raised(
-        self, app_factory, producer, topic_factory, consumer, executor
-    ):
+    def test_run_deserialization_error_raised(self, app_factory, executor):
         app = app_factory(auto_offset_reset="earliest")
-        topic_name, _ = topic_factory()
-        topic = app.topic(topic_name, value_deserializer=DoubleDeserializer())
+        topic = app.topic(str(uuid.uuid4()), value_deserializer=DoubleDeserializer())
 
         # Produce a string while double is expected
-        with producer:
-            producer.produce(topic=topic_name, value=b"abc")
+        with app.get_producer() as producer:
+            producer.produce(topic=topic.name, value=b"abc")
 
         sdf = app.dataframe(topic)
 
@@ -208,9 +198,7 @@ class TestApplication:
             executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
-    def test_run_consumer_error_suppressed(
-        self, app_factory, producer, topic_factory, consumer, executor
-    ):
+    def test_run_consumer_error_suppressed(self, app_factory, executor):
         done = Future()
         polled = 0
 
@@ -223,8 +211,7 @@ class TestApplication:
             return True
 
         app = app_factory(on_consumer_error=on_consumer_error)
-        topic_name, _ = topic_factory()
-        topic = app.topic(topic_name)
+        topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
 
         with patch.object(RowConsumer, "poll") as mocked:
@@ -235,13 +222,10 @@ class TestApplication:
             app.run(sdf)
         assert polled > 1
 
-    def test_run_processing_error_raised(
-        self, app_factory, topic_factory, producer, executor
-    ):
+    def test_run_processing_error_raised(self, app_factory, executor):
         app = app_factory(auto_offset_reset="earliest")
 
-        topic_name, _ = topic_factory()
-        topic = app.topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
         sdf = app.dataframe(topic)
 
         def fail(*args):
@@ -249,16 +233,14 @@ class TestApplication:
 
         sdf = sdf.apply(fail)
 
-        with producer:
+        with app.get_producer() as producer:
             producer.produce(topic=topic.name, value=b'{"field":"value"}')
 
         with pytest.raises(ValueError):
             executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
-    def test_run_processing_error_suppressed(
-        self, app_factory, topic_factory, producer, executor
-    ):
+    def test_run_processing_error_suppressed(self, app_factory, executor):
         produced = 2
         consumed = 0
         done = Future()
@@ -274,8 +256,7 @@ class TestApplication:
         app = app_factory(
             auto_offset_reset="earliest", on_processing_error=on_processing_error
         )
-        topic_name, _ = topic_factory()
-        topic = app.topic(topic_name, value_deserializer=JSONDeserializer())
+        topic = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
         sdf = app.dataframe(topic)
 
         def fail(*args):
@@ -283,7 +264,7 @@ class TestApplication:
 
         sdf = sdf.apply(fail)
 
-        with producer:
+        with app.get_producer() as producer:
             for i in range(produced):
                 producer.produce(topic=topic.name, value=b'{"field":"value"}')
 
@@ -292,22 +273,20 @@ class TestApplication:
         app.run(sdf)
         assert produced == consumed
 
-    def test_run_producer_error_raised(
-        self, app_factory, topic_factory, producer, topic_json_serdes_factory, executor
-    ):
+    def test_run_producer_error_raised(self, app_factory, producer, executor):
         app = app_factory(
             auto_offset_reset="earliest",
             producer_extra_config={"message.max.bytes": 1000},
         )
 
-        topic_in_name, _ = topic_factory()
-        topic_out_name, _ = topic_factory()
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
-        topic_out = app.topic(topic_out_name, value_serializer=JSONSerializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
+        topic_out = app.topic(str(uuid.uuid4()), value_serializer=JSONSerializer())
+        app._topic_manager.create_all_topics()
 
         sdf = app.dataframe(topic_in)
         sdf = sdf.to_topic(topic_out)
 
+        # use separate producer instance which won't share extra_config
         with producer:
             producer.produce(topic_in.name, dumps({"field": 1001 * "a"}))
 
@@ -315,29 +294,23 @@ class TestApplication:
             executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
-    def test_run_serialization_error_raised(
-        self, app_factory, producer, topic_factory, executor
-    ):
+    def test_run_serialization_error_raised(self, app_factory, executor):
         app = app_factory(auto_offset_reset="earliest")
 
-        topic_in_name, _ = topic_factory()
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
-        topic_out_name, _ = topic_factory()
-        topic_out = app.topic(topic_out_name, value_serializer=DoubleSerializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
+        topic_out = app.topic(str(uuid.uuid4()), value_serializer=DoubleSerializer())
 
         sdf = app.dataframe(topic_in)
         sdf = sdf.to_topic(topic_out)
 
-        with producer:
+        with app.get_producer() as producer:
             producer.produce(topic_in.name, b'{"field":"value"}')
 
         with pytest.raises(SerializationError):
             executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
-    def test_run_producer_error_suppressed(
-        self, app_factory, producer, topic_factory, consumer, executor
-    ):
+    def test_run_producer_error_suppressed(self, app_factory, executor):
         produce_input = 2
         produce_output_attempts = 0
         done = Future()
@@ -353,15 +326,13 @@ class TestApplication:
         app = app_factory(
             auto_offset_reset="earliest", on_producer_error=on_producer_error
         )
-        topic_in_name, _ = topic_factory()
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
-        topic_out_name, _ = topic_factory()
-        topic_out = app.topic(topic_out_name, value_serializer=DoubleSerializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
+        topic_out = app.topic(str(uuid.uuid4()), value_serializer=DoubleSerializer())
 
         sdf = app.dataframe(topic_in)
         sdf = sdf.to_topic(topic_out)
 
-        with producer:
+        with app.get_producer() as producer:
             for _ in range(produce_input):
                 producer.produce(topic_in.name, b'{"field":"value"}')
 
@@ -382,21 +353,85 @@ class TestApplication:
         sdf = app.dataframe(topic)
         assert sdf
 
+    def test_topic_auto_create_true(self, app_factory):
+        """
+        Topics are auto-created when auto_create_topics=True
+        """
+        app = app_factory(auto_create_topics=True)
+        topic_manager = app._topic_manager
+        _ = [app.topic("topic_in"), app.topic("topic_out")]
+
+        with patch.object(topic_manager, "create_all_topics") as create:
+            with patch.object(topic_manager, "validate_all_topics"):
+                app._setup_topics()
+
+        create.assert_called()
+
+    def test_topic_auto_create_false(self, app_factory):
+        """
+        Topics are not auto-created when auto_create_topics=False
+        """
+        app = app_factory(auto_create_topics=False)
+        topic_manager = app._topic_manager
+        _ = [app.topic("topic_in"), app.topic("topic_out")]
+
+        with patch.object(topic_manager, "create_all_topics") as create:
+            with patch.object(topic_manager, "validate_all_topics"):
+                app._setup_topics()
+
+        create.assert_not_called()
+
+    def test_topic_validation(self, app_factory):
+        """
+        Topics are validated
+        """
+        app = app_factory()
+        topic_manager = app._topic_manager
+
+        with patch.object(topic_manager, "validate_all_topics") as validate:
+            with patch.object(topic_manager, "create_all_topics"):
+                app._setup_topics()
+
+        validate.assert_called()
+
+    def test_topic_setup_on_get_producer(self, app_factory):
+        """
+        Topics are set up according to app settings when get_producer is called
+        """
+        app = app_factory()
+        with patch.object(app, "_setup_topics") as setup_topics:
+            with app.get_producer():
+                ...
+        setup_topics.assert_called()
+
+    def test_topic_setup_on_get_consumer(self, app_factory):
+        """
+        Topics are set up according to app settings when get_consumer is called
+        """
+        app = app_factory()
+        with patch.object(app, "_setup_topics") as setup_topics:
+            with app.get_consumer():
+                ...
+        setup_topics.assert_called()
+
 
 class TestQuixApplication:
     def test_init(self):
+        def cfg():
+            return {
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "bootstrap.servers": "address1,address2",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+                "ssl.endpoint.identification.algorithm": "none",
+            }
+
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg = {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
-            "bootstrap.servers": "address1,address2",
-            "sasl.username": "my-username",
-            "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
-            "ssl.endpoint.identification.algorithm": "none",
-        }
-        cfg_builder.get_confluent_broker_config.return_value = cfg
-        cfg_builder.append_workspace_id.return_value = "my_ws-c_group"
+        cfg_builder.get_confluent_broker_config.side_effect = cfg
+        cfg_builder.prepend_workspace_id.return_value = "my_ws-c_group"
+        cfg_builder.strip_workspace_id_prefix.return_value = "c_group"
         app = Application.Quix(
             quix_config_builder=cfg_builder,
             consumer_group="c_group",
@@ -406,103 +441,37 @@ class TestQuixApplication:
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        assert cfg.items() <= app._producer._producer_config.items()
-        assert cfg.items() <= app._consumer._consumer_config.items()
+        assert cfg().items() <= app._producer._producer_config.items()
+        assert cfg().items() <= app._consumer._consumer_config.items()
 
         assert app._producer._producer_config["extra"] == "config"
         assert app._consumer._consumer_config["extra"] == "config"
         assert app._consumer._consumer_config["group.id"] == "my_ws-c_group"
-        cfg_builder.append_workspace_id.assert_called_with("c_group")
+        cfg_builder.prepend_workspace_id.assert_called_with("c_group")
 
-    def test_topic_default(self, quix_app_factory):
+    def test_topic_name_and_config(self, quix_app_factory):
         """
         Topic names created from Quix apps are prefixed by the workspace id
+        Topic config has provided values else defaults
         """
         app = quix_app_factory()
         builder = app._quix_config_builder
+        topic_manager = app._topic_manager
 
         initial_topic_name = "input_topic"
-        topic = app.topic(initial_topic_name)
-        expected_name = f"{builder.workspace_id}-{initial_topic_name}"
-        assert topic.name == expected_name
-        assert builder.create_topic_configs[expected_name].name == expected_name
-
-    def test_topic_config(self, quix_app_factory):
-        """
-        Topic names created from Quix apps are prefixed by the workspace id
-        """
-        app = quix_app_factory()
-        builder = app._quix_config_builder
-
-        initial_topic_name = "input_topic"
+        topic_partitions = 5
         topic = app.topic(
             initial_topic_name,
-            creation_configs=TopicCreationConfigs(name="billy bob", num_partitions=5),
+            config=topic_manager.topic_config(num_partitions=topic_partitions),
         )
         expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        expected_topic = topic_manager.topics[expected_name]
         assert topic.name == expected_name
-        assert builder.create_topic_configs[expected_name].name == expected_name
-        assert builder.create_topic_configs[expected_name].num_partitions == 5
-
-    def test_topic_auto_create_false_topic_confirmation(self, quix_app_factory):
-        """
-        Topics are confirmed when auto_create_topics=False
-        """
-        app = quix_app_factory(auto_create_topics=False)
-        builder = app._quix_config_builder
-        topics = [app.topic("topic_in"), app.topic("topic_out")]
-
-        app._quix_runtime_init()
-
-        actual_call_arg = [_ for _ in builder.confirm_topics_exist.call_args[0][0]]
-        assert actual_call_arg == list(builder.create_topic_configs.values())
-        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
-
-    def test_topic_auto_create_true(self, quix_app_factory):
-        """
-        Topics are created when auto_create_topics=True
-        """
-        app = quix_app_factory(auto_create_topics=True)
-        builder = app._quix_config_builder
-        topics = [app.topic("topic_in"), app.topic("topic_out")]
-
-        app._quix_runtime_init()
-
-        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
-        assert actual_call_arg == list(builder.create_topic_configs.values())
-        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
-
-    def test_topic_auto_create_on_get_producer(self, quix_app_factory):
-        """
-        Test that topics are auto-created when calling get_producer with auto_create_topics=True in a Quix app.
-        """
-        app = quix_app_factory(auto_create_topics=True)
-        builder = app._quix_config_builder
-        topics = [app.topic("topic_in"), app.topic("topic_out")]
-
-        with app.get_producer():
-            ...
-
-        # Verify that create_topics was called with the expected topics
-        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
-        assert actual_call_arg == list(builder.create_topic_configs.values())
-        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
-
-    def test_topic_auto_create_on_get_consumer(self, quix_app_factory):
-        """
-        Test that topics are auto-created when calling get_consumer with auto_create_topics=True in a Quix app.
-        """
-        app = quix_app_factory(auto_create_topics=True)
-        builder = app._quix_config_builder
-        topics = [app.topic("topic_in"), app.topic("topic_out")]
-
-        with app.get_consumer():
-            ...
-
-        # Verify that create_topics was called with the expected topics
-        actual_call_arg = [_ for _ in builder.create_topics.call_args[0][0]]
-        assert actual_call_arg == list(builder.create_topic_configs.values())
-        assert {c.name for c in actual_call_arg} == {t.name for t in topics}
+        assert expected_name in topic_manager.topics
+        assert (
+            expected_topic.config.replication_factor == topic_manager._topic_replication
+        )
+        assert expected_topic.config.num_partitions == topic_partitions
 
     def test_consumer_extra_config(self, app_factory):
         """
@@ -540,9 +509,8 @@ class TestQuixApplication:
         runs on Quix (the "Quix__Deployment__Id" env var is set),
         but the "State Management" flag is disabled for the deployment.
         """
-        topic_name, _ = topic_factory()
-        app = quix_app_factory(workspace_id="")
-        topic = app.topic(topic_name)
+        app = quix_app_factory()
+        topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
         sdf = sdf.apply(lambda x, state: x, stateful=True)
 
@@ -554,8 +522,9 @@ class TestQuixApplication:
             QuixEnvironment.STATE_MANAGEMENT_ENABLED,
             "",
         )
+
         with pytest.warns(RuntimeWarning) as warned:
-            executor.submit(_stop_app_on_timeout, app, 5.0)
+            executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
         warning = str(warned.list[0].message)
@@ -584,8 +553,6 @@ class TestApplicationWithState:
     def test_run_stateful_success(
         self,
         app_factory,
-        producer,
-        topic_factory,
         executor,
         state_manager_factory,
         tmp_path,
@@ -597,15 +564,14 @@ class TestApplicationWithState:
 
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
         app = app_factory(
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
             state_dir=state_dir,
         )
 
-        topic_in_name, _ = topic_factory()
-
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
         def count(_, state: State):
@@ -621,10 +587,14 @@ class TestApplicationWithState:
         total_messages = 3
         # Produce messages to the topic and flush
         message_key = b"key"
-        data = {"key": message_key, "value": dumps({"key": "value"})}
-        with producer:
+        data = {
+            "key": message_key,
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
             for _ in range(total_messages):
-                producer.produce(topic_in_name, **data)
+                producer.produce(topic_in.name, **data)
 
         total_consumed = Future()
 
@@ -638,10 +608,10 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=0)
+            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=0) as tx:
+        with store.start_partition_transaction(partition=partition_num) as tx:
             # All keys in state must be prefixed with the message key
             with tx.with_prefix(message_key):
                 assert tx.get("total") == total_consumed.result()
@@ -649,23 +619,20 @@ class TestApplicationWithState:
     def test_run_stateful_processing_fails(
         self,
         app_factory,
-        producer,
-        topic_factory,
         executor,
         state_manager_factory,
         tmp_path,
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
         app = app_factory(
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
             state_dir=state_dir,
         )
 
-        topic_in_name, _ = topic_factory()
-
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
         def count(_, state: State):
@@ -683,10 +650,14 @@ class TestApplicationWithState:
 
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {"key": b"key", "value": dumps({"key": "value"})}
-        with producer:
+        data = {
+            "key": b"key",
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
             for _ in range(total_messages):
-                producer.produce(topic_in_name, **data)
+                producer.produce(topic_in.name, **data)
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, failed, 10.0)
@@ -699,23 +670,22 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=0)
+            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=0) as tx:
+        with store.start_partition_transaction(partition=partition_num) as tx:
             assert tx.get("total") is None
 
     def test_run_stateful_suppress_processing_errors(
         self,
         app_factory,
-        producer,
-        topic_factory,
         executor,
         state_manager_factory,
         tmp_path,
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
         app = app_factory(
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
@@ -724,8 +694,7 @@ class TestApplicationWithState:
             on_processing_error=lambda *args: True,
         )
 
-        topic_in_name, _ = topic_factory()
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
         def count(_, state: State):
@@ -743,10 +712,14 @@ class TestApplicationWithState:
         total_messages = 3
         message_key = b"key"
         # Produce messages to the topic and flush
-        data = {"key": message_key, "value": dumps({"key": "value"})}
-        with producer:
+        data = {
+            "key": message_key,
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
             for _ in range(total_messages):
-                producer.produce(topic_in_name, **data)
+                producer.produce(topic_in.name, **data)
 
         total_consumed = Future()
 
@@ -761,32 +734,30 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=0)
+            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=0) as tx:
+        with store.start_partition_transaction(partition=partition_num) as tx:
             with tx.with_prefix(message_key):
                 assert tx.get("total") == total_consumed.result()
 
     def test_on_assign_topic_offset_behind_warning(
         self,
         app_factory,
-        producer,
-        topic_factory,
         executor,
         state_manager_factory,
         tmp_path,
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
+        partition_num = 0
         app = app_factory(
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
             state_dir=state_dir,
         )
 
-        topic_in_name, _ = topic_factory()
-        topic_in = app.topic(topic_in_name, value_deserializer=JSONDeserializer())
+        topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
 
         # Set the store partition offset to 9999
         state_manager = state_manager_factory(
@@ -795,14 +766,14 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in.name, "default")
             state_partitions = state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in.name, partition=0)
+                TopicPartitionStub(topic=topic_in.name, partition=partition_num)
             )
             with state_manager.start_store_transaction(
-                topic=topic_in.name, partition=0, offset=9999
+                topic=topic_in.name, partition=partition_num, offset=9999
             ):
                 tx = state_manager.get_store_transaction()
                 tx.set("key", "value")
-            assert state_partitions[0].get_processed_offset() == 9999
+            assert state_partitions[partition_num].get_processed_offset() == 9999
 
         # Define some stateful function so the App assigns store partitions
         done = Future()
@@ -812,9 +783,13 @@ class TestApplicationWithState:
         )
 
         # Produce a message to the topic and flush
-        data = {"key": b"key", "value": dumps({"key": "value"})}
-        with producer:
-            producer.produce(topic_in_name, **data)
+        data = {
+            "key": b"key",
+            "value": dumps({"key": "value"}),
+            "partition": partition_num,
+        }
+        with app.get_producer() as producer:
+            producer.produce(topic_in.name, **data)
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, done, 10.0)
@@ -879,3 +854,11 @@ class TestApplicationWithState:
                 # All keys in state must be prefixed with the message key
                 with tx.with_prefix(tx_prefix):
                     assert tx.get("my_state") is None
+
+    def test_app_use_changelog_false(self, app_factory):
+        """
+        `Application`s StateStoreManager should not have a TopicManager if
+        use_changelog_topics is set to `False`.
+        """
+        app = app_factory(use_changelog_topics=False)
+        assert app._state_manager._changelog_manager is None
