@@ -29,7 +29,7 @@ def changelog_writer_factory(changelog_manager_factory):
 
         topic_manager.topic(topic_name)  # changelogs depend on topic objects existing
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name, suffix=store_name, consumer_group="group"
+            topic_name=topic_name, store_name=store_name, consumer_group="group"
         )
         if topic_admin:
             topic_manager.create_topics([changelog_topic])

@@ -241,7 +241,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param key: key to delete from DB
         :param cf_name: rocksdb column family name. Default - "default"
         """
-        # TODO: decide if we want more refined delete logic?
         key_serialized = self._serialize_key(key)
         try:
             cf_handle = self._partition.get_column_family_handle(cf_name)

@@ -238,6 +238,7 @@ class TestRocksDBPartitionTransaction:
                 for i in range(db_writes)
             ]
         )
+        assert changelog_writer_patched.produce.call_count == db_writes
         assert tx.completed
         assert tx._changelog_writer == changelog_writer_patched
         assert rocksdb_partition.get_changelog_offset() == db_writes
@@ -269,6 +270,7 @@ class TestRocksDBPartitionTransaction:
                 ),
             ]
         )
+        assert changelog_writer_patched.produce.call_count == 2
         assert tx.completed
         assert tx._changelog_writer == changelog_writer_patched
         assert rocksdb_partition.get_changelog_offset() == 2
@@ -304,6 +306,7 @@ class TestRocksDBPartitionTransaction:
                 )
             ]
         )
+        assert changelog_writer_patched.produce.call_count == db_writes
         assert tx.completed
         assert tx._changelog_writer == changelog_writer_patched
         assert rocksdb_partition.get_changelog_offset() == db_writes

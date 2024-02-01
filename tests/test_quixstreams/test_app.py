@@ -862,3 +862,196 @@ class TestApplicationWithState:
         """
         app = app_factory(use_changelog_topics=False)
         assert app._state_manager._changelog_manager is None
+
+
+class TestAppRecovery:
+    def test_changelog_recovery_default_store(
+        self, app_factory, executor, tmp_path, state_manager_factory
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        topic_name = str(uuid.uuid4())
+        sum_key = "my_sum"
+        store_name = "default"
+        msg_int_value = 10
+        partition_msg_count = {0: 4, 1: 2}
+
+        def sum_value(value: dict, state: State):
+            new_value = state.get(sum_key, 0) + value["my_value"]
+            state.set(sum_key, new_value)
+            return new_value
+
+        def get_app():
+            app = app_factory(
+                auto_offset_reset="earliest",
+                use_changelog_topics="True",
+                consumer_group=consumer_group,
+                state_dir=state_dir,
+            )
+            topic = app.topic(
+                topic_name, config=app._topic_manager.topic_config(num_partitions=2)
+            )
+            sdf = app.dataframe(topic)
+            sdf = sdf.apply(sum_value, stateful=True)
+            return app, sdf, topic
+
+        def validate_state(before_recovery: bool = True):
+            with state_manager_factory(
+                group_id=consumer_group,
+                state_dir=state_dir,
+            ) as state_manager:
+                state_manager.register_store(topic.name, store_name)
+                for p_num in partition_msg_count:
+                    state_manager.on_partition_assign(
+                        TopicPartitionStub(topic=topic.name, partition=p_num)
+                    )
+                store = state_manager.get_store(topic=topic.name, store_name=store_name)
+                for p_num, count in partition_msg_count.items():
+                    if before_recovery:
+                        assert (
+                            store._partitions[p_num].get_processed_offset() == count - 1
+                        )
+                    assert store._partitions[p_num].get_changelog_offset() == count
+
+                    with store.start_partition_transaction(partition=p_num) as tx:
+                        # All keys in state must be prefixed with the message key
+                        with tx.with_prefix(f"key{p_num}".encode()):
+                            assert tx.get(sum_key) == count * msg_int_value
+
+                if before_recovery:
+                    for p_num in partition_msg_count:
+                        state_manager.on_partition_revoke(
+                            TopicPartitionStub(topic=topic.name, partition=p_num)
+                        )
+                    state_manager.clear_stores()
+
+        app, sdf, topic = get_app()
+        # Produce messages to the topic and flush
+        with app.get_producer() as producer:
+            for p_num, count in partition_msg_count.items():
+                serialized = topic.serialize(
+                    key=f"key{p_num}".encode(), value={"my_value": msg_int_value}
+                )
+                data = {
+                    "key": serialized.key,
+                    "value": serialized.value,
+                    "partition": p_num,
+                }
+                for _ in range(count):
+                    producer.produce(topic.name, **data)
+
+        # run app to populate state
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+        # validate and then delete the state
+        validate_state()
+
+        # run the app again and validate the recovered state
+        app, sdf, topic = get_app()
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+        validate_state(before_recovery=False)
+
+    @pytest.mark.skip("Still WIP")
+    def test_changelog_recovery_window_store(
+        self, app_factory, executor, tmp_path, state_manager_factory
+    ):
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        topic_name = str(uuid.uuid4())
+        store_name = "window"
+        window_duration_ms = 6000
+        window_step_ms = 2000
+        msg_int_value = 10
+        partition_msg_count = {0: 4, 1: 2}
+
+        def get_app():
+            app = app_factory(
+                auto_offset_reset="earliest",
+                use_changelog_topics="True",
+                consumer_group=consumer_group,
+                state_dir=state_dir,
+            )
+            topic = app.topic(
+                topic_name, config=app._topic_manager.topic_config(num_partitions=2)
+            )
+            sdf = app.dataframe(topic)
+            sdf = sdf.apply(lambda row: row["my_value"])
+            sdf = (
+                sdf.hopping_window(
+                    duration_ms=window_duration_ms,
+                    step_ms=window_step_ms,
+                    name=store_name,
+                )
+                .sum()
+                .final()
+            )
+            sdf = sdf.apply(
+                lambda value: {
+                    "sum": value["value"],
+                    "window": (value["start"], value["end"]),
+                }
+            )
+            return app, sdf, topic
+
+        def validate_state(before_recovery: bool = True):
+            with state_manager_factory(
+                group_id=consumer_group, state_dir=state_dir
+            ) as state_manager:
+                state_manager.register_store(topic.name, store_name)
+                for p_num in partition_msg_count:
+                    state_manager.on_partition_assign(
+                        TopicPartitionStub(topic=topic.name, partition=p_num)
+                    )
+                store = state_manager.get_store(topic=topic.name, store_name=store_name)
+                for p_num, count in partition_msg_count.items():
+                    if before_recovery:
+                        assert (
+                            store._partitions[p_num].get_processed_offset() == count - 1
+                        )
+                    assert store._partitions[p_num].get_changelog_offset() == (
+                        count * (window_duration_ms // window_step_ms)
+                    )
+
+                    # with store.start_partition_transaction(partition=p_num) as tx:
+                    #     # All keys in state must be prefixed with the message key
+                    #     with tx.with_prefix(f"key{p_num}".encode()):
+                    #         assert tx.get(sum_key) == count * msg_int_value
+
+                if before_recovery:
+                    for p_num in partition_msg_count:
+                        state_manager.on_partition_revoke(
+                            TopicPartitionStub(topic=topic.name, partition=p_num)
+                        )
+                    state_manager.clear_stores()
+
+        app, sdf, topic = get_app()
+        # Produce messages to the topic and flush
+        with app.get_producer() as producer:
+            for p_num, count in partition_msg_count.items():
+                serialized = topic.serialize(
+                    key=f"key{p_num}".encode(), value={"my_value": msg_int_value}
+                )
+                data = {
+                    "key": serialized.key,
+                    "value": serialized.value,
+                    "partition": p_num,
+                }
+                for _ in range(count):
+                    producer.produce(topic.name, **data)
+
+        # run app to populate state
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run(sdf)
+        # validate and then delete the state
+        validate_state()
+
+        # run the app again and validate the recovered state
+        app, sdf, topic = get_app()
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run(sdf)
+        validate_state(before_recovery=False)

@@ -3,7 +3,6 @@ from unittest.mock import patch, create_autospec
 import pytest
 import uuid
 
-from quixstreams.models import Topic
 from quixstreams.state.recovery import (
     ChangelogWriter,
     RecoveryPartition,
@@ -71,7 +70,7 @@ class TestRecoveryPartition:
 
 class TestChangelogWriter:
     def test_produce(
-        self, topic_manager_admin_factory, row_producer_factory, consumer_factory
+        self, topic_manager_factory, row_producer_factory, consumer_factory
     ):
         p_num = 2
         cf_header = "my_cf_header"
@@ -82,7 +81,7 @@ class TestChangelogWriter:
             "headers": [(cf_header, cf.encode())],
             "partition": p_num,
         }
-        topic_manager = topic_manager_admin_factory()
+        topic_manager = topic_manager_factory()
         changelog = topic_manager.topic(
             name=str(uuid.uuid4()),
             key_serializer="bytes",
@@ -131,7 +130,7 @@ class TestChangelogManager:
         p_num = 1
         topic_manager.topic(topic_name)  # changelogs depend on topic objects existing
         changelog = topic_manager.changelog_topic(
-            topic_name=topic_name, suffix=store_name, consumer_group="group"
+            topic_name=topic_name, store_name=store_name, consumer_group="group"
         )
 
         writer = changelog_manager.get_writer(
@@ -150,19 +149,19 @@ class TestChangelogManager:
         recovery_manager = changelog_manager._recovery_manager
 
         topic_manager.topic(topic_name)
-        suffix_partitions = {}
+        store_partitions = {}
         changelog_partitions = {}
         for store_name in store_names:
             changelog = topic_manager.changelog_topic(
-                topic_name=topic_name, suffix=store_name, consumer_group="group"
+                topic_name=topic_name, store_name=store_name, consumer_group="group"
             )
-            suffix_partitions[store_name] = create_autospec(StorePartition)()
-            changelog_partitions[changelog.name] = suffix_partitions[store_name]
+            store_partitions[store_name] = create_autospec(StorePartition)()
+            changelog_partitions[changelog.name] = store_partitions[store_name]
 
         changelog_manager.assign_partition(
             topic_name=topic_name,
             partition_num=partition_num,
-            store_partitions=suffix_partitions,
+            store_partitions=store_partitions,
         )
 
         recovery_manager.assign_partitions.assert_called_with(
@@ -182,7 +181,7 @@ class TestChangelogManager:
         topic_manager.topic(topic_name)
         for store_name in store_names:
             topic_manager.changelog_topic(
-                topic_name=topic_name, suffix=store_name, consumer_group="group"
+                topic_name=topic_name, store_name=store_name, consumer_group="group"
             )
 
         changelog_manager.revoke_partition(
