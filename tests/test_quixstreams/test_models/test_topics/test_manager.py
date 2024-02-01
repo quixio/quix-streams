@@ -5,8 +5,9 @@ import pytest
 from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
 from quixstreams.models.topics import TopicConfig, TopicAdmin
 from quixstreams.models.topics.exceptions import (
-    TopicValidationError,
     TopicNameLengthExceeded,
+    TopicNotFoundError,
+    TopicConfigurationMismatch,
 )
 
 
@@ -157,7 +158,7 @@ class TestTopicManager:
         assert changelog.config.num_partitions == partitions == 5
         assert "ignore.this" not in changelog.config.extra_config
 
-    def test_create_topics(self, topic_manager_factory, topic_admin_mock):
+    def test_create_all_topics(self, topic_manager_factory, topic_admin_mock):
         topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [topic_manager.topic(name=n) for n in ["topic1", "topic2"]]
         topic_manager.create_topics(topics)
@@ -166,7 +167,7 @@ class TestTopicManager:
             topics, timeout=topic_manager._create_timeout
         )
 
-    def test_validate_topics(self, topic_manager_factory, topic_admin_mock):
+    def test_validate_all_topics(self, topic_manager_factory, topic_admin_mock):
         """
         Validation succeeds, even when a source topic's Topic.config or extra_config
         differs from its kafka topic settings.
@@ -197,47 +198,88 @@ class TestTopicManager:
         }
         topic_manager.validate_all_topics()
 
-    def test_validate_topics_fails(self, topic_manager_factory, topic_admin_mock):
+    def test_validate_all_topics_topic_not_found(
+        self, topic_manager_factory, topic_admin_mock
+    ):
         """
         Source topics and changelogs fail validation when missing.
-
-        Changelogs fail when kafka topic settings don't match it.
         """
         topic_manager = topic_manager_factory(topic_admin_mock)
-        topics = [
-            topic_manager.topic(
-                name=f"topic{n}",
-                config=topic_manager.topic_config(
-                    num_partitions=1, extra_config={"my.setting": "woo"}
-                ),
-            )
-            for n in range(3)
-        ]
-        changelogs = [
-            topic_manager.changelog_topic(
-                topic_name=topic_name, consumer_group="group", store_name="default"
-            )
-            for topic_name in topic_manager.topics
-        ]
+        topic = topic_manager.topic(
+            name="topic",
+            config=topic_manager.topic_config(),
+        )
         topic_admin_mock.inspect_topics.return_value = {
-            topics[0].name: topics[0].config,
-            topics[1].name: topics[1].config,
-            topics[2].name: None,
-            changelogs[0].name: changelogs[0].config,
-            changelogs[1].name: topic_manager.topic_config(
-                num_partitions=500,
-                replication_factor=changelogs[1].config.replication_factor,
-                extra_config=changelogs[1].config.extra_config,
-            ),
-            changelogs[2].name: None,
+            topic.name: None,
         }
 
-        with pytest.raises(TopicValidationError) as e:
+        with pytest.raises(TopicNotFoundError):
             topic_manager.validate_all_topics()
 
-        # failed topic names should show up in exception message
-        for topic in [topics[2].name, changelogs[1].name, changelogs[2].name]:
-            assert topic in e.value.args[0]
+    def test_validate_all_topics_changelog_partition_count_mismatch(
+        self, topic_manager_factory, topic_admin_mock
+    ):
+        """
+        Changelog topic validation must fail if it has a different number of partitions
+        than the source topic.
+        """
+        source_topic_config = TopicConfig(num_partitions=2, replication_factor=1)
+        topic_admin_mock.inspect_topics.return_value = {
+            "topic": source_topic_config,
+        }
+        topic_manager = topic_manager_factory(topic_admin_mock)
+        source_topic = topic_manager.topic(
+            name="topic",
+            config=source_topic_config,
+        )
+
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=source_topic.name, consumer_group="group", store_name="default"
+        )
+        topic_admin_mock.inspect_topics.return_value = {
+            source_topic.name: source_topic_config,
+            changelog_topic.name: topic_manager.topic_config(
+                num_partitions=500,
+            ),
+        }
+
+        with pytest.raises(TopicConfigurationMismatch, match="Invalid partition count"):
+            topic_manager.validate_all_topics()
+
+    def test_validate_all_topics_changelog_replication_factor_mismatch(
+        self, topic_manager_factory, topic_admin_mock
+    ):
+        """
+        Changelog topic validation must fail if it has a different replication factor
+        than the source topic.
+        """
+        source_topic_config = TopicConfig(num_partitions=2, replication_factor=2)
+        topic_admin_mock.inspect_topics.return_value = {
+            "topic": source_topic_config,
+        }
+        topic_manager = topic_manager_factory(topic_admin_mock)
+        source_topic = topic_manager.topic(
+            name="topic",
+            config=source_topic_config,
+        )
+
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=source_topic.name,
+            consumer_group="group",
+            store_name="default",
+        )
+
+        topic_admin_mock.inspect_topics.return_value = {
+            source_topic.name: source_topic.config,
+            changelog_topic.name: topic_manager.topic_config(
+                num_partitions=2, replication_factor=1
+            ),
+        }
+
+        with pytest.raises(
+            TopicConfigurationMismatch, match="Invalid replication factor"
+        ):
+            topic_manager.validate_all_topics()
 
     def test_topic_name_len_exceeded(self, topic_manager_factory):
         topic_manager = topic_manager_factory()

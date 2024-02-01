@@ -130,11 +130,11 @@ class TopicAdmin:
                 if future.done():
                     try:
                         future.result()
-                        logger.debug(f'Created topic "{topic_name}"')
+                        logger.info(f'Topic "{topic_name}" has been created')
                     except KafkaException as e:
                         # Topic was maybe created by another instance
                         if e.args[0].name() == "TOPIC_ALREADY_EXISTS":
-                            logger.debug(f'Topic "{topic_name}" already exists')
+                            logger.info(f'Topic "{topic_name}" already exists')
                         else:
                             exceptions[topic_name] = e.args[0].str()
                     # Not sure how these get raised, but they are supposedly possible
@@ -163,7 +163,7 @@ class TopicAdmin:
         :param finalize_timeout: the timeout of the topic finalizing ("ready")
         """
 
-        existing_topics = self.list_topics().keys()
+        existing_topics = self.list_topics()
         topics_to_create = [
             topic for topic in topics if topic.name not in existing_topics
         ]
@@ -171,8 +171,9 @@ class TopicAdmin:
             return
 
         for topic in topics_to_create:
-            logger.debug(
-                f'Creating a new topic "{topic.name}" ({topic.config.as_dict()})'
+            logger.info(
+                f'Creating a new topic "{topic.name}" '
+                f'with config: "{topic.config.as_dict()}"'
             )
 
         self._finalize_create(

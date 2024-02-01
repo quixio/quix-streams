@@ -1,13 +1,13 @@
 import logging
-import pprint
 from typing import Dict, List, Optional
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
 from .admin import TopicAdmin
 from .exceptions import (
-    TopicValidationError,
     TopicNameLengthExceeded,
+    TopicConfigurationMismatch,
+    TopicNotFoundError,
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
 
@@ -269,7 +269,6 @@ class TopicManager:
 
         :param topics: list of `Topic`s
         """
-        logger.info("Creating topics...")
         if not topics:
             logger.debug("No topics provided for creation...skipping!")
             return
@@ -288,27 +287,38 @@ class TopicManager:
 
         Issues are pooled and raised as an Exception once inspections are complete.
         """
-        logger.info(f"Validating Kafka topics have expected settings...")
-        issues = {}
+        logger.info(f"Validating Kafka topics exist and are configured correctly...")
         topics = self.all_topics
         changelog_names = [topic.name for topic in self.changelog_topics_list]
         actual_configs = self._admin.inspect_topics([t.name for t in topics])
+
         for topic in topics:
-            # validate the topic exists
-            if (actual := actual_configs[topic.name]) is not None:
-                if topic.name in changelog_names:
-                    # confirm changelog partitions and rep_factor matches its Topic
-                    expected = topic.config
-                    actual.extra_config = expected.extra_config
-                    if expected != actual:
-                        issues[topic.name] = {
-                            "expected": expected.as_dict(),
-                            "actual": actual.as_dict(),
-                        }
-            else:
-                issues[topic.name] = "TOPIC MISSING"
-        if issues:
-            raise TopicValidationError(
-                f"the following topics failed validation:\n{pprint.pformat(issues)}"
-            )
-        logger.info("All topics validated!")
+            # Validate that topic exists
+            actual_topic_config = actual_configs[topic.name]
+            if actual_topic_config is None:
+                raise TopicNotFoundError(
+                    f'Topic "{topic.name}" is not found on the broker'
+                )
+
+            # For changelog topics, validate the amount of partitions and
+            # a replication factor match with the source topic
+            if topic.name in changelog_names:
+                # Ensure that changelog topic has the same amount of partitions and
+                # replication factor as the source topic
+                if topic.config.num_partitions != actual_topic_config.num_partitions:
+                    raise TopicConfigurationMismatch(
+                        f'Invalid partition count for the topic "{topic.name}": '
+                        f"expected {topic.config.num_partitions}, "
+                        f"got {actual_topic_config.num_partitions}"
+                    )
+
+                if (
+                    topic.config.replication_factor
+                    != actual_topic_config.replication_factor
+                ):
+                    raise TopicConfigurationMismatch(
+                        f'Invalid replication factor for the topic "{topic.name}": '
+                        f"expected {topic.config.replication_factor}, "
+                        f"got {actual_topic_config.replication_factor}"
+                    )
+        logger.info(f"Kafka topics validation complete")

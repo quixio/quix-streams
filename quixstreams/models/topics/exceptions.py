@@ -1,7 +1,11 @@
 from quixstreams.exceptions import QuixException
 
 
-class TopicValidationError(QuixException):
+class TopicNotFoundError(QuixException):
+    ...
+
+
+class TopicConfigurationMismatch(QuixException):
     ...
 
 

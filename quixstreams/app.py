@@ -1,6 +1,5 @@
 import contextlib
 import logging
-import pprint
 import signal
 from typing import Optional, List, Callable
 
@@ -605,18 +604,11 @@ class Application:
             check_state_management_enabled()
 
     def _setup_topics(self):
-        topic_configs_formatted = pprint.pformat(
-            {
-                topic.name: topic.config.as_dict()
-                for topic in self._topic_manager.all_topics
-            }
+        topics_list = ", ".join(
+            f'"{topic.name}"' for topic in self._topic_manager.all_topics
         )
-        logger.info(
-            "topics (with provided configs) required for app operation:\n"
-            f"{topic_configs_formatted}"
-        )
+        logger.info(f"Topics required for this application: {topics_list}")
         if self._auto_create_topics:
-            logger.info("Auto-create topics enabled. Initializing topic creation...")
             self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 

@@ -12,119 +12,67 @@ from quixstreams.models.topics.exceptions import CreateTopicTimeout, CreateTopic
 logger = logging.getLogger(__name__)
 
 
-def test_list_topics(topic_admin, topic_factory):
-    topic_name, _ = topic_factory()
-    result = topic_admin.list_topics()
+class TestTopicAdmin:
+    def test_list_topics(self, topic_admin, topic_factory):
+        topic_name, _ = topic_factory()
+        result = topic_admin.list_topics()
 
-    assert isinstance(result, dict)
-    assert isinstance(result[topic_name], TopicMetadata)
+        assert isinstance(result, dict)
+        assert isinstance(result[topic_name], TopicMetadata)
 
+    def test_inspect_topics(self, topic_admin, topic_factory):
+        topic_name, _ = topic_factory()
+        not_a_topic = "non-existent-topic-name"
+        result = topic_admin.inspect_topics([topic_name, not_a_topic])
 
-def test_inspect_topics(topic_admin, topic_factory):
-    topic_name, _ = topic_factory()
-    not_a_topic = "non-existent-topic-name"
-    result = topic_admin.inspect_topics([topic_name, not_a_topic])
+        assert isinstance(result, dict)
+        assert isinstance(result[topic_name], TopicConfig)
+        assert result[not_a_topic] is None
 
-    assert isinstance(result, dict)
-    assert isinstance(result[topic_name], TopicConfig)
-    assert result[not_a_topic] is None
+    def test_create_topics(self, topic_admin, topic_factory, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        topic1 = topic_manager.topic(name=str(uuid4()))
+        topic2 = topic_manager.topic(name=str(uuid4()))
 
+        topic_admin.create_topics([topic1, topic2])
 
-def test_create_topics(topic_admin, topic_factory, topic_manager_factory):
-    """
-    Confirm topic create happy paths.
+        topics = topic_admin.list_topics()
+        assert topic1.name in topics
+        assert topic2.name in topics
 
-    2 topics will already exist ("skip", "ignore"), but we will pretend that "ignore"
-    does not actually exist and attempt to create it.
+    def test_create_topics_finalize_timeout(self, topic_admin, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        create = topic_manager.topic(name="create_me_timeout")
+        with pytest.raises(CreateTopicTimeout) as e:
+            topic_admin.create_topics([create], finalize_timeout=0)
 
-    1 will have a normal config that should succeed ("create")
-    """
-    exist1, _ = topic_factory()
-    exist2, _ = topic_factory()
+        error_str = str(e.value.args[0])
+        assert create.name in error_str
 
-    topic_manager = topic_manager_factory()
-    skip = topic_manager.topic(name=exist1)
-    ignore = topic_manager.topic(name=exist2)
-    create = topic_manager.topic(name=str(uuid4()))
+    def test_create_topics_already_exist(
+        self, topic_admin, topic_manager_factory, topic_factory, caplog
+    ):
+        topic_name, _ = topic_factory()
 
-    with patch.object(topic_admin, "list_topics") as list_topics:
-        # mock "ignore" topic being created simultaneously by another instance
-        list_topics.return_value = {skip.name: "Metadata"}
-        topic_admin.create_topics([create, ignore])
-    assert create.name in topic_admin.list_topics()
+        topic_manager = topic_manager_factory()
+        existing_topic = topic_manager.topic(name=topic_name)
 
-    topic_admin.create_topics([])  # does nothing, basically
+        with caplog.at_level(level=logging.INFO), patch.object(
+            topic_admin, "list_topics"
+        ) as list_topics_mock:
+            # Mock "list_topics" call to simulate a topic being created
+            # simultaneously by multiple instances
+            list_topics_mock.return_value = {}
+            topic_admin.create_topics([existing_topic])
 
+        assert f'Topic "{existing_topic.name}" already exists' in caplog.text
 
-def test_create_topics_finalize_timeout(topic_admin, topic_manager_factory):
-    topic_manager = topic_manager_factory()
-    create = topic_manager.topic(name="create_me_timeout")
-    with pytest.raises(CreateTopicTimeout) as e:
-        topic_admin.create_topics([create], finalize_timeout=0)
+    def test_create_topics_invalid_config(self, topic_admin, topic_manager_factory):
+        topic_manager = topic_manager_factory()
+        invalid_topic = topic_manager.topic(
+            name=str(uuid4()),
+            config=topic_manager.topic_config(extra_config={"bad_option": "not_real"}),
+        )
 
-    error_str = str(e.value.args[0])
-    assert create.name in error_str
-
-
-def test_create_topics_failure(
-    topic_admin, topic_manager_factory, topic_factory, caplog
-):
-    """
-    Cover all other cases of topic creation.
-
-    We test with 4 total topics, 1 should successfully create via Admin.
-
-    2 topics will already exist ("skip", "ignore"), but we will pretend that "ignore"
-    does not actually exist and attempt to create it.
-
-    1 will have a normal config that should succeed ("create")
-
-    1 will have a bad config value and should not create ("has_errors"), which
-    ultimately leads to the Exception being thrown after collecting the results of all
-    creation attempts.
-
-    We also use caplog to inspect the logs and confirm results are as expected.
-    """
-    exist1, _ = topic_factory()
-    exist2, _ = topic_factory()
-
-    topic_manager = topic_manager_factory()
-    skip = topic_manager.topic(name=exist1)
-    exists = topic_manager.topic(name=exist2)
-    create = topic_manager.topic(
-        name=str(uuid4()),
-        config=topic_manager.topic_config(extra_config={"retention.ms": "600000"}),
-    )
-    has_errors = topic_manager.topic(
-        name=str(uuid4()),
-        config=topic_manager.topic_config(extra_config={"bad_option": "not_real"}),
-    )
-
-    with pytest.raises(CreateTopicFailure) as e:
-        with caplog.at_level(level=logging.DEBUG):
-            with patch.object(topic_admin, "list_topics") as list_topics:
-                # mock "ignore" topic being created simultaneously by another instance
-                list_topics.return_value = {skip.name: "Metadata"}
-                topic_admin.create_topics([create, exists, has_errors])
-
-    error_str = str(e.value.args[0])
-    for expected in [has_errors.name, "bad_option"]:
-        assert expected in error_str
-
-    assert f'Created topic "{create.name}"' in caplog.text
-    assert f'Topic "{exists.name}" already exists' in caplog.text
-
-    cluster_topic_info = topic_admin.inspect_topics([create.name, has_errors.name])
-    assert cluster_topic_info[has_errors.name] is None
-    expected_topic_config = create.config
-    actual_topic_config = cluster_topic_info[create.name]
-
-    assert actual_topic_config.num_partitions == expected_topic_config.num_partitions
-    assert (
-        actual_topic_config.replication_factor
-        == expected_topic_config.replication_factor
-    )
-    assert (
-        expected_topic_config.extra_config.items()
-        <= actual_topic_config.extra_config.items()
-    )
+        with pytest.raises(CreateTopicFailure, match="Unknown topic config name"):
+            topic_admin.create_topics([invalid_topic])
