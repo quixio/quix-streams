@@ -25,6 +25,7 @@ Quix Streams has the following benefits:
 - Easily integrates with the entire Python ecosystem (pandas, scikit-learn, TensorFlow, PyTorch etc).
 - Support for many serialization formats, including JSON (and Quix-specific).
 - Support for stateful operations using RocksDB.
+- Support for aggregations over tumbling and hopping time windows
 - A simple framework with Pandas-like interface to ease newcomers to streaming.
 - "At-least-once" Kafka processing guarantees.
 - Designed to run and scale resiliently via container orchestration (like Kubernetes).
