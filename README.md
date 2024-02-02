@@ -25,6 +25,7 @@ Quix Streams has the following benefits:
 - Easily integrates with the entire Python ecosystem (pandas, scikit-learn, TensorFlow, PyTorch etc).
 - Support for many serialization formats, including JSON (and Quix-specific).
 - Support for stateful operations using RocksDB.
+- Support for aggregations over tumbling and hopping time windows
 - A simple framework with Pandas-like interface to ease newcomers to streaming.
 - "At-least-once" Kafka processing guarantees.
 - Designed to run and scale resiliently via container orchestration (like Kubernetes).
@@ -180,12 +181,13 @@ Otherwise, please see
 This library is being actively developed. 
 
 Here are some of the planned improvements:
-- State recovery based on Kafka changelog topics
-- Stateful Windowing: tumbling, hopping, and sliding windows
-- Group-bys and joins (for merging topics/keys)
-- Support for "exactly-once" Kafka processing (aka transactions)
-- Other serialization support like Avro and Protobuf
-- Schema Registry support
+
+- [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
+- [ ] State recovery based on Kafka changelog topics
+- [ ] Group-bys and joins (for merging topics/keys)
+- [ ] Support for "exactly-once" Kafka processing (aka transactions)
+- [ ] Support for Avro and Protobuf formats
+- [ ] Schema Registry support
 
 
 To find out when the next version is ready, make sure you watch this repo 
