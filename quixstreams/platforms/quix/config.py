@@ -266,11 +266,13 @@ class QuixKafkaConfigsBuilder:
         self, extract_to_folder: Optional[Path] = None
     ) -> Optional[str]:
         """
-        Gets and extracts zipped certificate from the API to provided folder.
+        Gets and extracts zipped certificate from the API to provided folder if the
+        SSL certificate is specified in broker configuration.
+
         If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
 
         :param extract_to_folder: path to folder to dump zipped cert file to
-        :return: full cert filepath as string
+        :return: full cert filepath as string or `None` if certificate is not specified
         """
         certificate_bytes = self.api.get_workspace_certificate(
             workspace_id=self._workspace_id
