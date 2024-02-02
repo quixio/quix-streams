@@ -100,7 +100,7 @@ class StateStoreManager:
             f'State Manager: registering changelog for store "{store_name}" '
             f'(topic "{topic_name}")'
         )
-        self._changelog_manager.add_changelog(
+        self._changelog_manager.register_changelog(
             topic_name=topic_name,
             store_name=store_name,
             consumer_group=self._group_id,

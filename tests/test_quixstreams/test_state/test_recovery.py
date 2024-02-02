@@ -1,12 +1,13 @@
 from unittest.mock import patch, create_autospec
 
-import pytest
+import logging
 import uuid
 
 from quixstreams.state.recovery import (
     ChangelogWriter,
     RecoveryPartition,
     ConfluentPartition,
+    OffsetUpdate,
 )
 from quixstreams.state.types import StorePartition
 from ..utils import ConfluentKafkaMessageStub
@@ -44,8 +45,8 @@ class TestRecoveryPartition:
 
     def test_update_offset(self, recovery_partition_store_mock):
         recovery_partition = recovery_partition_store_mock
-        with patch.object(
-            recovery_partition, "OffsetUpdate", spec=recovery_partition.OffsetUpdate
+        with patch(
+            "quixstreams.state.recovery.OffsetUpdate", spec=OffsetUpdate
         ) as offset_update:
             recovery_partition.update_offset()
         offset_update.assert_called_with(recovery_partition.offset)
@@ -53,19 +54,20 @@ class TestRecoveryPartition:
             recovery_partition.store_partition.set_changelog_offset.call_args_list[
                 0
             ].kwargs["changelog_message"],
-            recovery_partition.OffsetUpdate,
+            OffsetUpdate,
         )
 
-    def test_update_offset_warn(self, recovery_partition_store_mock):
+    def test_update_offset_warn(self, recovery_partition_store_mock, caplog):
+        """
+        A warning is thrown if the stored changelog offset is higher than the highwater
+        """
         recovery_partition = recovery_partition_store_mock
         recovery_partition.store_partition.get_changelog_offset.return_value = (
             recovery_partition._changelog_highwater + 1
         )
-        with patch.object(
-            recovery_partition, "_warn_bad_offset", spec=recovery_partition.OffsetUpdate
-        ) as warn:
+        with caplog.at_level(level=logging.WARNING):
             recovery_partition.update_offset()
-        warn.assert_called()
+        assert caplog.text != ""
 
 
 class TestChangelogWriter:
@@ -117,7 +119,7 @@ class TestChangelogManager:
             consumer_group="my_group",
         )
         with patch.object(topic_manager, "changelog_topic") as make_changelog:
-            changelog_manager.add_changelog(**kwargs, store_name=store_name)
+            changelog_manager.register_changelog(**kwargs, store_name=store_name)
         make_changelog.assert_called_with(**kwargs, store_name=store_name)
 
     def test_get_writer(self, row_producer_factory, changelog_manager_factory):
@@ -217,13 +219,11 @@ class TestRecoveryManager:
             store_partitions={changelog_name: store_partition},
         )
 
-        assert (
-            recovery_manager._recovery_process
-            == recovery_manager._handle_pending_assigns
-        )
         assert len(recovery_manager._pending_assigns) == 1
         recovery_partition = recovery_manager._pending_assigns[0]
-        expected_confluent_partition = recovery_partition.topic_partition
+        expected_confluent_partition = ConfluentPartition(
+            recovery_partition.topic_name, recovery_partition.partition_num
+        )
         assert isinstance(recovery_partition, RecoveryPartition)
         assert recovery_partition.topic_name == topic_name
         assert recovery_partition.changelog_name == changelog_name
@@ -451,10 +451,9 @@ class TestRecoveryManager:
 
     def test__finalize_recovery(self, recovery_manager_mock_consumer):
         """
-        Finalize recovery, which raises an exception to break out of an Application
-        consume loop.
+        Finalize recovery.
 
-        In this case, also tests when we have a remaining _partition with some offset
+        Also tests when we have a remaining _partition with some offset
         issues, updating it to current and revoking it before finishing recovery.
         """
         recovery_manager = recovery_manager_mock_consumer
@@ -476,8 +475,7 @@ class TestRecoveryManager:
             changelog_name
         ] = rp
 
-        with pytest.raises(recovery_manager.RecoveryComplete):
-            recovery_manager._finalize_recovery()
+        recovery_manager._finalize_recovery()
 
         consumer.resume.assert_called_with(assignment_result)
         consumer.incremental_unassign.assert_called()
@@ -511,27 +509,22 @@ class TestRecoveryManager:
             changelog_name
         ] = rp
 
-        recovery_manager._recover()
+        recovery_manager._recovery_loop()
 
         rp.store_partition.recover.assert_called_with(changelog_message=msg)
         assert not recovery_manager._recovery_partitions
         consumer.incremental_unassign.assert_called()
 
-    def test__recover_no_partitions(self, recovery_manager_mock_consumer):
+    def test__recovery_loop_no_partitions(self, recovery_manager_mock_consumer):
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
 
-        with patch.object(recovery_manager, "_finalize_recovery") as finalize:
-            finalize.side_effect = recovery_manager.RecoveryComplete()
-            with pytest.raises(recovery_manager.RecoveryComplete):
-                recovery_manager._recover()
-
-        finalize.assert_called()
+        recovery_manager._recovery_loop()
         consumer.poll.assert_not_called()
 
-    def test__recover_empty_poll(self, recovery_manager_mock_consumer):
+    def test__recovery_loop_empty_polls(self, recovery_manager_mock_consumer):
         """
-        Handle an empty poll.
+        Handle empty poll attempts, which ends recovery.
         """
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
@@ -539,6 +532,8 @@ class TestRecoveryManager:
         topic_name = "topic_name"
         changelog_name = f"changelog__{topic_name}__default"
         partition_num = 1
+
+        # won't poll without a partition assigned
         rp = RecoveryPartition(
             topic_name=topic_name,
             changelog_name=changelog_name,
@@ -549,40 +544,8 @@ class TestRecoveryManager:
             changelog_name
         ] = rp
 
-        with patch.object(recovery_manager, "_finalize_recovery") as finalize:
-            recovery_manager._recover()
-
-        assert recovery_manager._polls_remaining == recovery_manager._poll_attempts - 1
-        finalize.assert_not_called()
-        consumer.poll.assert_called()
-        rp.store_partition.recover.assert_not_called()
-
-    def test__recover_last_empty_poll(self, recovery_manager_mock_consumer):
-        """
-        Handle a final empty poll attempt, which ends recovery.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        recovery_manager._polls_remaining = 1
-        consumer = recovery_manager._consumer
-        consumer.poll.return_value = None
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 1
-        rp = RecoveryPartition(
-            topic_name=topic_name,
-            changelog_name=changelog_name,
-            partition_num=partition_num,
-            store_partition=create_autospec(StorePartition)(),
-        )
-        recovery_manager._recovery_partitions.setdefault(partition_num, {})[
-            changelog_name
-        ] = rp
-
-        with patch.object(recovery_manager, "_finalize_recovery") as finalize:
-            finalize.side_effect = recovery_manager.RecoveryComplete()
-            with pytest.raises(recovery_manager.RecoveryComplete):
-                recovery_manager._recover()
+        recovery_manager._recovery_loop()
 
         assert recovery_manager._polls_remaining == 0
-        finalize.assert_called()
-        consumer.poll.assert_called()
+        assert consumer.poll.call_count == recovery_manager._poll_attempts
+        rp.store_partition.recover.assert_not_called()

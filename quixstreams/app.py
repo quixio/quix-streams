@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import signal
-from functools import partial
 from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
@@ -41,7 +40,7 @@ from .platforms.quix import (
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
-from .state.recovery import ChangelogManager, RecoveryManager
+from .state.recovery import ChangelogManager
 from .state.rocksdb import RocksDBOptionsType
 
 __all__ = ("Application",)
@@ -191,8 +190,7 @@ class Application:
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
-        self._processing = lambda: None
-        self._run_mode = None
+        self._do_recovery_check = False
 
         if not topic_manager:
             topic_manager = TopicManager(
@@ -615,7 +613,7 @@ class Application:
             self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
-    def _process_messages(self, dataframe_composed, start_state_transaction):
+    def _process_message(self, dataframe_composed, start_state_transaction):
         # Serve producer callbacks
         self._producer.poll(self._producer_poll_timeout)
         rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
@@ -667,12 +665,6 @@ class Application:
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
-
-    def _recovery(self):
-        try:
-            self._state_manager.do_recovery()
-        except RecoveryManager.RecoveryComplete:
-            self._run_mode = self._processing
 
     def run(
         self,
@@ -742,13 +734,12 @@ class Application:
             self._running = True
 
             dataframe_composed = dataframe.compose()
-            self._processing = partial(
-                self._process_messages, dataframe_composed, start_state_transaction
-            )
-            self._run_mode = self._processing
 
             while self._running:
-                self._run_mode()
+                if self._do_recovery_check:
+                    self._state_manager.do_recovery()
+                    self._do_recovery_check = False
+                self._process_message(dataframe_composed, start_state_transaction)
 
             logger.info("Stop processing of StreamingDataFrame")
 
@@ -768,7 +759,7 @@ class Application:
         if self._state_manager.stores:
             if self._state_manager.using_changelogs:
                 # new partitions require a recovery check
-                self._run_mode = self._recovery
+                self._do_recovery_check = True
             logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
                 # Assign store partitions
