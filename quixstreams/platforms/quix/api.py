@@ -86,13 +86,23 @@ class QuixPortalApiService:
         )
         return s
 
-    def get_workspace_certificate(self, workspace_id: Optional[str] = None) -> bytes:
+    def get_workspace_certificate(
+        self, workspace_id: Optional[str] = None
+    ) -> Optional[bytes]:
+        """
+        Get a workspace TLS certificate if available.
+
+        Returns `None` if certificate is not specified.
+
+        :param workspace_id: workspace id, optional
+        :return: certificate as bytes if present, or None
+        """
         workspace_id = workspace_id or self.default_workspace_id
-        with ZipFile(
-            BytesIO(
-                self.session.get(f"/workspaces/{workspace_id}/certificates").content
-            )
-        ) as z:
+        content = self.session.get(f"/workspaces/{workspace_id}/certificates").content
+        if not content:
+            return
+
+        with ZipFile(BytesIO(content)) as z:
             with z.open("ca.cert") as f:
                 return f.read()
 

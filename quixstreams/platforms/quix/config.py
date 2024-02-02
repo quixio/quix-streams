@@ -262,7 +262,9 @@ class QuixKafkaConfigsBuilder:
             if self.search_workspace_for_topic(ws["workspaceId"], topic):
                 return ws
 
-    def get_workspace_ssl_cert(self, extract_to_folder: Optional[Path] = None) -> str:
+    def get_workspace_ssl_cert(
+        self, extract_to_folder: Optional[Path] = None
+    ) -> Optional[str]:
         """
         Gets and extracts zipped certificate from the API to provided folder.
         If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
@@ -270,14 +272,17 @@ class QuixKafkaConfigsBuilder:
         :param extract_to_folder: path to folder to dump zipped cert file to
         :return: full cert filepath as string
         """
+        certificate_bytes = self.api.get_workspace_certificate(
+            workspace_id=self._workspace_id
+        )
+        if certificate_bytes is None:
+            return
         extract_to_folder = extract_to_folder or Path(gettempdir())
         full_path = extract_to_folder / "ca.cert"
         if not full_path.is_file():
             extract_to_folder.mkdir(parents=True, exist_ok=True)
             with open(full_path, "wb") as f:
-                f.write(
-                    self.api.get_workspace_certificate(workspace_id=self._workspace_id)
-                )
+                f.write(certificate_bytes)
         return full_path.as_posix()
 
     def _create_topic(self, topic: TopicCreationConfigs):
@@ -438,7 +443,10 @@ class QuixKafkaConfigsBuilder:
             cfg_out[rdkafka_param_name] = param_value
 
         cfg_out["ssl.endpoint.identification.algorithm"] = "none"
-        cfg_out["ssl.ca.location"] = self._set_workspace_cert()
+        # Specify SSL certificate if it's provided for the broker
+        ssl_cert_path = self._set_workspace_cert()
+        if ssl_cert_path is not None:
+            cfg_out["ssl.ca.location"] = ssl_cert_path
 
         # Set the connection idle timeout and metadata max age to be less than
         # Azure's default 4 minutes.

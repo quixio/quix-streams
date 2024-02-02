@@ -356,6 +356,13 @@ class TestQuixKafkaConfigsBuilder:
             s = f.read()
         assert s == "my cool cert stuff"
 
+    def test_get_workspace_ssl_cert_empty(self, quix_kafka_config_factory, tmp_path):
+        cfg_factory = quix_kafka_config_factory(
+            workspace_id="12345",
+            api_responses={"get_workspace_certificate": None},
+        )
+        assert cfg_factory.get_workspace_ssl_cert(extract_to_folder=tmp_path) is None
+
     def test__set_workspace_cert_has_path(self, quix_kafka_config_factory):
         path = Path(getcwd()) / "certificates" / "12345"
         expected = (path / "ca.cert").as_posix()
