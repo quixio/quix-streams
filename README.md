@@ -184,6 +184,7 @@ Here are some of the planned improvements:
 
 - [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
 - [ ] State recovery based on Kafka changelog topics
+- [ ] Windowed aggregations over Sliding windows
 - [ ] Group-bys and joins (for merging topics/keys)
 - [ ] Support for "exactly-once" Kafka processing (aka transactions)
 - [ ] Support for Avro and Protobuf formats
