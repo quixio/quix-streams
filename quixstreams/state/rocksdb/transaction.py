@@ -453,7 +453,9 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
         """
         try:
             self._batch.put(
-                CHANGELOG_OFFSET_KEY, int_to_int64_bytes(self._message.offset() + 1)
+                CHANGELOG_OFFSET_KEY,
+                int_to_int64_bytes(self._message.offset() + 1),
+                self._partition.get_column_family_handle(METADATA_CF_NAME),
             )
             self._partition.write(self._batch)
         except Exception:

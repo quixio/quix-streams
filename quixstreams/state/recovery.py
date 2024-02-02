@@ -66,14 +66,14 @@ class RecoveryPartition:
         )
         if self.offset > self._changelog_highwater:
             logger.warning(
-                f"The changelog offset in state for "
-                f"{self.changelog_name}[{self.partition_num}] was larger than actual "
-                f"offset on that topic-partition, possibly due to Kafka or network "
-                f"issues. State may be inaccurate for any affected keys. "
-                f"The offset will now be fixed."
+                f"{self.changelog_name}[{self.partition_num}] - the changelog offset "
+                f"{self.offset} in state was larger than its actual highwater "
+                f"{self._changelog_highwater}, possibly due to previous Kafka or "
+                f"network issues. State may be inaccurate for any affected keys. "
+                f"The offset will now be set to {self._changelog_highwater}."
             )
         self.store_partition.set_changelog_offset(
-            changelog_message=OffsetUpdate(self.offset)
+            changelog_message=OffsetUpdate(self._changelog_highwater - 1)
         )
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):
@@ -259,6 +259,7 @@ class RecoveryManager:
                 self._consumer.pause([ConfluentPartition(topic_name, partition_num)])
             else:
                 # pause ALL partitions while we wait for Application to start recovery
+                # (all newly assigned partitions are available on `.assignment`).
                 self._consumer.pause(self._consumer.assignment())
 
     def revoke_partitions(self, partition_num: int):

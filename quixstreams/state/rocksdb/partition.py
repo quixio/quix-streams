@@ -94,13 +94,13 @@ class RocksDBStorePartition(StorePartition):
         ) as partition:
             partition.recover()
 
-    def set_changelog_offset(self, offset_only_message: ConfluentKafkaMessageProto):
+    def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
         """
         Set the changelog offset only; usually when the stored offset is "behind" but
         no messages are left on the changelog.
         """
         RocksDBPartitionRecoveryTransaction(
-            partition=self, changelog_message=offset_only_message
+            partition=self, changelog_message=changelog_message
         ).flush()
 
     def write(self, batch: WriteBatch):

@@ -14,7 +14,11 @@ app = Application(
     broker_address=environ["BROKER_ADDRESS"],
     consumer_group="ignore",
 )
-topic = app.topic(name="json__purchase_events", value_serializer="json")
+topic = app.topic(
+    name="json__purchase_events",
+    value_serializer="json",
+    config=app._topic_manager.topic_config(num_partitions=2),
+)
 
 retailers = [
     "Billy Bob's Shop",

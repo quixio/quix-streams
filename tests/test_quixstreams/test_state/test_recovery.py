@@ -49,7 +49,7 @@ class TestRecoveryPartition:
             "quixstreams.state.recovery.OffsetUpdate", spec=OffsetUpdate
         ) as offset_update:
             recovery_partition.update_offset()
-        offset_update.assert_called_with(recovery_partition.offset)
+        offset_update.assert_called_with(recovery_partition._changelog_highwater - 1)
         assert isinstance(
             recovery_partition.store_partition.set_changelog_offset.call_args_list[
                 0
@@ -211,36 +211,36 @@ class TestChangelogManager:
 
 
 class TestRecoveryManager:
-    def test_assign_partitions(self, recovery_manager_mock_consumer):
+    def test_assign_partitions(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
         """
-        Assign a topic partition that needs recovery.
+        From two RecoveryPartitions, assign the one ("window") that needs recovery.
 
-        Changelog partitions from two different stores are attempting assignment,
-        but only "window" should recover.
+        No recovery underway yet, so should pause all partitions.
         """
         recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
         topic_name = "topic_name"
         partition_num = 1
         store_names = ["default", "window"]
         changelog_names = [f"changelog__{topic_name}__{store}" for store in store_names]
+        watermarks = [(0, 10), (0, 20)]
+        changelog_offsets = [10, 15]
+
+        consumer = recovery_manager._consumer
+        consumer.get_watermark_offsets.side_effect = watermarks
+        consumer.assignment.return_value = "assignments"
 
         recovery_partitions = [
-            RecoveryPartition(
-                changelog_name=name,
+            recovery_partition_factory(
+                changelog_name=changelog_names[i],
                 partition_num=partition_num,
-                store_partition=create_autospec(StorePartition)(),
+                mocked_changelog_offset=changelog_offsets[i],
             )
-            for name in changelog_names
+            for i in range(len(store_names))
         ]
-        not_recover = recovery_partitions[0]
-        should_recover = recovery_partitions[1]
-
-        side_effects = []
-        for idx, p in enumerate(recovery_partitions):
-            p.store_partition.get_changelog_offset.return_value = 10 * idx
-            side_effects.append((0, 20 * idx))
-        consumer.get_watermark_offsets.side_effect = side_effects
+        skip_recover_partition = recovery_partitions[0]
+        should_recover_partition = recovery_partitions[1]
 
         recovery_manager.assign_partitions(
             topic_name=topic_name,
@@ -248,25 +248,115 @@ class TestRecoveryManager:
             recovery_partitions=recovery_partitions,
         )
 
+        # should pause ALL partitions
+        consumer.pause.assert_called_with("assignments")
+
+        # should only assign the partition that needs recovery
         assign_call = consumer.incremental_assign.call_args_list[0].args
         assert len(assign_call) == 1
         assert isinstance(assign_call[0], list)
         assert len(assign_call[0]) == 1
         assert isinstance(assign_call[0][0], ConfluentPartition)
-        assert should_recover.changelog_name == assign_call[0][0].topic
-        assert should_recover.partition_num == assign_call[0][0].partition
-        assert should_recover.offset == assign_call[0][0].offset
-
+        assert should_recover_partition.changelog_name == assign_call[0][0].topic
+        assert should_recover_partition.partition_num == assign_call[0][0].partition
+        assert should_recover_partition.offset == assign_call[0][0].offset
         assert (
             recovery_manager._recovery_partitions[partition_num][
-                should_recover.changelog_name
+                should_recover_partition.changelog_name
             ]
-            == should_recover
+            == should_recover_partition
         )
         assert (
-            not_recover.changelog_name
+            skip_recover_partition.changelog_name
             not in recovery_manager._recovery_partitions[partition_num]
         )
+
+    def test_assign_partitions_fix_offset_only(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
+        """
+        From two RecoveryPartitions, fix the one ("window") that has a bad offset.
+
+        No recovery was previously going, and an offset fix will not trigger one.
+        """
+        recovery_manager = recovery_manager_mock_consumer
+        topic_name = "topic_name"
+        partition_num = 1
+        store_names = ["default", "window"]
+        changelog_names = [f"changelog__{topic_name}__{store}" for store in store_names]
+        watermarks = [(0, 10), (0, 20)]
+        changelog_offsets = [10, 22]
+
+        consumer = recovery_manager._consumer
+        consumer.get_watermark_offsets.side_effect = watermarks
+        consumer.assignment.return_value = "assignments"
+
+        recovery_partitions = [
+            recovery_partition_factory(
+                changelog_name=changelog_names[i],
+                partition_num=partition_num,
+                mocked_changelog_offset=changelog_offsets[i],
+            )
+            for i in range(len(store_names))
+        ]
+
+        offset_update_partition = recovery_partitions[1]
+
+        with patch.object(recovery_partitions[1], "update_offset") as update_offset:
+            recovery_manager.assign_partitions(
+                topic_name=topic_name,
+                partition_num=partition_num,
+                recovery_partitions=recovery_partitions,
+            )
+
+        # no pause or assignments should be called
+        consumer.pause.assert_not_called()
+        consumer.incremental_assign.assert_not_called()
+        update_offset.assert_called()
+
+    def test_assign_partitions_fix_offset_during_recovery(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
+        """
+        From two RecoveryPartitions, fix the one ("window") that has a bad offset.
+
+        Recovery was previously going, so must pause the source topic.
+        """
+        recovery_manager = recovery_manager_mock_consumer
+        topic_name = "topic_name"
+        partition_num = 1
+        store_names = ["default", "window"]
+        changelog_names = [f"changelog__{topic_name}__{store}" for store in store_names]
+        watermarks = [(0, 10), (0, 20)]
+        changelog_offsets = [10, 22]
+
+        consumer = recovery_manager._consumer
+        consumer.get_watermark_offsets.side_effect = watermarks
+
+        # already in the middle of recovering
+        recovery_manager._recovery_partitions.setdefault(2, {})[
+            changelog_offsets[0]
+        ] = recovery_partition_factory(
+            changelog_name=changelog_names[0],
+            partition_num=2,
+        )
+        assert recovery_manager.recovering
+
+        recovery_partitions = [
+            recovery_partition_factory(
+                changelog_name=changelog_names[i],
+                partition_num=partition_num,
+                mocked_changelog_offset=changelog_offsets[i],
+            )
+            for i in range(len(store_names))
+        ]
+
+        with patch.object(recovery_partitions[1], "update_offset") as update_offset:
+            recovery_manager.assign_partitions(
+                topic_name=topic_name,
+                partition_num=partition_num,
+                recovery_partitions=recovery_partitions,
+            )
 
         pause_call = consumer.pause.call_args_list[0].args
         assert len(pause_call) == 1
@@ -276,53 +366,101 @@ class TestRecoveryManager:
         assert topic_name == pause_call[0][0].topic
         assert partition_num == pause_call[0][0].partition
 
-        # recovery_manager = recovery_manager_mock_consumer
-        # consumer = recovery_manager._consumer
-        # consumer.get_watermark_offsets.return_value = (0, 10)
-        # topic_name = "topic_name"
-        # changelog_name = f"changelog__{topic_name}__default"
-        # partition_num = 1
-        # store_partition = create_autospec(StorePartition)()
-        # recovery_manager.assign_partitions(
-        #     topic_name=topic_name,
-        #     partition_num=partition_num,
-        #     store_partitions={changelog_name: store_partition},
-        # )
-        #
-        # expected_confluent_partition = ConfluentPartition(
-        #     recovery_partition.topic_name, recovery_partition.partition_num
-        # )
-        # assert isinstance(recovery_partition, RecoveryPartition)
-        # assert recovery_partition.topic_name == topic_name
-        # assert recovery_partition.changelog_name == changelog_name
-        # assert recovery_partition.partition_num == partition_num
-        # assert recovery_partition.store_partition == store_partition
-        #
-        # pause_call = consumer.pause.call_args_list[0].args
-        # assert len(pause_call) == 1
-        # assert isinstance(pause_call[0], list)
-        # assert len(pause_call[0]) == 1
-        # assert isinstance(pause_call[0][0], ConfluentPartition)
-        # assert expected_confluent_partition.topic == pause_call[0][0].topic
-        # assert expected_confluent_partition.partition == pause_call[0][0].partition
+        consumer.incremental_assign.assert_not_called()
+        update_offset.assert_called()
 
-    def test__revoke_recovery_partitions(self, recovery_manager_mock_consumer):
+    def test_assign_partitions_during_recovery(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
+        """
+        From two RecoveryPartitions, assign the one ("window") that needs recovery.
+
+        RecoveryManager is currently recovering, so should only pause source topic.
+        """
+        recovery_manager = recovery_manager_mock_consumer
+        topic_name = "topic_name"
+        partition_num = 1
+        store_names = ["default", "window"]
+        changelog_names = [f"changelog__{topic_name}__{store}" for store in store_names]
+        watermarks = [(0, 10), (0, 20)]
+        changelog_offsets = [10, 15]
+
+        consumer = recovery_manager._consumer
+        consumer.get_watermark_offsets.side_effect = watermarks
+
+        # already in the middle of recovering
+        recovery_manager._recovery_partitions.setdefault(2, {})[
+            changelog_offsets[0]
+        ] = recovery_partition_factory(
+            changelog_name=changelog_names[0],
+            partition_num=2,
+        )
+        assert recovery_manager.recovering
+
+        recovery_partitions = [
+            recovery_partition_factory(
+                changelog_name=changelog_names[i],
+                partition_num=partition_num,
+                mocked_changelog_offset=changelog_offsets[i],
+            )
+            for i in range(len(store_names))
+        ]
+        skip_recover_partition = recovery_partitions[0]
+        should_recover_partition = recovery_partitions[1]
+        consumer.get_watermark_offsets.side_effect = watermarks
+
+        recovery_manager.assign_partitions(
+            topic_name=topic_name,
+            partition_num=partition_num,
+            recovery_partitions=recovery_partitions,
+        )
+
+        # should only pause the source topic partition since currently recovering
+        pause_call = consumer.pause.call_args_list[0].args
+        assert len(pause_call) == 1
+        assert isinstance(pause_call[0], list)
+        assert len(pause_call[0]) == 1
+        assert isinstance(pause_call[0][0], ConfluentPartition)
+        assert topic_name == pause_call[0][0].topic
+        assert partition_num == pause_call[0][0].partition
+
+        # should only assign the partition that needs recovery
+        assign_call = consumer.incremental_assign.call_args_list[0].args
+        assert len(assign_call) == 1
+        assert isinstance(assign_call[0], list)
+        assert len(assign_call[0]) == 1
+        assert isinstance(assign_call[0][0], ConfluentPartition)
+        assert should_recover_partition.changelog_name == assign_call[0][0].topic
+        assert should_recover_partition.partition_num == assign_call[0][0].partition
+        assert should_recover_partition.offset == assign_call[0][0].offset
+        assert (
+            recovery_manager._recovery_partitions[partition_num][
+                should_recover_partition.changelog_name
+            ]
+            == should_recover_partition
+        )
+        assert (
+            skip_recover_partition.changelog_name
+            not in recovery_manager._recovery_partitions[partition_num]
+        )
+
+    def test__revoke_recovery_partitions(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
         topic_name = "topic_name"
+        partition_num = 1
         changelog_names = [
             f"changelog__{topic_name}__{store_name}"
-            for store_name in ["store_a", "store_b"]
+            for store_name in ["default", "window"]
         ]
 
-        partition_num = 1
         recovery_manager._recovery_partitions = {
             partition_num: {
-                changelog_name: RecoveryPartition(
-                    topic_name=topic_name,
+                changelog_name: recovery_partition_factory(
                     changelog_name=changelog_name,
                     partition_num=partition_num,
-                    store_partition=create_autospec(StorePartition)(),
                 )
                 for changelog_name in changelog_names
             }
@@ -340,20 +478,20 @@ class TestRecoveryManager:
             assert partition_num == confluent_partition.partition
         assert not recovery_manager._recovery_partitions
 
-    def test_revoke_partitions(self, recovery_manager_mock_consumer):
+    def test_revoke_partitions(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
         """
         Revoke a topic partition's respective recovery partitions.
         """
         recovery_manager = recovery_manager_mock_consumer
         topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
         partition_num = 1
+        changelog_name = f"changelog__{topic_name}__default"
         recovery_partition = (
-            RecoveryPartition(
-                topic_name=topic_name,
+            recovery_partition_factory(
                 changelog_name=changelog_name,
                 partition_num=partition_num,
-                store_partition=create_autospec(StorePartition)(),
             ),
         )
         recovery_manager._recovery_partitions = {
@@ -375,82 +513,6 @@ class TestRecoveryManager:
             recovery_manager.revoke_partitions(partition_num=1)
 
         revoke.assert_not_called()
-
-    def test__handle_pending_assigns(self, recovery_manager_mock_consumer):
-        """
-        Two changelog partitions (partition numbers 3 and 7) are pending assignment; p3
-        has no offsets to recover, and p7 does, so only p7 should end up assigned.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_nums = [3, 7]
-        recovery_manager._pending_assigns = [
-            RecoveryPartition(
-                topic_name=topic_name,
-                changelog_name=changelog_name,
-                partition_num=partition_num,
-                store_partition=create_autospec(StorePartition)(),
-            )
-            for partition_num in partition_nums
-        ]
-        side_effects = []
-        for idx, p in enumerate(recovery_manager._pending_assigns):
-            p.store_partition.get_changelog_offset.return_value = 10 * idx
-            side_effects.append((0, 20 * idx))
-        side_effects.reverse()
-        consumer.get_watermark_offsets.side_effect = side_effects
-        not_recover = recovery_manager._pending_assigns[0]
-        should_recover = recovery_manager._pending_assigns[1]
-
-        recovery_manager._handle_pending_assigns()
-
-        assign_call = consumer.incremental_assign.call_args_list[0].args
-        assert len(assign_call) == 1
-        assert isinstance(assign_call[0], list)
-        assert len(assign_call[0]) == 1
-        assert isinstance(assign_call[0][0], ConfluentPartition)
-        assert should_recover.changelog_name == assign_call[0][0].topic
-        assert should_recover.partition_num == assign_call[0][0].partition
-        assert should_recover.offset == assign_call[0][0].offset
-
-        assert (
-            recovery_manager._recovery_partitions[should_recover.partition_num][
-                should_recover.changelog_name
-            ]
-            == should_recover
-        )
-        assert not_recover.partition_num not in recovery_manager._recovery_partitions
-        assert not recovery_manager._pending_assigns
-
-    def test__handle_pending_assigns_no_assigns(self, recovery_manager_mock_consumer):
-        """
-        Handle pending assigns of changelog partitions where none of them actually
-        needed assigning since they were up-to-date.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 3
-        recovery_manager._pending_assigns = [
-            RecoveryPartition(
-                topic_name=topic_name,
-                changelog_name=changelog_name,
-                partition_num=partition_num,
-                store_partition=create_autospec(StorePartition)(),
-            )
-        ]
-        consumer.get_watermark_offsets.side_effect = [(0, 10)]
-        not_recover = recovery_manager._pending_assigns[0]
-        not_recover.store_partition.get_changelog_offset.return_value = 10
-
-        recovery_manager._handle_pending_assigns()
-
-        consumer.incremental_assign.assert_not_called()
-        assert not_recover.partition_num not in recovery_manager._recovery_partitions
-        assert not recovery_manager._pending_assigns
 
     def test__handle_pending_assigns_update_offset(
         self, recovery_manager_mock_consumer
