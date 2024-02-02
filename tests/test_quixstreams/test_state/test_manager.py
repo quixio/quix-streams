@@ -332,6 +332,7 @@ class TestStateStoreManagerChangelog:
         changelog_manager = state_manager._changelog_manager
         producer = create_autospec(RowProducer)("broker")
         consumer = create_autospec(Consumer)("broker", "group", "latest")
+        consumer.get_watermark_offsets.return_value = (0, 10)
         changelog_manager._producer = producer
         changelog_manager._recovery_manager._consumer = consumer
         changelog_manager._topic_manager.topic(name="topic")
@@ -362,6 +363,7 @@ class TestStateStoreManagerChangelog:
         changelog_manager = state_manager._changelog_manager
         producer = create_autospec(RowProducer)("broker")
         consumer = create_autospec(Consumer)("broker", "group", "latest")
+        consumer.get_watermark_offsets.return_value = (0, 10)
         changelog_manager._producer = producer
         changelog_manager._recovery_manager._consumer = consumer
         changelog_manager._topic_manager.topic(name="topic")

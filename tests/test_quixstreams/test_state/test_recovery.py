@@ -1,4 +1,4 @@
-from unittest.mock import patch, create_autospec
+from unittest.mock import patch, create_autospec, call
 
 import logging
 import uuid
@@ -152,24 +152,33 @@ class TestChangelogManager:
 
         topic_manager.topic(topic_name)
         store_partitions = {}
-        changelog_partitions = {}
+        recovery_partition_calls = []
         for store_name in store_names:
             changelog = topic_manager.changelog_topic(
                 topic_name=topic_name, store_name=store_name, consumer_group="group"
             )
             store_partitions[store_name] = create_autospec(StorePartition)()
-            changelog_partitions[changelog.name] = store_partitions[store_name]
+            recovery_partition_calls.append(
+                call(
+                    changelog_name=changelog.name,
+                    partition_num=partition_num,
+                    store_partition=store_partitions[store_name],
+                )
+            )
+        with patch("quixstreams.state.recovery.RecoveryPartition") as rp:
+            rp.return_value = "rp"
+            changelog_manager.assign_partition(
+                topic_name=topic_name,
+                partition_num=partition_num,
+                store_partitions=store_partitions,
+            )
 
-        changelog_manager.assign_partition(
-            topic_name=topic_name,
-            partition_num=partition_num,
-            store_partitions=store_partitions,
-        )
-
+        rp.assert_has_calls(recovery_partition_calls)
+        assert rp.call_count == len(recovery_partition_calls)
         recovery_manager.assign_partitions.assert_called_with(
             topic_name=topic_name,
             partition_num=partition_num,
-            store_partitions=changelog_partitions,
+            recovery_partitions=["rp", "rp"],
         )
 
     def test_revoke_partition(self, changelog_manager_mock_recovery):
@@ -204,39 +213,98 @@ class TestChangelogManager:
 class TestRecoveryManager:
     def test_assign_partitions(self, recovery_manager_mock_consumer):
         """
-        Assign a topic partition and queue up its respective changelog partitions for
-        assignment.
+        Assign a topic partition that needs recovery.
+
+        Changelog partitions from two different stores are attempting assignment,
+        but only "window" should recover.
         """
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
         topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
         partition_num = 1
-        store_partition = create_autospec(StorePartition)()
+        store_names = ["default", "window"]
+        changelog_names = [f"changelog__{topic_name}__{store}" for store in store_names]
+
+        recovery_partitions = [
+            RecoveryPartition(
+                changelog_name=name,
+                partition_num=partition_num,
+                store_partition=create_autospec(StorePartition)(),
+            )
+            for name in changelog_names
+        ]
+        not_recover = recovery_partitions[0]
+        should_recover = recovery_partitions[1]
+
+        side_effects = []
+        for idx, p in enumerate(recovery_partitions):
+            p.store_partition.get_changelog_offset.return_value = 10 * idx
+            side_effects.append((0, 20 * idx))
+        consumer.get_watermark_offsets.side_effect = side_effects
+
         recovery_manager.assign_partitions(
             topic_name=topic_name,
             partition_num=partition_num,
-            store_partitions={changelog_name: store_partition},
+            recovery_partitions=recovery_partitions,
         )
 
-        assert len(recovery_manager._pending_assigns) == 1
-        recovery_partition = recovery_manager._pending_assigns[0]
-        expected_confluent_partition = ConfluentPartition(
-            recovery_partition.topic_name, recovery_partition.partition_num
+        assign_call = consumer.incremental_assign.call_args_list[0].args
+        assert len(assign_call) == 1
+        assert isinstance(assign_call[0], list)
+        assert len(assign_call[0]) == 1
+        assert isinstance(assign_call[0][0], ConfluentPartition)
+        assert should_recover.changelog_name == assign_call[0][0].topic
+        assert should_recover.partition_num == assign_call[0][0].partition
+        assert should_recover.offset == assign_call[0][0].offset
+
+        assert (
+            recovery_manager._recovery_partitions[partition_num][
+                should_recover.changelog_name
+            ]
+            == should_recover
         )
-        assert isinstance(recovery_partition, RecoveryPartition)
-        assert recovery_partition.topic_name == topic_name
-        assert recovery_partition.changelog_name == changelog_name
-        assert recovery_partition.partition_num == partition_num
-        assert recovery_partition.store_partition == store_partition
+        assert (
+            not_recover.changelog_name
+            not in recovery_manager._recovery_partitions[partition_num]
+        )
 
         pause_call = consumer.pause.call_args_list[0].args
         assert len(pause_call) == 1
         assert isinstance(pause_call[0], list)
         assert len(pause_call[0]) == 1
         assert isinstance(pause_call[0][0], ConfluentPartition)
-        assert expected_confluent_partition.topic == pause_call[0][0].topic
-        assert expected_confluent_partition.partition == pause_call[0][0].partition
+        assert topic_name == pause_call[0][0].topic
+        assert partition_num == pause_call[0][0].partition
+
+        # recovery_manager = recovery_manager_mock_consumer
+        # consumer = recovery_manager._consumer
+        # consumer.get_watermark_offsets.return_value = (0, 10)
+        # topic_name = "topic_name"
+        # changelog_name = f"changelog__{topic_name}__default"
+        # partition_num = 1
+        # store_partition = create_autospec(StorePartition)()
+        # recovery_manager.assign_partitions(
+        #     topic_name=topic_name,
+        #     partition_num=partition_num,
+        #     store_partitions={changelog_name: store_partition},
+        # )
+        #
+        # expected_confluent_partition = ConfluentPartition(
+        #     recovery_partition.topic_name, recovery_partition.partition_num
+        # )
+        # assert isinstance(recovery_partition, RecoveryPartition)
+        # assert recovery_partition.topic_name == topic_name
+        # assert recovery_partition.changelog_name == changelog_name
+        # assert recovery_partition.partition_num == partition_num
+        # assert recovery_partition.store_partition == store_partition
+        #
+        # pause_call = consumer.pause.call_args_list[0].args
+        # assert len(pause_call) == 1
+        # assert isinstance(pause_call[0], list)
+        # assert len(pause_call[0]) == 1
+        # assert isinstance(pause_call[0][0], ConfluentPartition)
+        # assert expected_confluent_partition.topic == pause_call[0][0].topic
+        # assert expected_confluent_partition.partition == pause_call[0][0].partition
 
     def test__revoke_recovery_partitions(self, recovery_manager_mock_consumer):
         recovery_manager = recovery_manager_mock_consumer
@@ -418,36 +486,6 @@ class TestRecoveryManager:
         update_offset.assert_called()
         assert not_recover.partition_num not in recovery_manager._recovery_partitions
         assert not recovery_manager._pending_assigns
-
-    def test__update_partition_offsets(self, recovery_manager_mock_consumer):
-        """
-        Partition offset updates are handled correctly.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_nums = [3, 7]
-        expected_pending_revokes = []
-        for partition_num in partition_nums:
-            rp = RecoveryPartition(
-                topic_name=topic_name,
-                changelog_name=changelog_name,
-                partition_num=partition_num,
-                store_partition=create_autospec(StorePartition)(),
-            )
-            rp.set_watermarks(0, 20)
-            rp.store_partition.get_changelog_offset.return_value = 18
-            recovery_manager._recovery_partitions.setdefault(partition_num, {})[
-                changelog_name
-            ] = rp
-            expected_pending_revokes += [rp]
-
-        with patch.object(recovery_manager, "_revoke_recovery_partitions") as revoke:
-            recovery_manager._update_partition_offsets()
-
-        revoke.assert_called_with(expected_pending_revokes)
-        for partition in expected_pending_revokes:
-            partition.store_partition.set_changelog_offset.assert_called()
 
     def test__finalize_recovery(self, recovery_manager_mock_consumer):
         """

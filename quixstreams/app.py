@@ -737,6 +737,7 @@ class Application:
 
             while self._running:
                 if self._do_recovery_check:
+                    # performs recovery if needed
                     self._state_manager.do_recovery()
                     self._do_recovery_check = False
                 self._process_message(dataframe_composed, start_state_transaction)

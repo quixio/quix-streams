@@ -54,12 +54,10 @@ def changelog_writer_with_changelog(changelog_writer_factory, topic_admin):
 
 @pytest.fixture()
 def recovery_partition_store_mock(rocksdb_store_factory):
-    topic_name = str(uuid.uuid4())
     store = create_autospec(StorePartition)()
     store.get_changelog_offset.return_value = 15
     recovery_partition = RecoveryPartition(
-        topic_name=topic_name,
-        changelog_name=f"changelog__{topic_name}",
+        changelog_name=f"changelog__{str(uuid.uuid4())}",
         partition_num=0,
         store_partition=store,
     )
