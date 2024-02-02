@@ -129,9 +129,9 @@ class QuixPortalApiService:
         self,
         topic_name: str,
         topic_partitions: int,
-        topic_rep_factor: int,
-        topic_ret_minutes: int,
-        topic_ret_bytes: int,
+        topic_rep_factor: Optional[int] = None,
+        topic_ret_minutes: Optional[int] = None,
+        topic_ret_bytes: Optional[int] = None,
         workspace_id: Optional[str] = None,
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id

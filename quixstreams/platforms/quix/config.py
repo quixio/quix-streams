@@ -53,10 +53,10 @@ _QUIX_SECURITY_PROTOCOL_MAP = {
 @dataclasses.dataclass
 class TopicCreationConfigs:
     name: Optional[str] = None  # Required when not created by a Quix App.
-    num_partitions: int = 2
-    replication_factor: int = 2
-    retention_bytes: int = 52428800
-    retention_minutes: int = 10080
+    num_partitions: int = 1
+    replication_factor: Optional[int] = None
+    retention_bytes: Optional[int] = None
+    retention_minutes: Optional[int] = None
     optionals: Optional[Mapping] = None
 
 
