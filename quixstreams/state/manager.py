@@ -74,9 +74,17 @@ class StateStoreManager:
 
     @property
     def using_changelogs(self) -> bool:
+        """
+        Whether the StateStoreManager is using changelog topics
+
+        :return: using changelogs, as bool
+        """
         return bool(self._changelog_manager)
 
     def do_recovery(self):
+        """
+        Perform a state recovery, if necessary.
+        """
         return self._changelog_manager.do_recovery()
 
     def get_store(
@@ -96,6 +104,12 @@ class StateStoreManager:
         return store
 
     def _add_changelog(self, topic_name: str, store_name: str):
+        """
+        Register a changelog topic with the ChangelogManager.
+
+        :param topic_name: source topic name
+        :param store_name: store name
+        """
         logger.debug(
             f'State Manager: registering changelog for store "{store_name}" '
             f'(topic "{topic_name}")'

@@ -100,15 +100,33 @@ class StorePartition(Protocol):
         """
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):
+        """
+        Updates state from a given changelog message.
+
+        :param changelog_message: A raw Confluent message read from a changelog topic.
+        """
         ...
 
     def get_processed_offset(self) -> Optional[int]:
+        """
+        Get last processed offset for the given partition
+        :return: offset or `None` if there's no processed offset yet
+        """
         ...
 
     def get_changelog_offset(self) -> Optional[int]:
+        """
+        Get offset that the changelog is up-to-date with.
+        :return: offset or `None` if there's no processed offset yet
+        """
         ...
 
     def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
+        """
+        Set the changelog offset based on a message (usually an "offset-only" message).
+
+        Used during recovery.
+        """
         ...
 
 
