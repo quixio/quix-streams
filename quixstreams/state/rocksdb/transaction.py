@@ -100,11 +100,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     In this case, a new `RocksDBTransaction` should be created.
 
     `RocksDBTransaction` can be used only once.
-
-    :param partition: instance of `RocksDBStatePartition` to be used for accessing
-        the underlying RocksDB
-    :param dumps: a function to serialize data to bytes.
-    :param loads: a function to deserialize data from bytes.
     """
 
     __slots__ = (
@@ -127,6 +122,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         loads: LoadsFunc,
         changelog_writer: Optional[ChangelogWriter] = None,
     ):
+        """
+        :param partition: instance of `RocksDBStatePartition` to be used for accessing
+            the underlying RocksDB
+        :param dumps: a function to serialize data to bytes.
+        :param loads: a function to deserialize data from bytes.
+        :param changelog_writer: if using changelogs, a ChangelogWriter instance
+        """
         self._partition = partition
         self._update_cache: Dict[str, Dict[bytes, Union[bytes, Undefined]]] = {}
         self._batch = WriteBatch(raw_mode=True)

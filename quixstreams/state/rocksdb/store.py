@@ -17,6 +17,13 @@ __all__ = ("RocksDBStore",)
 
 
 class RocksDBStore(Store):
+    """
+    RocksDB-based state store.
+
+    It keeps track of individual store partitions and provides access to the
+    partitions' transactions.
+    """
+
     options_type = RocksDBOptionsType
 
     def __init__(
@@ -28,14 +35,10 @@ class RocksDBStore(Store):
         options: Optional[options_type] = None,
     ):
         """
-        RocksDB-based state store.
-
-        It keeps track of individual store partitions and provides access to the
-        partitions' transactions.
-
         :param name: a unique store name
         :param topic: a topic name for this store
         :param base_dir: path to a directory with the state
+        :param changelog_manager: if using changelogs, a ChangelogManager instance
         :param options: RocksDB options. If `None`, the default options will be used.
         """
         self._name = name

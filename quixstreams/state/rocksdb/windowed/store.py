@@ -8,6 +8,13 @@ from ...recovery import ChangelogManager
 
 
 class WindowedRocksDBStore(RocksDBStore):
+    """
+    RocksDB-based windowed state store.
+
+    It keeps track of individual store partitions and provides access to the
+    partitions' transactions.
+    """
+
     def __init__(
         self,
         name: str,
@@ -16,6 +23,13 @@ class WindowedRocksDBStore(RocksDBStore):
         changelog_manager: Optional[ChangelogManager] = None,
         options: Optional[RocksDBOptionsType] = None,
     ):
+        """
+        :param name: a unique store name
+        :param topic: a topic name for this store
+        :param base_dir: path to a directory with the state
+        :param changelog_manager: if using changelogs, a ChangelogManager instance
+        :param options: RocksDB options. If `None`, the default options will be used.
+        """
         super().__init__(
             name=name,
             topic=topic,

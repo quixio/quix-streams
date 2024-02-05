@@ -37,7 +37,7 @@ with app.get_producer() as producer:
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
         value = {
             "account_id": account_id,
-            "account_class": "Gold" if account >= 8 else "Silver",
+            "account_class": "Gold" if account >= 7 else "Silver",
             "transaction_amount": randint(-2500, -1),
             "transaction_source": choice(retailers),
         }

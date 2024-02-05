@@ -5,7 +5,6 @@ import uuid
 
 from quixstreams.state.recovery import (
     ChangelogWriter,
-    RecoveryPartition,
     ConfluentPartition,
     OffsetUpdate,
 )
@@ -211,6 +210,65 @@ class TestChangelogManager:
 
 
 class TestRecoveryManager:
+    def test_do_recovery_skip_recovery(self, recovery_manager_mock_consumer):
+        recovery_manager = recovery_manager_mock_consumer
+        consumer = recovery_manager._consumer
+        recovery_manager.do_recovery()
+
+        consumer.resume.assert_not_called()
+
+    def test_do_recovery(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
+    ):
+        recovery_manager = recovery_manager_mock_consumer
+        topic_name = "topic_name"
+        partition_num = 1
+        store_names = ["default", "window"]
+        changelog_names = [f"changelog__{topic_name}__{store}" for store in store_names]
+        watermarks = [(0, 10), (0, 20)]
+        changelog_offsets = [0, 0]
+
+        consumer = recovery_manager._consumer
+        consumer.get_watermark_offsets.side_effect = watermarks
+        consumer.assignment.return_value = ["assignments"]
+
+        recovery_partitions = [
+            recovery_partition_factory(
+                changelog_name=changelog_names[i],
+                partition_num=partition_num,
+                mocked_changelog_offset=changelog_offsets[i],
+            )
+            for i in range(len(store_names))
+        ]
+
+        recovery_manager.assign_partitions(
+            topic_name=topic_name,
+            partition_num=partition_num,
+            recovery_partitions=recovery_partitions,
+        )
+        with patch.object(recovery_manager, "_recovery_loop") as recovery_loop:
+            recovery_manager.do_recovery()
+
+        changelog_resume_args = consumer.resume.call_args_list[0].args[0]
+        print(changelog_resume_args)
+        assert len(changelog_resume_args) == 2
+        for idx, tp in enumerate(changelog_resume_args):
+            assert recovery_partitions[idx].changelog_name == tp.topic
+            assert recovery_partitions[idx].partition_num == tp.partition
+        recovery_loop.assert_called()
+        assert consumer.resume.call_args_list[1].args[0] == ["assignments"]
+        assert consumer.resume.call_count == 2
+
+    def test_do_recovery_skip(self, recovery_manager_mock_consumer):
+        recovery_manager = recovery_manager_mock_consumer
+        consumer = recovery_manager._consumer
+
+        with patch.object(recovery_manager, "_recovery_loop") as recovery_loop:
+            recovery_manager.do_recovery()
+
+        consumer.resume.assert_not_called()
+        recovery_loop.assert_not_called()
+
     def test_assign_partitions(
         self, recovery_manager_mock_consumer, recovery_partition_factory
     ):
@@ -300,8 +358,6 @@ class TestRecoveryManager:
             for i in range(len(store_names))
         ]
 
-        offset_update_partition = recovery_partitions[1]
-
         with patch.object(recovery_partitions[1], "update_offset") as update_offset:
             recovery_manager.assign_partitions(
                 topic_name=topic_name,
@@ -323,6 +379,7 @@ class TestRecoveryManager:
         Recovery was previously going, so must pause the source topic.
         """
         recovery_manager = recovery_manager_mock_consumer
+        recovery_manager._recovery_initialized = True
         topic_name = "topic_name"
         partition_num = 1
         store_names = ["default", "window"]
@@ -378,6 +435,7 @@ class TestRecoveryManager:
         RecoveryManager is currently recovering, so should only pause source topic.
         """
         recovery_manager = recovery_manager_mock_consumer
+        recovery_manager._recovery_initialized = True
         topic_name = "topic_name"
         partition_num = 1
         store_names = ["default", "window"]
@@ -514,75 +572,9 @@ class TestRecoveryManager:
 
         revoke.assert_not_called()
 
-    def test__handle_pending_assigns_update_offset(
-        self, recovery_manager_mock_consumer
+    def test__recovery_loop(
+        self, recovery_manager_mock_consumer, recovery_partition_factory
     ):
-        """
-        Handle pending assigns of changelog partitions where the partition does not
-        actually need recovery, but instead a simple offset update (due to some
-        processing error, or there being no offset to read).
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 3
-        recovery_manager._pending_assigns = [
-            RecoveryPartition(
-                topic_name=topic_name,
-                changelog_name=changelog_name,
-                partition_num=partition_num,
-                store_partition=create_autospec(StorePartition)(),
-            )
-        ]
-        consumer.get_watermark_offsets.side_effect = [(0, 10)]
-        not_recover = recovery_manager._pending_assigns[0]
-        not_recover.store_partition.get_changelog_offset.return_value = 20
-
-        with patch.object(
-            recovery_manager._pending_assigns[0], "update_offset"
-        ) as update_offset:
-            recovery_manager._handle_pending_assigns()
-
-        consumer.incremental_assign.assert_not_called()
-        update_offset.assert_called()
-        assert not_recover.partition_num not in recovery_manager._recovery_partitions
-        assert not recovery_manager._pending_assigns
-
-    def test__finalize_recovery(self, recovery_manager_mock_consumer):
-        """
-        Finalize recovery.
-
-        Also tests when we have a remaining _partition with some offset
-        issues, updating it to current and revoking it before finishing recovery.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        assignment_result = "assignments_list"
-        consumer.assignment.return_value = assignment_result
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 1
-        rp = RecoveryPartition(
-            topic_name=topic_name,
-            changelog_name=changelog_name,
-            partition_num=partition_num,
-            store_partition=create_autospec(StorePartition)(),
-        )
-        rp.set_watermarks(0, 20)
-        rp.store_partition.get_changelog_offset.return_value = 18
-        recovery_manager._recovery_partitions.setdefault(partition_num, {})[
-            changelog_name
-        ] = rp
-
-        recovery_manager._finalize_recovery()
-
-        consumer.resume.assert_called_with(assignment_result)
-        consumer.incremental_unassign.assert_called()
-        assert recovery_manager._polls_remaining == recovery_manager._poll_attempts
-        assert not recovery_manager._recovery_partitions
-
-    def test__recover(self, recovery_manager_mock_consumer):
         """
         Successfully recover from a changelog message, which is also the last one
         for the partition, so revoke it afterward.
@@ -597,14 +589,13 @@ class TestRecoveryManager:
             topic=changelog_name, partition=partition_num, offset=highwater - 1
         )
         consumer.poll.return_value = msg
-        rp = RecoveryPartition(
-            topic_name=topic_name,
+        rp = recovery_partition_factory(
             changelog_name=changelog_name,
             partition_num=partition_num,
-            store_partition=create_autospec(StorePartition)(),
+            mocked_changelog_offset=highwater,  # referenced AFTER recovering from msg
+            lowwater=0,
+            highwater=highwater,
         )
-        rp.set_watermarks(0, highwater)
-        rp.store_partition.get_changelog_offset.return_value = highwater
         recovery_manager._recovery_partitions.setdefault(partition_num, {})[
             changelog_name
         ] = rp
@@ -612,7 +603,6 @@ class TestRecoveryManager:
         recovery_manager._recovery_loop()
 
         rp.store_partition.recover.assert_called_with(changelog_message=msg)
-        assert not recovery_manager._recovery_partitions
         consumer.incremental_unassign.assert_called()
 
     def test__recovery_loop_no_partitions(self, recovery_manager_mock_consumer):
@@ -621,31 +611,3 @@ class TestRecoveryManager:
 
         recovery_manager._recovery_loop()
         consumer.poll.assert_not_called()
-
-    def test__recovery_loop_empty_polls(self, recovery_manager_mock_consumer):
-        """
-        Handle empty poll attempts, which ends recovery.
-        """
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-        consumer.poll.return_value = None
-        topic_name = "topic_name"
-        changelog_name = f"changelog__{topic_name}__default"
-        partition_num = 1
-
-        # won't poll without a partition assigned
-        rp = RecoveryPartition(
-            topic_name=topic_name,
-            changelog_name=changelog_name,
-            partition_num=partition_num,
-            store_partition=create_autospec(StorePartition)(),
-        )
-        recovery_manager._recovery_partitions.setdefault(partition_num, {})[
-            changelog_name
-        ] = rp
-
-        recovery_manager._recovery_loop()
-
-        assert recovery_manager._polls_remaining == 0
-        assert consumer.poll.call_count == recovery_manager._poll_attempts
-        rp.store_partition.recover.assert_not_called()

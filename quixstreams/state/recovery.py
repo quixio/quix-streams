@@ -3,6 +3,7 @@ from typing import Optional, Dict, List
 
 from confluent_kafka import TopicPartition as ConfluentPartition
 
+from .exceptions import StopRecovery
 from quixstreams.kafka import Consumer
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.rowproducer import RowProducer
@@ -27,8 +28,8 @@ class OffsetUpdate(ConfluentKafkaMessageProto):
 
 class RecoveryPartition:
     """
-    A changelog partition mapped to a respective `StorePartition` with helper methods
-    to determine its current recovery status.
+    A changelog topic partition mapped to a respective `StorePartition` with helper
+    methods to determine its current recovery status.
 
     Since `StorePartition`s do recovery directly, it also handles recovery transactions.
     """
@@ -47,19 +48,35 @@ class RecoveryPartition:
 
     @property
     def offset(self) -> int:
+        """
+        Get the changelog offset from the underlying `StorePartition`.
+
+        :return: changelog offset (int)
+        """
         return self.store_partition.get_changelog_offset() or 0
 
     @property
     def needs_recovery(self):
+        """
+        Determine whether recovery is necessary for underlying `StorePartition`.
+        """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
         state_is_behind = (self._changelog_highwater - self.offset) > 0
         return has_consumable_offsets and state_is_behind
 
     @property
     def needs_offset_update(self):
+        """
+        Determine if an offset update is required.
+
+        Usually checked during assign if recovery was not required.
+        """
         return self._changelog_highwater and (self.offset != self._changelog_highwater)
 
     def update_offset(self):
+        """
+        Update only the changelog offset of a StorePartition.
+        """
         logger.info(
             f"changelog partition {self.changelog_name}[{self.partition_num}] "
             f"requires an offset update"
@@ -77,9 +94,20 @@ class RecoveryPartition:
         )
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):
+        """
+        Recover the StorePartition using a message read from its respective changelog.
+
+        :param changelog_message: A confluent kafka message (everything as bytes)
+        """
         self.store_partition.recover(changelog_message=changelog_message)
 
     def set_watermarks(self, lowwater: int, highwater: int):
+        """
+        Set the changelog watermarks as gathered from Consumer.get_watermark_offsets()
+
+        :param lowwater: topic partition lowwater
+        :param highwater: topic partition highwater
+        """
         self._changelog_lowwater = lowwater
         self._changelog_highwater = highwater
 
@@ -91,6 +119,11 @@ class ChangelogWriter:
     """
 
     def __init__(self, changelog: Topic, partition_num: int, producer: RowProducer):
+        """
+        :param changelog: A changelog Topic object
+        :param partition_num: source topic partition number
+        :param producer: a RowProducer (not shared with `Application` instance)
+        """
         self._changelog = changelog
         self._partition_num = partition_num
         self._producer = producer
@@ -101,6 +134,13 @@ class ChangelogWriter:
         value: Optional[bytes] = None,
         headers: Optional[MessageHeadersMapping] = None,
     ):
+        """
+        Produce a message to a changelog topic partition.
+
+        :param key: message key (same as state key, including prefixes)
+        :param value: message value (same as state value)
+        :param headers: message headers (includes column family info)
+        """
         self._producer.produce(
             key=key,
             value=value,
@@ -132,6 +172,10 @@ class ChangelogManager:
     def register_changelog(self, topic_name: str, store_name: str, consumer_group: str):
         """
         Register a changelog Topic with the TopicManager.
+
+        :param topic_name: source topic name
+        :param store_name: name of the store
+        :param consumer_group: name of the consumer group
         """
         self._topic_manager.changelog_topic(
             topic_name=topic_name,
@@ -173,12 +217,27 @@ class ChangelogManager:
         )
 
     def revoke_partition(self, partition_num: int):
+        """
+        revoke ALL StorePartitions (across all Stores) for a given partition number
+
+        :param partition_num: partition number of source topic
+        """
         self._recovery_manager.revoke_partitions(partition_num=partition_num)
         self._changelog_writers.pop(partition_num, None)
 
     def get_writer(
         self, topic_name: str, store_name: str, partition_num: int
     ) -> ChangelogWriter:
+        """
+        Retrieve a ChangelogWriter instance, used to produce changelog messages for a
+        respective StorePartition.
+
+        :param topic_name: source topic name
+        :param store_name: name of the store
+        :param partition_num: source topic partition number
+
+        :return: a ChangelogWriter instance
+        """
         changelog = self._topic_manager.changelog_topics[topic_name][store_name]
         return self._changelog_writers.setdefault(partition_num, {}).setdefault(
             changelog.name,
@@ -191,11 +250,9 @@ class ChangelogManager:
 
     def do_recovery(self):
         """
-        Perform a recovery only if the recovery manager has active RecoveryPartitions
+        Will recover only if `RecoveryManager` has active RecoveryPartitions
         """
-        # only performs recovery if changelog partitions are assigned
-        if self._recovery_manager.recovering:
-            self._recovery_manager.do_recovery()
+        self._recovery_manager.do_recovery()
 
 
 class RecoveryManager:
@@ -204,22 +261,60 @@ class RecoveryManager:
         - assigning/revoking, pausing/resuming topic partitions (especially changelogs)
         - consuming changelog messages until state is updated fully.
 
-    Also tracks/manages `RecoveryPartitions`, which are assigned/tracked when
-    recovery from a given changelog partition is actually required.
+    Also tracks/manages `RecoveryPartitions`, which are assigned/tracked only if
+    recovery for that changelog partition is required.
 
-    Recovery is attempted from the `Application` after a new partition assignment.
+    Recovery is attempted from the `Application` after any new partition assignment.
     """
 
-    _poll_attempts = 2
-
     def __init__(self, consumer: Consumer):
+        self._recovery_initialized = False
         self._consumer = consumer
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
-        self._polls_remaining: int = self._poll_attempts
+
+    @property
+    def has_assignments(self) -> bool:
+        """
+        Whether the Application has assigned RecoveryPartitions
+
+        :return: has assignments, as bool
+        """
+        return bool(self._recovery_partitions)
 
     @property
     def recovering(self) -> bool:
-        return bool(self._recovery_partitions)
+        """
+        Whether the Application is currently recovering
+
+        :return: is recovering, as bool
+        """
+        return self.has_assignments and self._recovery_initialized
+
+    def do_recovery(self):
+        """
+        If there are any active RecoveryPartitions, do a recovery procedure.
+
+        After, will resume normal `Application` processing.
+        """
+        if not self.has_assignments:
+            logger.debug("No recovery required!")
+            return
+
+        logger.info("Beginning the recovery process...")
+        self._recovery_initialized = True
+        self._consumer.resume(
+            [
+                ConfluentPartition(rp.changelog_name, rp.partition_num)
+                for rp in dict_values(self._recovery_partitions)
+            ]
+        )
+        try:
+            self._recovery_loop()
+            logger.info("Recovery process complete! Resuming normal processing...")
+            self._recovery_initialized = False
+            self._consumer.resume(self._consumer.assignment())
+        except StopRecovery:
+            logger.info("Stopping recovery...")
 
     def assign_partitions(
         self,
@@ -230,9 +325,8 @@ class RecoveryManager:
         """
         Assigns `RecoveryPartitions` ONLY IF they require recovery.
 
-        Also pauses any active consumer partitions as needed.
+        Pauses active consumer partitions as needed.
         """
-        previously_recovering = self.recovering
         for rp in recovery_partitions:
             c_name, p_num = rp.changelog_name, rp.partition_num
             rp.set_watermarks(
@@ -247,46 +341,32 @@ class RecoveryManager:
                     [ConfluentPartition(c_name, p_num, rp.offset)]
                 )
             elif rp.needs_offset_update:
-                # nothing to recover, but offset appears off...likely that offset >
-                # highwater due to At Least Once processing issues.
+                # nothing to recover, but offset is off...likely that offset >
+                # highwater due to At Least Once processing behavior.
                 rp.update_offset()
 
-        self._polls_remaining = self._poll_attempts
         # figure out if any pausing is required
         if self.recovering:
-            if previously_recovering:
-                # was already recovering, so pause source topic only
-                self._consumer.pause([ConfluentPartition(topic_name, partition_num)])
-            else:
-                # pause ALL partitions while we wait for Application to start recovery
-                # (all newly assigned partitions are available on `.assignment`).
-                self._consumer.pause(self._consumer.assignment())
+            # was already recovering, so pause source topic only
+            self._consumer.pause([ConfluentPartition(topic_name, partition_num)])
+            logger.info("Continuing recovery...")
+        elif self.has_assignments:
+            # pause ALL partitions while we wait for Application to start recovery
+            # (all newly assigned partitions are available on `.assignment`).
+            self._consumer.pause(self._consumer.assignment())
 
     def revoke_partitions(self, partition_num: int):
         """
-        Revoke EVERY stores' changelog partitions (if assigned) for the given partition
+        Revoke EVERY assigned RecoveryPartition for the given partition number.
 
-        :param partition_num: the partition number
+        :param partition_num: the source topic partition number
         """
         if changelogs := self._recovery_partitions.get(partition_num, {}):
+            logger.debug(f"Stopping recovery for {changelogs}")
             self._revoke_recovery_partitions(
                 [changelogs.pop(changelog) for changelog in list(changelogs.keys())],
                 partition_num,
             )
-
-    def do_recovery(self):
-        """
-        Begin a full recovery process and resume normal `Application` processing after.
-        """
-        self._consumer.resume(
-            [
-                ConfluentPartition(rp.changelog_name, rp.partition_num)
-                for rp in dict_values(self._recovery_partitions)
-            ]
-        )
-        self._recovery_loop()
-        self._polls_remaining = self._poll_attempts
-        self._consumer.resume(self._consumer.assignment())
 
     def _revoke_recovery_partitions(
         self,
@@ -295,11 +375,10 @@ class RecoveryManager:
     ):
         """
         For revoking a specific set of RecoveryPartitions.
-        Also cleans up any remnant empty dictionary references if given a partition num.
+        Also cleans up any remnant empty dictionary references for its partition number.
 
         :param recovery_partitions: a list of `RecoveryPartition`
-        :param partition_num: will attempt cleanup of recovery partition
-        dictionary for provided partition number.
+        :param partition_num: partition number
         """
         self._consumer.incremental_unassign(
             [
@@ -309,6 +388,8 @@ class RecoveryManager:
         )
         if not self._recovery_partitions[partition_num]:
             del self._recovery_partitions[partition_num]
+        if recovery_partitions:
+            logger.debug("Resuming recovery...")
 
     def _recovery_loop(self):
         """
@@ -317,7 +398,7 @@ class RecoveryManager:
 
         A RecoveryPartition is unassigned immediately once fully updated.
         """
-        while self.recovering:
+        while self.has_assignments:
             if (msg := self._consumer.poll(5)) is None:
                 continue
 
@@ -328,7 +409,7 @@ class RecoveryManager:
             partition.recover(changelog_message=msg)
 
             if not partition.needs_recovery:
-                logger.info(f"Recovery for {changelog_name}[{partition_num}] complete!")
+                logger.debug(f"Finished recovering {changelog_name}[{partition_num}]")
                 self._revoke_recovery_partitions(
                     [self._recovery_partitions[partition_num].pop(changelog_name)],
                     partition_num,

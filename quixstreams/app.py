@@ -40,6 +40,7 @@ from .platforms.quix import (
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
+from .state.exceptions import StopRecovery
 from .state.recovery import ChangelogManager
 from .state.rocksdb import RocksDBOptionsType
 
@@ -511,6 +512,8 @@ class Application:
         (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
         """
         self._running = False
+        if self._do_recovery_check:
+            raise StopRecovery
 
     def get_producer(self) -> Producer:
         """
@@ -740,7 +743,8 @@ class Application:
                     # performs recovery if needed
                     self._state_manager.do_recovery()
                     self._do_recovery_check = False
-                self._process_message(dataframe_composed, start_state_transaction)
+                else:
+                    self._process_message(dataframe_composed, start_state_transaction)
 
             logger.info("Stop processing of StreamingDataFrame")
 

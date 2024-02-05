@@ -55,6 +55,12 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
     def begin(
         self, changelog_writer: Optional[ChangelogWriter] = None
     ) -> "WindowedRocksDBPartitionTransaction":
+        """
+        Start a WindowedTransaction.
+
+        :param changelog_writer: If using changelogs, a ChangelogWriter instance
+        :return: a WindowedRocksDBPartitionTransaction instance
+        """
         return WindowedRocksDBPartitionTransaction(
             partition=self,
             dumps=self._dumps,
