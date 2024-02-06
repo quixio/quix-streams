@@ -11,7 +11,7 @@ from quixstreams.state.types import StorePartition
 
 
 @pytest.fixture()
-def changelog_writer_factory(changelog_manager_factory):
+def changelog_producer_factory(changelog_manager_factory):
     """
     Makes a changelog manager.
 
@@ -24,16 +24,15 @@ def changelog_writer_factory(changelog_manager_factory):
         partition_num: int = 0,
         topic_admin: Optional[TopicAdmin] = None,
     ):
-        changelog_manager = changelog_manager_factory(topic_admin=topic_admin)
+        changelog_manager = changelog_manager_factory()
         topic_manager = changelog_manager._topic_manager
-
         topic_manager.topic(topic_name)  # changelogs depend on topic objects existing
         changelog_topic = topic_manager.changelog_topic(
             topic_name=topic_name, store_name=store_name, consumer_group="group"
         )
         if topic_admin:
             topic_manager.create_topics([changelog_topic])
-        return changelog_manager.get_writer(
+        return changelog_manager.get_changelog_producer(
             topic_name=topic_name, store_name=store_name, partition_num=partition_num
         )
 
@@ -41,15 +40,10 @@ def changelog_writer_factory(changelog_manager_factory):
 
 
 @pytest.fixture()
-def changelog_writer_patched(changelog_writer_factory):
-    writer = changelog_writer_factory()
+def changelog_producer_patched(changelog_producer_factory):
+    writer = changelog_producer_factory()
     with patch.object(writer, "produce"):
         yield writer
-
-
-@pytest.fixture()
-def changelog_writer_with_changelog(changelog_writer_factory, topic_admin):
-    return changelog_writer_factory(topic_admin=topic_admin)
 
 
 @pytest.fixture()
@@ -96,7 +90,8 @@ def recovery_partition_factory():
 
 
 @pytest.fixture()
-def recovery_manager_mock_consumer():
+def recovery_manager_mock_consumer(topic_manager_factory):
     return RecoveryManager(
-        consumer=create_autospec(Consumer)("broker", "group", "latest")
+        consumer=create_autospec(Consumer)("broker", "group", "latest"),
+        topic_manager=topic_manager_factory(),
     )

@@ -26,7 +26,7 @@ from .transaction import (
     RocksDBPartitionRecoveryTransaction,
 )
 from .types import RocksDBOptionsType
-from ..recovery import ChangelogWriter
+from ..recovery import ChangelogProducer
 
 __all__ = ("RocksDBStorePartition",)
 
@@ -55,6 +55,7 @@ class RocksDBStorePartition(StorePartition):
         self,
         path: str,
         options: Optional[RocksDBOptionsType] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
     ):
         self._path = path
         self._options = options or RocksDBOptions()
@@ -66,10 +67,10 @@ class RocksDBStorePartition(StorePartition):
         self._db = self._init_rocksdb()
         self._cf_cache = {}
         self._cf_handle_cache = {}
+        self._changelog_producer = changelog_producer
 
     def begin(
         self,
-        changelog_writer: Optional[ChangelogWriter] = None,
     ) -> RocksDBPartitionTransaction:
         """
         Create a new `RocksDBTransaction` object.
@@ -81,7 +82,7 @@ class RocksDBStorePartition(StorePartition):
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
-            changelog_writer=changelog_writer,
+            changelog_producer=self._changelog_producer,
         )
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):

@@ -11,7 +11,7 @@ from .exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
-from .recovery import ChangelogManager
+from .recovery import ChangelogManager, RecoveryManager
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .rocksdb.windowed.store import WindowedRocksDBStore
 from .types import (
@@ -43,12 +43,14 @@ class StateStoreManager:
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
         changelog_manager: Optional[ChangelogManager] = None,
+        recovery_manager: Optional[RecoveryManager] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
         self._changelog_manager = changelog_manager
+        self._recovery_manager = recovery_manager
         self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
@@ -79,13 +81,19 @@ class StateStoreManager:
 
         :return: using changelogs, as bool
         """
-        return bool(self._changelog_manager)
+        return bool(self._recovery_manager)
 
     def do_recovery(self):
         """
         Perform a state recovery, if necessary.
         """
-        return self._changelog_manager.do_recovery()
+        return self._recovery_manager.do_recovery()
+
+    def stop_recovery(self):
+        """
+        Perform a state recovery, if necessary.
+        """
+        return self._recovery_manager.stop_recovery()
 
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
@@ -103,7 +111,7 @@ class StateStoreManager:
             )
         return store
 
-    def _add_changelog(self, topic_name: str, store_name: str):
+    def _add_changelog_topic(self, topic_name: str, store_name: str):
         """
         Register a changelog topic with the ChangelogManager.
 
@@ -136,7 +144,7 @@ class StateStoreManager:
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
             if self._changelog_manager:
-                self._add_changelog(topic_name, store_name)
+                self._add_changelog_topic(topic_name, store_name)
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
@@ -161,7 +169,7 @@ class StateStoreManager:
         if store:
             raise WindowedStoreAlreadyRegisteredError()
         if self._changelog_manager:
-            self._add_changelog(topic_name, store_name)
+            self._add_changelog_topic(topic_name, store_name)
 
         self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
             name=store_name,
@@ -199,8 +207,8 @@ class StateStoreManager:
         for name, store in self._stores.get(tp.topic, {}).items():
             store_partition = store.assign_partition(tp.partition)
             store_partitions[name] = store_partition
-        if self._changelog_manager and store_partitions:
-            self._changelog_manager.assign_partition(
+        if self._recovery_manager and store_partitions:
+            self._recovery_manager.assign_partition(
                 tp.topic, tp.partition, store_partitions
             )
         return list(store_partitions.values())
@@ -212,8 +220,8 @@ class StateStoreManager:
         :param tp: `TopicPartition` from Kafka consumer
         """
         if stores := self._stores.get(tp.topic, {}).values():
-            if self._changelog_manager:
-                self._changelog_manager.revoke_partition(tp.partition)
+            if self._recovery_manager:
+                self._recovery_manager.revoke_partition(tp.partition)
             for store in stores:
                 store.revoke_partition(tp.partition)
 

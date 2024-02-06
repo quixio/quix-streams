@@ -226,7 +226,8 @@ class TopicManager:
             raise TopicNameLengthExceeded(
                 f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
             )
-
+        print(topic_name)
+        print(self._admin.inspect_topics([topic_name]))
         # Get a configuration of the source topic
         source_topic_config = (
             self._admin.inspect_topics([topic_name])[topic_name]

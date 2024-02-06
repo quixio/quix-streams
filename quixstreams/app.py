@@ -40,8 +40,7 @@ from .platforms.quix import (
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
-from .state.exceptions import StopRecovery
-from .state.recovery import ChangelogManager
+from .state.recovery import ChangelogManager, RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 
 __all__ = ("Application",)
@@ -201,6 +200,11 @@ class Application:
                 )
             )
         self._topic_manager = topic_manager
+        self._recovery_manager = (
+            RecoveryManager(consumer=self._consumer, topic_manager=self._topic_manager)
+            if use_changelog_topics
+            else None
+        )
 
         changelog_manager = (
             ChangelogManager(
@@ -211,7 +215,6 @@ class Application:
                     extra_config=producer_extra_config,
                     on_error=on_producer_error,
                 ),
-                consumer=self._consumer,
             )
             if use_changelog_topics
             else None
@@ -221,6 +224,7 @@ class Application:
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
             changelog_manager=changelog_manager,
+            recovery_manager=self._recovery_manager,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
@@ -512,8 +516,8 @@ class Application:
         (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
         """
         self._running = False
-        if self._do_recovery_check:
-            raise StopRecovery
+        if self._state_manager.using_changelogs:
+            self._state_manager.stop_recovery()
 
     def get_producer(self) -> Producer:
         """

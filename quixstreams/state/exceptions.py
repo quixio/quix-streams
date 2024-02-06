@@ -19,7 +19,3 @@ class WindowedStoreAlreadyRegisteredError(QuixException):
 
 class InvalidStoreTransactionStateError(QuixException):
     ...
-
-
-class StopRecovery(QuixException):
-    ...

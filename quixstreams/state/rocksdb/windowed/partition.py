@@ -15,7 +15,7 @@ from ..partition import (
 from ..serialization import int_from_int64_bytes
 from ..types import RocksDBOptionsType
 
-from ...recovery import ChangelogWriter
+from ...recovery import ChangelogProducer
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,11 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         self,
         path: str,
         options: Optional[RocksDBOptionsType] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
     ):
-        super().__init__(path=path, options=options)
+        super().__init__(
+            path=path, options=options, changelog_producer=changelog_producer
+        )
         self._latest_timestamp_ms = self._get_latest_timestamp_from_db()
         self._expiration_index_cf_name = f"__expiration-index__"
         self._ensure_column_family(self._expiration_index_cf_name)
@@ -53,7 +56,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         return cf.items(from_key=from_key, read_opt=read_opt)
 
     def begin(
-        self, changelog_writer: Optional[ChangelogWriter] = None
+        self, changelog_writer: Optional[ChangelogProducer] = None
     ) -> "WindowedRocksDBPartitionTransaction":
         """
         Start a WindowedTransaction.
@@ -66,7 +69,6 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             dumps=self._dumps,
             loads=self._loads,
             latest_timestamp_ms=self._latest_timestamp_ms,
-            changelog_writer=changelog_writer,
         )
 
     def set_latest_timestamp(self, timestamp_ms: int):

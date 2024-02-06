@@ -306,6 +306,7 @@ def state_manager_factory(tmp_path):
         group_id: Optional[str] = None,
         state_dir: Optional[str] = None,
         changelog_manager: Optional[ChangelogManager] = None,
+        recovery_manager: Optional[RecoveryManager] = None,
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())
@@ -313,6 +314,7 @@ def state_manager_factory(tmp_path):
             group_id=group_id,
             state_dir=str(tmp_path / state_dir),
             changelog_manager=changelog_manager,
+            recovery_manager=recovery_manager,
         )
 
     return factory
@@ -330,37 +332,30 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 def changelog_manager_factory(
     topic_manager_factory,
     row_producer_factory,
-    row_consumer_factory,
 ):
     def factory(
         topic_admin: Optional[TopicAdmin] = None,
         producer: RowProducer = row_producer_factory(),
-        recovery_manager: Optional[RecoveryManager] = None,
     ):
         changelog_manager = ChangelogManager(
             topic_manager=topic_manager_factory(topic_admin),
             producer=producer,
-            consumer=row_consumer_factory(),
         )
-        if recovery_manager:
-            changelog_manager._recovery_manager = recovery_manager
         return changelog_manager
 
     return factory
 
 
 @pytest.fixture()
-def changelog_manager_mock_recovery(changelog_manager_factory):
-    with patch("quixstreams.state.recovery.RecoveryManager", spec=RecoveryManager):
-        return changelog_manager_factory()
-
-
-@pytest.fixture()
 def state_manager_changelogs(
-    state_manager_factory, topic_admin, changelog_manager_factory
+    state_manager_factory,
+    topic_admin,
+    changelog_manager_factory,
+    recovery_manager_mock_consumer,
 ) -> StateStoreManager:
     manager = state_manager_factory(
-        changelog_manager=changelog_manager_factory(topic_admin=topic_admin)
+        changelog_manager=changelog_manager_factory(topic_admin=topic_admin),
+        recovery_manager=recovery_manager_mock_consumer,
     )
     manager.init()
     yield manager

@@ -276,13 +276,21 @@ class TestStateStoreManagerChangelog:
         assert store_name in state_manager._stores[topic.name]
         assert store_name in topic_manager.changelog_topics[topic.name]
 
-    def test_assign_revoke_partitions_stores_registered(self, state_manager_changelogs):
+    def test_assign_revoke_partitions_stores_registered(
+        self,
+        state_manager_changelogs,
+        topic_manager_factory,
+    ):
         state_manager = state_manager_changelogs
-        changelog_manager = state_manager._changelog_manager
-        changelog_assign = patch.object(changelog_manager, "assign_partition").start()
-        changelog_revoke = patch.object(changelog_manager, "revoke_partition").start()
-        changelog_manager._topic_manager.topic(name="topic1")
-        changelog_manager._topic_manager.topic(name="topic2")
+        topic_manager = topic_manager_factory()
+        recovery_manager = state_manager._recovery_manager
+
+        state_manager._changelog_manager._topic_manager = topic_manager
+        recovery_manager._topic_manager = topic_manager
+        changelog_assign = patch.object(recovery_manager, "assign_partition").start()
+        changelog_revoke = patch.object(recovery_manager, "revoke_partition").start()
+        topic_manager.topic(name="topic1")
+        topic_manager.topic(name="topic2")
         state_manager.register_store("topic1", store_name="store1")
         state_manager.register_store("topic1", store_name="store2")
         state_manager.register_store("topic2", store_name="store1")
@@ -327,15 +335,25 @@ class TestStateStoreManagerChangelog:
         assert not state_manager.get_store("topic1", "store2").partitions
         assert not state_manager.get_store("topic2", "store1").partitions
 
-    def test_store_transaction_no_flush_on_exception(self, state_manager_changelogs):
+    def test_store_transaction_no_flush_on_exception(
+        self,
+        state_manager_changelogs,
+        topic_manager_factory,
+    ):
         state_manager = state_manager_changelogs
+        topic_manager = topic_manager_factory()
+        recovery_manager = state_manager._recovery_manager
         changelog_manager = state_manager._changelog_manager
+
+        recovery_manager._topic_manager = topic_manager
+        changelog_manager._topic_manager = topic_manager
         producer = create_autospec(RowProducer)("broker")
         consumer = create_autospec(Consumer)("broker", "group", "latest")
         consumer.get_watermark_offsets.return_value = (0, 10)
         changelog_manager._producer = producer
-        changelog_manager._recovery_manager._consumer = consumer
-        changelog_manager._topic_manager.topic(name="topic")
+        recovery_manager._consumer = consumer
+        topic_manager.topic(name="topic")
+        # topic_admin_mock.inspect_topics.return_value = {"topic": None}
         state_manager.register_store("topic", store_name="store")
         state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
 
@@ -353,20 +371,27 @@ class TestStateStoreManagerChangelog:
         producer.produce.assert_not_called()
 
     def test_store_transaction_no_flush_if_partition_transaction_failed(
-        self, state_manager_changelogs
+        self,
+        state_manager_changelogs,
+        topic_manager_factory,
     ):
         """
         Ensure that no PartitionTransactions are flushed to the DB if
         any of them fails
         """
         state_manager = state_manager_changelogs
+        topic_manager = topic_manager_factory()
+        recovery_manager = state_manager._recovery_manager
         changelog_manager = state_manager._changelog_manager
+
+        recovery_manager._topic_manager = topic_manager
+        changelog_manager._topic_manager = topic_manager
         producer = create_autospec(RowProducer)("broker")
         consumer = create_autospec(Consumer)("broker", "group", "latest")
         consumer.get_watermark_offsets.return_value = (0, 10)
         changelog_manager._producer = producer
-        changelog_manager._recovery_manager._consumer = consumer
-        changelog_manager._topic_manager.topic(name="topic")
+        recovery_manager._consumer = consumer
+        topic_manager.topic(name="topic")
         state_manager.register_store("topic", store_name="store1")
         state_manager.register_store("topic", store_name="store2")
         state_manager.on_partition_assign(TopicPartitionStub("topic", 0))

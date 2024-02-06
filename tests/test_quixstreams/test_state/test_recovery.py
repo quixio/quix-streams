@@ -4,7 +4,7 @@ import logging
 import uuid
 
 from quixstreams.state.recovery import (
-    ChangelogWriter,
+    ChangelogProducer,
     ConfluentPartition,
     OffsetUpdate,
 )
@@ -91,7 +91,7 @@ class TestChangelogWriter:
         )
         topic_manager.create_topics([changelog])
 
-        writer = ChangelogWriter(
+        writer = ChangelogProducer(
             changelog=changelog, partition_num=p_num, producer=row_producer_factory()
         )
         writer.produce(
@@ -134,20 +134,21 @@ class TestChangelogManager:
             topic_name=topic_name, store_name=store_name, consumer_group="group"
         )
 
-        writer = changelog_manager.get_writer(
+        writer = changelog_manager.get_changelog_producer(
             topic_name=topic_name, store_name=store_name, partition_num=p_num
         )
         assert writer._changelog == changelog
         assert writer._partition_num == p_num
         assert writer._producer == producer
 
-    def test_assign_partition(self, changelog_manager_mock_recovery):
+
+class TestRecoveryManager:
+    def test_assign_partition(self, recovery_manager_mock_consumer):
+        recovery_manager = recovery_manager_mock_consumer
+        topic_manager = recovery_manager._topic_manager
         topic_name = "topic_a"
         store_names = ["default", "rolling_10s"]
         partition_num = 1
-        changelog_manager = changelog_manager_mock_recovery
-        topic_manager = changelog_manager._topic_manager
-        recovery_manager = changelog_manager._recovery_manager
 
         topic_manager.topic(topic_name)
         store_partitions = {}
@@ -164,29 +165,29 @@ class TestChangelogManager:
                     store_partition=store_partitions[store_name],
                 )
             )
-        with patch("quixstreams.state.recovery.RecoveryPartition") as rp:
-            rp.return_value = "rp"
-            changelog_manager.assign_partition(
-                topic_name=topic_name,
-                partition_num=partition_num,
-                store_partitions=store_partitions,
-            )
+        with patch.object(recovery_manager, "assign_partitions") as assign_partitions:
+            with patch("quixstreams.state.recovery.RecoveryPartition") as rp:
+                rp.return_value = "rp"
+                recovery_manager.assign_partition(
+                    topic_name=topic_name,
+                    partition_num=partition_num,
+                    store_partitions=store_partitions,
+                )
 
         rp.assert_has_calls(recovery_partition_calls)
         assert rp.call_count == len(recovery_partition_calls)
-        recovery_manager.assign_partitions.assert_called_with(
+        assign_partitions.assert_called_with(
             topic_name=topic_name,
             partition_num=partition_num,
             recovery_partitions=["rp", "rp"],
         )
 
-    def test_revoke_partition(self, changelog_manager_mock_recovery):
+    def test_revoke_partition(self, recovery_manager_mock_consumer):
+        recovery_manager = recovery_manager_mock_consumer
+        topic_manager = recovery_manager._topic_manager
         topic_name = "topic_a"
         store_names = ["default", "rolling-10s"]
         partition_num = 1
-        changelog_manager = changelog_manager_mock_recovery
-        topic_manager = changelog_manager._topic_manager
-        recovery_manager = changelog_manager._recovery_manager
 
         topic_manager.topic(topic_name)
         for store_name in store_names:
@@ -194,22 +195,10 @@ class TestChangelogManager:
                 topic_name=topic_name, store_name=store_name, consumer_group="group"
             )
 
-        changelog_manager.revoke_partition(
-            partition_num=partition_num,
-        )
-        recovery_manager.revoke_partitions.assert_called_with(
-            partition_num=partition_num
-        )
+        with patch.object(recovery_manager, "revoke_partitions") as revoke_partitions:
+            recovery_manager.revoke_partition(partition_num=partition_num)
+        revoke_partitions.assert_called_with(partition_num=partition_num)
 
-    def test_do_recovery(self, changelog_manager_mock_recovery):
-        changelog_manager = changelog_manager_mock_recovery
-        recovery_manager = changelog_manager._recovery_manager
-
-        changelog_manager.do_recovery()
-        recovery_manager.do_recovery.assert_called()
-
-
-class TestRecoveryManager:
     def test_do_recovery_skip_recovery(self, recovery_manager_mock_consumer):
         recovery_manager = recovery_manager_mock_consumer
         consumer = recovery_manager._consumer
@@ -379,7 +368,7 @@ class TestRecoveryManager:
         Recovery was previously going, so must pause the source topic.
         """
         recovery_manager = recovery_manager_mock_consumer
-        recovery_manager._recovery_initialized = True
+        recovery_manager._running = True
         topic_name = "topic_name"
         partition_num = 1
         store_names = ["default", "window"]
@@ -435,7 +424,7 @@ class TestRecoveryManager:
         RecoveryManager is currently recovering, so should only pause source topic.
         """
         recovery_manager = recovery_manager_mock_consumer
-        recovery_manager._recovery_initialized = True
+        recovery_manager._running = True
         topic_name = "topic_name"
         partition_num = 1
         store_names = ["default", "window"]
@@ -580,6 +569,7 @@ class TestRecoveryManager:
         for the partition, so revoke it afterward.
         """
         recovery_manager = recovery_manager_mock_consumer
+        recovery_manager._running = True
         consumer = recovery_manager._consumer
         topic_name = "topic_name"
         changelog_name = f"changelog__{topic_name}__default"

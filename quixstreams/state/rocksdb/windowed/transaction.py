@@ -8,7 +8,7 @@ from ..metadata import METADATA_CF_NAME, LATEST_TIMESTAMP_KEY, PREFIX_SEPARATOR
 from ..partition import RocksDBPartitionTransaction
 from ..serialization import int_to_int64_bytes, serialize
 from ..types import LoadsFunc, DumpsFunc
-from ...recovery import ChangelogWriter
+from ...recovery import ChangelogProducer
 
 if TYPE_CHECKING:
     from .partition import WindowedRocksDBStorePartition
@@ -23,13 +23,13 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         dumps: DumpsFunc,
         loads: LoadsFunc,
         latest_timestamp_ms: int,
-        changelog_writer: Optional[ChangelogWriter] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
     ):
         super().__init__(
             partition=partition,
             dumps=dumps,
             loads=loads,
-            changelog_writer=changelog_writer,
+            changelog_producer=changelog_producer,
         )
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
         self._state = WindowedTransactionState(transaction=self)

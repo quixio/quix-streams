@@ -4,7 +4,7 @@ from .partition import WindowedRocksDBStorePartition
 from .transaction import WindowedRocksDBPartitionTransaction
 from ..store import RocksDBStore
 from ..types import RocksDBOptionsType
-from ...recovery import ChangelogManager
+from ...recovery import ChangelogManager, ChangelogProducer
 
 
 class WindowedRocksDBStore(RocksDBStore):
@@ -38,10 +38,11 @@ class WindowedRocksDBStore(RocksDBStore):
             options=options,
         )
 
-    def create_new_partition(self, path: str) -> WindowedRocksDBStorePartition:
+    def create_new_partition(
+        self, path: str, changelog_producer: Optional[ChangelogProducer] = None
+    ) -> WindowedRocksDBStorePartition:
         db_partition = WindowedRocksDBStorePartition(
-            path=path,
-            options=self._options,
+            path=path, options=self._options, changelog_producer=changelog_producer
         )
         return db_partition
 

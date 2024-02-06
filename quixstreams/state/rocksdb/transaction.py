@@ -16,6 +16,7 @@ from quixstreams.state.types import (
 from .exceptions import (
     NestedPrefixError,
     StateTransactionError,
+    ColumnFamilyHeaderMissing,
 )
 from .metadata import (
     METADATA_CF_NAME,
@@ -29,7 +30,7 @@ from .serialization import (
     deserialize,
     int_to_int64_bytes,
 )
-from ..recovery import ChangelogWriter
+from ..recovery import ChangelogProducer
 from ..state import TransactionState
 
 if TYPE_CHECKING:
@@ -112,7 +113,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         "_dumps",
         "_loads",
         "_state",
-        "_changelog_writer",
+        "_changelog_producer",
     )
 
     def __init__(
@@ -120,14 +121,14 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         partition: "RocksDBStorePartition",
         dumps: DumpsFunc,
         loads: LoadsFunc,
-        changelog_writer: Optional[ChangelogWriter] = None,
+        changelog_producer: Optional[ChangelogProducer] = None,
     ):
         """
         :param partition: instance of `RocksDBStatePartition` to be used for accessing
             the underlying RocksDB
         :param dumps: a function to serialize data to bytes.
         :param loads: a function to deserialize data from bytes.
-        :param changelog_writer: if using changelogs, a ChangelogWriter instance
+        :param changelog_producer: if using changelogs, a ChangelogWriter instance
         """
         self._partition = partition
         self._update_cache: Dict[str, Dict[bytes, Union[bytes, Undefined]]] = {}
@@ -137,7 +138,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         self._completed = False
         self._dumps = dumps
         self._loads = loads
-        self._changelog_writer = changelog_writer
+        self._changelog_producer = changelog_producer
         self._state = TransactionState(transaction=self)
 
     @property
@@ -312,9 +313,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             headers = {CHANGELOG_CF_MESSAGE_HEADER: cf_name}
             for k, v in self._update_cache[cf_name].items():
                 if v is _deleted:
-                    self._changelog_writer.produce(key=k, headers=headers)
+                    self._changelog_producer.produce(key=k, headers=headers)
                 else:
-                    self._changelog_writer.produce(key=k, value=v, headers=headers)
+                    self._changelog_producer.produce(key=k, value=v, headers=headers)
                 offset += 1
 
         self._batch.put(
@@ -346,7 +347,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                     self._batch.put(
                         PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
                     )
-                if self._changelog_writer:
+                if self._changelog_producer:
                     self._update_changelog(cf_handle)
                 self._partition.write(self._batch)
         except Exception:
@@ -388,14 +389,11 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
         self._failed = False
         self._completed = False
 
-    class MissingColumnFamilyHeader(Exception):
-        ...
-
     def _get_header_column_family(self, headers: MessageHeadersTuples) -> ColumnFamily:
         for t in headers:
             if t[0] == CHANGELOG_CF_MESSAGE_HEADER:
                 return self._partition.get_column_family_handle(t[1].decode())
-        raise self.MissingColumnFamilyHeader(
+        raise ColumnFamilyHeaderMissing(
             f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
         )
 

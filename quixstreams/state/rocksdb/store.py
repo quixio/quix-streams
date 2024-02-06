@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
-from quixstreams.state.recovery import ChangelogManager
+from quixstreams.state.recovery import ChangelogManager, ChangelogProducer
 from quixstreams.state.types import Store
 from .partition import (
     RocksDBStorePartition,
@@ -69,8 +69,12 @@ class RocksDBStore(Store):
         """
         return self._partitions
 
-    def create_new_partition(self, path: str) -> RocksDBStorePartition:
-        return RocksDBStorePartition(path=path, options=self._options)
+    def create_new_partition(
+        self, path: str, changelog_producer: Optional[ChangelogProducer] = None
+    ) -> RocksDBStorePartition:
+        return RocksDBStorePartition(
+            path=path, options=self._options, changelog_producer=changelog_producer
+        )
 
     def assign_partition(self, partition: int) -> RocksDBStorePartition:
         """
@@ -91,7 +95,16 @@ class RocksDBStore(Store):
             return self._partitions[partition]
 
         path = str((self._partitions_dir / str(partition)).absolute())
-        store_partition = self.create_new_partition(path)
+        store_partition = self.create_new_partition(
+            path,
+            self._changelog_manager.get_changelog_producer(
+                topic_name=self._topic,
+                store_name=self._name,
+                partition_num=partition,
+            )
+            if self._changelog_manager
+            else None,
+        )
 
         self._partitions[partition] = store_partition
         logger.debug(
@@ -143,15 +156,7 @@ class RocksDBStore(Store):
             )
 
         store_partition = self._partitions[partition]
-        return store_partition.begin(
-            changelog_writer=self._changelog_manager.get_writer(
-                topic_name=self._topic,
-                store_name=self._name,
-                partition_num=partition,
-            )
-            if self._changelog_manager
-            else None
-        )
+        return store_partition.begin()
 
     def close(self):
         """
