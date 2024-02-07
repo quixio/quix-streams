@@ -55,15 +55,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
         cf = self.get_column_family(cf_name=cf_name)
         return cf.items(from_key=from_key, read_opt=read_opt)
 
-    def begin(
-        self, changelog_writer: Optional[ChangelogProducer] = None
-    ) -> "WindowedRocksDBPartitionTransaction":
-        """
-        Start a WindowedTransaction.
-
-        :param changelog_writer: If using changelogs, a ChangelogWriter instance
-        :return: a WindowedRocksDBPartitionTransaction instance
-        """
+    def begin(self) -> "WindowedRocksDBPartitionTransaction":
         return WindowedRocksDBPartitionTransaction(
             partition=self,
             dumps=self._dumps,

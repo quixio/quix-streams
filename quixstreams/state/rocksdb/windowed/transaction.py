@@ -23,11 +23,7 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         loads: LoadsFunc,
         latest_timestamp_ms: int,
     ):
-        super().__init__(
-            partition=partition,
-            dumps=dumps,
-            loads=loads,
-        )
+        super().__init__(partition=partition, dumps=dumps, loads=loads)
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
         self._state = WindowedTransactionState(transaction=self)
         self._latest_timestamp_ms = latest_timestamp_ms
