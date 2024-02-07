@@ -1,4 +1,4 @@
-# Upgrading from Legacy Quixstreams <v2.0.0
+# Upgrading from Legacy Quix Streams <2.0.0
 
 If you were using a previous version of Quix Streams, more specifically the Quix
 `ParameterData` or `EventData` formats and plan on using old 
@@ -63,7 +63,7 @@ Example of `EventData`:
 }
 ```
 
-Quix Streams 2.0 supports producing and consuming of both EventData and ParameterData with some limitations
+Quix Streams v2 supports producing and consuming of both EventData and ParameterData with some limitations
 
 
 ## Limitations

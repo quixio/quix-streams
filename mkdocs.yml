@@ -26,7 +26,7 @@ nav:
   - Stateful Processing: stateful-processing.md
   - Working with Quix:
     - Using the Platform: quix-platform.md
-    - Upgrading from QuixStreams v0.5: upgrading-legacy.md
+    - Upgrading from Quix Streams v0.5: upgrading-legacy.md
   - API Docs:
     - Application: api-reference/application.md
     - StreamingDataFrame & Series: api-reference/dataframe.md

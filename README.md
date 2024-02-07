@@ -8,16 +8,16 @@
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/client-library-intro.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
-# Quix Streams 2.0 (alpha)
+# Quix Streams v2 (alpha)
 
->***IMPORTANT:*** Quix Streams v2.0 is currently in alpha and will likely experience rapid and 
+>***IMPORTANT:*** Quix Streams v2 is currently in alpha and will likely experience rapid and 
 significant interface changes, feature additions, and bugfixes.
 ><br>
 >Use with discretion!
 >
 > ***The documentation for Quix Streams <2.0 can be found [here](https://github.com/quixio/quix-streams/blob/release/v0.5/README.md)***
 
-Quix Streams 2.0 is a cloud native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka with an easy to use Python interface.
+Quix Streams v2 is a cloud native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka with an easy to use Python interface.
 
 Quix Streams has the following benefits:
 
@@ -40,8 +40,8 @@ Use Quix Streams to build event-driven, machine learning/AI or physics-based app
 
 ### Install Quix Streams
 
-#### Quix Streams 2.0 (currently in alpha)
-To install the latest alpha version of Quix Streams 2.0: 
+#### Quix Streams v2 (currently in alpha)
+To install the latest alpha version of Quix Streams v2: 
 
 ```shell
 python -m pip install --pre quixstreams
