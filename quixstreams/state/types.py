@@ -100,7 +100,9 @@ class StorePartition(Protocol):
         State new `PartitionTransaction`
         """
 
-    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+    def recover_from_changelog_message(
+        self, changelog_message: ConfluentKafkaMessageProto
+    ):
         """
         Updates state from a given changelog message.
 
@@ -320,7 +322,7 @@ class WindowedPartitionTransaction(WindowedState):
         Normally, it's called by `StreamingDataFrame` internals to ensure that every
         message key is stored separately.
         :param prefix: key prefix
-        :return: context maager
+        :return: context manager
         """
 
     def maybe_flush(self, offset: Optional[int] = None):

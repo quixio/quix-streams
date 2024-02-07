@@ -92,13 +92,17 @@ class RecoveryPartition:
             changelog_message=OffsetUpdate(self._changelog_highwater - 1)
         )
 
-    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+    def recover_from_changelog_message(
+        self, changelog_message: ConfluentKafkaMessageProto
+    ):
         """
         Recover the StorePartition using a message read from its respective changelog.
 
         :param changelog_message: A confluent kafka message (everything as bytes)
         """
-        self.store_partition.recover(changelog_message=changelog_message)
+        self.store_partition.recover_from_changelog_message(
+            changelog_message=changelog_message
+        )
 
     def set_watermarks(self, lowwater: int, highwater: int):
         """
@@ -140,8 +144,8 @@ class ChangelogProducerFactory:
 
 class ChangelogProducer:
     """
-    Created and handed to `PartitionTransaction`s to produce state changes to
-    a `StorePartition`s respective kafka changelog partition.
+    Generated for a `StorePartition` to produce state changes to its respective
+    kafka changelog partition.
     """
 
     def __init__(self, changelog: Topic, partition_num: int, producer: RowProducer):
@@ -284,7 +288,7 @@ class RecoveryManager:
         store_partitions: Dict[str, StorePartition],
     ):
         """
-        Assigns `StorePartition` (as RecoveryPartition) ONLY IF it requires recovery.
+        Assigns `StorePartition`s (as `RecoveryPartition`s) ONLY IF recovery required.
 
         Pauses active consumer partitions as needed.
         """
@@ -367,7 +371,7 @@ class RecoveryManager:
             partition_num = msg.partition()
 
             partition = self._recovery_partitions[partition_num][changelog_name]
-            partition.recover(changelog_message=msg)
+            partition.recover_from_changelog_message(changelog_message=msg)
 
             if not partition.needs_recovery:
                 logger.debug(f"Finished recovering {changelog_name}[{partition_num}]")

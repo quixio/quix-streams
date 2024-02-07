@@ -14,11 +14,7 @@ app = Application(
     broker_address=environ["BROKER_ADDRESS"],
     consumer_group="ignore",
 )
-topic = app.topic(
-    name="json__purchase_events",
-    value_serializer="json",
-    config=app._topic_manager.topic_config(num_partitions=2),
-)
+topic = app.topic(name="json__purchase_events", value_serializer="json")
 
 retailers = [
     "Billy Bob's Shop",
@@ -37,7 +33,7 @@ with app.get_producer() as producer:
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
         value = {
             "account_id": account_id,
-            "account_class": "Gold" if account >= 7 else "Silver",
+            "account_class": "Gold" if account >= 8 else "Silver",
             "transaction_amount": randint(-2500, -1),
             "transaction_source": choice(retailers),
         }

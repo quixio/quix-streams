@@ -44,6 +44,7 @@ class RocksDBStorePartition(StorePartition):
      1. Managing access to the RocksDB instance
      2. Creating transactions to interact with data
      3. Flushing WriteBatches to the RocksDB
+     4. Producing state-related changelog messages
 
     It opens the RocksDB on `__init__`. If the db is locked by another process,
     it will retry according to `open_max_retries` and `open_retry_backoff` options.
@@ -89,7 +90,9 @@ class RocksDBStorePartition(StorePartition):
             loads=self._loads,
         )
 
-    def recover(self, changelog_message: ConfluentKafkaMessageProto):
+    def recover_from_changelog_message(
+        self, changelog_message: ConfluentKafkaMessageProto
+    ):
         """
         Updates state from a given changelog message.
 

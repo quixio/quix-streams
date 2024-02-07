@@ -36,8 +36,8 @@ class TestRecoveryPartition:
     def test_recover(self, recovery_partition_store_mock):
         recovery_partition = recovery_partition_store_mock
         msg = ConfluentKafkaMessageStub()
-        recovery_partition.recover(msg)
-        recovery_partition.store_partition.recover.assert_called_with(
+        recovery_partition.recover_from_changelog_message(msg)
+        recovery_partition.store_partition.recover_from_changelog_message.assert_called_with(
             changelog_message=msg
         )
 
@@ -550,7 +550,9 @@ class TestRecoveryManager:
 
         recovery_manager._recovery_loop()
 
-        rp.store_partition.recover.assert_called_with(changelog_message=msg)
+        rp.store_partition.recover_from_changelog_message.assert_called_with(
+            changelog_message=msg
+        )
         consumer.incremental_unassign.assert_called()
 
     def test__recovery_loop_no_partitions(self, recovery_manager_mock_consumer):

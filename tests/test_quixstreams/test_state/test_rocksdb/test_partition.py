@@ -201,7 +201,9 @@ class TestRocksDBStorePartition:
         )
 
         assert rocksdb_partition.get_changelog_offset() is None
-        rocksdb_partition.recover(changelog_message=changelog_msg)
+        rocksdb_partition.recover_from_changelog_message(
+            changelog_message=changelog_msg
+        )
 
         assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
         with rocksdb_partition.begin() as tx:
