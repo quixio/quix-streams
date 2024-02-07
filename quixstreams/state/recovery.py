@@ -167,16 +167,14 @@ class ChangelogProducer:
         :param value: message value (same as state value)
         :param headers: message headers (includes column family info)
         """
-        kwargs = {
-            "key": key,
-            "headers": headers,
-            "partition": self._partition_num,
-            "topic": self._changelog.name,
-        }
-        if value is not None:
-            kwargs["value"] = value
         self._producer.poll(0)
-        self._producer.produce(**kwargs)
+        self._producer.produce(
+            key=key,
+            value=value,
+            headers=headers,
+            partition=self._partition_num,
+            topic=self._changelog.name,
+        )
 
 
 class RecoveryManager:

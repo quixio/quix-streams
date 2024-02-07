@@ -307,12 +307,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         for cf_name in self._update_cache:
             headers = {CHANGELOG_CF_MESSAGE_HEADER: cf_name}
             for k, v in self._update_cache[cf_name].items():
-                if v is _deleted:
-                    self._partition.produce_to_changelog(key=k, headers=headers)
-                else:
-                    self._partition.produce_to_changelog(
-                        key=k, value=v, headers=headers
-                    )
+                self._partition.produce_to_changelog(
+                    key=k, value=v if v is not _deleted else None, headers=headers
+                )
                 offset += 1
 
         self._batch.put(
