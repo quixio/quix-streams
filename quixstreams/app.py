@@ -40,7 +40,7 @@ from .platforms.quix import (
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
-from .state.recovery import ChangelogManager, RecoveryManager
+from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 
 __all__ = ("Application",)
@@ -206,24 +206,18 @@ class Application:
             else None
         )
 
-        changelog_manager = (
-            ChangelogManager(
-                topic_manager=self._topic_manager,
-                producer=RowProducer(
-                    broker_address=broker_address,
-                    partitioner=partitioner,
-                    extra_config=producer_extra_config,
-                    on_error=on_producer_error,
-                ),
-            )
-            if use_changelog_topics
-            else None
-        )
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            changelog_manager=changelog_manager,
+            producer=RowProducer(
+                broker_address=broker_address,
+                partitioner=partitioner,
+                extra_config=producer_extra_config,
+                on_error=on_producer_error,
+            )
+            if use_changelog_topics
+            else None,
             recovery_manager=self._recovery_manager,
         )
 

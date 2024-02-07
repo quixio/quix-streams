@@ -4,7 +4,7 @@ from .partition import WindowedRocksDBStorePartition
 from .transaction import WindowedRocksDBPartitionTransaction
 from ..store import RocksDBStore
 from ..types import RocksDBOptionsType
-from ...recovery import ChangelogManager, ChangelogProducer
+from ...recovery import ChangelogProducerFactory, ChangelogProducer
 
 
 class WindowedRocksDBStore(RocksDBStore):
@@ -20,21 +20,22 @@ class WindowedRocksDBStore(RocksDBStore):
         name: str,
         topic: str,
         base_dir: str,
-        changelog_manager: Optional[ChangelogManager] = None,
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[RocksDBOptionsType] = None,
     ):
         """
         :param name: a unique store name
         :param topic: a topic name for this store
         :param base_dir: path to a directory with the state
-        :param changelog_manager: if using changelogs, a ChangelogManager instance
+        :param changelog_producer_factory: a ChangelogProducerFactory instance
+            if using changelogs
         :param options: RocksDB options. If `None`, the default options will be used.
         """
         super().__init__(
             name=name,
             topic=topic,
             base_dir=base_dir,
-            changelog_manager=changelog_manager,
+            changelog_producer_factory=changelog_producer_factory,
             options=options,
         )
 

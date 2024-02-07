@@ -3,6 +3,7 @@ from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
 from typing_extensions import Self
 
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models.types import MessageHeadersMapping
 
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
@@ -104,6 +105,17 @@ class StorePartition(Protocol):
         Updates state from a given changelog message.
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
+        """
+        ...
+
+    def produce_to_changelog(
+        self,
+        key: bytes,
+        value: Optional[bytes] = None,
+        headers: Optional[MessageHeadersMapping] = None,
+    ):
+        """
+        Produce a message to the StorePartitions respective changelog.
         """
         ...
 
@@ -329,36 +341,11 @@ class PartitionRecoveryTransaction(Protocol):
     A class for managing recovery for a StorePartition from a changelog message
     """
 
-    @property
-    def failed(self) -> bool:
-        """
-        Return `True` if transaction failed to update data at some point.
-
-        Failed transactions cannot be re-used.
-        :return: bool
-        """
-
-    @property
-    def completed(self) -> bool:
-        """
-        Return `True` if transaction is completed.
-
-        Completed transactions cannot be re-used.
-        :return: bool
-        """
-        ...
-
-    def recover(self):
+    def write_from_changelog_message(self):
         ...
 
     def flush(self):
         """
-        Flush the recent updates and last processed offset to the storage.
+        Flush the recovery update and last processed offset to the storage.
         """
-        ...
-
-    def __enter__(self):
-        ...
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
         ...

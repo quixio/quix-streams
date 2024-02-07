@@ -4,7 +4,7 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from quixstreams.state import ChangelogManager, ChangelogProducer
+from quixstreams.state import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.rocksdb.options import RocksDBOptions
 from quixstreams.state.rocksdb.partition import RocksDBStorePartition
@@ -44,14 +44,14 @@ def rocksdb_store_factory(tmp_path):
     def factory(
         topic: Optional[str] = None,
         name: str = "default",
-        changelog_manager: Optional[ChangelogManager] = None,
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
     ) -> RocksDBStore:
         topic = topic or str(uuid.uuid4())
         return RocksDBStore(
             topic=topic,
             name=name,
             base_dir=str(tmp_path),
-            changelog_manager=changelog_manager,
+            changelog_producer_factory=changelog_producer_factory,
         )
 
     return factory

@@ -2,48 +2,11 @@ import pytest
 import uuid
 
 from typing import Optional
-from unittest.mock import patch, create_autospec
+from unittest.mock import create_autospec
 
 from quixstreams.kafka import Consumer
-from quixstreams.models.topics import TopicAdmin
 from quixstreams.state.recovery import RecoveryPartition, RecoveryManager
 from quixstreams.state.types import StorePartition
-
-
-@pytest.fixture()
-def changelog_producer_factory(changelog_manager_factory):
-    """
-    Makes a changelog manager.
-
-    If admin is passed, will also create changelog for you
-    """
-
-    def factory(
-        topic_name: str = str(uuid.uuid4()),
-        store_name: str = "store_name",
-        partition_num: int = 0,
-        topic_admin: Optional[TopicAdmin] = None,
-    ):
-        changelog_manager = changelog_manager_factory()
-        topic_manager = changelog_manager._topic_manager
-        topic_manager.topic(topic_name)  # changelogs depend on topic objects existing
-        changelog_topic = topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name, consumer_group="group"
-        )
-        if topic_admin:
-            topic_manager.create_topics([changelog_topic])
-        return changelog_manager.get_changelog_producer(
-            topic_name=topic_name, store_name=store_name, partition_num=partition_num
-        )
-
-    return factory
-
-
-@pytest.fixture()
-def changelog_producer_patched(changelog_producer_factory):
-    writer = changelog_producer_factory()
-    with patch.object(writer, "produce"):
-        yield writer
 
 
 @pytest.fixture()

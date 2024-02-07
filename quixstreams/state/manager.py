@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
+from quixstreams.rowproducer import RowProducer
 from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
@@ -11,7 +12,7 @@ from .exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
-from .recovery import ChangelogManager, RecoveryManager
+from .recovery import RecoveryManager, ChangelogProducerFactory
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .rocksdb.windowed.store import WindowedRocksDBStore
 from .types import (
@@ -42,14 +43,14 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
-        changelog_manager: Optional[ChangelogManager] = None,
+        producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
-        self._changelog_manager = changelog_manager
+        self._producer = producer
         self._recovery_manager = recovery_manager
         self._transaction: Optional[_MultiStoreTransaction] = None
 
@@ -111,22 +112,20 @@ class StateStoreManager:
             )
         return store
 
-    def _add_changelog_topic(self, topic_name: str, store_name: str):
-        """
-        Register a changelog topic with the ChangelogManager.
-
-        :param topic_name: source topic name
-        :param store_name: store name
-        """
-        logger.debug(
-            f'State Manager: registering changelog for store "{store_name}" '
-            f'(topic "{topic_name}")'
-        )
-        self._changelog_manager.register_changelog(
-            topic_name=topic_name,
-            store_name=store_name,
-            consumer_group=self._group_id,
-        )
+    def _setup_changelogs(
+        self, topic_name: str, store_name: str
+    ) -> ChangelogProducerFactory:
+        if self._recovery_manager:
+            logger.debug(
+                f'State Manager: registering changelog for store "{store_name}" '
+                f'(topic "{topic_name}")'
+            )
+            changelog = self._recovery_manager.register_changelog(
+                topic_name=topic_name,
+                store_name=store_name,
+                consumer_group=self._group_id,
+            )
+            return ChangelogProducerFactory(changelog, self._producer)
 
     def register_store(
         self, topic_name: str, store_name: str = _DEFAULT_STATE_STORE_NAME
@@ -143,13 +142,13 @@ class StateStoreManager:
         :param store_name: store name
         """
         if self._stores.get(topic_name, {}).get(store_name) is None:
-            if self._changelog_manager:
-                self._add_changelog_topic(topic_name, store_name)
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
                 base_dir=str(self._state_dir),
-                changelog_manager=self._changelog_manager,
+                changelog_producer_factory=self._setup_changelogs(
+                    topic_name, store_name
+                ),
                 options=self._rocksdb_options,
             )
 
@@ -168,14 +167,11 @@ class StateStoreManager:
         store = self._stores.get(topic_name, {}).get(store_name)
         if store:
             raise WindowedStoreAlreadyRegisteredError()
-        if self._changelog_manager:
-            self._add_changelog_topic(topic_name, store_name)
-
         self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
             name=store_name,
             topic=topic_name,
             base_dir=str(self._state_dir),
-            changelog_manager=self._changelog_manager,
+            changelog_producer_factory=self._setup_changelogs(topic_name, store_name),
             options=self._rocksdb_options,
         )
 

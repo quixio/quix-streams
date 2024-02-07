@@ -239,7 +239,6 @@ class TestRocksDBPartitionTransaction:
         )
         assert changelog_producer.produce.call_count == db_writes
         assert tx.completed
-        assert tx._changelog_producer == changelog_producer
         assert rocksdb_partition.get_changelog_offset() == db_writes
 
     def test_transaction_with_changelog_delete(self, rocksdb_partition):
@@ -264,13 +263,13 @@ class TestRocksDBPartitionTransaction:
                 ),
                 call(
                     key=tx._serialize_key(key=key_out),
+                    value=None,
                     headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
                 ),
             ]
         )
         assert changelog_producer.produce.call_count == 2
         assert tx.completed
-        assert tx._changelog_producer == changelog_producer
         assert rocksdb_partition.get_changelog_offset() == 2
 
     def test_transaction_with_changelog_delete_cached(self, rocksdb_partition):
@@ -299,13 +298,13 @@ class TestRocksDBPartitionTransaction:
             + [
                 call(
                     key=tx._serialize_key(key=f"{key_out}{delete_index}"),
+                    value=None,
                     headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
                 )
             ]
         )
         assert changelog_producer.produce.call_count == db_writes
         assert tx.completed
-        assert tx._changelog_producer == changelog_producer
         assert rocksdb_partition.get_changelog_offset() == db_writes
 
     def test_transaction_with_changelog_delete_nonexisting_key(self, rocksdb_partition):
@@ -319,11 +318,11 @@ class TestRocksDBPartitionTransaction:
 
         changelog_producer.produce.assert_called_with(
             key=tx._serialize_key(key=key_out),
+            value=None,
             headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
         )
 
         assert tx.completed
-        assert tx._changelog_producer == changelog_producer
         assert rocksdb_partition.get_changelog_offset() == 1
 
     def test_transaction_doesnt_write_empty_batch(self, rocksdb_partition):

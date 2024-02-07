@@ -5,6 +5,7 @@ from typing import Any, Union, Optional, List
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.state.types import (
     StorePartition,
 )
@@ -69,6 +70,10 @@ class RocksDBStorePartition(StorePartition):
         self._cf_handle_cache = {}
         self._changelog_producer = changelog_producer
 
+    @property
+    def using_changelogs(self) -> bool:
+        return bool(self._changelog_producer)
+
     def begin(
         self,
     ) -> RocksDBPartitionTransaction:
@@ -82,7 +87,6 @@ class RocksDBStorePartition(StorePartition):
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
-            changelog_producer=self._changelog_producer,
         )
 
     def recover(self, changelog_message: ConfluentKafkaMessageProto):
@@ -91,11 +95,20 @@ class RocksDBStorePartition(StorePartition):
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
         """
-        with RocksDBPartitionRecoveryTransaction(
-            partition=self,
-            changelog_message=changelog_message,
-        ) as partition:
-            partition.recover()
+        RocksDBPartitionRecoveryTransaction(
+            partition=self, changelog_message=changelog_message
+        ).write_from_changelog_message()
+
+    def produce_to_changelog(
+        self,
+        key: bytes,
+        value: Optional[bytes] = None,
+        headers: Optional[MessageHeadersMapping] = None,
+    ):
+        """
+        Produce a message to the StorePartitions respective changelog.
+        """
+        self._changelog_producer.produce(key=key, value=value, headers=headers)
 
     def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
         """

@@ -30,7 +30,6 @@ from .serialization import (
     deserialize,
     int_to_int64_bytes,
 )
-from ..recovery import ChangelogProducer
 from ..state import TransactionState
 
 if TYPE_CHECKING:
@@ -113,7 +112,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         "_dumps",
         "_loads",
         "_state",
-        "_changelog_producer",
     )
 
     def __init__(
@@ -121,14 +119,12 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         partition: "RocksDBStorePartition",
         dumps: DumpsFunc,
         loads: LoadsFunc,
-        changelog_producer: Optional[ChangelogProducer] = None,
     ):
         """
         :param partition: instance of `RocksDBStatePartition` to be used for accessing
             the underlying RocksDB
         :param dumps: a function to serialize data to bytes.
         :param loads: a function to deserialize data from bytes.
-        :param changelog_producer: if using changelogs, a ChangelogWriter instance
         """
         self._partition = partition
         self._update_cache: Dict[str, Dict[bytes, Union[bytes, Undefined]]] = {}
@@ -138,7 +134,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         self._completed = False
         self._dumps = dumps
         self._loads = loads
-        self._changelog_producer = changelog_producer
         self._state = TransactionState(transaction=self)
 
     @property
@@ -313,9 +308,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             headers = {CHANGELOG_CF_MESSAGE_HEADER: cf_name}
             for k, v in self._update_cache[cf_name].items():
                 if v is _deleted:
-                    self._changelog_producer.produce(key=k, headers=headers)
+                    self._partition.produce_to_changelog(key=k, headers=headers)
                 else:
-                    self._changelog_producer.produce(key=k, value=v, headers=headers)
+                    self._partition.produce_to_changelog(
+                        key=k, value=v, headers=headers
+                    )
                 offset += 1
 
         self._batch.put(
@@ -347,7 +344,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                     self._batch.put(
                         PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
                     )
-                if self._changelog_producer:
+                if self._partition.using_changelogs:
                     self._update_changelog(cf_handle)
                 self._partition.write(self._batch)
         except Exception:
@@ -376,7 +373,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
 
 class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
-    __slots__ = ("_partition", "_batch", "_failed", "_completed", "_message")
+    __slots__ = ("_partition", "_batch", "_message")
 
     def __init__(
         self,
@@ -397,76 +394,25 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
             f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
         )
 
-    @_validate_transaction_state
-    def recover(self):
+    def write_from_changelog_message(self):
         """
         Update the respective db k/v from the changelog message.
-
-        Should only be called once over the lifetime of this object.
-
-        Should flush afterward, which additionally updates the stored offset.
         """
         cf_handle = self._get_header_column_family(self._message.headers())
         key = self._message.key()
-        try:
-            if value := self._message.value():
-                self._batch.put(key, value, cf_handle)
-            else:
-                self._batch.delete(key, cf_handle)
-        except Exception:
-            self._failed = True
-            raise
+        if value := self._message.value():
+            self._batch.put(key, value, cf_handle)
+        else:
+            self._batch.delete(key, cf_handle)
+        self.flush()
 
-    @property
-    def completed(self) -> bool:
-        """
-        Check if the transaction is completed.
-
-        It doesn't indicate whether transaction is successful or not.
-        Use `RocksDBTransaction.failed` for that.
-
-        The completed transaction should not be re-used.
-
-        :return: `True` if transaction is completed, `False` otherwise.
-        """
-        return self._completed
-
-    @property
-    def failed(self) -> bool:
-        """
-        Check if the transaction has failed.
-
-        The failed transaction should not be re-used.
-
-        :return: `True` if transaction is failed, `False` otherwise.
-        """
-        return self._failed
-
-    @_validate_transaction_state
     def flush(self):
         """
-        Flush the recent updates to the database and empty the update cache.
-        It writes the WriteBatch to RocksDB and marks itself as finished.
-
-        If writing fails, the transaction will be also marked as "failed" and
-        cannot be used anymore.
+        Update the changelog offset and flush outstanding writes.
         """
-        try:
-            self._batch.put(
-                CHANGELOG_OFFSET_KEY,
-                int_to_int64_bytes(self._message.offset() + 1),
-                self._partition.get_column_family_handle(METADATA_CF_NAME),
-            )
-            self._partition.write(self._batch)
-        except Exception:
-            self._failed = True
-            raise
-        finally:
-            self._completed = True
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_val is None and not self._failed:
-            self.flush()
+        self._batch.put(
+            CHANGELOG_OFFSET_KEY,
+            int_to_int64_bytes(self._message.offset() + 1),
+            self._partition.get_column_family_handle(METADATA_CF_NAME),
+        )
+        self._partition.write(self._batch)

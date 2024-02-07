@@ -1,14 +1,12 @@
 import os
 import contextlib
 import uuid
-from unittest.mock import patch, call, create_autospec
+from unittest.mock import patch, call
 
 import pytest
 import rocksdict
 from tests.utils import TopicPartitionStub
 
-from quixstreams.kafka.consumer import Consumer
-from quixstreams.rowproducer import RowProducer
 from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     InvalidStoreTransactionStateError,
@@ -268,7 +266,7 @@ class TestStateStoreManagerChangelog:
 
     def test_register_store(self, state_manager_changelogs):
         state_manager = state_manager_changelogs
-        topic_manager = state_manager._changelog_manager._topic_manager
+        topic_manager = state_manager._recovery_manager._topic_manager
         topic = topic_manager.topic(name="topic1")
         store_name = "default"
         state_manager.register_store(topic.name, store_name=store_name)
@@ -279,14 +277,11 @@ class TestStateStoreManagerChangelog:
     def test_assign_revoke_partitions_stores_registered(
         self,
         state_manager_changelogs,
-        topic_manager_factory,
     ):
         state_manager = state_manager_changelogs
-        topic_manager = topic_manager_factory()
         recovery_manager = state_manager._recovery_manager
+        topic_manager = recovery_manager._topic_manager
 
-        state_manager._changelog_manager._topic_manager = topic_manager
-        recovery_manager._topic_manager = topic_manager
         changelog_assign = patch.object(recovery_manager, "assign_partition").start()
         changelog_revoke = patch.object(recovery_manager, "revoke_partition").start()
         topic_manager.topic(name="topic1")
@@ -338,25 +333,18 @@ class TestStateStoreManagerChangelog:
     def test_store_transaction_no_flush_on_exception(
         self,
         state_manager_changelogs,
-        topic_manager_factory,
     ):
         state_manager = state_manager_changelogs
-        topic_manager = topic_manager_factory()
         recovery_manager = state_manager._recovery_manager
-        changelog_manager = state_manager._changelog_manager
+        topic_manager = recovery_manager._topic_manager
+        producer = state_manager._producer
+        consumer = recovery_manager._consumer
 
-        recovery_manager._topic_manager = topic_manager
-        changelog_manager._topic_manager = topic_manager
-        producer = create_autospec(RowProducer)("broker")
-        consumer = create_autospec(Consumer)("broker", "group", "latest")
         consumer.get_watermark_offsets.return_value = (0, 10)
-        changelog_manager._producer = producer
-        recovery_manager._consumer = consumer
         topic_manager.topic(name="topic")
         # topic_admin_mock.inspect_topics.return_value = {"topic": None}
         state_manager.register_store("topic", store_name="store")
         state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
-
         store = state_manager.get_store("topic", "store")
 
         with contextlib.suppress(Exception):
@@ -373,24 +361,18 @@ class TestStateStoreManagerChangelog:
     def test_store_transaction_no_flush_if_partition_transaction_failed(
         self,
         state_manager_changelogs,
-        topic_manager_factory,
     ):
         """
         Ensure that no PartitionTransactions are flushed to the DB if
         any of them fails
         """
         state_manager = state_manager_changelogs
-        topic_manager = topic_manager_factory()
         recovery_manager = state_manager._recovery_manager
-        changelog_manager = state_manager._changelog_manager
+        topic_manager = recovery_manager._topic_manager
+        producer = state_manager._producer
+        consumer = recovery_manager._consumer
 
-        recovery_manager._topic_manager = topic_manager
-        changelog_manager._topic_manager = topic_manager
-        producer = create_autospec(RowProducer)("broker")
-        consumer = create_autospec(Consumer)("broker", "group", "latest")
         consumer.get_watermark_offsets.return_value = (0, 10)
-        changelog_manager._producer = producer
-        recovery_manager._consumer = consumer
         topic_manager.topic(name="topic")
         state_manager.register_store("topic", store_name="store1")
         state_manager.register_store("topic", store_name="store2")

@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
-from quixstreams.state.recovery import ChangelogManager, ChangelogProducer
+from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.types import Store
 from .partition import (
     RocksDBStorePartition,
@@ -31,21 +31,22 @@ class RocksDBStore(Store):
         name: str,
         topic: str,
         base_dir: str,
-        changelog_manager: Optional[ChangelogManager] = None,
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
         options: Optional[options_type] = None,
     ):
         """
         :param name: a unique store name
         :param topic: a topic name for this store
         :param base_dir: path to a directory with the state
-        :param changelog_manager: if using changelogs, a ChangelogManager instance
+        :param changelog_producer_factory: a ChangelogProducerFactory instance
+            if using changelogs
         :param options: RocksDB options. If `None`, the default options will be used.
         """
         self._name = name
         self._topic = topic
         self._partitions_dir = Path(base_dir).absolute() / self._name / self._topic
         self._partitions: Dict[int, RocksDBStorePartition] = {}
-        self._changelog_manager = changelog_manager
+        self._changelog_producer_factory = changelog_producer_factory
         self._options = options
 
     @property
@@ -97,12 +98,8 @@ class RocksDBStore(Store):
         path = str((self._partitions_dir / str(partition)).absolute())
         store_partition = self.create_new_partition(
             path,
-            self._changelog_manager.get_changelog_producer(
-                topic_name=self._topic,
-                store_name=self._name,
-                partition_num=partition,
-            )
-            if self._changelog_manager
+            self._changelog_producer_factory.get_partition_producer(partition)
+            if self._changelog_producer_factory
             else None,
         )
 

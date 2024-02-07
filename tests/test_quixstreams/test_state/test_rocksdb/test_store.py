@@ -35,8 +35,7 @@ class TestRocksDBStore:
         rocksdb_store.assign_partition(0)
         with rocksdb_store.start_partition_transaction(0) as tx:
             assert tx.get("key") == "value"
-        assert rocksdb_store._changelog_manager is None
-        assert tx._changelog_producer is None
+        assert rocksdb_store._changelog_producer_factory is None
 
     def test_get_transaction_partition_not_assigned(self, rocksdb_store):
         with pytest.raises(PartitionNotAssignedError):
