@@ -1,6 +1,6 @@
-from unittest.mock import patch, MagicMock
 import logging
 import uuid
+from unittest.mock import patch
 
 from quixstreams.state.recovery import (
     ChangelogProducer,
@@ -91,7 +91,9 @@ class TestChangelogProducer:
         topic_manager.create_topics([changelog])
 
         writer = ChangelogProducer(
-            changelog=changelog, partition_num=p_num, producer=row_producer_factory()
+            changelog_name=changelog.name,
+            partition_num=p_num,
+            producer=row_producer_factory(),
         )
         writer.produce(
             **{k: v for k, v in expected.items() if k in ["key", "value"]},
@@ -109,16 +111,15 @@ class TestChangelogProducer:
 
 class TestChangelogProducerFactory:
     def test_get_partition_producer(self, row_producer_factory):
-        changelog_topic = MagicMock()
-        changelog_topic.name = "changelog__topic"
+        changelog_name = "changelog__topic"
         producer = row_producer_factory()
 
         p_num = 1
 
         changelog_producer = ChangelogProducerFactory(
-            changelog=changelog_topic, producer=producer
+            changelog_name=changelog_name, producer=producer
         ).get_partition_producer(partition_num=p_num)
-        assert changelog_producer._changelog == changelog_topic
+        assert changelog_producer._changelog_name == changelog_name
         assert changelog_producer._partition_num == p_num
         assert changelog_producer._producer == producer
 

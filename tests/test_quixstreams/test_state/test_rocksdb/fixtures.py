@@ -4,10 +4,14 @@ from unittest.mock import create_autospec
 
 import pytest
 
+from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.rocksdb.options import RocksDBOptions
-from quixstreams.state.rocksdb.partition import RocksDBStorePartition
+from quixstreams.state.rocksdb.partition import (
+    RocksDBStorePartition,
+    RocksDBPartitionRecoveryTransaction,
+)
 
 
 @pytest.fixture()
@@ -62,3 +66,16 @@ def rocksdb_store(rocksdb_store_factory) -> RocksDBStore:
     store = rocksdb_store_factory()
     yield store
     store.close()
+
+
+@pytest.fixture()
+def partition_recovery_transaction_factory(rocksdb_partition):
+    def factory(
+        changelog_message: ConfluentKafkaMessageProto,
+        store_partition: Optional[RocksDBStorePartition] = rocksdb_partition,
+    ):
+        return RocksDBPartitionRecoveryTransaction(
+            partition=store_partition, changelog_message=changelog_message
+        )
+
+    return factory

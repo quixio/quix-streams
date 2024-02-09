@@ -2,9 +2,14 @@ from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
+from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
-from ..metadata import METADATA_CF_NAME, LATEST_TIMESTAMP_KEY, PREFIX_SEPARATOR
+from ..metadata import (
+    METADATA_CF_NAME,
+    LATEST_TIMESTAMP_KEY,
+    PREFIX_SEPARATOR,
+)
 from ..partition import RocksDBPartitionTransaction
 from ..serialization import int_to_int64_bytes, serialize
 from ..types import LoadsFunc, DumpsFunc
@@ -99,8 +104,8 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
 
         # Find the latest start timestamp of the expired windows for the given key
         last_expired = self.get(
-            "expired_start__gt",
-            cf_name=self._partition.expiration_index_cf_name,
+            LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+            cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
         )
         if last_expired is not None:
             start_from = max(start_from, last_expired)
@@ -116,9 +121,9 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
             latest_window = expired_windows[-1]
             last_expired__gt = latest_window[0][0]
             self.set(
-                "expired_start__gt",
+                LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
                 last_expired__gt,
-                cf_name=self._partition.expiration_index_cf_name,
+                cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
             )
             # Delete expired windows from the state
             for (start, end), _ in expired_windows:

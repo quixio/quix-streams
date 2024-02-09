@@ -191,6 +191,8 @@ class RocksDBStorePartition(StorePartition):
         self._cf_handle_cache = {}
         self._cf_cache = {}
         self._db.close()
+        if self._changelog_producer:
+            self._changelog_producer.flush()
         logger.debug(f'Closed rocksdb partition on "{self._path}"')
 
     @property

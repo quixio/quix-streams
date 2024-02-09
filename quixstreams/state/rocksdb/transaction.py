@@ -17,6 +17,7 @@ from .exceptions import (
     NestedPrefixError,
     StateTransactionError,
     ColumnFamilyHeaderMissing,
+    ColumnFamilyDoesNotExist,
 )
 from .metadata import (
     METADATA_CF_NAME,
@@ -386,7 +387,15 @@ class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
     def _get_header_column_family(self, headers: MessageHeadersTuples) -> ColumnFamily:
         for t in headers:
             if t[0] == CHANGELOG_CF_MESSAGE_HEADER:
-                return self._partition.get_column_family_handle(t[1].decode())
+                cf_name = t[1].decode()
+                try:
+                    return self._partition.get_column_family_handle(t[1].decode())
+                except Exception as exc:
+                    if "does not exist" in str(exc):
+                        raise ColumnFamilyDoesNotExist(
+                            f'Column family "{cf_name}" does not exist'
+                        )
+                    raise
         raise ColumnFamilyHeaderMissing(
             f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
         )

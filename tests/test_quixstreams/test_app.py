@@ -993,7 +993,7 @@ class TestAppRecovery:
 
         # how many times window updates should occur (1:1 with changelog updates)
         expected_window_updates = {0: {}, 1: {}}
-        # expired windows should have no values (2 changelog updates per expiration)
+        # expired windows should have no values (changelog updates per tx == num_exp_windows + 1)
         expected_expired_windows = {0: set(), 1: set()}
 
         for p, windows in partition_windows.items():
@@ -1058,6 +1058,8 @@ class TestAppRecovery:
                     )
                 store = state_manager.get_store(topic=topic.name, store_name=store_name)
                 for p_num, windows in expected_window_updates.items():
+                    # in this test, each expiration check only deletes one window,
+                    # simplifying the offset counting.
                     expected_offset = sum(
                         expected_window_updates[p_num].values()
                     ) + 2 * len(expected_expired_windows[p_num])

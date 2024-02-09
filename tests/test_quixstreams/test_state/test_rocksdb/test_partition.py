@@ -17,9 +17,13 @@ from quixstreams.state.rocksdb import (
     RocksDBOptions,
     ColumnFamilyAlreadyExists,
     ColumnFamilyDoesNotExist,
+    ColumnFamilyHeaderMissing,
+)
+from quixstreams.state.rocksdb.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    PREFIX_SEPARATOR,
 )
 from quixstreams.state.rocksdb.serialization import serialize
-from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.utils.json import dumps
 from ...utils import ConfluentKafkaMessageStub
 
@@ -654,5 +658,54 @@ class TestRocksDBPartitionTransaction:
 
 
 class TestRocksDBPartitionRecoveryTransaction:
-    # TODO: finish this
-    ...
+    @pytest.mark.parametrize("store_value", [10, None])
+    def test_recover_from_changelog_message(
+        self, partition_recovery_transaction_factory, store_value
+    ):
+        """
+        Tests both a put (10) and delete (None)
+        """
+        kafka_key = b"my_key"
+        user_store_key = "count"
+        changelog_msg = ConfluentKafkaMessageStub(
+            key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),
+            value=dumps(store_value),
+            headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
+            offset=50,
+        )
+        recovery_transaction = partition_recovery_transaction_factory(
+            changelog_message=changelog_msg
+        )
+        store_partition = recovery_transaction._partition
+
+        recovery_transaction.write_from_changelog_message()
+
+        with store_partition.begin() as tx:
+            with tx.with_prefix(kafka_key):
+                assert tx.get(user_store_key) == store_value
+        assert store_partition.get_changelog_offset() == changelog_msg.offset() + 1
+
+    @pytest.mark.parametrize(
+        ("headers", "error"),
+        [
+            ([(CHANGELOG_CF_MESSAGE_HEADER, b"derp")], ColumnFamilyDoesNotExist),
+            ([("dumb_header", b"value")], ColumnFamilyHeaderMissing),
+        ],
+    )
+    def test_recover_from_changelog_message_cf_errors(
+        self, partition_recovery_transaction_factory, headers, error
+    ):
+        changelog_msg = ConfluentKafkaMessageStub(
+            key=b'my_key|"count"',
+            value=b"10",
+            headers=headers,
+            offset=50,
+        )
+        recovery_transaction = partition_recovery_transaction_factory(
+            changelog_message=changelog_msg
+        )
+        store_partition = recovery_transaction._partition
+
+        with pytest.raises(error):
+            recovery_transaction.write_from_changelog_message()
+        assert store_partition.get_changelog_offset() is None

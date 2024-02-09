@@ -5,10 +5,10 @@ from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models.topics import TopicManager
+from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.types import StorePartition
-from quixstreams.models.topics import TopicManager, Topic
-from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.utils.dicts import dict_values
 
 logger = logging.getLogger(__name__)
@@ -120,14 +120,14 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(self, changelog: Topic, producer: RowProducer):
+    def __init__(self, changelog_name: str, producer: RowProducer):
         """
-        :param changelog: changelog topic object
+        :param changelog_name: changelog topic name
         :param producer: a RowProducer (not shared with `Application` instance)
 
         :return: a ChangelogWriter instance
         """
-        self._changelog = changelog
+        self._changelog_name = changelog_name
         self._producer = producer
 
     def get_partition_producer(self, partition_num):
@@ -138,7 +138,7 @@ class ChangelogProducerFactory:
         :param partition_num: source topic partition number
         """
         return ChangelogProducer(
-            self._changelog, partition_num, producer=self._producer
+            self._changelog_name, partition_num, producer=self._producer
         )
 
 
@@ -148,13 +148,13 @@ class ChangelogProducer:
     kafka changelog partition.
     """
 
-    def __init__(self, changelog: Topic, partition_num: int, producer: RowProducer):
+    def __init__(self, changelog_name: str, partition_num: int, producer: RowProducer):
         """
-        :param changelog: A changelog Topic object
+        :param changelog_name: A changelog topic name
         :param partition_num: source topic partition number
         :param producer: a RowProducer (not shared with `Application` instance)
         """
-        self._changelog = changelog
+        self._changelog_name = changelog_name
         self._partition_num = partition_num
         self._producer = producer
 
@@ -177,8 +177,11 @@ class ChangelogProducer:
             value=value,
             headers=headers,
             partition=self._partition_num,
-            topic=self._changelog.name,
+            topic=self._changelog_name,
         )
+
+    def flush(self):
+        self._producer.flush(10)
 
 
 class RecoveryManager:

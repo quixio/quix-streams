@@ -1,11 +1,10 @@
-import os
 import contextlib
+import os
 import uuid
 from unittest.mock import patch, call
 
 import pytest
 import rocksdict
-from tests.utils import TopicPartitionStub
 
 from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
@@ -13,6 +12,8 @@ from quixstreams.state.exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
+from quixstreams.state.recovery import ChangelogProducerFactory
+from tests.utils import TopicPartitionStub
 
 
 class TestStateStoreManager:
@@ -315,9 +316,11 @@ class TestStateStoreManagerChangelog:
         assert changelog_assign.call_count == len(assign_calls)
         assert len(store_partitions) == 3
 
-        assert len(state_manager.get_store("topic1", "store1").partitions) == 1
-        assert len(state_manager.get_store("topic1", "store2").partitions) == 1
-        assert len(state_manager.get_store("topic2", "store1").partitions) == 1
+        for store in stores_list:
+            assert len(store.partitions) == 1
+            assert isinstance(
+                store._changelog_producer_factory, ChangelogProducerFactory
+            )
 
         revoke_calls = []
         for tp in partitions:
@@ -326,9 +329,8 @@ class TestStateStoreManagerChangelog:
         changelog_revoke.assert_has_calls(revoke_calls)
         assert changelog_revoke.call_count == len(revoke_calls)
 
-        assert not state_manager.get_store("topic1", "store1").partitions
-        assert not state_manager.get_store("topic1", "store2").partitions
-        assert not state_manager.get_store("topic2", "store1").partitions
+        for store in stores_list:
+            assert not store.partitions
 
     def test_store_transaction_no_flush_on_exception(
         self,

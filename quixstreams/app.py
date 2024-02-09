@@ -200,11 +200,6 @@ class Application:
                 )
             )
         self._topic_manager = topic_manager
-        self._recovery_manager = (
-            RecoveryManager(consumer=self._consumer, topic_manager=self._topic_manager)
-            if use_changelog_topics
-            else None
-        )
 
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
@@ -218,7 +213,12 @@ class Application:
             )
             if use_changelog_topics
             else None,
-            recovery_manager=self._recovery_manager,
+            recovery_manager=RecoveryManager(
+                consumer=self._consumer,
+                topic_manager=self._topic_manager,
+            )
+            if use_changelog_topics
+            else None,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):

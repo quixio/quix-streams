@@ -3,6 +3,7 @@ from typing import Optional
 
 from rocksdict import ReadOptions, RdictItems  # type: ignore
 
+from .metadata import LATEST_EXPIRED_WINDOW_CF_NAME
 from .transaction import WindowedRocksDBPartitionTransaction
 from .. import ColumnFamilyDoesNotExist
 from ..metadata import (
@@ -42,12 +43,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             path=path, options=options, changelog_producer=changelog_producer
         )
         self._latest_timestamp_ms = self._get_latest_timestamp_from_db()
-        self._expiration_index_cf_name = f"__expiration-index__"
-        self._ensure_column_family(self._expiration_index_cf_name)
-
-    @property
-    def expiration_index_cf_name(self) -> str:
-        return self._expiration_index_cf_name
+        self._ensure_column_family(LATEST_EXPIRED_WINDOW_CF_NAME)
 
     def iter_items(
         self, from_key: bytes, read_opt: ReadOptions, cf_name: str = "default"
