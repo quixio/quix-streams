@@ -17,14 +17,6 @@ logger = logging.getLogger(__name__)
 __all__ = ("ChangelogProducer", "ChangelogProducerFactory", "RecoveryManager")
 
 
-class OffsetUpdate(ConfluentKafkaMessageProto):
-    def __init__(self, offset):
-        self._offset = offset
-
-    def offset(self):
-        return self._offset
-
-
 class RecoveryPartition:
     """
     A changelog topic partition mapped to a respective `StorePartition` with helper
@@ -89,7 +81,7 @@ class RecoveryPartition:
                 f"The offset will now be set to {self._changelog_highwater}."
             )
         self.store_partition.set_changelog_offset(
-            changelog_message=OffsetUpdate(self._changelog_highwater - 1)
+            changelog_offset=self._changelog_highwater - 1
         )
 
     def recover_from_changelog_message(

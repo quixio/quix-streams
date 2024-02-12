@@ -656,12 +656,8 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition.begin() as tx:
             assert tx.exists(key, cf_name="cf")
 
-
-class TestRocksDBPartitionRecoveryTransaction:
     @pytest.mark.parametrize("store_value", [10, None])
-    def test_recover_from_changelog_message(
-        self, partition_recovery_transaction_factory, store_value
-    ):
+    def test_recover_from_changelog_message(self, rocksdb_partition, store_value):
         """
         Tests both a put (10) and delete (None)
         """
@@ -673,27 +669,23 @@ class TestRocksDBPartitionRecoveryTransaction:
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
             offset=50,
         )
-        recovery_transaction = partition_recovery_transaction_factory(
-            changelog_message=changelog_msg
-        )
-        store_partition = recovery_transaction._partition
 
-        recovery_transaction.write_from_changelog_message()
+        rocksdb_partition.recover_from_changelog_message(changelog_msg)
 
-        with store_partition.begin() as tx:
+        with rocksdb_partition.begin() as tx:
             with tx.with_prefix(kafka_key):
                 assert tx.get(user_store_key) == store_value
-        assert store_partition.get_changelog_offset() == changelog_msg.offset() + 1
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
 
     @pytest.mark.parametrize(
         ("headers", "error"),
         [
             ([(CHANGELOG_CF_MESSAGE_HEADER, b"derp")], ColumnFamilyDoesNotExist),
-            ([("dumb_header", b"value")], ColumnFamilyHeaderMissing),
+            ([], ColumnFamilyHeaderMissing),
         ],
     )
     def test_recover_from_changelog_message_cf_errors(
-        self, partition_recovery_transaction_factory, headers, error
+        self, rocksdb_partition, headers, error
     ):
         changelog_msg = ConfluentKafkaMessageStub(
             key=b'my_key|"count"',
@@ -701,11 +693,6 @@ class TestRocksDBPartitionRecoveryTransaction:
             headers=headers,
             offset=50,
         )
-        recovery_transaction = partition_recovery_transaction_factory(
-            changelog_message=changelog_msg
-        )
-        store_partition = recovery_transaction._partition
-
         with pytest.raises(error):
-            recovery_transaction.write_from_changelog_message()
-        assert store_partition.get_changelog_offset() is None
+            rocksdb_partition.recover_from_changelog_message(changelog_msg)
+        assert rocksdb_partition.get_changelog_offset() is None

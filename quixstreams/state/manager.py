@@ -92,7 +92,7 @@ class StateStoreManager:
 
     def stop_recovery(self):
         """
-        Perform a state recovery, if necessary.
+        Stop recovery (called during app shutdown).
         """
         return self._recovery_manager.stop_recovery()
 

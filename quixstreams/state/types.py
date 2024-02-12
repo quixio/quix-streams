@@ -135,11 +135,13 @@ class StorePartition(Protocol):
         """
         ...
 
-    def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
+    def set_changelog_offset(self, changelog_offset: int):
         """
         Set the changelog offset based on a message (usually an "offset-only" message).
 
         Used during recovery.
+
+        :param changelog_offset: A changelog offset
         """
         ...
 

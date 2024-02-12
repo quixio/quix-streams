@@ -5,7 +5,6 @@ from unittest.mock import patch
 from quixstreams.state.recovery import (
     ChangelogProducer,
     ConfluentPartition,
-    OffsetUpdate,
 )
 from quixstreams.state.recovery import ChangelogProducerFactory
 from ..utils import ConfluentKafkaMessageStub
@@ -43,16 +42,9 @@ class TestRecoveryPartition:
 
     def test_update_offset(self, recovery_partition_store_mock):
         recovery_partition = recovery_partition_store_mock
-        with patch(
-            "quixstreams.state.recovery.OffsetUpdate", spec=OffsetUpdate
-        ) as offset_update:
-            recovery_partition.update_offset()
-        offset_update.assert_called_with(recovery_partition._changelog_highwater - 1)
-        assert isinstance(
-            recovery_partition.store_partition.set_changelog_offset.call_args_list[
-                0
-            ].kwargs["changelog_message"],
-            OffsetUpdate,
+        recovery_partition.update_offset()
+        recovery_partition.store_partition.set_changelog_offset.assert_called_with(
+            recovery_partition._changelog_highwater - 1
         )
 
     def test_update_offset_warn(self, recovery_partition_store_mock, caplog):

@@ -539,12 +539,9 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
                 assert tx.get_window(start_ms=10, end_ms=20) is None
                 assert tx.get_window(start_ms=20, end_ms=30) == 3
 
-
-class TestWindowedRocksDBPartitionRecoveryTransaction:
     @pytest.mark.parametrize("store_value", [10, None])
     def test_recover_window_from_changelog_message(
         self,
-        partition_recovery_transaction_factory,
         windowed_rocksdb_store_factory_changelog,
         store_value,
     ):
@@ -564,11 +561,8 @@ class TestWindowedRocksDBPartitionRecoveryTransaction:
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
             offset=50,
         )
-        recovery_transaction = partition_recovery_transaction_factory(
-            changelog_message=changelog_msg, store_partition=store_partition
-        )
 
-        recovery_transaction.write_from_changelog_message()
+        store_partition.recover_from_changelog_message(changelog_msg)
 
         with store_partition.begin() as tx:
             with tx.with_prefix(kafka_key):
@@ -579,7 +573,6 @@ class TestWindowedRocksDBPartitionRecoveryTransaction:
 
     def test_recover_latest_expire_from_changelog_message(
         self,
-        partition_recovery_transaction_factory,
         windowed_rocksdb_store_factory_changelog,
     ):
         """
@@ -598,11 +591,8 @@ class TestWindowedRocksDBPartitionRecoveryTransaction:
             ],
             offset=50,
         )
-        recovery_transaction = partition_recovery_transaction_factory(
-            changelog_message=changelog_msg, store_partition=store_partition
-        )
 
-        recovery_transaction.write_from_changelog_message()
+        store_partition.recover_from_changelog_message(changelog_msg)
 
         with store_partition.begin() as tx:
             with tx.with_prefix(kafka_key):

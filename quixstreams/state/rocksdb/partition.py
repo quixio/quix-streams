@@ -12,19 +12,21 @@ from quixstreams.state.types import (
 from .exceptions import (
     ColumnFamilyAlreadyExists,
     ColumnFamilyDoesNotExist,
+    ColumnFamilyHeaderMissing,
 )
 from .metadata import (
     METADATA_CF_NAME,
     PROCESSED_OFFSET_KEY,
     CHANGELOG_OFFSET_KEY,
+    CHANGELOG_CF_MESSAGE_HEADER,
 )
 from .options import RocksDBOptions
 from .serialization import (
     int_from_int64_bytes,
+    int_to_int64_bytes,
 )
 from .transaction import (
     RocksDBPartitionTransaction,
-    RocksDBPartitionRecoveryTransaction,
 )
 from .types import RocksDBOptionsType
 from ..recovery import ChangelogProducer
@@ -90,6 +92,17 @@ class RocksDBStorePartition(StorePartition):
             loads=self._loads,
         )
 
+    def _changelog_recover_flush(self, changelog_offset: int, batch: WriteBatch):
+        """
+        Update the changelog offset and flush outstanding writes.
+        """
+        batch.put(
+            CHANGELOG_OFFSET_KEY,
+            int_to_int64_bytes(changelog_offset + 1),
+            self.get_column_family_handle(METADATA_CF_NAME),
+        )
+        self.write(batch)
+
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto
     ):
@@ -98,9 +111,31 @@ class RocksDBStorePartition(StorePartition):
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
         """
-        RocksDBPartitionRecoveryTransaction(
-            partition=self, changelog_message=changelog_message
-        ).write_from_changelog_message()
+        try:
+            cf_handle = self.get_column_family_handle(
+                changelog_message.headers()[0][1].decode()
+            )
+        except IndexError:
+            raise ColumnFamilyHeaderMissing(
+                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
+            )
+        batch = WriteBatch(raw_mode=True)
+        key = changelog_message.key()
+        if value := changelog_message.value():
+            batch.put(key, value, cf_handle)
+        else:
+            batch.delete(key, cf_handle)
+        self._changelog_recover_flush(changelog_message.offset(), batch)
+
+    def set_changelog_offset(self, changelog_offset: int):
+        """
+        Set the changelog offset based on a message (usually an "offset-only" message).
+
+        Used during recovery.
+
+        :param changelog_offset: A changelog offset
+        """
+        self._changelog_recover_flush(changelog_offset, WriteBatch(raw_mode=True))
 
     def produce_to_changelog(
         self,
@@ -112,18 +147,6 @@ class RocksDBStorePartition(StorePartition):
         Produce a message to the StorePartitions respective changelog.
         """
         self._changelog_producer.produce(key=key, value=value, headers=headers)
-
-    def set_changelog_offset(self, changelog_message: ConfluentKafkaMessageProto):
-        """
-        Set the changelog offset based on a message (usually an "offset-only" message).
-
-        Used during recovery.
-
-        :param changelog_message: A Confluent-like message, usually only with offset
-        """
-        RocksDBPartitionRecoveryTransaction(
-            partition=self, changelog_message=changelog_message
-        ).flush()
 
     def write(self, batch: WriteBatch):
         """
@@ -223,12 +246,17 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: column family name
         :return: instance of `rocksdict.ColumnFamily`
         """
-        cached_cf_handle = self._cf_handle_cache.get(cf_name)
-        if cached_cf_handle is not None:
-            return cached_cf_handle
-        new_cf_handle = self._db.get_column_family_handle(cf_name)
-        self._cf_handle_cache[cf_name] = new_cf_handle
-        return new_cf_handle
+        if (cf_handle := self._cf_handle_cache.get(cf_name)) is None:
+            try:
+                cf_handle = self._db.get_column_family_handle(cf_name)
+                self._cf_handle_cache[cf_name] = cf_handle
+            except Exception as exc:
+                if "does not exist" in str(exc):
+                    raise ColumnFamilyDoesNotExist(
+                        f'Column family "{cf_name}" does not exist'
+                    )
+                raise
+        return cf_handle
 
     def get_column_family(self, cf_name: str) -> Rdict:
         """
@@ -238,20 +266,17 @@ class RocksDBStorePartition(StorePartition):
         :param cf_name: column family name
         :return: instance of `rocksdict.Rdict` for the given column family
         """
-        cached_cf = self._cf_cache.get(cf_name)
-        if cached_cf is not None:
-            return cached_cf
-        try:
-            new_cf = self._db.get_column_family(cf_name)
-        except Exception as exc:
-            if "does not exist" in str(exc):
-                raise ColumnFamilyDoesNotExist(
-                    f'Column family "{cf_name}" does not exist'
-                )
-            raise
-
-        self._cf_cache[cf_name] = new_cf
-        return new_cf
+        if (cf := self._cf_cache.get(cf_name)) is None:
+            try:
+                cf = self._db.get_column_family(cf_name)
+                self._cf_cache[cf_name] = cf
+            except Exception as exc:
+                if "does not exist" in str(exc):
+                    raise ColumnFamilyDoesNotExist(
+                        f'Column family "{cf_name}" does not exist'
+                    )
+                raise
+        return cf
 
     def create_column_family(self, cf_name: str):
         try:

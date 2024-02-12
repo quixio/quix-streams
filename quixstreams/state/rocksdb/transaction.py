@@ -6,18 +6,14 @@ from typing import Any, Union, Optional, Dict, NewType, TYPE_CHECKING
 from rocksdict import WriteBatch, ColumnFamily
 from typing_extensions import Self
 
-from quixstreams.models import MessageHeadersTuples, ConfluentKafkaMessageProto
 from quixstreams.state.types import (
     DumpsFunc,
     LoadsFunc,
     PartitionTransaction,
-    PartitionRecoveryTransaction,
 )
 from .exceptions import (
     NestedPrefixError,
     StateTransactionError,
-    ColumnFamilyHeaderMissing,
-    ColumnFamilyDoesNotExist,
 )
 from .metadata import (
     METADATA_CF_NAME,
@@ -47,7 +43,7 @@ _deleted = Undefined(object())
 _DEFAULT_PREFIX = b""
 
 
-__all__ = ("RocksDBPartitionTransaction", "RocksDBPartitionRecoveryTransaction")
+__all__ = ("RocksDBPartitionTransaction",)
 
 
 def _validate_transaction_state(func):
@@ -368,57 +364,3 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val is None and not self._failed:
             self.maybe_flush()
-
-
-class RocksDBPartitionRecoveryTransaction(PartitionRecoveryTransaction):
-    __slots__ = ("_partition", "_batch", "_message")
-
-    def __init__(
-        self,
-        partition: "RocksDBStorePartition",
-        changelog_message: ConfluentKafkaMessageProto,
-    ):
-        self._partition = partition
-        self._batch = WriteBatch(raw_mode=True)
-        self._message = changelog_message
-        self._failed = False
-        self._completed = False
-
-    def _get_header_column_family(self, headers: MessageHeadersTuples) -> ColumnFamily:
-        for t in headers:
-            if t[0] == CHANGELOG_CF_MESSAGE_HEADER:
-                cf_name = t[1].decode()
-                try:
-                    return self._partition.get_column_family_handle(t[1].decode())
-                except Exception as exc:
-                    if "does not exist" in str(exc):
-                        raise ColumnFamilyDoesNotExist(
-                            f'Column family "{cf_name}" does not exist'
-                        )
-                    raise
-        raise ColumnFamilyHeaderMissing(
-            f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
-        )
-
-    def write_from_changelog_message(self):
-        """
-        Update the respective db k/v from the changelog message.
-        """
-        cf_handle = self._get_header_column_family(self._message.headers())
-        key = self._message.key()
-        if value := self._message.value():
-            self._batch.put(key, value, cf_handle)
-        else:
-            self._batch.delete(key, cf_handle)
-        self.flush()
-
-    def flush(self):
-        """
-        Update the changelog offset and flush outstanding writes.
-        """
-        self._batch.put(
-            CHANGELOG_OFFSET_KEY,
-            int_to_int64_bytes(self._message.offset() + 1),
-            self._partition.get_column_family_handle(METADATA_CF_NAME),
-        )
-        self._partition.write(self._batch)
