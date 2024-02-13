@@ -163,7 +163,6 @@ class ChangelogProducer:
         :param value: message value (same as state value)
         :param headers: message headers (includes column family info)
         """
-        self._producer.poll(0)
         self._producer.produce(
             key=key,
             value=value,
@@ -173,7 +172,7 @@ class ChangelogProducer:
         )
 
     def flush(self):
-        self._producer.flush(10)
+        self._producer.flush()
 
 
 class RecoveryManager:
@@ -355,7 +354,7 @@ class RecoveryManager:
         A RecoveryPartition is unassigned immediately once fully updated.
         """
         while self.recovering:
-            if (msg := self._consumer.poll(5)) is None:
+            if (msg := self._consumer.poll(1)) is None:
                 continue
 
             changelog_name = msg.topic()
