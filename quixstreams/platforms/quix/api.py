@@ -128,7 +128,7 @@ class QuixPortalApiService:
     def post_topic(
         self,
         topic_name: str,
-        topic_partitions: int,
+        topic_partitions: Optional[int] = None,
         topic_rep_factor: Optional[int] = None,
         topic_ret_minutes: Optional[int] = None,
         topic_ret_bytes: Optional[int] = None,
