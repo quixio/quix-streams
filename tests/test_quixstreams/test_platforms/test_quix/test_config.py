@@ -356,13 +356,6 @@ class TestQuixKafkaConfigsBuilder:
             s = f.read()
         assert s == "my cool cert stuff"
 
-    def test_get_workspace_ssl_cert_empty(self, quix_kafka_config_factory, tmp_path):
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-            api_responses={"get_workspace_certificate": None},
-        )
-        assert cfg_factory.get_workspace_ssl_cert(extract_to_folder=tmp_path) is None
-
     def test__set_workspace_cert_has_path(self, quix_kafka_config_factory):
         path = Path(getcwd()) / "certificates" / "12345"
         expected = (path / "ca.cert").as_posix()
@@ -445,15 +438,15 @@ class TestQuixKafkaConfigsBuilder:
             "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
         }
 
-    def test_append_workspace_id(self, quix_kafka_config_factory):
+    def test_prepend_workspace_id(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
-        assert cfg_factory.append_workspace_id("topic") == "12345-topic"
-        assert cfg_factory.append_workspace_id("12345-topic") == "12345-topic"
+        assert cfg_factory.prepend_workspace_id("topic") == "12345-topic"
+        assert cfg_factory.prepend_workspace_id("12345-topic") == "12345-topic"
 
-    def test_strip_workspace_id(self, quix_kafka_config_factory):
+    def test_strip_workspace_id_prefix(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
-        assert cfg_factory.strip_workspace_id("12345-topic") == "topic"
-        assert cfg_factory.strip_workspace_id("topic") == "topic"
+        assert cfg_factory.strip_workspace_id_prefix("12345-topic") == "topic"
+        assert cfg_factory.strip_workspace_id_prefix("topic") == "topic"
 
     def test_get_confluent_client_config(self, quix_kafka_config_factory):
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")

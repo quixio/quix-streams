@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from quixstreams.state.exceptions import PartitionNotAssignedError
+from quixstreams.state.recovery import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.types import Store
 from .partition import (
     RocksDBStorePartition,
@@ -16,29 +17,36 @@ __all__ = ("RocksDBStore",)
 
 
 class RocksDBStore(Store):
+    """
+    RocksDB-based state store.
+
+    It keeps track of individual store partitions and provides access to the
+    partitions' transactions.
+    """
+
+    options_type = RocksDBOptionsType
+
     def __init__(
         self,
         name: str,
         topic: str,
         base_dir: str,
-        options: Optional[RocksDBOptionsType] = None,
+        changelog_producer_factory: Optional[ChangelogProducerFactory] = None,
+        options: Optional[options_type] = None,
     ):
         """
-        RocksDB-based state store.
-
-        It keeps track of individual store partitions and provides access to the
-        partitions' transactions.
-
         :param name: a unique store name
         :param topic: a topic name for this store
         :param base_dir: path to a directory with the state
+        :param changelog_producer_factory: a ChangelogProducerFactory instance
+            if using changelogs
         :param options: RocksDB options. If `None`, the default options will be used.
         """
         self._name = name
         self._topic = topic
         self._partitions_dir = Path(base_dir).absolute() / self._name / self._topic
-        self._transactions: Dict[int, RocksDBPartitionTransaction] = {}
         self._partitions: Dict[int, RocksDBStorePartition] = {}
+        self._changelog_producer_factory = changelog_producer_factory
         self._options = options
 
     @property
@@ -62,8 +70,12 @@ class RocksDBStore(Store):
         """
         return self._partitions
 
-    def create_new_partition(self, path: str) -> RocksDBStorePartition:
-        return RocksDBStorePartition(path=path, options=self._options)
+    def create_new_partition(
+        self, path: str, changelog_producer: Optional[ChangelogProducer] = None
+    ) -> RocksDBStorePartition:
+        return RocksDBStorePartition(
+            path=path, options=self._options, changelog_producer=changelog_producer
+        )
 
     def assign_partition(self, partition: int) -> RocksDBStorePartition:
         """
@@ -84,7 +96,12 @@ class RocksDBStore(Store):
             return self._partitions[partition]
 
         path = str((self._partitions_dir / str(partition)).absolute())
-        store_partition = self.create_new_partition(path)
+        store_partition = self.create_new_partition(
+            path,
+            self._changelog_producer_factory.get_partition_producer(partition)
+            if self._changelog_producer_factory
+            else None,
+        )
 
         self._partitions[partition] = store_partition
         logger.debug(

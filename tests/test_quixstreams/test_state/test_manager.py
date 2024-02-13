@@ -1,11 +1,10 @@
-import os
 import contextlib
+import os
 import uuid
-from unittest.mock import patch
+from unittest.mock import patch, call
 
 import pytest
 import rocksdict
-from tests.utils import TopicPartitionStub
 
 from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
@@ -13,6 +12,8 @@ from quixstreams.state.exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
+from quixstreams.state.recovery import ChangelogProducerFactory
+from tests.utils import TopicPartitionStub
 
 
 class TestStateStoreManager:
@@ -47,6 +48,11 @@ class TestStateStoreManager:
         state_manager.on_partition_assign(tp)
         state_manager.on_partition_revoke(tp)
         state_manager.on_partition_lost(tp)
+
+    def test_register_store(self, state_manager):
+        state_manager = state_manager
+        state_manager.register_store("my_topic", store_name="default")
+        assert "default" in state_manager.stores["my_topic"]
 
     def test_assign_revoke_partitions_stores_registered(self, state_manager):
         state_manager.register_store("topic1", store_name="store1")
@@ -248,3 +254,147 @@ class TestStateStoreManager:
                     "topic", partition=0, offset=0
                 ):
                     ...
+
+
+class TestStateStoreManagerChangelog:
+    def test_rebalance_partitions_stores_not_registered(self, state_manager_changelogs):
+        state_manager = state_manager_changelogs
+        tp = TopicPartitionStub("topic", 0)
+        # It's ok to rebalance partitions when there are no stores registered
+        state_manager.on_partition_assign(tp)
+        state_manager.on_partition_revoke(tp)
+        state_manager.on_partition_lost(tp)
+
+    def test_register_store(self, state_manager_changelogs):
+        state_manager = state_manager_changelogs
+        topic_manager = state_manager._recovery_manager._topic_manager
+        topic = topic_manager.topic(name="topic1")
+        store_name = "default"
+        state_manager.register_store(topic.name, store_name=store_name)
+
+        assert store_name in state_manager._stores[topic.name]
+        assert store_name in topic_manager.changelog_topics[topic.name]
+
+    def test_assign_revoke_partitions_stores_registered(
+        self,
+        state_manager_changelogs,
+    ):
+        state_manager = state_manager_changelogs
+        recovery_manager = state_manager._recovery_manager
+        topic_manager = recovery_manager._topic_manager
+
+        changelog_assign = patch.object(recovery_manager, "assign_partition").start()
+        changelog_revoke = patch.object(recovery_manager, "revoke_partition").start()
+        topic_manager.topic(name="topic1")
+        topic_manager.topic(name="topic2")
+        state_manager.register_store("topic1", store_name="store1")
+        state_manager.register_store("topic1", store_name="store2")
+        state_manager.register_store("topic2", store_name="store1")
+
+        stores_list = [s for d in state_manager.stores.values() for s in d.values()]
+        assert len(stores_list) == 3
+
+        partitions = [
+            TopicPartitionStub("topic1", 0),
+            TopicPartitionStub("topic2", 0),
+        ]
+
+        store_partitions = []
+        assign_calls = []
+        for tp in partitions:
+            store_partitions.extend(state_manager.on_partition_assign(tp))
+            assign_calls.append(
+                call(
+                    tp.topic,
+                    tp.partition,
+                    {
+                        name: store.partitions[tp.partition]
+                        for name, store in state_manager._stores[tp.topic].items()
+                    },
+                )
+            )
+        assert changelog_assign.call_count == len(assign_calls)
+        assert len(store_partitions) == 3
+
+        for store in stores_list:
+            assert len(store.partitions) == 1
+            assert isinstance(
+                store._changelog_producer_factory, ChangelogProducerFactory
+            )
+
+        revoke_calls = []
+        for tp in partitions:
+            state_manager.on_partition_revoke(tp)
+            revoke_calls.append(call(tp.partition))
+        changelog_revoke.assert_has_calls(revoke_calls)
+        assert changelog_revoke.call_count == len(revoke_calls)
+
+        for store in stores_list:
+            assert not store.partitions
+
+    def test_store_transaction_no_flush_on_exception(
+        self,
+        state_manager_changelogs,
+    ):
+        state_manager = state_manager_changelogs
+        recovery_manager = state_manager._recovery_manager
+        topic_manager = recovery_manager._topic_manager
+        producer = state_manager._producer
+        consumer = recovery_manager._consumer
+
+        consumer.get_watermark_offsets.return_value = (0, 10)
+        topic_manager.topic(name="topic")
+        # topic_admin_mock.inspect_topics.return_value = {"topic": None}
+        state_manager.register_store("topic", store_name="store")
+        state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
+        store = state_manager.get_store("topic", "store")
+
+        with contextlib.suppress(Exception):
+            with state_manager.start_store_transaction("topic", partition=0, offset=1):
+                tx = state_manager.get_store_transaction("store")
+                tx.set("some_key", "some_value")
+                raise ValueError()
+
+        store_partition = store.partitions[0]
+        assert store_partition.get_processed_offset() is None
+        assert store_partition.get_changelog_offset() is None
+        producer.produce.assert_not_called()
+
+    def test_store_transaction_no_flush_if_partition_transaction_failed(
+        self,
+        state_manager_changelogs,
+    ):
+        """
+        Ensure that no PartitionTransactions are flushed to the DB if
+        any of them fails
+        """
+        state_manager = state_manager_changelogs
+        recovery_manager = state_manager._recovery_manager
+        topic_manager = recovery_manager._topic_manager
+        producer = state_manager._producer
+        consumer = recovery_manager._consumer
+
+        consumer.get_watermark_offsets.return_value = (0, 10)
+        topic_manager.topic(name="topic")
+        state_manager.register_store("topic", store_name="store1")
+        state_manager.register_store("topic", store_name="store2")
+        state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
+
+        store1 = state_manager.get_store("topic", "store1")
+        store2 = state_manager.get_store("topic", "store2")
+
+        with state_manager.start_store_transaction("topic", partition=0, offset=1):
+            tx_store1 = state_manager.get_store_transaction("store1")
+            tx_store2 = state_manager.get_store_transaction("store2")
+            # Simulate exception in one of the transactions
+            with contextlib.suppress(ValueError), patch.object(
+                rocksdict.WriteBatch, "put", side_effect=ValueError("test")
+            ):
+                tx_store1.set("some_key", "some_value")
+            tx_store2.set("some_key", "some_value")
+
+        assert store1.partitions[0].get_processed_offset() is None
+        assert store1.partitions[0].get_changelog_offset() is None
+        assert store2.partitions[0].get_processed_offset() is None
+        assert store2.partitions[0].get_changelog_offset() is None
+        producer.produce.assert_not_called()

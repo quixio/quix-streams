@@ -1,4 +1,3 @@
-import json
 import time
 import uuid
 from os import environ
@@ -6,9 +5,16 @@ from random import randint, random, choice
 
 from dotenv import load_dotenv
 
-from quixstreams.kafka import Producer
+from quixstreams import Application
 
 load_dotenv("./env_vars.env")
+
+
+app = Application(
+    broker_address=environ["BROKER_ADDRESS"],
+    consumer_group="ignore",
+)
+topic = app.topic(name="json__purchase_events", value_serializer="json")
 
 retailers = [
     "Billy Bob's Shop",
@@ -19,12 +25,9 @@ retailers = [
     "Food Emporium",
 ]
 
-# strings for key, value, and headers will be serialized to bytes by default
 i = 0
-with Producer(
-    broker_address=environ["BROKER_ADDRESS"],
-    extra_config={"allow.auto.create.topics": "true"},
-) as producer:
+# app.get_producer() automatically creates any topics made via `app.topic`
+with app.get_producer() as producer:
     while i < 10000:
         account = randint(0, 10)
         account_id = f"A{'0'*(10-len(str(account)))}{account}"
@@ -35,11 +38,15 @@ with Producer(
             "transaction_source": choice(retailers),
         }
         print(f"Producing value {value}")
+        # with current functionality, we need to manually serialize our data
+        serialized = topic.serialize(
+            key=account_id, value=value, headers={"uuid": str(uuid.uuid4())}
+        )
         producer.produce(
-            topic="json__purchase_events",
-            headers=[("uuid", str(uuid.uuid4()))],  # a dict is also allowed here
-            key=account_id,
-            value=json.dumps(value),  # needs to be a string
+            topic=topic.name,
+            headers=serialized.headers,
+            key=serialized.key,
+            value=serialized.value,
         )
         i += 1
         time.sleep(random())

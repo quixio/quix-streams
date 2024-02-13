@@ -131,12 +131,48 @@ Exactly Once Semantics avoids this, and it is currently on our roadmap.
 
 <br>
 
-### Limitations 
-#### Recovery
+## Recovering State
 
-Currently, if the state store becomes corrupted, the state must start from scratch.
+Should something happen to an `Application`s stateful database (corruption, new 
+application host, etc.), it can rebuild its state from changelog topics (enabled by 
+default when using stateful processing).
+
+### Changelog Topics
+
+Changelog topics are "internal topics", AKA managed entirely by the `Application`.
+This includes creating, producing, and consuming from them. The user should not have
+to manage them.
+
+They function as the "source of truth" for an Application's respective state stores. 
+Depending on the stateful operations, there can be multiple changelog topics per 
+Application.
+
+They function differently from other topics, primarily due to how they retain data. 
+They use "compaction", meaning they indefinitely store the latest value of a Kafka key,
+enabling state rebuilds.
+
+#### Manual Managing of Changelog Topics
+
+Should you need to manage these changelog topics yourself (due to things like 
+permission issues), you can find out what you need by running your `Application`, 
+which prints what topics it expects to exist during initialization. 
+
+Be sure that the partition counts and `cleanup.policy` match what is printed.
+
+#### Disabling Changelog Topics
+
+Should you need it, you can disable changelog topics via 
+`Application(use_changelog_topics=False)`. 
+
+> ***WARNING***: you will lose all stateful data should something happen to the databases, 
+> so this is not recommended.
+
+Re-enabling them will not "backfill" the changelog topics from state; 
+it will simply store state updates from that point forward.
+
 <br>
-We plan to add a proper recovery process in the future.
+
+### Limitations 
 
 #### Shared state directory 
 In the current version, it's assumed that the state directory is shared between consumers (e.g. using Kubernetes PVC)

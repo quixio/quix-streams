@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Optional, List
+from typing import Optional, List, Literal
 from urllib.parse import urljoin
 from zipfile import ZipFile
 
@@ -86,23 +86,13 @@ class QuixPortalApiService:
         )
         return s
 
-    def get_workspace_certificate(
-        self, workspace_id: Optional[str] = None
-    ) -> Optional[bytes]:
-        """
-        Get a workspace TLS certificate if available.
-
-        Returns `None` if certificate is not specified.
-
-        :param workspace_id: workspace id, optional
-        :return: certificate as bytes if present, or None
-        """
+    def get_workspace_certificate(self, workspace_id: Optional[str] = None) -> bytes:
         workspace_id = workspace_id or self.default_workspace_id
-        content = self.session.get(f"/workspaces/{workspace_id}/certificates").content
-        if not content:
-            return
-
-        with ZipFile(BytesIO(content)) as z:
+        with ZipFile(
+            BytesIO(
+                self.session.get(f"/workspaces/{workspace_id}/certificates").content
+            )
+        ) as z:
             with z.open("ca.cert") as f:
                 return f.read()
 
@@ -129,19 +119,24 @@ class QuixPortalApiService:
         self,
         topic_name: str,
         topic_partitions: int,
-        topic_rep_factor: Optional[int] = None,
+        topic_rep_factor: int,
         topic_ret_minutes: Optional[int] = None,
         topic_ret_bytes: Optional[int] = None,
+        cleanup_policy: Optional[Literal["compact", "delete"]] = None,
         workspace_id: Optional[str] = None,
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
+        optionals = {
+            "retentionInMinutes": topic_ret_minutes,
+            "retentionInBytes": topic_ret_bytes,
+            "cleanupPolicy": cleanup_policy,
+        }
         d = {
             "name": topic_name,
             "configuration": {
                 "partitions": topic_partitions,
                 "replicationFactor": topic_rep_factor,
-                "retentionInMinutes": topic_ret_minutes,
-                "retentionInBytes": topic_ret_bytes,
+                **{k: v for k, v in optionals.items() if v is not None},
             },
         }
         return self.session.post(f"/{workspace_id}/topics", json=d).json()
