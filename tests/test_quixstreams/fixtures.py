@@ -45,7 +45,7 @@ from quixstreams.platforms.quix.config import (
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
-from quixstreams.state.recovery import ChangelogManager
+from quixstreams.state.recovery import RecoveryManager
 
 
 @pytest.fixture()
@@ -305,14 +305,16 @@ def state_manager_factory(tmp_path):
     def factory(
         group_id: Optional[str] = None,
         state_dir: Optional[str] = None,
-        changelog_manager: Optional[ChangelogManager] = None,
+        producer: Optional[RowProducer] = None,
+        recovery_manager: Optional[RecoveryManager] = None,
     ) -> StateStoreManager:
         group_id = group_id or str(uuid.uuid4())
         state_dir = state_dir or str(uuid.uuid4())
         return StateStoreManager(
             group_id=group_id,
             state_dir=str(tmp_path / state_dir),
-            changelog_manager=changelog_manager,
+            producer=producer,
+            recovery_manager=recovery_manager,
         )
 
     return factory
@@ -327,24 +329,14 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
-def changelog_manager_factory(topic_manager_factory):
-    def factory(
-        topic_admin: Optional[TopicAdmin] = None,
-    ):
-        changelog_manager = ChangelogManager(
-            topic_manager=topic_manager_factory(topic_admin),
-        )
-        return changelog_manager
-
-    return factory
-
-
-@pytest.fixture()
 def state_manager_changelogs(
-    state_manager_factory, topic_admin, changelog_manager_factory
+    state_manager_factory,
+    topic_admin,
+    recovery_manager_mock_consumer,
 ) -> StateStoreManager:
     manager = state_manager_factory(
-        changelog_manager=changelog_manager_factory(topic_admin=topic_admin)
+        producer=create_autospec(RowProducer)("broker"),
+        recovery_manager=recovery_manager_mock_consumer,
     )
     manager.init()
     yield manager

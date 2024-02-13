@@ -17,7 +17,6 @@ from .error_callbacks import (
 )
 from .kafka import (
     AutoOffsetReset,
-    AssignmentStrategy,
     Partitioner,
     Producer,
     Consumer,
@@ -41,7 +40,7 @@ from .platforms.quix import (
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
-from .state.recovery import ChangelogManager
+from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
 
 __all__ = ("Application",)
@@ -95,7 +94,6 @@ class Application:
         consumer_group: str,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
-        assignment_strategy: AssignmentStrategy = "range",
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
@@ -121,7 +119,6 @@ class Application:
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
-        :param assignment_strategy: The name of a partition assignment strategy.
         :param partitioner: A function to be used to determine the outgoing message
             partition.
         :param consumer_extra_config: A dictionary with additional options that
@@ -166,7 +163,6 @@ class Application:
         self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
         self._auto_commit_enable = auto_commit_enable
-        self._assignment_strategy = assignment_strategy
         self._partitioner = partitioner
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
@@ -176,7 +172,7 @@ class Application:
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy=assignment_strategy,
+            assignment_strategy="cooperative-sticky",
             extra_config=consumer_extra_config,
             on_error=on_consumer_error,
         )
@@ -194,6 +190,7 @@ class Application:
         self._on_message_processed = on_message_processed
         self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
+        self._do_recovery_check = False
 
         if not topic_manager:
             topic_manager = TopicManager(
@@ -204,18 +201,24 @@ class Application:
             )
         self._topic_manager = topic_manager
 
-        changelog_manager = (
-            ChangelogManager(
-                topic_manager=self._topic_manager,
-            )
-            if use_changelog_topics
-            else None
-        )
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            changelog_manager=changelog_manager,
+            producer=RowProducer(
+                broker_address=broker_address,
+                partitioner=partitioner,
+                extra_config=producer_extra_config,
+                on_error=on_producer_error,
+            )
+            if use_changelog_topics
+            else None,
+            recovery_manager=RecoveryManager(
+                consumer=self._consumer,
+                topic_manager=self._topic_manager,
+            )
+            if use_changelog_topics
+            else None,
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
@@ -227,7 +230,6 @@ class Application:
         consumer_group: str,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
-        assignment_strategy: AssignmentStrategy = "range",
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
@@ -284,7 +286,6 @@ class Application:
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
-        :param assignment_strategy: The name of a partition assignment strategy.
         :param partitioner: A function to be used to determine the outgoing message
             partition.
         :param consumer_extra_config: A dictionary with additional options that
@@ -362,7 +363,6 @@ class Application:
             producer_extra_config=producer_extra_config,
             auto_offset_reset=auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy=assignment_strategy,
             partitioner=partitioner,
             on_consumer_error=on_consumer_error,
             on_processing_error=on_processing_error,
@@ -510,6 +510,8 @@ class Application:
         (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
         """
         self._running = False
+        if self._state_manager.using_changelogs:
+            self._state_manager.stop_recovery()
 
     def get_producer(self) -> Producer:
         """
@@ -582,7 +584,7 @@ class Application:
             consumer_group=self._consumer_group,
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=self._auto_commit_enable,
-            assignment_strategy=self._assignment_strategy,
+            assignment_strategy="cooperative-sticky",
             extra_config=self._consumer_extra_config,
         )
 
@@ -611,6 +613,59 @@ class Application:
         if self._auto_create_topics:
             self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
+
+    def _process_message(self, dataframe_composed, start_state_transaction):
+        # Serve producer callbacks
+        self._producer.poll(self._producer_poll_timeout)
+        rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
+
+        if rows is None:
+            return
+
+        # Deserializer may return multiple rows for a single message
+        rows = rows if isinstance(rows, list) else [rows]
+        if not rows:
+            return
+
+        first_row = rows[0]
+        topic_name, partition, offset = (
+            first_row.topic,
+            first_row.partition,
+            first_row.offset,
+        )
+
+        with start_state_transaction(
+            topic=topic_name, partition=partition, offset=offset
+        ):
+            for row in rows:
+                context = copy_context()
+                context.run(set_message_context, first_row.context)
+                try:
+                    # Execute StreamingDataFrame in a context
+                    context.run(dataframe_composed, row.value)
+                except Filtered:
+                    # The message was filtered by StreamingDataFrame
+                    continue
+                except Exception as exc:
+                    # TODO: This callback might be triggered because of Producer
+                    #  errors too because they happen within ".process()"
+                    to_suppress = self._on_processing_error(exc, row, logger)
+                    if not to_suppress:
+                        raise
+
+        # Store the message offset after it's successfully processed
+        self._consumer.store_offsets(
+            offsets=[
+                TopicPartition(
+                    topic=topic_name,
+                    partition=partition,
+                    offset=offset + 1,
+                )
+            ]
+        )
+
+        if self._on_message_processed is not None:
+            self._on_message_processed(topic_name, partition, offset)
 
     def run(
         self,
@@ -680,58 +735,12 @@ class Application:
             self._running = True
 
             dataframe_composed = dataframe.compose()
+
             while self._running:
-                # Serve producer callbacks
-                self._producer.poll(self._producer_poll_timeout)
-                rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
-
-                if rows is None:
-                    continue
-
-                # Deserializer may return multiple rows for a single message
-                rows = rows if isinstance(rows, list) else [rows]
-                if not rows:
-                    continue
-
-                first_row = rows[0]
-                topic_name, partition, offset = (
-                    first_row.topic,
-                    first_row.partition,
-                    first_row.offset,
-                )
-
-                with start_state_transaction(
-                    topic=topic_name, partition=partition, offset=offset
-                ):
-                    for row in rows:
-                        context = copy_context()
-                        context.run(set_message_context, row.context)
-                        try:
-                            # Execute StreamingDataFrame in a context
-                            context.run(dataframe_composed, row.value)
-                        except Filtered:
-                            # The message was filtered by StreamingDataFrame
-                            continue
-                        except Exception as exc:
-                            # TODO: This callback might be triggered because of Producer
-                            #  errors too because they happen within ".process()"
-                            to_suppress = self._on_processing_error(exc, row, logger)
-                            if not to_suppress:
-                                raise
-
-                # Store the message offset after it's successfully processed
-                self._consumer.store_offsets(
-                    offsets=[
-                        TopicPartition(
-                            topic=topic_name,
-                            partition=partition,
-                            offset=offset + 1,
-                        )
-                    ]
-                )
-
-                if self._on_message_processed is not None:
-                    self._on_message_processed(topic_name, partition, offset)
+                if self._state_manager.recovery_required:
+                    self._state_manager.do_recovery()
+                else:
+                    self._process_message(dataframe_composed, start_state_transaction)
 
             logger.info("Stop processing of StreamingDataFrame")
 
@@ -741,6 +750,13 @@ class Application:
 
         :param topic_partitions: list of `TopicPartition` from Kafka
         """
+        # sometimes "empty" calls happen, probably updating the consumer epoch
+        if not topic_partitions:
+            return
+        # assigning manually here (instead of allowing it handle it automatically)
+        # enables pausing them during recovery to work as expected
+        self._consumer.incremental_assign(topic_partitions)
+
         if self._state_manager.stores:
             logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
@@ -773,6 +789,7 @@ class Application:
         """
         Revoke partitions from consumer and state
         """
+        self._consumer.incremental_unassign(topic_partitions)
         if self._state_manager.stores:
             logger.debug(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:

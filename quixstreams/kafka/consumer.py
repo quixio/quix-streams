@@ -428,6 +428,10 @@ class Consumer:
         """
         Pause consumption for the provided list of partitions.
 
+        Paused partitions must be tracked manually.
+
+        Does NOT affect the result of Consumer.assignment().
+
         :param list(TopicPartition) partitions: List of topic+partitions to pause.
         :rtype: None
         :raises: KafkaException
@@ -503,9 +507,23 @@ class Consumer:
         return self._consumer.set_sasl_credentials(username, password)
 
     def incremental_assign(self, partitions: List[TopicPartition]):
+        """
+        Assign new partitions.
+
+        Can be called outside the `Consumer` `on_assign` callback (multiple times).
+        Partitions immediately show on `Consumer.assignment()`.
+
+        Any additional partitions besides the ones passed during the `Consumer`
+        `on_assign` callback will NOT be associated with the consumer group.
+        """
         return self._consumer.incremental_assign(partitions)
 
     def incremental_unassign(self, partitions: List[TopicPartition]):
+        """
+        Revoke partitions.
+
+        Can be called outside an on_revoke callback.
+        """
         return self._consumer.incremental_unassign(partitions)
 
     def close(self):
