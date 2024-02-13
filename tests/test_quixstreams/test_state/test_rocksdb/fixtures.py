@@ -12,6 +12,32 @@ from quixstreams.state.rocksdb.partition import (
 )
 
 
+TEST_KEYS = [
+    "string",
+    123,
+    123.123,
+    (123, 456),
+]
+
+TEST_VALUES = [
+    None,
+    "string",
+    123,
+    123.123,
+    {"key": "value", "mapping": {"key": "value"}},
+    [123, 456],
+]
+
+TEST_PREFIXES = [
+    b"some_bytes",
+    "string",
+    123,
+    123.123,
+    (123, 456),
+    [123, 456],
+]
+
+
 @pytest.fixture()
 def rocksdb_partition_factory(tmp_path):
     def factory(
