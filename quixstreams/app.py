@@ -737,10 +737,8 @@ class Application:
             dataframe_composed = dataframe.compose()
 
             while self._running:
-                if self._do_recovery_check:
-                    # performs recovery if needed
+                if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
-                    self._do_recovery_check = False
                 else:
                     self._process_message(dataframe_composed, start_state_transaction)
 
@@ -760,9 +758,6 @@ class Application:
         self._consumer.incremental_assign(topic_partitions)
 
         if self._state_manager.stores:
-            if self._state_manager.using_changelogs:
-                # new partitions require a recovery check
-                self._do_recovery_check = True
             logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
                 # Assign store partitions

@@ -232,10 +232,6 @@ class RecoveryManager:
 
         After, will resume normal `Application` processing.
         """
-        if not self.has_assignments:
-            logger.debug("No recovery required!")
-            return
-
         logger.info("Beginning the recovery process...")
         self._running = True
         self._consumer.resume(

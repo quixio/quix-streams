@@ -502,16 +502,6 @@ class TestRecoveryManager:
         assert consumer.resume.call_args_list[1].args[0] == ["assignments"]
         assert consumer.resume.call_count == 2
 
-    def test_do_recovery_no_recovery_needed(self, recovery_manager_mock_consumer):
-        recovery_manager = recovery_manager_mock_consumer
-        consumer = recovery_manager._consumer
-
-        with patch.object(recovery_manager, "_recovery_loop") as recovery_loop:
-            recovery_manager.do_recovery()
-
-        consumer.resume.assert_not_called()
-        recovery_loop.assert_not_called()
-
     def test__recovery_loop(
         self, recovery_manager_mock_consumer, recovery_partition_factory
     ):

@@ -76,6 +76,15 @@ class StateStoreManager:
         return self._stores
 
     @property
+    def recovery_required(self) -> bool:
+        """
+        Whether recovery needs to be done.
+        """
+        if self._recovery_manager:
+            return self._recovery_manager.has_assignments
+        return False
+
+    @property
     def using_changelogs(self) -> bool:
         """
         Whether the StateStoreManager is using changelog topics
