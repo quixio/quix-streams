@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L43)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L52)
 
 The main Application class.
 
@@ -47,7 +47,7 @@ from quixstreams import Application
 app = Application(broker_address='localhost:9092', consumer_group='group')
 topic = app.topic('test-topic')
 df = app.dataframe(topic)
-df.apply(lambda value, context: print('New message', value)
+df.apply(lambda value, context: print('New message', value))
 
 app.run(dataframe=df)
 ```
@@ -63,7 +63,6 @@ def __init__(broker_address: str,
              consumer_group: str,
              auto_offset_reset: AutoOffsetReset = "latest",
              auto_commit_enable: bool = True,
-             assignment_strategy: AssignmentStrategy = "range",
              partitioner: Partitioner = "murmur2",
              consumer_extra_config: Optional[dict] = None,
              producer_extra_config: Optional[dict] = None,
@@ -75,10 +74,13 @@ def __init__(broker_address: str,
              on_message_processed: Optional[MessageProcessedCallback] = None,
              consumer_poll_timeout: float = 1.0,
              producer_poll_timeout: float = 0.0,
-             loglevel: Optional[LogLevel] = "INFO")
+             loglevel: Optional[LogLevel] = "INFO",
+             auto_create_topics: bool = True,
+             use_changelog_topics: bool = True,
+             topic_manager: Optional[TopicManager] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L82)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L91)
 
 
 <br>
@@ -91,7 +93,6 @@ Passed as `group.id` to `confluent_kafka.Consumer`
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `auto_commit_enable`: If true, periodically commit offset of
 the last message handed to the application. Default - `True`.
-- `assignment_strategy`: The name of a partition assignment strategy.
 - `partitioner`: A function to be used to determine the outgoing message
 partition.
 - `consumer_extra_config`: A dictionary with additional options that
@@ -108,11 +109,15 @@ If `None`, the default options will be used.
 processed.
 - `loglevel`: a log level for "quixstreams" logger.
 Should be a string or None.
-    If `None` is passed, no logging will be configured.
-    You may pass `None` and configure "quixstreams" logger
-    externally using `logging` library.
-    Default - "INFO".
-
+If `None` is passed, no logging will be configured.
+You may pass `None` and configure "quixstreams" logger
+externally using `logging` library.
+Default - "INFO".
+- `auto_create_topics`: Create all `Topic`s made via Application.topic()
+Default - `True`
+- `use_changelog_topics`: Use changelog topics to back stateful operations
+Default - `True`
+- `topic_manager`: A TopicManager instance
 ***Error Handlers***
 
 To handle errors, `Application` accepts callbacks triggered when
@@ -138,7 +143,6 @@ def Quix(cls,
          consumer_group: str,
          auto_offset_reset: AutoOffsetReset = "latest",
          auto_commit_enable: bool = True,
-         assignment_strategy: AssignmentStrategy = "range",
          partitioner: Partitioner = "murmur2",
          consumer_extra_config: Optional[dict] = None,
          producer_extra_config: Optional[dict] = None,
@@ -152,10 +156,12 @@ def Quix(cls,
          producer_poll_timeout: float = 0.0,
          loglevel: Optional[LogLevel] = "INFO",
          quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
-         auto_create_topics: bool = True) -> Self
+         auto_create_topics: bool = True,
+         use_changelog_topics: bool = True,
+         topic_manager: Optional[QuixTopicManager] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L188)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L228)
 
 Initialize an Application to work with Quix platform,
 
@@ -202,7 +208,6 @@ Passed as `group.id` to `confluent_kafka.Consumer`.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `auto_commit_enable`: If true, periodically commit offset of
 the last message handed to the application. Default - `True`.
-- `assignment_strategy`: The name of a partition assignment strategy.
 - `partitioner`: A function to be used to determine the outgoing message
 partition.
 - `consumer_extra_config`: A dictionary with additional options that
@@ -219,11 +224,15 @@ If `None`, the default options will be used.
 processed.
 - `loglevel`: a log level for "quixstreams" logger.
 Should be a string or None.
-    If `None` is passed, no logging will be configured.
-    You may pass `None` and configure "quixstreams" logger
-    externally using `logging` library.
-    Default - "INFO".
-
+If `None` is passed, no logging will be configured.
+You may pass `None` and configure "quixstreams" logger
+externally using `logging` library.
+Default - "INFO".
+- `auto_create_topics`: Create all `Topic`s made via Application.topic()
+Default - `True`
+- `use_changelog_topics`: Use changelog topics to back stateful operations
+Default - `True`
+- `topic_manager`: A QuixTopicManager instance
 ***Error Handlers***
 
 To handle errors, `Application` accepts callbacks triggered when
@@ -241,8 +250,6 @@ or to produce a message to Kafka.
 ***Quix-specific Parameters***
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
 instead of the default one.
-- `auto_create_topics`: Whether to auto-create any topics handed to a
-StreamingDataFrame instance (topics_in + topics_out).
 
 
 <br>
@@ -262,11 +269,11 @@ def topic(name: str,
           key_deserializer: DeserializerType = "bytes",
           value_serializer: SerializerType = "json",
           key_serializer: SerializerType = "bytes",
-          creation_configs: Optional[TopicCreationConfigs] = None,
+          config: Optional[TopicConfig] = None,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L334)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L386)
 
 Create a topic definition.
 
@@ -306,8 +313,9 @@ be `<workspace_id>-<name>`
 - `key_deserializer`: a deserializer type for keys; default="bytes"
 - `value_serializer`: a serializer type for values; default="json"
 - `key_serializer`: a serializer type for keys; default="bytes"
-- `creation_configs`: settings for auto topic creation (Quix platform only)
-Its name will be overridden by this method's 'name' param.
+- `config`: optional topic configurations (for creation/validation)
+>***NOTE:*** will not create without Application's auto_create_topics set
+to True (is True by default)
 - `timestamp_extractor`: a callable that returns a timestamp in
 milliseconds from a deserialized message. Default - `None`.
 
@@ -346,7 +354,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L420)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L466)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -396,7 +404,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L456)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L502)
 
 Stop the internal poll loop and the message processing.
 
@@ -416,7 +424,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L468)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L516)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -451,7 +459,7 @@ with app.get_producer() as producer:
 def get_consumer() -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L504)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L547)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -496,7 +504,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L553)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L591)
 
 Clear the state of the application.
 
@@ -510,7 +518,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/app.py#L582)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/app.py#L670)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -554,7 +562,7 @@ app.run(dataframe=df)
 class State(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/state/types.py#L102)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/state/types.py#L149)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -568,7 +576,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/state/types.py#L107)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/state/types.py#L154)
 
 Get the value for key if key is present in the state, else default
 
@@ -595,7 +603,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/state/types.py#L116)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/state/types.py#L163)
 
 Set value for the key.
 
@@ -616,7 +624,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/state/types.py#L123)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/state/types.py#L170)
 
 Delete value for the key.
 
@@ -638,7 +646,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/b8d415d4298ed0628c8470d27607a7c1cb6a0c39/quixstreams/state/types.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/20c0122af530d72f624e2aa3b1359ac1c1afe265/quixstreams/state/types.py#L178)
 
 Check if the key exists in state.
 
