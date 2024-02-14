@@ -364,7 +364,7 @@ class RecoveryManager:
             partition.recover_from_changelog_message(changelog_message=msg)
 
             if not partition.needs_recovery:
-                logger.debug(f"Finished recovering {changelog_name}[{partition_num}]")
+                logger.info(f"Finished recovering {changelog_name}[{partition_num}]")
                 self._revoke_recovery_partitions(
                     [self._recovery_partitions[partition_num].pop(changelog_name)],
                     partition_num,
