@@ -199,8 +199,6 @@ class RocksDBStorePartition(StorePartition):
         """
         metadata_cf = self.get_column_family(METADATA_CF_NAME)
         offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
-        if offset_bytes is None:
-            offset_bytes = self._db.get(CHANGELOG_OFFSET_KEY)
         if offset_bytes is not None:
             return int_from_int64_bytes(offset_bytes)
 
