@@ -27,9 +27,9 @@ handle that complexity yourself:
 
 - State store in Quix Streams keeps data per each topic partition and automatically reacts to the changes in partition assignment.  
 Each partition has its own RocksDB instance, therefore data from different partitions is stored separately, which
-allows to process partitions in parallel.
+allows to processing of partitions in parallel.
 
-- The state data is also stored per-key, so the updates for the messages with key `A` are visible only for the messages with the same key.
+- The state data is also stored per key, so the updates for the messages with key `A` are visible only for the messages with the same key.
 
 
 ### Example: 
@@ -45,7 +45,7 @@ When another consumer reads the message with `KEY_B`, it will not be able to rea
 
 ## Using State
 
-The state is available in functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` and `StreamingDataFrame.filter()` with parameter `stateful=True`:
+The state is available in functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()`, and `StreamingDataFrame.filter()` with parameter `stateful=True`:
 
 ```python
 from quixstreams import Application, State
@@ -69,18 +69,18 @@ sdf = sdf.apply(count_messages, stateful=True)
 
 ```
 
-Currently, only functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` and `StreamingDataFrame.filter()` may use State.
+Currently, only functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()`, and `StreamingDataFrame.filter()` may use State.
 
 
 ## Fault Tolerance & Recovery
 
 Quix Streams stores data in the local state stores, and these stores are not fault-tolerant out of the box.  
-For example, certain hard disk may get corrupted, and the data on this disk will be lost.
+For example, a certain hard disk may get corrupted, and the data on this disk will be lost.
 
 To prevent that, Quix Streams uses a mechanism based on Changelog topics to keep the state data in Kafka, which is already highly available and replicated.  
 
 **Changelog topic** is an internal kind of topic that Quix Streams uses to keep the record of the state changes for the given state store.  
-Changelog topics are "on" by default, and `Application` class will create and manage them for each used state store.
+Changelog topics are "on" by default, and the `Application` class will create and manage them for each used state store.
 
 Changelog topics have the same number of partitions as the source topic to ensure that partitions can be reassigned between consumers.   
 They are also compacted to prevent them from growing indefinitely.
@@ -115,13 +115,13 @@ Should you need it, you can disable changelog topics via
 > ***WARNING***: you will lose all stateful data should something happen to the local state stores, 
 > so this is not recommended.
 > 
-> Also, re-enabling changelog topics will not "backfill" them from state.  
+> Also, re-enabling changelog topics will not "backfill" them from the state.  
 > It will simply send new state updates from that point forward.
 
 
 ## Changing the State File Path
 
-By default, an `Application` keeps the state in `state` directory relative to the current working directory.  
+By default, an `Application` keeps the state in the `state` directory relative to the current working directory.  
 To change it, pass `state_dir="your-path"` to `Application` or `Application.Quix` calls:
 
 ```python
@@ -165,11 +165,11 @@ This ensures that state clearing does not interfere with the ongoing stateful pr
 ## State Guarantees
 
 Because we currently handle messages with "At Least Once" guarantees, it is possible
-for the state to become slightly out of sync with a topic in-between shutdowns and
+for the state to become slightly out of sync with a topic in between shutdowns and
 rebalances. 
 
 While the impact of this is generally minimal and only for a small amount of messages,
 be aware this could cause side effects where the same message may be re-processed 
-differently if it depended on certain state conditionals.
+differently, if it depended on certain state conditionals.
 
 Exactly Once Semantics avoids this, and it is currently on our roadmap.
