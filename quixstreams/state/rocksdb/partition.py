@@ -202,18 +202,6 @@ class RocksDBStorePartition(StorePartition):
         if offset_bytes is not None:
             return int_from_int64_bytes(offset_bytes)
 
-    def get_changelog_offset(self) -> Optional[int]:
-        """
-        Get offset that the changelog is up-to-date with.
-        :return: offset or `None` if there's no processed offset yet
-        """
-        metadata_cf = self.get_column_family(METADATA_CF_NAME)
-        offset_bytes = metadata_cf.get(CHANGELOG_OFFSET_KEY)
-        if offset_bytes is None:
-            offset_bytes = self._db.get(CHANGELOG_OFFSET_KEY)
-        if offset_bytes is not None:
-            return int_from_int64_bytes(offset_bytes)
-
     def close(self):
         """
         Close the underlying RocksDB
