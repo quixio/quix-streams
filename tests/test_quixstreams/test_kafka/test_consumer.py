@@ -165,6 +165,64 @@ class TestConsumerOnAssign:
                 if num_partitions_assigned == 10:
                     return
 
+    def test_cooperative_pause_during_on_assign_callback_remains_paused(
+        self, consumer_factory, topic_factory, producer
+    ):
+        """
+        Confirm that consumer partitions that are manually assigned, and then paused,
+        during the on_assign callback remain paused (they must be assigned first!).
+
+        Also, confirm incremental assigns of other partitions outside the normal
+        rebalance scope do not affect this pause status.
+        """
+
+        def on_assign(consumer, tp_list):
+            consumer.incremental_assign(tp_list)
+            if len(tp_list) == 1:
+                consumer.pause(tp_list)
+
+        topic, _ = topic_factory(num_partitions=2)
+        topic_empty, _ = topic_factory(num_partitions=2)
+        stack = contextlib.ExitStack()
+
+        consumer_args = dict(
+            auto_offset_reset="earliest",
+            assignment_strategy="cooperative-sticky",
+            extra_config={"max.poll.interval.ms": 60000},
+        )
+        consumer_0 = consumer_factory(**consumer_args)
+        stack.enter_context(consumer_0)
+        consumer_0.subscribe(topics=[topic])
+        while len(consumer_0.assignment()) != 2:
+            consumer_0.poll(0.1)
+
+        consumer_1 = consumer_factory(**consumer_args)
+        stack.enter_context(consumer_1)
+        consumer_1.subscribe(
+            topics=[topic],
+            on_assign=on_assign,
+        )
+
+        while len(consumer_0.assignment()) != len(consumer_1.assignment()):
+            consumer_1.poll(0.1)
+            consumer_0.poll(0.1)
+
+        # assigning a partition outside normal scope should not unpause others
+        consumer_1.incremental_assign([TopicPartition(topic_empty, 0)])
+        while len(consumer_1.assignment()) < 2:
+            consumer_1.poll(0.1)
+
+        stack.enter_context(producer)
+        producer.produce(key="key0", value="value", topic=topic, partition=0)
+        producer.produce(key="key1", value="value", topic=topic, partition=1)
+        producer.flush()
+
+        try:
+            assert consumer_0.poll(3).offset() == 0
+            assert consumer_1.poll(3) is None
+        finally:
+            stack.close()
+
 
 class TestConsumerOnRevoke:
     def test_consumer_on_revoke_callback_new_consumer_joined(

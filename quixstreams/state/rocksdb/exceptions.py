@@ -6,6 +6,7 @@ __all__ = (
     "NestedPrefixError",
     "ColumnFamilyDoesNotExist",
     "ColumnFamilyAlreadyExists",
+    "ColumnFamilyHeaderMissing",
 )
 
 
@@ -30,4 +31,8 @@ class ColumnFamilyDoesNotExist(StateError):
 
 
 class ColumnFamilyAlreadyExists(StateError):
+    ...
+
+
+class ColumnFamilyHeaderMissing(StateError):
     ...

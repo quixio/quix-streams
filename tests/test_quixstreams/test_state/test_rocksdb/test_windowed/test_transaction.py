@@ -1,4 +1,16 @@
+from unittest.mock import call
+
 import pytest
+
+from quixstreams.state.rocksdb.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    PREFIX_SEPARATOR,
+)
+from quixstreams.state.rocksdb.windowed.metadata import (
+    LATEST_EXPIRED_WINDOW_CF_NAME,
+    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+)
+from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
 
 
 class TestWindowedRocksDBPartitionTransaction:
@@ -267,3 +279,260 @@ class TestWindowedRocksDBPartitionTransaction:
 
         with partition.begin() as tx:
             assert tx.get_latest_timestamp() == timestamp
+
+
+class TestWindowedRocksDBPartitionTransactionChangelog:
+    def test_update_window(self, windowed_rocksdb_store_factory_changelog):
+        store = windowed_rocksdb_store_factory_changelog()
+        partition_num = 0
+        store_partition = store.assign_partition(partition_num)
+        producer = store_partition._changelog_producer._producer
+        key = b"__key__"
+        start_ms = 0
+        end_ms = 10
+        value = 1
+
+        with store.start_partition_transaction(partition_num) as tx:
+            with tx.with_prefix(key):
+                expected_produced_key = tx._serialize_key(
+                    encode_window_key(start_ms, end_ms)
+                )
+                expected_produced_value = tx._serialize_value(value)
+                tx.update_window(
+                    start_ms=start_ms, end_ms=end_ms, value=value, timestamp_ms=2
+                )
+                assert tx.get_window(start_ms=start_ms, end_ms=end_ms) == value
+
+        with store.start_partition_transaction(partition_num) as tx:
+            with tx.with_prefix(key):
+                assert tx.get_window(start_ms=start_ms, end_ms=end_ms) == value
+
+        assert (
+            store_partition.get_changelog_offset() == producer.produce.call_count == 1
+        )
+        producer.produce.assert_called_with(
+            key=expected_produced_key,
+            value=expected_produced_value,
+            headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+            topic=store_partition._changelog_producer._changelog_name,
+            partition=store_partition._changelog_producer._partition_num,
+        )
+
+    def test_delete_window(self, windowed_rocksdb_store_factory_changelog):
+        store = windowed_rocksdb_store_factory_changelog()
+        partition_num = 0
+        store_partition = store.assign_partition(partition_num)
+        producer = store_partition._changelog_producer._producer
+        key = b"__key__"
+        expected_produced_value = None
+        start_ms = 0
+        end_ms = 10
+
+        with store.start_partition_transaction(partition_num) as tx:
+            with tx.with_prefix(key):
+                expected_produced_key = tx._serialize_key(
+                    encode_window_key(start_ms, end_ms)
+                )
+                tx.update_window(
+                    start_ms=start_ms, end_ms=end_ms, value=1, timestamp_ms=1
+                )
+                assert tx.get_window(start_ms=start_ms, end_ms=end_ms) == 1
+                tx.delete_window(start_ms=start_ms, end_ms=end_ms)
+
+        with store.start_partition_transaction(partition_num) as tx:
+            with tx.with_prefix(key):
+                assert (
+                    tx.get_window(start_ms=start_ms, end_ms=end_ms)
+                    is expected_produced_value
+                )
+
+        assert (
+            store_partition.get_changelog_offset() == producer.produce.call_count == 1
+        )
+        producer.produce.assert_called_with(
+            key=expected_produced_key,
+            value=expected_produced_value,
+            headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+            topic=store_partition._changelog_producer._changelog_name,
+            partition=store_partition._changelog_producer._partition_num,
+        )
+
+    def test_expire_windows_expired(self, windowed_rocksdb_store_factory_changelog):
+        store = windowed_rocksdb_store_factory_changelog()
+        partition_num = 0
+        store_partition = store.assign_partition(partition_num)
+        producer = store_partition._changelog_producer._producer
+        key = b"__key__"
+        expected_update_produce_keys = []
+        expected_update_produce_values = []
+        expected_expired_window_keys = []
+        expected_expired_windows = [
+            dict(start_ms=0, end_ms=10, value=1, timestamp_ms=2),
+            dict(start_ms=10, end_ms=20, value=2, timestamp_ms=10),
+        ]
+
+        # update windows, which will become expired later
+        with store.start_partition_transaction(partition_num) as tx:
+            with tx.with_prefix(key):
+                for kwargs in expected_expired_windows:
+                    serialized_key = tx._serialize_key(
+                        encode_window_key(
+                            start_ms=kwargs["start_ms"], end_ms=kwargs["end_ms"]
+                        )
+                    )
+                    expected_update_produce_keys.append(serialized_key)
+                    expected_expired_window_keys.append(serialized_key)
+                    expected_update_produce_values.append(
+                        tx._serialize_value(kwargs["value"])
+                    )
+                    tx.update_window(**kwargs)
+
+        # add new window update, which expires previous windows
+        with store.start_partition_transaction(partition_num) as tx:
+            with tx.with_prefix(key):
+                kwargs = dict(start_ms=20, end_ms=30, value=3, timestamp_ms=20)
+                expected_update_produce_keys.append(
+                    tx._serialize_key(
+                        encode_window_key(
+                            start_ms=kwargs["start_ms"], end_ms=kwargs["end_ms"]
+                        )
+                    )
+                )
+                expected_update_produce_values.append(
+                    tx._serialize_value(kwargs["value"])
+                )
+                tx.update_window(**kwargs)
+                expired = tx.expire_windows(duration_ms=10)
+                print(expired)
+                # "expire_windows" must update the expiration index so that the same
+                # windows are not expired twice
+                assert not tx.expire_windows(duration_ms=10)
+
+        assert expired == [
+            ((w["start_ms"], w["end_ms"]), w["value"]) for w in expected_expired_windows
+        ]
+
+        produce_calls = [
+            call(
+                key=k,
+                value=v,
+                headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+                topic=store_partition._changelog_producer._changelog_name,
+                partition=store_partition._changelog_producer._partition_num,
+            )
+            for k, v in zip(
+                expected_update_produce_keys, expected_update_produce_values
+            )
+        ]
+
+        produce_calls.extend(
+            [
+                call(
+                    key=k,
+                    value=None,
+                    headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+                    topic=store_partition._changelog_producer._changelog_name,
+                    partition=store_partition._changelog_producer._partition_num,
+                )
+                for k in expected_expired_window_keys
+            ]
+        )
+
+        produce_calls.append(
+            call(
+                key=key + PREFIX_SEPARATOR + LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+                value=str(expected_expired_windows[-1]["start_ms"]).encode(),
+                headers={CHANGELOG_CF_MESSAGE_HEADER: LATEST_EXPIRED_WINDOW_CF_NAME},
+                topic=store_partition._changelog_producer._changelog_name,
+                partition=store_partition._changelog_producer._partition_num,
+            )
+        )
+
+        producer.produce.assert_has_calls(produce_calls)
+        assert producer.produce.call_count == len(produce_calls)
+
+        with store.start_partition_transaction(0) as tx:
+            with tx.with_prefix(b"__key__"):
+                assert tx.get_window(start_ms=0, end_ms=10) is None
+                assert tx.get_window(start_ms=10, end_ms=20) is None
+                assert tx.get_window(start_ms=20, end_ms=30) == 3
+
+    def test_expire_windows_cached(self, windowed_rocksdb_store_factory_changelog):
+        """
+        Check that windows expire correctly even if they're not committed to the DB
+        yet.
+
+        Consequently, only the end result of a window should be produced to the
+        changelog topic, not every update.
+        """
+        store = windowed_rocksdb_store_factory_changelog()
+        partition_num = 0
+        store_partition = store.assign_partition(partition_num)
+        producer = store_partition._changelog_producer._producer
+        key = b"__key__"
+        expected_update_produce_keys = []
+        expected_update_produce_values = []
+        update_windows = [
+            dict(start_ms=0, end_ms=10, value=1, timestamp_ms=2),
+            dict(start_ms=10, end_ms=20, value=2, timestamp_ms=10),
+            dict(start_ms=20, end_ms=30, value=3, timestamp_ms=20),
+        ]
+        expected_expired_windows = update_windows[:2]
+
+        with store.start_partition_transaction(0) as tx:
+            with tx.with_prefix(b"__key__"):
+                for kwargs in update_windows:
+                    serialized_key = tx._serialize_key(
+                        encode_window_key(
+                            start_ms=kwargs["start_ms"], end_ms=kwargs["end_ms"]
+                        )
+                    )
+                    tx.update_window(**kwargs)
+                    expected_update_produce_keys.append(serialized_key)
+                    if kwargs in expected_expired_windows:
+                        expected_update_produce_values.append(None)
+                    else:
+                        expected_update_produce_values.append(
+                            tx._serialize_value(kwargs["value"])
+                        )
+
+                expired = tx.expire_windows(duration_ms=10)
+                # "expire_windows" must update the expiration index so that the same
+                # windows are not expired twice
+                assert not tx.expire_windows(duration_ms=10)
+
+        assert expired == [
+            ((w["start_ms"], w["end_ms"]), w["value"]) for w in expected_expired_windows
+        ]
+
+        produce_calls = [
+            call(
+                key=k,
+                value=v,
+                headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+                topic=store_partition._changelog_producer._changelog_name,
+                partition=store_partition._changelog_producer._partition_num,
+            )
+            for k, v in zip(
+                expected_update_produce_keys, expected_update_produce_values
+            )
+        ]
+
+        produce_calls.append(
+            call(
+                key=key + PREFIX_SEPARATOR + LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+                value=str(expected_expired_windows[-1]["start_ms"]).encode(),
+                headers={CHANGELOG_CF_MESSAGE_HEADER: LATEST_EXPIRED_WINDOW_CF_NAME},
+                topic=store_partition._changelog_producer._changelog_name,
+                partition=store_partition._changelog_producer._partition_num,
+            )
+        )
+
+        producer.produce.assert_has_calls(produce_calls)
+        assert producer.produce.call_count == len(produce_calls)
+
+        with store.start_partition_transaction(0) as tx:
+            with tx.with_prefix(b"__key__"):
+                assert tx.get_window(start_ms=0, end_ms=10) is None
+                assert tx.get_window(start_ms=10, end_ms=20) is None
+                assert tx.get_window(start_ms=20, end_ms=30) == 3

@@ -1,10 +1,13 @@
+import dataclasses
 import logging
-from typing import Union, List, Mapping, Optional, Any, Callable
+from typing import List, Optional, Any, Callable, Mapping, Union
 
-from .messagecontext import MessageContext
-from .messages import KafkaMessage
-from .rows import Row
-from .serializers import (
+from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
+
+from quixstreams.models.messagecontext import MessageContext
+from quixstreams.models.messages import KafkaMessage
+from quixstreams.models.rows import Row
+from quixstreams.models.serializers import (
     SerializationContext,
     DeserializerIsNotProvidedError,
     SerializerIsNotProvidedError,
@@ -18,15 +21,13 @@ from .serializers import (
     Serializer,
     Deserializer,
 )
-from .timestamps import MessageTimestamp, TimestampType
-from .types import (
+from quixstreams.models.timestamps import MessageTimestamp, TimestampType
+from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
-    MessageKey,
-    MessageValue,
     MessageHeadersTuples,
 )
 
-__all__ = ("Topic", "TimestampExtractor")
+__all__ = ("Topic", "TopicConfig", "TimestampExtractor")
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,22 @@ TimestampExtractor = Callable[
     [Any, Optional[MessageHeadersTuples], int, TimestampType],
     int,
 ]
+
+
+@dataclasses.dataclass(eq=True)
+class TopicConfig:
+    """
+    Represents all kafka-level configuration for a kafka topic.
+
+    Generally used by Topic and any topic creation procedures.
+    """
+
+    num_partitions: int
+    replication_factor: int
+    extra_config: dict = dataclasses.field(default_factory=dict)
+
+    def as_dict(self):
+        return dataclasses.asdict(self)
 
 
 def _get_serializer(serializer: SerializerType) -> Serializer:
@@ -78,6 +95,7 @@ class Topic:
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
+        config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         """
@@ -108,6 +126,7 @@ class Topic:
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
+        :param config: optional topic configs via `TopicConfig` (creation/validation)
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
 
@@ -129,6 +148,7 @@ class Topic:
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
+        self._config = config
         self._timestamp_extractor = timestamp_extractor
 
     @property
@@ -137,6 +157,10 @@ class Topic:
         Topic name
         """
         return self._name
+
+    @property
+    def config(self) -> TopicConfig:
+        return self._config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
         """
@@ -223,20 +247,46 @@ class Topic:
 
     def serialize(
         self,
-        key: Optional[MessageKey] = None,
-        value: Optional[MessageValue] = None,
+        key: Optional[object] = None,
+        value: Optional[object] = None,
         headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
         timestamp_ms: int = None,
     ) -> KafkaMessage:
-        # TODO: Implement SerDes for raw messages (also to produce primitive values)
-        raise NotImplementedError
+        ctx = SerializationContext(topic=self.name, headers=headers)
+        if self._key_serializer:
+            key = self._key_serializer(key, ctx=ctx)
+        elif key is not None:
+            raise SerializerIsNotProvidedError(
+                f'Key serializer is not provided for topic "{self.name}"'
+            )
+        if self._value_serializer:
+            value = self._value_serializer(value, ctx=ctx)
+        elif value is not None:
+            raise SerializerIsNotProvidedError(
+                f'Value serializer is not provided for topic "{self.name}"'
+            )
+        return KafkaMessage(
+            key=key,
+            value=value,
+            headers=headers,
+            timestamp=timestamp_ms,
+        )
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
-        # TODO: Implement SerDes for raw messages
-        raise NotImplementedError
+        ctx = SerializationContext(topic=message.topic(), headers=message.headers())
+        return KafkaMessage(
+            key=self._key_deserializer(key, ctx=ctx)
+            if (key := message.key())
+            else None,
+            value=self._value_serializer(value, ctx=ctx)
+            if (value := message.value())
+            else None,
+            headers=message.headers(),
+            timestamp=message.timestamp(),
+        )
 
     def __repr__(self):
-        return f'<{self.__class__} name="{self._name}"> '
+        return f'<{self.__class__.__name__} name="{self._name}"> '
 
     def _create_message_context(
         self,

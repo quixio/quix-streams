@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Iterator
 
+from quixstreams.rowproducer import RowProducer
 from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
@@ -11,6 +12,7 @@ from .exceptions import (
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
+from .recovery import RecoveryManager, ChangelogProducerFactory
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .rocksdb.windowed.store import WindowedRocksDBStore
 from .types import (
@@ -41,11 +43,15 @@ class StateStoreManager:
         group_id: str,
         state_dir: str,
         rocksdb_options: Optional[RocksDBOptionsType] = None,
+        producer: Optional[RowProducer] = None,
+        recovery_manager: Optional[RecoveryManager] = None,
     ):
         self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
+        self._producer = producer
+        self._recovery_manager = recovery_manager
         self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
@@ -69,6 +75,36 @@ class StateStoreManager:
         """
         return self._stores
 
+    @property
+    def recovery_required(self) -> bool:
+        """
+        Whether recovery needs to be done.
+        """
+        if self._recovery_manager:
+            return self._recovery_manager.has_assignments
+        return False
+
+    @property
+    def using_changelogs(self) -> bool:
+        """
+        Whether the StateStoreManager is using changelog topics
+
+        :return: using changelogs, as bool
+        """
+        return bool(self._recovery_manager)
+
+    def do_recovery(self):
+        """
+        Perform a state recovery, if necessary.
+        """
+        return self._recovery_manager.do_recovery()
+
+    def stop_recovery(self):
+        """
+        Stop recovery (called during app shutdown).
+        """
+        return self._recovery_manager.stop_recovery()
+
     def get_store(
         self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ) -> Store:
@@ -85,6 +121,23 @@ class StateStoreManager:
             )
         return store
 
+    def _setup_changelogs(
+        self, topic_name: str, store_name: str
+    ) -> ChangelogProducerFactory:
+        if self._recovery_manager:
+            logger.debug(
+                f'State Manager: registering changelog for store "{store_name}" '
+                f'(topic "{topic_name}")'
+            )
+            return ChangelogProducerFactory(
+                self._recovery_manager.register_changelog(
+                    topic_name=topic_name,
+                    store_name=store_name,
+                    consumer_group=self._group_id,
+                ).name,
+                self._producer,
+            )
+
     def register_store(
         self, topic_name: str, store_name: str = _DEFAULT_STATE_STORE_NAME
     ):
@@ -99,12 +152,14 @@ class StateStoreManager:
         :param topic_name: topic name
         :param store_name: store name
         """
-        store = self._stores.get(topic_name, {}).get(store_name)
-        if store is None:
+        if self._stores.get(topic_name, {}).get(store_name) is None:
             self._stores.setdefault(topic_name, {})[store_name] = RocksDBStore(
                 name=store_name,
                 topic=topic_name,
                 base_dir=str(self._state_dir),
+                changelog_producer_factory=self._setup_changelogs(
+                    topic_name, store_name
+                ),
                 options=self._rocksdb_options,
             )
 
@@ -123,11 +178,11 @@ class StateStoreManager:
         store = self._stores.get(topic_name, {}).get(store_name)
         if store:
             raise WindowedStoreAlreadyRegisteredError()
-
         self._stores.setdefault(topic_name, {})[store_name] = WindowedRocksDBStore(
             name=store_name,
             topic=topic_name,
             base_dir=str(self._state_dir),
+            changelog_producer_factory=self._setup_changelogs(topic_name, store_name),
             options=self._rocksdb_options,
         )
 
@@ -155,10 +210,15 @@ class StateStoreManager:
         :return: list of assigned `StorePartition`
         """
 
-        store_partitions = []
-        for store in self._stores.get(tp.topic, {}).values():
-            store_partitions.append(store.assign_partition(tp.partition))
-        return store_partitions
+        store_partitions = {}
+        for name, store in self._stores.get(tp.topic, {}).items():
+            store_partition = store.assign_partition(tp.partition)
+            store_partitions[name] = store_partition
+        if self._recovery_manager and store_partitions:
+            self._recovery_manager.assign_partition(
+                tp.topic, tp.partition, store_partitions
+            )
+        return list(store_partitions.values())
 
     def on_partition_revoke(self, tp: TopicPartition):
         """
@@ -166,8 +226,11 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        if stores := self._stores.get(tp.topic, {}).values():
+            if self._recovery_manager:
+                self._recovery_manager.revoke_partition(tp.partition)
+            for store in stores:
+                store.revoke_partition(tp.partition)
 
     def on_partition_lost(self, tp: TopicPartition):
         """
@@ -176,8 +239,7 @@ class StateStoreManager:
 
         :param tp: `TopicPartition` from Kafka consumer
         """
-        for store in self._stores.get(tp.topic, {}).values():
-            store.revoke_partition(tp.partition)
+        self.on_partition_revoke(tp)
 
     def init(self):
         """
@@ -216,7 +278,7 @@ class StateStoreManager:
         Starting the multi-store transaction for the Kafka message.
 
         This transaction will keep track of all used stores and flush them in the end.
-        If any exception is catched during this transaction, none of them
+        If any exception is caught during this transaction, none of them
         will be flushed as a best effort to keep stores consistent in "at-least-once" setting.
 
         There can be only one active transaction at a time. Starting a new transaction
@@ -259,7 +321,7 @@ class _MultiStoreTransaction:
     processed message.
 
     It is responsible for:
-    - Keeping track of actual DBTransactions for the individiual stores
+    - Keeping track of actual DBTransactions for the individual stores
     - Flushing of the opened transactions in the end
 
     """

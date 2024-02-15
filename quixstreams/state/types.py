@@ -1,6 +1,9 @@
-from typing import Protocol, Any, Optional, Iterator, Callable, Dict
+from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
 
 from typing_extensions import Self
+
+from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models.types import MessageHeadersMapping
 
 DumpsFunc = Callable[[Any], bytes]
 LoadsFunc = Callable[[bytes], Any]
@@ -13,6 +16,8 @@ class Store(Protocol):
     It keeps track of individual store partitions and provides access to the
     partitions' transactions.
     """
+
+    options_type: ClassVar[object]
 
     @property
     def topic(self) -> str:
@@ -95,7 +100,49 @@ class StorePartition(Protocol):
         State new `PartitionTransaction`
         """
 
+    def recover_from_changelog_message(
+        self, changelog_message: ConfluentKafkaMessageProto
+    ):
+        """
+        Updates state from a given changelog message.
+
+        :param changelog_message: A raw Confluent message read from a changelog topic.
+        """
+        ...
+
+    def produce_to_changelog(
+        self,
+        key: bytes,
+        value: Optional[bytes] = None,
+        headers: Optional[MessageHeadersMapping] = None,
+    ):
+        """
+        Produce a message to the StorePartitions respective changelog.
+        """
+        ...
+
     def get_processed_offset(self) -> Optional[int]:
+        """
+        Get last processed offset for the given partition
+        :return: offset or `None` if there's no processed offset yet
+        """
+        ...
+
+    def get_changelog_offset(self) -> Optional[int]:
+        """
+        Get offset that the changelog is up-to-date with.
+        :return: offset or `None` if there's no processed offset yet
+        """
+        ...
+
+    def set_changelog_offset(self, changelog_offset: int):
+        """
+        Set the changelog offset based on a message (usually an "offset-only" message).
+
+        Used during recovery.
+
+        :param changelog_offset: A changelog offset
+        """
         ...
 
 
@@ -175,7 +222,7 @@ class PartitionTransaction(State):
         Normally, it's called by `StreamingDataFrame` internals to ensure that every
         message key is stored separately.
         :param prefix: key prefix
-        :return: context maager
+        :return: context manager
         """
 
     def maybe_flush(self, offset: Optional[int] = None):
@@ -277,7 +324,7 @@ class WindowedPartitionTransaction(WindowedState):
         Normally, it's called by `StreamingDataFrame` internals to ensure that every
         message key is stored separately.
         :param prefix: key prefix
-        :return: context maager
+        :return: context manager
         """
 
     def maybe_flush(self, offset: Optional[int] = None):
@@ -290,4 +337,19 @@ class WindowedPartitionTransaction(WindowedState):
         ...
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        ...
+
+
+class PartitionRecoveryTransaction(Protocol):
+    """
+    A class for managing recovery for a StorePartition from a changelog message
+    """
+
+    def write_from_changelog_message(self):
+        ...
+
+    def flush(self):
+        """
+        Flush the recovery update and last processed offset to the storage.
+        """
         ...
