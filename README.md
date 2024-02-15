@@ -8,14 +8,7 @@
 [![Docs](https://img.shields.io/badge/-Docs-blueviolet)](https://www.quix.io/docs/client-library-intro.html)
 [![Roadmap](https://img.shields.io/badge/-Roadmap-red)](https://github.com/orgs/quixio/projects/1)
 
-# Quix Streams v2 (alpha)
-
->***IMPORTANT:*** Quix Streams v2 is currently in alpha and will likely experience rapid and 
-significant interface changes, feature additions, and bugfixes.
-><br>
->Use with discretion!
->
-> ***The documentation for Quix Streams <2.0 can be found [here](https://github.com/quixio/quix-streams/blob/release/v0.5/README.md)***
+# Quix Streams v2
 
 Quix Streams v2 is a cloud native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka with an easy to use Python interface.
 
@@ -40,17 +33,8 @@ Use Quix Streams to build event-driven, machine learning/AI or physics-based app
 
 ### Install Quix Streams
 
-#### Quix Streams v2 (currently in alpha)
-To install the latest alpha version of Quix Streams v2: 
-
 ```shell
-python -m pip install --pre quixstreams
-```
-
-or
-
-```shell
-python -m pip install "quixstreams>=2.0a"
+python -m pip install quixstreams
 ```
 
 #### Requirements
@@ -183,7 +167,7 @@ This library is being actively developed.
 Here are some of the planned improvements:
 
 - [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
-- [ ] State recovery based on Kafka changelog topics
+- [x] State recovery based on Kafka changelog topics
 - [ ] Windowed aggregations over Sliding windows
 - [ ] Group-bys and joins (for merging topics/keys)
 - [ ] Support for "exactly-once" Kafka processing (aka transactions)
