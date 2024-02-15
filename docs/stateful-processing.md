@@ -19,7 +19,7 @@ accessible only while it is the currently active message key**.
 Each key may belong to different Kafka topic partitions, and partitions are automatically 
 assigned and re-assigned by Kafka broker to consumer apps in the same consumer group.
 
-Be sure to take this into consideration when making decisions around what your 
+Be sure to consider this when making decisions around what your 
 Kafka message keys should be.
 
 The good news? _The library manages this aspect for you_, so you don't need to 
@@ -74,21 +74,20 @@ Currently, only functions passed to `StreamingDataFrame.apply()`, `StreamingData
 
 ## Fault Tolerance & Recovery
 
-Quix Streams stores data in the local state stores, and these stores are not fault-tolerant out of the box.  
-For example, a certain hard disk may get corrupted, and the data on this disk will be lost.
+To prevent state data loss in case of failures, all local state stores in Quix Streams are backed by the changelog topics in Kafka.  
 
-To prevent that, Quix Streams uses a mechanism based on Changelog topics to keep the state data in Kafka, which is already highly available and replicated.  
-
-**Changelog topic** is an internal kind of topic that Quix Streams uses to keep the record of the state changes for the given state store.  
-Changelog topics are "on" by default, and the `Application` class will create and manage them for each used state store.
+**Changelog topic** is an internal kind of topic that Quix Streams uses to keep the record of the state changes for the given state store.
+Changelog topics use the same Kafka replication mechanisms which makes the state data highly available.  
+Changelog topics are enabled by default.  
+The `Application` class will automatically create and manage them for each used state store.
 
 Changelog topics have the same number of partitions as the source topic to ensure that partitions can be reassigned between consumers.   
 They are also compacted to prevent them from growing indefinitely.
 
 
-### How They Work
-- When the application starts, it automatically checks which state stores need to be created, and it will also ensure the changelog topics for these stores.
-- When the key is updated in the state store during processing, the update will be sent both to the changelog topic and to the local database.
+### How Changelog Topics Work
+- When the application starts, it automatically checks which state stores need to be created. It will also ensure the changelog topics for these stores.
+- When the key is updated in the state store during processing, the update will be sent both to the changelog topic and the local database.
 - When the application restarts or a new consumer joins the group, it will check whether the state stores are up-to-date with their changelog topics.  
 If they are not, the application will first update the local stores, and only then will it continue processing the messages. 
 
