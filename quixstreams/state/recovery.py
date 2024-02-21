@@ -153,8 +153,8 @@ class ChangelogProducer:
     def produce(
         self,
         key: bytes,
-        headers: MessageHeadersMapping,
         value: Optional[bytes] = None,
+        headers: Optional[MessageHeadersMapping] = None,
     ):
         """
         Produce a message to a changelog topic partition.

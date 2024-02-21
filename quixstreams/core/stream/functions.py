@@ -2,7 +2,6 @@ import abc
 import functools
 from itertools import chain
 from typing import TypeVar, Callable, List
-from typing_extensions import ParamSpec
 
 __all__ = (
     "StreamCallable",
@@ -18,7 +17,6 @@ __all__ = (
 R = TypeVar("R")
 T = TypeVar("T")
 
-Param = ParamSpec("Param")
 StreamCallable = Callable[[T], R]
 
 
