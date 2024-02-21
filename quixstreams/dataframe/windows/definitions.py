@@ -1,6 +1,7 @@
 import abc
 from abc import abstractmethod
-from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING
+from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING, Union
+from typing_extensions import TypeAlias
 
 from quixstreams.state import (
     WindowedState,
@@ -10,6 +11,8 @@ from .time_based import FixedTimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
+
+Numeric: TypeAlias = Union[int, float]
 
 
 def _mean_merge_func(state_value: Tuple[float, int]):
@@ -77,7 +80,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Any,
+            value: Numeric,
             state: WindowedState,
         ):
             current_value = state.get_window(
@@ -104,7 +107,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            _: Any,
+            _: int,
             state: WindowedState,
         ):
             current_value = state.get_window(
@@ -132,7 +135,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Any,
+            value: Numeric,
             state: WindowedState,
         ):
             sum_, count_ = state.get_window(
@@ -184,7 +187,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             (the accumulated value and a new value) and returns a single value.
             The returned value will be saved to the state store and sent downstream.
         :param initializer: A function to call for every first element of the window.
-            This function is used to initialize the aggreation within a window.
+            This function is used to initialize the aggregation within a window.
 
         :return: A window configured to perform custom reduce aggregation on the data.
         """
@@ -222,7 +225,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Any,
+            value: Numeric,
             state: WindowedState,
         ):
             current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)
@@ -251,7 +254,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Any,
+            value: Numeric,
             state: WindowedState,
         ):
             current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)

@@ -1,6 +1,7 @@
 import logging
-from typing import List, Dict, Tuple, Union, Optional
+from typing import Union, Optional
 from typing_extensions import Literal
+from quixstreams.models.types import Headers
 
 from confluent_kafka import (
     Producer as ConfluentProducer,
@@ -15,11 +16,6 @@ __all__ = (
 
 Partitioner = Literal[
     "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
-]
-HeaderValue = Optional[Union[str, bytes]]
-Headers = Union[
-    List[Tuple[str, HeaderValue]],
-    Dict[str, HeaderValue],
 ]
 
 logger = logging.getLogger(__name__)
@@ -60,7 +56,7 @@ class Producer:
         self,
         broker_address: str,
         partitioner: Partitioner = "murmur2",
-        extra_config: dict = None,
+        extra_config: Optional[dict] = None,
     ):
         """
         A wrapper around `confluent_kafka.Producer`.
@@ -98,7 +94,7 @@ class Producer:
     def produce(
         self,
         topic: str,
-        value: Union[str, bytes],
+        value: Union[str, bytes] = None,
         key: Optional[Union[str, bytes]] = None,
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
@@ -153,14 +149,14 @@ class Producer:
                 # Poll for delivery callbacks and try again
                 self._producer.poll(timeout=poll_timeout)
 
-    def poll(self, timeout: float = None):
+    def poll(self, timeout: Optional[float] = None):
         """
         Polls the producer for events and calls `on_delivery` callbacks.
         :param timeout: poll timeout seconds
         """
         return self._producer.poll(timeout)
 
-    def flush(self, timeout: float = None) -> int:
+    def flush(self, timeout: Optional[float] = None) -> int:
         """
         Wait for all messages in the Producer queue to be delivered.
 

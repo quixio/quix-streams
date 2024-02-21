@@ -1,3 +1,5 @@
+import contextlib
+
 from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
 
 from typing_extensions import Self
@@ -24,12 +26,14 @@ class Store(Protocol):
         """
         Topic name
         """
+        ...
 
     @property
     def name(self) -> str:
         """
         Store name
         """
+        ...
 
     @property
     def partitions(self) -> Dict[int, "StorePartition"]:
@@ -54,7 +58,6 @@ class Store(Protocol):
 
         :param partition: partition number
         """
-
         ...
 
     def start_partition_transaction(
@@ -72,6 +75,7 @@ class Store(Protocol):
         """
         Close store and revoke all store partitions
         """
+        ...
 
     def __enter__(self):
         ...
@@ -159,6 +163,7 @@ class State(Protocol):
         :param default: default value to return if the key is not found
         :return: value or None if the key is not found and `default` is not provided
         """
+        ...
 
     def set(self, key: Any, value: Any):
         """
@@ -166,6 +171,7 @@ class State(Protocol):
         :param key: key
         :param value: value
         """
+        ...
 
     def delete(self, key: Any):
         """
@@ -174,6 +180,7 @@ class State(Protocol):
         This function always returns `None`, even if value is not found.
         :param key: key
         """
+        ...
 
     def exists(self, key: Any) -> bool:
         """
@@ -181,6 +188,7 @@ class State(Protocol):
         :param key: key
         :return: True if key exists, False otherwise
         """
+        ...
 
 
 class PartitionTransaction(State):
@@ -195,6 +203,7 @@ class PartitionTransaction(State):
         An instance of State to be provided to `StreamingDataFrame` functions
         :return:
         """
+        ...
 
     @property
     def failed(self) -> bool:
@@ -204,6 +213,7 @@ class PartitionTransaction(State):
         Failed transactions cannot be re-used.
         :return: bool
         """
+        ...
 
     @property
     def completed(self) -> bool:
@@ -215,6 +225,7 @@ class PartitionTransaction(State):
         """
         ...
 
+    @contextlib.contextmanager
     def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
         """
         A context manager set the prefix for all keys in the scope.
@@ -224,6 +235,7 @@ class PartitionTransaction(State):
         :param prefix: key prefix
         :return: context manager
         """
+        ...
 
     def maybe_flush(self, offset: Optional[int] = None):
         """
@@ -255,6 +267,7 @@ class WindowedState(Protocol):
         :param default: default value to return if the key is not found
         :return: value or None if the key is not found and `default` is not provided
         """
+        ...
 
     def update_window(self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int):
         """
@@ -268,6 +281,7 @@ class WindowedState(Protocol):
         :param value: value of the window
         :param timestamp_ms: current message timestamp in milliseconds
         """
+        ...
 
     def get_latest_timestamp(self) -> int:
         """
@@ -278,6 +292,7 @@ class WindowedState(Protocol):
 
         :return: latest observed event timestamp in milliseconds
         """
+        ...
 
     def expire_windows(self, duration_ms: int, grace_ms: int = 0):
         """
@@ -291,6 +306,7 @@ class WindowedState(Protocol):
         :param duration_ms: duration of the windows in milliseconds
         :param grace_ms: grace period in milliseconds. Default - "0"
         """
+        ...
 
 
 class WindowedPartitionTransaction(WindowedState):
@@ -306,6 +322,7 @@ class WindowedPartitionTransaction(WindowedState):
         Failed transactions cannot be re-used.
         :return: bool
         """
+        ...
 
     @property
     def completed(self) -> bool:
@@ -326,6 +343,7 @@ class WindowedPartitionTransaction(WindowedState):
         :param prefix: key prefix
         :return: context manager
         """
+        ...
 
     def maybe_flush(self, offset: Optional[int] = None):
         """

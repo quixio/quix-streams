@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from typing import List, Optional, Any, Callable, Mapping, Union
+from typing import List, Optional, Any, Callable, Union
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
@@ -54,7 +54,7 @@ class TopicConfig:
         return dataclasses.asdict(self)
 
 
-def _get_serializer(serializer: SerializerType) -> Serializer:
+def _get_serializer(serializer: Optional[SerializerType]) -> Optional[Serializer]:
     if isinstance(serializer, str):
         try:
             return SERIALIZERS[serializer]()
@@ -66,7 +66,9 @@ def _get_serializer(serializer: SerializerType) -> Serializer:
     return serializer
 
 
-def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
+def _get_deserializer(
+    deserializer: Optional[DeserializerType],
+) -> Optional[Deserializer]:
     if isinstance(deserializer, str):
         try:
             return DESERIALIZERS[deserializer]()
@@ -159,7 +161,7 @@ class Topic:
         return self._name
 
     @property
-    def config(self) -> TopicConfig:
+    def config(self) -> Optional[TopicConfig]:
         return self._config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
@@ -249,8 +251,8 @@ class Topic:
         self,
         key: Optional[object] = None,
         value: Optional[object] = None,
-        headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
-        timestamp_ms: int = None,
+        headers: Optional[MessageHeadersTuples] = None,
+        timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
         ctx = SerializationContext(topic=self.name, headers=headers)
         if self._key_serializer:
@@ -282,7 +284,7 @@ class Topic:
             if (value := message.value())
             else None,
             headers=message.headers(),
-            timestamp=message.timestamp(),
+            timestamp=message.timestamp()[1],
         )
 
     def __repr__(self):

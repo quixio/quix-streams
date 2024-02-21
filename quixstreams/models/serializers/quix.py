@@ -1,10 +1,10 @@
 import base64
-from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable
+from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable, Dict
 
 from .base import SerializationContext
 from .exceptions import SerializationError, IgnoreMessage
 from .json import JSONDeserializer, JSONSerializer
-from ..types import MessageHeadersMapping
+from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.utils.json import (
     dumps as default_dumps,
     loads as default_loads,
@@ -253,9 +253,7 @@ class QuixDeserializer(JSONDeserializer):
         except AttributeError:
             return False
 
-    def _parse_legacy_format(
-        self, value: bytes
-    ) -> Tuple[Union[Mapping, List[Mapping]], Mapping]:
+    def _parse_legacy_format(self, value: bytes) -> Tuple[Mapping, Mapping]:
         value = self._loads(value)
         headers = {
             QCodecId.HEADER_NAME: value.pop(LegacyHeaders.Q_CODEC_ID),
@@ -266,8 +264,8 @@ class QuixDeserializer(JSONDeserializer):
 
 
 class QuixSerializer(JSONSerializer):
-    _legacy = {}
-    _extra_headers = {}
+    _legacy: Dict[str, str] = {}
+    _extra_headers: Dict[str, str] = {}
 
     def __init__(
         self,
@@ -350,7 +348,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
     def __call__(self, value: Mapping, ctx: SerializationContext) -> Union[str, bytes]:
         if not isinstance(value, Mapping):
             raise SerializationError(f"Expected Mapping, got {type(value)}")
-        result = {
+        result: dict = {
             "BinaryValues": {},
             "StringValues": {},
             "NumericValues": {},

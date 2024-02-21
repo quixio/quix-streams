@@ -1,6 +1,6 @@
 import contextvars
 import operator
-from typing import Optional, Union, Callable, Container, Any
+from typing import Optional, Union, Callable, Container, Any, Mapping, overload
 
 from typing_extensions import Self
 
@@ -185,8 +185,33 @@ class StreamingSeries(BaseStreaming):
         composed = self.compose()
         return context.run(composed, value)
 
+    @overload
     def _operation(
-        self, other: Union[Self, object], operator_: Callable[[object, object], object]
+        self,
+        other: Union[str, int],
+        operator_: Callable[
+            [Union[Mapping, Self], Union[str, int]], Union[Self, object]
+        ],
+    ) -> Self:
+        # getitem
+        ...
+
+    @overload
+    def _operation(
+        self,
+        other: Union[Self, object],
+        operator_: Callable[[Union[Container, Self], object], bool],
+    ) -> Self:
+        # contains
+        ...
+
+    def _operation(
+        self,
+        other: Union[Self, str, int, object],
+        operator_: Callable[
+            [Union[Self, Container, Mapping, object], Union[Self, str, int, object]],
+            Union[bool, object],
+        ],
     ) -> Self:
         self_composed = self.compose()
         if isinstance(other, self.__class__):
@@ -226,7 +251,7 @@ class StreamingSeries(BaseStreaming):
             other, lambda a, b, contains=operator.contains: contains(b, a)
         )
 
-    def contains(self, other: object) -> Self:
+    def contains(self, other: Union[Self, object]) -> Self:
         """
         Check if series value contains "other"
         Same as "other in StreamingSeries".
@@ -251,7 +276,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.contains)
 
-    def is_(self, other: object) -> Self:
+    def is_(self, other: Union[Self, object]) -> Self:
         """
         Check if series value refers to the same object as `other`
 
@@ -274,7 +299,7 @@ class StreamingSeries(BaseStreaming):
         """
         return self._operation(other, operator.is_)
 
-    def isnot(self, other: object) -> Self:
+    def isnot(self, other: Union[Self, object]) -> Self:
         """
         Check if series value does not refer to the same object as `other`
 
@@ -368,40 +393,40 @@ class StreamingSeries(BaseStreaming):
     def __getitem__(self, item: Union[str, int]) -> Self:
         return self._operation(item, operator.getitem)
 
-    def __mod__(self, other: object) -> Self:
+    def __mod__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.mod)
 
-    def __add__(self, other: object) -> Self:
+    def __add__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.add)
 
-    def __sub__(self, other: object) -> Self:
+    def __sub__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.sub)
 
-    def __mul__(self, other: object) -> Self:
+    def __mul__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.mul)
 
-    def __truediv__(self, other: object) -> Self:
+    def __truediv__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.truediv)
 
-    def __eq__(self, other: object) -> Self:
+    def __eq__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.eq)
 
-    def __ne__(self, other: object) -> Self:
+    def __ne__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.ne)
 
-    def __lt__(self, other: object) -> Self:
+    def __lt__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.lt)
 
-    def __le__(self, other: object) -> Self:
+    def __le__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.le)
 
-    def __gt__(self, other: object) -> Self:
+    def __gt__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.gt)
 
-    def __ge__(self, other: object) -> Self:
+    def __ge__(self, other: Union[Self, object]) -> Self:
         return self._operation(other, operator.ge)
 
-    def __and__(self, other: object) -> Self:
+    def __and__(self, other: Union[Self, object]) -> Self:
         """
         Do a logical "and" comparison.
 
@@ -422,7 +447,7 @@ class StreamingSeries(BaseStreaming):
         else:
             return self.from_func(func=lambda v: self_composed(v) and other)
 
-    def __or__(self, other: object) -> Self:
+    def __or__(self, other: Union[Self, object]) -> Self:
         """
         Do a logical "or" comparison.
 

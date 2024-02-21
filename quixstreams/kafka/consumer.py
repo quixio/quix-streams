@@ -71,7 +71,9 @@ class Consumer:
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
         assignment_strategy: AssignmentStrategy = "range",
-        on_commit: Callable[[Optional[KafkaError], List[TopicPartition]], None] = None,
+        on_commit: Optional[
+            Callable[[Optional[KafkaError], List[TopicPartition]], None]
+        ] = None,
         extra_config: Optional[dict] = None,
     ):
         """
@@ -121,7 +123,7 @@ class Consumer:
         )
         self._inner_consumer: Optional[ConfluentConsumer] = None
 
-    def poll(self, timeout: float = None) -> Optional[Message]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
         """
         Consumes a single message, calls callbacks and returns events.
 
@@ -245,7 +247,7 @@ class Consumer:
     def store_offsets(
         self,
         message: Optional[Message] = None,
-        offsets: List[TopicPartition] = None,
+        offsets: Optional[List[TopicPartition]] = None,
     ):
         """
         .. py:function:: store_offsets([message=None], [offsets=None])
@@ -278,8 +280,8 @@ class Consumer:
 
     def commit(
         self,
-        message: Message = None,
-        offsets: List[TopicPartition] = None,
+        message: Optional[Message] = None,
+        offsets: Optional[List[TopicPartition]] = None,
         asynchronous: bool = True,
     ) -> Optional[List[TopicPartition]]:
         """
@@ -317,7 +319,7 @@ class Consumer:
         return self._consumer.commit(**kwargs)
 
     def committed(
-        self, partitions: List[TopicPartition], timeout: float = None
+        self, partitions: List[TopicPartition], timeout: Optional[float] = None
     ) -> List[TopicPartition]:
         """
         .. py:function:: committed(partitions, [timeout=None])
@@ -339,7 +341,7 @@ class Consumer:
     def get_watermark_offsets(
         self,
         partition: TopicPartition,
-        timeout: float = None,
+        timeout: Optional[float] = None,
         cached: bool = False,
     ) -> Tuple[int, int]:
         """
@@ -363,7 +365,7 @@ class Consumer:
         return self._consumer.get_watermark_offsets(**kwargs)
 
     def list_topics(
-        self, topic: Optional[str] = None, timeout: float = -1
+        self, topic: Optional[str] = None, timeout: Optional[float] = -1
     ) -> ClusterMetadata:
         """
         .. py:function:: list_topics([topic=None], [timeout=-1])
@@ -397,7 +399,7 @@ class Consumer:
         return self._consumer.memberid()
 
     def offsets_for_times(
-        self, partitions: List[TopicPartition], timeout: float = None
+        self, partitions: List[TopicPartition], timeout: Optional[float] = None
     ) -> List[TopicPartition]:
         """
 

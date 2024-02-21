@@ -312,7 +312,7 @@ class QuixKafkaConfigsBuilder:
         """
         The actual API call to create the topic
 
-        :param topic: a TopicConfig instance
+        :param topic: a Topic instance
         """
         topic_name = self.strip_workspace_id_prefix(topic.name)
         cfg = topic.config

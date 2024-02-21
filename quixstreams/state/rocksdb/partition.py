@@ -1,10 +1,11 @@
 import logging
 import time
-from typing import Any, Union, Optional, List
+from typing import Any, Union, Optional, List, Dict
 
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.state.types import (
     StorePartition,
@@ -29,7 +30,6 @@ from .transaction import (
     RocksDBPartitionTransaction,
 )
 from .types import RocksDBOptionsType
-from ..recovery import ChangelogProducer
 
 __all__ = ("RocksDBStorePartition",)
 
@@ -69,8 +69,8 @@ class RocksDBStorePartition(StorePartition):
         self._open_max_retries = self._options.open_max_retries
         self._open_retry_backoff = self._options.open_retry_backoff
         self._db = self._init_rocksdb()
-        self._cf_cache = {}
-        self._cf_handle_cache = {}
+        self._cf_cache: Dict[str, Rdict] = {}
+        self._cf_handle_cache: Dict[str, ColumnFamily] = {}
         self._changelog_producer = changelog_producer
 
     @property
