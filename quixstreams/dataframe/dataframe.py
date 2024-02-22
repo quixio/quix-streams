@@ -100,7 +100,7 @@ class StreamingDataFrame(BaseStreaming):
     def __bool__(self):
         raise InvalidOperation(
             "Cannot assess truth level of a StreamingDataFrame using 'bool()' or any "
-            "operations that rely on it; use '&' or '|' when doing and/or comparisons"
+            "operations that rely on it; use '&' or '|' for logical and/or comparisons"
         )
 
     def apply(
