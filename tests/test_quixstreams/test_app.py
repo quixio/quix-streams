@@ -426,7 +426,6 @@ class TestQuixApplication:
                 "sasl.username": "my-username",
                 "sasl.password": "my-password",
                 "ssl.ca.location": "/mock/dir/ca.cert",
-                "ssl.endpoint.identification.algorithm": "none",
             }
 
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
