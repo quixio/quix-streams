@@ -9,6 +9,7 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
+from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.models import (
     DoubleDeserializer,
@@ -352,7 +353,7 @@ class TestApplication:
         app = Application(broker_address="localhost", consumer_group="test")
         topic = app.topic(name="test-topic")
         sdf = app.dataframe(topic)
-        assert sdf
+        assert isinstance(sdf, StreamingDataFrame)
 
     def test_topic_auto_create_true(self, app_factory):
         """

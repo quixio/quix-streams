@@ -5,6 +5,7 @@ import pytest
 
 from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
+from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.dataframe.windows import WindowResult
 from quixstreams.models import MessageTimestamp
 from quixstreams.models.topics import Topic
@@ -224,6 +225,16 @@ class TestStreamingDataFrame:
         invalid_value = {"y": 2}
         with pytest.raises(Filtered):
             sdf.test(invalid_value)
+
+    def test_cannot_use_logical_and(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with pytest.raises(InvalidOperation):
+            sdf["truth"] = sdf[sdf.apply(lambda x: x["a"] > 0)] and sdf[["b"]]
+
+    def test_cannot_use_logical_or(self, dataframe_factory):
+        sdf = dataframe_factory()
+        with pytest.raises(InvalidOperation):
+            sdf["truth"] = sdf[sdf.apply(lambda x: x["a"] > 0)] or sdf[["b"]]
 
 
 class TestStreamingDataFrameApplyExpand:
