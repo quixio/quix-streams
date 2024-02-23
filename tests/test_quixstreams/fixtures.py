@@ -356,11 +356,11 @@ def quix_mock_config_builder_factory(kafka_container):
         }
         # Slight change to ws stuff in case you pass a blank workspace (which makes
         #  some things easier
-        cfg_builder.prepend_workspace_id.side_effect = (
-            lambda s: prepend_workspace_id(workspace_id, s) if workspace_id else s
+        cfg_builder.prepend_workspace_id.side_effect = lambda s: (
+            prepend_workspace_id(workspace_id, s) if workspace_id else s
         )
-        cfg_builder.strip_workspace_id_prefix.side_effect = (
-            lambda s: strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
+        cfg_builder.strip_workspace_id_prefix.side_effect = lambda s: (
+            strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
         )
         return cfg_builder
 

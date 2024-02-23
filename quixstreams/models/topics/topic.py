@@ -26,6 +26,7 @@ from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
     MessageHeadersTuples,
 )
+from .exceptions import TopicConfigUndefined
 
 __all__ = ("Topic", "TopicConfig", "TimestampExtractor")
 
@@ -161,7 +162,9 @@ class Topic:
         return self._name
 
     @property
-    def config(self) -> Optional[TopicConfig]:
+    def config(self) -> TopicConfig:
+        if self._config is None:
+            raise TopicConfigUndefined("No TopicConfig was provided.")
         return self._config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
@@ -277,12 +280,14 @@ class Topic:
     def deserialize(self, message: ConfluentKafkaMessageProto):
         ctx = SerializationContext(topic=message.topic(), headers=message.headers())
         return KafkaMessage(
-            key=self._key_deserializer(key, ctx=ctx)
-            if (key := message.key())
-            else None,
-            value=self._value_serializer(value, ctx=ctx)
-            if (value := message.value())
-            else None,
+            key=(
+                self._key_deserializer(key, ctx=ctx) if (key := message.key()) else None
+            ),
+            value=(
+                self._value_serializer(value, ctx=ctx)
+                if (value := message.value())
+                else None
+            ),
             headers=message.headers(),
             timestamp=message.timestamp()[1],
         )

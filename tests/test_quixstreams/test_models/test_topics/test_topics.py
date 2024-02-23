@@ -205,9 +205,9 @@ class TestTopic:
                 JSONListDeserializer(),
                 json.dumps([{"ts": 456}]).encode(),
                 None,
-                lambda v, headers, ts, ts_type: 101
-                if ts_type == TimestampType.TIMESTAMP_CREATE_TIME
-                else 0,
+                lambda v, headers, ts, ts_type: (
+                    101 if ts_type == TimestampType.TIMESTAMP_CREATE_TIME else 0
+                ),
                 [101],
             ),
         ],

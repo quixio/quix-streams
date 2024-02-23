@@ -1,7 +1,6 @@
 import abc
 from abc import abstractmethod
-from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING, Union
-from typing_extensions import TypeAlias
+from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING
 
 from quixstreams.state import (
     WindowedState,
@@ -11,8 +10,6 @@ from .time_based import FixedTimeWindow
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame
-
-Numeric: TypeAlias = Union[int, float]
 
 
 def _mean_merge_func(state_value: Tuple[float, int]):
@@ -80,7 +77,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Numeric,
+            value: Any,
             state: WindowedState,
         ):
             current_value = state.get_window(
@@ -107,7 +104,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            _: int,
+            _: Any,
             state: WindowedState,
         ):
             current_value = state.get_window(
@@ -135,7 +132,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Numeric,
+            value: Any,
             state: WindowedState,
         ):
             sum_, count_ = state.get_window(
@@ -225,7 +222,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Numeric,
+            value: Any,
             state: WindowedState,
         ):
             current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)
@@ -254,7 +251,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             start_ms: int,
             end_ms: int,
             timestamp_ms: int,
-            value: Numeric,
+            value: Any,
             state: WindowedState,
         ):
             current_value = state.get_window(start_ms=start_ms, end_ms=end_ms)

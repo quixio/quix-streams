@@ -212,9 +212,11 @@ def compose(
             composed = func.get_executor()
         else:
             composed = composer(
-                func.get_executor()
-                if not has_expanded
-                else func.get_executor_expanded(),
+                (
+                    func.get_executor()
+                    if not has_expanded
+                    else func.get_executor_expanded()
+                ),
                 composed,
             )
 

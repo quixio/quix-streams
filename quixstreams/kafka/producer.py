@@ -94,7 +94,7 @@ class Producer:
     def produce(
         self,
         topic: str,
-        value: Union[str, bytes] = None,
+        value: Optional[Union[str, bytes]] = None,
         key: Optional[Union[str, bytes]] = None,
         headers: Optional[Headers] = None,
         partition: Optional[int] = None,
@@ -149,22 +149,23 @@ class Producer:
                 # Poll for delivery callbacks and try again
                 self._producer.poll(timeout=poll_timeout)
 
-    def poll(self, timeout: Optional[float] = None):
+    def poll(self, timeout: float = 0):
         """
         Polls the producer for events and calls `on_delivery` callbacks.
-        :param timeout: poll timeout seconds
+        :param timeout: poll timeout seconds; Default: 0 (unlike others)
+            > NOTE: -1 will hang indefinitely if there are no messages to acknowledge
         """
-        return self._producer.poll(timeout)
+        return self._producer.poll(timeout=timeout)
 
     def flush(self, timeout: Optional[float] = None) -> int:
         """
         Wait for all messages in the Producer queue to be delivered.
 
-        :param timeout: timeout is seconds
+        :param float timeout: time to attempt flushing (seconds).
+            None or -1 is infinite. Default: None
         :return: number of messages delivered
         """
-        args_ = [arg for arg in (timeout,) if arg is not None]
-        return self._producer.flush(*args_)
+        return self._producer.flush(timeout=timeout if timeout is not None else -1)
 
     @property
     def _producer(self) -> ConfluentProducer:

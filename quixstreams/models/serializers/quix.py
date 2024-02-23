@@ -348,7 +348,7 @@ class QuixTimeseriesSerializer(QuixSerializer):
     def __call__(self, value: Mapping, ctx: SerializationContext) -> Union[str, bytes]:
         if not isinstance(value, Mapping):
             raise SerializationError(f"Expected Mapping, got {type(value)}")
-        result: dict = {
+        result = {
             "BinaryValues": {},
             "StringValues": {},
             "NumericValues": {},
