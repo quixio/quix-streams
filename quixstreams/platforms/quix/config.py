@@ -475,7 +475,6 @@ class QuixKafkaConfigsBuilder:
                 param_value = _QUIX_SASL_MECHANISM_MAP[param_value]
             cfg_out[rdkafka_param_name] = param_value
 
-        cfg_out["ssl.endpoint.identification.algorithm"] = "none"
         # Specify SSL certificate if it's provided for the broker
         ssl_cert_path = self._set_workspace_cert()
         if ssl_cert_path is not None:

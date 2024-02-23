@@ -440,7 +440,6 @@ class TestQuixKafkaConfigsBuilder:
             "sasl.username": "my-username",
             "sasl.password": "my-password",
             "ssl.ca.location": "/mock/dir/ca.cert",
-            "ssl.endpoint.identification.algorithm": "none",
             "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
             "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
         }
