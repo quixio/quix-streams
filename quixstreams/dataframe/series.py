@@ -185,26 +185,6 @@ class StreamingSeries(BaseStreaming):
         composed = self.compose()
         return context.run(composed, value)
 
-    @overload
-    def _operation(
-        self,
-        other: Union[str, int],
-        operator_: Callable[
-            [Union[Mapping, Self], Union[str, int]], Union[Self, object]
-        ],
-    ) -> Self:
-        # getitem
-        ...
-
-    @overload
-    def _operation(
-        self,
-        other: Union[Self, object],
-        operator_: Callable[[Union[Container, Self], object], bool],
-    ) -> Self:
-        # contains
-        ...
-
     def _operation(
         self,
         other: Union[Self, str, int, object],
