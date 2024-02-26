@@ -368,8 +368,9 @@ class StreamingSeries(BaseStreaming):
 
     def __bool__(self):
         raise InvalidOperation(
-            "Cannot assess truth level of a StreamingSeries using 'bool()' or any "
-            "operations that rely on it; use '&' or '|' for logical and/or comparisons"
+            f"Cannot assess truth level of a {self.__class__.__name__} "
+            f"using 'bool()' or any operations that rely on it; "
+            f"use '&' or '|' for logical and/or comparisons"
         )
 
     def __getitem__(self, item: Union[str, int]) -> Self:
