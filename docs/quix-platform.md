@@ -31,11 +31,10 @@ format, but Quix Platform provides additional features on top of this format in 
 
 You may connect to Quix Platform locally too (e.g. while developing the application on your machine).
 <br>
-To do that, you will need to set the following environment variables:
+To do that, you will need to set the following environment variable:
 
 ```
 Quix__Sdk__Token
-Quix__Portal__Api
 ```
 
 You can find these values on the platform in your Workspace settings.
