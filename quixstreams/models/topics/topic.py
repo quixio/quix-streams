@@ -24,9 +24,9 @@ from quixstreams.models.serializers import (
 from quixstreams.models.timestamps import MessageTimestamp, TimestampType
 from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
+    Headers,
     MessageHeadersTuples,
 )
-from .exceptions import TopicConfigUndefined
 
 __all__ = ("Topic", "TopicConfig", "TimestampExtractor")
 
@@ -94,11 +94,11 @@ class Topic:
     def __init__(
         self,
         name: str,
+        config: TopicConfig,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         """
@@ -147,11 +147,11 @@ class Topic:
         ```
         """
         self._name = name
+        self._config = config
         self._key_serializer = _get_serializer(key_serializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
-        self._config = config
         self._timestamp_extractor = timestamp_extractor
 
     @property
@@ -163,8 +163,6 @@ class Topic:
 
     @property
     def config(self) -> TopicConfig:
-        if self._config is None:
-            raise TopicConfigUndefined("No TopicConfig was provided.")
         return self._config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
@@ -254,7 +252,7 @@ class Topic:
         self,
         key: Optional[object] = None,
         value: Optional[object] = None,
-        headers: Optional[MessageHeadersTuples] = None,
+        headers: Optional[Headers] = None,
         timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
         ctx = SerializationContext(topic=self.name, headers=headers)

@@ -35,7 +35,13 @@ from quixstreams.models.timestamps import (
     TimestampType,
     MessageTimestamp,
 )
-from quixstreams.models.topics import Topic, TopicManager, TopicAdmin
+from quixstreams.models.topics import (
+    Topic,
+    TopicManager,
+    TopicAdmin,
+    TopicConfig,
+    TimestampExtractor,
+)
 from quixstreams.platforms.quix import QuixTopicManager
 from quixstreams.platforms.quix.config import (
     QuixKafkaConfigsBuilder,
@@ -165,6 +171,7 @@ def topic_json_serdes_factory(topic_factory):
             topic_name = uuid.uuid4()
         return Topic(
             name=topic or topic_name,
+            config=TopicConfig(num_partitions=num_partitions, replication_factor=1),
             value_deserializer=JSONDeserializer(),
             value_serializer=JSONSerializer(),
         )
@@ -488,11 +495,12 @@ def topic_manager_topic_factory(topic_manager_factory):
     def factory(
         name: Optional[str] = str(uuid.uuid4()),
         partitions: int = 1,
-        create_topic: bool = True,
+        create_topic: bool = False,
         key_serializer: Optional[Union[Serializer, str]] = None,
         value_serializer: Optional[Union[Serializer, str]] = None,
         key_deserializer: Optional[Union[Deserializer, str]] = None,
         value_deserializer: Optional[Union[Deserializer, str]] = None,
+        timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         topic_manager = topic_manager_factory()
         topic_args = {
@@ -501,6 +509,7 @@ def topic_manager_topic_factory(topic_manager_factory):
             "key_deserializer": key_deserializer,
             "value_deserializer": value_deserializer,
             "config": topic_manager.topic_config(num_partitions=partitions),
+            "timestamp_extractor": timestamp_extractor,
         }
         topic = topic_manager.topic(
             name, **{k: v for k, v in topic_args.items() if v is not None}

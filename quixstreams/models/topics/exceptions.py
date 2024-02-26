@@ -19,7 +19,3 @@ class CreateTopicFailure(QuixException):
 
 class TopicNameLengthExceeded(QuixException):
     ...
-
-
-class TopicConfigUndefined(QuixException):
-    ...

@@ -7,7 +7,6 @@ from unittest.mock import patch, call, create_autospec
 import pytest
 from requests import HTTPError, Response
 
-from quixstreams.models.topics import Topic
 from quixstreams.platforms.quix.config import (
     QUIX_CONNECTIONS_MAX_IDLE_MS,
     QUIX_METADATA_MAX_AGE_MS,
@@ -512,7 +511,9 @@ class TestQuixKafkaConfigsBuilder:
         )
         assert cfg_factory.get_topics() == api_data
 
-    def test_create_topics(self, quix_kafka_config_factory):
+    def test_create_topics(
+        self, quix_kafka_config_factory, topic_manager_topic_factory
+    ):
         get_topics_return = [
             {
                 "id": "12345-topic_a",
@@ -531,9 +532,9 @@ class TestQuixKafkaConfigsBuilder:
             },
         ]
 
-        topic_b = Topic("12345-topic_b")
-        topic_c = Topic("12345-topic_c")
-        topic_d = Topic("12345-topic_d")
+        topic_b = topic_manager_topic_factory("12345-topic_b")
+        topic_c = topic_manager_topic_factory("12345-topic_c")
+        topic_d = topic_manager_topic_factory("12345-topic_d")
 
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
         stack = ExitStack()
@@ -548,7 +549,9 @@ class TestQuixKafkaConfigsBuilder:
         create_topic.assert_called_once_with(topic_d)
         finalize.assert_called_with({t.name for t in [topic_c, topic_d]}, timeout=1)
 
-    def test_create_topics_parallel_create_attempt(self, quix_kafka_config_factory):
+    def test_create_topics_parallel_create_attempt(
+        self, quix_kafka_config_factory, topic_manager_topic_factory
+    ):
         """When another app or something tries to create a topic at the same time"""
         get_topics_return = [
             {
@@ -558,7 +561,7 @@ class TestQuixKafkaConfigsBuilder:
             },
         ]
 
-        topic_b = Topic("12345-topic_b")
+        topic_b = topic_manager_topic_factory("12345-topic_b")
 
         mock_response = create_autospec(Response)
         mock_response.text = "already exists"
@@ -640,7 +643,9 @@ class TestQuixKafkaConfigsBuilder:
         assert "topic_c" not in e and "topic_d" in e
         assert get_topics.call_count == 1
 
-    def test_confirm_topics_exist(self, quix_kafka_config_factory):
+    def test_confirm_topics_exist(
+        self, quix_kafka_config_factory, topic_manager_topic_factory
+    ):
         api_data_stub = [
             {
                 "id": "12345-topic_a",
@@ -664,16 +669,18 @@ class TestQuixKafkaConfigsBuilder:
             },
         ]
 
-        topic_b = Topic("12345-topic_b")
-        topic_c = Topic("12345-topic_c")
-        topic_d = Topic("12345-topic_d")
+        topic_b = topic_manager_topic_factory("12345-topic_b")
+        topic_c = topic_manager_topic_factory("12345-topic_c")
+        topic_d = topic_manager_topic_factory("12345-topic_d")
 
         cfg_factory = quix_kafka_config_factory(
             workspace_id="12345", api_responses={"get_topics": api_data_stub}
         )
         cfg_factory.confirm_topics_exist([topic_b, topic_c, topic_d])
 
-    def test_confirm_topics_exist_topics_missing(self, quix_kafka_config_factory):
+    def test_confirm_topics_exist_topics_missing(
+        self, quix_kafka_config_factory, topic_manager_topic_factory
+    ):
         api_data_stub = [
             {
                 "id": "12345-topic_a",
@@ -687,9 +694,9 @@ class TestQuixKafkaConfigsBuilder:
             },
         ]
 
-        topic_b = Topic("12345-topic_b")
-        topic_c = Topic("12345-topic_c")
-        topic_d = Topic("12345-topic_d")
+        topic_b = topic_manager_topic_factory("12345-topic_b")
+        topic_c = topic_manager_topic_factory("12345-topic_c")
+        topic_d = topic_manager_topic_factory("12345-topic_d")
 
         cfg_factory = quix_kafka_config_factory(
             workspace_id="12345", api_responses={"get_topics": api_data_stub}

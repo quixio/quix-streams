@@ -1,10 +1,9 @@
-from typing import Optional, Union
+from typing import Optional
 
 from .types import (
+    Headers,
     MessageKey,
     MessageValue,
-    MessageHeadersTuples,
-    MessageHeadersMapping,
 )
 
 
@@ -15,7 +14,7 @@ class KafkaMessage:
         self,
         key: Optional[MessageKey],
         value: Optional[MessageValue],
-        headers: Optional[Union[MessageHeadersTuples, MessageHeadersMapping]],
+        headers: Optional[Headers],
         timestamp: Optional[int] = None,
     ):
         self.key = key

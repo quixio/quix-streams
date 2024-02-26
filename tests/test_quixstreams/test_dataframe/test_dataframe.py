@@ -7,7 +7,6 @@ from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
 from quixstreams.dataframe.windows import WindowResult
 from quixstreams.models import MessageTimestamp
-from quixstreams.models.topics import Topic
 from tests.utils import TopicPartitionStub
 
 
@@ -272,11 +271,9 @@ class TestStreamingDataFrameToTopic:
         dataframe_factory,
         row_consumer_factory,
         row_producer_factory,
-        topic_factory,
+        topic_manager_topic_factory,
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(
-            topic_name,
+        topic = topic_manager_topic_factory(
             key_deserializer="str",
             value_serializer="json",
             value_deserializer="json",
@@ -314,11 +311,9 @@ class TestStreamingDataFrameToTopic:
         dataframe_factory,
         row_consumer_factory,
         row_producer_factory,
-        topic_factory,
+        topic_manager_topic_factory,
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(
-            topic_name,
+        topic = topic_manager_topic_factory(
             key_deserializer="str",
             value_serializer="json",
             value_deserializer="json",
@@ -361,11 +356,9 @@ class TestStreamingDataFrameToTopic:
         dataframe_factory,
         row_consumer_factory,
         row_producer_factory,
-        topic_factory,
+        topic_manager_topic_factory,
     ):
-        topic_name, _ = topic_factory()
-        topic = Topic(
-            topic_name,
+        topic = topic_manager_topic_factory(
             value_serializer="json",
             value_deserializer="json",
             key_serializer="int",
@@ -405,18 +398,13 @@ class TestStreamingDataFrameToTopic:
         dataframe_factory,
         row_consumer_factory,
         row_producer_factory,
-        topic_factory,
+        topic_manager_topic_factory,
     ):
-        topic_0_name, _ = topic_factory()
-        topic_1_name, _ = topic_factory()
-
-        topic_0 = Topic(
-            topic_0_name,
+        topic_0 = topic_manager_topic_factory(
             value_serializer="json",
             value_deserializer="json",
         )
-        topic_1 = Topic(
-            topic_1_name,
+        topic_1 = topic_manager_topic_factory(
             value_serializer="json",
             value_deserializer="json",
         )
@@ -454,8 +442,10 @@ class TestStreamingDataFrameToTopic:
             assert consumed_row.key == ctx.key
             assert consumed_row.value == value
 
-    def test_to_topic_no_producer_assigned(self, dataframe_factory):
-        topic = Topic("test")
+    def test_to_topic_no_producer_assigned(
+        self, dataframe_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory()
 
         sdf = dataframe_factory()
         sdf = sdf.to_topic(topic)
@@ -477,8 +467,10 @@ class TestStreamingDataFrameToTopic:
 
 
 class TestStreamingDataframeStateful:
-    def test_apply_stateful(self, dataframe_factory, state_manager):
-        topic = Topic("test")
+    def test_apply_stateful(
+        self, dataframe_factory, state_manager, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory()
 
         def stateful_func(value_: dict, state: State) -> int:
             current_max = state.get("max")
@@ -503,7 +495,7 @@ class TestStreamingDataframeStateful:
         result = None
         ctx = MessageContext(
             key=b"test",
-            topic="test",
+            topic=topic.name,
             partition=0,
             offset=0,
             size=0,
@@ -517,8 +509,10 @@ class TestStreamingDataframeStateful:
 
         assert result == 10
 
-    def test_update_stateful(self, dataframe_factory, state_manager):
-        topic = Topic("test")
+    def test_update_stateful(
+        self, dataframe_factory, state_manager, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory()
 
         def stateful_func(value_: dict, state: State):
             current_max = state.get("max")
@@ -543,7 +537,7 @@ class TestStreamingDataframeStateful:
         ]
         ctx = MessageContext(
             key=b"test",
-            topic="test",
+            topic=topic.name,
             partition=0,
             offset=0,
             size=0,
@@ -558,8 +552,10 @@ class TestStreamingDataframeStateful:
         assert result is not None
         assert result["max"] == 10
 
-    def test_filter_stateful(self, dataframe_factory, state_manager):
-        topic = Topic("test")
+    def test_filter_stateful(
+        self, dataframe_factory, state_manager, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory()
 
         def stateful_func(value_: dict, state: State):
             current_max = state.get("max")
@@ -584,7 +580,7 @@ class TestStreamingDataframeStateful:
         ]
         ctx = MessageContext(
             key=b"test",
-            topic="test",
+            topic=topic.name,
             partition=0,
             offset=0,
             size=0,
@@ -603,9 +599,9 @@ class TestStreamingDataframeStateful:
         assert results[0]["max"] == 3
 
     def test_filter_with_another_sdf_apply_stateful(
-        self, dataframe_factory, state_manager
+        self, dataframe_factory, state_manager, topic_manager_topic_factory
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory()
 
         def stateful_func(value_: dict, state: State):
             current_max = state.get("max")
@@ -630,7 +626,7 @@ class TestStreamingDataframeStateful:
         ]
         ctx = MessageContext(
             key=b"test",
-            topic="test",
+            topic=topic.name,
             partition=0,
             offset=0,
             size=0,
@@ -684,9 +680,15 @@ class TestStreamingDataFrameTumblingWindow:
         assert window_definition.grace_ms == grace_ms
 
     def test_tumbling_window_current(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = (
@@ -723,13 +725,19 @@ class TestStreamingDataFrameTumblingWindow:
         ]
 
     def test_tumbling_window_current_out_of_order_late(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
         """
         Test that window with "latest" doesn't output the result if incoming timestamp
         is late
         """
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().current()
@@ -762,9 +770,15 @@ class TestStreamingDataFrameTumblingWindow:
         ]
 
     def test_tumbling_window_final(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(
+            name="test",
+        )
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10, grace_ms=0).sum().final()
@@ -869,9 +883,13 @@ class TestStreamingDataFrameHoppingWindow:
         assert window_definition.step_ms == step_ms
 
     def test_hopping_window_current(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(name="test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
@@ -914,9 +932,13 @@ class TestStreamingDataFrameHoppingWindow:
         ]
 
     def test_hopping_window_current_out_of_order_late(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(name="test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
@@ -953,9 +975,13 @@ class TestStreamingDataFrameHoppingWindow:
         ]
 
     def test_hopping_window_final(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(name="test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().final()
