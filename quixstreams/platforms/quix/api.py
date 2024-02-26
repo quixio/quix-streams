@@ -9,6 +9,7 @@ from quixstreams.exceptions import QuixException
 from .env import QUIX_ENVIRONMENT
 
 __all__ = ("QuixPortalApiService",)
+DEFAULT_PORTAL_API_URL = "https://portal-api.platform.quix.io/"
 
 
 class QuixPortalApiService:
@@ -32,7 +33,9 @@ class QuixPortalApiService:
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
     ):
-        self._portal_api = portal_api or QUIX_ENVIRONMENT.portal_api or "https://portal-api.platform.quix.io/"
+        self._portal_api = (
+            portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
+        )
         self._auth_token = auth_token or QUIX_ENVIRONMENT.sdk_token
         self._default_workspace_id = (
             default_workspace_id or QUIX_ENVIRONMENT.workspace_id
