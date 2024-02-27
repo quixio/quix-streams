@@ -1,5 +1,6 @@
 import pytest
 
+from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.dataframe.series import StreamingSeries
 
 
@@ -321,3 +322,11 @@ class TestStreamingSeries:
         series = StreamingSeries("x") | StreamingSeries("y")
         # Ensure it doesn't fail with KeyError ("y" is not present in value)
         series.test({"x": True})
+
+    def test_cannot_use_logical_and(self):
+        with pytest.raises(InvalidOperation):
+            StreamingSeries("x") and StreamingSeries("y")
+
+    def test_cannot_use_logical_or(self):
+        with pytest.raises(InvalidOperation):
+            StreamingSeries("x") or StreamingSeries("y")
