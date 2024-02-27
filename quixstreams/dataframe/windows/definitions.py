@@ -184,7 +184,7 @@ class FixedTimeWindowDefinition(abc.ABC):
             (the accumulated value and a new value) and returns a single value.
             The returned value will be saved to the state store and sent downstream.
         :param initializer: A function to call for every first element of the window.
-            This function is used to initialize the aggreation within a window.
+            This function is used to initialize the aggregation within a window.
 
         :return: A window configured to perform custom reduce aggregation on the data.
         """

@@ -1,6 +1,6 @@
 import logging
 import functools
-from typing import Any, Optional, List, TYPE_CHECKING, cast
+from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple
 
 from quixstreams.context import (
     message_context,
@@ -57,7 +57,7 @@ class FixedTimeWindow:
 
     def process_window(
         self, value: Any, state: WindowedState, timestamp_ms: int
-    ) -> (List[WindowResult], List[WindowResult]):
+    ) -> Tuple[List[WindowResult], List[WindowResult]]:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
 

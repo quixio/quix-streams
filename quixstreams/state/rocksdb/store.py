@@ -98,9 +98,11 @@ class RocksDBStore(Store):
         path = str((self._partitions_dir / str(partition)).absolute())
         store_partition = self.create_new_partition(
             path,
-            self._changelog_producer_factory.get_partition_producer(partition)
-            if self._changelog_producer_factory
-            else None,
+            (
+                self._changelog_producer_factory.get_partition_producer(partition)
+                if self._changelog_producer_factory
+                else None
+            ),
         )
 
         self._partitions[partition] = store_partition

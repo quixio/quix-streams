@@ -56,12 +56,14 @@ def quix_timeseries_factory():
                 if as_legacy
                 else value
             ).encode(),
-            headers=None
-            if as_legacy
-            else [
-                ("__Q_ModelKey", model_key.encode()),
-                ("__Q_CodecId", codec_id.encode()),
-            ],
+            headers=(
+                None
+                if as_legacy
+                else [
+                    ("__Q_ModelKey", model_key.encode()),
+                    ("__Q_CodecId", codec_id.encode()),
+                ]
+            ),
         )
         return message
 
@@ -118,12 +120,14 @@ def quix_eventdata_factory():
                 if as_legacy
                 else event
             ).encode(),
-            headers=None
-            if as_legacy
-            else [
-                ("__Q_ModelKey", model_key.encode()),
-                ("__Q_CodecId", codec_id.encode()),
-            ],
+            headers=(
+                None
+                if as_legacy
+                else [
+                    ("__Q_ModelKey", model_key.encode()),
+                    ("__Q_CodecId", codec_id.encode()),
+                ]
+            ),
         )
         return message
 
@@ -153,12 +157,14 @@ def quix_eventdata_list_factory():
                 if as_legacy
                 else events
             ).encode(),
-            headers=None
-            if as_legacy
-            else [
-                ("__Q_ModelKey", model_key.encode()),
-                ("__Q_CodecId", codec_id.encode()),
-            ],
+            headers=(
+                None
+                if as_legacy
+                else [
+                    ("__Q_ModelKey", model_key.encode()),
+                    ("__Q_CodecId", codec_id.encode()),
+                ]
+            ),
         )
         return message
 

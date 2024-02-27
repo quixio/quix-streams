@@ -3,8 +3,10 @@ from typing_extensions import Protocol
 
 MessageKey = Union[str, bytes]
 MessageValue = Union[str, bytes]
-MessageHeadersTuples = List[Tuple[str, bytes]]
-MessageHeadersMapping = Mapping[str, Union[str, bytes, None]]
+HeaderValue = Optional[Union[str, bytes]]
+MessageHeadersTuples = List[Tuple[str, HeaderValue]]
+MessageHeadersMapping = Mapping[str, HeaderValue]
+Headers = Union[MessageHeadersTuples, MessageHeadersMapping]
 
 
 class ConfluentKafkaMessageProto(Protocol):
@@ -18,10 +20,10 @@ class ConfluentKafkaMessageProto(Protocol):
 
     """
 
-    def headers(self, *args, **kwargs) -> Optional[List[Tuple[str, bytes]]]:
+    def headers(self, *args, **kwargs) -> Optional[MessageHeadersTuples]:
         ...
 
-    def key(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
+    def key(self, *args, **kwargs) -> Optional[MessageKey]:
         ...
 
     def offset(self, *args, **kwargs) -> int:
@@ -30,13 +32,13 @@ class ConfluentKafkaMessageProto(Protocol):
     def partition(self, *args, **kwargs) -> int:
         ...
 
-    def timestamp(self, *args, **kwargs) -> (int, int):
+    def timestamp(self, *args, **kwargs) -> Tuple[int, int]:
         ...
 
     def topic(self, *args, **kwargs) -> str:
         ...
 
-    def value(self, *args, **kwargs) -> Optional[Union[str, bytes]]:
+    def value(self, *args, **kwargs) -> Optional[MessageValue]:
         ...
 
     def latency(self, *args, **kwargs) -> Optional[float]:

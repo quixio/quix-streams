@@ -91,7 +91,7 @@ class Serializer(abc.ABC):
         return {}
 
     @abc.abstractmethod
-    def __call__(self, *args, **kwargs) -> bytes:
+    def __call__(self, *args, **kwargs) -> Union[str, bytes]:
         ...
 
 

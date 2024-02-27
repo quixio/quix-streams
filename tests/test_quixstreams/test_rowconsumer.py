@@ -6,7 +6,6 @@ from quixstreams.models import (
     Deserializer,
     IgnoreMessage,
     SerializationError,
-    Topic,
 )
 from quixstreams.rowconsumer import KafkaMessageError
 from tests.utils import Timeout
@@ -54,8 +53,10 @@ class TestRowConsumer:
                     if len(rows) == 2:
                         return
 
-    def test_poll_row_kafka_error(self, row_consumer_factory):
-        topic = Topic("123")
+    def test_poll_row_kafka_error(
+        self, row_consumer_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory()
         with row_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer:
@@ -66,26 +67,24 @@ class TestRowConsumer:
         assert exc.code == KafkaError.UNKNOWN_TOPIC_OR_PART
 
     def test_poll_row_ignore_message(
-        self, row_consumer_factory, topic_factory, producer
+        self, row_consumer_factory, topic_manager_topic_factory, producer
     ):
-        topic_name, _ = topic_factory()
-
         class _Deserializer(Deserializer):
             def __call__(self, *args, **kwargs):
                 raise IgnoreMessage()
 
-        topic = Topic(topic_name, value_deserializer=_Deserializer())
+        topic = topic_manager_topic_factory(value_deserializer=_Deserializer())
         with row_consumer_factory(
             auto_offset_reset="earliest",
         ) as consumer, producer:
-            producer.produce(topic_name, key=b"key", value=b"value")
+            producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
             row = consumer.poll_row(10.0)
             assert row is None
 
             low, high = consumer.get_watermark_offsets(
-                partition=TopicPartition(topic=topic_name, partition=0)
+                partition=TopicPartition(topic=topic.name, partition=0)
             )
         assert low == 0
         assert high == 1

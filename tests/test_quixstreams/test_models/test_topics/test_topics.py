@@ -4,7 +4,6 @@ from typing import Optional, Any, Callable, List
 import pytest
 
 from quixstreams.models import (
-    Topic,
     StringSerializer,
     TimestampType,
     MessageHeadersTuples,
@@ -92,9 +91,9 @@ class TestTopic:
         value: Optional[bytes],
         expected_key: Any,
         expected_value: Any,
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "topic",
+        topic = topic_manager_topic_factory(
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
         )
@@ -127,18 +126,17 @@ class TestTopic:
         self,
         value_deserializer: Deserializer,
         value: Optional[bytes],
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "topic",
+        topic = topic_manager_topic_factory(
             value_deserializer=value_deserializer,
         )
         message = ConfluentKafkaMessageStub(key=b"key", value=value)
         with pytest.raises(TypeError, match="Row value must be a dict"):
             topic.row_deserialize(message=message)
 
-    def test_row_deserialize_ignorevalueerror_raised(self):
-        topic = Topic(
-            "topic",
+    def test_row_deserialize_ignorevalueerror_raised(self, topic_manager_topic_factory):
+        topic = topic_manager_topic_factory(
             value_deserializer=IgnoreDivisibleBy3Deserializer(column_name="value"),
         )
         row = topic.row_deserialize(
@@ -152,9 +150,8 @@ class TestTopic:
         )
         assert row is None
 
-    def test_row_deserialize_split_values(self):
-        topic = Topic(
-            "topic",
+    def test_row_deserialize_split_values(self, topic_manager_topic_factory):
+        topic = topic_manager_topic_factory(
             value_deserializer=JSONListDeserializer(),
         )
         value = b'[{"a":"b"}, {"c":123}]'
@@ -205,9 +202,9 @@ class TestTopic:
                 JSONListDeserializer(),
                 json.dumps([{"ts": 456}]).encode(),
                 None,
-                lambda v, headers, ts, ts_type: 101
-                if ts_type == TimestampType.TIMESTAMP_CREATE_TIME
-                else 0,
+                lambda v, headers, ts, ts_type: (
+                    101 if ts_type == TimestampType.TIMESTAMP_CREATE_TIME else 0
+                ),
                 [101],
             ),
         ],
@@ -219,9 +216,9 @@ class TestTopic:
         headers: Optional[MessageHeadersTuples],
         timestamp_extractor: Callable,
         expected_timestamps: List[int],
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "topic",
+        topic = topic_manager_topic_factory(
             value_deserializer=value_deserializer,
             timestamp_extractor=timestamp_extractor,
         )
@@ -243,13 +240,12 @@ class TestTopic:
         ],
     )
     def test_row_deserialize_deserializer_isnot_provided_error(
-        self, key_deserializer, value_deserializer
+        self, key_deserializer, value_deserializer, topic_manager_topic_factory
     ):
-        topic = Topic(
-            "topic",
-            key_deserializer=key_deserializer,
-            value_deserializer=value_deserializer,
-        )
+        topic = topic_manager_topic_factory()
+        # override any defaults that get set when `None` is provided
+        topic._key_deserializer = key_deserializer
+        topic._value_deserializer = value_deserializer
         with pytest.raises(DeserializerIsNotProvidedError):
             topic.row_deserialize(
                 message=ConfluentKafkaMessageStub(key=b"key", value=b"123")
@@ -285,9 +281,11 @@ class TestTopic:
         expected_key: Optional[bytes],
         expected_value: Optional[bytes],
         row_factory: pytest.fixture,
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "topic", key_serializer=key_serializer, value_serializer=value_serializer
+        topic = topic_manager_topic_factory(
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
         )
         row = row_factory(key=key, value=value)
         message = topic.row_serialize(row=row)
@@ -328,24 +326,27 @@ class TestTopic:
         expected_key: Optional[bytes],
         expected_value: Optional[bytes],
         row_factory: pytest.fixture,
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "topic", key_serializer=key_serializer, value_serializer=value_serializer
+        topic = topic_manager_topic_factory(
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
         )
         row = row_factory(key=key, value=value)
         message = topic.row_serialize(row=row, key=new_key)
         assert message.key == expected_key
         assert message.value == expected_value
 
-    def test_row_serialize_extra_headers(self, row_factory: pytest.fixture):
+    def test_row_serialize_extra_headers(
+        self, row_factory: pytest.fixture, topic_manager_topic_factory
+    ):
         class BytesSerializerWithHeaders(BytesSerializer):
             extra_headers = {"header": b"value"}
 
         key_serializer = BytesSerializer()
         value_serializer = BytesSerializerWithHeaders()
 
-        topic = Topic(
-            "topic",
+        topic = topic_manager_topic_factory(
             key_serializer=key_serializer,
             value_serializer=value_serializer,
         )
@@ -355,8 +356,10 @@ class TestTopic:
         assert message.value == b"value"
         assert message.headers == value_serializer.extra_headers
 
-    def test_serialize(self, topic_json_serdes_factory):
-        topic = Topic(name="my_topic", key_serializer="str", value_serializer="json")
+    def test_serialize(self, topic_json_serdes_factory, topic_manager_topic_factory):
+        topic = topic_manager_topic_factory(
+            key_serializer="str", value_serializer="json"
+        )
         message = topic.serialize(
             key="woo",
             value={"a": ["cool", "json"]},
@@ -368,8 +371,12 @@ class TestTopic:
         assert message.headers == {"header": "value"}
         assert message.timestamp == 1234567890
 
-    def test_serialize_no_key(self, topic_json_serdes_factory):
-        topic = Topic(name="my_topic", key_serializer=None, value_serializer="json")
+    def test_serialize_no_key(
+        self, topic_json_serdes_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory(
+            key_serializer=None, value_serializer="json"
+        )
         message = topic.serialize(
             value={"a": ["cool", "json"]},
             headers={"header": "value"},
@@ -383,8 +390,12 @@ class TestTopic:
     @pytest.mark.skip(
         "string serializer currently allows NoneTypes, probably shouldn't?"
     )
-    def test_serialize_key_missing(self, topic_json_serdes_factory):
-        topic = Topic(name="my_topic", key_serializer="string", value_serializer="json")
+    def test_serialize_key_missing(
+        self, topic_json_serdes_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory(
+            key_serializer="string", value_serializer="json"
+        )
         with pytest.raises(SerializationError):
             topic.serialize(
                 value={"a": ["cool", "json"]},
@@ -393,8 +404,12 @@ class TestTopic:
             )
 
     @pytest.mark.skip("skip until we do more type checking with serializers")
-    def test_serialize_serialization_error(self, topic_json_serdes_factory):
-        topic = Topic(name="my_topic", key_serializer="bytes", value_serializer="json")
+    def test_serialize_serialization_error(
+        self, topic_json_serdes_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory(
+            key_serializer="bytes", value_serializer="json"
+        )
         with pytest.raises(SerializationError):
             topic.serialize(
                 key="woo",
@@ -403,8 +418,12 @@ class TestTopic:
                 timestamp_ms=1234567890,
             )
 
-    def test_serialize_serializer_missing(self, topic_json_serdes_factory):
-        topic = Topic(name="my_topic", key_serializer="string", value_serializer=None)
+    def test_serialize_serializer_missing(
+        self, topic_json_serdes_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory(
+            key_serializer="string", value_serializer=None
+        )
         with pytest.raises(SerializerIsNotProvidedError):
             topic.serialize(
                 key="woo",
@@ -437,9 +456,10 @@ class TestTopic:
         key: Any,
         value: Any,
         row_factory: pytest.fixture,
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "topic", key_serializer=key_serializer, value_serializer=value_serializer
+        topic = topic_manager_topic_factory(
+            key_serializer=key_serializer, value_serializer=value_serializer
         )
 
         row = row_factory(key=key, value=value)
@@ -449,24 +469,31 @@ class TestTopic:
     @pytest.mark.parametrize(
         "serializer_str, expected_type", [(k, v) for k, v in SERIALIZERS.items()]
     )
-    def test__get_serializer_strings(self, serializer_str, expected_type):
+    def test__get_serializer_strings(
+        self, serializer_str, expected_type, topic_manager_topic_factory
+    ):
         assert isinstance(
-            Topic("topic", key_serializer=serializer_str)._key_serializer, expected_type
+            topic_manager_topic_factory(key_serializer=serializer_str)._key_serializer,
+            expected_type,
         )
 
-    def test__get_serializer_strings_invalid(self):
+    def test__get_serializer_strings_invalid(self, topic_manager_topic_factory):
         with pytest.raises(ValueError):
-            Topic("topic", key_serializer="fail_me_bro")  # type: ignore
+            topic_manager_topic_factory(key_serializer="fail_me_bro")
 
     @pytest.mark.parametrize(
         "deserializer_str, expected_type", [(k, v) for k, v in DESERIALIZERS.items()]
     )
-    def test__get_deserializer_strings(self, deserializer_str, expected_type):
+    def test__get_deserializer_strings(
+        self, deserializer_str, expected_type, topic_manager_topic_factory
+    ):
         assert isinstance(
-            Topic("topic", key_deserializer=deserializer_str)._key_deserializer,
+            topic_manager_topic_factory(
+                key_deserializer=deserializer_str
+            )._key_deserializer,
             expected_type,
         )
 
-    def test__get_deserializer_strings_invalid(self):
+    def test__get_deserializer_strings_invalid(self, topic_manager_topic_factory):
         with pytest.raises(ValueError):
-            Topic("topic", key_deserializer="fail_me_bro")  # type: ignore
+            topic_manager_topic_factory(key_deserializer="fail_me_bro")
