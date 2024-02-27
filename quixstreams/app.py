@@ -205,20 +205,24 @@ class Application:
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            producer=RowProducer(
-                broker_address=broker_address,
-                partitioner=partitioner,
-                extra_config=producer_extra_config,
-                on_error=on_producer_error,
-            )
-            if use_changelog_topics
-            else None,
-            recovery_manager=RecoveryManager(
-                consumer=self._consumer,
-                topic_manager=self._topic_manager,
-            )
-            if use_changelog_topics
-            else None,
+            producer=(
+                RowProducer(
+                    broker_address=broker_address,
+                    partitioner=partitioner,
+                    extra_config=producer_extra_config,
+                    on_error=on_producer_error,
+                )
+                if use_changelog_topics
+                else None
+            ),
+            recovery_manager=(
+                RecoveryManager(
+                    consumer=self._consumer,
+                    topic_manager=self._topic_manager,
+                )
+                if use_changelog_topics
+                else None
+            ),
         )
 
     def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):

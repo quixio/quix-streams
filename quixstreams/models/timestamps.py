@@ -1,5 +1,4 @@
 import enum
-from typing import Optional
 
 from typing_extensions import Self
 
@@ -24,7 +23,7 @@ class MessageTimestamp:
 
     def __init__(
         self,
-        milliseconds: Optional[int],
+        milliseconds: int,
         type: TimestampType,
     ):
         self._milliseconds = milliseconds

@@ -52,11 +52,7 @@ class TestConsumerSubscribe:
             assert topic_name in metadata.topics
             assert len(metadata.topics[topic_name].partitions) == num_partitions
 
-    def test_consumer_subscribe_topic_doesnt_exist(
-        self,
-        consumer,
-        topic_factory,
-    ):
+    def test_consumer_subscribe_topic_doesnt_exist(self, consumer):
         topic_name = str(uuid.uuid4())
 
         with consumer:

@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import contextvars
 import functools
 import operator
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, TypeVar, Any
+from typing import Optional, Callable, Union, List, TypeVar, Any, overload
 
 from typing_extensions import Self
 
@@ -344,7 +346,7 @@ class StreamingDataFrame(BaseStreaming):
     def tumbling_window(
         self,
         duration_ms: Union[int, timedelta],
-        grace_ms: Optional[Union[int, timedelta]] = 0,
+        grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
     ) -> TumblingWindowDefinition:
         """
@@ -414,7 +416,7 @@ class StreamingDataFrame(BaseStreaming):
         self,
         duration_ms: Union[int, timedelta],
         step_ms: Union[int, timedelta],
-        grace_ms: Optional[Union[int, timedelta]] = 0,
+        grace_ms: Union[int, timedelta] = 0,
         name: Optional[str] = None,
     ) -> HoppingWindowDefinition:
         """
@@ -535,6 +537,14 @@ class StreamingDataFrame(BaseStreaming):
         else:
             stream = self.stream.add_update(lambda v: operator.setitem(v, key, value))
         self._stream = stream
+
+    @overload
+    def __getitem__(self, item: str) -> StreamingSeries:
+        ...
+
+    @overload
+    def __getitem__(self, item: Union[StreamingSeries, List[str], Self]) -> Self:
+        ...
 
     def __getitem__(
         self, item: Union[str, List[str], StreamingSeries, Self]

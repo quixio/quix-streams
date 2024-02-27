@@ -1,6 +1,6 @@
 import dataclasses
 import logging
-from typing import List, Optional, Any, Callable, Mapping, Union
+from typing import List, Optional, Any, Callable, Union
 
 from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
 
@@ -24,6 +24,7 @@ from quixstreams.models.serializers import (
 from quixstreams.models.timestamps import MessageTimestamp, TimestampType
 from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
+    Headers,
     MessageHeadersTuples,
 )
 
@@ -54,7 +55,7 @@ class TopicConfig:
         return dataclasses.asdict(self)
 
 
-def _get_serializer(serializer: SerializerType) -> Serializer:
+def _get_serializer(serializer: Optional[SerializerType]) -> Optional[Serializer]:
     if isinstance(serializer, str):
         try:
             return SERIALIZERS[serializer]()
@@ -66,7 +67,9 @@ def _get_serializer(serializer: SerializerType) -> Serializer:
     return serializer
 
 
-def _get_deserializer(deserializer: DeserializerType) -> Deserializer:
+def _get_deserializer(
+    deserializer: Optional[DeserializerType],
+) -> Optional[Deserializer]:
     if isinstance(deserializer, str):
         try:
             return DESERIALIZERS[deserializer]()
@@ -91,11 +94,11 @@ class Topic:
     def __init__(
         self,
         name: str,
+        config: TopicConfig,
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
         key_serializer: Optional[SerializerType] = BytesSerializer(),
-        config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         """
@@ -144,11 +147,11 @@ class Topic:
         ```
         """
         self._name = name
+        self._config = config
         self._key_serializer = _get_serializer(key_serializer)
         self._key_deserializer = _get_deserializer(key_deserializer)
         self._value_serializer = _get_serializer(value_serializer)
         self._value_deserializer = _get_deserializer(value_deserializer)
-        self._config = config
         self._timestamp_extractor = timestamp_extractor
 
     @property
@@ -249,8 +252,8 @@ class Topic:
         self,
         key: Optional[object] = None,
         value: Optional[object] = None,
-        headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
-        timestamp_ms: int = None,
+        headers: Optional[Headers] = None,
+        timestamp_ms: Optional[int] = None,
     ) -> KafkaMessage:
         ctx = SerializationContext(topic=self.name, headers=headers)
         if self._key_serializer:
@@ -275,14 +278,16 @@ class Topic:
     def deserialize(self, message: ConfluentKafkaMessageProto):
         ctx = SerializationContext(topic=message.topic(), headers=message.headers())
         return KafkaMessage(
-            key=self._key_deserializer(key, ctx=ctx)
-            if (key := message.key())
-            else None,
-            value=self._value_serializer(value, ctx=ctx)
-            if (value := message.value())
-            else None,
+            key=(
+                self._key_deserializer(key, ctx=ctx) if (key := message.key()) else None
+            ),
+            value=(
+                self._value_serializer(value, ctx=ctx)
+                if (value := message.value())
+                else None
+            ),
             headers=message.headers(),
-            timestamp=message.timestamp(),
+            timestamp=message.timestamp()[1],
         )
 
     def __repr__(self):

@@ -4,7 +4,6 @@ import pytest
 from confluent_kafka import KafkaException
 
 from quixstreams.models import (
-    Topic,
     JSONSerializer,
     SerializationError,
 )
@@ -76,12 +75,9 @@ class TestRowProducer:
         assert not row.headers
 
     def test_produce_row_serialization_error_raise(
-        self, row_producer_factory, row_factory
+        self, row_producer_factory, row_factory, topic_manager_topic_factory
     ):
-        topic = Topic(
-            "test",
-            value_serializer=JSONSerializer(),
-        )
+        topic = topic_manager_topic_factory(value_serializer=JSONSerializer())
 
         with row_producer_factory() as producer:
             row = row_factory(
@@ -91,11 +87,10 @@ class TestRowProducer:
             with pytest.raises(SerializationError):
                 producer.produce_row(topic=topic, row=row)
 
-    def test_produce_row_produce_error_raise(self, row_producer_factory, row_factory):
-        topic = Topic(
-            "test",
-            value_serializer=JSONSerializer(),
-        )
+    def test_produce_row_produce_error_raise(
+        self, row_producer_factory, row_factory, topic_manager_topic_factory
+    ):
+        topic = topic_manager_topic_factory(value_serializer=JSONSerializer())
 
         with row_producer_factory(extra_config={"message.max.bytes": 1000}) as producer:
             row = row_factory(
@@ -106,12 +101,13 @@ class TestRowProducer:
                 producer.produce_row(topic=topic, row=row)
 
     def test_produce_row_serialization_error_suppress(
-        self, row_consumer_factory, row_producer_factory, row_factory
+        self,
+        row_consumer_factory,
+        row_producer_factory,
+        row_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic(
-            "test",
-            value_serializer=JSONSerializer(),
-        )
+        topic = topic_manager_topic_factory(value_serializer=JSONSerializer())
 
         suppressed = Future()
 

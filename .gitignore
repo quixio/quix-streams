@@ -1,24 +1,32 @@
+# Mac OS
 .DS_Store
 
+# Quixstreams (Quix Platform)
 certificates/
 
-#Ignore PyCharm files
+# PyCharm
 .idea/
+
+# VS Code
+.vscode/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-# pytest cache
-.pytest_cache
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
 
 # coverage reports
 .coverage
 
-#ignore environment
+# environment
 env/
 venv/
 
-#ignore build results
+# build results
 /build/
 dist/
 *egg-info
@@ -29,6 +37,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-#direnv
+# direnv
 .direnv/
 .envrc

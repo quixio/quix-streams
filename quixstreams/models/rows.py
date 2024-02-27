@@ -3,9 +3,9 @@ from typing import Optional, Union, List, Any, KeysView, ValuesView, ItemsView, 
 
 from typing_extensions import Self
 
-from .messages import MessageHeadersTuples
-from .timestamps import MessageTimestamp
 from .messagecontext import MessageContext
+from .timestamps import MessageTimestamp
+from .types import MessageHeadersTuples
 
 
 class Row:

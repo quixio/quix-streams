@@ -1,7 +1,7 @@
 import abc
 import functools
 from itertools import chain
-from typing import TypeVar, Callable, List, Any
+from typing import TypeVar, Callable, List
 
 __all__ = (
     "StreamCallable",
@@ -76,7 +76,7 @@ class ApplyFunction(StreamFunction):
         return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
 
     def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> R:
+        def wrapper(value: List[T], func=self._func) -> List[R]:
             # Execute a function on an expanded value and return a list with results
             return [func(i) for i in value]
 
@@ -95,7 +95,7 @@ class ApplyExpandFunction(StreamFunction):
     expand = True
 
     def get_executor(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> List[Any]:
+        def wrapper(value: T, func=self._func) -> List[object]:
             # Execute a function on a single value and wrap results into a list
             # to expand them downstream
             return list(func(value))
@@ -103,7 +103,7 @@ class ApplyExpandFunction(StreamFunction):
         return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
 
     def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> R:
+        def wrapper(value: List[T], func=self._func) -> List[R]:
             # Execute a function on an expanded value and flatten the results
             # (expanded value is an iterable, and the function itself
             # also returns an iterable)
@@ -131,7 +131,7 @@ class FilterFunction(StreamFunction):
         return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
 
     def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> T:
+        def wrapper(value: List[T], func=self._func) -> List[T]:
             # Filter an expanded value.
             # If all items from expanded list are filtered, raise Filtered()
             # exception to abort the function chain
@@ -212,9 +212,11 @@ def compose(
             composed = func.get_executor()
         else:
             composed = composer(
-                func.get_executor()
-                if not has_expanded
-                else func.get_executor_expanded(),
+                (
+                    func.get_executor()
+                    if not has_expanded
+                    else func.get_executor_expanded()
+                ),
                 composed,
             )
 

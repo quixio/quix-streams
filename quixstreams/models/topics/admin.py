@@ -103,13 +103,17 @@ class TopicAdmin:
             for config_resource, config in futures_dict.items()
         }
         return {
-            topic: TopicConfig(
-                num_partitions=len(cluster_topics[topic].partitions),
-                replication_factor=len(cluster_topics[topic].partitions[0].replicas),
-                extra_config=configs[topic],
+            topic: (
+                TopicConfig(
+                    num_partitions=len(cluster_topics[topic].partitions),
+                    replication_factor=len(
+                        cluster_topics[topic].partitions[0].replicas
+                    ),
+                    extra_config=configs[topic],
+                )
+                if topic in existing_topics
+                else None
             )
-            if topic in existing_topics
-            else None
             for topic in topic_names
         }
 

@@ -71,7 +71,9 @@ class Consumer:
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
         assignment_strategy: AssignmentStrategy = "range",
-        on_commit: Callable[[Optional[KafkaError], List[TopicPartition]], None] = None,
+        on_commit: Optional[
+            Callable[[Optional[KafkaError], List[TopicPartition]], None]
+        ] = None,
         extra_config: Optional[dict] = None,
     ):
         """
@@ -121,7 +123,7 @@ class Consumer:
         )
         self._inner_consumer: Optional[ConfluentConsumer] = None
 
-    def poll(self, timeout: float = None) -> Optional[Message]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
         """
         Consumes a single message, calls callbacks and returns events.
 
@@ -133,12 +135,11 @@ class Consumer:
         ``on_assign``, ``on_revoke``, et al.
 
         :param float timeout: Maximum time in seconds to block waiting for message,
-            event or callback. Default: infinite.
+            event or callback. None or -1 is infinite. Default: None.
         :returns: A Message object or None on timeout
         :raises: RuntimeError if called on a closed consumer
         """
-        args = [timeout] if timeout is not None else []
-        return self._consumer.poll(*args)
+        return self._consumer.poll(timeout=timeout if timeout is not None else -1)
 
     def subscribe(
         self,
@@ -245,7 +246,7 @@ class Consumer:
     def store_offsets(
         self,
         message: Optional[Message] = None,
-        offsets: List[TopicPartition] = None,
+        offsets: Optional[List[TopicPartition]] = None,
     ):
         """
         .. py:function:: store_offsets([message=None], [offsets=None])
@@ -278,8 +279,8 @@ class Consumer:
 
     def commit(
         self,
-        message: Message = None,
-        offsets: List[TopicPartition] = None,
+        message: Optional[Message] = None,
+        offsets: Optional[List[TopicPartition]] = None,
         asynchronous: bool = True,
     ) -> Optional[List[TopicPartition]]:
         """
@@ -317,7 +318,7 @@ class Consumer:
         return self._consumer.commit(**kwargs)
 
     def committed(
-        self, partitions: List[TopicPartition], timeout: float = None
+        self, partitions: List[TopicPartition], timeout: Optional[float] = None
     ) -> List[TopicPartition]:
         """
         .. py:function:: committed(partitions, [timeout=None])
@@ -326,27 +327,28 @@ class Consumer:
 
           :param list(TopicPartition) partitions: List of topic+partitions to query for stored offsets.
           :param float timeout: Request timeout (seconds).
+            None or -1 is infinite. Default: None
           :returns: List of topic+partitions with offset and possibly error set.
           :rtype: list(TopicPartition)
           :raises: KafkaException
           :raises: RuntimeError if called on a closed consumer
         """
-        kwargs = {"partitions": partitions}
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        return self._consumer.committed(**kwargs)
+        return self._consumer.committed(
+            partitions, timeout=timeout if timeout is not None else -1
+        )
 
     def get_watermark_offsets(
         self,
         partition: TopicPartition,
-        timeout: float = None,
+        timeout: Optional[float] = None,
         cached: bool = False,
     ) -> Tuple[int, int]:
         """
         Retrieve low and high offsets for the specified partition.
 
         :param TopicPartition partition: Topic+partition to return offsets for.
-        :param float timeout: Request timeout (seconds). Ignored if cached=True.
+        :param float timeout: Request timeout (seconds). None or -1 is infinite.
+            Ignored if cached=True. Default: None
         :param bool cached: Instead of querying the broker, use cached information.
             Cached values: The low offset is updated periodically
             (if statistics.interval.ms is set) while the high offset is updated on each
@@ -357,13 +359,12 @@ class Consumer:
         :raises: KafkaException
         :raises: RuntimeError if called on a closed consumer
         """
-        kwargs = {"partition": partition, "cached": cached}
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        return self._consumer.get_watermark_offsets(**kwargs)
+        return self._consumer.get_watermark_offsets(
+            partition, timeout=timeout if timeout is not None else -1, cached=cached
+        )
 
     def list_topics(
-        self, topic: Optional[str] = None, timeout: float = -1
+        self, topic: Optional[str] = None, timeout: Optional[float] = None
     ) -> ClusterMetadata:
         """
         .. py:function:: list_topics([topic=None], [timeout=-1])
@@ -376,12 +377,14 @@ class Consumer:
             else return results for all topics in cluster.
             Warning: If auto.create.topics.enable is set to true on the broker and
             an unknown topic is specified, it will be created.
-         :param float timeout: The maximum response time before timing out,
-         or -1 for infinite timeout.
+         :param float timeout: The maximum response time before timing out
+            None or -1 is infinite. Default: None
          :rtype: ClusterMetadata
          :raises: KafkaException
         """
-        return self._consumer.list_topics(topic, timeout)
+        return self._consumer.list_topics(
+            topic=topic, timeout=timeout if timeout is not None else -1
+        )
 
     def memberid(self) -> str:
         """
@@ -397,7 +400,7 @@ class Consumer:
         return self._consumer.memberid()
 
     def offsets_for_times(
-        self, partitions: List[TopicPartition], timeout: float = None
+        self, partitions: List[TopicPartition], timeout: Optional[float] = None
     ) -> List[TopicPartition]:
         """
 
@@ -410,19 +413,17 @@ class Consumer:
 
          :param list(TopicPartition) partitions: topic+partitions with timestamps
             in the TopicPartition.offset field.
-         :param float timeout: Request timeout (seconds).
+         :param float timeout: The maximum response time before timing out.
+            None or -1 is infinite. Default: None
          :returns: List of topic+partition with offset field set and possibly error set
          :rtype: list(TopicPartition)
          :raises: KafkaException
          :raises: RuntimeError if called on a closed consumer
         """
 
-        kwargs = {
-            "partitions": partitions,
-        }
-        if timeout is not None:
-            kwargs["timeout"] = timeout
-        return self._consumer.offsets_for_times(**kwargs)
+        return self._consumer.offsets_for_times(
+            partitions, timeout=timeout if timeout is not None else -1
+        )
 
     def pause(self, partitions: List[TopicPartition]):
         """

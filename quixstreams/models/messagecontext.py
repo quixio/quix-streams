@@ -1,6 +1,6 @@
 from typing import Any, Optional, Union, Mapping
 
-from .messages import MessageHeadersTuples
+from .types import MessageHeadersTuples
 from .timestamps import MessageTimestamp
 
 
