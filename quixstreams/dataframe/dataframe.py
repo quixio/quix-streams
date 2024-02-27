@@ -18,6 +18,7 @@ from quixstreams.models import Topic, Row, MessageContext
 from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
+from .exceptions import InvalidOperation
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
@@ -97,6 +98,13 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def state_manager(self) -> StateStoreManager:
         return self._state_manager
+
+    def __bool__(self):
+        raise InvalidOperation(
+            f"Cannot assess truth level of a {self.__class__.__name__} "
+            f"using 'bool()' or any operations that rely on it; "
+            f"use '&' or '|' for logical and/or comparisons"
+        )
 
     def apply(
         self,

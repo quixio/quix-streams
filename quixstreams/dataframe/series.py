@@ -9,6 +9,7 @@ from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
+from .exceptions import InvalidOperation
 
 __all__ = ("StreamingSeries",)
 
@@ -369,6 +370,13 @@ class StreamingSeries(BaseStreaming):
         :return: new StreamingSeries
         """
         return self.apply(func=lambda v: abs(v))
+
+    def __bool__(self):
+        raise InvalidOperation(
+            f"Cannot assess truth level of a {self.__class__.__name__} "
+            f"using 'bool()' or any operations that rely on it; "
+            f"use '&' or '|' for logical and/or comparisons"
+        )
 
     def __getitem__(self, item: Union[str, int]) -> Self:
         return self._operation(item, operator.getitem)
