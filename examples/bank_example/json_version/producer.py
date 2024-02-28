@@ -10,10 +10,7 @@ from quixstreams import Application
 load_dotenv("./env_vars.env")
 
 
-app = Application(
-    broker_address=environ["BROKER_ADDRESS"],
-    consumer_group="ignore",
-)
+app = Application(broker_address=environ["BROKER_ADDRESS"])
 topic = app.topic(name="json__purchase_events", value_serializer="json")
 
 retailers = [
