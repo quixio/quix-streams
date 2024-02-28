@@ -207,7 +207,7 @@ def _as_windowed(
         if not key:
             ctx = message_context()
             logger.warning(
-                f"Skipping window processing for a message because the key is None."
+                f"Skipping window processing for a message because the key is None. "
                 f"Message offset: {ctx.offset}, partition: {ctx.partition}."
             )
             return _noop()
