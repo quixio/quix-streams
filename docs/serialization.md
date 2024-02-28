@@ -51,7 +51,7 @@ You can find all available serializers in `quixstreams.models.serializers` modul
 We also plan on including other popular ones like Avro and Protobuf in the near future.
 
 ## Data format
-Currently, Quix Streams 2.0a expects all values to be serialized and deserialized as dictionaries.
+Currently, Quix Streams expects all values to be serialized and deserialized as dictionaries.
 If you need to consume messages formatted as simple types, you need to pass `column_name="<some_column>"` to Deserializer class.
 The Deserializer object will wrap the received value to the dictionary with `column_name` as a key.
 
