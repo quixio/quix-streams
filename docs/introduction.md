@@ -28,7 +28,7 @@ See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams){targe
 
     Get started using Quix Streams. Get your CPU data into Quix in under 10 minutes.
 
-    [Quickstart :octicons-arrow-right-24:](./get-started/quickstart.md)
+    [Quickstart :octicons-arrow-right-24:](https://quix.io/docs/get-started/quickstart.html)
 
 - __Quix Tour__
 
@@ -36,6 +36,6 @@ See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams){targe
 
     Build a complete Python stream processing application in under 20 minutes.
 
-    [Quix Tour :octicons-arrow-right-24:](./get-started/quixtour/overview.md)
+    [Quix Tour :octicons-arrow-right-24:](https://quix.io/docs/get-started/quixtour/overview.html)
 
 </div>
