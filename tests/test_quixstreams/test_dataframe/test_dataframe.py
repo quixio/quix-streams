@@ -811,11 +811,11 @@ class TestStreamingDataFrameTumblingWindow:
             tp=TopicPartitionStub(topic=topic.name, partition=0)
         )
         messages = [
-            # Create window [0,10) - Before null key message
+            # Create window [0,10)
             (1, message_context_factory(key="test", timestamp_ms=1)),
-            # Introduce message with None key, expected to be ignored
+            # Message with None key, expected to be ignored
             (10, message_context_factory(key=None, timestamp_ms=100)),
-            # Update window [0,10) - After null key message
+            # Update window [0,10)
             (2, message_context_factory(key="test", timestamp_ms=2)),
         ]
 
@@ -1038,11 +1038,11 @@ class TestStreamingDataFrameHoppingWindow:
             tp=TopicPartitionStub(topic=topic.name, partition=0)
         )
         messages = [
-            # Create window [0,10) - Before null key message
+            # Create window [0,10)
             (1, message_context_factory(key="test", timestamp_ms=1)),
-            # Introduce message with None key, expected to be ignored
+            # Message with None key, expected to be ignored
             (10, message_context_factory(key=None, timestamp_ms=100)),
-            # Update window [0,10) - After null key message
+            # Update window [0,10)
             (2, message_context_factory(key="test", timestamp_ms=2)),
         ]
 
