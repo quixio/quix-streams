@@ -1,4 +1,5 @@
 import base64
+import gzip
 from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable, Dict
 
 from .base import SerializationContext
@@ -52,6 +53,8 @@ class QCodecId:
 
     Q_CODECID_ALLOWED = (JSON, JSON_TYPED, PROTOBUF, STRING, BYTES, NULL)
     SUPPORTED_CODECS = (JSON, JSON_TYPED)
+
+    GZIP_PREFIX = "[GZIP]"
 
 
 class LegacyHeaders:
@@ -223,9 +226,17 @@ class QuixDeserializer(JSONDeserializer):
 
         # Fail if the codec is not JSON
         if codec_id not in QCodecId.SUPPORTED_CODECS:
-            raise SerializationError(
-                f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
-            )
+            if not codec_id.startswith(QCodecId.GZIP_PREFIX):
+                raise SerializationError(
+                    f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
+                )
+
+            value = gzip.decompress(value)
+            codec_id = codec_id[len(QCodecId.GZIP_PREFIX) :]
+            if codec_id not in QCodecId.SUPPORTED_CODECS:
+                raise SerializationError(
+                    f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
+                )
 
         # Fail if the model_key is unknown
         if model_key not in QModelKey.ALLOWED_KEYS:
