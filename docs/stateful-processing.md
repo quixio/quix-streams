@@ -1,6 +1,6 @@
 # Stateful Applications
 
-Quix Streams v2 provides a RocksDB-based state store that allows to store 
+Quix Streams provides a RocksDB-based state store that allows to store 
 data in the persistent state and use it during stream processing.
 
 This allows you to do things like compare a record to a previous version of it, or

@@ -63,7 +63,7 @@ Example of `EventData`:
 }
 ```
 
-Quix Streams v2 supports producing and consuming of both EventData and ParameterData with some limitations
+Quix Streams supports producing and consuming of both EventData and ParameterData with some limitations
 
 
 ## Limitations
