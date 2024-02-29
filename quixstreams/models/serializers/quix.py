@@ -224,19 +224,16 @@ class QuixDeserializer(JSONDeserializer):
                 f'Ignore Quix message with "{QModelKey.HEADER_NAME}": "{model_key}"'
             )
 
+        # Check if compressed
+        if codec_id.startswith(QCodecId.GZIP_PREFIX):
+            codec_id = codec_id[len(QCodecId.GZIP_PREFIX) :]
+            value = gzip.decompress(value)
+
         # Fail if the codec is not JSON
         if codec_id not in QCodecId.SUPPORTED_CODECS:
-            if not codec_id.startswith(QCodecId.GZIP_PREFIX):
-                raise SerializationError(
-                    f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
-                )
-
-            value = gzip.decompress(value)
-            codec_id = codec_id[len(QCodecId.GZIP_PREFIX) :]
-            if codec_id not in QCodecId.SUPPORTED_CODECS:
-                raise SerializationError(
-                    f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
-                )
+            raise SerializationError(
+                f'Unsupported "{QCodecId.HEADER_NAME}" value "{codec_id}"'
+            )
 
         # Fail if the model_key is unknown
         if model_key not in QModelKey.ALLOWED_KEYS:
