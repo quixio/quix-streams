@@ -227,6 +227,9 @@ class Topic:
             # should be processed as a separate message
             rows = []
             for item in value:
+                # if not isinstance(item, dict):
+                #     raise TypeError(f'Row value must be a dict, but got "{type(item)}"')
+
                 rows.append(
                     Row(
                         value=item,
@@ -236,6 +239,9 @@ class Topic:
                     )
                 )
             return rows
+
+        # if not isinstance(value, dict):
+        #     raise TypeError(f'Row value must be a dict, but got "{type(value)}"')
 
         return Row(
             value=value,

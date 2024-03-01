@@ -105,14 +105,6 @@ class TestTopic:
                 b"key",
                 [1, 2, 3],
             ),
-            (
-                BytesDeserializer(),
-                JSONListDeserializer(),
-                b"key",
-                b"[1,2,3]",
-                b"key",
-                [1, 2, 3],
-            ),
         ],
     )
     def test_row_deserialize_success(
@@ -148,6 +140,58 @@ class TestTopic:
         assert row.timestamp.milliseconds == message.timestamp()[1]
         assert row.latency == message.latency()
         assert row.leader_epoch == message.leader_epoch()
+
+    @pytest.mark.parametrize(
+        "key_deserializer, value_deserializer, key, value, expected_key, expected_value",
+        [
+            (
+                BytesDeserializer(),
+                JSONListDeserializer(),
+                b"key",
+                b"[1,2,3]",
+                b"key",
+                [1, 2, 3],
+            ),
+            (
+                BytesDeserializer(),
+                JSONListDeserializer(),
+                b"key",
+                b'[{"a":"b"}]',
+                b"key",
+                [{"a": "b"}],
+            ),
+        ],
+    )
+    def test_row_list_deserialize_success(
+        self,
+        key_deserializer: Deserializer,
+        value_deserializer: Deserializer,
+        key: Optional[bytes],
+        value: Optional[bytes],
+        expected_key: Any,
+        expected_value: Any,
+        topic_manager_topic_factory,
+    ):
+        topic = topic_manager_topic_factory(
+            key_deserializer=key_deserializer,
+            value_deserializer=value_deserializer,
+        )
+        message = ConfluentKafkaMessageStub(key=key, value=value)
+        rows = topic.row_deserialize(message=message)
+
+        assert rows
+        assert isinstance(rows, list)
+        assert [r.value for r in rows] == expected_value
+        for row in rows:
+            assert row.topic == message.topic()
+            assert row.partition == message.partition()
+            assert row.offset == message.offset()
+            assert row.key == expected_key
+            assert row.headers == message.headers()
+            assert row.timestamp.type == message.timestamp()[0]
+            assert row.timestamp.milliseconds == message.timestamp()[1]
+            assert row.latency == message.latency()
+            assert row.leader_epoch == message.leader_epoch()
 
     def test_row_deserialize_ignorevalueerror_raised(self, topic_manager_topic_factory):
         topic = topic_manager_topic_factory(
