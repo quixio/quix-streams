@@ -49,20 +49,3 @@ output_topic = app.topic('output', value_serializer=JSONSerializer())
 You can find all available serializers in `quixstreams.models.serializers` module.
 
 We also plan on including other popular ones like Avro and Protobuf in the near future.
-
-## Data format
-Currently, Quix Streams expects all values to be serialized and deserialized as dictionaries.
-If you need to consume messages formatted as simple types, you need to pass `column_name="<some_column>"` to Deserializer class.
-The Deserializer object will wrap the received value to the dictionary with `column_name` as a key.
-
-Example:
-
-```python
-from quixstreams import Application
-from quixstreams.models import IntegerDeserializer
-
-app = Application(broker_address='localhost:9092', consumer_group='consumer')
-input_topic = app.topic('input',
-                        value_deserializer=IntegerDeserializer(column_name='number'))
-# Will deserialize message with value "123" to "{'number': 123}" ...
-```

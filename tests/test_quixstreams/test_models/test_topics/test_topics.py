@@ -81,6 +81,30 @@ class TestTopic:
                 1.1,
                 {"root": {"key": "value"}},
             ),
+            (
+                BytesDeserializer(),
+                DoubleDeserializer(),
+                b"key",
+                float_to_bytes(1.23),
+                b"key",
+                1.23,
+            ),
+            (
+                BytesDeserializer(),
+                JSONDeserializer(),
+                b"key",
+                b'[{"a":"b"}]',
+                b"key",
+                [{"a": "b"}],
+            ),
+            (
+                BytesDeserializer(),
+                JSONDeserializer(),
+                b"key",
+                b"[1,2,3]",
+                b"key",
+                [1, 2, 3],
+            ),
         ],
     )
     def test_row_deserialize_success(
@@ -99,6 +123,7 @@ class TestTopic:
         )
         message = ConfluentKafkaMessageStub(key=key, value=value)
         row = topic.row_deserialize(message=message)
+
         assert row
         assert row.topic == message.topic()
         assert row.partition == message.partition()
@@ -112,28 +137,56 @@ class TestTopic:
         assert row.leader_epoch == message.leader_epoch()
 
     @pytest.mark.parametrize(
-        "value_deserializer, value",
+        "key_deserializer, value_deserializer, key, value, expected_key, expected_value",
         [
-            # Value is primitive
-            (DoubleDeserializer(), float_to_bytes(1.23)),
-            # Value is a list
-            (JSONDeserializer(), b'[{"a":"b"}]'),
-            # Serializer is allowed to return a list, but each item is a primitive
-            (JSONListDeserializer(), b"[1,2,3]"),
+            (
+                BytesDeserializer(),
+                JSONListDeserializer(),
+                b"key",
+                b"[1,2,3]",
+                b"key",
+                [1, 2, 3],
+            ),
+            (
+                BytesDeserializer(),
+                JSONListDeserializer(),
+                b"key",
+                b'[{"a":"b"}]',
+                b"key",
+                [{"a": "b"}],
+            ),
         ],
     )
-    def test_row_deserialize_value_is_not_mapping_error(
+    def test_row_list_deserialize_success(
         self,
+        key_deserializer: Deserializer,
         value_deserializer: Deserializer,
+        key: Optional[bytes],
         value: Optional[bytes],
+        expected_key: Any,
+        expected_value: Any,
         topic_manager_topic_factory,
     ):
         topic = topic_manager_topic_factory(
+            key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
         )
-        message = ConfluentKafkaMessageStub(key=b"key", value=value)
-        with pytest.raises(TypeError, match="Row value must be a dict"):
-            topic.row_deserialize(message=message)
+        message = ConfluentKafkaMessageStub(key=key, value=value)
+        rows = topic.row_deserialize(message=message)
+
+        assert rows
+        assert isinstance(rows, list)
+        assert [r.value for r in rows] == expected_value
+        for row in rows:
+            assert row.topic == message.topic()
+            assert row.partition == message.partition()
+            assert row.offset == message.offset()
+            assert row.key == expected_key
+            assert row.headers == message.headers()
+            assert row.timestamp.type == message.timestamp()[0]
+            assert row.timestamp.milliseconds == message.timestamp()[1]
+            assert row.latency == message.latency()
+            assert row.leader_epoch == message.leader_epoch()
 
     def test_row_deserialize_ignorevalueerror_raised(self, topic_manager_topic_factory):
         topic = topic_manager_topic_factory(
