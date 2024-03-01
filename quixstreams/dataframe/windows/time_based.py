@@ -206,8 +206,8 @@ def _as_windowed(
         if key is None:
             ctx = message_context()
             logger.warning(
-                f"Skipping window processing for a message because the key is None. "
-                f"Message offset: {ctx.offset}, partition: {ctx.partition}."
+                f"Skipping window processing for a message because the key is None, "
+                f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
             )
             return _noop()
         with transaction.with_prefix(prefix=key):
