@@ -1,4 +1,5 @@
 import base64
+import gzip
 from typing import List, Mapping, Iterable, Optional, Union, Tuple, Any, Callable, Dict
 
 from .base import SerializationContext
@@ -52,6 +53,8 @@ class QCodecId:
 
     Q_CODECID_ALLOWED = (JSON, JSON_TYPED, PROTOBUF, STRING, BYTES, NULL)
     SUPPORTED_CODECS = (JSON, JSON_TYPED)
+
+    GZIP_PREFIX = "[GZIP]"
 
 
 class LegacyHeaders:
@@ -220,6 +223,11 @@ class QuixDeserializer(JSONDeserializer):
             raise IgnoreMessage(
                 f'Ignore Quix message with "{QModelKey.HEADER_NAME}": "{model_key}"'
             )
+
+        # Check if compressed
+        if codec_id.startswith(QCodecId.GZIP_PREFIX):
+            codec_id = codec_id[len(QCodecId.GZIP_PREFIX) :]
+            value = gzip.decompress(value)
 
         # Fail if the codec is not JSON
         if codec_id not in QCodecId.SUPPORTED_CODECS:

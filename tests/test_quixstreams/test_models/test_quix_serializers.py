@@ -1,4 +1,5 @@
 import base64
+import gzip
 import json
 
 import pytest
@@ -42,6 +43,14 @@ class TestQuixDeserializersValidation:
             # Codec header value is incorrect
             (
                 [(QCodecId.HEADER_NAME, b"BLABLA"), (QModelKey.HEADER_NAME, b"BLABLA")],
+                f'Unsupported "{QCodecId.HEADER_NAME}" value "BLABLA"',
+            ),
+            # GZIP prefix is provided but codec header value is incorrect
+            (
+                [
+                    (QCodecId.HEADER_NAME, f"{QCodecId.GZIP_PREFIX}BLABLA".encode()),
+                    (QModelKey.HEADER_NAME, b"BLABLA"),
+                ],
                 f'Unsupported "{QCodecId.HEADER_NAME}" value "BLABLA"',
             ),
             # ModelKey header value is incorrect
@@ -163,6 +172,58 @@ class TestQuixDeserializer:
         rows = list(
             deserializer(
                 value=message.value(),
+                ctx=SerializationContext(
+                    topic=message.topic(),
+                    headers=message.headers(),
+                ),
+            )
+        )
+        assert len(rows) == len(expected)
+        for item, row in zip(expected, rows):
+            for key in item:
+                assert item[key] == row[key]
+
+    def test_deserialize_timeseries_gzip_success(self, quix_timeseries_factory):
+        message = quix_timeseries_factory(
+            binary={"param1": [b"1", None], "param2": [None, b"1"]},
+            strings={"param3": [1, None], "param4": [None, 1.1]},
+            numeric={"param5": ["1", None], "param6": [None, "a"], "param7": ["", ""]},
+            tags={"tag1": ["value1", "value2"], "tag2": ["value3", "value4"]},
+            timestamps=[1234567890, 1234567891],
+            as_legacy=False,
+            codec_id=QCodecId.GZIP_PREFIX + QCodecId.JSON_TYPED,
+        )
+        value_zipped = gzip.compress(message.value())
+
+        expected = [
+            {
+                "param1": b"1",
+                "param2": None,
+                "param3": 1,
+                "param4": None,
+                "param5": "1",
+                "param6": None,
+                "param7": "",
+                "Tags": {"tag1": "value1", "tag2": "value3"},
+                "Timestamp": 1234567890,
+            },
+            {
+                "param1": None,
+                "param2": b"1",
+                "param3": None,
+                "param4": 1.1,
+                "param5": None,
+                "param6": "a",
+                "param7": "",
+                "Tags": {"tag1": "value2", "tag2": "value4"},
+                "Timestamp": 1234567891,
+            },
+        ]
+
+        deserializer = QuixDeserializer()
+        rows = list(
+            deserializer(
+                value=value_zipped,
                 ctx=SerializationContext(
                     topic=message.topic(),
                     headers=message.headers(),
