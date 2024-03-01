@@ -704,7 +704,12 @@ class Application:
         """
         self._setup_signal_handlers()
 
-        logger.info("Initializing processing of StreamingDataFrame")
+        logger.info(
+            f"Starting the Application with the config: "
+            f'broker_address="{self._broker_address}" '
+            f'consumer_group="{self._consumer_group}" '
+            f'auto_offset_reset="{self._auto_offset_reset}"'
+        )
         if self.is_quix_app:
             self._quix_runtime_init()
 
