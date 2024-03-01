@@ -190,7 +190,8 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 Here are some general concepts about how windowed aggregations are implemented in Quix Streams:
 
 - Only time-based windows are supported. 
-- Every window is grouped by the current Kafka message key. 
+- Every window is grouped by the current Kafka message key.
+- Messages with `None` key will be ignored.
 - The minimal window unit is a **millisecond**. More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
 
 
