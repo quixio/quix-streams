@@ -124,11 +124,6 @@ class TestTopic:
         message = ConfluentKafkaMessageStub(key=key, value=value)
         row = topic.row_deserialize(message=message)
 
-        if isinstance(row, list):
-            assert [r.value for r in row] == expected_value
-            row = row[0]
-            expected_value = expected_value[0]
-
         assert row
         assert row.topic == message.topic()
         assert row.partition == message.partition()
