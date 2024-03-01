@@ -91,7 +91,7 @@ class Application:
     def __init__(
         self,
         broker_address: str,
-        consumer_group: Optional[str] = "quixstreams-default",
+        consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
@@ -232,7 +232,7 @@ class Application:
     @classmethod
     def Quix(
         cls,
-        consumer_group: Optional[str] = "quixstreams-default",
+        consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
