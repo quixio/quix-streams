@@ -81,6 +81,38 @@ class TestTopic:
                 1.1,
                 {"root": {"key": "value"}},
             ),
+            (
+                BytesDeserializer(),
+                DoubleDeserializer(),
+                b"key",
+                float_to_bytes(1.23),
+                b"key",
+                1.23,
+            ),
+            (
+                BytesDeserializer(),
+                JSONDeserializer(),
+                b"key",
+                b'[{"a":"b"}]',
+                b"key",
+                [{"a": "b"}],
+            ),
+            (
+                BytesDeserializer(),
+                JSONDeserializer(),
+                b"key",
+                b"[1,2,3]",
+                b"key",
+                [1, 2, 3],
+            ),
+            (
+                BytesDeserializer(),
+                JSONListDeserializer(),
+                b"key",
+                b"[1,2,3]",
+                b"key",
+                [1, 2, 3],
+            ),
         ],
     )
     def test_row_deserialize_success(
@@ -99,6 +131,12 @@ class TestTopic:
         )
         message = ConfluentKafkaMessageStub(key=key, value=value)
         row = topic.row_deserialize(message=message)
+
+        if isinstance(row, list):
+            assert [r.value for r in row] == expected_value
+            row = row[0]
+            expected_value = expected_value[0]
+
         assert row
         assert row.topic == message.topic()
         assert row.partition == message.partition()
@@ -110,30 +148,6 @@ class TestTopic:
         assert row.timestamp.milliseconds == message.timestamp()[1]
         assert row.latency == message.latency()
         assert row.leader_epoch == message.leader_epoch()
-
-    @pytest.mark.parametrize(
-        "value_deserializer, value",
-        [
-            # Value is primitive
-            (DoubleDeserializer(), float_to_bytes(1.23)),
-            # Value is a list
-            (JSONDeserializer(), b'[{"a":"b"}]'),
-            # Serializer is allowed to return a list, but each item is a primitive
-            (JSONListDeserializer(), b"[1,2,3]"),
-        ],
-    )
-    def test_row_deserialize_value_is_not_mapping_error(
-        self,
-        value_deserializer: Deserializer,
-        value: Optional[bytes],
-        topic_manager_topic_factory,
-    ):
-        topic = topic_manager_topic_factory(
-            value_deserializer=value_deserializer,
-        )
-        message = ConfluentKafkaMessageStub(key=b"key", value=value)
-        with pytest.raises(TypeError, match="Row value must be a dict"):
-            topic.row_deserialize(message=message)
 
     def test_row_deserialize_ignorevalueerror_raised(self, topic_manager_topic_factory):
         topic = topic_manager_topic_factory(

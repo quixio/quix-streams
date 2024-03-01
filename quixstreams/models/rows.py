@@ -20,7 +20,7 @@ class Row:
 
     def __init__(
         self,
-        value: Optional[dict],
+        value: Optional[Any],
         context: MessageContext,
     ):
         self.value = value
