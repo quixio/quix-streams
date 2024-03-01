@@ -203,7 +203,7 @@ def _as_windowed(
             state_manager.get_store_transaction(store_name=store_name),
         )
         key = message_key()
-        if not key:
+        if key is None:
             ctx = message_context()
             logger.warning(
                 f"Skipping window processing for a message because the key is None. "
