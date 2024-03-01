@@ -91,7 +91,7 @@ class Application:
     def __init__(
         self,
         broker_address: str,
-        consumer_group: str,
+        consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
@@ -116,6 +116,7 @@ class Application:
             Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`
+            Default - "quixstreams-default".
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
@@ -231,7 +232,7 @@ class Application:
     @classmethod
     def Quix(
         cls,
-        consumer_group: str,
+        consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
@@ -271,7 +272,7 @@ class Application:
         ```python
         from quixstreams import Application
 
-        # Set up an `app = Application.Quix` and  `sdf = StreamingDataFrame`;
+        # Set up an `app = Application.Quix` and `sdf = StreamingDataFrame`;
         # add some operations to `sdf` and then run everything. Also shows off how to
         # use the quix-specific serializers and deserializers.
 
@@ -286,6 +287,7 @@ class Application:
 
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
+            Default - "quixstreams-default".
               >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
@@ -702,7 +704,12 @@ class Application:
         """
         self._setup_signal_handlers()
 
-        logger.info("Initializing processing of StreamingDataFrame")
+        logger.info(
+            f"Starting the Application with the config: "
+            f'broker_address="{self._broker_address}" '
+            f'consumer_group="{self._consumer_group}" '
+            f'auto_offset_reset="{self._auto_offset_reset}"'
+        )
         if self.is_quix_app:
             self._quix_runtime_init()
 
