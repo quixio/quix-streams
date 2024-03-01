@@ -825,9 +825,13 @@ class TestStreamingDataFrameTumblingWindow:
         ]
 
     def test_tumbling_window_none_key_messages(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(name="test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.tumbling_window(duration_ms=10).sum().current()
@@ -1064,9 +1068,13 @@ class TestStreamingDataFrameHoppingWindow:
         ]
 
     def test_hopping_window_none_key_messages(
-        self, dataframe_factory, state_manager, message_context_factory
+        self,
+        dataframe_factory,
+        state_manager,
+        message_context_factory,
+        topic_manager_topic_factory,
     ):
-        topic = Topic("test")
+        topic = topic_manager_topic_factory(name="test")
 
         sdf = dataframe_factory(topic, state_manager=state_manager)
         sdf = sdf.hopping_window(duration_ms=10, step_ms=5).sum().current()
