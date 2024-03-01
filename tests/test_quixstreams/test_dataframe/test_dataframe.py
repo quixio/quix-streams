@@ -7,7 +7,7 @@ from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
 from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.dataframe.windows import WindowResult
-from quixstreams.models import MessageTimestamp
+from quixstreams.models import MessageTimestamp, Topic
 from tests.utils import TopicPartitionStub
 
 
@@ -856,6 +856,40 @@ class TestStreamingDataFrameTumblingWindow:
         assert results == [
             WindowResult(value=2, start=0, end=10),
             WindowResult(value=2, start=20, end=30),
+        ]
+
+    def test_tumbling_window_none_key_messages(
+        self, dataframe_factory, state_manager, message_context_factory
+    ):
+        topic = Topic("test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        sdf = sdf.tumbling_window(duration_ms=10).sum().current()
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+        messages = [
+            # Create window [0,10)
+            (1, message_context_factory(key="test", timestamp_ms=1)),
+            # Message with None key, expected to be ignored
+            (10, message_context_factory(key=None, timestamp_ms=100)),
+            # Update window [0,10)
+            (2, message_context_factory(key="test", timestamp_ms=2)),
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                results += sdf.test(value=value, ctx=ctx)
+
+        assert len(results) == 2
+        # Ensure that the windows are returned with correct values and order
+        assert results == [
+            WindowResult(value=1, start=0, end=10),
+            WindowResult(value=3, start=0, end=10),
         ]
 
 
