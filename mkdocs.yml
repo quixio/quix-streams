@@ -18,7 +18,7 @@ exclude_docs: |
   build/*
 
 nav:
-  - 'Introduction': '../quix-streams-intro.html'
+  - 'Introduction': 'introduction.md'
   - Example Applications: example.md
   - Defining your Streaming Pipeline: streamingdataframe.md
   - Windowed Aggregations: windowing.md
