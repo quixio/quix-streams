@@ -16,7 +16,7 @@ Quix Streams has the following benefits:
 * Seamless integration with the Quix platform.
 * Use Quix Streams to build event-driven, machine learning/AI or physics-based applications that depend on real-time data from Kafka.
 
-See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams){target=_blank} for detailed project information, and all source code.
+See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams) for detailed project information, and all source code.
 
 ## Next steps
 
@@ -28,7 +28,7 @@ See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams){targe
 
     Get started using Quix Streams. Get your CPU data into Quix in under 10 minutes.
 
-    [Quickstart :octicons-arrow-right-24:](https://quix.io/docs/get-started/quickstart.html)
+    [Quickstart](https://quix.io/docs/get-started/quickstart.html)
 
 - __Quix Tour__
 
@@ -36,6 +36,6 @@ See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams){targe
 
     Build a complete Python stream processing application in under 20 minutes.
 
-    [Quix Tour :octicons-arrow-right-24:](https://quix.io/docs/get-started/quixtour/overview.html)
+    [Quix Tour](https://quix.io/docs/get-started/quixtour/overview.html)
 
 </div>
