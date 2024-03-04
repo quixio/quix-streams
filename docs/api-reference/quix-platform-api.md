@@ -10,7 +10,7 @@
 class QuixPortalApiService()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/api.py#L15)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/api.py#L15)
 
 A light wrapper around the Quix Portal Api. If used in the Quix Platform, it will
 use that workspaces auth token and portal endpoint, else you must provide it.
@@ -34,7 +34,7 @@ def get_workspace_certificate(
         workspace_id: Optional[str] = None) -> Optional[bytes]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/api.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/api.py#L92)
 
 Get a workspace TLS certificate if available.
 
@@ -65,7 +65,7 @@ certificate as bytes if present, or None
 class TopicCreationConfigs()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L51)
 
 <a id="quixstreams.platforms.quix.config.TopicCreationConfigs.name"></a>
 
@@ -85,7 +85,7 @@ Required when not created by a Quix App.
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L60)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L60)
 
 Remove the workspace ID from a given string if it starts with it,
 
@@ -114,7 +114,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(workspace_id: str, s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L72)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L72)
 
 Add the workspace ID as a prefix to a given string if it does not have it,
 
@@ -141,7 +141,7 @@ the string with workspace_id prepended
 class QuixKafkaConfigsBuilder()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L84)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L84)
 
 Retrieves all the necessary information from the Quix API and builds all the
 objects required to connect a confluent-kafka client to the Quix Platform.
@@ -167,7 +167,7 @@ def __init__(quix_portal_api_service: Optional[QuixPortalApiService] = None,
              workspace_cert_path: Optional[str] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L100)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L100)
 
 
 <br>
@@ -187,7 +187,7 @@ def __init__(quix_portal_api_service: Optional[QuixPortalApiService] = None,
 def strip_workspace_id_prefix(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L179)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L179)
 
 Remove the workspace ID from a given string if it starts with it,
 
@@ -215,7 +215,7 @@ the string with workspace_id prefix removed
 def prepend_workspace_id(s: str) -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L189)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L189)
 
 Add the workspace ID as a prefix to a given string if it does not have it,
 
@@ -244,7 +244,7 @@ def search_for_workspace(
         workspace_name_or_id: Optional[str] = None) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L199)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L199)
 
 Search for a workspace given an expected workspace name or id.
 
@@ -270,7 +270,7 @@ the workspace data dict if search success, else None
 def get_workspace_info(known_workspace_topic: Optional[str] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L222)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L222)
 
 Queries for workspace data from the Quix API, regardless of instance cache,
 
@@ -292,7 +292,7 @@ and updates instance attributes from query result.
 def search_workspace_for_topic(workspace_id: str, topic: str) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L249)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L249)
 
 Search through all the topics in the given workspace id to see if there is a
 
@@ -321,7 +321,7 @@ the workspace_id if success, else None
 def search_for_topic_workspace(topic: str) -> Optional[dict]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L265)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L265)
 
 Find what workspace a topic belongs to.
 
@@ -351,7 +351,7 @@ def get_workspace_ssl_cert(
         extract_to_folder: Optional[Path] = None) -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L286)
 
 Gets and extracts zipped certificate from the API to provided folder if the
 
@@ -382,7 +382,7 @@ def create_topics(topics: List[Topic],
                   finalize_timeout_seconds: Optional[int] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L363)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L363)
 
 Create topics in a Quix cluster.
 
@@ -404,7 +404,7 @@ marked as "Ready" (and thus ready to produce to/consume from).
 def confirm_topics_exist(topics: Union[List[Topic], List[str]])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L412)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L412)
 
 Confirm whether the desired set of topics exists in the Quix workspace.
 
@@ -424,7 +424,7 @@ Confirm whether the desired set of topics exists in the Quix workspace.
 def get_confluent_broker_config(known_topic: Optional[str] = None) -> dict
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L452)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L452)
 
 Get the full client config dictionary required to authenticate a confluent-kafka
 
@@ -459,7 +459,7 @@ def get_confluent_client_configs(
 ) -> Tuple[dict, List[str], Optional[str]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/config.py#L497)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/config.py#L497)
 
 Get all the values you need in order to use a confluent_kafka-based client
 
@@ -496,7 +496,7 @@ and consumer group name
 class QuixEnvironment()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L7)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L7)
 
 Class to access various Quix platform environment settings
 
@@ -511,7 +511,7 @@ Class to access various Quix platform environment settings
 def state_management_enabled() -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L19)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L19)
 
 Check whether "State management" is enabled for the current deployment
 
@@ -532,7 +532,7 @@ True if state management is enabled, otherwise False
 def deployment_id() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L27)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L27)
 
 Return current Quix deployment id.
 
@@ -556,7 +556,7 @@ deployment id or None
 def workspace_id() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L39)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L39)
 
 Return Quix workspace id if set
 
@@ -577,7 +577,7 @@ workspace id or None
 def portal_api() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L47)
 
 Return Quix Portal API url if set
 
@@ -598,7 +598,7 @@ portal API URL or None
 def sdk_token() -> Optional[str]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L56)
 
 Return Quix SDK token if set
 
@@ -619,7 +619,7 @@ sdk token or None
 def state_dir() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/6e3708282d2d86cc3c10e09bbb5d7fb95b89fc8b/quixstreams/platforms/quix/env.py#L64)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/platforms/quix/env.py#L64)
 
 Return application state directory on Quix.
 

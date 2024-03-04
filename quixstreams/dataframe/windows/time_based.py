@@ -1,3 +1,4 @@
+import logging
 import functools
 from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple
 
@@ -20,6 +21,8 @@ from .base import (
 
 if TYPE_CHECKING:
     from quixstreams.dataframe.dataframe import StreamingDataFrame, DataFrameFunc
+
+logger = logging.getLogger(__name__)
 
 
 def _default_merge_func(state_value: Any) -> Any:
@@ -180,6 +183,16 @@ class FixedTimeWindow:
         return self._dataframe.apply(func=func, expand=expand)
 
 
+def _noop() -> Any:
+    """
+    No-operation function for skipping messages due to None keys.
+
+    Messages with None keys are ignored because keys are essential for performing
+    accurate and meaningful windowed aggregation.
+    """
+    return []
+
+
 def _as_windowed(
     func: WindowedDataFrameFunc, state_manager: StateStoreManager, store_name: str
 ) -> "DataFrameFunc":
@@ -190,6 +203,13 @@ def _as_windowed(
             state_manager.get_store_transaction(store_name=store_name),
         )
         key = message_key()
+        if key is None:
+            ctx = message_context()
+            logger.warning(
+                f"Skipping window processing for a message because the key is None, "
+                f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
+            )
+            return _noop()
         with transaction.with_prefix(prefix=key):
             return func(value, transaction.state)
 
