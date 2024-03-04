@@ -364,7 +364,13 @@ class StreamingDataFrame(BaseStreaming):
         They allow to perform stateful aggregations like `sum`, `reduce`, etc.
         on top of the data and emit results downstream.
 
-        The time windows always use the current event time.
+        Notes:
+
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - The time windows always use the current event time.
+
+
 
         Example Snippet:
 
@@ -435,7 +441,11 @@ class StreamingDataFrame(BaseStreaming):
         They allow to perform stateful aggregations like `sum`, `reduce`, etc.
         on top of the data and emit results downstream.
 
-        The time windows always use the current event time.
+        Notes:
+
+        - Every window is grouped by the current Kafka message key.
+        - Messages with `None` key will be ignored.
+        - The time windows always use the current event time.
 
         Example Snippet:
 
