@@ -21,7 +21,6 @@ def count_transactions(value: dict, state: State):
     :param value: message value
     :param state: instance of State store
     """
-    state = {}
     total = state.get("total_transactions", 0)
     total += 1
     state.set("total_transactions", total)
