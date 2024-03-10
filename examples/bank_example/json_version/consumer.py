@@ -21,6 +21,7 @@ def count_transactions(value: dict, state: State):
     :param value: message value
     :param state: instance of State store
     """
+    state = {}
     total = state.get("total_transactions", 0)
     total += 1
     state.set("total_transactions", total)
@@ -42,10 +43,9 @@ def uppercase_source(value: dict):
 
 
 # Define your application and settings
-import random
 app = Application(
     broker_address=environ["BROKER_ADDRESS"],
-    consumer_group="json__purchase_notifier"+str(random.randint(0,10000)),
+    consumer_group="json__purchase_notifier",
     auto_offset_reset="earliest",
 )
 
@@ -58,15 +58,11 @@ output_topic = app.topic("json__user_notifications", value_serializer="json")
 # Create a StreamingDataFrame and start building your processing pipeline
 sdf = app.dataframe(input_topic)
 
-sdf = sdf.sql("""
-SELECT account_id, transaction_amount, transaction_source FROM __self 
-WHERE account_class == 'Gold' AND transaction_amount >= 1000
-""")
+# Filter only messages with "account_class" == "Gold" and "transaction_amount" >= 1000
+sdf = sdf[(sdf["account_class"] == "Gold") & (sdf["transaction_amount"].abs() >= 1000)]
 
-## Filter only messages with "account_class" == "Gold" and "transaction_amount" >= 1000
-#sdf = sdf[(sdf["account_class"] == "Gold") & (sdf["transaction_amount"].abs() >= 1000)]
-## Drop all fields except the ones we need
-#sdf = sdf[["account_id", "transaction_amount", "transaction_source"]]
+# Drop all fields except the ones we need
+sdf = sdf[["account_id", "transaction_amount", "transaction_source"]]
 
 # Update the total number of transactions in state and save result to the message
 sdf["total_transactions"] = sdf.apply(count_transactions, stateful=True)
