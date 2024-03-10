@@ -1,3 +1,4 @@
+import datetime
 import operator
 from datetime import timedelta
 
@@ -615,6 +616,8 @@ class TestStreamingDataframeStateful:
         assert result is not None
         assert result["max"] == 10
 
+
+
     def test_filter_stateful(
         self, dataframe_factory, state_manager, topic_manager_topic_factory
     ):
@@ -785,6 +788,52 @@ class TestStreamingDataFrameTumblingWindow:
             WindowResult(value=1, start=0, end=10000),
             WindowResult(value=3, start=0, end=10000),
             WindowResult(value=3, start=20000, end=30000),
+        ]
+
+    def test_sql_groupby_tumble(
+        self, dataframe_factory, state_manager, topic_manager_topic_factory, message_context_factory
+    ):
+        topic = topic_manager_topic_factory(name="test")
+
+        sdf = dataframe_factory(topic, state_manager=state_manager)
+        # TODO: ideally __timestamp isn't special and we should be able to use any column with the correct type
+        # but that's not how tumbling windows are implemented and the timestamp extractor doesn't work well with
+        # the dataframe.test method (AFAICT)
+        sdf = sdf.sql(
+            """
+            SELECT TUMBLE_START(__timestamp, INTERVAL '1' HOUR) AS window_start,
+          COUNT(number) AS n_rows,
+          SUM(number) AS total
+        FROM __self
+        GROUP BY TUMBLE(__timestamp, INTERVAL '1' HOUR);"""
+        )
+
+        state_manager.on_partition_assign(
+            tp=TopicPartitionStub(topic=topic.name, partition=0)
+        )
+
+        def create_event(number, timestamp: datetime.datetime):
+            return ({"number": number, "timestamp": timestamp.isoformat()},
+                    message_context_factory(key="test", timestamp_ms=int(timestamp.timestamp()*1000)))
+
+        messages = [
+            create_event(number=1, timestamp=datetime.datetime(2021, 1, 1, 0, 5, 0)),
+            create_event(number=4, timestamp=datetime.datetime(2021, 1, 1, 0, 10, 58)),
+            create_event(number=0, timestamp=datetime.datetime(2021, 1, 1, 0, 11, 58)),
+            create_event(number=2, timestamp=datetime.datetime(2021, 1, 1, 3, 10, 4))
+        ]
+
+        results = []
+        for value, ctx in messages:
+            with state_manager.start_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
+            ):
+                results += sdf.test(value=value, ctx=ctx)
+        assert results == [
+            {'n_rows': 1, 'window_start': '2021-01-01T00:00:00', 'total': 1},
+            {'n_rows': 2, 'window_start': '2021-01-01T00:00:00', 'total': 5},
+            {'n_rows': 3, 'window_start': '2021-01-01T00:00:00', 'total': 5},
+            {'n_rows': 1, 'window_start': '2021-01-01T03:00:00', 'total': 2}
         ]
 
     def test_tumbling_window_current_out_of_order_late(
