@@ -3,3 +3,4 @@ requests>=2.28
 rocksdict>=0.3, <0.4
 typing_extensions>=4.8,<4.9
 orjson>=3.9,<4
+sqlglot~=22.2.2.dev18

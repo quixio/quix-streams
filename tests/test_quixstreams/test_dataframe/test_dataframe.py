@@ -2,6 +2,7 @@ import operator
 from datetime import timedelta
 
 import pytest
+import sqlglot.errors
 
 from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
@@ -9,6 +10,57 @@ from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.dataframe.windows import WindowResult
 from quixstreams.models import MessageTimestamp, Topic
 from tests.utils import TopicPartitionStub
+
+
+SQLCASES = [
+    ({"col1": 1, "col2": 1}, "SELECT col2 FROM __self", {"col2": 1}),
+    ({"col1": 's', "col2": 1}, "SELECT col2 FROM __self WHERE col2 = 1 AND col1 = 's'", {"col2": 1}),
+    ({"col1": 1, "col2": 1}, "SELECT col2 FROM __self WHERE col1 != 1", Filtered()),
+    ({"col1": "this", "col2": "that"}, """
+    SELECT col2 FROM __self WHERE (col1 = 'this' AND col2 = 'that')
+    """, {"col2": "that"}),
+    ({"col1": 1, "col2": "test"}, "SELECT col2 FROM __self WHERE col1 = 1 and col2 = 'test'", {"col2": "test"})
+]
+UNSUPPORTED_SQLCASES = [
+    ({"col1": 1, "col2": 1}, "SELECT col2 FROM __self WHERE col1 = 1 LIMIT 0", sqlglot.errors.ExecuteError()),
+]
+
+
+class TestStreamingSQLDataFrame:
+    @pytest.mark.parametrize(
+        "value, query, expected", SQLCASES
+    )
+    def test_apply(self, dataframe_factory, value, query, expected):
+        sdf = dataframe_factory()
+
+        sdf = sdf.sql(query)
+        if issubclass(type(expected), Exception):
+            with pytest.raises(type(expected)):
+                sdf.test(value)
+        else:
+            assert sdf.test(value) == expected
+
+    @pytest.mark.parametrize(
+        "value, query, expected", UNSUPPORTED_SQLCASES
+    )
+    def test_not_supported(self, dataframe_factory, value, query, expected):
+        sdf = dataframe_factory()
+
+        # We want any expected exceptions to be raised before evaluation
+        if issubclass(type(expected), Exception):
+            with pytest.raises(type(expected)):
+                sdf.sql(query)
+
+    def test_optimized(self, dataframe_factory):
+        sdf = dataframe_factory()
+
+        query = "SELECT col2 FROM __self WHERE col1 = 1 and col2 = 'test'"
+        value = {"col1": 1, "col2": "test"}
+        expected = {"col2": "test"}
+        sdf = sdf.sql(query, table_schemas={"__self": {"col1": "INT", "col2": "VARCHAR"}})
+        assert sdf.test(value) == expected
+        with pytest.raises(Filtered):
+            sdf.test({"col1": 1, "col2": "test2"})
 
 
 class TestStreamingDataFrame:

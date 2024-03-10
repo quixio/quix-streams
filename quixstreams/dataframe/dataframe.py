@@ -4,7 +4,7 @@ import contextvars
 import functools
 import operator
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, TypeVar, Any, overload
+from typing import Dict, Optional, Callable, Union, List, TypeVar, Any, overload
 
 from typing_extensions import Self
 
@@ -188,6 +188,18 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_update(func)
         return self._clone(stream=stream)
 
+    def sql(self, query: str, tables: Dict[str, StreamingDataFrame] = None, table_schemas: Dict[str, Dict] = None) -> Self:
+        from .sql import StreamingSQLExecutor
+
+        sql = StreamingSQLExecutor(query=query)
+        if not tables:
+            tables = {}
+        if "__self" in tables:
+            raise InvalidOperation("Reserved table name '__self' is not allowed")
+        df = sql.add_to_stream(tables={"__self": self, **tables}, table_schemas=table_schemas)
+        return df
+
+
     def filter(
         self, func: Union[DataFrameFunc, DataFrameStatefulFunc], stateful: bool = False
     ) -> Self:
@@ -226,7 +238,7 @@ class StreamingDataFrame(BaseStreaming):
         if stateful:
             self._register_store()
             func = _as_stateful(func=func, state_manager=self._state_manager)
-
+        
         stream = self.stream.add_filter(func)
         return self._clone(stream=stream)
 
