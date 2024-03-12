@@ -91,8 +91,8 @@ class Application:
 
     def __init__(
         self,
-        consumer_group: str = "quixstreams-default",
         broker_address: Optional[str] = None,
+        consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
@@ -160,10 +160,15 @@ class Application:
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
         """
-
+        broker_address = broker_address or environ.get("QUIXSTREAMS_BROKER_ADDRESS")
         configure_logging(loglevel=loglevel)
         self._quix_config_builder = None
         if self.is_quix_app:
+            if broker_address is not None:
+                raise ValueError(
+                    "Cannot provide a 'broker_address' when "
+                    "'Quix__Sdk__Token' is also defined in environment"
+                )
             quix_config_builder = QuixKafkaConfigsBuilder()
             self._topic_manager_class = lambda **kwargs: QuixTopicManager(
                 **kwargs, quix_config_builder=quix_config_builder
