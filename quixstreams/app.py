@@ -160,9 +160,9 @@ class Application:
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
         """
-        broker_address = broker_address or environ.get("QUIXSTREAMS_BROKER_ADDRESS")
         configure_logging(loglevel=loglevel)
-        self._quix_config_builder = None
+
+        broker_address = broker_address or environ.get("QUIXSTREAMS_BROKER_ADDRESS")
         if self.is_quix_app:
             if broker_address is not None:
                 raise ValueError(
@@ -185,7 +185,6 @@ class Application:
             consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
             consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
             producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
-            self._set_quix_config_builder(quix_config_builder)
         else:
             self._topic_manager_class = TopicManager
             if broker_address is None:
@@ -220,7 +219,6 @@ class Application:
         self._running = False
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
-        self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
         self._do_recovery_check = False
 
@@ -256,9 +254,6 @@ class Application:
                 else None
             ),
         )
-
-    def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
-        self._quix_config_builder = config_builder
 
     @property
     def is_quix_app(self) -> bool:
