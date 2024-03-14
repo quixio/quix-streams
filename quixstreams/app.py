@@ -6,6 +6,8 @@ from os import environ
 from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
+from typing_extensions import Self
+from warnings import warn
 
 from .context import set_message_context, copy_context
 from .core.stream import Filtered
@@ -254,6 +256,138 @@ class Application:
                 else None
             ),
         )
+
+    @classmethod
+    def Quix(
+        cls,
+        consumer_group: str = "quixstreams-default",
+        auto_offset_reset: AutoOffsetReset = "latest",
+        auto_commit_enable: bool = True,
+        partitioner: Partitioner = "murmur2",
+        consumer_extra_config: Optional[dict] = None,
+        producer_extra_config: Optional[dict] = None,
+        state_dir: str = "state",
+        rocksdb_options: Optional[RocksDBOptionsType] = None,
+        on_consumer_error: Optional[ConsumerErrorCallback] = None,
+        on_processing_error: Optional[ProcessingErrorCallback] = None,
+        on_producer_error: Optional[ProducerErrorCallback] = None,
+        on_message_processed: Optional[MessageProcessedCallback] = None,
+        consumer_poll_timeout: float = 1.0,
+        producer_poll_timeout: float = 0.0,
+        loglevel: Optional[LogLevel] = "INFO",
+        auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
+        topic_manager: Optional[QuixTopicManager] = None,
+    ) -> Self:
+        """
+        Initialize an Application to work with Quix platform,
+        assuming environment is properly configured (by default in the platform).
+
+        It takes the credentials from the environment and configures consumer and
+        producer to properly connect to the Quix platform.
+
+        >***NOTE:*** Quix platform requires `consumer_group` and topic names to be
+            prefixed with workspace id.
+            If the application is created via `Application.Quix()`, the real consumer
+            group will be `<workspace_id>-<consumer_group>`,
+            and the real topic names will be `<workspace_id>-<topic_name>`.
+
+
+
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+
+        # Set up an `app = Application.Quix` and `sdf = StreamingDataFrame`;
+        # add some operations to `sdf` and then run everything. Also shows off how to
+        # use the quix-specific serializers and deserializers.
+
+        app = Application.Quix()
+        input_topic = app.topic("topic-in", value_deserializer="quix")
+        output_topic = app.topic("topic-out", value_serializer="quix_timeseries")
+        df = app.dataframe(topic_in)
+        df = df.to_topic(output_topic)
+
+        app.run(dataframe=df)
+        ```
+
+        :param consumer_group: Kafka consumer group.
+            Passed as `group.id` to `confluent_kafka.Consumer`.
+            Default - "quixstreams-default".
+              >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
+        :param auto_offset_reset: Consumer `auto.offset.reset` setting
+        :param auto_commit_enable: If true, periodically commit offset of
+            the last message handed to the application. Default - `True`.
+        :param partitioner: A function to be used to determine the outgoing message
+            partition.
+        :param consumer_extra_config: A dictionary with additional options that
+            will be passed to `confluent_kafka.Consumer` as is.
+        :param producer_extra_config: A dictionary with additional options that
+            will be passed to `confluent_kafka.Producer` as is.
+        :param state_dir: path to the application state directory.
+            Default - ".state".
+        :param rocksdb_options: RocksDB options.
+            If `None`, the default options will be used.
+        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
+        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
+        :param on_message_processed: a callback triggered when message is successfully
+            processed.
+        :param loglevel: a log level for "quixstreams" logger.
+            Should be a string or None.
+            If `None` is passed, no logging will be configured.
+            You may pass `None` and configure "quixstreams" logger
+            externally using `logging` library.
+            Default - "INFO".
+        :param auto_create_topics: Create all `Topic`s made via Application.topic()
+            Default - `True`
+        :param use_changelog_topics: Use changelog topics to back stateful operations
+            Default - `True`
+        :param topic_manager: A QuixTopicManager instance
+
+        ***Error Handlers***
+
+        To handle errors, `Application` accepts callbacks triggered when
+            exceptions occur on different stages of stream processing. If the callback
+            returns `True`, the exception will be ignored. Otherwise, the exception
+            will be propagated and the processing will eventually stop.
+        :param on_consumer_error: triggered when internal `RowConsumer` fails to poll
+            Kafka or cannot deserialize a message.
+        :param on_processing_error: triggered when exception is raised within
+            `StreamingDataFrame.process()`.
+        :param on_producer_error: triggered when RowProducer fails to serialize
+            or to produce a message to Kafka.
+
+        :return: `Application` object
+        """
+        warn(
+            "Application.Quix() is being deprecated; use Application with "
+            "environment variable 'Quix__Sdk__Token' set (like with Application.Quix) "
+            "to use the Quix Platform",
+            DeprecationWarning,
+        )
+        app = cls(
+            broker_address=None,
+            consumer_group=consumer_group,
+            consumer_extra_config=consumer_extra_config,
+            producer_extra_config=producer_extra_config,
+            auto_offset_reset=auto_offset_reset,
+            auto_commit_enable=auto_commit_enable,
+            partitioner=partitioner,
+            on_consumer_error=on_consumer_error,
+            on_processing_error=on_processing_error,
+            on_producer_error=on_producer_error,
+            on_message_processed=on_message_processed,
+            consumer_poll_timeout=consumer_poll_timeout,
+            producer_poll_timeout=producer_poll_timeout,
+            loglevel=loglevel,
+            state_dir=state_dir,
+            rocksdb_options=rocksdb_options,
+            auto_create_topics=auto_create_topics,
+            use_changelog_topics=use_changelog_topics,
+            topic_manager=topic_manager,
+        )
+        return app
 
     @property
     def is_quix_app(self) -> bool:
