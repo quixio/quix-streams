@@ -1,0 +1,35 @@
+{
+	"libraryItemId": "8dd9ecb9-d1aa-498c-84fb-054a042acc13",
+	"name": "CSV data",
+	"language": "Python",
+	"tags": {
+		"Technology": ["QuixStreams"],
+		"Pipeline Stage": ["Source"],
+		"Popular Subjects": ["Quick Start"],
+		"Type": ["Demos"]
+	},
+	"shortDescription": "Stream data from a CSV file",
+	"longDescription": "Stream our simple CSV data file or your own CSV data into a topic",
+	"DefaultFile": "main.py",
+	"EntryPoint": "dockerfile",
+	"RunEntryPoint": "main.py",
+	"Variables": [
+		{
+			"Name" : "output",
+			"Type" : "EnvironmentVariable",
+			"InputType" : "OutputTopic",
+			"Description" : "Name of the output topic to write into",
+			"DefaultValue" : "csv-data",
+			"Required": true
+		}
+	],
+	"DeploySettings":
+	{
+		"DeploymentType": "Job",
+		"CpuMillicores": 200,
+		"MemoryInMb": 200,
+		"Replicas": 1,
+		"PublicAccess": false,
+		"ValidateConnection": false
+	}
+}
