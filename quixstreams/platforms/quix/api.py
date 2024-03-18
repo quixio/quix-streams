@@ -28,15 +28,15 @@ class QuixPortalApiService:
 
     def __init__(
         self,
+        auth_token: str,
         portal_api: Optional[str] = None,
-        auth_token: Optional[str] = None,
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
     ):
+        self._auth_token = auth_token
         self._portal_api = (
             portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
         )
-        self._auth_token = auth_token or QUIX_ENVIRONMENT.sdk_token
         self._default_workspace_id = (
             default_workspace_id or QUIX_ENVIRONMENT.workspace_id
         )
@@ -69,14 +69,6 @@ class QuixPortalApiService:
         self._default_workspace_id = value
 
     def _init_session(self) -> SessionWithUrlBase:
-        if not (self._portal_api and self._auth_token):
-            missing = filter(
-                None,
-                [self._portal_api or "portal_api", self._auth_token or "auth_token"],
-            )
-            raise self.MissingConnectionRequirements(
-                f"Using the API requires a portal and token. Missing: {missing}"
-            )
         s = self.SessionWithUrlBase(self._portal_api)
         s.hooks = {"response": lambda r, *args, **kwargs: r.raise_for_status()}
         s.headers.update(

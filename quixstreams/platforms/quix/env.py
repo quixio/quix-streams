@@ -53,14 +53,6 @@ class QuixEnvironment:
         return os.environ.get(self.PORTAL_API)
 
     @property
-    def sdk_token(self) -> Optional[str]:
-        """
-        Return Quix SDK token if set
-        :return: sdk token or None
-        """
-        return os.environ.get(self.SDK_TOKEN)
-
-    @property
     def state_dir(self) -> str:
         """
         Return application state directory on Quix.
