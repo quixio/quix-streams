@@ -1,13 +1,13 @@
 import contextlib
+import functools
 import logging
+import os
 import signal
-
-from os import environ
+import warnings
 from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
-from warnings import warn
 
 from .context import set_message_context, copy_context
 from .core.stream import Filtered
@@ -64,10 +64,10 @@ class Application:
 
     What it Does:
 
-    - During user setup:
+    - On init:
         - Provides defaults or helper methods for commonly needed objects
-        - For Quix Platform Users: Configures the app for it
-            (see `Application.Quix()`)
+        - If `quix_sdk_token` is passed, configures the app for to work
+            with Quix Platform.
     - When executed via `.run()` (after setup):
         - Initializes Topics and StreamingDataFrames
         - Facilitates processing of Kafka messages with a `StreamingDataFrame`
@@ -94,6 +94,7 @@ class Application:
     def __init__(
         self,
         broker_address: Optional[str] = None,
+        quix_sdk_token: Optional[str] = None,
         consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
@@ -111,8 +112,13 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
     ):
+        # TODO: Document sdk token and that's it's taken from the environment by default
+        # TODO: Log when the quix SDK token is detected in .run()
+        # TODO: Pass quix_sdk_token directly to the config builder
+        # TODO: Add tests
         """
 
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
@@ -161,25 +167,30 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
+
+        ***Quix Platform Parameters***
+
+        :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
+            instead of the default one.
         """
         configure_logging(loglevel=loglevel)
 
-        broker_address = broker_address or environ.get("QUIXSTREAMS_BROKER_ADDRESS")
-        if self.is_quix_app:
-            if broker_address is not None:
-                raise ValueError(
-                    "Cannot provide a 'broker_address' when "
-                    "'Quix__Sdk__Token' is also defined in environment"
-                )
-            quix_config_builder = QuixKafkaConfigsBuilder()
-            self._topic_manager_class = lambda **kwargs: QuixTopicManager(
-                **kwargs, quix_config_builder=quix_config_builder
+        if quix_sdk_token:
+            quix_config_builder = QuixKafkaConfigsBuilder(quix_sdk_token=quix_sdk_token)
+
+        if broker_address and quix_config_builder:
+            raise ValueError("Cannot provide both broker address and Quix SDK Token")
+        elif not (broker_address or quix_config_builder):
+            raise ValueError("Either broker address or Quix SDK Token must be provided")
+        elif quix_config_builder:
+            # SDK Token or QuixKafkaConfigsBuilder are provided, configure app
+            # to use Quix broker and APIs
+            topic_manager_factory = functools.partial(
+                QuixTopicManager, quix_config_builder=quix_config_builder
             )
             quix_configs = quix_config_builder.get_confluent_broker_config()
-
             # Check if the state dir points to the mounted PVC while running on Quix
-            # Otherwise, the state won't be shared and replicas won't be able to
-            # recover the same state.
+            # TODO: Do we still need this?
             check_state_dir(state_dir=state_dir)
 
             broker_address = quix_configs.pop("bootstrap.servers")
@@ -188,9 +199,10 @@ class Application:
             consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
             producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
         else:
-            self._topic_manager_class = TopicManager
-            if broker_address is None:
-                raise ValueError("A 'broker_address' must be provided")
+            # Only broker address is provided, use # TODO:
+            topic_manager_factory = TopicManager
+
+        self._is_quix_app = bool(quix_config_builder)
 
         self._broker_address = broker_address
         self._consumer_group = consumer_group
@@ -225,7 +237,7 @@ class Application:
         self._do_recovery_check = False
 
         if not topic_manager:
-            topic_manager = self._topic_manager_class(
+            topic_manager = topic_manager_factory(
                 topic_admin=TopicAdmin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
@@ -275,6 +287,7 @@ class Application:
         consumer_poll_timeout: float = 1.0,
         producer_poll_timeout: float = 0.0,
         loglevel: Optional[LogLevel] = "INFO",
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_manager: Optional[QuixTopicManager] = None,
@@ -358,16 +371,24 @@ class Application:
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
 
+
+        ***Quix-specific Parameters***
+
+        :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
+            instead of the default one.
+
         :return: `Application` object
         """
-        warn(
-            "Application.Quix() is being deprecated; use Application with "
-            "environment variable 'Quix__Sdk__Token' set (like with Application.Quix) "
-            "to use the Quix Platform",
+        warnings.warn(
+            "Application.Quix() is being deprecated; "
+            "To connect to Quix Platform, "
+            'use Application() with "quix_sdk_token" parameter or set the '
+            '"Quix__Sdk__Token" environment variable (like with Application.Quix).',
             DeprecationWarning,
         )
         app = cls(
             broker_address=None,
+            quix_sdk_token=os.getenv("Quix__Sdk__Token"),
             consumer_group=consumer_group,
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
@@ -386,12 +407,9 @@ class Application:
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
+            quix_config_builder=quix_config_builder,
         )
         return app
-
-    @property
-    def is_quix_app(self) -> bool:
-        return environ.get("Quix__Sdk__Token") is not None
 
     def topic(
         self,
@@ -714,7 +732,7 @@ class Application:
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}"'
         )
-        if self.is_quix_app:
+        if self._is_quix_app:
             self._quix_runtime_init()
 
         self._setup_topics()
