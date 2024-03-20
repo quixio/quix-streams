@@ -1,0 +1,95 @@
+# Producing Data to Kafka
+
+Quix Streams is a streaming processing library.  
+To process the streaming data, the data first needs to be produced to the Kafka topic.
+
+Below we will cover how you can use `Producer` class to send data to Kafka topics.
+
+## Step 1. Create an Application
+To start working with Quix Streams, you first need to create an [`Application`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/application.html#application) object.
+
+Application is the main entry point, and it provides API to create Producers, Topics, and other necessary objects.
+```python
+from quixstreams import Application
+
+
+# Create an Application instance with Kafka config
+app = Application(broker_address='localhost:9092')
+```
+
+## Step 2. Define a Topic and serialization
+When the `Application` is created, we may define the [`Topic`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#topic) object that we will be sending our data to.
+
+We will use [`Topic`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#topic) to serialize and deserialize the data.  
+It will also help the `Application` instance to validate if the topic exists.
+If there is no such topic, by default, the `Application` will try to create it with the default parameters.
+
+See here://LINK to learn more about the Topic objects and available serialization formats. 
+
+```python
+# Define a topic "my_topic" with JSON serialization
+topic = app.topic(name='my_topic', value_serializer='json')
+```
+
+
+## Step 3. Create a Producer and produce messages
+When the `Application` and `Topic` instances are ready, we may create the [`Producer`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#producer) and start sending messages to the topic.
+
+```python
+event = {"id": "1", "text": "Lorem ipsum dolor sit amet"}
+
+# Create a Producer instance
+with app.get_producer() as producer:
+    
+    # Serialize an event using the defined Topic 
+    message = topic.serialize(key=event["id"], value=event)
+    
+    # Produce a message into the Kafka topic
+    producer.produce(
+        topic=topic.name, value=message.value, key=message.key
+    )
+```
+
+
+## Complete example
+```python
+# Create an Application instance with Kafka configs
+from quixstreams import Application
+
+
+app = Application(
+    broker_address='localhost:9092', consumer_group='example'
+)
+
+# Define a topic "my_topic" with JSON serialization
+topic = app.topic(name='my_topic', value_serializer='json')
+
+event = {"id": "1", "text": "Lorem ipsum dolor sit amet"}
+
+# Create a Producer instance
+with app.get_producer() as producer:
+    
+    # Serialize an event using the defined Topic 
+    message = topic.serialize(key=event["id"], value=event)
+    
+    # Produce a message into the Kafka topic
+    producer.produce(
+        topic=topic.name, value=message.value, key=message.key
+    )
+```
+## Configuration
+
+
+The Producer configuration is supplied via the [`Application`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/application.html#application) instance.
+
+The `Producer` is implemented on top of the [`confluent_kafka`](https://github.com/confluentinc/confluent-kafka-python) library, and is configured similarly.
+
+**Main parameters:**
+
+- `broker_address` - the Kafka broker address.
+- `partitioner` - the partitioner to be used. Default - `murmur2`. Available values: `"random"`, `"consistent_random"`, `"murmur2"`, `"murmur2_random"`, `"fnv1a"`, `"fnv1a_random"`.
+- `producer_poll_timeout` - the timeout to be used when polling Kafka for the producer callbacks. Default - `0.0`. `Producer` polls for callbacks automatically on each `.produce()` call.
+- `producer_extra_config` - a dictionary with additional configuration parameters for Producer in the format of `librdkafka`.
+
+The full list of configuration parameters can be found in [the librdkafka documentation](https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md)  
+Passing `bootstrap.servers` and `partitioner` within `producer_extra_config` will have no effect because they are already supplied to the `Application` object.
