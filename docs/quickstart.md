@@ -84,7 +84,7 @@ sdf = sdf.apply(
     expand=True,
 )
 
-# Calculate the word length and set the result back to the message value
+# Calculate the word length and store the result in the column
 sdf["length"] = sdf["text"].apply(lambda word: len(word))
 
 # Print the output result
@@ -140,10 +140,10 @@ Input:  {'chat_id': 'id2', 'text': 'Consectetur adipiscing elit sed'}
 ## Next steps
 
 Now that you have a simple Quix Streams application working, you can dive into more advanced features:
-- Processing & Transforming Data - //LINK
-- Windowing & Aggregations - //LINK
-- Writing back to Kafka - //LINK
-- Using Quix Platform - //LINK
+
+- [Producing Data to Kafka](./producer.md)
+- [Processing & Transforming Data](./processing.md)
+- [Windowing & Aggregations](./windowing.md)
 
 
 ## Getting help
