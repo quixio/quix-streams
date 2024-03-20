@@ -185,15 +185,6 @@ def custom_ts_extractor(
 topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 ```
 
-## Implementation Details
-
-Here are some general concepts about how windowed aggregations are implemented in Quix Streams:
-
-- Only time-based windows are supported. 
-- Every window is grouped by the current Kafka message key.
-- Messages with `None` key will be ignored.
-- The minimal window unit is a **millisecond**. More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
-
 
 ## Types of Time in Streaming
 
@@ -218,46 +209,81 @@ When the application gets an event timestamp for the event, it assigns an interv
 Quix Streams supports two ways of slicing the time: tumbling windows and hopping windows.
 
 ## Tumbling Windows
-   Tumbling windows slice time into non-overlapping intervals of a fixed size. 
+Tumbling windows slice time into non-overlapping intervals of a fixed size. 
 
-   For example, a tumbling window of 1 hour will generate the following intervals:
-    
-   ```
-                    Tumbling Windows
-                    
-   Time    
-   [00:00, 01:00):     .....
-   [01:00, 02:00):          .....
-   [02:00, 03:00):               .....
-   [03:00, 04:00):                    .....
-   ```
-   Note that the start of the interval is inclusive and the end is exclusive.
+For example, a tumbling window of 1 hour will generate the following intervals:
 
-   In tumbling windows, each timestamp can be assigned only to a **single** interval.  
-   For example, a timestamp `00:33:13` will be assigned to an interval 
-    `00:00:00 - 01:00:00` for a tumbling window of 1 hour.
+```
+                Tumbling Windows
+                
+Time    
+[00:00, 01:00):     .....
+[01:00, 02:00):          .....
+[02:00, 03:00):               .....
+[03:00, 04:00):                    .....
+```
+Note that the start of the interval is inclusive and the end is exclusive.
 
-   The following code snippet shows how to define a tumbling window over a `StreamingDataFrame`:
+In tumbling windows, each timestamp can be assigned only to a **single** interval.  
+For example, a timestamp `00:33:13` will be assigned to an interval 
+`00:00:00 - 01:00:00` for a tumbling window of 1 hour.
+
+
+**Example:**
+
+Imagine we receive temperature readings from sensors, and we need to calculate average temperature for each hour, and produce updates for each incoming message.
+The message key is a sensor ID, so we aggregate temperature by each sensor.
+
+Input format:
+
+```json
+{"temperature":  65}
+```
+
+Expected output:
+
+```json
+{"avg_temperature": 52.2, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 53.9, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 49.0, "window_start": 0, "window_end": 3600000}
+```
+
+Here is how to do it using tumbling windows: 
 
 ```python
 from datetime import timedelta
 
+sdf = (
+    # Extract "temperature" value from the message
+    sdf.apply(lambda value: value["temperature"])
 
-sdf = app.dataframe(...)
+    # Define a tumbling window of 1 hour
+    # You can also pass duration_ms as an integer of milliseconds
+    .tumbling_window(duration_ms=timedelta(hours=1))
 
-# Calculate the sum over a tumbling window of 1 hour and emit results for each  
-# incoming record
-sdf = sdf.tumbling_window(duration_ms=timedelta(hours=1)).sum().current()
+    # Specify the "mean" aggregate function
+    .mean()
 
-# Alternative syntax to specify window duration using milliseconds
-sdf = sdf.tumbling_window(duration_ms=60 * 60* 1000).sum().current()
+    # Emit updates for each incoming message
+    .current()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "avg_temperature": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
+)
+
 ```
 
 
 ## Hopping Windows
-   Hopping windows slice time into overlapping intervals of a fixed size and with a fixed step.
+Hopping windows slice time into overlapping intervals of a fixed size and with a fixed step.
 
-   For example, a hopping window of 1 hour with a step of 10 minutes will generate the following intervals:
+For example, a hopping window of 1 hour with a step of 10 minutes will generate the following intervals:
 
 ```
                Hopping Windows
@@ -270,40 +296,65 @@ Time
 
 ```
    
-   Note that the start of the interval is inclusive and the end is exclusive.
+Note that the start of the interval is inclusive and the end is exclusive.
 
-   In hopping windows, each timestamp can be assigned to multiple intervals, because these
-   intervals overlap.
+In hopping windows, each timestamp can be assigned to multiple intervals, because these
+intervals overlap.
 
-   For example, a timestamp `00:33:13` will match two intervals for a hopping window of 1 hour with a 30 minute step:
+For example, a timestamp `00:33:13` will match two intervals for a hopping window of 1 hour with a 30 minute step:
+
    - `00:00:00 - 01:00:00`
    - `00:30:00 - 01:30:00`
 
     
-   The following code snippet shows how to define a hopping window over a `StreamingDataFrame`:
+**Example:**
+
+Imagine we receive temperature readings from sensors, and we need to calculate average temperature for each hour with 10 minutes hop, and produce updates for each incoming message.
+The message key is a sensor ID, so we aggregate temperature by each sensor.
+
+Input format:
+
+```json
+{"temperature":  65}
+```
+
+Expected output:
+
+```json
+{"avg_temperature": 52.2, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 53.9, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 49.0, "window_start": 60000, "window_end": 4200000}
+```
 
 ```python
 from datetime import timedelta
 
-sdf = app.dataframe(...)
 
-# Create a hopping window of 1 hour with a 10 minute step
 sdf = (
-    sdf.hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
-    .sum()
-    .current()
-)
+    # Extract "temperature" value from the message
+    sdf.apply(lambda value: value["temperature"])
 
-# Alternative syntax to specify window duration and step using milliseconds
-sdf = (
-    sdf.hopping_window(duration_ms=60 * 60 * 1000, step_ms=10 * 60 * 1000)
-    .sum()
+    # Define a hopping window of 1h with 10m step
+    # You can also pass duration_ms and step_ms as integers of milliseconds
+    .hopping_window(duration_ms=timedelta(hours=1), step_ms=timedelta(minutes=10))
+
+    # Specify the "mean" aggregate function
+    .mean()
+
+    # Emit updates for each incoming message
     .current()
+
+    # Unwrap the aggregated result to match the expected output format
+    .apply(
+        lambda result: {
+            "avg_temperature": result["value"],
+            "window_start_ms": result["start"],
+            "window_end_ms": result["end"],
+        }
+    )
 )
 
 ```
-
-    
 
 
 ## Lateness and Out-of-Order Processing
@@ -340,68 +391,6 @@ sdf.tumbling_window(timedelta(hours=1), grace_ms=timedelta(seconds=10))
 
 The appropriate value for a grace period varies depending on the use case.
 
-
-## Emitting results
-
-Windows in Quix Streams supports 2 modes of emitting results:
-
-1. `current()` - results are emitted for each processed message in the window.
-
-This mode returns the aggregated result immediately after the message is processed, but the results themselves are not guaranteed to be final for the given interval.
-
-The same window may receive another update in the future, and a new value with the same interval will be emitted.
-
-Example:
-
-```python
-from datetime import timedelta
-
-
-sdf = app.dataframe(...)
-
-# Calculate a sum of values over a window of 10 seconds and emit results immediately
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
-
-# -> Timestamp=100, value=1 -> emit {"start": 0, "end": 10000, "value": 1} 
-# -> Timestamp=101, value=1 -> emit {"start": 0, "end": 10000, "value": 2} 
-# -> Timestamp=102, value=1 -> emit {"start": 0, "end": 10000, "value": 3} 
-```
-
-`current()` mode may be used when you need to react to changes quickly because the application doesn't need to wait until the window is closed. 
-But you will likely get duplicated values for each window interval.
-
-
-2. `final()` - results are emitted only after the window is expired.
-
-This mode makes the application wait until the maximum observed timestamp for the topic partition passes the window end before emitting.
-
-Example:
-
-```python
-from datetime import timedelta
-
-
-sdf = app.dataframe(...)
-
-# Calculate a sum of values over a window of 10 seconds and emit results only when they are final
-sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final()
-
-
-# -> Timestamp=100, value=1   -> emit nothing (the window is not closed yet) 
-# -> Timestamp=101, value=1   -> emit nothing (the window is not closed yet) 
-# -> Timestamp=10001, value=1 -> emit {"start": 0, "end": 10000, "value": 2}, because the time has progressed beyond the window end. 
-```
-
-Emitting final results provides unique and complete values per window interval, but it adds some latency.
-Also, specifying a grace period via `grace_ms` will increase the latency, because the window now needs to wait for potential out-of-order events.
-
-`final()` mode is suitable for use cases when some latency is allowed, but the emitted events must be complete and unique.
-
->***NOTE:*** Windows can be closed only by the records with the **same** message key.
-> If some message keys appear irregularly in the stream, the latest windows 
-> can remain unprocessed until the message with the same key is received.
-
-
 ## Supported Aggregations
 
 Currently, windows support the following aggregation functions:
@@ -414,10 +403,82 @@ Currently, windows support the following aggregation functions:
 - [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
 
 
+## Emitting results
+
+Quix Streams supports 2 modes of emitting results for time windows:
+
+- For each processed message in the given time window
+- Only once, after the time window is closed
 
 
+### Emitting updates for each message
 
-## Operations
+To emit results for each processed message in the stream, use the following API:
+
+```python
+from datetime import timedelta
+
+
+sdf = app.dataframe(...)
+
+# Calculate a sum of values over a window of 10 seconds and emit results immediately
+sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
+
+# Results:
+# -> Timestamp=100, value=1 -> emit {"start": 0, "end": 10000, "value": 1} 
+# -> Timestamp=101, value=1 -> emit {"start": 0, "end": 10000, "value": 2} 
+# -> Timestamp=102, value=1 -> emit {"start": 0, "end": 10000, "value": 3} 
+```
+
+`.current()` methods instructs the window to return the aggregated result immediately after the message is processed, but the results themselves are not guaranteed to be final for the given interval.
+
+The same window may receive another update in the future, and a new value with the same interval will be emitted.
+
+`current()` mode can be used to react on changes quickly because the application doesn't need to wait until the window is closed. 
+But you will likely get duplicated values for each window interval.
+
+### Emitting after the window is closed 
+
+Here is how to emit results only once for each window interval after it's closed:
+
+```python
+from datetime import timedelta
+
+
+sdf = app.dataframe(...)
+
+# Calculate a sum of values over a window of 10 seconds 
+# and emit results only when the window is complete
+sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final()
+
+# Results:
+# -> Timestamp=100, value=1   -> emit nothing (the window is not closed yet) 
+# -> Timestamp=101, value=1   -> emit nothing (the window is not closed yet) 
+# -> Timestamp=10001, value=1 -> emit {"start": 0, "end": 10000, "value": 2}, because the time has progressed beyond the window end. 
+```
+
+`.final()` mode makes the window wait until the maximum observed timestamp for the topic partition passes the window end before emitting.
+
+Emitting final results provides unique and complete values per window interval, but it adds some latency.
+Also, specifying a grace period via `grace_ms` will increase the latency, because the window now needs to wait for potential out-of-order events.
+
+You can use `final()` mode when some latency is allowed, but the emitted results must be complete and unique.
+
+>***NOTE:*** Windows can be closed only by the records with the **same** message key.
+> If some message keys appear irregularly in the stream, the latest windows 
+> can remain unprocessed until the message with the same key is received.
+
+
+## Implementation Details
+
+Here are some general concepts about how windowed aggregations are implemented in Quix Streams:
+
+- Only time-based windows are supported. 
+- Every window is grouped by the current Kafka message key.
+- Messages with `None` key will be ignored.
+- The minimal window unit is a **millisecond**. More fine-grained values (e.g. microseconds) will be rounded towards the closest millisecond number.
+
+## Operational Notes
 ### How Windows are Stored in State
 
 Each window in a `StreamingDataFrame` creates its own state store. 
