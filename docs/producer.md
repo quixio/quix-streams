@@ -3,7 +3,7 @@
 Quix Streams is a streaming processing library.  
 To process the streaming data, the data first needs to be produced to the Kafka topic.
 
-Below we will cover how you can use `Producer` class to send data to Kafka topics.
+Below we will cover how you can use `Producer` class to produce data to Kafka topics.
 
 ## Step 1. Create an Application
 To start working with Quix Streams, you first need to create an [`Application`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/application.html#application) object.
@@ -18,7 +18,7 @@ app = Application(broker_address='localhost:9092')
 ```
 
 ## Step 2. Define a Topic and serialization
-When the `Application` is created, we may define the [`Topic`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#topic) object that we will be sending our data to.
+When the `Application` is created, we may define the [`Topic`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#topic) object that we will be publishing our data to.
 
 We will use [`Topic`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#topic) to serialize and deserialize the data.  
 It will also help the `Application` instance to validate if the topic exists.
@@ -33,7 +33,7 @@ topic = app.topic(name='my_topic', value_serializer='json')
 
 
 ## Step 3. Create a Producer and produce messages
-When the `Application` and `Topic` instances are ready, we may create the [`Producer`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#producer) and start sending messages to the topic.
+When the `Application` and `Topic` instances are ready, we may create the [`Producer`](https://quix.io/docs/quix-streams/v2-0-latest/api-reference/quixstreams.html#producer) and start producing messages to the topic.
 
 ```python
 event = {"id": "1", "text": "Lorem ipsum dolor sit amet"}

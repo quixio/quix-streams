@@ -2,8 +2,8 @@
 
 ## Introduction to StreamingDataFrame
 
-`StreamingDataFrame` is the primary interface to define the stream processing pipelines in Quix Streams.  
-
+`StreamingDataFrame` is the primary interface to define the stream processing pipelines
+in Quix Streams.
 
 With `StreamingDataFrame`, you can:
 
@@ -13,27 +13,36 @@ With `StreamingDataFrame`, you can:
 - Access and modify data similarly to pandas DataFrames.
 - Apply custom functions (and access State store inside them).
 - Perform windowed aggregations.
-- Send data to the output topic.
+- Produce data to the output topic.
 
 ### How It Works
+
 `StreamingDataFrame` is a lazy object.  
-You may think of it as a pipeline containing all transformations for incoming messages.  
+You may think of it as a pipeline containing all transformations for incoming messages.
 
-It doesn't store the actual consumed data in memory, but only declares how the data should be transformed.
+It doesn't store the actual consumed data in memory, but only declares how the data
+should be transformed.
 
-All changes to `StreamingDataFrame` objects update the processing pipeline, and each operation on it only adds a new step to the pipeline. 
+All changes to `StreamingDataFrame` objects update the processing pipeline, and each
+operation on it only adds a new step to the pipeline.
 
-Most StreamingDataFrame API methods return new `StreamingDataFrame` objects with updated pipeline, so you can chain them together.  
+Most StreamingDataFrame API methods return new `StreamingDataFrame` objects with updated
+pipeline, so you can chain them together.
 
 To run it, pass the `StreamingDataFrame` object to the `Application.run()` method.
 
 **Example:**
 
-Let's assume we have a temperature sensor, and this sensor sends readings in Fahrenheits to the `temperature` topic , and we need to convert them to Celsius, and send data to the output topic.  
+Let's assume we have a temperature sensor, and this sensor produces readings in
+Fahrenheits to the `temperature` topic , and we need to convert them to Celsius, and
+publish results to the output topic.
 
 Message format:
+
 ```json
-{"tempF":  68}
+{
+  "tempF": 68
+}
 ```
 
 Here is how we can do it with `StreamingDataFrame`:
@@ -50,15 +59,15 @@ output_topic = app.topic('temperature-celsius', value_deserializer='json')
 sdf = app.dataframe(topic=input_topic)
 
 sdf = (
-  # Convert the temperature value from °F to °C
-  # E.g. {"tempF": 68} will become {"tempC": 20}
-  sdf.apply(lambda value: {'tempC': (value['tempF'] - 32) * 5/9})
-  
-  # Print the result to the console
-  .update(print)
+    # Convert the temperature value from °F to °C
+    # E.g. {"tempF": 68} will become {"tempC": 20}
+    sdf.apply(lambda value: {'tempC': (value['tempF'] - 32) * 5 / 9})
+
+    # Print the result to the console
+    .update(print)
 )
 
-# Send data to the output topic
+# Publish data to the output topic
 sdf = sdf.to_topic(output_topic)
 
 # Run the pipeline
@@ -67,17 +76,17 @@ app.run(sdf)
 
 ### Data Types
 
-`StreamingDataFrame` itself is agnostic of data types passed to it during processing, and it can work with any Python type.
+`StreamingDataFrame` itself is agnostic of data types passed to it during processing,
+and it can work with any Python type.
 
-The serialization and deserialization of the messages 
-is handled by the `Topic` objects according to 
+The serialization and deserialization of the messages
+is handled by the `Topic` objects according to
 the settings passed via `app.topic()`.
 
 **Example:**
 
 ```python
 from quixstreams import Application
-
 
 app = Application(broker_address='localhost:9092')
 
@@ -88,9 +97,262 @@ input_topic = app.topic('input', value_deserializer='json')
 output_topic = app.topic('input', value_serializer='json')
 ```
 
+## Selecting Columns
+
+You can select only a few columns from the incoming message (aka "make a projection")
+using the pandas-like approach and provide
+
+**Example**:
+
+In this example, assume we receive temperature readings in the following format:
+
+```json
+{
+  "temperature": 35.5,
+  "timestamp": 1710865771.3750699,
+  "metadata": {
+    "sensor_id": "sensor-1"
+  }
+} 
+```
+
+and we only need "temperature" and "timestamp" columns for processing:
+
+```json
+{
+  "temperature": 35.5,
+  "timestamp": 1710865771.3750699
+}
+```
+
+Here is how to do that with `StreamingDataFrame`:
+
+```python
+sdf = app.dataframe(...)
+# Selecting only "temperature" and "timestamp" columns using pandas-like approach
+sdf = sdf[["temperature", "timestamp"]]
+
+# The same can be done using .apply() with a custom function
+sdf = sdf.apply(lambda value: {'temperature': value['temperature'],
+                               'timestamp': value['timestamp']})
+```
+
+> **_NOTE:_**  The pandas-like approach works only with mapping-like values like
+> dicts.  
+> To make projection on top of non-mapping values (like custom objects), use
+> the `.apply()` approach.
+
+## Transforming Data
+
+### Generating New Data
+
+To generate a new value based on the current one, use the `StreamingDataFrame.apply()`
+method and provide it with a custom function defining the transformation.
+
+`StreamingDataFrame.apply()` accepts a callback and provides the current value as a
+first argument.
+
+Note that functions passed to `.apply()` should always return the result, and it will be
+sent to downstream transformations.
+
+**Example**:
+
+Imagine we receive data in tabular format, and we need to convert it to a plain
+structure.
+
+```python
+# Input:
+{"columns": ["temperature", "timestamp"], "values": [35.5, 1710865771.3750699]}
+
+# Output:
+{"temperature": 35.5, "timestamp": 1710865771.3750699}
+```
+
+Here is how to do it with `StreamingDataFrame.apply()`:
+
+```python
+sdf = app.dataframe(...)
+
+# Convert tabular data to dictionaries
+sdf = sdf.apply(
+    lambda data: {column: value for column, value in
+                  zip(data['columns'], data['values'])}
+)
+```
+
+### Mutating Data In-Place
+
+There are two primary ways to update data in-place with StreamingDataFrame:
+
+1. Assigning and updating columns using DataFrame API.  
+   Use it if the message value is decoded as dictionary.
+
+2. Using `StreamingDataFrame.update()` with a custom function.
+   Use this approach if the values are not dicts, or when you need to perform a more
+   complex function.
+
+**Example**:
+
+Assume we receive the same temperature readings in Celsius, but this time we need to add
+a new column with values in Fahrenheits.
+
+Here is how you can do that using columns and DataFrame API:
+> **_NOTE:_**  This approach works only with dict-like values.
+
+```python
+sdf = app.dataframe(...)
+
+# Add a new column with temperature in Fahrenheits
+# Input: {'temperature': 9}
+sdf['temperatureF'] = (sdf['temperature'] * 9 / 5) + 32
+# Output: {'temperature': 9, 'temperatureF': 48.2}
+
+# The same can be done via assigning columns and .apply()
+# Note: here function passed to .apply() will only get "temperature" as an argument
+sdf['temperatureF'] = sdf['temperature'].apply(lambda temp: (temp * 9 / 5) + 32)
+
+# You can also assign the result of StreamingDataFrame.apply() to a column
+sdf['temperatureF'] = sdf.apply(lambda value: (value['temperature'] * 9 / 5) + 32)
+```
+
+The similar can be done by using `StreamingDataFrame.update()`.
+
+Similarly to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` accepts a
+callback and provides the current value to it as a first argument.
+
+But this callback is supposed to mutate data in-place, so its return will be ignored by
+the downstream StreamingDataFrame.
+
+```python
+
+sdf = app.dataframe(...)
+
+
+def add_fahrenheits(value):
+    """
+    Add a new column with temperature in Fahrenheits
+    
+    Note that this function doesn't return anything and only mutates the incoming value
+    """
+    value['temperatureF'] = (value['temperature'] * 9 / 5) + 32
+
+
+# Input: {'temperature': 9}
+sdf = sdf.update(add_fahrenheits)
+# Output: {'temperature': 9, 'temperatureF': 48.2}
+```
+
+## Filtering Data
+
+To filter data with `StreamingDataFrame`, you may use:
+
+- DataFrame API with conditional expressions on columns.  
+  Use it if the message value is decode to a dictionary.
+
+- Custom functions via `sdf.filter(...)`
+  Use this approach if the value is not a dictionary, or you need to perform a more
+  complex function.
+
+When the value is filtered from the stream, all the downstream operations for that value
+are now skipped.
+
+**Example**:
+
+Imagine we process the temperature readings, and we are only interested in numbers
+higher than a certain threshold.
+
+Here is how to filter these values with DataFrame API:
+
+```python
+sdf = app.dataframe(...)
+
+# Filter only values with temperature higher than 60 degrees.
+sdf = sdf[sdf['temperature'] > 60]
+
+# The same can be done with .apply() and a custom function
+sdf = sdf[sdf['temperature'].apply(lambda temp: temp > 60)]
+# Or
+sdf = sdf[sdf.apply(lambda value: value['temperature'] > 60)]
+
+# Multiple conditions can also be combined via binary operators 
+sdf = sdf[(sdf['temperature'] > 60) & (sdf['country'] == 'US')]
+# Or
+sdf = sdf[
+    (sdf['temperature'] > 60)
+    & sdf['country'].apply(lambda country: country.lower() == 'US')
+    ]
+```
+
+You can achieve the same result by using `StreamingDataFrame.filter()`.
+
+`StreamingDataFrame.filter()` accepts a callback and provides the current value to it as
+a first argument.
+If the result of the callback is `False`, the value will be filtered out from the
+stream.
+
+```python
+sdf = sdf.filter(lambda value: value['temperature'] > 60)
+```
+
+## Writing Data to Kafka Topics
+
+To publish the current value of the `StreamingDataFrame` to a topic, simply call
+`StreamingDataFrame.to_topic(<Topic>)` with a `Topic` instance generated
+from `Application.topic()`
+as an argument.
+
+Similarly to other methods, `.to_topic()` creates a new `StreamingDataFrame` object.
+
+### Changing Message Key Before Producing
+
+To change the outgoing message key (which defaults to the current consumed key),
+you can optionally provide a `key` callback generating a new key.
+
+This callback can use the current value and must return a new message key.
+
+The returned key must be compatible with `key_serializer` provided to the `Topic`object.
+
+**Example:**
+
+Imagine we get temperature readings from multiple sensors in multiple locations.   
+Each message uses a sensor ID as a message key, but we want them to use location ID
+instead to do aggregations downstream.
+
+Message format:
+
+```json
+{
+  "temperature": 35,
+  "location_id": "location-1"
+}
+```
+
+Here is how we can produce messages to the output topics:
+
+```python
+from quixstreams import Application
+
+app = Application(broker_address='localhost:9092', consumer_group='consumer')
+
+# Define an input topic and deserialize message keys to strings
+input_topic = app.topic("input", key_deserializer='str')
+
+# Define an output topic and serialize keys from strings to bytes
+output_topic = app.topic("output", key_serializer='str')
+
+sdf = app.dataframe(input_topic)
+
+# Publish the consumed message to the output topic with the same key (sensor ID)
+sdf = sdf.to_topic(output_topic)
+
+# Publish the consumed message to the topic, but use the location ID as a new message key 
+sdf = sdf.to_topic(output_topic, key=lambda value: str(value["location_id"]))
+```
+
 ## Using Columns and DataFrame API
 
-`StreamingDataFrame` class provides rich API to access and combine individual columns, similar to `pandas.DataFrame`.
+`StreamingDataFrame` class provides rich API to access and combine individual columns,
+similar to `pandas.DataFrame`.
 
 With this API, can:
 
@@ -100,7 +362,9 @@ With this API, can:
 - Apply custom functions to individual columns
 
 > ***NOTE***: DataFrame API works only with mapping-like values like dicts.  
-> If the stream values are not dict-like, you may use [custom functions](#using-custom-functions) instead to transform and filter the data. 
+> If the stream values are not dict-like, you may
+> use [custom functions](#using-custom-functions) instead to transform and filter the
+> data.
 
 **Examples:**
 
@@ -125,38 +389,44 @@ sdf['average_as_string'] = sdf['average'].apply(lambda avg: f"Average: {avg}")
 # Check if "average" is null
 sdf['average_is_null'] = sdf["average"].isnull()
 ```
+
 ### How it works
-Under the good, when you access a column on `StreamingDataFrame`, it generates and new object `StreamingSeries` that refers to the value of the passed key. 
 
-These objects are also lazy, and they are evaluated only when the `StreamingDataFrame` is executed via `app.run(sdf)`.
+Under the good, when you access a column on `StreamingDataFrame`, it generates and new
+object `StreamingSeries` that refers to the value of the passed key.
 
-When you set them back to the StreamingDataFrame or use them to filter data, it creates a new step in the pipeline to be evaluated later.
+These objects are also lazy, and they are evaluated only when the `StreamingDataFrame`is
+executed via `app.run(sdf)`.
+
+When you set them back to the StreamingDataFrame or use them to filter data, it creates
+a new step in the pipeline to be evaluated later.
 
 We will go over the individual use cases in the next chapters.
-
 
 ## Using Custom Functions
 
 `StreamingDataFrame` provides a flexible mechanism to transform and filter data using
 custom functions via `.apply()`, `.update()` and `.filter()` methods.
 
-
 These methods accept two arguments:
 
-1. A function to apply. 
-A stateless function should accept only one argument - the value.  
-A stateful function should accept two arguments - the value and `State`.
+1. A function to apply.
+   A stateless function should accept only one argument - the value.  
+   A stateful function should accept two arguments - the value and `State`.
 
 2. A `stateful` flag which can be `True` or `False` (default - `False`).  
-By passing `stateful=True`, you inform a `StreamingDataFrame` to pass an extra argument of type `State` to your function
-to perform stateful operations.
-
+   By passing `stateful=True`, you inform a `StreamingDataFrame` to pass an extra
+   argument of type `State` to your function
+   to perform stateful operations.
 
 ### StreamingDataFrame.apply()
-Use `.apply()` when you need to generate a new value based on the input.  
-When using `.apply()`, the result of the callback will be sent to downstream operations as an input.
 
-Although `.apply()` can mutate the input, it's discouraged, and `.update()` method should be used for mutations instead.
+Use `.apply()` when you need to generate a new value based on the input.  
+When using `.apply()`, the result of the callback will be sent to downstream operations
+as an input.
+
+Although `.apply()` can mutate the input, it's discouraged, and `.update()` method
+should be used for mutations instead.
 
 **Example:**
 
@@ -166,26 +436,34 @@ sdf = sdf.apply(lambda value: value + 1)
 ```
 
 There are 2 other use cases for `.apply()`:
-1. `StreamingDataFrame.apply()` can be used to assign new columns if the value is a dictionary:
+
+1. `StreamingDataFrame.apply()` can be used to assign new columns if the value is a
+   dictionary:
+
 ```python
 # Calculate an average value of some metric using "sum" and "count" columns
 sdf['average'] = sdf.apply(lambda value: value['sum'] / value['count'])
 ```
 
 2. `StreamingDataFrame.apply()` can be used to filter values.
-In this case, the result of the passed function is interpreted as boolean.   
-If it is `False`, the value will be filtered out from the stream:
+   In this case, the result of the passed function is interpreted as boolean.   
+   If it is `False`, the value will be filtered out from the stream:
+
 ```python
 # Filter values where sum of "field_b" and "field_c" is greater than 0
 sdf = sdf[sdf.apply(lambda value: (value['field_b'] + value['field_c']) > 0)]
 ```
 
-
 #### Expanding collections into items
-`StreamingDataFrame.apply()` with `expand=True` will expand the collection  (e.g. list or tuple) into individual values, so the 
-next operations in `StreamingDataFrame` will work with individual items from this list instead of the whole list.
 
-For example, you get a sentence, and you need to apply transformations to individual words and produce them:
+`StreamingDataFrame.apply()` with `expand=True` will expand the collection  (e.g. list
+or tuple) into individual values, so the
+next operations in `StreamingDataFrame` will work with individual items from this list
+instead of the whole list.
+
+For example, you get a sentence, and you need to apply transformations to individual
+words and produce them:
+
 ```python
 # Split a sentence into words
 sdf = sdf.apply(lambda sentence: sentence.split(' '), expand=True)
@@ -193,22 +471,27 @@ sdf = sdf.apply(lambda sentence: sentence.split(' '), expand=True)
 sdf = sdf.apply(lambda word: len(word))
 ```
 
-After using `StreamingDataFrame.apply(expand=True)`, each downstream function will be applied
+After using `StreamingDataFrame.apply(expand=True)`, each downstream function will be
+applied
 to the item of the returned iterable.
 <br/>
 The items will be processed in the same order as they are returned.
 
 There are certain limitations coming with this API:
 
-- `StreamingDataFrame.apply(expand=True)` cannot be used to filter values via `sdf[sdf.apply(<function>, expand=True)]`
-- `StreamingDataFrame.apply(expand=True)` cannot be set back to the `StreamingDataFrame` via `sdf['column'] = sdf[sdf.apply(<function>, expand=True)]`
-
+- `StreamingDataFrame.apply(expand=True)` cannot be used to filter values
+  via `sdf[sdf.apply(<function>, expand=True)]`
+- `StreamingDataFrame.apply(expand=True)` cannot be set back to the `StreamingDataFrame`
+  via `sdf['column'] = sdf[sdf.apply(<function>, expand=True)]`
 
 ### StreamingDataFrame.update()
-Use `.update()` when you need to mutate the input value in-place or to perform a side effect without changing the value.
+
+Use `.update()` when you need to mutate the input value in-place or to perform a side
+effect without changing the value.
 For example, to log input data, or to update a counter in the State.
 
-The return of the callback passed to `.update()` will be ignored, and the original input will be sent to downstream operations instead.
+The return of the callback passed to `.update()` will be ignored, and the original input
+will be sent to downstream operations instead.
 
 **Example:**
 
@@ -221,8 +504,8 @@ sdf = sdf.update(lambda some_list: some_list.append(1))
 sdf = sdf.update(lambda value: print("Received value: ", value))
 ```
 
-
 ### StreamingDataFrame.filter()
+
 Use `.filter()` to filter values based on entire message content.
 
 The result of the callback passed to `.filter()` is interpreted as boolean.
@@ -237,236 +520,21 @@ sdf = sdf.filter(lambda value: value['field_a'])
 ```
 
 You may also achieve the same result with `sdf[sdf.apply()]` syntax:
+
 ```python
 # Filter out values with "field_a" <= 0 using .apply() syntax
 sdf = sdf[sdf.apply(lambda value: value['field_a'] > 0)]
 ```
 
-
-## Selecting Columns
-
-You can select only a few columns from the incoming message (aka "make a projection") using the pandas-like approach and provide 
-
-**Example**: 
-
-In this example, assume we receive temperature readings in the following format: 
-```json
-{"temperature": 35.5, "timestamp":  1710865771.3750699, "metadata": {"sensor_id": "sensor-1"}} 
-```
-and we only need "temperature" and "timestamp" columns for processing:
-```json
-{"temperature": 35.5, "timestamp":  1710865771.3750699}
-```
-
-Here is how to do that with `StreamingDataFrame`:
-
-```python
-sdf = app.dataframe(...)
-# Selecting only "temperature" and "timestamp" columns using pandas-like approach
-sdf = sdf[["temperature", "timestamp"]]
-
-# The same can be done using .apply() with a custom function
-sdf = sdf.apply(lambda value: {'temperature': value['temperature'],
-                               'timestamp': value['timestamp']})
-```
-
-> **_NOTE:_**  The pandas-like approach works only with mapping-like values like dicts.  
-> To make projection on top of non-mapping values (like custom objects), use the `.apply()` approach.
-
-
-## Transforming Data
-
-### Generating New Data
-
-To generate a new value based on the current one, use the `StreamingDataFrame.apply()` method and provide it with a custom function defining the transformation.
-
-`StreamingDataFrame.apply()` accepts a callback and provides the current value as a first argument. 
-
-Note that functions passed to `.apply()` should always return the result, and it will be sent to downstream transformations.
-
-
-**Example**:
-
-Imagine we receive data in tabular format, and we need to convert it to a plain structure.
- 
-```python
-# Input:
-{"columns": ["temperature", "timestamp"], "values": [35.5, 1710865771.3750699]}
-
-# Output:
-{"temperature": 35.5, "timestamp": 1710865771.3750699}
-```
-
-Here is how to do it with `StreamingDataFrame.apply()`:
-
-```python
-sdf = app.dataframe(...)
-
-# Convert tabular data to dictionaries
-sdf = sdf.apply(
-  lambda data: {column: value for column, value in zip(data['columns'], data['values'])}
-)
-```
-
-### Mutating Data In-Place
-
-There are two primary ways to update data in-place with StreamingDataFrame:
-
-1. Assigning and updating columns using DataFrame API.  
-Use it if the message value is decoded as dictionary.
-   
-2. Using `StreamingDataFrame.update()` with a custom function.
-Use this approach if the values are not dicts, or when you need to perform a more complex function.
-
-**Example**:
-
-Assume we receive the same temperature readings in Celsius, but this time we need to add a new column with values in Fahrenheits.
-
-Here is how you can do that using columns and DataFrame API:
-> **_NOTE:_**  This approach works only with dict-like values.
-
-```python
-sdf = app.dataframe(...)
-
-# Add a new column with temperature in Fahrenheits
-# Input: {'temperature': 9}
-sdf['temperatureF'] = (sdf['temperature'] * 9 / 5) + 32
-# Output: {'temperature': 9, 'temperatureF': 48.2}
-
-# The same can be done via assigning columns and .apply()
-# Note: here function passed to .apply() will only get "temperature" as an argument
-sdf['temperatureF'] = sdf['temperature'].apply(lambda temp: (temp * 9 / 5) + 32)
-
-# You can also assign the result of StreamingDataFrame.apply() to a column
-sdf['temperatureF'] = sdf.apply(lambda value: (value['temperature'] * 9 / 5) + 32)
-```
-
-The similar can be done by using `StreamingDataFrame.update()`.
-
-Similarly to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` accepts a callback and provides the current value to it as a first argument.
-
-But this callback is supposed to mutate data in-place, so its return will be ignored by the downstream StreamingDataFrame.
-
-```python
-
-sdf = app.dataframe(...)
-
-def add_fahrenheits(value):
-    """
-    Add a new column with temperature in Fahrenheits
-    
-    Note that this function doesn't return anything and only mutates the incoming value
-    """
-    value['temperatureF'] = (value['temperature'] * 9 /5) + 32
-
-# Input: {'temperature': 9}
-sdf = sdf.update(add_fahrenheits)
-# Output: {'temperature': 9, 'temperatureF': 48.2}
-```
-
-
-## Filtering Data
-To filter data with `StreamingDataFrame`, you may use:
-
-- DataFrame API with conditional expressions on columns.  
-Use it if the message value is decode to a dictionary.
-
-- Custom functions via `sdf.filter(...)`
-Use this approach if the value is not a dictionary, or you need to perform a more complex function.
-
-When the value is filtered from the stream, all the downstream operations for that value are now skipped.
-
-
-**Example**:
-
-Imagine we process the temperature readings, and we are only interested in numbers higher than a certain threshold.  
-
-Here is how to filter these values with DataFrame API:
-
-```python
-sdf = app.dataframe(...)
-
-# Filter only values with temperature higher than 60 degrees.
-sdf = sdf[sdf['temperature'] > 60]
-
-# The same can be done with .apply() and a custom function
-sdf = sdf[sdf['temperature'].apply(lambda temp: temp > 60)]
-# Or
-sdf = sdf[sdf.apply(lambda value: value['temperature'] > 60)]
-
-# Multiple conditions can also be combined via binary operators 
-sdf = sdf[(sdf['temperature'] > 60) & (sdf['country'] == 'US')]
-# Or
-sdf = sdf[
-  (sdf['temperature'] > 60) 
-  & sdf['country'].apply(lambda country: country.lower() == 'US')
-]
-```
-
-You can achieve the same result by using `StreamingDataFrame.filter()`.
-
-`StreamingDataFrame.filter()` accepts a callback and provides the current value to it as a first argument.
-If the result of the callback is `False`, the value will be filtered out from the stream.
-
-```python
-sdf = sdf.filter(lambda value: value['temperature'] > 60)
-```
-
-## Writing Data to Kafka Topics
-
-To send the current value of the `StreamingDataFrame` to a topic, simply call 
-`StreamingDataFrame.to_topic(<Topic>)` with a `Topic` instance generated from `Application.topic()` 
-as an argument.
-
-Similarly to other methods, `.to_topic()` creates a new `StreamingDataFrame` object.
-
-### Changing Message Key Before Producing
-To change the outgoing message key (which defaults to the current consumed key), 
-you can optionally provide a `key` callback generating a new key. 
-
-This callback can use the current value and must return a new message key.
-
-The returned key must be compatible with `key_serializer` provided to the `Topic` object.
-
-
-**Example:**
-
-Imagine we get temperature readings from multiple sensors in multiple locations.   
-Each message uses a sensor ID as a message key, but we want them to use location ID instead to do aggregations downstream.
-
-Message format: 
-```json
-{"temperature": 35, "location_id": "location-1"}
-```
-
-Here is how we can send messages to the output topics:
-
-```python
-from quixstreams import Application
-
-app = Application(broker_address='localhost:9092', consumer_group='consumer')
-
-# Define an input topic and deserialize message keys to strings
-input_topic = app.topic("input", key_deserializer='str')
-
-# Define an output topic and serialize keys from strings to bytes
-output_topic = app.topic("output", key_serializer='str')
-
-sdf = app.dataframe(input_topic)
-
-# Send the consumed message to the output topic with the same key (sensor ID)
-sdf = sdf.to_topic(output_topic)
-
-# Send the consumed message to the topic, but use the location ID as a new message key 
-sdf = sdf.to_topic(output_topic, key=lambda value: str(value["location_id"]))
-```
-
 ## Debugging
-To debug code in `StreamingDataFrame`, you can use the usual tools like prints, logging and breakpoints.
+
+To debug code in `StreamingDataFrame`, you can use the usual tools like prints, logging
+and breakpoints.
 
 **Example**:
 
-Here is how to use `StreamingDataFrame.update()` to set a breakpoint and examine the value between operations:   
+Here is how to use `StreamingDataFrame.update()` to set a breakpoint and examine the
+value between operations:
 
 ```python
 import pdb
@@ -481,11 +549,13 @@ sdf = sdf.update(lambda value: pdb.set_trace())
 sdf = sdf.update(lambda value: print('Value: ', value))
 ```
 
-
 ## Accessing Kafka Keys and Metadata
-Quix Streams library provides access to the metadata of the current Kafka message via `quixstreams.context` module.
 
-Information like message key, topic, partition, offset, timestamp and more is stored globally in `MessageContext` object, 
+Quix Streams library provides access to the metadata of the current Kafka message
+via `quixstreams.context` module.
+
+Information like message key, topic, partition, offset, timestamp and more is stored
+globally in `MessageContext` object,
 and it's updated on each incoming message.
 
 To get the current message key, use `quixstreams.message_key` function:
@@ -497,7 +567,9 @@ from quixstreams import message_key
 sdf = sdf.filter(lambda value: message_key() == b'INVALID')
 ```
 
-To get the whole `MessageContext` object with all attributes including keys, use `quixstreams.message_context`  
+To get the whole `MessageContext` object with all attributes including keys,
+use `quixstreams.message_context`
+
 ```python
 from quixstreams import message_context
 
@@ -510,8 +582,10 @@ only from the custom functions during processing.
 
 ## Using State Store
 
-If you want to use persistent state during processing, you can access the state for a given _message key_ via
-passing `stateful=True` to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()` or `StreamingDataFrame.filter()`.
+If you want to use persistent state during processing, you can access the state for a
+given _message key_ via
+passing `stateful=True` to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()`
+or `StreamingDataFrame.filter()`.
 
 In this case, your custom function should accept a second argument of type `State`.
 
@@ -522,21 +596,23 @@ The `State` object provides a minimal API to store key-value data:
 - `.delete(key)`
 - `.exists(key)`
 
-Keys and values can be of any type as long as they are serializable to JSON (a default serialization format for the State).  
+Keys and values can be of any type as long as they are serializable to JSON (a default
+serialization format for the State).  
 You may easily store strings, numbers, lists, tuples and dictionaries.
 
 Under the hood, keys are always prefixed by the actual Kafka message key to ensure
 that messages with different keys don't have access to the same state.
 
-
 **Example:**
 
-Imagine we process the temperature readings, and we want to add the maximum observed temperature to the current value:
+Imagine we process the temperature readings, and we want to add the maximum observed
+temperature to the current value:
 
 ```python
 from quixstreams import State
 
 sdf = app.dataframe(...)
+
 
 def add_max_temperature(value: dict, state: State):
     """
@@ -554,5 +630,5 @@ def add_max_temperature(value: dict, state: State):
 sdf = sdf.update(add_max_temperature, stateful=True)
 ```
 
-For more information about stateful processing, see 
-[**Stateful Applications**](https://github.com/quixio/quix-streams/blob/main/docs/stateful-processing.md).
+For more information about stateful processing, see
+[**Stateful Processing**](../advanced/stateful-processing).
