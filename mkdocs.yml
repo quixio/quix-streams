@@ -27,19 +27,22 @@ nav:
   - Quickstart: 'quickstart.md'
   - Producing Data to Kafka: producer.md
   - Processing & Transforming Data: processing.md
-  - Windows & Aggregations: 'windowing.md'
+  - Windows & Aggregations: windowing.md
   - Running the Application: application.md # TODO: Application configuration, error handling, logging, stopping the app.
   - Advanced Usage:
     - Serialization Formats: advanced/serialization.md
     - Stateful Processing: advanced/stateful-processing.md
     - Using Topics: advanced/topics.md # TODO: using topics, configuration, timestamp extraction
+    - Using Producer & Consumer: advanced/producer-consumer.md # TODO: Explain low-level producer and consumer
   - Connecting to Quix Cloud: quix-platform.md # TODO: Review, briefly explain Quix features & where Quix Cloud may help
   - Upgrading Guide:
     - Upgrading from Quix Streams v0.5: upgrading-legacy.md
 
   - API Docs:
-    - StreamingDataFrame & StreamingSeries: api-reference/dataframe.md
-    - Topics & Serializers: api-reference/topics-serdes.md  # TODO: Fix them
-    - Application: api-reference/application.md
-    - Producer & Consumer: api-reference/producer-consumer.md # TODO: Explain low-level producer and consumer
+    - StreamingDataFrame API: api-reference/dataframe.md
+    - Topics API: api-reference/topics.md
+    - Context API: api-reference/context.md
+    - Serializers API: api-reference/serialization.md
+    - Application API: api-reference/application.md
+    - Kafka Producer & Consumer API: api-reference/kafka.md
     - Full Reference: api-reference/quixstreams.md
