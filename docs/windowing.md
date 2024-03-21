@@ -421,7 +421,8 @@ from datetime import timedelta
 
 sdf = app.dataframe(...)
 
-# Calculate a sum of values over a window of 10 seconds and emit results immediately
+# Calculate a sum of values over a window of 10 seconds 
+# and use .current() to emit results immediately
 sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().current()
 
 # Results:
@@ -448,7 +449,7 @@ from datetime import timedelta
 sdf = app.dataframe(...)
 
 # Calculate a sum of values over a window of 10 seconds 
-# and emit results only when the window is complete
+# and use .final() to emit results only when the window is complete
 sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final()
 
 # Results:
