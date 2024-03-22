@@ -105,14 +105,6 @@ doc_map = {
             "quixstreams.context",
         ]
     },
-    "quix-platform-api.md": {
-        k: None
-        for k in [
-            "quixstreams.platforms.quix.api",
-            "quixstreams.platforms.quix.config",
-            "quixstreams.platforms.quix.env",
-        ]
-    },
 }
 
 # Go over all modules and assign them to doc files
