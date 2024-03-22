@@ -66,7 +66,13 @@ doc_map = {
         k: None
         for k in [
             "quixstreams.app",
+        ]
+    },
+    "state.md": {
+        k: None
+        for k in [
             "quixstreams.state.types",
+            "quixstreams.state.rocksdb.options",
         ]
     },
     "serialization.md": {
@@ -116,7 +122,7 @@ for m in modules:
         doc_map[doc_modules[m.name]][m.name] = m
 
 # Do some additional filtering within individual moduiles
-for name, module in doc_map["application.md"].items():
+for name, module in doc_map["state.md"].items():
     if name == "quixstreams.state.types":
         module.members = [x for x in module.members if x.name == "State"]
 

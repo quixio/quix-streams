@@ -44,5 +44,6 @@ nav:
     - Context API: api-reference/context.md
     - Serializers API: api-reference/serialization.md
     - Application API: api-reference/application.md
+    - State API: api-reference/state.md
     - Kafka Producer & Consumer API: api-reference/kafka.md
     - Full Reference: api-reference/quixstreams.md
