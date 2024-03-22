@@ -28,7 +28,7 @@ nav:
   - Producing Data to Kafka: producer.md
   - Processing & Transforming Data: processing.md
   - Windows & Aggregations: windowing.md
-  - Running the Application: application.md # TODO: Application configuration, error handling, logging, stopping the app.
+  - Configuration: configuration.md
   - Advanced Usage:
     - Serialization Formats: advanced/serialization.md
     - Stateful Processing: advanced/stateful-processing.md
