@@ -20,7 +20,8 @@ class QuixTopicManager(TopicManager):
     """
 
     _topic_partitions = 1
-    _topic_replication = 2
+    # Setting it to None to use defaults defined in Quix Cloud
+    _topic_replication = None
     _max_topic_name_len = 249
 
     _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
