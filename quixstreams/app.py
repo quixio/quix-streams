@@ -1,6 +1,9 @@
 import contextlib
+import functools
 import logging
+import os
 import signal
+import warnings
 from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
@@ -61,10 +64,10 @@ class Application:
 
     What it Does:
 
-    - During user setup:
+    - On init:
         - Provides defaults or helper methods for commonly needed objects
-        - For Quix Platform Users: Configures the app for it
-            (see `Application.Quix()`)
+        - If `quix_sdk_token` is passed, configures the app for to work
+            with Quix Platform.
     - When executed via `.run()` (after setup):
         - Initializes Topics and StreamingDataFrames
         - Facilitates processing of Kafka messages with a `StreamingDataFrame`
@@ -90,7 +93,8 @@ class Application:
 
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Optional[str] = None,
+        quix_sdk_token: Optional[str] = None,
         consumer_group: str = "quixstreams-default",
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
@@ -108,8 +112,13 @@ class Application:
         loglevel: Optional[LogLevel] = "INFO",
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
     ):
+        # TODO: Document sdk token and that's it's taken from the environment by default
+        # TODO: Log when the quix SDK token is detected in .run()
+        # TODO: Pass quix_sdk_token directly to the config builder
+        # TODO: Add tests
         """
 
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
@@ -158,8 +167,43 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
+
+        ***Quix Platform Parameters***
+
+        :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
+            instead of the default one.
         """
         configure_logging(loglevel=loglevel)
+
+        if quix_sdk_token:
+            quix_config_builder = QuixKafkaConfigsBuilder(quix_sdk_token=quix_sdk_token)
+
+        if broker_address and quix_config_builder:
+            raise ValueError("Cannot provide both broker address and Quix SDK Token")
+        elif not (broker_address or quix_config_builder):
+            raise ValueError("Either broker address or Quix SDK Token must be provided")
+        elif quix_config_builder:
+            # SDK Token or QuixKafkaConfigsBuilder are provided, configure app
+            # to use Quix broker and APIs
+            topic_manager_factory = functools.partial(
+                QuixTopicManager, quix_config_builder=quix_config_builder
+            )
+            quix_configs = quix_config_builder.get_confluent_broker_config()
+            # Check if the state dir points to the mounted PVC while running on Quix
+            # TODO: Do we still need this?
+            check_state_dir(state_dir=state_dir)
+
+            broker_address = quix_configs.pop("bootstrap.servers")
+            # Quix platform prefixes consumer group with workspace id
+            consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
+            consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
+            producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
+        else:
+            # Only broker address is provided, use # TODO:
+            topic_manager_factory = TopicManager
+
+        self._is_quix_app = bool(quix_config_builder)
+
         self._broker_address = broker_address
         self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
@@ -189,12 +233,11 @@ class Application:
         self._running = False
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
-        self._quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None
         self._auto_create_topics = auto_create_topics
         self._do_recovery_check = False
 
         if not topic_manager:
-            topic_manager = TopicManager(
+            topic_manager = topic_manager_factory(
                 topic_admin=TopicAdmin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
@@ -225,9 +268,6 @@ class Application:
                 else None
             ),
         )
-
-    def _set_quix_config_builder(self, config_builder: QuixKafkaConfigsBuilder):
-        self._quix_config_builder = config_builder
 
     @classmethod
     def Quix(
@@ -339,31 +379,16 @@ class Application:
 
         :return: `Application` object
         """
-        configure_logging(loglevel=loglevel)
-        quix_config_builder = quix_config_builder or QuixKafkaConfigsBuilder()
-        quix_configs = quix_config_builder.get_confluent_broker_config()
-
-        # Check if the state dir points to the mounted PVC while running on Quix
-        # Otherwise, the state won't be shared and replicas won't be able to
-        # recover the same state.
-        check_state_dir(state_dir=state_dir)
-
-        broker_address = quix_configs.pop("bootstrap.servers")
-        # Quix platform prefixes consumer group with workspace id
-        consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
-        consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
-        producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
-
-        if topic_manager is None:
-            topic_admin = TopicAdmin(
-                broker_address=broker_address,
-                extra_config=producer_extra_config,
-            )
-            topic_manager = QuixTopicManager(
-                topic_admin=topic_admin, quix_config_builder=quix_config_builder
-            )
+        warnings.warn(
+            "Application.Quix() is being deprecated; "
+            "To connect to Quix Platform, "
+            'use Application() with "quix_sdk_token" parameter or set the '
+            '"Quix__Sdk__Token" environment variable (like with Application.Quix).',
+            DeprecationWarning,
+        )
         app = cls(
-            broker_address=broker_address,
+            broker_address=None,
+            quix_sdk_token=os.getenv("Quix__Sdk__Token"),
             consumer_group=consumer_group,
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
@@ -376,18 +401,15 @@ class Application:
             on_message_processed=on_message_processed,
             consumer_poll_timeout=consumer_poll_timeout,
             producer_poll_timeout=producer_poll_timeout,
+            loglevel=loglevel,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
+            quix_config_builder=quix_config_builder,
         )
-        app._set_quix_config_builder(quix_config_builder)
         return app
-
-    @property
-    def is_quix_app(self) -> bool:
-        return self._quix_config_builder is not None
 
     def topic(
         self,
@@ -710,7 +732,7 @@ class Application:
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}"'
         )
-        if self.is_quix_app:
+        if self._is_quix_app:
             self._quix_runtime_init()
 
         self._setup_topics()

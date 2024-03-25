@@ -455,8 +455,8 @@ class TestQuixApplication:
         Topic names created from Quix apps are prefixed by the workspace id
         Topic config has provided values else defaults
         """
-        app = quix_app_factory()
-        builder = app._quix_config_builder
+        workspace_id = "my-workspace"
+        app = quix_app_factory(workspace_id=workspace_id)
         topic_manager = app._topic_manager
 
         initial_topic_name = "input_topic"
@@ -465,7 +465,7 @@ class TestQuixApplication:
             initial_topic_name,
             config=topic_manager.topic_config(num_partitions=topic_partitions),
         )
-        expected_name = f"{builder.workspace_id}-{initial_topic_name}"
+        expected_name = f"{workspace_id}-{initial_topic_name}"
         expected_topic = topic_manager.topics[expected_name]
         assert topic.name == expected_name
         assert expected_name in topic_manager.topics
@@ -528,7 +528,8 @@ class TestQuixApplication:
             executor.submit(_stop_app_on_timeout, app, 10.0)
             app.run(sdf)
 
-        warning = str(warned.list[0].message)
+        warnings = [w for w in warned.list if w.category is RuntimeWarning]
+        warning = str(warnings[0].message)
         assert "State Management feature is disabled" in warning
 
     def test_quix_app_stateful_quix_deployment_state_dir_mismatch_warning(
@@ -545,8 +546,8 @@ class TestQuixApplication:
         )
         with pytest.warns(RuntimeWarning) as warned:
             quix_app_factory()
-
-        warning = str(warned.list[0].message)
+        warnings = [w for w in warned.list if w.category is RuntimeWarning]
+        warning = str(warnings[0].message)
         assert "does not match the state directory" in warning
 
 
