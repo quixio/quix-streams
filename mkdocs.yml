@@ -21,7 +21,6 @@ markdown_extensions:
 exclude_docs: |
   build/*
 
-# TODO: Replace //LINK placeholders everywhere
 nav:
   - Introduction: 'introduction.md'
   - Quickstart: 'quickstart.md'
