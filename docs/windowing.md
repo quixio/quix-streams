@@ -12,136 +12,24 @@ With windows, you can calculate such aggregations as:
 - Maximum temperature of a sensor observed over 30 second ranges
 
 
-## Examples
+## Types of Time in Streaming
 
-### The sum of a message field over a tumbling window
-Summing values over some time interval is probably the most basic aggregation because it can tell a lot about the behavior of the underlying metric.
+There are two types of time in streaming systems:
 
-To calculate a sum of values over a window, you can use the `sum()` aggregation function.  
-
-Note: the `sum()` function does not validate the value type, and it may fail if the values cannot be added to each other.
-
-The example below demonstrates how to extract a value from the record's dictionary and use it in the aggregation:
-
-```python
-from datetime import timedelta
-
-sdf = app.dataframe(...)
-
-sdf = (
-    # Extract the "total" field from the record
-    sdf.apply(lambda value: value["total"])
-    
-    # Define a tumbling window of 10 minutes
-    .tumbling_window(timedelta(minutes=10))
-    
-    # Specify the "sum" aggregation function to apply to values of "total"
-    .sum()
-    
-    # Emit results only when the 10 minute window has elapsed
-    .final()
-)
-```
+1. **Event time** - the time when the event happened. 
+2. **Processing time** - the time when the event is processed by the system
 
 
-### Multiple aggregates with "reduce"
+In Quix Streams, **windows always use event time**.  
 
-Aggregation via `reduce` provides a lot of flexibility. It enables the definition of a custom windowed aggregation using two components:
+The event time is obtained from the timestamps of incoming Kafka messages.  
 
-- An **"initializer"** function to initialize an aggregated window state when the first message arrives in the window. **The "initializer" is called only once when the window is created.** 
-- A **"reducer"** function to combine an aggregated window state with new data. **The "reducer" is called only for the second and following incoming values.**  
+A Quix Streams application keeps its own "clock" for each assigned partition.  
+The state store tracks the **maximum observed timestamp** across incoming events within each topic partition, and 
+this timestamp is used as a current time in the stream.  
+What's important, it can never go backward.
 
-With `reduce()`, you can define a very wide range of aggregations, such as:
-
-- Aggregating over multiple message fields at once
-- Using multiple message fields to create a single aggregate
-- Aggregating multiple metrics for the same value
-
-
-Example:
-
-```python
-from datetime import timedelta
-
-sdf = app.dataframe(...)
-
-
-def initializer(value: dict) -> dict:
-    """
-    Initialize the state for aggregation when a new window starts.
-    
-    It will prime the aggregation when the first record arrives 
-    in the window.
-    """
-    return {
-        'min': value['total'],
-        'max': value['total'],
-        'count': 1,
-    }
-
-
-def reducer(aggregated: dict, value: dict) -> dict:
-    """
-    Calculate "min", "max" and "count" over a set of transactions.
-    
-    Reducer always receives two arguments:
-    - previously aggregated value (the "aggregated" argument)
-    - current value (the "value" argument)
-    It combines them into a new aggregated value and returns it.
-    This aggregated value will be also returned as a result of the window.
-    """
-    return {
-        'min': min(aggregated['min'], value['total']),
-        'max': max(aggregated['max'], value['total']),
-        'count': aggregated['count'] + 1,
-    }
-
-
-sdf = (
-
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-
-    # Create a "reduce" aggregation with "reducer" and "initializer" functions
-    .reduce(reducer=reducer, initializer=initializer)
-
-    # Emit results only for closed 10 minute windows
-    .final()
-)
-```
-
-### Transforming the result of a windowed aggregation
-Windowed aggregations return aggregated results in the following format/schema:
-
-```python
-{"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>}
-```
-
-Since it is rather generic, you may need to transform it into your own schema. Here is how you can do that:
- 
-```python
-sdf = (
-    # Define a tumbling window of 10 minutes
-    sdf.tumbling_window(timedelta(minutes=10))
-    # Specify the "count" aggregation function
-    .count()
-    # Emit results only for closed 10 minute windows
-    .final()
-)
-
-# Windowed aggregations return aggregated results in the following format:
-# {"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>
-#
-# Let's transform it to a different format:
-# {"count": <aggregated value>, "window": (<window start ms>, <window end ms>)}
-sdf = sdf.apply(
-    lambda value: {
-        "count": value["value"], 
-        "window": (value["start"], value["end"]),
-    }
-)
-```
-
+When the application gets an event timestamp for the event, it assigns an interval according to the window definition.
 
 ### Extracting timestamps from messages
 By default, Quix Streams uses Kafka message timestamps to determine the time of the event.  
@@ -184,29 +72,6 @@ def custom_ts_extractor(
 # The window functions will now use the extracted timestamp instead of the Kafka timestamp.
 topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 ```
-
-
-## Types of Time in Streaming
-
-There are two types of time in streaming systems:
-
-1. **Event time** - the time when the event happened. 
-2. **Processing time** - the time when the event is processed by the system
-
-
-In Quix Streams, windows always use event time.  
-
-The event time is obtained from the timestamps of incoming Kafka messages.  
-
-A Quix Streams application keeps its own "clock" for each assigned partition.  
-The state store tracks the **maximum observed timestamp** across incoming events within each topic partition, and 
-this timestamp is used as a current time in the stream.  
-What's important, it can never go backward.
-
-When the application gets an event timestamp for the event, it assigns an interval according to the window definition.
-
-
-Quix Streams supports two ways of slicing the time: tumbling windows and hopping windows.
 
 ## Tumbling Windows
 Tumbling windows slice time into non-overlapping intervals of a fixed size. 
@@ -357,6 +222,223 @@ sdf = (
 ```
 
 
+## Supported Aggregations
+
+Currently, windows support the following aggregation functions:
+
+- [`reduce()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
+- [`min()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
+- [`max()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
+- [`mean()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
+- [`sum()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
+- [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
+
+We will go over each ot them in more detail below.
+
+###  Reduce()
+
+[`.reduce()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) allows you to perform complex aggregations using custom "reducer" and "initializer" functions:
+
+- The **"initializer"** function receives the **first** value for the given window, and it must return an initial state for this window.  
+This state will be later passed to the "reducer" function.  
+**It is called only once for each window.**
+
+- The **"reducer"** function receives an aggregated state and a current value, and it must combine them and return a new aggregated state.  
+This function should contain the actual aggregation logic.  
+It will be called for each message coming into the window, except the first one.
+
+With `reduce()`, you can define a wide range of aggregations, such as:
+
+- Aggregating over multiple message fields at once
+- Using multiple message fields to create a single aggregate
+- Calculating multiple aggregates for the same value
+
+**Example**:
+
+Assume we receive the temperature data from the sensor, and we need to calculate these aggregates for each 10-minute tumbling window:
+
+- min temperature
+- max temperature
+- total count of events
+- average temperature
+
+Here is how you can do that with `reduce()`:
+
+```python
+from datetime import timedelta
+
+sdf = app.dataframe(...)
+
+
+def initializer(value: dict) -> dict:
+    """
+    Initialize the state for aggregation when a new window starts.
+    
+    It will prime the aggregation when the first record arrives 
+    in the window.
+    """
+    return {
+        'min_temp': value['temperature'],
+        'max_temp': value['temperature'],
+        'total_events': 1,
+        '_sum_temp': value['temperature'],
+        'avg_temp': value['temperature']
+    }
+
+
+def reducer(aggregated: dict, value: dict) -> dict:
+    """
+    Calculate "min", "max", "total" and "average" over temperature values.
+    
+    Reducer always receives two arguments:
+    - previously aggregated value (the "aggregated" argument)
+    - current value (the "value" argument)
+    It combines them into a new aggregated value and returns it.
+    This aggregated value will be also returned as a result of the window.
+    """
+    total_events = aggregated['count'] + 1
+    sum_temp = aggregated['_sum_temp'] + value
+    avg_temp = sum_temp / total_events
+    return {
+        'min_temp': min(aggregated['min_temp'], value['temperature']),
+        'max_temp': max(aggregated['max_temp'], value['temperature']),
+        'total_events': total_events,
+        'avg_temp': avg_temp,
+        '_sum_temp': sum_temp
+    }
+
+
+sdf = (
+    
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+
+    # Create a "reduce" aggregation with "reducer" and "initializer" functions
+    .reduce(reducer=reducer, initializer=initializer)
+
+    # Emit results only for closed windows
+    .final()
+)
+
+# Output:
+# {
+#   'start': <window start>, 
+#   'end': <window end>, 
+#   'value': {'min_temp': 1, 'max_temp': 999, 'total_events': 999, 'avg_temp': 34.32, '_sum_temp': 9999},
+# }
+
+```
+
+
+### Count()
+Use `.count()` to calculate total number of events in the window.
+
+**Example:**
+
+Count all received events over a 10-minute tumbling window.
+
+```python
+from datetime import timedelta
+
+sdf = app.dataframe(...)
+
+
+sdf = (
+    
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+
+    # Count events in the window 
+    .count()
+
+    # Emit results only for closed windows
+    .final()
+)
+# Output:
+# {
+#   'start': <window start>, 
+#   'end': <window end>, 
+#   'value': 9999 - total number of events in the window
+# }
+```
+
+### Min(), Max(), Mean() and Sum()
+
+Methods `.min()`, `.max()`, `.mean()`, and `.sum()` provide short API to calculate these aggregates over the streaming windows.  
+
+
+**These methods assume that incoming values are numbers.**
+
+When they are not, extract the numeric values first using `.apply()` function.
+
+**Example:**
+
+Imagine we receive the temperature data from the sensor, and we need to calculate only a minimum temperature for each 10-minute tumbling window.  
+
+```python
+from datetime import timedelta
+
+sdf = app.dataframe(...)
+
+# Input:
+# {"temperature" : 9999}
+
+sdf = (
+    # Extract the "temperature" column from the dictionary 
+    sdf.apply(lambda value: value['temperature'])
+    
+    # Define a tumbling window of 10 minutes
+    .tumbling_window(timedelta(minutes=10))
+
+    # Calculate the minimum temperature 
+    .min()
+
+    # Emit results only for closed windows
+    .final()
+)
+# Output:
+# {
+#   'start': <window start>, 
+#   'end': <window end>, 
+#   'value': 9999  - minimum temperature
+# }
+```
+
+
+
+## Transforming the result of a windowed aggregation
+Windowed aggregations return aggregated results in the following format/schema:
+
+```python
+{"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>}
+```
+
+Since it is rather generic, you may need to transform it into your own schema.  
+Here is how you can do that:
+ 
+```python
+sdf = (
+    # Define a tumbling window of 10 minutes
+    sdf.tumbling_window(timedelta(minutes=10))
+    # Specify the "count" aggregation function
+    .count()
+    # Emit results only for closed windows
+    .final()
+)
+
+# Input format:
+# {"start": <window start ms>, "end": <window end ms>, "value": <aggregated value>
+sdf = sdf.apply(
+    lambda value: {
+        "count": value["value"], 
+        "window": (value["start"], value["end"]),
+    }
+)
+# Output format:
+# {"count": <aggregated value>, "window": (<window start ms>, <window end ms>)}
+```
+
+
 ## Lateness and Out-of-Order Processing
 When working with event time, some events may be processed later than they're supposed to.  
 We call such events **"out-of-order"** because they violate the expected order of time in the data stream. 
@@ -391,16 +473,7 @@ sdf.tumbling_window(timedelta(hours=1), grace_ms=timedelta(seconds=10))
 
 The appropriate value for a grace period varies depending on the use case.
 
-## Supported Aggregations
-
-Currently, windows support the following aggregation functions:
-
-- [`reduce()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
-- [`min()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
-- [`max()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
-- [`mean()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
-- [`sum()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
-- [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
+ 
 
 
 ## Emitting results
