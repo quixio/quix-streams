@@ -27,12 +27,12 @@ nav:
   - Quickstart: 'quickstart.md'
   - Producing Data to Kafka: producer.md
   - Processing & Transforming Data: processing.md
-  - Windows & Aggregations: windowing.md
+  - Windows & Aggregations: windowing.md # TODO: Add more about the individual functions (esp. reduce())
   - Configuration: configuration.md
   - Advanced Usage:
     - Serialization Formats: advanced/serialization.md
     - Stateful Processing: advanced/stateful-processing.md
-    - Using Topics: advanced/topics.md # TODO: using topics, configuration, timestamp extraction
+    - Managing Kafka Topics: advanced/topics.md
     - Using Producer & Consumer: advanced/producer-consumer.md # TODO: Explain low-level producer and consumer
   - Connecting to Quix Cloud: quix-platform.md # TODO: Review, briefly explain Quix features & where Quix Cloud may help
   - Upgrading Guide:
