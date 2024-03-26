@@ -226,18 +226,18 @@ sdf = (
 
 Currently, windows support the following aggregation functions:
 
-- [`reduce()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
-- [`min()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
-- [`max()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
-- [`mean()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
-- [`sum()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
-- [`count()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
+- [`reduce()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
+- [`min()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
+- [`max()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
+- [`mean()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
+- [`sum()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
+- [`count()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
 
 We will go over each ot them in more detail below.
 
 ###  Reduce()
 
-[`.reduce()`](https://github.com/quixio/quix-streams/blob/main/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) allows you to perform complex aggregations using custom "reducer" and "initializer" functions:
+`.reduce()` allows you to perform complex aggregations using custom "reducer" and "initializer" functions:
 
 - The **"initializer"** function receives the **first** value for the given window, and it must return an initial state for this window.  
 This state will be later passed to the "reducer" function.  
