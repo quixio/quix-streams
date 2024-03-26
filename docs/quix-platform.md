@@ -1,40 +1,63 @@
-# Quix Platform Users: `Application.Quix()`
+# Connecting to Quix Cloud
 
-If you are deploying your Quix Streams application to the Quix platform directly, all you need for ensuring everything connects as expected is to use the 
-`Application.Quix()` instance.
+### Why to Use Quix Cloud?
+Quix Streams provide an API to seamlessly work with Quix Cloud platform.
 
-`Application.Quix()` automatically configures the application to use Quix Kafka broker and underlying API which allows topic creation.
-<br>
-By default, `Application.Quix()` use `auto_create_topics=True`.
+You may use Quix Cloud to deploy and manage stream processing pipelines in a frictionless environment.
 
-<br>
+To learn more about Quix Cloud and how to set up a project, please see the [Quix Cloud docs](https://quix.io/docs/quix-cloud/overview.html#developing-your-stream-processing-application).
 
-## Using Quix-formatted Messages (SerDes)
+### Can I Use Quix Streams With My Own Kafka?
 
-The Quix Platform/topics use their own messaging formats, known as `TimeseriesData` and 
-`EventData`. In order to consume or produce these, you must use the respective SerDes:
-
-- `QuixDeserializer` (can deserialize both)
-- `QuixEventsSerializer`
-- `QuixTimeseriesSerializer`
-
-See [**Migrating from Legacy Quix Streams**](https://github.com/quixio/quix-streams/blob/main/docs/upgrading-legacy.md) 
-for more detail around the Quix format.
-
-You may use any serialization method you like instead of the Quix 
-format, but Quix Platform provides additional features on top of this format in the UI.
+Using Quix Cloud with Quix Streams is optional.
 
 
-<br>
+## Connecting to Kafka brokers in Quix
 
-## Using `Application.Quix()` locally
+To connect to the Kafka broker in Quix Cloud, you need to take the following steps:
 
-You may connect to Quix Platform locally too (e.g. while developing the application on your machine).
-<br>
-To do that, you will need to set the following environment variable:
+**1. Create an Application instance using a special factory method - `Application.Quix()`.**    
 
+
+It will configure the Application to connect to the Kafka broker in Quix Cloud using the Streaming Token provided via env variable `Quix__Sdk__Token`.
+
+It has the same API as the `Application` class constructor, except it doesn't require you to pass the `broker_address`.
+
+**2. [Obtain the Streaming Token for your Quix Cloud workspace](https://quix.io/docs/develop/authentication/streaming-token.html#how-to-find).**
+
+
+**3. Pass the Streaming Token via env variable `Quix__Sdk__Token`.**
+
+>***NOTE:*** When running in Quix Cloud, `Quix__Sdk__Token` environment variable is provided automatically.
+
+
+
+**Example**:
+
+Create a Quix Streams application and connect it to Quix Cloud.
+
+Application code:
+
+```python
+# app.py
+from quixstreams import Application
+
+# Create an Application configured to use a Quix Cloud broker
+# You may pass additional settings to it similar to usual Application init.
+app = Application.Quix(auto_offset_reset='earliest', consumer_group='my-consumer-group')
+
+# Define an input topic
+topic = app.topic('input')
+
+# Print all incoming messages
+sdf = app.dataframe(topic).update(print)
+
+# Run the Application
+app.run(sdf)
 ```
-Quix__Sdk__Token
-```
 
-You can find these values on the platform in your Workspace settings.
+Running the application:
+
+```commandline
+Quix__Sdk__Token=<my-sdk-token> python app.py
+```
