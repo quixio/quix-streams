@@ -24,7 +24,7 @@ We will use [`Topic`](https://quix.io/docs/quix-streams/v2-0-latest/api-referenc
 It will also help the `Application` instance to validate if the topic exists.
 If there is no such topic, by default, the `Application` will try to create it with the default parameters.
 
-See here://LINK to learn more about the Topic objects and available serialization formats. 
+To learn more about the Topic objects and available serialization formats, see [Managing Kafka Topics](/docs/quix-streams/advanced/topics/) and [Serialization and Deserialization](/docs/quix-streams/advanced/serialization/) pages.  
 
 ```python
 # Define a topic "my_topic" with JSON serialization
