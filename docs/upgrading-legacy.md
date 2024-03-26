@@ -63,8 +63,13 @@ Example of `EventData`:
 }
 ```
 
-Quix Streams supports producing and consuming of both EventData and ParameterData with some limitations
+In order to consume or produce these, you must use the respective serializers and deserializers:
 
+- `QuixDeserializer` (can deserialize both)
+- `QuixEventsSerializer`
+- `QuixTimeseriesSerializer`
+
+Quix Streams supports producing and consuming of both EventData and ParameterData with some limitations
 
 ## Limitations
 
