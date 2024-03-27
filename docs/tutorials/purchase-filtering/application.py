@@ -4,7 +4,7 @@ from quixstreams import Application
 
 app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="purchase_summing",
+    consumer_group="purchase_filtering",
     auto_offset_reset="earliest",
 )
 customer_purchases_topic = app.topic(name="customer_purchases")
@@ -23,7 +23,7 @@ SALES_TAX = 1.10
 
 sdf = app.dataframe(topic=customer_purchases_topic)
 sdf = sdf[
-    (sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00)
+    (sdf["Purchases"].apply(get_purchase_totals) * SALES_TAX >= 100.00)
     & (sdf["Membership Type"].isin(["Silver", "Gold"]))
 ]
 sdf["Full Name"] = sdf.apply(get_full_name)
@@ -33,10 +33,3 @@ sdf = sdf.to_topic(customers_qualified_topic)
 
 if __name__ == "__main__":
     app.run(sdf)
-
-
-# Shown here:
-# column assign
-# apply with extra stuff
-# filtering with inequality
-# column selection
