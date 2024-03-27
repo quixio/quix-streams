@@ -7,7 +7,6 @@ app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
     consumer_group="product_review_word_counter",
     auto_offset_reset="earliest",
-    loglevel="DEBUG",
 )
 product_reviews_topic = app.topic(name="product_reviews")
 word_counts_topic = app.topic(name="product_review_word_counts")

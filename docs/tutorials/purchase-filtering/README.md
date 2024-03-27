@@ -1,13 +1,13 @@
-# Example: Purchase Summing
+# Example: Purchase Filtering
 
-We will build a simple Purchase Summing app to showcase some common Quix Streams 
+We will build a simple Purchase Filtering app to showcase some common Quix Streams 
 dataframe-like operations with dictionary/JSON data (a format frequently used).
 
 You'll learn how to:
 
 - Create a topic
 - Assign a value to a new column
-- Pair sdf.Apply() with additional operations
+- Use sdf.Apply() with additional operations
 - Filter with inequalities combined with and/or ("&", "|")
 - Get subset of columns (AKA slice or select)
 - Produce resulting output to a topic
@@ -28,11 +28,11 @@ necessary information downstream.
 ## 2. Our Example
 
 We will use a simple producer to generate some mock purchase data, which our 
-new Purchase Summing application will then transform and filter as required.
+new Purchase Filtering application will then adjust and filter as required.
 
 ## 3. Main Takeaways
  
-The primary lesson in this example is learning how you can use common pandas-like 
+The primary lesson: learning how you can use common pandas-like 
 operations on dictionary/JSON data to perform various transformations
 as if it were a dataframe.
 
@@ -72,7 +72,7 @@ kafka_value:
 ```
 
 
-## 5. Purchase Condenser application
+## 5. Purchase Filtering application
 
 
 Here is what our application will look like in the end:
@@ -84,7 +84,7 @@ from quixstreams import Application
 
 app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="purchase_summing",
+    consumer_group="purchase_filtering",
     auto_offset_reset="earliest",
 )
 customer_purchases_topic = app.topic(name="customer_purchases")
@@ -168,75 +168,124 @@ sdf["Full Name"] = sdf.apply(get_full_name)
 def get_purchase_totals(transaction):
     return sum([t["Price"]*t["Quantity"] for t in transaction])
 
-sdf = sdf[(sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00) & (sdf["Membership Type"].isin(["Silver", "Gold"]))]
+sdf = sdf[
+    (sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00)
+    & (sdf["Membership Type"].isin(["Silver", "Gold"]))
+]
 ```
 
-We get started with a bang! Basica Using SDF.apply(F), we can apply any custom
-function F to alter our incoming text (F should take the data as an argument, and return data).
+We get started with a bang! 
 
-So, with "tokenize_and_count", we do some fairly typical string normalization and finish with counting, resulting in (word, count) pairs.
-
-
-This effectively turns this:
-
-`>>> "Bob likes bananas and Frank likes apples."`
-
-to this:
-
-`>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('and', 1), ('frank', 1), ('apples', 1)]`
-
-
-Two important and related points here:
-1. Note the `expand=True` argument for SDF.apply(F), which tells SDF "hey, this .apply() returns multiple independent events!"
-2. Our F returns a list (must be a non-dict iterable of some kind), hence the "expand".
-
-
-### Filtering Expanded Results
+Let's break it down step-by-step, as most of our
+work is done here:
 
 ```python
-def should_skip(word_count_pair):
-    word, count = word_count_pair
-    return word not in ['i', 'a', 'we', 'it', 'is', 'and', 'or', 'the']
-
-sdf = sdf.filter(should_skip)
+# step A
+sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00
 ```
 
-Now we filter out some "filler" words using SDF.filter(F), where F is our "should_skip" function. 
+Here, we do a `.apply(F)` operation on a column value (F should take your data as an 
+argument, and return some data). Our F here is "get_purchase_totals".
 
-If F returns any "True"-like value, the pipeline continues processing that event...otherwise, the event stops here. 
-
-Remember that each word is treated like an independent event now due to the previous expand, so our
-function expects only one word count pair at a time.
-
-With this filter applied, our "and" event is removed:
-
-`>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('frank', 1), ('apples', 1)]`
-
-
-### Producing Events With New Keys
+Notice how you can still do basic operations with an apply result, like multiplying it 
+by our sales tax, and then finally doing an inequality check on the total (all of which
+are SDF operations...more on that in a second).
 
 ```python
-sdf = sdf.to_topic(word_counts_topic, key=lambda word_count_pair: word_count_pair[0])
+# step B
+sdf["Membership Type"].isin(["Silver", "Gold"])
 ```
 
-Finally, we produce each event downstream (they will be independent messages).
+We additionally showcase our built-in `.isin` function, a way for SDF to perform an 
+"`if x in y`" check (SDF is declaratively defined, invalidating that approach).
 
-Notice here the optional `key` argument, which allows you to provide a custom key generator.
+Be sure to check out our documentation HERE to see what other built-ins are available!
 
-While it's fairly common to maintain the input event's key (SDF's default behavior), 
-there are many reasons why you might adjust it.
-
-In our case, we are changing the message key to the word so
-if something is totaling word counts over time, the data is now set up to do so.
-
-So we would produce 5 messages in total, like so:
 
 ```python
-# two shown here...
-{kafka_key: "bob", kafka_value: ["bob", 1]}
-{kafka_key: "likes", kafka_value: ["likes", 2]}
-# etc...
+# "and" Steps A, B
+(A) & (B)
 ```
+Now we "and" these steps, which translates to your typical "A and B" 
+(and returns a boolean).
+
+A couple things with "&" (and): 
+- It is considered an SDF operation.
+- You MUST use "&" for and, "|" for or
+- Your respective objects (i.e. A, B) must be wrapped in parentheses.
+
+Ultimately, when executed, the result of "&" will be boolean. This is imporant for...
+
+
+```python
+# filter with "&" result
+sdf = sdf[X]
+```
+Ultimately, this is a filtering operation: whenever X is an SDF operation(s) result, it acts like Pandas row filtering.
+
+As such, SDF filtering interprets the SDF operation "&" boolean result as follows:
+- True -> continue processing this event
+- False -> stop ALL further processing of this event (including produces!)
+
+So, any events that don't satisfy these conditions will be filtered as desired!
+
+### Adding a New Column
+
+```python
+def get_full_name(customer):
+    return f'{customer["First Name"]} {customer["Last Name"]}'
+
+
+sdf["Full Name"] = sdf.apply(get_full_name)
+```
+
+With filtering done, we now add a new column to the data that we need downstream.
+
+This is basically a functional equivalent of adding a key to a dictionary.
+
+```python
+>>> {"Remove Me": "value", "Email": "cool email"}`
+```
+
+becomes
+
+```python
+>>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name"}`
+```
+
+### Getting a Column Subset
+
+```python
+sdf = sdf[["Email", "Full Name"]]
+```
+We only need a couple fields to send downstream, so this is a convenient way to select
+only a specific list of columns (aka dict keys) from our data.
+
+So 
+
+```python
+>>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name", }`
+```
+
+becomes
+
+```python
+>>> {"Email": "cool email", "Full Name": "cool name"}`
+```
+
+NOTE: you cannot reference nested keys in this way.
+
+### Producing the Result
+
+```python
+sdf = sdf.to_topic(customers_qualified_topic)
+```
+
+Finally, we produce our non-filtered results downstream.
+
+NOTE: by default, our outgoing Kafka key is persisted from the input message. Should
+you need to change it, check out our documentation HERE.
+
 
 ## 6. Try it yourself!
 
@@ -244,16 +293,19 @@ So we would produce 5 messages in total, like so:
 First, go ahead and get a kafka cluster running. To easily follow along with this example, just follow THESE (link) instructions.
 
 ### Install quixstreams
-Then, install the quixstreams library in your python environment
+In your python environment, run `pip install quixstreams`
 
 ### Run the Producer and Application
 Just call `python producer.py` and `python application.py` in separate windows.
 
 ### Check out the results!
 
-Look at all those counted works, beautiful!
+...but wait, I don't see any message processing output...Is it working???
 
-### Related topics - Data Aggregation
+One thing to keep in mind is that the Quix Streams does not log/print any message processing
+operations by default.
 
-If you were interested in learning how to aggregate across events as we hinted
-at with our key changes, check out how easy it is with SDF's stateful functions here! [LINK]
+To get visual outputs around message processing, you can either:
+- use recommended ways of printing/logging stuff HERE
+- use DEBUG mode via `Application(loglevel="DEBUG")`
+  - WARNING: you should NOT run your applications in "DEBUG" mode in production.

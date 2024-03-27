@@ -219,7 +219,7 @@ However, if the value ended up >= 90....we finally finish by producing our alert
 First, go ahead and get a kafka cluster running. To easily follow along with this example, just follow THESE (link) instructions.
 
 ### Install quixstreams
-Then, install the quixstreams library in your python environment
+In your python environment, run `pip install quixstreams`
 
 ### Run the Producer and Application
 Just call `python producer.py` and `python application.py` in separate windows.
