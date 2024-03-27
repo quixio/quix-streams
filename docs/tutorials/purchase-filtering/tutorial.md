@@ -1,4 +1,4 @@
-# Example: Purchase Filtering
+# Tutorial: Purchase Filtering
 
 We will build a simple Purchase Filtering app to showcase some common Quix Streams 
 dataframe-like operations with dictionary/JSON data (a format frequently used).
@@ -7,9 +7,9 @@ You'll learn how to:
 
 - Create a topic
 - Assign a value to a new column
-- Use sdf.Apply() with additional operations
-- Filter with inequalities combined with and/or ("&", "|")
-- Get subset of columns (AKA slice or select)
+- Use `SDF.apply()` with additional operations
+- Filter with inequalities combined with and/or (`&`, `|`)
+- Get a subset/selection of columns
 - Produce resulting output to a topic
 
 
@@ -27,8 +27,8 @@ necessary information downstream.
 
 ## 2. Our Example
 
-We will use a simple producer to generate some mock purchase data, which our 
-new Purchase Filtering application will then adjust and filter as required.
+We will use a simple producer to generate some mock purchase data to be processed by our 
+new Purchase Filtering application.
 
 ## 3. Main Takeaways
  
@@ -41,7 +41,7 @@ with the Pandas terminology, but you can also think of it as a dictionary key.
 
 ## 4. Generating Purchase Data
 
-We have a standalone producer HERE [LINK] that generates a small static set of 
+We have a simple [**purchases producer**](producer.py) that generates a small static set of 
 "purchases", which are simply dictionaries with various info about what was purchased by 
 a customer during their visit. The data is keyed on customer ID.
 
@@ -72,47 +72,11 @@ kafka_value:
 ```
 
 
-## 5. Purchase Filtering application
+## 5. Purchase Filtering Application
 
 
-Here is what our application will look like in the end:
+Now let's go over our [**Purchase Filtering Application**](application.py) line-by-line!
 
-```python
-import os
-
-from quixstreams import Application
-
-app = Application(
-    broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="purchase_filtering",
-    auto_offset_reset="earliest",
-)
-customer_purchases_topic = app.topic(name="customer_purchases")
-customers_qualified_topic = app.topic(name="customers_coupon_qualified")
-
-
-def get_full_name(customer):
-    return f'{customer["First Name"]} {customer["Last Name"]}'
-
-
-def get_purchase_totals(transaction):
-    return sum([t["Price"]*t["Quantity"] for t in transaction])
-
-
-SALES_TAX = 1.10
-
-sdf = app.dataframe(topic=customer_purchases_topic)
-sdf = sdf[(sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00) & (sdf["Membership Type"].isin(["Silver", "Gold"]))]
-sdf["Full Name"] = sdf.apply(get_full_name)
-sdf = sdf[["Full Name", "Email"]]
-sdf = sdf.to_topic(customers_qualified_topic)
-
-
-if __name__ == '__main__':
-    app.run(sdf)
-```
-
-Let's go over it in detail:
 
 ### Create Application
 
@@ -124,9 +88,9 @@ app = Application(
 )
 ```
 
-First, create the quixstreams Application, which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
+First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
 
-You can learn more about auto_offset_reset HERE (link to article?), but TL;DR - "earliest" is generally recommended while learning.
+Once you are more familiar with Kafka, we definitely recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 
 ### Define Topics
@@ -136,10 +100,11 @@ customer_purchases_topic = app.topic(name="customer_purchases")
 customers_qualified_topic = app.topic(name="customers_coupon_qualified")
 ```
 
-Next we define our input/output topics, named customer_purchases and customers_coupon_qualified, respectively. 
+Next we define our input/output topics, named `customer_purchases` and `customers_coupon_qualified`, respectively. 
 
-These topics will automatically be created for you when you run the application should they not exist.
+They each return `Topic` objects, used later on.
 
+NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
 
 ### The StreamingDataFrame (SDF)
 
@@ -147,22 +112,13 @@ These topics will automatically be created for you when you run the application 
 sdf = app.dataframe(topic=customer_purchases_topic)
 ```
 
-Now for the fun part: building our StreamingDataFrame, often shorthanded to "SDF".  
+Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
 
-We initialize it, and then continue re-assigning to the same variable ("sdf") as we add operations until we are finished with it.
+We initialize it, and then continue re-assigning to the same variable (`sdf`) as we add operations until we are finished with it.
 
+Also note how we pass our input topic object (from the previous step) to it.
 
-### Adding a New Column
-
-```python
-def get_full_name(customer):
-    return f'{customer["First Name"]} {customer["Last Name"]}'
-
-
-sdf["Full Name"] = sdf.apply(get_full_name)
-```
-
-### SDF-based filtering
+### Filtering Purchases
 
 ```python
 def get_purchase_totals(transaction):
@@ -179,55 +135,64 @@ We get started with a bang!
 Let's break it down step-by-step, as most of our
 work is done here:
 
+<br>
+
 ```python
 # step A
 sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00
 ```
 
-Here, we do a `.apply(F)` operation on a column value (F should take your data as an 
-argument, and return some data). Our F here is "get_purchase_totals".
+Here, we do an [SDF.apply(F)](../../processing.md#streamingdataframeapply) operation on a column (`F` should take your data as an 
+argument, and return something back): our `F` here is `get_purchase_totals`.
 
-Notice how you can still do basic operations with an apply result, like multiplying it 
+Notice how you can still do basic operations with an `SDF.apply()` result, like multiplying it 
 by our sales tax, and then finally doing an inequality check on the total (all of which
 are SDF operations...more on that in a second).
+
+<br>
 
 ```python
 # step B
 sdf["Membership Type"].isin(["Silver", "Gold"])
 ```
 
-We additionally showcase our built-in `.isin` function, a way for SDF to perform an 
-"`if x in y`" check (SDF is declaratively defined, invalidating that approach).
+We additionally showcase one of our built-in column operations `.isin()`, a way for SDF to perform an 
+`if x in y` check (SDF is declaratively defined, invalidating that approach).
 
-Be sure to check out our documentation HERE to see what other built-ins are available!
+**NOTE**: some operations (like `.isin()`) are only available when manipulating a column.
+  - if you're unsure what's possible, autocomplete often covers you!
+  - _ADVANCED_: [complete list of column operations](../../api-reference/dataframe.md#streamingseries).
 
+<br>
 
 ```python
 # "and" Steps A, B
 (A) & (B)
 ```
-Now we "and" these steps, which translates to your typical "A and B" 
+Now we "and" these steps, which translates to your typical `A and B` 
 (and returns a boolean).
 
-A couple things with "&" (and): 
+A few notes around `&` (and): 
 - It is considered an SDF operation.
-- You MUST use "&" for and, "|" for or
-- Your respective objects (i.e. A, B) must be wrapped in parentheses.
+- You MUST use `&` for and, `|` for or
+- Your respective objects (i.e. `A`, `B`) must be wrapped in parentheses.
 
-Ultimately, when executed, the result of "&" will be boolean. This is imporant for...
+Ultimately, when executed, the result of `&` will be _boolean_. This is important for...
 
+<br>
 
 ```python
 # filter with "&" result
 sdf = sdf[X]
 ```
-Ultimately, this is a filtering operation: whenever X is an SDF operation(s) result, it acts like Pandas row filtering.
+Ultimately, this is a filtering operation: whenever `X` is an SDF operation(s) result, it acts like Pandas row filtering.
 
-As such, SDF filtering interprets the SDF operation "&" boolean result as follows:
-- True -> continue processing this event
-- False -> stop ALL further processing of this event (including produces!)
+As such, SDF filtering interprets the SDF operation `&` _boolean_ result as follows:
+- `True` -> continue processing this event
+- `False` -> stop ALL further processing of this event (including produces!)
 
 So, any events that don't satisfy these conditions will be filtered as desired!
+
 
 ### Adding a New Column
 
@@ -253,13 +218,13 @@ becomes
 >>> {"Remove Me": "value", "Email": "cool email", "Full Name": "cool name"}`
 ```
 
-### Getting a Column Subset
+### Getting a Column Subset/Selection
 
 ```python
 sdf = sdf[["Email", "Full Name"]]
 ```
 We only need a couple fields to send downstream, so this is a convenient way to select
-only a specific list of columns (aka dict keys) from our data.
+only a specific list of columns (AKA dictionary keys) from our data.
 
 So 
 
@@ -281,7 +246,8 @@ NOTE: you cannot reference nested keys in this way.
 sdf = sdf.to_topic(customers_qualified_topic)
 ```
 
-Finally, we produce our non-filtered results downstream.
+Finally, we produce our non-filtered results downstream via [SDF.to_topic(T)](../../processing.md#writing-data-to-kafka-topics), where `T`
+is our previously defined `Topic` (not the topic name!).
 
 NOTE: by default, our outgoing Kafka key is persisted from the input message. Should
 you need to change it, check out our documentation HERE.
@@ -289,10 +255,12 @@ you need to change it, check out our documentation HERE.
 
 ## 6. Try it yourself!
 
-### Run kafka
-First, go ahead and get a kafka cluster running. To easily follow along with this example, just follow THESE (link) instructions.
+### Run Kafka
+First, have a running Kafka cluster. 
 
-### Install quixstreams
+To conveniently follow along with this tutorial, just [run this simple one-liner](../tutorials-overview.md#running-kafka-locally).
+
+### Install Quix Streams
 In your python environment, run `pip install quixstreams`
 
 ### Run the Producer and Application
