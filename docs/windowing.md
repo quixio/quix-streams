@@ -226,12 +226,12 @@ sdf = (
 
 Currently, windows support the following aggregation functions:
 
-- [`reduce()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
-- [`min()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmin) - to get a minimum value within a window
-- [`max()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
-- [`mean()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionmean) - to get a mean value within a window 
-- [`sum()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitionsum) - to sum values within a window 
-- [`count()`](/docs/api-reference/quixstreams.md#fixedtimewindowdefinitioncount) - to count the number of values within a window 
+- [`reduce()`](../api-reference/quixstreams#fixedtimewindowdefinitionreduce) - to perform custom aggregations using "reducer" and "initializer" functions
+- [`min()`](../api-reference/quixstreams#fixedtimewindowdefinitionmin) - to get a minimum value within a window
+- [`max()`](../api-reference/quixstreams#fixedtimewindowdefinitionmax) -  to get a maximum value within a window
+- [`mean()`](../api-reference/quixstreams#fixedtimewindowdefinitionmean) - to get a mean value within a window 
+- [`sum()`](../api-reference/quixstreams#fixedtimewindowdefinitionsum) - to sum values within a window 
+- [`count()`](../api-reference/quixstreams#fixedtimewindowdefinitioncount) - to count the number of values within a window 
 
 We will go over each ot them in more detail below.
 
