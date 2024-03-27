@@ -11,7 +11,7 @@ You can configure various aspects of your app, like:
 - and more.
 
 
-For the full list of parameters see the [Application API docs](../api-reference/application/#application__init__).
+For the full list of parameters see the [Application API docs](api-reference/application.md#application__init__).
 
 ## Main Configuration Parameters
 
@@ -40,7 +40,7 @@ To override it, pass an instance of `quixstreams.state.rocksdb.options.RocksDBOp
 **Default** - `None` (i.e. use a default config).
 
 - **`use_changelog_topics`** - whether the application should use changelog topics to back stateful operations.  
-See the [Stateful Processing](../advanced/stateful-processing/#fault-tolerance-recovery) page to learn more about changelog topics.   
+See the [Stateful Processing](advanced/stateful-processing.md#fault-tolerance-recovery) page to learn more about changelog topics.   
 **Default** - `True`.
 
 ## Logging

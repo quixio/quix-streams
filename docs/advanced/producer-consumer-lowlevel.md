@@ -28,7 +28,7 @@ It is a recommended way to create a `Consumer`.
 2. Create an instance of `quixstreams.kafka.Consumer`.  
 This way you will need to configure the instance yourself.
 
-See the **[Consumer API Docs](../../api-reference/kafka/#consumer)** for more details and methods.
+See the **[Consumer API Docs](../api-reference/kafka.md#consumer)** for more details and methods.
 
 ### Differences from `confluent_kafka.Consumer`
 
@@ -88,7 +88,7 @@ It is a recommended way to create a `Producer`.
 2. Create an instance of `quixstreams.kafka.Producer`.  
 This way you will need to configure the instance yourself.
 
-See the **[Producer API Docs](../../api-reference/kafka/#producer)** for more details and methods.
+See the **[Producer API Docs](../api-reference/kafka.md#producer)** for more details and methods.
 
 ### Differences from `confluent_kafka.Producer`
 
@@ -102,7 +102,7 @@ See the **[Producer API Docs](../../api-reference/kafka/#producer)** for more de
 
 Creating a `Producer` object via an `Application` instance and start producing messages.
 
-For a more complete example, you can also read the [Quickstart](../../quickstart) page.
+For a more complete example, you can also read the [Quickstart](../quickstart.md) page.
 
 ```python
 from quixstreams import Application
