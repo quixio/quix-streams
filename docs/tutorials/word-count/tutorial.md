@@ -1,4 +1,4 @@
-# Example: Word Counts
+# Tutorial: Word Counts
 
 We will build a simple word counter, which is a great introduction to quixstreams and Kafka!
 
@@ -7,8 +7,8 @@ You'll learn how to:
 - Create a topic
 - Do simple event alterations
 - Generate multiple events from a single event
-- Filter any of these events you don't need
-- Produce remaining events to a topic using a new key for each
+- Filter any undesired events
+- Produce events, with new Kafka keys, to a topic
 
 
 
@@ -20,11 +20,11 @@ We want to process text reviews for our various products in real time
 and see what words are the most popular across all of them.
 
 We need an application that will split reviews into individual words, and then send
-the counts of each individually downstream to be further processed as needed.
+the counts of each individually downstream for further processing.
 
 ## 2. Our Example
 
-We will use a very simple producer to generate text to be processed by our 
+We will use a simple producer to generate text to be processed by our 
 new Word Counter application.
 
 NOTE: our example uses JSON formatting for Kafka message values.
@@ -39,6 +39,9 @@ event into multiple new ones.
 More than that: each new event generated via expansion is processed individually
 through the remainder of your pipeline, allowing you to write ALL your operations 
 like they are handling a single event...because they are!
+
+This can often require adjusting their respective outgoing Kafka keys as well, so we additionally
+showcase that.
 
 ## 4. Generating Text Data
 
@@ -57,46 +60,7 @@ The Kafka message looks like:
 
 ## 5. Word Counter application
 
-
-Here is what our application will look like in the end:
-
-```python
-import os
-from collections import Counter
-
-from quixstreams import Application
-
-app = Application(
-    broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
-    consumer_group="product_review_word_counter",
-    auto_offset_reset="earliest",
-)
-product_reviews_topic = app.topic(name="product_reviews")
-word_counts_topic = app.topic(name="product_review_word_counts")
-
-
-def tokenize_and_count(text):
-    return list(Counter(text.lower().replace(".", " ").split()).items())
-
-
-def should_skip(word_count_pair):
-    word, count = word_count_pair
-    return word in ['i', 'a', 'we', 'it', 'is', 'and', 'or', 'the']
-
-
-sdf = app.dataframe(topic=product_reviews_topic)
-sdf = sdf.apply(tokenize_and_count, expand=True)
-sdf = sdf.filter(should_skip)
-sdf = sdf.to_topic(word_counts_topic, key=lambda word_count_pair: word_count_pair[0])
-
-
-if __name__ == '__main__':
-    app.run(sdf)
-
-
-```
-
-Let's go over it in detail:
+Now let's go over our [**Word Counter Application**](application.py) line-by-line!
 
 ### Create Application
 
@@ -108,10 +72,9 @@ app = Application(
 )
 ```
 
-First, create the quixstreams Application, which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
+First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
 
-You can learn more about auto_offset_reset HERE (link to article?), but TL;DR - "earliest" is generally recommended while learning.
-
+Once you are more familiar with Kafka, we definitely recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 ### Define Topics
 
@@ -120,9 +83,11 @@ product_reviews_topic = app.topic(name="product_reviews")
 word_counts_topic = app.topic(name="product_review_word_counts")
 ```
 
-Next we define our input/output topics, named product_reviews and product_review_word_counts, respectively. 
+Next we define our input/output topics, named `product_reviews` and `product_review_word_counts`, respectively. 
 
-These topics will automatically be created for you when you run the application should they not exist.
+They each return `Topic` objects, used later on.
+
+NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
 
 
 ### The StreamingDataFrame (SDF)
@@ -131,12 +96,13 @@ These topics will automatically be created for you when you run the application 
 sdf = app.dataframe(topic=product_reviews_topic)
 ```
 
-Now for the fun part: building our StreamingDataFrame, often shorthanded to "SDF".  
+Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
 
-We initialize it, and then continue re-assigning to the same variable ("sdf") as we add operations until we are finished with it.
+We initialize it, and then continue re-assigning to the same variable (`sdf`) as we add operations until we are finished with it.
 
+Also note how we pass our input topic object (from the previous step) to it.
 
-### Tokenizing Text - SDF.apply(F, expand=True)
+### Tokenizing Text
 
 ```python
 def tokenize_and_count(text):
@@ -146,10 +112,10 @@ def tokenize_and_count(text):
 sdf = sdf.apply(tokenize_and_count, expand=True)
 ```
 
-This is where most of the magic happens! Using SDF.apply(F), we can apply any custom
-function F to alter our incoming text (F should take the data as an argument, and return data).
+This is where most of the magic happens! We alter our text data with [SDF.apply(F)](../../processing.md#streamingdataframeapply) (`F` should take your data as an 
+argument, and return something back): our `F` here is `tokenize_and_count`.
 
-So, with "tokenize_and_count", we do some fairly typical string normalization and finish with counting, resulting in (word, count) pairs.
+Basically we do some fairly typical string normalization and count the words, resulting in (word, count) pairs.
 
 
 This effectively turns this:
@@ -161,9 +127,9 @@ to this:
 `>>> [('bob', 1), ('likes', 2), ('bananas', 1), ('and', 1), ('frank', 1), ('apples', 1)]`
 
 
-Two important and related points here:
-1. Note the `expand=True` argument for SDF.apply(F), which tells SDF "hey, this .apply() returns multiple independent events!"
-2. Our F returns a list (must be a non-dict iterable of some kind), hence the "expand".
+NOTE: two VERY important and related points around the `expand=True` argument:
+1. it tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
+2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
 
 
 ### Filtering Expanded Results
@@ -176,12 +142,14 @@ def should_skip(word_count_pair):
 sdf = sdf.filter(should_skip)
 ```
 
-Now we filter out some "filler" words using SDF.filter(F), where F is our "should_skip" function. 
+Now we filter out some "filler" words using [SDF.filter(F)](../../processing.md#streamingdataframefilter), where `F` is our `should_skip` function. 
 
-If F returns any "True"-like value, the pipeline continues processing that event...otherwise, the event stops here. 
+For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
+- `True` -> continue processing this event
+- `False` -> stop ALL further processing of this event (including produces!)
 
-Remember that each word is treated like an independent event now due to the previous expand, so our
-function expects only one word count pair at a time.
+Remember that each word is now an independent event now due to our previous expand, so our
+`F` expects only a single word count pair.
 
 With this filter applied, our "and" event is removed:
 
@@ -194,9 +162,10 @@ With this filter applied, our "and" event is removed:
 sdf = sdf.to_topic(word_counts_topic, key=lambda word_count_pair: word_count_pair[0])
 ```
 
-Finally, we produce each event downstream (they will be independent messages).
+Finally, we produce each event downstream (they will be independent messages) 
+via [SDF.to_topic(T)](../../processing.md#writing-data-to-kafka-topics), where `T` is our previously defined `Topic` (not the topic name!).
 
-Notice here the optional `key` argument, which allows you to provide a custom key generator.
+Notice here the optional `key` argument, which allows you to provide a [custom key generator](../../processing.md#changing-message-key-before-producing).
 
 While it's fairly common to maintain the input event's key (SDF's default behavior), 
 there are many reasons why you might adjust it.
@@ -215,10 +184,12 @@ So we would produce 5 messages in total, like so:
 
 ## 6. Try it yourself!
 
-### Run kafka
-First, go ahead and get a kafka cluster running. To easily follow along with this example, just follow THESE (link) instructions.
+### Run Kafka
+First, have a running Kafka cluster. 
 
-### Install quixstreams
+To conveniently follow along with this tutorial, just [run this simple one-liner](../tutorials-overview.md#running-kafka-locally).
+
+### Install Quix Streams
 In your python environment, run `pip install quixstreams`
 
 ### Run the Producer and Application
@@ -231,4 +202,5 @@ Look at all those counted works, beautiful!
 ### Related topics - Data Aggregation
 
 If you were interested in learning how to aggregate across events as we hinted
-at with our key changes, check out how easy it is with SDF's stateful functions here! [LINK]
+at with our key changes, check out how easy it is with either SDF's [stateful functions](../../processing.md#using-state-store)
+or [windowing](../../windowing.md), depending on your use case!
