@@ -249,8 +249,8 @@ sdf = sdf.to_topic(customers_qualified_topic)
 Finally, we produce our non-filtered results downstream via [SDF.to_topic(T)](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
-NOTE: by default, our outgoing Kafka key is persisted from the input message. Should
-you need to change it, check out our documentation HERE.
+NOTE: by default, our outgoing Kafka key is persisted from the input message. 
+[You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
 
 
 ## 6. Try it yourself!
@@ -274,6 +274,6 @@ One thing to keep in mind is that the Quix Streams does not log/print any messag
 operations by default.
 
 To get visual outputs around message processing, you can either:
-- use recommended ways of printing/logging stuff HERE
-- use DEBUG mode via `Application(loglevel="DEBUG")`
-  - WARNING: you should NOT run your applications in "DEBUG" mode in production.
+- use [recommended way of printing/logging stuff](../../processing.md#debugging)
+- use `DEBUG` mode via `Application(loglevel="DEBUG")`
+  - WARNING: you should NOT run your applications in `DEBUG` mode in production.

@@ -45,7 +45,7 @@ showcase that.
 
 ## 4. Generating Text Data
 
-We have a standalone producer HERE [LINK] that generates a static set of "reviews", 
+We have a [**review producer**](producer.py) that generates a static set of "reviews", 
 which are simply strings, where the key is the product name.
 
 The Kafka message looks like:
