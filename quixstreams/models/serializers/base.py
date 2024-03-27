@@ -68,8 +68,7 @@ class Deserializer(abc.ABC):
         return value
 
     @abc.abstractmethod
-    def __call__(self, *args, **kwargs) -> Any:
-        ...
+    def __call__(self, *args, **kwargs) -> Any: ...
 
 
 class Serializer(abc.ABC):
@@ -91,8 +90,7 @@ class Serializer(abc.ABC):
         return {}
 
     @abc.abstractmethod
-    def __call__(self, *args, **kwargs) -> Union[str, bytes]:
-        ...
+    def __call__(self, *args, **kwargs) -> Union[str, bytes]: ...
 
 
 SerializerStr: TypeAlias = Literal[

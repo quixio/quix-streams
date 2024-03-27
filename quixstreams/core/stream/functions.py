@@ -20,8 +20,7 @@ T = TypeVar("T")
 StreamCallable = Callable[[T], R]
 
 
-class Filtered(Exception):
-    ...
+class Filtered(Exception): ...
 
 
 class StreamFunction(abc.ABC):

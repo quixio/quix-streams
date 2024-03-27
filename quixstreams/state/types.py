@@ -77,11 +77,9 @@ class Store(Protocol):
         """
         ...
 
-    def __enter__(self):
-        ...
+    def __enter__(self): ...
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        ...
+    def __exit__(self, exc_type, exc_val, exc_tb): ...
 
 
 class StorePartition(Protocol):
@@ -243,11 +241,9 @@ class PartitionTransaction(State):
         :param offset: offset of the last processed message, optional.
         """
 
-    def __enter__(self):
-        ...
+    def __enter__(self): ...
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        ...
+    def __exit__(self, exc_type, exc_val, exc_tb): ...
 
 
 class WindowedState(Protocol):
@@ -311,8 +307,7 @@ class WindowedState(Protocol):
 
 class WindowedPartitionTransaction(WindowedState):
     @property
-    def state(self) -> WindowedState:
-        ...
+    def state(self) -> WindowedState: ...
 
     @property
     def failed(self) -> bool:
@@ -351,11 +346,9 @@ class WindowedPartitionTransaction(WindowedState):
         :param offset: offset of the last processed message, optional.
         """
 
-    def __enter__(self):
-        ...
+    def __enter__(self): ...
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        ...
+    def __exit__(self, exc_type, exc_val, exc_tb): ...
 
 
 class PartitionRecoveryTransaction(Protocol):
@@ -363,8 +356,7 @@ class PartitionRecoveryTransaction(Protocol):
     A class for managing recovery for a StorePartition from a changelog message
     """
 
-    def write_from_changelog_message(self):
-        ...
+    def write_from_changelog_message(self): ...
 
     def flush(self):
         """

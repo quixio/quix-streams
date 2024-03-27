@@ -15,8 +15,7 @@ __all__ = (
 _current_message_context = ContextVar("current_message_context")
 
 
-class MessageContextNotSetError(QuixException):
-    ...
+class MessageContextNotSetError(QuixException): ...
 
 
 def set_message_context(context: Optional[MessageContext]):
