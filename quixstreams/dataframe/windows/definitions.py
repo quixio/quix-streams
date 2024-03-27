@@ -50,8 +50,7 @@ class FixedTimeWindowDefinition(abc.ABC):
         func_name: str,
         aggregate_func: WindowAggregateFunc,
         merge_func: Optional[WindowMergeFunc] = None,
-    ) -> "FixedTimeWindow":
-        ...
+    ) -> "FixedTimeWindow": ...
 
     @property
     def duration_ms(self) -> int:

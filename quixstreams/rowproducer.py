@@ -18,8 +18,7 @@ class RowProducerProto(Protocol):
         key: Optional[Any] = None,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
-    ):
-        ...
+    ): ...
 
 
 class RowProducer(Producer, RowProducerProto):

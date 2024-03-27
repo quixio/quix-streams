@@ -10,5 +10,4 @@ class PartitionAssignmentError(QuixException):
     """
 
 
-class KafkaPartitionError(QuixException):
-    ...
+class KafkaPartitionError(QuixException): ...

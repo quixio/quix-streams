@@ -107,8 +107,7 @@ class TestStream:
         )
         repr(stream)
 
-    def test_init_with_unwrapped_function(self):
-        ...
+    def test_init_with_unwrapped_function(self): ...
 
     def test_apply_expand(self):
         stream = Stream().add_apply(lambda v: [v, v], expand=True)

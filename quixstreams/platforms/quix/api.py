@@ -43,11 +43,9 @@ class QuixPortalApiService:
         self.api_version = api_version or "2.0"
         self.session = self._init_session()
 
-    class MissingConnectionRequirements(QuixException):
-        ...
+    class MissingConnectionRequirements(QuixException): ...
 
-    class UndefinedQuixWorkspaceId(QuixException):
-        ...
+    class UndefinedQuixWorkspaceId(QuixException): ...
 
     class SessionWithUrlBase(requests.Session):
         def __init__(self, url_base: str):
