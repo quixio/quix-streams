@@ -35,15 +35,15 @@ class RocksDBOptions(RocksDBOptionsType):
     Please see `rocksdict.Options` for a complete description of other options.
     """
 
-    write_buffer_size: int = 64 * 1024 * 1024  # 64MB
-    target_file_size_base: int = 64 * 1024 * 1024  # 64MB
+    write_buffer_size: int = 64 * 1024 * 1024
+    target_file_size_base: int = 64 * 1024 * 1024
     max_write_buffer_number: int = 3
-    block_cache_size: int = 128 * 1024 * 1024  # 128MB
+    block_cache_size: int = 128 * 1024 * 1024
     bloom_filter_bits_per_key: int = 10
     enable_pipelined_write: bool = False
     compression_type: CompressionType = "lz4"
     wal_dir: Optional[str] = None
-    max_total_wal_size: int = 128 * 1024 * 1024  # 128MB
+    max_total_wal_size: int = 128 * 1024 * 1024
     db_log_dir: Optional[str] = None
     dumps: DumpsFunc = dumps
     loads: LoadsFunc = loads

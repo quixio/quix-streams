@@ -39,6 +39,8 @@ Python 3.8+, Apache Kafka 0.10+
 
 See [requirements.txt](https://github.com/quixio/quix-streams/blob/main/requirements.txt) for the full list of requirements
 
+## Documentation
+[Quix Streams Docs](https://quix.io/docs/quix-streams/introduction.html)
 
 ### Example Application
 
