@@ -631,4 +631,4 @@ sdf = sdf.update(add_max_temperature, stateful=True)
 ```
 
 For more information about stateful processing, see
-[**Stateful Processing**](../advanced/stateful-processing).
+[**Stateful Processing**](advanced/stateful-processing.md).

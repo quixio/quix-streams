@@ -6,7 +6,7 @@ To process the streaming data, the data first needs to be produced to the Kafka 
 Below we will cover how you can use `Producer` class to produce data to Kafka topics.
 
 ## Step 1. Create an Application
-To start working with Quix Streams, you first need to create an [`Application`](../api-reference/application#application) object.
+To start working with Quix Streams, you first need to create an [`Application`](api-reference/application.md#application) object.
 
 Application is the main entry point, and it provides API to create Producers, Topics, and other necessary objects.
 ```python
@@ -18,13 +18,13 @@ app = Application(broker_address='localhost:9092')
 ```
 
 ## Step 2. Define a Topic and serialization
-When the `Application` is created, we may define the [`Topic`](../api-reference/quixstreams#topic) object that we will be publishing our data to.
+When the `Application` is created, we may define the [`Topic`](api-reference/quixstreams.md#topic) object that we will be publishing our data to.
 
-We will use [`Topic`](../api-reference/quixstreams#topic) to serialize and deserialize the data.  
+We will use [`Topic`](api-reference/quixstreams.md#topic) to serialize and deserialize the data.  
 It will also help the `Application` instance to validate if the topic exists.
 If there is no such topic, by default, the `Application` will try to create it with the default parameters.
 
-To learn more about the Topic objects and available serialization formats, see [Managing Kafka Topics](../advanced/topics) and [Serialization and Deserialization](../advanced/serialization/) pages.  
+To learn more about the Topic objects and available serialization formats, see [Managing Kafka Topics](advanced/topics.md) and [Serialization and Deserialization](advanced/serialization.md) pages.  
 
 ```python
 # Define a topic "my_topic" with JSON serialization
@@ -33,7 +33,7 @@ topic = app.topic(name='my_topic', value_serializer='json')
 
 
 ## Step 3. Create a Producer and produce messages
-When the `Application` and `Topic` instances are ready, we may create the [`Producer`](../api-reference/quixstreams#producer) and start producing messages to the topic.
+When the `Application` and `Topic` instances are ready, we may create the [`Producer`](api-reference/quixstreams.md#producer) and start producing messages to the topic.
 
 ```python
 event = {"id": "1", "text": "Lorem ipsum dolor sit amet"}
@@ -80,7 +80,7 @@ with app.get_producer() as producer:
 ## Configuration
 
 
-The Producer configuration is supplied via the [`Application`](../api-reference/application#application) instance.
+The Producer configuration is supplied via the [`Application`](api-reference/application.md#application) instance.
 
 The `Producer` is implemented on top of the [`confluent_kafka`](https://github.com/confluentinc/confluent-kafka-python) library, and is configured similarly.
 
