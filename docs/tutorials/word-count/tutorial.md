@@ -40,7 +40,7 @@ More than that: each new event generated via expansion is processed individually
 through the remainder of your pipeline, allowing you to write ALL your operations 
 like they are handling a single event...because they are!
 
-This can often require adjusting their respective outgoing Kafka keys as well, so we additionally
+NOTE: Expanding often includes adjusting outgoing Kafka keys as well, so we additionally
 showcase that.
 
 ## 4. Generating Text Data
@@ -74,7 +74,7 @@ app = Application(
 
 First, create the [Quix Streams Application](../../configuration.md), which is our constructor for everything! We provide it our connection settings, consumer group (ideally unique per Application), and where the consumer group should start from on our topic. 
 
-Once you are more familiar with Kafka, we definitely recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
+NOTE: Once you are more familiar with Kafka, we recommend [learning more about auto_offset_reset](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls).
 
 ### Define Topics
 
@@ -100,7 +100,7 @@ Now for the fun part: building our [StreamingDataFrame](../../processing.md#intr
 
 We initialize it, and then continue re-assigning to the same variable (`sdf`) as we add operations until we are finished with it.
 
-Also note how we pass our input topic object (from the previous step) to it.
+Also notice that we pass our input `Topic` (from the previous step) to it.
 
 ### Tokenizing Text
 
