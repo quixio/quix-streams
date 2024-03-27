@@ -3,7 +3,7 @@
 In this article, we will go over how to manage input and output Kafka topics with Quix Streams.  
 
 
-To learn more about Changelog topics and how they are managed, please see [Stateful Processing](/docs/quix-streams/advanced/stateful-processing/#how-changelog-topics-work)
+To learn more about Changelog topics and how they are managed, please see [Stateful Processing](../stateful-processing/#how-changelog-topics-work)
 
 
 ## Creating Topics Automatically 
