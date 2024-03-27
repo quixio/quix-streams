@@ -24,6 +24,10 @@ exclude_docs: |
 nav:
   - Introduction: 'introduction.md'
   - Quickstart: 'quickstart.md'
+  - Tutorials:
+    - Word Count: 'tutorials/word-count/tutorial.md'
+    - Anomaly Detection: 'tutorials/anomaly-detection/tutorial.md'
+    - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
   - Producing Data to Kafka: producer.md
   - Processing & Transforming Data: processing.md
   - Windows & Aggregations: windowing.md
