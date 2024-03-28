@@ -18,10 +18,12 @@ app = Application(broker_address='localhost:9092')
 ```
 
 ## Step 2. Define a Topic and serialization
-When the `Application` is created, we may define the [`Topic`](api-reference/quixstreams.md#topic) object that we will be publishing our data to.
+When the `Application` is created, you may define the [`Topic`](api-reference/quixstreams.md#topic) object to publish data to it.
 
-We will use [`Topic`](api-reference/quixstreams.md#topic) to serialize and deserialize the data.  
-It will also help the `Application` instance to validate if the topic exists.
+The [`Topic`](api-reference/quixstreams.md#topic) is used for:
+
+- Serializing the data.  
+- Making the `Application` instance to validate if the topic exists.  
 If there is no such topic, by default, the `Application` will try to create it with the default parameters.
 
 To learn more about the Topic objects and available serialization formats, see [Managing Kafka Topics](advanced/topics.md) and [Serialization and Deserialization](advanced/serialization.md) pages.  
@@ -33,7 +35,7 @@ topic = app.topic(name='my_topic', value_serializer='json')
 
 
 ## Step 3. Create a Producer and produce messages
-When the `Application` and `Topic` instances are ready, we may create the [`Producer`](api-reference/quixstreams.md#producer) and start producing messages to the topic.
+When the `Application` and `Topic` instances are ready, you can create the [`Producer`](api-reference/quixstreams.md#producer) and start producing messages to the topic.
 
 ```python
 event = {"id": "1", "text": "Lorem ipsum dolor sit amet"}

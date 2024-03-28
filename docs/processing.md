@@ -33,8 +33,8 @@ To run it, pass the `StreamingDataFrame` object to the `Application.run()` metho
 
 **Example:**
 
-Let's assume we have a temperature sensor, and this sensor produces readings in
-Fahrenheit to the `temperature` topic , and we need to convert them to Celsius, and
+Let's assume you have a temperature sensor producing readings in
+Fahrenheit to the `temperature` topic , and you need to convert them to Celsius, and
 publish results to the output topic.
 
 Message format:
@@ -45,7 +45,7 @@ Message format:
 }
 ```
 
-Here is how we can do it with `StreamingDataFrame`:
+Here is how it can be done with `StreamingDataFrame`:
 
 ```python
 from quixstreams import Application
@@ -106,7 +106,7 @@ You may use it to extract only the necessary columns and reduce the size of the 
 
 **Example**:
 
-In this example, assume we receive temperature readings in the following format:
+In this example, assume you receive temperature readings in the following format:
 
 ```json
 {
@@ -118,7 +118,7 @@ In this example, assume we receive temperature readings in the following format:
 } 
 ```
 
-and we only need "temperature" and "timestamp" columns for processing:
+and you only need "temperature" and "timestamp" columns for processing:
 
 ```json
 {
@@ -158,7 +158,7 @@ sent to downstream transformations.
 
 **Example**:
 
-Imagine we receive data in tabular format, and we need to convert it to a plain
+Imagine you receive data in tabular format, and you need to convert it to a plain
 structure.
 
 ```python
@@ -194,7 +194,7 @@ There are two primary ways to update data in-place with StreamingDataFrame:
 
 **Example**:
 
-Assume we receive the same temperature readings in Celsius, but this time we need to add
+Assume you receive the same temperature readings in Celsius, but this time you need to add
 a new column with values in Fahrenheit.
 
 Here is how you can do that using columns and DataFrame API:
@@ -259,7 +259,7 @@ are now skipped.
 
 **Example**:
 
-Imagine we process the temperature readings, and we are only interested in numbers
+Imagine you process the temperature readings, and you are only interested in numbers
 higher than a certain threshold.
 
 Here is how to filter these values with DataFrame API:
@@ -315,8 +315,8 @@ The returned key must be compatible with `key_serializer` provided to the `Topic
 
 **Example:**
 
-Imagine we get temperature readings from multiple sensors in multiple locations.   
-Each message uses a sensor ID as a message key, but we want them to use location ID
+Imagine you get temperature readings from multiple sensors in multiple locations.   
+Each message uses a sensor ID as a message key, but you want them to use location ID
 instead to do aggregations downstream.
 
 Message format:
@@ -328,7 +328,7 @@ Message format:
 }
 ```
 
-Here is how we can produce messages to the output topics:
+Here is how you can produce messages to the output topics:
 
 ```python
 from quixstreams import Application
@@ -605,7 +605,7 @@ that messages with different keys don't have access to the same state.
 
 **Example:**
 
-Imagine we process the temperature readings, and we want to add the maximum observed
+Imagine you process the temperature readings, and you need to add the maximum observed
 temperature to the current value:
 
 ```python

@@ -153,7 +153,7 @@ app.clear_state()
 
 ## State Guarantees
 
-Because we currently handle messages with "At Least Once" guarantees, it is possible
+Because Quix Streams currently handles messages with "At Least Once" guarantees, it is possible
 for the state to become slightly out of sync with a topic in between shutdowns and
 rebalances. 
 

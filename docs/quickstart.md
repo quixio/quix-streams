@@ -8,7 +8,7 @@ In this quickstart guide, you will learn how to create your first Quix Streams a
 ## Demo application
 Our demo application will analyze the incoming stream of chat messages, split them into words, and write the results back to Kafka.
 
-In this guide, we assume that the Kafka cluster is up and running locally on `localhost:9092`.
+In this guide, it's assumed that the Kafka cluster is up and running locally on `localhost:9092`.
 
 
 ### Step 1. Producing data to Kafka
@@ -115,7 +115,7 @@ Produce event with key="id3" value="b'{"chat_id":"id3","text":"Mollis nunc sed i
 
 ### Step 4. Running the Consumer
 
-Now that we have a topic with data, we may start consuming events and process them.  
+Now that you have a topic with data, you may start consuming events and process them.  
 Let's run the `consumer.py` to see the results:
 
 ```commandline

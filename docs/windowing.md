@@ -96,8 +96,8 @@ For example, a timestamp `00:33:13` will be assigned to an interval
 
 **Example:**
 
-Imagine we receive temperature readings from sensors, and we need to calculate average temperature for each hour, and produce updates for each incoming message.
-The message key is a sensor ID, so we aggregate temperature by each sensor.
+Imagine you receive temperature readings from sensors, and you need to calculate average temperature for each hour, and produce updates for each incoming message.
+The message key is a sensor ID, so the aggregations will be grouped by each sensor.
 
 Input:
 
@@ -177,8 +177,8 @@ For example, a timestamp `00:33:13` will match two intervals for a hopping windo
     
 **Example:**
 
-Imagine we receive temperature readings from sensors, and we need to calculate average temperature for each hour with 10 minutes hop, and produce updates for each incoming message.
-The message key is a sensor ID, so we aggregate temperature by each sensor.
+Imagine you receive temperature readings from sensors, and you need to calculate average temperature for each hour with 10 minutes hop, and produce updates for each incoming message.
+The message key is a sensor ID, so the aggregations will be grouped by each sensor.
 
 Input:  
 (Here the `"timestamp"` column illustrates Kafka message timestamps)
@@ -266,7 +266,7 @@ With `reduce()`, you can define a wide range of aggregations, such as:
 
 **Example**:
 
-Assume we receive the temperature data from the sensor, and we need to calculate these aggregates for each 10-minute tumbling window:
+Assume you receive the temperature data from the sensor, and you need to calculate these aggregates for each 10-minute tumbling window:
 
 - min temperature
 - max temperature
@@ -384,7 +384,7 @@ When they are not, extract the numeric values first using `.apply()` function.
 
 **Example:**
 
-Imagine we receive the temperature data from the sensor, and we need to calculate only a minimum temperature for each 10-minute tumbling window.  
+Imagine you receive the temperature data from the sensor, and you need to calculate only a minimum temperature for each 10-minute tumbling window.  
 
 ```python
 from datetime import timedelta
@@ -452,7 +452,7 @@ sdf = sdf.apply(
 
 ## Lateness and Out-of-Order Processing
 When working with event time, some events may be processed later than they're supposed to.  
-We call such events **"out-of-order"** because they violate the expected order of time in the data stream. 
+Such events are called **"out-of-order"** because they violate the expected order of time in the data stream. 
 
 Example:
 
@@ -466,7 +466,8 @@ To account for late events, windows in Quix Streams employ the concept of a **"g
 
 By default, events are dropped (and are not processed) when they arrive after reaching the end of the window.
 
-But we can tell the window to wait for a certain period before closing itself. To do that, you must specify a grace period.
+But you can tell the window to wait for a certain period before closing itself.  
+To do that, you must specify a grace period.
 
 Example:
 

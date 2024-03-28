@@ -12,9 +12,9 @@ For example:
 - To batch messages in-memory before processing them.
 
 `Producer` & `Consumer` are essentially thin wrappers on top of the [`confluent_kafka`](https://github.com/confluentinc/confluent-kafka-python) library, which is used in Quix Streams.  
-The wrapping code adds additional logging, typing, and error handling, but we intend to keep the methods API the same.
+The wrapping code adds additional logging, typing, and error handling, but the intention is to keep the methods API the same.
 
-Using them will require more code then with `StreamingDataFrame`, but you can implement any streaming workflows you need.
+Using them will require more code than with `StreamingDataFrame` but you can implement any streaming workflows you need.
 
 
 ## Using Consumer
