@@ -20,22 +20,8 @@ See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams) for d
 
 ## Next steps
 
-<div class="grid cards" markdown>
-
-- __Quickstart__
-
-    ---
-
-    Get started using Quix Streams. Get your CPU data into Quix in under 10 minutes.
-
-    [Quickstart](https://quix.io/docs/get-started/quickstart.html)
-
-- __Quix Tour__
-
-    ---
-
-    Build a complete Python stream processing application in under 20 minutes.
-
-    [Quix Tour](https://quix.io/docs/get-started/quixtour/overview.html)
-
-</div>
+- [Quix Streams Quickstart](quickstart.md)
+- Quix Streams Tutorials:
+    - [Word Count](tutorials/word-count/tutorial.md)
+    - [Anomaly Detection](tutorials/anomaly-detection/tutorial.md)
+    - [Purchase Filtering](tutorials/purchase-filtering/tutorial.md)
