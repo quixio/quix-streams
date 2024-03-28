@@ -34,7 +34,7 @@ To run it, pass the `StreamingDataFrame` object to the `Application.run()` metho
 **Example:**
 
 Let's assume we have a temperature sensor, and this sensor produces readings in
-Fahrenheits to the `temperature` topic , and we need to convert them to Celsius, and
+Fahrenheit to the `temperature` topic , and we need to convert them to Celsius, and
 publish results to the output topic.
 
 Message format:
@@ -196,7 +196,7 @@ There are two primary ways to update data in-place with StreamingDataFrame:
 **Example**:
 
 Assume we receive the same temperature readings in Celsius, but this time we need to add
-a new column with values in Fahrenheits.
+a new column with values in Fahrenheit.
 
 Here is how you can do that using columns and DataFrame API:
 > **_NOTE:_**  This approach works only with dict-like values.
@@ -204,7 +204,7 @@ Here is how you can do that using columns and DataFrame API:
 ```python
 sdf = app.dataframe(...)
 
-# Add a new column with temperature in Fahrenheits
+# Add a new column with temperature in Fahrenheit
 # Input: {'temperature': 9}
 sdf['temperatureF'] = (sdf['temperature'] * 9 / 5) + 32
 # Output: {'temperature': 9, 'temperatureF': 48.2}
@@ -230,9 +230,9 @@ the downstream StreamingDataFrame.
 sdf = app.dataframe(...)
 
 
-def add_fahrenheits(value):
+def add_fahrenheit(value):
     """
-    Add a new column with temperature in Fahrenheits
+    Add a new column with temperature in Fahrenheit
     
     Note that this function doesn't return anything and only mutates the incoming value
     """
@@ -240,7 +240,7 @@ def add_fahrenheits(value):
 
 
 # Input: {'temperature': 9}
-sdf = sdf.update(add_fahrenheits)
+sdf = sdf.update(add_fahrenheit)
 # Output: {'temperature': 9, 'temperatureF': 48.2}
 ```
 
