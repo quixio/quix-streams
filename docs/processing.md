@@ -355,7 +355,7 @@ sdf = sdf.to_topic(output_topic, key=lambda value: str(value["location_id"]))
 `StreamingDataFrame` class provides rich API to access and combine individual columns,
 similar to `pandas.DataFrame`.
 
-With this API, can:
+With this API, you can:
 
 - Update and set new columns
 - Do boolean and math operations on columns
@@ -393,8 +393,7 @@ sdf['average_is_null'] = sdf["average"].isnull()
 
 ### How it works
 
-Under the good, when you access a column on `StreamingDataFrame`, it generates and new
-object `StreamingSeries` that refers to the value of the passed key.
+Under the good, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
 
 These objects are also lazy, and they are evaluated only when the `StreamingDataFrame`is
 executed via `app.run(sdf)`.
@@ -441,19 +440,19 @@ There are 2 other use cases for `.apply()`:
 1. `StreamingDataFrame.apply()` can be used to assign new columns if the value is a
    dictionary:
 
-```python
-# Calculate an average value of some metric using "sum" and "count" columns
-sdf['average'] = sdf.apply(lambda value: value['sum'] / value['count'])
-```
+    ```python
+    # Calculate an average value of some metric using "sum" and "count" columns
+    sdf['average'] = sdf.apply(lambda value: value['sum'] / value['count'])
+    ```
 
 2. `StreamingDataFrame.apply()` can be used to filter values.
    In this case, the result of the passed function is interpreted as boolean.   
    If it is `False`, the value will be filtered out from the stream:
 
-```python
-# Filter values where sum of "field_b" and "field_c" is greater than 0
-sdf = sdf[sdf.apply(lambda value: (value['field_b'] + value['field_c']) > 0)]
-```
+    ```python
+    # Filter values where sum of "field_b" and "field_c" is greater than 0
+    sdf = sdf[sdf.apply(lambda value: (value['field_b'] + value['field_c']) > 0)]
+    ```
 
 #### Expanding collections into items
 
@@ -478,7 +477,7 @@ to the item of the returned iterable.
 <br/>
 The items will be processed in the same order as they are returned.
 
-There are certain limitations coming with this API:
+There are certain limitations of this API:
 
 - `StreamingDataFrame.apply(expand=True)` cannot be used to filter values
   via `sdf[sdf.apply(<function>, expand=True)]`
