@@ -145,6 +145,11 @@ Now that you have a simple Quix Streams application working, you can dive into m
 - [Processing & Transforming Data](./processing.md)
 - [Windowing & Aggregations](./windowing.md)
 
+Or check out the tutorials for more in-depth examples:
+
+- [Tutorial - Word Count](tutorials/word-count/tutorial.md)
+- [Tutorial - Anomaly Detection](tutorials/anomaly-detection/tutorial.md)
+- [Tutorial - Purchase Filtering](tutorials/purchase-filtering/tutorial.md) 
 
 ## Getting help
 

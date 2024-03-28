@@ -21,7 +21,9 @@ See the [Quix Streams GitHub page](https://github.com/quixio/quix-streams) for d
 ## Next steps
 
 - [Quix Streams Quickstart](quickstart.md)
-- Quix Streams Tutorials:
-    - [Word Count](tutorials/word-count/tutorial.md)
-    - [Anomaly Detection](tutorials/anomaly-detection/tutorial.md)
-    - [Purchase Filtering](tutorials/purchase-filtering/tutorial.md)
+
+Check out Quix Streams tutorials for more in-depth examples:
+
+- [Tutorial - Word Count](tutorials/word-count/tutorial.md)
+- [Tutorial - Anomaly Detection](tutorials/anomaly-detection/tutorial.md)
+- [Tutorial - Purchase Filtering](tutorials/purchase-filtering/tutorial.md) 
