@@ -9,19 +9,18 @@ To learn more about Quix Cloud and how to set up a project, please see the [Quix
 
 ### Can I Use Quix Streams With My Own Kafka?
 
-Using Quix Cloud with Quix Streams is optional.
+Using Quix Streams with Quix Cloud is entirely optional.  
+You could, for example, connect to Redpanda Cloud, or another supported broker, or connect to a self-hosted broker.
 
 
 ## Connecting to Kafka Brokers in Quix
 
 To connect to the Kafka broker in Quix Cloud, you need to take the following steps:
 
-**1. Create an Application instance using a special factory method - `Application.Quix()`.**    
+**1. Create an Application instance using a special factory method - `Application.Quix()`.**   
+    It has the same API as the `Application` class constructor, except it doesn't require you to pass the `broker_address`.  
+    It will configure the Application to connect to the Kafka broker in Quix Cloud using the Streaming Token provided using the environment variable `Quix__Sdk__Token`.
 
-
-It will configure the Application to connect to the Kafka broker in Quix Cloud using the Streaming Token provided using the environment variable `Quix__Sdk__Token`.
-
-It has the same API as the `Application` class constructor, except it doesn't require you to pass the `broker_address`.
 
 **2. [Obtain the Streaming Token for your Quix Cloud workspace](https://quix.io/docs/develop/authentication/streaming-token.html#how-to-find).**
 
