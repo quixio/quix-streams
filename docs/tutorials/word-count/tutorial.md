@@ -1,6 +1,6 @@
 # Tutorial: Word Counts
 
-We will build a simple word counter, which is a great introduction to quixstreams and Kafka!
+We will build a simple word counter, which is a great introduction to Quix Streams and Kafka!
 
 You'll learn how to:
 
