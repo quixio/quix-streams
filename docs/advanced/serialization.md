@@ -48,5 +48,3 @@ output_topic = app.topic('output', value_serializer=JSONSerializer())
 ```
 
 You can find all available serializers in `quixstreams.models.serializers` module.
-
-We also plan on including other popular ones like Avro and Protobuf in the near future.
