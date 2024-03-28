@@ -139,8 +139,7 @@ sdf = sdf.apply(lambda value: {'temperature': value['temperature'],
                                'timestamp': value['timestamp']})
 ```
 
-> **_NOTE:_**  The pandas-like approach works only with mapping-like values like
-> dicts.  
+> **_NOTE:_**  The pandas-like approach works only with mapping-like values like dictionaries.  
 > To make projection on top of non-mapping values (like custom objects), use
 > the `.apply()` approach.
 
@@ -190,7 +189,7 @@ There are two primary ways to update data in-place with StreamingDataFrame:
    Use it if the message value is decoded as dictionary.
 
 2. Using `StreamingDataFrame.update()` with a custom function.
-   Use this approach if the values are not dicts, or when you need to perform a more
+   Use this approach if the values are not dictionaries or when you need to perform a more
    complex function.
 
 **Example**:
@@ -363,7 +362,7 @@ With this API, can:
 - Filter data based on column values
 - Apply custom functions to individual columns
 
-> ***NOTE***: DataFrame API works only with mapping-like values like dicts.  
+> ***NOTE***: DataFrame API works only with mapping-like values like dictionaries.  
 > If the stream values are not dict-like, you may
 > use [custom functions](#using-custom-functions) instead to transform and filter the
 > data.
