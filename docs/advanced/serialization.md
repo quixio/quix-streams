@@ -19,7 +19,7 @@ The serialization settings are defined per-topic via these parameters of `Applic
 
 By default, message values are serialized with `json` and message keys are serialized with `bytes` (i.e. passed as they are received from Kafka).
 
-## Using Serialization
+## Configuring Serialization
 To set a serializer, you may either pass a string shorthand for it, or an instance of `quixstreams.models.serializers.Serializer` and `quixstreams.models.serializers.Deserializer` directly 
 to the `Application.topic()`.
 
