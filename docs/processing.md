@@ -99,8 +99,10 @@ output_topic = app.topic('input', value_serializer='json')
 
 ## Selecting Columns
 
-You can select only a few columns from the incoming message (aka "make a projection")
-using the pandas-like approach and provide
+Quix Streams provides a pandas-like API to select columns from incoming messages (AKA "to make a projection").  
+
+You may use it to extract only the necessary columns and reduce the size of the message before sending it downstream.
+
 
 **Example**:
 
