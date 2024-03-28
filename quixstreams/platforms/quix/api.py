@@ -5,8 +5,12 @@ from zipfile import ZipFile
 
 import requests
 
-from quixstreams.exceptions import QuixException
 from .env import QUIX_ENVIRONMENT
+from .exceptions import (
+    UndefinedQuixWorkspaceId,
+    MissingConnectionRequirements,
+    QuixApiRequestFailure,
+)
 
 __all__ = ("QuixPortalApiService",)
 DEFAULT_PORTAL_API_URL = "https://portal-api.platform.quix.io/"
@@ -43,10 +47,6 @@ class QuixPortalApiService:
         self.api_version = api_version or "2.0"
         self.session = self._init_session()
 
-    class MissingConnectionRequirements(QuixException): ...
-
-    class UndefinedQuixWorkspaceId(QuixException): ...
-
     class SessionWithUrlBase(requests.Session):
         def __init__(self, url_base: str):
             self.url_base = url_base
@@ -61,16 +61,39 @@ class QuixPortalApiService:
     @property
     def default_workspace_id(self) -> str:
         if not self._default_workspace_id:
-            raise self.UndefinedQuixWorkspaceId("You must provide a Quix Workspace ID")
+            raise UndefinedQuixWorkspaceId("You must provide a Quix Workspace ID")
         return self._default_workspace_id
 
     @default_workspace_id.setter
     def default_workspace_id(self, value):
         self._default_workspace_id = value
 
+    def _response_handler(self, r: requests.Response, *args, **kwargs):
+        """
+        Custom callback/hook that is called after receiving a request.Response
+
+        Catches non-200's and passes both the original exception and the Response body.
+
+        Note: *args and **kwargs expected for hook
+        """
+        try:
+            r.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            try:
+                reason_text = e.response.json()
+            except requests.exceptions.JSONDecodeError:
+                reason_text = e.response.text
+
+            raise QuixApiRequestFailure(
+                {
+                    "response_error": e,  # response error
+                    "response_body": reason_text,  # error message in the API response
+                }
+            )
+
     def _init_session(self) -> SessionWithUrlBase:
         s = self.SessionWithUrlBase(self._portal_api)
-        s.hooks = {"response": lambda r, *args, **kwargs: r.raise_for_status()}
+        s.hooks = {"response": self._response_handler}
         s.headers.update(
             {
                 "X-Version": self.api_version,
