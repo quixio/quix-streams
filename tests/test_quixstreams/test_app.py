@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 import uuid
 from concurrent.futures import Future
@@ -416,8 +417,266 @@ class TestApplication:
                 ...
         setup_topics.assert_called()
 
+    def test_consumer_extra_config(self, app_factory):
+        """
+        Some configs like `enable.auto.offset.store` are overridable and others are not
+        """
+        app = app_factory(
+            auto_offset_reset="latest",
+            consumer_extra_config={
+                "auto.offset.reset": "earliest",
+                "enable.auto.offset.store": True,
+            },
+        )
+
+        with app.get_consumer() as x:
+            assert x._consumer_config["enable.auto.offset.store"] is True
+            assert x._consumer_config["auto.offset.reset"] is "latest"
+
+    def test_producer_extra_config(self, app_factory):
+        """
+        Test that producer receives the Application extra configs
+        """
+        app = app_factory(
+            producer_extra_config={"max.in.flight": "123"},
+        )
+
+        with app.get_producer() as x:
+            assert x._producer_config["max.in.flight"] is "123"
+
+    def test_missing_broker_id_raise(self):
+        # confirm environment is empty
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ValueError) as e_info:
+                Application()
+            error_str = "Either broker address or Quix SDK Token must be provided"
+            assert error_str in e_info.value.args
+
+    def test_consumer_group_env(self):
+        """
+        Sanity check consumer_group gets set from the environment via getenv.
+        """
+        consumer_group = "my_group"
+        with patch.dict(os.environ, {"Quix__Consumer__group": consumer_group}):
+            app = Application(
+                broker_address="my_address", consumer_group=consumer_group
+            )
+        assert app._consumer_group == consumer_group
+
+    def test_consumer_group_default(self):
+        """
+        Sanity check behavior around getenv defaults
+        """
+        with patch.dict(os.environ, {}, clear=True):
+            app = Application(broker_address="my_address")
+        assert app._consumer_group == "quixstreams-default"
+
 
 class TestQuixApplication:
+    def test_init_with_quix_sdk_token_arg(self):
+        def cfg():
+            return {
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "bootstrap.servers": "address1,address2",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+
+        consumer_group = "c_group"
+        expected_workspace_cgroup = f"my_ws-{consumer_group}"
+        quix_sdk_token = "my_sdk_token"
+
+        def get_cfg_builder(quix_sdk_token):
+            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.get_confluent_broker_config.side_effect = cfg
+            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+            cfg_builder.quix_sdk_token = quix_sdk_token
+            return cfg_builder
+
+        with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder):
+            app = Application(
+                consumer_group=consumer_group,
+                quix_sdk_token=quix_sdk_token,
+                consumer_extra_config={"extra": "config"},
+                producer_extra_config={"extra": "config"},
+            )
+
+        # Check if items from the Quix config have been passed
+        # to the low-level configs of producer and consumer
+        assert cfg().items() <= app._producer._producer_config.items()
+        assert cfg().items() <= app._consumer._consumer_config.items()
+
+        assert app._producer._producer_config["extra"] == "config"
+        assert app._consumer._consumer_config["extra"] == "config"
+        assert app._consumer._consumer_config["group.id"] == expected_workspace_cgroup
+
+    def test_init_with_quix_sdk_token_env(self):
+        def cfg():
+            return {
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "bootstrap.servers": "address1,address2",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+
+        consumer_group = "c_group"
+        expected_workspace_cgroup = f"my_ws-{consumer_group}"
+        quix_sdk_token = "my_sdk_token"
+
+        def get_cfg_builder(quix_sdk_token):
+            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.get_confluent_broker_config.side_effect = cfg
+            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+            cfg_builder.quix_sdk_token = quix_sdk_token
+            return cfg_builder
+
+        with patch.dict(os.environ, {"Quix__Sdk__Token": quix_sdk_token}):
+            with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder):
+                app = Application(
+                    consumer_group=consumer_group,
+                    consumer_extra_config={"extra": "config"},
+                    producer_extra_config={"extra": "config"},
+                )
+
+        # Check if items from the Quix config have been passed
+        # to the low-level configs of producer and consumer
+        assert cfg().items() <= app._producer._producer_config.items()
+        assert cfg().items() <= app._consumer._consumer_config.items()
+
+        assert app._producer._producer_config["extra"] == "config"
+        assert app._consumer._consumer_config["extra"] == "config"
+        assert app._consumer._consumer_config["group.id"] == expected_workspace_cgroup
+
+    def test_init_with_quix_config_builder(self):
+        def cfg():
+            return {
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "bootstrap.servers": "address1,address2",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+
+        consumer_group = "c_group"
+        expected_workspace_cgroup = f"my_ws-{consumer_group}"
+        quix_sdk_token = "my_sdk_token"
+
+        def get_cfg_builder(quix_sdk_token):
+            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.get_confluent_broker_config.side_effect = cfg
+            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+            cfg_builder.quix_sdk_token = quix_sdk_token
+            return cfg_builder
+
+        app = Application(
+            consumer_group=consumer_group,
+            quix_config_builder=get_cfg_builder(quix_sdk_token),
+            consumer_extra_config={"extra": "config"},
+            producer_extra_config={"extra": "config"},
+        )
+
+        # Check if items from the Quix config have been passed
+        # to the low-level configs of producer and consumer
+        assert cfg().items() <= app._producer._producer_config.items()
+        assert cfg().items() <= app._consumer._consumer_config.items()
+
+        assert app._producer._producer_config["extra"] == "config"
+        assert app._consumer._consumer_config["extra"] == "config"
+        assert app._consumer._consumer_config["group.id"] == expected_workspace_cgroup
+
+    def test_init_with_broker_id_raises(self):
+        with pytest.raises(ValueError) as e_info:
+            Application(
+                broker_address="address",
+                quix_config_builder=create_autospec(QuixKafkaConfigsBuilder),
+            )
+        error_str = "Cannot provide both broker address and Quix SDK Token"
+        assert error_str in e_info.value.args
+
+    def test_topic_name_and_config(self, quix_app_factory):
+        """
+        Topic names created from Quix apps are prefixed by the workspace id
+        Topic config has provided values else defaults
+        """
+        workspace_id = "my-workspace"
+        app = quix_app_factory(workspace_id=workspace_id)
+        topic_manager = app._topic_manager
+        initial_topic_name = "input_topic"
+        topic_partitions = 5
+        topic = app.topic(
+            initial_topic_name,
+            config=topic_manager.topic_config(num_partitions=topic_partitions),
+        )
+        expected_name = f"{workspace_id}-{initial_topic_name}"
+        expected_topic = topic_manager.topics[expected_name]
+        assert topic.name == expected_name
+        assert expected_name in topic_manager.topics
+        assert (
+            expected_topic.config.replication_factor == topic_manager._topic_replication
+        )
+        assert expected_topic.config.num_partitions == topic_partitions
+
+
+class TestQuixApplicationWithState:
+    def test_quix_app_no_state_management_warning(
+        self, app_dot_quix_factory, monkeypatch, topic_factory, executor
+    ):
+        """
+        Ensure that Application.run() prints a warning if the app is stateful,
+        runs on Quix (the "Quix__Deployment__Id" env var is set),
+        but the "State Management" flag is disabled for the deployment.
+        """
+        app = app_dot_quix_factory()
+        topic = app.topic(str(uuid.uuid4()))
+        sdf = app.dataframe(topic)
+        sdf = sdf.apply(lambda x, state: x, stateful=True)
+
+        monkeypatch.setenv(
+            QuixEnvironment.DEPLOYMENT_ID,
+            "123",
+        )
+        monkeypatch.setenv(
+            QuixEnvironment.STATE_MANAGEMENT_ENABLED,
+            "",
+        )
+
+        with pytest.warns(RuntimeWarning) as warned:
+            executor.submit(_stop_app_on_timeout, app, 10.0)
+            app.run(sdf)
+
+        warnings = [w for w in warned.list if w.category is RuntimeWarning]
+        warning = str(warnings[0].message)
+        assert "State Management feature is disabled" in warning
+
+    def test_quix_app_state_dir_mismatch_warning(
+        self, app_dot_quix_factory, monkeypatch, caplog
+    ):
+        """
+        Ensure that Application.Quix() logs a warning
+        if the app runs on Quix (the "Quix__Deployment__Id" env var is set),
+        but the "state_dir" path doesn't match the one on Quix.
+        """
+        monkeypatch.setenv(
+            QuixEnvironment.DEPLOYMENT_ID,
+            "123",
+        )
+        with pytest.warns(RuntimeWarning) as warned:
+            app_dot_quix_factory()
+        warnings = [w for w in warned.list if w.category is RuntimeWarning]
+        warning = str(warnings[0].message)
+        assert "does not match the state directory" in warning
+
+
+class TestDeprecatedApplicationDotQuix:
+    """
+    We can remove this class after we remove Application.Quix().
+    """
+
     def test_init(self):
         def cfg():
             return {
@@ -450,13 +709,13 @@ class TestQuixApplication:
         assert app._consumer._consumer_config["group.id"] == "my_ws-c_group"
         cfg_builder.prepend_workspace_id.assert_called_with("c_group")
 
-    def test_topic_name_and_config(self, quix_app_factory):
+    def test_topic_name_and_config(self, app_dot_quix_factory):
         """
         Topic names created from Quix apps are prefixed by the workspace id
         Topic config has provided values else defaults
         """
         workspace_id = "my-workspace"
-        app = quix_app_factory(workspace_id=workspace_id)
+        app = app_dot_quix_factory(workspace_id=workspace_id)
         topic_manager = app._topic_manager
 
         initial_topic_name = "input_topic"
@@ -474,43 +733,15 @@ class TestQuixApplication:
         )
         assert expected_topic.config.num_partitions == topic_partitions
 
-    def test_consumer_extra_config(self, app_factory):
-        """
-        Test that some configs like `enable.auto.offset.store` are overridable and others are not
-        """
-        app = app_factory(
-            auto_offset_reset="latest",
-            consumer_extra_config={
-                "auto.offset.reset": "earliest",
-                "enable.auto.offset.store": True,
-            },
-        )
-
-        with app.get_consumer() as x:
-            assert x._consumer_config["enable.auto.offset.store"] is True
-            assert x._consumer_config["auto.offset.reset"] is "latest"
-
-    def test_producer_extra_config(self, app_factory):
-        """
-        Test that setting same configs through different ways works in the expected way
-        """
-        app = app_factory(
-            auto_offset_reset="latest",
-            producer_extra_config={"auto.offset.reset": "earliest"},
-        )
-
-        with app.get_consumer() as x:
-            assert x._consumer_config["auto.offset.reset"] is "latest"
-
     def test_quix_app_stateful_quix_deployment_no_state_management_warning(
-        self, quix_app_factory, monkeypatch, topic_factory, executor
+        self, app_dot_quix_factory, monkeypatch, topic_factory, executor
     ):
         """
         Ensure that Application.run() prints a warning if the app is stateful,
         runs on Quix (the "Quix__Deployment__Id" env var is set),
         but the "State Management" flag is disabled for the deployment.
         """
-        app = quix_app_factory()
+        app = app_dot_quix_factory()
         topic = app.topic(str(uuid.uuid4()))
         sdf = app.dataframe(topic)
         sdf = sdf.apply(lambda x, state: x, stateful=True)
@@ -533,7 +764,7 @@ class TestQuixApplication:
         assert "State Management feature is disabled" in warning
 
     def test_quix_app_stateful_quix_deployment_state_dir_mismatch_warning(
-        self, quix_app_factory, monkeypatch, caplog
+        self, app_dot_quix_factory, monkeypatch, caplog
     ):
         """
         Ensure that Application.Quix() logs a warning
@@ -545,7 +776,7 @@ class TestQuixApplication:
             "123",
         )
         with pytest.warns(RuntimeWarning) as warned:
-            quix_app_factory()
+            app_dot_quix_factory()
         warnings = [w for w in warned.list if w.category is RuntimeWarning]
         warning = str(warnings[0].message)
         assert "does not match the state directory" in warning

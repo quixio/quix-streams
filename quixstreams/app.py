@@ -95,7 +95,7 @@ class Application:
         self,
         broker_address: Optional[str] = None,
         quix_sdk_token: Optional[str] = None,
-        consumer_group: str = "quixstreams-default",
+        consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
@@ -115,17 +115,22 @@ class Application:
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
     ):
-        # TODO: Document sdk token and that's it's taken from the environment by default
-        # TODO: Log when the quix SDK token is detected in .run()
-        # TODO: Pass quix_sdk_token directly to the config builder
-        # TODO: Add tests
         """
-
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
             Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+            Either this OR quix_sdk_token must be set to use Application (not both).
+            Linked Environment Variable: `Quix__Broker__Address`
+            Default: None
+        :param quix_sdk_token: If using the Quix Platform, the SDK token to connect with.
+            Either this OR broker_address must be set to use Application (not both).
+            Linked Environment Variable: `Quix__Sdk__Token`
+            Default: None (if not run on Quix Platform)
+              >***NOTE:*** the environment variable is set for you on the Quix Platform
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`
-            Default - "quixstreams-default".
+            Linked Environment Variable: `Quix__Consumer__Group`
+            Default - "quixstreams-default" (post-init).
+              >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
@@ -172,10 +177,26 @@ class Application:
 
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
+            > NOTE: It is recommended to just use quix_sdk_token instead.
         """
         configure_logging(loglevel=loglevel)
 
-        if quix_sdk_token:
+        # We can't use os.getenv as defaults (and have testing work nicely)
+        # since it evaluates getenv when the function is defined.
+        # In general this is just a most robust approach.
+        broker_address = broker_address or os.getenv("Quix__Broker__Address")
+        quix_sdk_token = quix_sdk_token or os.getenv("Quix__Sdk__Token")
+        consumer_group = consumer_group or os.getenv(
+            "Quix__Consumer_Group", "quixstreams-default"
+        )
+
+        if quix_config_builder and quix_sdk_token:
+            raise warnings.warn(
+                "'quix_config_builder' is not necessary when an SDK token is defined; "
+                "we recommend letting the Application generate it automatically"
+            )
+
+        if quix_sdk_token and not quix_config_builder:
             quix_config_builder = QuixKafkaConfigsBuilder(quix_sdk_token=quix_sdk_token)
 
         if broker_address and quix_config_builder:
@@ -183,8 +204,10 @@ class Application:
         elif not (broker_address or quix_config_builder):
             raise ValueError("Either broker address or Quix SDK Token must be provided")
         elif quix_config_builder:
-            # SDK Token or QuixKafkaConfigsBuilder are provided, configure app
-            # to use Quix broker and APIs
+            # SDK Token or QuixKafkaConfigsBuilder were provided
+            logger.info(
+                f"QUIX APPLICATION DETECTED; it will connect to Quix Platform brokers"
+            )
             topic_manager_factory = functools.partial(
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
@@ -199,7 +222,7 @@ class Application:
             consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
             producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
         else:
-            # Only broker address is provided, use # TODO:
+            # Only broker address is provided
             topic_manager_factory = TopicManager
 
         self._is_quix_app = bool(quix_config_builder)
@@ -272,7 +295,7 @@ class Application:
     @classmethod
     def Quix(
         cls,
-        consumer_group: str = "quixstreams-default",
+        consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
@@ -293,6 +316,8 @@ class Application:
         topic_manager: Optional[QuixTopicManager] = None,
     ) -> Self:
         """
+        >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
+
         Initialize an Application to work with Quix platform,
         assuming environment is properly configured (by default in the platform).
 
@@ -326,9 +351,10 @@ class Application:
         ```
 
         :param consumer_group: Kafka consumer group.
-            Passed as `group.id` to `confluent_kafka.Consumer`.
-            Default - "quixstreams-default".
-              >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
+            Passed as `group.id` to `confluent_kafka.Consumer`
+            Linked Environment Variable: `Quix__Consumer__Group`
+            Default - "quixstreams-default" (post-init).
+              >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
@@ -630,6 +656,7 @@ class Application:
         """
         # Ensure that state management is enabled if application is stateful
         # and is running on Quix platform
+        logger.info("APPLICATION IS CONNECTED TO THE QUIX PLATFORM")
         if self._state_manager.stores:
             check_state_management_enabled()
 

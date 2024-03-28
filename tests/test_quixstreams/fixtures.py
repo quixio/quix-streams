@@ -397,7 +397,7 @@ def quix_topic_manager_factory(
 
 
 @pytest.fixture()
-def quix_app_factory(
+def app_dot_quix_factory(
     random_consumer_group,
     kafka_container,
     tmp_path,
@@ -449,6 +449,57 @@ def quix_app_factory(
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
+        )
+
+    return factory
+
+
+@pytest.fixture()
+def quix_app_factory(
+    random_consumer_group,
+    kafka_container,
+    tmp_path,
+    topic_admin,
+    quix_mock_config_builder_factory,
+    quix_topic_manager_factory,
+):
+    """
+    For doing testing with Application.Quix() against a local cluster.
+
+    Almost all behavior is standard, except the quix_config_builder is mocked out, and
+    thus topic creation is handled with the TopicAdmin client.
+    """
+
+    def factory(
+        auto_offset_reset: AutoOffsetReset = "latest",
+        consumer_extra_config: Optional[dict] = None,
+        producer_extra_config: Optional[dict] = None,
+        on_consumer_error: Optional[ConsumerErrorCallback] = None,
+        on_producer_error: Optional[ProducerErrorCallback] = None,
+        on_processing_error: Optional[ProcessingErrorCallback] = None,
+        on_message_processed: Optional[MessageProcessedCallback] = None,
+        state_dir: Optional[str] = None,
+        auto_create_topics: bool = True,
+        use_changelog_topics: bool = True,
+        workspace_id: str = "my_ws",
+    ) -> Application:
+        state_dir = state_dir or (tmp_path / "state").absolute()
+        return Application(
+            consumer_group=random_consumer_group,
+            state_dir=state_dir,
+            auto_offset_reset=auto_offset_reset,
+            consumer_extra_config=consumer_extra_config,
+            producer_extra_config=producer_extra_config,
+            on_consumer_error=on_consumer_error,
+            on_producer_error=on_producer_error,
+            on_processing_error=on_processing_error,
+            on_message_processed=on_message_processed,
+            auto_create_topics=auto_create_topics,
+            use_changelog_topics=use_changelog_topics,
+            topic_manager=quix_topic_manager_factory(workspace_id=workspace_id),
+            quix_config_builder=quix_mock_config_builder_factory(
+                workspace_id=workspace_id
+            ),
         )
 
     return factory
