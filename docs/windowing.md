@@ -546,7 +546,7 @@ sdf = sdf.tumbling_window(timedelta(seconds=10)).sum().final()
 `.final()` mode makes the window wait until the maximum observed timestamp for the topic partition passes the window end before emitting.
 
 Emitting final results provides unique and complete values per window interval, but it adds some latency.
-Also, specifying a grace period via `grace_ms` will increase the latency, because the window now needs to wait for potential out-of-order events.
+Also, specifying a grace period using `grace_ms` will increase the latency, because the window now needs to wait for potential out-of-order events.
 
 You can use `final()` mode when some latency is allowed, but the emitted results must be complete and unique.
 

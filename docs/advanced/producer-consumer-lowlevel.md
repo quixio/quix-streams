@@ -39,7 +39,7 @@ See the **[Consumer API Docs](../api-reference/kafka.md#consumer)** for more det
 
 **Example**:
 
-Creating a `Consumer` object via an `Application` instance and start polling the topic.
+Creating a `Consumer` object using an `Application` instance and start polling the topic.
 
 ```python
 from quixstreams import Application
@@ -100,7 +100,7 @@ See the **[Producer API Docs](../api-reference/kafka.md#producer)** for more det
 
 **Example**:
 
-Creating a `Producer` object via an `Application` instance and start producing messages.
+Creating a `Producer` object using an `Application` instance and start producing messages.
 
 For a more complete example, you can also read the [Quickstart](../quickstart.md) page.
 

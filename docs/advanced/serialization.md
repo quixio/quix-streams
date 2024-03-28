@@ -10,7 +10,7 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `quix` - for deserializers only
 - `quix_events` & `quix_timeseries` - for serializers only.
 
-The serialization settings are defined per-topic via these parameters of `Application.topic()` function:
+The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
 
 - `key_serializer`
 - `value_serializer`

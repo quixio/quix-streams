@@ -16,7 +16,7 @@ To create topics automatically, you need:
 1. Make sure the `auto_create_topics=True` configuration parameter is passed to the `Application()` instance.   
 Default - `True`.
 
-2. Define a topic via `Application.topic()` method.    
+2. Define a topic using `Application.topic()` method.    
 This will let the app track this topic on the Kafka broker
 
 When you have this code in place, the topics will be created on `Application.run()`.
@@ -59,7 +59,7 @@ To do that, you can provide a custom configuration to the `Topic` objects.
 **Example:**
 
 Define input and output topics and create them automatically in Kafka with custom configs  
-by passing them via `TopicConfig`. 
+by passing them using `TopicConfig`. 
 
 ```python
 from quixstreams import Application

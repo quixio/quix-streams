@@ -82,7 +82,7 @@ with app.get_producer() as producer:
 ## Configuration
 
 
-The Producer configuration is supplied via the [`Application`](api-reference/application.md#application) instance.
+The Producer configuration is supplied by the [`Application`](api-reference/application.md#application) instance.
 
 The `Producer` is implemented on top of the [`confluent_kafka`](https://github.com/confluentinc/confluent-kafka-python) library, and is configured similarly.
 

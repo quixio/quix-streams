@@ -81,7 +81,7 @@ and it can work with any Python type.
 
 The serialization and deserialization of the messages
 is handled by the `Topic` objects according to
-the settings passed via `app.topic()`.
+the settings passed to `app.topic()`.
 
 **Example:**
 
@@ -208,7 +208,7 @@ sdf = app.dataframe(...)
 sdf['temperatureF'] = (sdf['temperature'] * 9 / 5) + 32
 # Output: {'temperature': 9, 'temperatureF': 48.2}
 
-# The same can be done via assigning columns and .apply()
+# The same can be done by assigning columns and .apply()
 # Note: here function passed to .apply() will only get "temperature" as an argument
 sdf['temperatureF'] = sdf['temperature'].apply(lambda temp: (temp * 9 / 5) + 32)
 
@@ -250,7 +250,7 @@ To filter data with `StreamingDataFrame`, you may use:
 - DataFrame API with conditional expressions on columns.  
   Use it if the message value is decode to a dictionary.
 
-- Custom functions via `sdf.filter(...)`
+- Custom functions using `sdf.filter(...)`
   Use this approach if the value is not a dictionary, or you need to perform a more
   complex function.
 
@@ -275,7 +275,7 @@ sdf = sdf[sdf['temperature'].apply(lambda temp: temp > 60)]
 # Or
 sdf = sdf[sdf.apply(lambda value: value['temperature'] > 60)]
 
-# Multiple conditions can also be combined via binary operators 
+# Multiple conditions can also be combined using binary operators 
 sdf = sdf[(sdf['temperature'] > 60) & (sdf['country'] == 'US')]
 # Or
 sdf = sdf[
@@ -396,7 +396,7 @@ sdf['average_is_null'] = sdf["average"].isnull()
 Under the good, when you access a column on `StreamingDataFrame` it generates the new `StreamingSeries` instance that refers to the value of the passed key.
 
 These objects are also lazy, and they are evaluated only when the `StreamingDataFrame`is
-executed via `app.run(sdf)`.
+executed by `app.run(sdf)`.
 
 When you set them back to the StreamingDataFrame or use them to filter data, it creates
 a new step in the pipeline to be evaluated later.
@@ -406,7 +406,7 @@ We will go over the individual use cases in the next chapters.
 ## Using Custom Functions
 
 `StreamingDataFrame` provides a flexible mechanism to transform and filter data using
-custom functions via `.apply()`, `.update()` and `.filter()` methods.
+custom functions and `.apply()`, `.update()` and `.filter()` methods.
 
 These methods accept two arguments:
 
@@ -480,9 +480,9 @@ The items will be processed in the same order as they are returned.
 There are certain limitations of this API:
 
 - `StreamingDataFrame.apply(expand=True)` cannot be used to filter values
-  via `sdf[sdf.apply(<function>, expand=True)]`
+  using `sdf[sdf.apply(<function>, expand=True)]`
 - `StreamingDataFrame.apply(expand=True)` cannot be set back to the `StreamingDataFrame`
-  via `sdf['column'] = sdf[sdf.apply(<function>, expand=True)]`
+  using `sdf['column'] = sdf[sdf.apply(<function>, expand=True)]`
 
 ### StreamingDataFrame.update()
 
@@ -583,8 +583,7 @@ only from the custom functions during processing.
 ## Using State Store
 
 If you want to use persistent state during processing, you can access the state for a
-given _message key_ via
-passing `stateful=True` to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()`
+given _message key_ by passing `stateful=True` to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()`
 or `StreamingDataFrame.filter()`.
 
 In this case, your custom function should accept a second argument of type `State`.

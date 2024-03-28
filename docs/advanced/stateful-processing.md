@@ -106,8 +106,7 @@ Be sure that the partition counts and `cleanup.policy` match what is printed.
 
 ### Disabling Changelog Topics
 
-Should you need it, you can disable changelog topics via 
-`Application(use_changelog_topics=False)`. 
+Should you need it, you can disable changelog topics by passing `use_changelog_topics=False` to the `Application()` object. 
 
 > ***WARNING***: you will lose all stateful data should something happen to the local state stores, 
 > so this is not recommended.

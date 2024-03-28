@@ -47,7 +47,7 @@ See the [Stateful Processing](advanced/stateful-processing.md#fault-tolerance-re
 - `loglevel` - a log level to use for the "quixstreams" logger.  
 **Options:** `"DEBUG"`, `"INFO"`, `"ERROR"`, `"WARNING"`, `"CRITICAL"`,`"NOTSET"`, `None`.  
 If `None` is passed, no logging will be configured.  
-You may pass `None` and configure "quixstreams" logger externally via `logging` library.    
+You may pass `None` and configure "quixstreams" logger externally using `logging` library.    
 **Default** - `"INFO"`.
 
 
@@ -128,7 +128,7 @@ app = Application(
 
 ## Topic Management
 - **`auto_create_topics`** - whether to create all defined topics automatically when starting the app.  
-Only topics made via `Application.topic()` call are tracked.  
+Only topics made using `Application.topic()` call are tracked.  
 **Default** - `True`
 
 ## Advanced Kafka Configuration
@@ -138,10 +138,10 @@ Only topics made via `Application.topic()` call are tracked.
 **Default** - `murmur2`.
 
 - **`producer_extra_config`** - a dictionary with additional Producer options in the format of librdkafka.  
-Values in this dictionary cannot override settings already defined via other parameters, like `broker_address` and `partitioner`.
+Values in this dictionary cannot override settings already defined by other parameters, like `broker_address` and `partitioner`.
 
 - **`consumer_extra_config`** - a dictionary with additional Consumer options in the format of librdkafka.  
-Values in the dictionary cannot override settings already defined via other parameters, like `broker_address`, `auto_offset_reset` and `consumer_group`.
+Values in the dictionary cannot override settings already defined by other parameters, like `broker_address`, `auto_offset_reset` and `consumer_group`.
 
 - **`consumer_poll_timeout`** - a timeout in seconds for the internal Consumer `.poll()`.  
 **Default** - `1.0`
