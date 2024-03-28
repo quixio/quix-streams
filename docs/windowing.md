@@ -99,18 +99,21 @@ For example, a timestamp `00:33:13` will be assigned to an interval
 Imagine we receive temperature readings from sensors, and we need to calculate average temperature for each hour, and produce updates for each incoming message.
 The message key is a sensor ID, so we aggregate temperature by each sensor.
 
-Input format:
+Input:
 
+(Here the `"timestamp"` column illustrates Kafka message timestamps)
 ```json
-{"temperature":  65}
+{"temperature": 65, "timestamp": 100}
+{"temperature": 52, "timestamp": 200}
+{"temperature": 61, "timestamp": 300}
 ```
 
 Expected output:
 
 ```json
-{"avg_temperature": 52.2, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 53.9, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 49.0, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 65, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 58.5, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 59.333, "window_start": 0, "window_end": 3600000}
 ```
 
 Here is how to do it using tumbling windows: 
@@ -177,19 +180,27 @@ For example, a timestamp `00:33:13` will match two intervals for a hopping windo
 Imagine we receive temperature readings from sensors, and we need to calculate average temperature for each hour with 10 minutes hop, and produce updates for each incoming message.
 The message key is a sensor ID, so we aggregate temperature by each sensor.
 
-Input format:
+Input:  
+(Here the `"timestamp"` column illustrates Kafka message timestamps)
 
 ```json
-{"temperature":  65}
+{"temperature": 65, "timestamp": 50000}
+{"temperature": 52, "timestamp": 60000}
+{"temperature": 61, "timestamp": 62000}
 ```
 
 Expected output:
 
 ```json
-{"avg_temperature": 52.2, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 53.9, "window_start": 0, "window_end": 3600000}
-{"avg_temperature": 49.0, "window_start": 60000, "window_end": 4200000}
+{"avg_temperature": 65, "window_start": 0, "window_end": 3600000}
+
+{"avg_temperature": 58.5, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 65, "window_start": 60000, "window_end": 4200000}
+
+{"avg_temperature": 59.333, "window_start": 0, "window_end": 3600000}
+{"avg_temperature": 56.5, "window_start": 60000, "window_end": 4200000}
 ```
+
 
 ```python
 from datetime import timedelta
