@@ -11,6 +11,7 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `quix_events` & `quix_timeseries` - for serializers only.
 
 The serialization settings are defined per-topic via these parameters of `Application.topic()` function:
+
 - `key_serializer`
 - `value_serializer`
 - `key_deserializer`
@@ -23,7 +24,6 @@ To set a serializer, you may either pass a string shorthand for it, or an instan
 to the `Application.topic()`.
 
 **Example:**
-
 
 ```python
 from quixstreams import Application
