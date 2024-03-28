@@ -8,7 +8,9 @@ In this quickstart guide, you will learn how to create your first Quix Streams a
 ## Demo application
 Our demo application will analyze the incoming stream of chat messages, split them into words, and write the results back to Kafka.
 
-In this guide, it's assumed that the Kafka cluster is up and running locally on `localhost:9092`.
+In this guide, it's assumed that the Kafka cluster is up and running locally on `localhost:9092`.  
+
+If you don't have Kafka installed yet, see the [Apache Kafka Quickstart page](https://kafka.apache.org/quickstart) to learn how to install and run Kafka on your machine. 
 
 
 ### Step 1. Producing data to Kafka
