@@ -113,7 +113,7 @@ for m in modules:
     if m.name in doc_modules:
         doc_map[doc_modules[m.name]][m.name] = m
 
-# Do some additional filtering within individual moduiles
+# Do some additional filtering within individual modules
 for name, module in doc_map["state.md"].items():
     if name == "quixstreams.state.types":
         module.members = [x for x in module.members if x.name == "State"]
