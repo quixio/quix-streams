@@ -485,15 +485,11 @@ on top of the data and emit results downstream.
   - Messages with `None` key will be ignored.
   - The time windows always use the current event time.
   
-  
-<br>
-***Example Snippet:***
-  
-  
-<br>
-***Example Snippet:***
-```python
 
+<br>
+***Example Snippet:***
+
+```python
 app = Application()
 sdf = app.dataframe(...)
 
