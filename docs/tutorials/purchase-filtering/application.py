@@ -15,8 +15,8 @@ def get_full_name(customer):
     return f'{customer["First Name"]} {customer["Last Name"]}'
 
 
-def get_purchase_totals(transaction):
-    return sum([t["Price"] * t["Quantity"] for t in transaction])
+def get_purchase_totals(items):
+    return sum([i["Price"] * i["Quantity"] for i in items])
 
 
 SALES_TAX = 1.10

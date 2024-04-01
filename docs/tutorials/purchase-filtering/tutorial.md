@@ -13,8 +13,7 @@ You'll learn how to:
 - Produce resulting output to a topic
 
 
-
-## 1. Outline of the Problem
+## Outline of the Problem
 
 Imagine we are a company who sells goods to members only: they can have a 
 "Bronze", "Silver", or "Gold" membership.
@@ -25,23 +24,39 @@ visit.
 We need an application that will filter for the applicable customers and send only the
 necessary information downstream.
 
-## 2. Our Example
+
+
+## Our Example
 
 We will use a simple producer to generate some mock purchase data to be processed by our 
 new Purchase Filtering application.
 
-## 3. Main Takeaways
+
+
+## Important Takeaways
  
 The primary lesson: learning how you can use common pandas-like 
 operations on dictionary/JSON data to perform various transformations
 as if it were a dataframe.
 
-Another important thing to note that we use the word "column" for consistency
-with the Pandas terminology, but you can also think of it as a dictionary key.
 
-## 4. Generating Purchase Data
 
-We have a simple [**purchases producer**](producer.py) that generates a small static set of 
+## Before Getting Started
+
+- You will see links scattered throughout this tutorial.
+    - Tutorial code links are marked **>>> LIKE THIS <<<** .
+    - ***All other links provided are completely optional***. 
+    - They are great ways to learn more about various concepts if you need it!
+
+
+- We use the word "column" for consistency with Pandas terminology.
+  - You can also think of it as a dictionary key.
+
+
+
+## Generating Purchase Data
+
+We have a simple [**>>> Purchases Producer <<<**](producer.py) that generates a small static set of 
 "purchases", which are simply dictionaries with various info about what was purchased by 
 a customer during their visit. The data is keyed on customer ID.
 
@@ -72,10 +87,10 @@ kafka_value:
 ```
 
 
-## 5. Purchase Filtering Application
+## Purchase Filtering Application
 
 
-Now let's go over our [**Purchase Filtering Application**](application.py) line-by-line!
+Now let's go over our [**>>> Purchase Filtering Application <<<**](application.py) line-by-line!
 
 
 ### Create Application
@@ -102,7 +117,7 @@ customers_qualified_topic = app.topic(name="customers_coupon_qualified")
 
 Next we define our input/output topics, named `customer_purchases` and `customers_coupon_qualified`, respectively. 
 
-They each return `Topic` objects, used later on.
+They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
 
 NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
 
@@ -114,18 +129,20 @@ sdf = app.dataframe(topic=customer_purchases_topic)
 
 Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
 
-We initialize it, and then continue re-assigning to the same variable (`sdf`) as we add operations until we are finished with it.
+SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-Also notice that we pass our input `Topic` (from the previous step) to it.
+After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
+
+(Also: notice that we pass our input `Topic` from the previous step to it.)
 
 ### Filtering Purchases
 
 ```python
-def get_purchase_totals(transaction):
-    return sum([t["Price"]*t["Quantity"] for t in transaction])
+def get_purchase_totals(items):
+    return sum([i["Price"]*i["Quantity"] for i in items])
 
 sdf = sdf[
-    (sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00)
+    (sdf["Purchases"].apply(get_purchase_totals) * SALES_TAX >= 100.00)
     & (sdf["Membership Type"].isin(["Silver", "Gold"]))
 ]
 ```
@@ -139,11 +156,12 @@ work is done here:
 
 ```python
 # step A
-sdf["Transaction"].apply(get_purchase_totals) * SALES_TAX >= 100.00
+sdf["Purchases"].apply(get_purchase_totals) * SALES_TAX >= 100.00
 ```
 
-Here, we do an [SDF.apply(F)](../../processing.md#streamingdataframeapply) operation on a column (`F` should take your data as an 
-argument, and return something back): our `F` here is `get_purchase_totals`.
+Here, we do an [`SDF.apply(F)`](../../processing.md#streamingdataframeapply) operation on a column (`F` should take your current 
+message value as an argument, and return your new message value): 
+our `F` here is `get_purchase_totals`.
 
 Notice how you can still do basic operations with an `SDF.apply()` result, like multiplying it 
 by our sales tax, and then finally doing an inequality check on the total (all of which
@@ -246,27 +264,27 @@ NOTE: you cannot reference nested keys in this way.
 sdf = sdf.to_topic(customers_qualified_topic)
 ```
 
-Finally, we produce our non-filtered results downstream via [SDF.to_topic(T)](../../processing.md#writing-data-to-kafka-topics), where `T`
+Finally, we produce our non-filtered results downstream via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
 NOTE: by default, our outgoing Kafka key is persisted from the input message. 
 [You can alter it](../../processing.md#changing-message-key-before-producing), if needed.
 
 
-## 6. Try it yourself!
+## Try it yourself!
 
-### Run Kafka
+### 1. Run Kafka
 First, have a running Kafka cluster. 
 
 To conveniently follow along with this tutorial, just [run this simple one-liner](../tutorials-overview.md#running-kafka-locally).
 
-### Install Quix Streams
+### 2. Install Quix Streams
 In your python environment, run `pip install quixstreams`
 
-### Run the Producer and Application
+### 3. Run the Producer and Application
 Just call `python producer.py` and `python application.py` in separate windows.
 
-### Check out the results!
+### 4. Check out the results!
 
 ...but wait, I don't see any message processing output...Is it working???
 

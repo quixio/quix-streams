@@ -10,7 +10,7 @@ You will learn how to build a simple anomaly detection system, a common use case
 
 
 
-## 1. Outline of the Problem
+## Outline of the Problem
 
 For our example, we have "machines" performing various tasks. While running, they emit their current temperature several times a second, which we can use to detect issues.
 
@@ -21,7 +21,7 @@ When this occurs, we want to send alerts as soon as possible so appropriate acti
 
 
 
-## 2. Our Example
+## Our Example
 
 We will use a producer to generate mock temperature events for 3 machines (MACHINE_IDs '0', '1', or '2'); ID's 0 and 1 are functioning normally, 2 is malfunctioning (overheating).
 
@@ -31,7 +31,7 @@ NOTE: our example uses JSON formatting for Kafka message values.
 
 
 
-## 3. Alerting Approach (Windowing)
+## Alerting Approach (Windowing)
 
 First, let's do an overview of the alerting approach we'll take with our Anomaly Detector.
 
@@ -42,11 +42,17 @@ This approach is desirable since temperatures fluctuate quickly; it enables more
 - allows more time for the machine to cool back down (as part of normal operation)
 
 
+## Before Getting Started
+
+- You will see links scattered throughout this tutorial.
+    - Tutorial code links are marked **>>> LIKE THIS <<<** .
+    - ***All other links provided are completely optional***. 
+    - They are great ways to learn more about various concepts if you need it!
 
 
-## 4. Generating Temperature Data
+## Generating Temperature Data
 
-Without going into much detail, we have this [**temperature readings producer**](producer.py) to pair up nicely with our Anomaly Detector.
+Without going into much detail, we have this [**>>> Temperature Readings Producer <<<**](producer.py) to pair up nicely with our Anomaly Detector.
 
 It cycles through MACHINE_ID's 0-2 (using the ID as the Kafka key), and produces a (-1, 0, +1) temperature change for each machine a few times a second, along with the time. 
 
@@ -71,9 +77,9 @@ Feel free to inspect it further, but it's just to get some data flowing. Our foc
 
 
 
-## 5. Anomaly Detector Application
+## Anomaly Detector Application
 
-Now let's go over our [**Anomaly Detector Application**](application.py) line-by-line!
+Now let's go over our [**>>> Anomaly Detector Application <<<**](application.py) line-by-line!
 
 ### Create Application
 
@@ -99,7 +105,7 @@ alerts_topic = app.topic(name="alerts")
 
 Next we define our input/output topics, named `temperature_readings_topic` and `alerts_topic`, respectively. 
 
-They each return `Topic` objects, used later on.
+They each return [`Topic`](../../api-reference/topics.md) objects, used later on.
 
 NOTE: the topics will automatically be created for you in Kafka when you run the application should they not exist.
 
@@ -112,9 +118,11 @@ sdf = app.dataframe(topic=temperature_readings_topic)
 
 Now for the fun part: building our [StreamingDataFrame](../../processing.md#introduction-to-streamingdataframe), often shorthanded to "SDF".  
 
-We initialize it, and then continue re-assigning to the same variable (`sdf`) as we add operations until we are finished with it.
+SDF allows manipulating the message value in a dataframe-like fashion using various operations.
 
-Also notice that we pass our input `Topic` (from the previous step) to it.
+After initializing, we continue re-assigning to the same `sdf` variable as we add operations.
+
+(Also: notice that we pass our input `Topic` from the previous step to it.)
 
 ### Prep Data for Windowing
 
@@ -130,8 +138,9 @@ But it needs to be just the temperature:
 
 `>>> 65`
 
-So we'll perform a generic SDF transformation using [SDF.apply(F)](../../processing.md#streamingdataframeapply), 
-where `F` is a function that expects our current data as input and returns an output: our `F` is a simple `lambda`, in this case.
+So we'll perform a generic SDF transformation using [`SDF.apply(F)`](../../processing.md#streamingdataframeapply), 
+(`F` should take your current message value as an argument, and return your new message value): 
+our `F` is a simple `lambda`, in this case.
 
 
 ### Windowing
@@ -166,7 +175,7 @@ Now we get a window result (mean) along with its start/end timestamp:
 
 `>>> {"value": 67.49478585, "start": 1234567890, "end": 1234567895}`
 
-We don't particularly care about the window itself in our case, just the result...so we extract the "value" with SDF.apply() and [SDF.filter(F)](../../processing.md#streamingdataframefilter), where `F` is our "should_alert" function. 
+We don't particularly care about the window itself in our case, just the result...so we extract the "value" with `SDF.apply()` and [`SDF.filter(F)`](../../processing.md#streamingdataframefilter), where `F` is our "should_alert" function. 
 
 For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
 - `True` -> continue processing this event
@@ -180,27 +189,27 @@ In our case, this example event would then stop since `bool(None)` is `False`.
 sdf = sdf.to_topic(alerts_topic)
 ```
 
-However, if the value ended up >= 90....we finally finish by producing our alert to our downstream topic via [SDF.to_topic(T)](../../processing.md#writing-data-to-kafka-topics), where `T`
+However, if the value ended up >= 90....we finally finish by producing our alert to our downstream topic via [`SDF.to_topic(T)`](../../processing.md#writing-data-to-kafka-topics), where `T`
 is our previously defined `Topic` (not the topic name!).
 
 NOTE: because we use "Current" windowing, we may produce a lot of "duplicate" alerts once triggered...you could solve this in numerous ways downstream. What we care about is alerting as soon as possible!
 
-## 6. Try it yourself!
+## Try it yourself!
 
-### Run Kafka
+### 1. Run Kafka
 First, have a running Kafka cluster. 
 
 To conveniently follow along with this tutorial, just [run this simple one-liner](../tutorials-overview.md#running-kafka-locally).
 
-### Install Quix Streams
+### 2. Install Quix Streams
 In your python environment, run `pip install quixstreams`
 
-### Run the Producer and Application
+### 3. Run the Producer and Application
 Just call `python producer.py` and `python application.py` in separate windows.
 
 You'll note that the Application does not print any output beyond initialization: it will only print alerts being fired (and thus when it's producing a downstream message).
 
-### Check out the results!
+### 4. Check out the results!
 
 Eventually, you should see an alert will look something like: 
 

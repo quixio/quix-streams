@@ -82,6 +82,14 @@ def _get_deserializer(
 
 
 class Topic:
+    """
+    A definition of a Kafka topic.
+
+    Typically created with an `app = quixstreams.app.Application()` instance via
+    `app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
+    instance.
+    """
+
     def __init__(
         self,
         name: str,
@@ -93,12 +101,6 @@ class Topic:
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         """
-        A defition of a Kafka topic.
-
-        Typically created with an `app = quixstreams.app.Application()` instance via
-        `app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
-        instance.
-
         :param name: topic name
         :param value_deserializer: a deserializer type for values
         :param key_deserializer: a deserializer type for keys
