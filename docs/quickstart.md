@@ -10,7 +10,7 @@ Our demo application will analyze the incoming stream of chat messages, split th
 
 In this guide, it's assumed that the Kafka cluster is up and running locally on `localhost:9092`.  
 
-If you don't have Kafka installed yet, see the [Apache Kafka Quickstart page](https://kafka.apache.org/quickstart) to learn how to install and run Kafka on your machine. 
+If you don't have Kafka installed yet, just [follow this simple one-liner](./tutorials/tutorials-overview.md#running-kafka-locally) to run it! 
 
 
 ### Step 1. Producing data to Kafka
