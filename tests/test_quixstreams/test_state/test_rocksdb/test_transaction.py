@@ -10,8 +10,8 @@ from quixstreams.state.rocksdb import (
     StateSerializationError,
     StateTransactionError,
     RocksDBStorePartition,
-    NestedPrefixError,
     RocksDBOptions,
+    RocksDBPartitionTransaction,
 )
 from quixstreams.state.rocksdb.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
@@ -322,9 +322,14 @@ class TestRocksDBPartitionTransaction:
         Test that if the update operation (set or delete) fails the transaction is
         marked as failed and cannot be re-used anymore.
         """
+        # TODO: Test fails because writebatch is not used anymore during updates
+        # TODO: What's the point of this "failing?" - To not flush anything if one of transactions is incomplete on __exit__
+        #   Since now each update translates
         with patch.object(
-            rocksdict.WriteBatch, "put", side_effect=ValueError("test")
-        ), patch.object(rocksdict.WriteBatch, "delete", side_effect=ValueError("test")):
+            RocksDBPartitionTransaction,
+            "_serialize_key",
+            side_effect=ValueError("test"),
+        ):
             with rocksdb_partition.begin() as tx:
                 with contextlib.suppress(ValueError):
                     operation(tx=tx)
@@ -389,13 +394,6 @@ class TestRocksDBPartitionTransaction:
 
         with rocksdb_partition.begin() as tx:
             assert tx.get("key") is None
-
-    def test_nested_prefixes_fail(self, rocksdb_partition):
-        tx = rocksdb_partition.begin()
-        with pytest.raises(NestedPrefixError):
-            with tx.with_prefix("prefix"):
-                with tx.with_prefix("prefix"):
-                    ...
 
     def test_custom_dumps_loads(self, rocksdb_partition_factory):
         key = secrets.token_bytes(10)

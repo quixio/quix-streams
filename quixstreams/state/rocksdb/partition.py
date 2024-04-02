@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Any, Union, Optional, List, Dict
 
-from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
+from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.state.recovery import ChangelogProducer
@@ -312,6 +312,9 @@ class RocksDBStorePartition(StorePartition):
             options=options,
             access_type=AccessType.read_write(),
         )
+        # write_opts = WriteOptions()
+        # write_opts.disable_wal = True
+        # rdict.set_write_options(write_opts)
         # Ensure metadata column family is created without defining it upfront
         try:
             rdict.get_column_family(METADATA_CF_NAME)

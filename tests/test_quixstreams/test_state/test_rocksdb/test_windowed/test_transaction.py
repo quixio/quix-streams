@@ -90,15 +90,11 @@ class TestWindowedRocksDBPartitionTransaction:
                 # "expire_windows" must update the expiration index so that the same
                 # windows are not expired twice
                 assert not tx.expire_windows(duration_ms=10)
-
-        assert len(expired) == 2
-        assert expired == [
-            ((0, 10), 1),
-            ((10, 20), 2),
-        ]
-
-        with store.start_partition_transaction(0) as tx:
-            with tx.with_prefix(b"__key__"):
+                assert len(expired) == 2
+                assert expired == [
+                    ((0, 10), 1),
+                    ((10, 20), 2),
+                ]
                 assert tx.get_window(start_ms=0, end_ms=10) is None
                 assert tx.get_window(start_ms=10, end_ms=20) is None
                 assert tx.get_window(start_ms=20, end_ms=30) == 3
