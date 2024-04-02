@@ -557,12 +557,10 @@ class StreamingDataFrame(BaseStreaming):
         self._stream = stream
 
     @overload
-    def __getitem__(self, item: str) -> StreamingSeries:
-        ...
+    def __getitem__(self, item: str) -> StreamingSeries: ...
 
     @overload
-    def __getitem__(self, item: Union[StreamingSeries, List[str], Self]) -> Self:
-        ...
+    def __getitem__(self, item: Union[StreamingSeries, List[str], Self]) -> Self: ...
 
     def __getitem__(
         self, item: Union[str, List[str], StreamingSeries, Self]
