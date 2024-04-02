@@ -658,8 +658,6 @@ class Application:
           is stateful and is running in Quix Cloud
         """
         # Ensure that state management is enabled if application is stateful
-        # and is running in Quix Cloud
-        logger.info("APPLICATION IS CONNECTED TO THE QUIX PLATFORM")
         if self._state_manager.stores:
             check_state_management_enabled()
 
