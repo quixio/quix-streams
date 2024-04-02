@@ -41,6 +41,12 @@ class QuixPortalApiService:
         self._portal_api = (
             portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
         )
+        self._auth_token = auth_token or QUIX_ENVIRONMENT.sdk_token
+        if not self._auth_token:
+            raise MissingConnectionRequirements(
+                f"A Quix Cloud auth token (SDK or PAT) is required; "
+                f"set with environment variable {QUIX_ENVIRONMENT.SDK_TOKEN}"
+            )
         self._default_workspace_id = (
             default_workspace_id or QUIX_ENVIRONMENT.workspace_id
         )
@@ -61,7 +67,10 @@ class QuixPortalApiService:
     @property
     def default_workspace_id(self) -> str:
         if not self._default_workspace_id:
-            raise UndefinedQuixWorkspaceId("You must provide a Quix Workspace ID")
+            raise UndefinedQuixWorkspaceId(
+                f"A Quix Cloud Workspace ID is required; "
+                f"set with environment variable {QUIX_ENVIRONMENT.WORKSPACE_ID}"
+            )
         return self._default_workspace_id
 
     @default_workspace_id.setter
@@ -84,11 +93,9 @@ class QuixPortalApiService:
             except requests.exceptions.JSONDecodeError:
                 reason_text = e.response.text
 
+            reason_text = reason_text or "Invalid URL"
             raise QuixApiRequestFailure(
-                {
-                    "response_error": e,  # response error
-                    "response_body": reason_text,  # error message in the API response
-                }
+                f'{e.response.status_code} for "{e.response.url}": {reason_text}'
             )
 
     def _init_session(self) -> SessionWithUrlBase:

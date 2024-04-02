@@ -1,15 +1,24 @@
 from json import loads, JSONDecodeError
+from typing import Union, Optional
 from unittest.mock import create_autospec
 
 import pytest
 import requests
+from typing_extensions import Type
 
 from quixstreams.platforms.quix.api import QuixPortalApiService
 from quixstreams.platforms.quix.config import QuixKafkaConfigsBuilder
 
 
 class MockResponse:
-    def __init__(self, status_code=200, response_body=b"", request_exception=None):
+    def __init__(
+        self,
+        url: str = "www.bad-url.com",
+        status_code: int = 200,
+        response_body: Union[str, bytes] = b"",
+        request_exception: Optional[Type[Exception]] = None,
+    ):
+        self.url = url
         self.status_code = status_code
         self.text = response_body
         self.request_exception = request_exception
@@ -23,7 +32,7 @@ class MockResponse:
     def raise_for_status(self):
         if self.request_exception:
             raise self.request_exception(
-                f"status code {self.status_code}", response=self
+                f"{self.status_code}: {self.url}", response=self
             )
 
 
@@ -57,11 +66,4 @@ def quix_kafka_config_factory(mock_quix_portal_api_factory):
 
 @pytest.fixture()
 def mock_response_factory():
-    def factory(status_code=200, response_body=b"", request_exception=None):
-        return MockResponse(
-            status_code=status_code,
-            response_body=response_body,
-            request_exception=request_exception,
-        )
-
-    return factory
+    return MockResponse

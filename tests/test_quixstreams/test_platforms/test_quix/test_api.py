@@ -42,23 +42,28 @@ class TestApi:
 
     def test_response_handler_bad_request(self, mock_response_factory):
         valid_json = b'"bad workspace"'
-        s = json.loads(valid_json)
+        code = 404
+        url = "bad_url"
         api = QuixPortalApiService(portal_api="http://fake.fake", auth_token="token")
 
         with pytest.raises(QuixApiRequestFailure) as e:
             api._response_handler(
                 mock_response_factory(
-                    status_code=404,
+                    url=url,
+                    status_code=code,
                     response_body=valid_json,
                     request_exception=requests.exceptions.HTTPError,
                 )
             )
 
         error_str = str(e.value)
-        assert s in error_str and "404" in error_str
+        for s in [json.loads(valid_json), str(code), url]:
+            assert s in error_str
 
     def test_response_handler_bad_request_invalid_json(self, mock_response_factory):
         invalid_json = b"bad workspace"
+        code = 404
+        url = "bad_url"
 
         with pytest.raises(json.JSONDecodeError):
             json.loads(invalid_json)
@@ -68,11 +73,13 @@ class TestApi:
         with pytest.raises(QuixApiRequestFailure) as e:
             api._response_handler(
                 mock_response_factory(
-                    status_code=404,
+                    url=url,
+                    status_code=code,
                     response_body=invalid_json,
                     request_exception=requests.exceptions.HTTPError,
                 )
             )
 
         error_str = str(e.value)
-        assert invalid_json.decode() in error_str and "404" in error_str
+        for s in [invalid_json.decode(), str(code), url]:
+            assert s in error_str
