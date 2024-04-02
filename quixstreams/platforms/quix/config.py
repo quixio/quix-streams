@@ -99,18 +99,27 @@ class QuixKafkaConfigsBuilder:
     # TODO: Consider a workspace class?
     def __init__(
         self,
-        quix_portal_api_service: Optional[QuixPortalApiService] = None,
+        quix_sdk_token: Optional[str] = None,
         workspace_id: Optional[str] = None,
         workspace_cert_path: Optional[str] = None,
+        quix_portal_api_service: Optional[QuixPortalApiService] = None,
     ):
         """
         :param quix_portal_api_service: A QuixPortalApiService instance (else generated)
         :param workspace_id: A valid Quix Workspace ID (else searched for)
         :param workspace_cert_path: path to an existing workspace cert (else retrieved)
         """
-        self.api = quix_portal_api_service or QuixPortalApiService(
-            default_workspace_id=workspace_id
-        )
+        if quix_sdk_token:
+            self.api = QuixPortalApiService(
+                default_workspace_id=workspace_id, auth_token=quix_sdk_token
+            )
+        elif quix_portal_api_service:
+            self.api = quix_portal_api_service
+        else:
+            raise ValueError(
+                'Either "quix_sdk_token" or "quix_portal_api_service" must be provided'
+            )
+
         try:
             self._workspace_id = workspace_id or self.api.default_workspace_id
         except self.api.UndefinedQuixWorkspaceId:
