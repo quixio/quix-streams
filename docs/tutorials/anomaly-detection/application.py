@@ -8,7 +8,6 @@ app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
     consumer_group="temperature_alerter",
     auto_offset_reset="earliest",
-    loglevel="DEBUG",
 )
 temperature_readings_topic = app.topic(name="temperature_readings")
 alerts_topic = app.topic(name="alerts")

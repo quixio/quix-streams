@@ -69,7 +69,7 @@ The Kafka message looks like:
 ```
 
 
-## Word Counter application
+## Word Counter Application
 
 Now let's go over our [**>>> Word Counter Application <<<**](application.py) line-by-line!
 
