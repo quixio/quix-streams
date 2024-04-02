@@ -32,12 +32,11 @@ class QuixPortalApiService:
 
     def __init__(
         self,
-        auth_token: str,
+        auth_token: Optional[str] = None,
         portal_api: Optional[str] = None,
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
     ):
-        self._auth_token = auth_token
         self._portal_api = (
             portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
         )
