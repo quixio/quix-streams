@@ -66,8 +66,7 @@ class Application:
 
     - On init:
         - Provides defaults or helper methods for commonly needed objects
-        - If `quix_sdk_token` is passed, configures the app for to work
-            with Quix Platform.
+        - If `quix_sdk_token` is passed, configures the app to use the Quix Cloud.
     - When executed via `.run()` (after setup):
         - Initializes Topics and StreamingDataFrames
         - Facilitates processing of Kafka messages with a `StreamingDataFrame`
@@ -125,11 +124,11 @@ class Application:
             Either this OR broker_address must be set to use Application (not both).
             Linked Environment Variable: `Quix__Sdk__Token`
             Default: None (if not run on Quix Platform)
-              >***NOTE:*** the environment variable is set for you on the Quix Platform
+              >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`
             Linked Environment Variable: `Quix__Consumer__Group`
-            Default - "quixstreams-default" (post-init).
+            Default - "quixstreams-default" (set in init)
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
@@ -190,6 +189,8 @@ class Application:
             "Quix__Consumer_Group", "quixstreams-default"
         )
 
+        if quix_config_builder:
+            quix_app_source = "Quix Config Builder"
         if quix_config_builder and quix_sdk_token:
             raise warnings.warn(
                 "'quix_config_builder' is not necessary when an SDK token is defined; "
@@ -197,6 +198,7 @@ class Application:
             )
 
         if quix_sdk_token and not quix_config_builder:
+            quix_app_source = "Quix SDK Token"
             quix_config_builder = QuixKafkaConfigsBuilder(quix_sdk_token=quix_sdk_token)
 
         if broker_address and quix_config_builder:
@@ -206,7 +208,8 @@ class Application:
         elif quix_config_builder:
             # SDK Token or QuixKafkaConfigsBuilder were provided
             logger.info(
-                f"QUIX APPLICATION DETECTED; it will connect to Quix Platform brokers"
+                f"{quix_app_source} detected; "
+                f"the application will connect to Quix Cloud brokers"
             )
             topic_manager_factory = functools.partial(
                 QuixTopicManager, quix_config_builder=quix_config_builder
@@ -217,7 +220,7 @@ class Application:
             check_state_dir(state_dir=state_dir)
 
             broker_address = quix_configs.pop("bootstrap.servers")
-            # Quix platform prefixes consumer group with workspace id
+            # Quix Cloud prefixes consumer group with workspace id
             consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
             consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
             producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
@@ -318,13 +321,13 @@ class Application:
         """
         >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
-        Initialize an Application to work with Quix platform,
-        assuming environment is properly configured (by default in the platform).
+        Initialize an Application to work with Quix Cloud,
+        assuming environment is properly configured (by default in Quix Cloud).
 
         It takes the credentials from the environment and configures consumer and
-        producer to properly connect to the Quix platform.
+        producer to properly connect to the Quix Cloud.
 
-        >***NOTE:*** Quix platform requires `consumer_group` and topic names to be
+        >***NOTE:*** Quix Cloud requires `consumer_group` and topic names to be
             prefixed with workspace id.
             If the application is created via `Application.Quix()`, the real consumer
             group will be `<workspace_id>-<consumer_group>`,
@@ -407,7 +410,7 @@ class Application:
         """
         warnings.warn(
             "Application.Quix() is being deprecated; "
-            "To connect to Quix Platform, "
+            "To connect to Quix Cloud, "
             'use Application() with "quix_sdk_token" parameter or set the '
             '"Quix__Sdk__Token" environment variable (like with Application.Quix).',
             DeprecationWarning,
@@ -652,10 +655,10 @@ class Application:
         """
         Do a runtime setup only applicable to an Application.Quix instance
         - Ensure that "State management" flag is enabled for deployment if the app
-          is stateful and is running on Quix platform
+          is stateful and is running in Quix Cloud
         """
         # Ensure that state management is enabled if application is stateful
-        # and is running on Quix platform
+        # and is running in Quix Cloud
         logger.info("APPLICATION IS CONNECTED TO THE QUIX PLATFORM")
         if self._state_manager.stores:
             check_state_management_enabled()
