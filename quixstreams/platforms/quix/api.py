@@ -94,7 +94,7 @@ class QuixPortalApiService:
 
             reason_text = reason_text or "Invalid URL"
             raise QuixApiRequestFailure(
-                f'{e.response.status_code} for "{e.response.url}": {reason_text}'
+                f'{e.response.status_code} for url "{e.response.url}": {reason_text}'
             )
 
     def _init_session(self) -> SessionWithUrlBase:
