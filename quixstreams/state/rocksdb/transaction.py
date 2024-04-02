@@ -12,7 +12,6 @@ from quixstreams.state.types import (
     PartitionTransaction,
 )
 from .exceptions import (
-    NestedPrefixError,
     StateTransactionError,
 )
 from .metadata import (
@@ -110,6 +109,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         "_loads",
         "_state",
     )
+    _prefix: bytes
 
     def __init__(
         self,
@@ -124,7 +124,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param loads: a function to deserialize data from bytes.
         """
         self._partition = partition
-        self._update_cache: Dict[str, Dict[bytes, Union[bytes, Undefined]]] = {}
+        self._update_cache: Dict[
+            str, Dict[bytes, Dict[bytes, Union[bytes, Undefined]]]
+        ] = {"default": {}}
         self._batch = WriteBatch(raw_mode=True)
         self._prefix = _DEFAULT_PREFIX
         self._failed = False
@@ -155,8 +157,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             automatically between the key and the prefix if the prefix
             is not empty.
         """
-        if self._prefix != _DEFAULT_PREFIX:
-            raise NestedPrefixError("The transaction already has a prefix")
         self._prefix = (
             prefix if isinstance(prefix, bytes) else self._serialize_value(prefix)
         )
@@ -188,7 +188,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         # First, check the update cache in case the value was previously written
         # Use _undefined sentinel as default because the actual value can be "None"
         key_serialized = self._serialize_key(key)
-        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _undefined)
+        cached = (
+            self._update_cache.get(cf_name, {})
+            .get(self._prefix, {})
+            .get(key_serialized, _undefined)
+        )
         if cached is _deleted:
             return default
 
@@ -213,13 +217,10 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param cf_name: rocksdb column family name. Default - "default"
         """
 
-        key_serialized = self._serialize_key(key)
-        value_serialized = self._serialize_value(value)
-
         try:
-            cf_handle = self._partition.get_column_family_handle(cf_name)
-            self._batch.put(key_serialized, value_serialized, cf_handle)
-            self._update_cache.setdefault(cf_name, {})[
+            key_serialized = self._serialize_key(key)
+            value_serialized = self._serialize_value(value)
+            self._update_cache.setdefault(cf_name, {}).setdefault(self._prefix, {})[
                 key_serialized
             ] = value_serialized
         except Exception:
@@ -236,14 +237,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param key: key to delete from DB
         :param cf_name: rocksdb column family name. Default - "default"
         """
-        key_serialized = self._serialize_key(key)
         try:
-            cf_handle = self._partition.get_column_family_handle(cf_name)
-            self._batch.delete(key_serialized, cf_handle)
-
-            if cf_name not in self._update_cache:
-                self._update_cache[cf_name] = {}
-            self._update_cache[cf_name][key_serialized] = _deleted
+            key_serialized = self._serialize_key(key)
+            self._update_cache.setdefault(cf_name, {}).setdefault(self._prefix, {})[
+                key_serialized
+            ] = _deleted
 
         except Exception:
             self._failed = True
@@ -262,7 +260,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
 
         key_serialized = self._serialize_key(key)
-        cached = self._update_cache.get(cf_name, {}).get(key_serialized, _undefined)
+        cached = (
+            self._update_cache.get(cf_name, {})
+            .get(self._prefix, {})
+            .get(key_serialized, _undefined)
+        )
         if cached is _deleted:
             return False
 
@@ -301,13 +303,16 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         logger.debug("Flushing state changes to the changelog topic...")
         offset = self._partition.get_changelog_offset() or 0
 
-        for cf_name in self._update_cache:
+        for cf_name, cf_update_cache in self._update_cache.items():
             headers = {CHANGELOG_CF_MESSAGE_HEADER: cf_name}
-            for k, v in self._update_cache[cf_name].items():
-                self._partition.produce_to_changelog(
-                    key=k, value=v if v is not _deleted else None, headers=headers
-                )
-                offset += 1
+            for _prefix, prefix_update_cache in cf_update_cache.items():
+                for key, value in prefix_update_cache.items():
+                    self._partition.produce_to_changelog(
+                        key=key,
+                        value=value if value is not _deleted else None,
+                        headers=headers,
+                    )
+                    offset += 1
 
         self._batch.put(
             CHANGELOG_OFFSET_KEY, int_to_int64_bytes(offset), meta_cf_handle
@@ -331,15 +336,27 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         :param offset: offset of the last processed message, optional.
         """
         try:
+            meta_cf_handle = self._partition.get_column_family_handle(METADATA_CF_NAME)
+            for cf_name, cf_update_cache in self._update_cache.items():
+                cf_handle = self._partition.get_column_family_handle(cf_name)
+                for _prefix, prefix_update_cache in cf_update_cache.items():
+                    for key, value in prefix_update_cache.items():
+                        if value is _deleted:
+                            self._batch.delete(key, cf_handle)
+                        else:
+                            self._batch.put(key, value, cf_handle)
+
+            # TODO: Maybe unify writebatch and changelog work here so we do only one pass
+            #  through the update cache
+
             # Don't write batches if this transaction doesn't change any keys
             if len(self._batch):
-                cf_handle = self._partition.get_column_family_handle(METADATA_CF_NAME)
                 if offset is not None:
                     self._batch.put(
-                        PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), cf_handle
+                        PROCESSED_OFFSET_KEY, int_to_int64_bytes(offset), meta_cf_handle
                     )
                 if self._partition.using_changelogs:
-                    self._update_changelog(cf_handle)
+                    self._update_changelog(meta_cf_handle)
                 self._partition.write(self._batch)
         except Exception:
             self._failed = True

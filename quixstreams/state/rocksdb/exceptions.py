@@ -3,7 +3,6 @@ from quixstreams.exceptions import QuixException
 __all__ = (
     "StateSerializationError",
     "StateTransactionError",
-    "NestedPrefixError",
     "ColumnFamilyDoesNotExist",
     "ColumnFamilyAlreadyExists",
     "ColumnFamilyHeaderMissing",
@@ -17,9 +16,6 @@ class StateSerializationError(StateError): ...
 
 
 class StateTransactionError(StateError): ...
-
-
-class NestedPrefixError(StateError): ...
 
 
 class ColumnFamilyDoesNotExist(StateError): ...

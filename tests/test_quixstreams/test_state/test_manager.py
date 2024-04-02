@@ -13,6 +13,7 @@ from quixstreams.state.exceptions import (
     WindowedStoreAlreadyRegisteredError,
 )
 from quixstreams.state.recovery import ChangelogProducerFactory
+from quixstreams.state.rocksdb import RocksDBPartitionTransaction
 from tests.utils import TopicPartitionStub
 
 
@@ -229,7 +230,9 @@ class TestStateStoreManager:
             tx_store2 = state_manager.get_store_transaction("store2")
             # Simulate exception in one of the transactions
             with contextlib.suppress(ValueError), patch.object(
-                rocksdict.WriteBatch, "put", side_effect=ValueError("test")
+                RocksDBPartitionTransaction,
+                "_serialize_key",
+                side_effect=ValueError("test"),
             ):
                 tx_store1.set("some_key", "some_value")
             tx_store2.set("some_key", "some_value")
@@ -344,7 +347,6 @@ class TestStateStoreManagerChangelog:
 
         consumer.get_watermark_offsets.return_value = (0, 10)
         topic_manager.topic(name="topic")
-        # topic_admin_mock.inspect_topics.return_value = {"topic": None}
         state_manager.register_store("topic", store_name="store")
         state_manager.on_partition_assign(TopicPartitionStub("topic", 0))
         store = state_manager.get_store("topic", "store")
@@ -388,7 +390,9 @@ class TestStateStoreManagerChangelog:
             tx_store2 = state_manager.get_store_transaction("store2")
             # Simulate exception in one of the transactions
             with contextlib.suppress(ValueError), patch.object(
-                rocksdict.WriteBatch, "put", side_effect=ValueError("test")
+                RocksDBPartitionTransaction,
+                "_serialize_key",
+                side_effect=ValueError("test"),
             ):
                 tx_store1.set("some_key", "some_value")
             tx_store2.set("some_key", "some_value")

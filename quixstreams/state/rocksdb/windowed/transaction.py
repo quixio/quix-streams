@@ -10,7 +10,7 @@ from ..metadata import (
     LATEST_TIMESTAMP_KEY,
     PREFIX_SEPARATOR,
 )
-from ..partition import RocksDBPartitionTransaction
+from ..transaction import RocksDBPartitionTransaction, _deleted
 from ..serialization import int_to_int64_bytes, serialize
 from ..types import LoadsFunc, DumpsFunc
 
@@ -172,18 +172,17 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
             read_opt=read_opt, from_key=seek_from_key
         ):
             message_key, start, end = parse_window_key(key)
+            if start_from_ms < start <= start_to_ms:
+                windows[(start, end)] = self._deserialize_value(value)
 
-            if message_key != self._prefix or start > start_to_ms:
-                break
-            elif start <= start_from_ms:
-                continue
-
-            windows[(start, end)] = self._deserialize_value(value)
-
-        for window_key, window_value in self._update_cache.get("default", {}).items():
+        for window_key, window_value in (
+            self._update_cache["default"].get(self._prefix, {}).items()
+        ):
             message_key, start, end = parse_window_key(window_key)
-            if message_key != self._prefix or not start_from_ms < start <= start_to_ms:
+            if window_value is _deleted:
+                windows.pop((start, end), None)
                 continue
-            windows[(start, end)] = self._deserialize_value(window_value)
+            elif start_from_ms < start <= start_to_ms:
+                windows[(start, end)] = self._deserialize_value(window_value)
 
         return sorted(windows.items())
