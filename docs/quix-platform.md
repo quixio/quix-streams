@@ -45,13 +45,13 @@ these approaches:
 
 - **Set Environment Variable** (***recommended***):
     - Simply set `Quix__Sdk__Token` (double underscores!) to your `SDK Token`
-    > NOTE: `Quix__Sdk__Token` is set automatically in Quix Cloud, thus is the recommended approach
+  > NOTE: `Quix__Sdk__Token` is set automatically in Quix Cloud, thus is the recommended approach for an easy migration.
   
 OR <br>
 
 - **Application argument** 
     - Just do `Application(quix_sdk_token="MY_TOKEN")` 
-    > WARNING: This value is prioritized over `Quix__Sdk__Token`, which may cause ambiguity if both are set.
+  > WARNING: This value is prioritized over `Quix__Sdk__Token`, which may cause ambiguity if both are set.
 
 <br>
 
