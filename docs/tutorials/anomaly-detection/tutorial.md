@@ -1,4 +1,4 @@
-Tutorial: Anomaly Detection
+# Tutorial: Anomaly Detection
 
 You will learn how to build a simple anomaly detection system, a common use case of stateful streaming applications. This will show how to use a QuixStreams Application to:
 
@@ -154,8 +154,8 @@ Now we do a (5 second) windowing operation on our temperature value. A few very 
 - You can use either a ["current" or "final" window emission](../../windowing.md#emitting-results). "Current" is often preferred for an "alerting" style.
 
 - Window calculations relate specifically to its message key. 
-  - Since we care about temperature readings PER MACHINE, our example producer used MACHINE_ID as the Kafka message key. 
-  - If we had instead used a static key, say "my_machines", our Anomaly Detector would have evaluated the machines together as one.
+    - Since we care about temperature readings PER MACHINE, our example producer used MACHINE_ID as the Kafka message key. 
+    - If we had instead used a static key, say "my_machines", our Anomaly Detector would have evaluated the machines together as one.
 
 - The event's windowing timestamp comes from the "Timestamp" (case-sensitive!!!) field, which SDF looks for in the message value when first receiving it. If it doesn't exist, the kafka message timestamp is used. [A custom function can also be used](../../windowing.md#extracting-timestamps-from-messages).
 
