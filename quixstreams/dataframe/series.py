@@ -14,17 +14,25 @@ from .exceptions import InvalidOperation, MissingColumn
 __all__ = ("StreamingSeries",)
 
 
-def _getitem(obj: Any, item: Union[str, int]):
+def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
+    """
+    Special error handling around column referencing with SDF
+
+    :param d: a dict-like object (usually just a dict)
+    :column_name: the column name
+
+    :returns: Nested data
+    """
     try:
-        return obj[item]
+        return d[column_name]
     except KeyError:
         raise MissingColumn(
-            f"Column name '{item}' does not exist in the StreamingDataFrame"
+            f"Column name '{column_name}' does not exist in the StreamingDataFrame"
         )
     except TypeError:
         raise TypeError(
-            f"Cannot reference column name '{item}' for the StreamingDataFrame data "
-            f"type '{type(obj)}'; a dictionary is required."
+            f"Cannot reference column name '{column_name}' for the StreamingDataFrame "
+            f"data type '{type(d)}'; a dictionary is required."
         )
 
 
