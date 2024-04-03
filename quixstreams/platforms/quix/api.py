@@ -89,8 +89,6 @@ class QuixPortalApiService:
         except requests.exceptions.HTTPError as e:
             try:
                 reason_text = e.response.json()
-                if isinstance(reason_text, dict):
-                    reason_text = reason_text.get("message", reason_text)
             except requests.exceptions.JSONDecodeError:
                 reason_text = e.response.text
 
