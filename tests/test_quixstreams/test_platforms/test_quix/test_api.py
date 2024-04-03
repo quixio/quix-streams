@@ -1,16 +1,24 @@
+import json
 import zipfile
 from io import BytesIO
 from unittest.mock import create_autospec
 
 import pytest
+import requests
 
-from quixstreams.platforms.quix.api import QuixPortalApiService
+from quixstreams.platforms.quix.api import (
+    QuixPortalApiService,
+)
+from quixstreams.platforms.quix.exceptions import (
+    UndefinedQuixWorkspaceId,
+    QuixApiRequestFailure,
+)
 
 
 class TestApi:
     def test_no_workspace_id_provided(self):
         api = QuixPortalApiService(portal_api="http://portal.com", auth_token="token")
-        with pytest.raises(api.UndefinedQuixWorkspaceId):
+        with pytest.raises(UndefinedQuixWorkspaceId):
             api.get_topics()
 
     def test_get_workspace_certificate(self):
@@ -27,3 +35,51 @@ class TestApi:
 
         result = api.get_workspace_certificate(ws)
         assert result == b"my cool cert stuff"
+
+    def test_response_handler_valid_request(self, mock_response_factory):
+        api = QuixPortalApiService(portal_api="http://fake.fake", auth_token="token")
+        api._response_handler(mock_response_factory())
+
+    def test_response_handler_bad_request(self, mock_response_factory):
+        valid_json = b'"bad workspace"'
+        code = 404
+        url = "bad_url"
+        api = QuixPortalApiService(portal_api="http://fake.fake", auth_token="token")
+
+        with pytest.raises(QuixApiRequestFailure) as e:
+            api._response_handler(
+                mock_response_factory(
+                    url=url,
+                    status_code=code,
+                    response_body=valid_json,
+                    request_exception=requests.exceptions.HTTPError,
+                )
+            )
+
+        error_str = str(e.value)
+        for s in [json.loads(valid_json), str(code), url]:
+            assert s in error_str
+
+    def test_response_handler_bad_request_invalid_json(self, mock_response_factory):
+        invalid_json = b"bad workspace"
+        code = 404
+        url = "bad_url"
+
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(invalid_json)
+
+        api = QuixPortalApiService(portal_api="http://fake.fake", auth_token="token")
+
+        with pytest.raises(QuixApiRequestFailure) as e:
+            api._response_handler(
+                mock_response_factory(
+                    url=url,
+                    status_code=code,
+                    response_body=invalid_json,
+                    request_exception=requests.exceptions.HTTPError,
+                )
+            )
+
+        error_str = str(e.value)
+        for s in [invalid_json.decode(), str(code), url]:
+            assert s in error_str

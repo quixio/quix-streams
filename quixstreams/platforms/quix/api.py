@@ -5,8 +5,12 @@ from zipfile import ZipFile
 
 import requests
 
-from quixstreams.exceptions import QuixException
 from .env import QUIX_ENVIRONMENT
+from .exceptions import (
+    UndefinedQuixWorkspaceId,
+    MissingConnectionRequirements,
+    QuixApiRequestFailure,
+)
 
 __all__ = ("QuixPortalApiService",)
 DEFAULT_PORTAL_API_URL = "https://portal-api.platform.quix.io/"
@@ -28,24 +32,25 @@ class QuixPortalApiService:
 
     def __init__(
         self,
-        auth_token: str,
+        auth_token: Optional[str] = None,
         portal_api: Optional[str] = None,
         api_version: Optional[str] = None,
         default_workspace_id: Optional[str] = None,
     ):
-        self._auth_token = auth_token
         self._portal_api = (
             portal_api or QUIX_ENVIRONMENT.portal_api or DEFAULT_PORTAL_API_URL
         )
+        self._auth_token = auth_token or QUIX_ENVIRONMENT.sdk_token
+        if not self._auth_token:
+            raise MissingConnectionRequirements(
+                f"A Quix Cloud auth token (SDK or PAT) is required; "
+                f"set with environment variable {QUIX_ENVIRONMENT.SDK_TOKEN}"
+            )
         self._default_workspace_id = (
             default_workspace_id or QUIX_ENVIRONMENT.workspace_id
         )
         self.api_version = api_version or "2.0"
         self.session = self._init_session()
-
-    class MissingConnectionRequirements(QuixException): ...
-
-    class UndefinedQuixWorkspaceId(QuixException): ...
 
     class SessionWithUrlBase(requests.Session):
         def __init__(self, url_base: str):
@@ -61,16 +66,43 @@ class QuixPortalApiService:
     @property
     def default_workspace_id(self) -> str:
         if not self._default_workspace_id:
-            raise self.UndefinedQuixWorkspaceId("You must provide a Quix Workspace ID")
+            raise UndefinedQuixWorkspaceId(
+                f"A Quix Cloud Workspace ID is required; "
+                f"set with environment variable {QUIX_ENVIRONMENT.WORKSPACE_ID}"
+            )
         return self._default_workspace_id
 
     @default_workspace_id.setter
     def default_workspace_id(self, value):
         self._default_workspace_id = value
 
+    def _response_handler(self, r: requests.Response, *args, **kwargs):
+        """
+        Custom callback/hook that is called after receiving a request.Response
+
+        Catches non-200's and passes both the original exception and the Response body.
+
+        Note: *args and **kwargs expected for hook
+        """
+        try:
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            try:
+                reason_text = e.response.json()
+            except requests.exceptions.JSONDecodeError:
+                reason_text = e.response.text
+
+            if reason_text:
+                e = (
+                    f'Error {e.response.status_code} for url "{e.response.url}": '
+                    f"{reason_text}"
+                )
+
+            raise QuixApiRequestFailure(e)
+
     def _init_session(self) -> SessionWithUrlBase:
         s = self.SessionWithUrlBase(self._portal_api)
-        s.hooks = {"response": lambda r, *args, **kwargs: r.raise_for_status()}
+        s.hooks = {"response": self._response_handler}
         s.headers.update(
             {
                 "X-Version": self.api_version,
