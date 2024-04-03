@@ -117,17 +117,17 @@ class Application:
         """
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
             Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
-            Either this OR quix_sdk_token must be set to use Application (not both).
-            Linked Environment Variable: `Quix__Broker__Address`
-            Default: None
-        :param quix_sdk_token: If using the Quix Platform, the SDK token to connect with.
-            Either this OR broker_address must be set to use Application (not both).
-            Linked Environment Variable: `Quix__Sdk__Token`
-            Default: None (if not run on Quix Platform)
+            Either this OR `quix_sdk_token` must be set to use `Application` (not both).
+            Linked Environment Variable: `Quix__Broker__Address`.
+            Default: `None`
+        :param quix_sdk_token: If using the Quix Cloud, the SDK token to connect with.
+            Either this OR `broker_address` must be set to use Application (not both).
+            Linked Environment Variable: `Quix__Sdk__Token`.
+            Default: None (if not run on Quix Cloud)
               >***NOTE:*** the environment variable is set for you in the Quix Cloud
         :param consumer_group: Kafka consumer group.
-            Passed as `group.id` to `confluent_kafka.Consumer`
-            Linked Environment Variable: `Quix__Consumer__Group`
+            Passed as `group.id` to `confluent_kafka.Consumer`.
+            Linked Environment Variable: `Quix__Consumer__Group`.
             Default - "quixstreams-default" (set in init)
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
@@ -140,11 +140,11 @@ class Application:
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
         :param state_dir: path to the application state directory.
-            Default - ".state".
+            Default - `".state"`.
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
-        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
-        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
+        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - `1.0`s
+        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - `0`s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
         :param loglevel: a log level for "quixstreams" logger.
@@ -152,31 +152,28 @@ class Application:
             If `None` is passed, no logging will be configured.
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
-            Default - "INFO".
+            Default - `"INFO"`.
         :param auto_create_topics: Create all `Topic`s made via Application.topic()
             Default - `True`
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
-        :param topic_manager: A TopicManager instance
+        :param topic_manager: A `TopicManager` instance
 
-        ***Error Handlers***
-
+        <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
             will be propagated and the processing will eventually stop.
         :param on_consumer_error: triggered when internal `RowConsumer` fails
-        to poll Kafka or cannot deserialize a message.
+            to poll Kafka or cannot deserialize a message.
         :param on_processing_error: triggered when exception is raised within
             `StreamingDataFrame.process()`.
-        :param on_producer_error: triggered when RowProducer fails to serialize
+        :param on_producer_error: triggered when `RowProducer` fails to serialize
             or to produce a message to Kafka.
-
-        ***Quix Platform Parameters***
-
+        <br><br>***Quix Cloud Parameters***<br>
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
-            > NOTE: It is recommended to just use quix_sdk_token instead.
+            > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
         configure_logging(loglevel=loglevel)
 
@@ -354,8 +351,8 @@ class Application:
         ```
 
         :param consumer_group: Kafka consumer group.
-            Passed as `group.id` to `confluent_kafka.Consumer`
-            Linked Environment Variable: `Quix__Consumer__Group`
+            Passed as `group.id` to `confluent_kafka.Consumer`.
+            Linked Environment Variable: `Quix__Consumer__Group`.
             Default - "quixstreams-default" (post-init).
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
@@ -368,27 +365,26 @@ class Application:
         :param producer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
         :param state_dir: path to the application state directory.
-            Default - ".state".
+            Default - `".state"`.
         :param rocksdb_options: RocksDB options.
             If `None`, the default options will be used.
-        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - 1.0s
-        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - 0s.
+        :param consumer_poll_timeout: timeout for `RowConsumer.poll()`. Default - `1.0`s
+        :param producer_poll_timeout: timeout for `RowProducer.poll()`. Default - `0`s.
         :param on_message_processed: a callback triggered when message is successfully
             processed.
         :param loglevel: a log level for "quixstreams" logger.
-            Should be a string or None.
+            Should be a string or `None`.
             If `None` is passed, no logging will be configured.
             You may pass `None` and configure "quixstreams" logger
             externally using `logging` library.
-            Default - "INFO".
-        :param auto_create_topics: Create all `Topic`s made via Application.topic()
+            Default - `"INFO"`.
+        :param auto_create_topics: Create all `Topic`s made via `Application.topic()`
             Default - `True`
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
-        :param topic_manager: A QuixTopicManager instance
+        :param topic_manager: A `QuixTopicManager` instance
 
-        ***Error Handlers***
-
+        <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
             exceptions occur on different stages of stream processing. If the callback
             returns `True`, the exception will be ignored. Otherwise, the exception
@@ -399,10 +395,7 @@ class Application:
             `StreamingDataFrame.process()`.
         :param on_producer_error: triggered when RowProducer fails to serialize
             or to produce a message to Kafka.
-
-
-        ***Quix-specific Parameters***
-
+        <br><br>***Quix Cloud Parameters***<br>
         :param quix_config_builder: instance of `QuixKafkaConfigsBuilder` to be used
             instead of the default one.
 
