@@ -4,10 +4,10 @@
 Quix Streams was made to seamlessly integrate with the Quix Cloud.
 
 When running Quix Streams on Quix Cloud, all connection and authentication-based 
-settings are preconfigured, getting you up and running quickly!
+settings are preconfigured for you.
 
 Quix Cloud itself provides a frictionless environment to deploy and manage your applications using either
-our API or browser-based UI!
+our API or our browser-based UI.
 
 To learn more about Quix Cloud and how to set up a project, please see the [Quix Cloud docs](https://quix.io/docs/quix-cloud/overview.html#developing-your-stream-processing-application).
 
@@ -20,11 +20,11 @@ You could, for example, connect to Redpanda Cloud, or another supported broker, 
 
 ## Connecting with Quix Streams
 
-Connecting to the Quix Cloud Kafka brokers using Quix Streams is extremely simple!
+Here is how to connect to the Quix Cloud Kafka brokers using Quix Streams:
 
 ### Within Quix Cloud
 
-If you are running your Quix Streams `Application` directly within Quix Cloud, do...nothing! It's configured automatically!
+If you are running your Quix Streams `Application` directly within Quix Cloud, it's configured automatically.
 
 ### Outside of Quix Cloud
 
