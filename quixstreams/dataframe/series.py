@@ -19,7 +19,7 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
     Special error handling around column referencing with SDF.
 
     :param d: a dict-like object (usually just a dict).
-    :column_name: the column name.
+    :param column_name: the column name.
 
     :return: Nested data from column name
     """
