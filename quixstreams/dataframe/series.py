@@ -1,6 +1,6 @@
 import contextvars
 import operator
-from typing import Optional, Union, Callable, Container, Any, Mapping, overload
+from typing import Optional, Union, Callable, Container, Any, Mapping
 
 from typing_extensions import Self
 
@@ -9,9 +9,23 @@ from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, MissingColumn
 
 __all__ = ("StreamingSeries",)
+
+
+def _getitem(obj: Any, item: Union[str, int]):
+    try:
+        return obj[item]
+    except KeyError:
+        raise MissingColumn(
+            f"Column name '{item}' does not exist in the StreamingDataFrame"
+        )
+    except TypeError:
+        raise TypeError(
+            f"Cannot reference column name '{item}' for the StreamingDataFrame data "
+            f"type '{type(obj)}'; a dictionary is required."
+        )
 
 
 class StreamingSeries(BaseStreaming):
@@ -71,7 +85,7 @@ class StreamingSeries(BaseStreaming):
     ):
         if not (name or stream):
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=ApplyFunction(lambda v: v[name]))
+        self._stream = stream or Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
 
     @classmethod
     def from_func(cls, func: StreamCallable) -> Self:

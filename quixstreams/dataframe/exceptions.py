@@ -5,3 +5,6 @@ __all__ = ("InvalidOperation",)
 
 
 class InvalidOperation(QuixException): ...
+
+
+class MissingColumn(QuixException): ...
