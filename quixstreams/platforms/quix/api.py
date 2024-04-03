@@ -86,16 +86,21 @@ class QuixPortalApiService:
         """
         try:
             r.raise_for_status()
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.HTTPError as e:
             try:
                 reason_text = e.response.json()
+                if isinstance(reason_text, dict):
+                    reason_text = reason_text.get("message", reason_text)
             except requests.exceptions.JSONDecodeError:
                 reason_text = e.response.text
 
-            reason_text = reason_text or "Invalid URL"
-            raise QuixApiRequestFailure(
-                f'{e.response.status_code} for url "{e.response.url}": {reason_text}'
-            )
+            if reason_text:
+                e = (
+                    f'Error {e.response.status_code} for url "{e.response.url}": '
+                    f"{reason_text}"
+                )
+
+            raise QuixApiRequestFailure(e)
 
     def _init_session(self) -> SessionWithUrlBase:
         s = self.SessionWithUrlBase(self._portal_api)
