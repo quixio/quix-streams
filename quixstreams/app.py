@@ -128,7 +128,7 @@ class Application:
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
             Linked Environment Variable: `Quix__Consumer__Group`.
-            Default - "quixstreams-default" (set in init)
+            Default - "quixstreams-default" (set during init)
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
@@ -353,7 +353,7 @@ class Application:
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`.
             Linked Environment Variable: `Quix__Consumer__Group`.
-            Default - "quixstreams-default" (post-init).
+            Default - "quixstreams-default" (set during init).
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
         :param auto_commit_enable: If true, periodically commit offset of
