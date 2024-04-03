@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L55)
 
 The main Application class.
 
@@ -24,10 +24,9 @@ Most functionality is explained the various methods, except for
 <br>
 ***What it Does:***
 
-- During user setup:
+- On init:
     - Provides defaults or helper methods for commonly needed objects
-    - For Quix Platform Users: Configures the app for it
-        (see `Application.Quix()`)
+    - If `quix_sdk_token` is passed, configures the app to use the Quix Cloud.
 - When executed via `.run()` (after setup):
     - Initializes Topics and StreamingDataFrames
     - Facilitates processing of Kafka messages with a `StreamingDataFrame`
@@ -59,8 +58,9 @@ app.run(dataframe=df)
 #### Application.\_\_init\_\_
 
 ```python
-def __init__(broker_address: str,
-             consumer_group: str = "quixstreams-default",
+def __init__(broker_address: Optional[str] = None,
+             quix_sdk_token: Optional[str] = None,
+             consumer_group: Optional[str] = None,
              auto_offset_reset: AutoOffsetReset = "latest",
              auto_commit_enable: bool = True,
              partitioner: Partitioner = "murmur2",
@@ -77,10 +77,11 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO",
              auto_create_topics: bool = True,
              use_changelog_topics: bool = True,
+             quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
              topic_manager: Optional[TopicManager] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L93)
 
 
 <br>
@@ -88,9 +89,19 @@ def __init__(broker_address: str,
 
 - `broker_address`: Kafka broker host and port in format `<host>:<port>`.
 Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+Either this OR quix_sdk_token must be set to use Application (not both).
+Linked Environment Variable: `Quix__Broker__Address`
+Default: None
+- `quix_sdk_token`: If using the Quix Platform, the SDK token to connect with.
+Either this OR broker_address must be set to use Application (not both).
+Linked Environment Variable: `Quix__Sdk__Token`
+Default: None (if not run on Quix Platform)
+  >***NOTE:*** the environment variable is set for you in the Quix Cloud
 - `consumer_group`: Kafka consumer group.
 Passed as `group.id` to `confluent_kafka.Consumer`
-Default - "quixstreams-default".
+Linked Environment Variable: `Quix__Consumer__Group`
+Default - "quixstreams-default" (set in init)
+  >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `auto_commit_enable`: If true, periodically commit offset of
 the last message handed to the application. Default - `True`.
@@ -132,6 +143,11 @@ to poll Kafka or cannot deserialize a message.
 - `on_producer_error`: triggered when RowProducer fails to serialize
 or to produce a message to Kafka.
 
+***Quix Platform Parameters***
+- `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
+instead of the default one.
+> NOTE: It is recommended to just use quix_sdk_token instead.
+
 <a id="quixstreams.app.Application.Quix"></a>
 
 <br><br>
@@ -141,7 +157,7 @@ or to produce a message to Kafka.
 ```python
 @classmethod
 def Quix(cls,
-         consumer_group: str = "quixstreams-default",
+         consumer_group: Optional[str] = None,
          auto_offset_reset: AutoOffsetReset = "latest",
          auto_commit_enable: bool = True,
          partitioner: Partitioner = "murmur2",
@@ -162,16 +178,17 @@ def Quix(cls,
          topic_manager: Optional[QuixTopicManager] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L299)
 
-Initialize an Application to work with Quix platform,
+>***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
-assuming environment is properly configured (by default in the platform).
+Initialize an Application to work with Quix Cloud,
+assuming environment is properly configured (by default in Quix Cloud).
 
 It takes the credentials from the environment and configures consumer and
-producer to properly connect to the Quix platform.
+producer to properly connect to the Quix Cloud.
 
->***NOTE:*** Quix platform requires `consumer_group` and topic names to be
+>***NOTE:*** Quix Cloud requires `consumer_group` and topic names to be
     prefixed with workspace id.
     If the application is created via `Application.Quix()`, the real consumer
     group will be `<workspace_id>-<consumer_group>`,
@@ -204,9 +221,10 @@ app.run(dataframe=df)
 ***Arguments:***
 
 - `consumer_group`: Kafka consumer group.
-Passed as `group.id` to `confluent_kafka.Consumer`.
-Default - "quixstreams-default".
-  >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
+Passed as `group.id` to `confluent_kafka.Consumer`
+Linked Environment Variable: `Quix__Consumer__Group`
+Default - "quixstreams-default" (post-init).
+  >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `auto_commit_enable`: If true, periodically commit offset of
 the last message handed to the application. Default - `True`.
@@ -275,7 +293,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L443)
 
 Create a topic definition.
 
@@ -356,7 +374,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L472)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L523)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -406,7 +424,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L508)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L559)
 
 Stop the internal poll loop and the message processing.
 
@@ -426,7 +444,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L522)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L573)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -461,7 +479,7 @@ with app.get_producer() as producer:
 def get_consumer() -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L553)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L604)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -506,7 +524,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L597)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L648)
 
 Clear the state of the application.
 
@@ -520,7 +538,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/app.py#L676)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/app.py#L726)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 

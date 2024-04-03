@@ -10,7 +10,7 @@
 class State(Protocol)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/types.py#L153)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/types.py#L151)
 
 Primary interface for working with key-value state data from `StreamingDataFrame`
 
@@ -24,7 +24,7 @@ Primary interface for working with key-value state data from `StreamingDataFrame
 def get(key: Any, default: Any = None) -> Optional[Any]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/types.py#L158)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/types.py#L156)
 
 Get the value for key if key is present in the state, else default
 
@@ -51,7 +51,7 @@ value or None if the key is not found and `default` is not provided
 def set(key: Any, value: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/types.py#L168)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/types.py#L166)
 
 Set value for the key.
 
@@ -72,7 +72,7 @@ Set value for the key.
 def delete(key: Any)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/types.py#L176)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/types.py#L174)
 
 Delete value for the key.
 
@@ -94,7 +94,7 @@ This function always returns `None`, even if value is not found.
 def exists(key: Any) -> bool
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/types.py#L185)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/types.py#L183)
 
 Check if the key exists in state.
 
@@ -123,7 +123,7 @@ True if key exists, False otherwise
 class RocksDBOptions(RocksDBOptionsType)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/rocksdb/options.py#L25)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/rocksdb/options.py#L25)
 
 RocksDB database options.
 
@@ -148,7 +148,7 @@ Please see `rocksdict.Options` for a complete description of other options.
 def to_options() -> rocksdict.Options
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4fd6ae337f656d6caf022c5329815d7c39ca3466/quixstreams/state/rocksdb/options.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/7b5e53917979268252d6f3f2d18d15ae987ea6bb/quixstreams/state/rocksdb/options.py#L53)
 
 Convert parameters to `rocksdict.Options`
 
