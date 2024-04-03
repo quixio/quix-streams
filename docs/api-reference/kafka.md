@@ -10,7 +10,7 @@
 class Producer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/producer.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/producer.py#L54)
 
 <a id="quixstreams.kafka.producer.Producer.__init__"></a>
 
@@ -24,7 +24,7 @@ def __init__(broker_address: str,
              extra_config: Optional[dict] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/producer.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/producer.py#L55)
 
 A wrapper around `confluent_kafka.Producer`.
 
@@ -64,7 +64,7 @@ def produce(topic: str,
             buffer_error_max_tries: int = 3)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/producer.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/producer.py#L94)
 
 Produce message to topic.
 
@@ -97,7 +97,7 @@ Pass `0` to not retry after `BufferError`.
 def poll(timeout: float = 0)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/producer.py#L152)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/producer.py#L152)
 
 Polls the producer for events and calls `on_delivery` callbacks.
 
@@ -118,7 +118,7 @@ Polls the producer for events and calls `on_delivery` callbacks.
 def flush(timeout: Optional[float] = None) -> int
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/producer.py#L160)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/producer.py#L160)
 
 Wait for all messages in the Producer queue to be delivered.
 
@@ -133,7 +133,7 @@ None or -1 is infinite. Default: None
 <br>
 ***Returns:***
 
-number of messages delivered
+number of messages remaining (not flushed)
 
 <a id="quixstreams.kafka.consumer"></a>
 
@@ -147,7 +147,7 @@ number of messages delivered
 class Consumer()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L66)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L66)
 
 <a id="quixstreams.kafka.consumer.Consumer.__init__"></a>
 
@@ -166,7 +166,7 @@ def __init__(broker_address: str,
              extra_config: Optional[dict] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L67)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L67)
 
 A wrapper around `confluent_kafka.Consumer`.
 
@@ -208,7 +208,7 @@ Note: values passed as arguments override values in `extra_config`.
 def poll(timeout: Optional[float] = None) -> Optional[Message]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L126)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L126)
 
 Consumes a single message, calls callbacks and returns events.
 
@@ -249,7 +249,7 @@ def subscribe(topics: List[str],
               on_lost: Optional[RebalancingCallback] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L144)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L144)
 
 Set subscription to supplied list of topics
 
@@ -292,7 +292,7 @@ for example, may fail.
 def unsubscribe()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L238)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L238)
 
 Remove current subscription.
 
@@ -312,7 +312,7 @@ def store_offsets(message: Optional[Message] = None,
                   offsets: Optional[List[TopicPartition]] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L246)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L246)
 
 .. py:function:: store_offsets([message=None], [offsets=None])
 
@@ -347,7 +347,7 @@ def commit(message: Optional[Message] = None,
            asynchronous: bool = True) -> Optional[List[TopicPartition]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L280)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L280)
 
 Commit a message or a list of offsets.
 
@@ -385,7 +385,7 @@ def committed(partitions: List[TopicPartition],
               timeout: Optional[float] = None) -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L320)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L320)
 
 .. py:function:: committed(partitions, [timeout=None])
 
@@ -422,7 +422,7 @@ def get_watermark_offsets(partition: TopicPartition,
                           cached: bool = False) -> Tuple[int, int]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L340)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L340)
 
 Retrieve low and high offsets for the specified partition.
 
@@ -461,7 +461,7 @@ def list_topics(topic: Optional[str] = None,
                 timeout: Optional[float] = None) -> ClusterMetadata
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L366)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L366)
 
 .. py:function:: list_topics([topic=None], [timeout=-1])
 
@@ -494,7 +494,7 @@ None or -1 is infinite. Default: None
 def memberid() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L389)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L389)
 
 Return this client's broker-assigned group member id.
 
@@ -517,7 +517,7 @@ def offsets_for_times(partitions: List[TopicPartition],
                       timeout: Optional[float] = None) -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L402)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L402)
 
 Look up offsets by timestamp for the specified partitions.
 
@@ -546,7 +546,7 @@ last message in the partition, a value of -1 will be returned.
 def pause(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L428)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L428)
 
 Pause consumption for the provided list of partitions.
 
@@ -574,7 +574,7 @@ Does NOT affect the result of Consumer.assignment().
 def resume(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L442)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L442)
 
 .. py:function:: resume(partitions)
 
@@ -600,7 +600,7 @@ Resume consumption for the provided list of partitions.
 def position(partitions: List[TopicPartition]) -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L454)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L454)
 
 Retrieve current positions (offsets) for the specified partitions.
 
@@ -633,7 +633,7 @@ the last consumed message + 1.
 def seek(partition: TopicPartition)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L468)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L468)
 
 Set consume position for partition to offset.
 
@@ -665,7 +665,7 @@ pass the offset in an `assign()` call.
 def assignment() -> List[TopicPartition]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L485)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L485)
 
 Returns the current partition assignment.
 
@@ -690,7 +690,7 @@ Returns the current partition assignment.
 def set_sasl_credentials(username: str, password: str)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L498)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L498)
 
 Sets the SASL credentials used for this client.
 These credentials will overwrite the old ones, and will be used the next
@@ -709,7 +709,7 @@ This method is applicable only to SASL PLAIN and SCRAM mechanisms.
 def incremental_assign(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L510)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L510)
 
 Assign new partitions.
 
@@ -729,7 +729,7 @@ Any additional partitions besides the ones passed during the `Consumer`
 def incremental_unassign(partitions: List[TopicPartition])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L522)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L522)
 
 Revoke partitions.
 
@@ -745,7 +745,7 @@ Can be called outside an on_revoke callback.
 def close()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/kafka/consumer.py#L530)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9c0a51b864588f265fc2fcafe592b3e03bd10ce6/quixstreams/kafka/consumer.py#L530)
 
 Close down and terminate the Kafka Consumer.
 

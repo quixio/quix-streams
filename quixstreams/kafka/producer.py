@@ -163,7 +163,8 @@ class Producer:
 
         :param float timeout: time to attempt flushing (seconds).
             None or -1 is infinite. Default: None
-        :return: number of messages delivered
+
+        :return: number of messages remaining (not flushed)
         """
         return self._producer.flush(timeout=timeout if timeout is not None else -1)
 
