@@ -9,7 +9,7 @@ from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
-from .exceptions import InvalidOperation, MissingColumn
+from .exceptions import InvalidOperation, MissingColumn, InvalidColumnReference
 
 __all__ = ("StreamingSeries",)
 
@@ -30,9 +30,10 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
             f"Column name '{column_name}' does not exist in the StreamingDataFrame"
         )
     except TypeError:
-        raise TypeError(
-            f"Cannot reference column name '{column_name}' for the StreamingDataFrame "
-            f"data type '{type(d)}'; a dictionary is required."
+        d_type = getattr(type(d), "__name__", type(d))
+        raise InvalidColumnReference(
+            f"Cannot reference column name '{column_name}' for StreamingDataFrame "
+            f"data type '{d_type}'; a dictionary is required."
         )
 
 

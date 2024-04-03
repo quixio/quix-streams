@@ -1,6 +1,10 @@
 import pytest
 
-from quixstreams.dataframe.exceptions import InvalidOperation, MissingColumn
+from quixstreams.dataframe.exceptions import (
+    InvalidOperation,
+    MissingColumn,
+    InvalidColumnReference,
+)
 from quixstreams.dataframe.series import StreamingSeries
 
 
@@ -344,6 +348,5 @@ class TestStreamingSeries:
         Raise special TypeError when the initial (SDF) data is not a dict and user
         attempts a column reference.
         """
-        with pytest.raises(TypeError) as e:
+        with pytest.raises(InvalidColumnReference):
             StreamingSeries("x").test(2)
-        assert "column name 'x'" in str(e.value)
