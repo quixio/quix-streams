@@ -447,11 +447,10 @@ class StreamingDataFrame(BaseStreaming):
         - Messages with `None` key will be ignored.
         - The time windows always use the current event time.
 
-        Example Snippet:
 
         Example Snippet:
+
         ```python
-
         app = Application()
         sdf = app.dataframe(...)
 

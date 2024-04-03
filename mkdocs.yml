@@ -5,6 +5,9 @@ edit_uri: tree/main
 
 theme:
   name: material
+  features:
+    - navigation.path
+    - navigation.indexes
 
 markdown_extensions:
   - attr_list
@@ -14,22 +17,37 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
 
+
 exclude_docs: |
   build/*
 
 nav:
-  - 'Introduction': 'introduction.md'
-  - Example Applications: example.md
-  - Defining your Streaming Pipeline: streamingdataframe.md
-  - Windowed Aggregations: windowing.md
-  - Serialization: serialization.md
-  - Stateful Processing: stateful-processing.md
-  - Working with Quix:
-    - Using the Platform: quix-platform.md
+  - Introduction: 'introduction.md'
+  - Quickstart: 'quickstart.md'
+  - Tutorials:
+    - 'tutorials/README.md'
+    - Word Count: 'tutorials/word-count/tutorial.md'
+    - Anomaly Detection: 'tutorials/anomaly-detection/tutorial.md'
+    - Purchase Filtering: 'tutorials/purchase-filtering/tutorial.md'
+  - Producing Data to Kafka: producer.md
+  - Processing & Transforming Data: processing.md
+  - Windows & Aggregations: windowing.md
+  - Configuration: configuration.md
+  - Advanced Usage:
+    - Serialization Formats: advanced/serialization.md
+    - Stateful Processing: advanced/stateful-processing.md
+    - Managing Kafka Topics: advanced/topics.md
+    - Using Producer & Consumer: advanced/producer-consumer-lowlevel.md
+  - Connecting to Quix Cloud: quix-platform.md
+  - Upgrading Guide:
     - Upgrading from Quix Streams v0.5: upgrading-legacy.md
+
   - API Docs:
-    - Application: api-reference/application.md
-    - StreamingDataFrame & Series: api-reference/dataframe.md
-    - Topics & Serializers: api-reference/topics-serdes.md
-    - Quix Platform API: api-reference/quix-platform-api.md
+    - StreamingDataFrame API: api-reference/dataframe.md
+    - Topics API: api-reference/topics.md
+    - Context API: api-reference/context.md
+    - Serializers API: api-reference/serialization.md
+    - Application API: api-reference/application.md
+    - State API: api-reference/state.md
+    - Kafka Producer & Consumer API: api-reference/kafka.md
     - Full Reference: api-reference/quixstreams.md

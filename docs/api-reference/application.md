@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L55)
 
 The main Application class.
 
@@ -24,10 +24,9 @@ Most functionality is explained the various methods, except for
 <br>
 ***What it Does:***
 
-- During user setup:
+- On init:
     - Provides defaults or helper methods for commonly needed objects
-    - For Quix Platform Users: Configures the app for it
-        (see `Application.Quix()`)
+    - If `quix_sdk_token` is passed, configures the app to use the Quix Cloud.
 - When executed via `.run()` (after setup):
     - Initializes Topics and StreamingDataFrames
     - Facilitates processing of Kafka messages with a `StreamingDataFrame`
@@ -59,8 +58,9 @@ app.run(dataframe=df)
 #### Application.\_\_init\_\_
 
 ```python
-def __init__(broker_address: str,
-             consumer_group: str = "quixstreams-default",
+def __init__(broker_address: Optional[str] = None,
+             quix_sdk_token: Optional[str] = None,
+             consumer_group: Optional[str] = None,
              auto_offset_reset: AutoOffsetReset = "latest",
              auto_commit_enable: bool = True,
              partitioner: Partitioner = "murmur2",
@@ -77,10 +77,11 @@ def __init__(broker_address: str,
              loglevel: Optional[LogLevel] = "INFO",
              auto_create_topics: bool = True,
              use_changelog_topics: bool = True,
+             quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
              topic_manager: Optional[TopicManager] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L91)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L93)
 
 
 <br>
@@ -88,9 +89,19 @@ def __init__(broker_address: str,
 
 - `broker_address`: Kafka broker host and port in format `<host>:<port>`.
 Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+Either this OR `quix_sdk_token` must be set to use `Application` (not both).
+Linked Environment Variable: `Quix__Broker__Address`.
+Default: `None`
+- `quix_sdk_token`: If using the Quix Cloud, the SDK token to connect with.
+Either this OR `broker_address` must be set to use Application (not both).
+Linked Environment Variable: `Quix__Sdk__Token`.
+Default: None (if not run on Quix Cloud)
+  >***NOTE:*** the environment variable is set for you in the Quix Cloud
 - `consumer_group`: Kafka consumer group.
-Passed as `group.id` to `confluent_kafka.Consumer`
-Default - "quixstreams-default".
+Passed as `group.id` to `confluent_kafka.Consumer`.
+Linked Environment Variable: `Quix__Consumer__Group`.
+Default - "quixstreams-default" (set during init)
+  >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `auto_commit_enable`: If true, periodically commit offset of
 the last message handed to the application. Default - `True`.
@@ -101,11 +112,11 @@ will be passed to `confluent_kafka.Consumer` as is.
 - `producer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Producer` as is.
 - `state_dir`: path to the application state directory.
-Default - ".state".
+Default - `".state"`.
 - `rocksdb_options`: RocksDB options.
 If `None`, the default options will be used.
-- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - 1.0s
-- `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - 0s.
+- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - `1.0`s
+- `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - `0`s.
 - `on_message_processed`: a callback triggered when message is successfully
 processed.
 - `loglevel`: a log level for "quixstreams" logger.
@@ -113,14 +124,13 @@ Should be a string or None.
 If `None` is passed, no logging will be configured.
 You may pass `None` and configure "quixstreams" logger
 externally using `logging` library.
-Default - "INFO".
+Default - `"INFO"`.
 - `auto_create_topics`: Create all `Topic`s made via Application.topic()
 Default - `True`
 - `use_changelog_topics`: Use changelog topics to back stateful operations
 Default - `True`
-- `topic_manager`: A TopicManager instance
-***Error Handlers***
-
+- `topic_manager`: A `TopicManager` instance
+<br><br>***Error Handlers***<br>
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
@@ -129,8 +139,12 @@ To handle errors, `Application` accepts callbacks triggered when
 to poll Kafka or cannot deserialize a message.
 - `on_processing_error`: triggered when exception is raised within
 `StreamingDataFrame.process()`.
-- `on_producer_error`: triggered when RowProducer fails to serialize
+- `on_producer_error`: triggered when `RowProducer` fails to serialize
 or to produce a message to Kafka.
+<br><br>***Quix Cloud Parameters***<br>
+- `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
+instead of the default one.
+> NOTE: It is recommended to just use `quix_sdk_token` instead.
 
 <a id="quixstreams.app.Application.Quix"></a>
 
@@ -141,7 +155,7 @@ or to produce a message to Kafka.
 ```python
 @classmethod
 def Quix(cls,
-         consumer_group: str = "quixstreams-default",
+         consumer_group: Optional[str] = None,
          auto_offset_reset: AutoOffsetReset = "latest",
          auto_commit_enable: bool = True,
          partitioner: Partitioner = "murmur2",
@@ -162,16 +176,17 @@ def Quix(cls,
          topic_manager: Optional[QuixTopicManager] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L233)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L296)
 
-Initialize an Application to work with Quix platform,
+>***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
-assuming environment is properly configured (by default in the platform).
+Initialize an Application to work with Quix Cloud,
+assuming environment is properly configured (by default in Quix Cloud).
 
 It takes the credentials from the environment and configures consumer and
-producer to properly connect to the Quix platform.
+producer to properly connect to the Quix Cloud.
 
->***NOTE:*** Quix platform requires `consumer_group` and topic names to be
+>***NOTE:*** Quix Cloud requires `consumer_group` and topic names to be
     prefixed with workspace id.
     If the application is created via `Application.Quix()`, the real consumer
     group will be `<workspace_id>-<consumer_group>`,
@@ -205,8 +220,9 @@ app.run(dataframe=df)
 
 - `consumer_group`: Kafka consumer group.
 Passed as `group.id` to `confluent_kafka.Consumer`.
-Default - "quixstreams-default".
-  >***NOTE:*** The consumer group will be prefixed by Quix workspace id.
+Linked Environment Variable: `Quix__Consumer__Group`.
+Default - "quixstreams-default" (set during init).
+  >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
 - `auto_offset_reset`: Consumer `auto.offset.reset` setting
 - `auto_commit_enable`: If true, periodically commit offset of
 the last message handed to the application. Default - `True`.
@@ -217,26 +233,25 @@ will be passed to `confluent_kafka.Consumer` as is.
 - `producer_extra_config`: A dictionary with additional options that
 will be passed to `confluent_kafka.Producer` as is.
 - `state_dir`: path to the application state directory.
-Default - ".state".
+Default - `".state"`.
 - `rocksdb_options`: RocksDB options.
 If `None`, the default options will be used.
-- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - 1.0s
-- `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - 0s.
+- `consumer_poll_timeout`: timeout for `RowConsumer.poll()`. Default - `1.0`s
+- `producer_poll_timeout`: timeout for `RowProducer.poll()`. Default - `0`s.
 - `on_message_processed`: a callback triggered when message is successfully
 processed.
 - `loglevel`: a log level for "quixstreams" logger.
-Should be a string or None.
+Should be a string or `None`.
 If `None` is passed, no logging will be configured.
 You may pass `None` and configure "quixstreams" logger
 externally using `logging` library.
-Default - "INFO".
-- `auto_create_topics`: Create all `Topic`s made via Application.topic()
+Default - `"INFO"`.
+- `auto_create_topics`: Create all `Topic`s made via `Application.topic()`
 Default - `True`
 - `use_changelog_topics`: Use changelog topics to back stateful operations
 Default - `True`
-- `topic_manager`: A QuixTopicManager instance
-***Error Handlers***
-
+- `topic_manager`: A `QuixTopicManager` instance
+<br><br>***Error Handlers***<br>
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
     returns `True`, the exception will be ignored. Otherwise, the exception
@@ -247,9 +262,7 @@ Kafka or cannot deserialize a message.
 `StreamingDataFrame.process()`.
 - `on_producer_error`: triggered when RowProducer fails to serialize
 or to produce a message to Kafka.
-
-
-***Quix-specific Parameters***
+<br><br>***Quix Cloud Parameters***<br>
 - `quix_config_builder`: instance of `QuixKafkaConfigsBuilder` to be used
 instead of the default one.
 
@@ -275,7 +288,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L392)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L436)
 
 Create a topic definition.
 
@@ -356,7 +369,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L472)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L516)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -406,7 +419,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L508)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L552)
 
 Stop the internal poll loop and the message processing.
 
@@ -426,7 +439,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L522)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L566)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -461,7 +474,7 @@ with app.get_producer() as producer:
 def get_consumer() -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L553)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L597)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -506,7 +519,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L597)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L641)
 
 Clear the state of the application.
 
@@ -520,7 +533,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/app.py#L676)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/9d6b47202147e59c9052a783de579cd234bb6cf4/quixstreams/app.py#L719)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
@@ -551,116 +564,4 @@ app.run(dataframe=df)
 ***Arguments:***
 
 - `dataframe`: instance of `StreamingDataFrame`
-
-<a id="quixstreams.state.types"></a>
-
-## quixstreams.state.types
-
-<a id="quixstreams.state.types.State"></a>
-
-### State
-
-```python
-class State(Protocol)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/state/types.py#L153)
-
-Primary interface for working with key-value state data from `StreamingDataFrame`
-
-<a id="quixstreams.state.types.State.get"></a>
-
-<br><br>
-
-#### State.get
-
-```python
-def get(key: Any, default: Any = None) -> Optional[Any]
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/state/types.py#L158)
-
-Get the value for key if key is present in the state, else default
-
-
-<br>
-***Arguments:***
-
-- `key`: key
-- `default`: default value to return if the key is not found
-
-
-<br>
-***Returns:***
-
-value or None if the key is not found and `default` is not provided
-
-<a id="quixstreams.state.types.State.set"></a>
-
-<br><br>
-
-#### State.set
-
-```python
-def set(key: Any, value: Any)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/state/types.py#L168)
-
-Set value for the key.
-
-
-<br>
-***Arguments:***
-
-- `key`: key
-- `value`: value
-
-<a id="quixstreams.state.types.State.delete"></a>
-
-<br><br>
-
-#### State.delete
-
-```python
-def delete(key: Any)
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/state/types.py#L176)
-
-Delete value for the key.
-
-This function always returns `None`, even if value is not found.
-
-
-<br>
-***Arguments:***
-
-- `key`: key
-
-<a id="quixstreams.state.types.State.exists"></a>
-
-<br><br>
-
-#### State.exists
-
-```python
-def exists(key: Any) -> bool
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/000d0523cbe1825500b111f1d8124507f67732ac/quixstreams/state/types.py#L185)
-
-Check if the key exists in state.
-
-
-<br>
-***Arguments:***
-
-- `key`: key
-
-
-<br>
-***Returns:***
-
-True if key exists, False otherwise
 

@@ -1,17 +1,7 @@
-# Serialization and Deserialization (SerDes)
+# Serialization and Deserialization
 
-SerDes simply refers to how you pack (serialize) or unpack (deserialize) your data 
-when publishing to or reading from a topic.
-<br>
-These settings are defined per-topic via these parameters of `Application.topic()` function:
-- `key_serializer`
-- `value_serializer`
-- `key_deserializer`
-- `value_deserializer`
+Quix Streams supports multiple serialization formats to exchange data between Kafka topics:
 
-By default, message values are serialized with  `JSON`, message keys are serialized with `bytes` (i.e. passed as they are received from Kafka).
-
-## Supported formats:
 - `bytes`
 - `string`
 - `integer`
@@ -20,11 +10,21 @@ By default, message values are serialized with  `JSON`, message keys are seriali
 - `quix` - for deserializers only
 - `quix_events` & `quix_timeseries` - for serializers only.
 
-## Using SerDes
+The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
+
+- `key_serializer`
+- `value_serializer`
+- `key_deserializer`
+- `value_deserializer`
+
+By default, message values are serialized with `json` and message keys are serialized with `bytes` (i.e. passed as they are received from Kafka).
+
+## Configuring Serialization
 To set a serializer, you may either pass a string shorthand for it, or an instance of `quixstreams.models.serializers.Serializer` and `quixstreams.models.serializers.Deserializer` directly 
 to the `Application.topic()`.
 
-Example with format shorthands:
+**Example:**
+
 ```python
 from quixstreams import Application
 app = Application(broker_address='localhost:9092', consumer_group='consumer')
@@ -34,6 +34,7 @@ input_topic = app.topic('input', value_deserializer='json', key_deserializer='st
 # Serializing message values to JSON and message keys to bytes
 output_topic = app.topic('output', value_serializer='json', key_deserializer='bytes')
 ```
+
 
 Passing `Serializer` and `Deserializer` instances directly:
 
@@ -47,5 +48,3 @@ output_topic = app.topic('output', value_serializer=JSONSerializer())
 ```
 
 You can find all available serializers in `quixstreams.models.serializers` module.
-
-We also plan on including other popular ones like Avro and Protobuf in the near future.

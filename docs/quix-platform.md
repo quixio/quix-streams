@@ -1,40 +1,62 @@
-# Quix Platform Users: `Application.Quix()`
+# Connecting to Quix Cloud
 
-If you are deploying your Quix Streams application to the Quix platform directly, all you need for ensuring everything connects as expected is to use the 
-`Application.Quix()` instance.
+### Why Use Quix Cloud
+Quix Streams was made to seamlessly integrate with the Quix Cloud.
 
-`Application.Quix()` automatically configures the application to use Quix Kafka broker and underlying API which allows topic creation.
+When running Quix Streams on Quix Cloud, all connection and authentication-based 
+settings are preconfigured for you.
+
+Quix Cloud itself provides a frictionless environment to deploy and manage your applications using either
+our API or our browser-based UI.
+
+To learn more about Quix Cloud and how to set up a project, please see the [Quix Cloud docs](https://quix.io/docs/quix-cloud/overview.html#developing-your-stream-processing-application).
+
+### Can I Use Quix Streams With My Own Kafka?
+
+Using Quix Streams with Quix Cloud is entirely optional.  
+
+You could, for example, connect to Redpanda Cloud, or another supported broker, or connect to a self-hosted broker.
+
+
+## Connecting with Quix Streams
+
+Here is how to connect to the Quix Cloud Kafka brokers using Quix Streams:
+
+### Within Quix Cloud
+
+If you are running your Quix Streams `Application` directly within Quix Cloud, it's configured automatically.
+
+### Outside of Quix Cloud
+
+
+#### 1. Obtain Streaming Token
+First, [get your Streaming
+Token](https://quix.io/docs/develop/authentication/streaming-token.html#how-to-find) (also
+called `SDK Token`).
+
+> NOTE: A `Personal Access Token` (PAT) is also accepted, but often requires more configuration 
+> due to raised privileges. We recommend using the `SDK Token`.
+
 <br>
-By default, `Application.Quix()` use `auto_create_topics=True`.
+
+#### 2. Pass Streaming Token to Application
+With your `SDK Token` and a Quix Streams `Application`, you can pass it using one of
+these approaches:
+
+- **Set Environment Variable** (***recommended***):
+    - Simply set `Quix__Sdk__Token` (double underscores!) to your `SDK Token`
+  > NOTE: `Quix__Sdk__Token` is set automatically in Quix Cloud, thus is the recommended approach for an easy migration.
+  
+OR <br>
+
+- **Application argument** 
+    - Just do `Application(quix_sdk_token="MY_TOKEN")` 
+  > WARNING: This value is prioritized over `Quix__Sdk__Token`, which may cause ambiguity if both are set.
 
 <br>
 
-## Using Quix-formatted Messages (SerDes)
+#### 3. Validate it Worked! 
+When you initialize your `Application()`, a message should be logged letting 
+you know it will connect to Quix Cloud when `Application.run()` is called. 
 
-The Quix Platform/topics use their own messaging formats, known as `TimeseriesData` and 
-`EventData`. In order to consume or produce these, you must use the respective SerDes:
-
-- `QuixDeserializer` (can deserialize both)
-- `QuixEventsSerializer`
-- `QuixTimeseriesSerializer`
-
-See [**Migrating from Legacy Quix Streams**](https://github.com/quixio/quix-streams/blob/main/docs/upgrading-legacy.md) 
-for more detail around the Quix format.
-
-You may use any serialization method you like instead of the Quix 
-format, but Quix Platform provides additional features on top of this format in the UI.
-
-
-<br>
-
-## Using `Application.Quix()` locally
-
-You may connect to Quix Platform locally too (e.g. while developing the application on your machine).
-<br>
-To do that, you will need to set the following environment variable:
-
-```
-Quix__Sdk__Token
-```
-
-You can find these values on the platform in your Workspace settings.
+If not, you'll need to double check your settings and try again!

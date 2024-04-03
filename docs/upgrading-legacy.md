@@ -6,22 +6,23 @@ topics or mixing legacy + new library versions, then this section is for you!
 
 To learn more about the previous version of Quix Streams, please see [here](https://github.com/quixio/quix-streams/blob/release/v0.5/README.md)
 
-***Note: Many of these details can be skipped for most users, but the context
+
+>***NOTE:*** Many of these details can be skipped for most users, but the context
 may help you understand speed/operational differences you might experience, or if
-you are an edge case that might require more work to convert.***
-
-<br>
-
+you are an edge case that might require more work to convert.
 
 
 ## Data Formats
 Quix Streams <2.0 uses custom JSON-based serialization formats and utilizes special metadata messages.
 
 The most important of them are:
+
 - `ParameterData`
 - `EventData`
 
-Example of `ParameterData`
+
+**Example of `ParameterData`**:
+
 ```json
 {
   "C": "JT",
@@ -44,7 +45,7 @@ Example of `ParameterData`
 }
 ```
 
-Example of `EventData`:
+**Example of `EventData`:**
 
 ```json
 {
@@ -63,8 +64,13 @@ Example of `EventData`:
 }
 ```
 
-Quix Streams supports producing and consuming of both EventData and ParameterData with some limitations
+In order to consume or produce these, you must use the respective serializers and deserializers:
 
+- `QuixDeserializer` (can deserialize both)
+- `QuixEventsSerializer`
+- `QuixTimeseriesSerializer`
+
+Quix Streams supports producing and consuming of both EventData and ParameterData with some limitations
 
 ## Limitations
 
@@ -96,7 +102,6 @@ supported in legacy C# library).
 
 ***`quixstreams>=2.0` will (gracefully) skip any split messages it encounters.***
 
-<br>
 
 ### Batched/"Buffered" Message Handling
 
@@ -107,17 +112,14 @@ However, it will still be able to consume these messages without issue.
 
 To process them, it will separate each record/message out and handle them individually. 
 
-For example, a message with: 
+For example, a message like the one below would equate to three independently processed messages: 
 ```
 {
   "NumericValues": {"p0": [10, 20, 30]},
   "StringValues": {"p1": ["a", "b", "c"]}
 }
 ```
-would equate to 3 independently processed messages.
 
-
-<br>
 
 ### Multiple Message/Serialization Types
 
@@ -125,7 +127,7 @@ The Quix Streams <2.0 client supported and actively managed multiple message typ
 on one topic under the hood, which significantly complicates the client messaging model.
 
 As such, `quixstreams>=2.0` intends to _encourage_ producing only one message type
-per topic by enforcing 1 serializer per-topic, per-application. Additionally, 
+per topic by enforcing one serializer per-topic, per-application. Additionally, 
 `quixstreams>=2.0` ignores all but `TimeseriesData` and `EventData` message types 
 when using a `QuixDeserializer`. 
 

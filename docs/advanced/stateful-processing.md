@@ -1,19 +1,17 @@
 # Stateful Applications
 
-Quix Streams provides a RocksDB-based state store that allows to store 
+Quix Streams provides a RocksDB-based state store that enables to store 
 data in the persistent state and use it during stream processing.
 
-This allows you to do things like compare a record to a previous version of it, or
-do some aggregate calculations.  
 Here, we will outline how stateful processing works.
 
 
-## How State Relates to Kafka Keys
+## How State Relates to Kafka Message Keys
 
 The most important concept to understand with state is that it depends on the message 
 key due to how Kafka topic partitioning works.
 
-**Every Kafka key's state is independent and _inaccessible_ from all others; it is
+**Every Kafka message key's state is independent and _inaccessible_ from all others; it is
 accessible only while it is the currently active message key**.  
 
 Each key may belong to different Kafka topic partitions, and partitions are automatically 
@@ -27,7 +25,7 @@ handle that complexity yourself:
 
 - State store in Quix Streams keeps data per each topic partition and automatically reacts to the changes in partition assignment.  
 Each partition has its own RocksDB instance, therefore data from different partitions is stored separately, which
-allows to processing of partitions in parallel.
+enables parallel processing of partitions.
 
 - The state data is also stored per key, so the updates for the messages with key `A` are visible only for the messages with the same key.
 
@@ -36,14 +34,13 @@ allows to processing of partitions in parallel.
 
 There are two messages with two new message keys, `KEY_A` and `KEY_B`. 
 
-A consumer app processes `KEY_A`, storing a value for it, `{"important_value": 5}`.`
+A consumer app processes `KEY_A`, storing a value for it, `{"important_value": 5}`.
 
 When another consumer reads the message with `KEY_B`, it will not be able to read or update the data for the key `KEY_A`.
 
 
-<br>
 
-## Using State
+## Using State in Custom Functions
 
 The state is available in functions passed to `StreamingDataFrame.apply()`, `StreamingDataFrame.update()`, and `StreamingDataFrame.filter()` with parameter `stateful=True`:
 
@@ -64,7 +61,8 @@ def count_messages(value: dict, state: State):
     return {**value, 'total': total}
     
     
-# Apply a custom function and inform StreamingDataFrame to provide a State instance to it via passing "stateful=True"
+# Apply a custom function and inform StreamingDataFrame 
+# to provide a State instance to it using "stateful=True"
 sdf = sdf.apply(count_messages, stateful=True)
 
 ```
@@ -108,8 +106,7 @@ Be sure that the partition counts and `cleanup.policy` match what is printed.
 
 ### Disabling Changelog Topics
 
-Should you need it, you can disable changelog topics via 
-`Application(use_changelog_topics=False)`. 
+Should you need it, you can disable changelog topics by passing `use_changelog_topics=False` to the `Application()` object. 
 
 > ***WARNING***: you will lose all stateful data should something happen to the local state stores, 
 > so this is not recommended.
@@ -121,20 +118,12 @@ Should you need it, you can disable changelog topics via
 ## Changing the State File Path
 
 By default, an `Application` keeps the state in the `state` directory relative to the current working directory.  
-To change it, pass `state_dir="your-path"` to `Application` or `Application.Quix` calls:
+To change it, pass `state_dir="your-path"` when initializing an `Application`:
 
 ```python
 from quixstreams import Application
 app = Application(
     broker_address='localhost:9092', 
-    consumer_group='consumer', 
-    state_dir="folder/path/here",
-)
-
-# or
-
-app = Application.Quix(
-    consumer_group='consumer', 
     state_dir="folder/path/here",
 )
 ```
@@ -149,21 +138,21 @@ allowing you to start from a clean slate:
 ```python
 from quixstreams import Application
 
-app = Application(broker_address='localhost:9092', consumer_group='consumer')
+app = Application(broker_address='localhost:9092')
 
 # Delete state for the app with consumer group "consumer"
 app.clear_state()
 ```
 
-Note that clearing the app state using `Application.clear_state()` 
-is only possible when the `Application.run()` is not running. 
-Meaning that the state can be cleared either before calling `Application.run()` or after.
-This ensures that state clearing does not interfere with the ongoing stateful processing.
+>***NOTE:*** Calling `Application.clear_state()` is only possible when the `Application.run()` is not running.  
+> The state can be cleared either before calling `Application.run()` or after.  
+> This ensures that state clearing does not interfere with the ongoing stateful processing.
+
 
 
 ## State Guarantees
 
-Because we currently handle messages with "At Least Once" guarantees, it is possible
+Because Quix Streams currently handles messages with "At Least Once" guarantees, it is possible
 for the state to become slightly out of sync with a topic in between shutdowns and
 rebalances. 
 

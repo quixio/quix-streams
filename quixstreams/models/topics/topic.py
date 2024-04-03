@@ -83,8 +83,7 @@ def _get_deserializer(
 
 class Topic:
     """
-    A representation of a Kafka topic and its expected data format via
-    designated key and value serializers/deserializers.
+    A definition of a Kafka topic.
 
     Typically created with an `app = quixstreams.app.Application()` instance via
     `app.topic()`, and used by `quixstreams.dataframe.StreamingDataFrame`
@@ -102,28 +101,6 @@ class Topic:
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ):
         """
-        Can specify serialization that should be used when consuming/producing
-        to the topic in the form of a string name (i.e. "json" for JSON) or a
-        serialization class instance directly, like JSONSerializer().
-
-
-        Example Snippet:
-
-        ```python
-        from quixstreams.dataframe import StreamingDataFrame
-        from quixstreams.models import Topic, JSONSerializer
-
-        # Specify an input and output topic for a `StreamingDataFrame` instance,
-        # where the output topic requires adjusting the key serializer.
-        input_topic = Topic("input-topic", value_deserializer="json")
-        output_topic = Topic(
-            "output-topic", key_serializer="str", value_serializer=JSONSerializer()
-        )
-        sdf = StreamingDataFrame(input_topic)
-        sdf.to_topic(output_topic)
-        ```
-
-
         :param name: topic name
         :param value_deserializer: a deserializer type for values
         :param key_deserializer: a deserializer type for keys
@@ -132,19 +109,6 @@ class Topic:
         :param config: optional topic configs via `TopicConfig` (creation/validation)
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
-
-        Example Snippet:
-
-        ```python
-        def custom_ts_extractor(
-            value: Any,
-            headers: Optional[List[Tuple[str, bytes]]],
-            timestamp: float,
-            timestamp_type: TimestampType,
-        ) -> int:
-            return value["timestamp"]
-        topic = Topic("input-topic", timestamp_extractor=custom_ts_extractor)
-        ```
         """
         self._name = name
         self._config = config
