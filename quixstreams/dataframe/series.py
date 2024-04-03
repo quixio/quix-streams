@@ -16,12 +16,12 @@ __all__ = ("StreamingSeries",)
 
 def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
     """
-    Special error handling around column referencing with SDF
+    Special error handling around column referencing with SDF.
 
-    :param d: a dict-like object (usually just a dict)
-    :column_name: the column name
+    :param d: a dict-like object (usually just a dict).
+    :column_name: the column name.
 
-    :returns: Nested data
+    :return: Nested data from column name
     """
     try:
         return d[column_name]
