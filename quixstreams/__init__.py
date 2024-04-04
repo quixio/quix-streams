@@ -4,4 +4,4 @@ from .models import MessageContext
 from .state import State
 
 
-__version__ = "2.4.0"
+__version__ = "2.4.1"
