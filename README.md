@@ -128,9 +128,9 @@ Under the hood, the `Application` will:
 To see Quix Streams in action, check out the Quickstart and Tutorials in the docs: 
 
 - [**Quickstart**](https://quix.io/docs/quix-streams/quickstart.html)
-- [**Tutorial - Word Count**](tutorials/word-count/tutorial.md)
-- [**Tutorial - Anomaly Detection**](tutorials/anomaly-detection/tutorial.md)
-- [**Tutorial - Purchase Filtering**](tutorials/purchase-filtering/tutorial.md)
+- [**Tutorial - Word Count**](https://quix.io/docs/quix-streams/tutorials/word-count/tutorial.html)
+- [**Tutorial - Anomaly Detection**](https://quix.io/docs/quix-streams/tutorials/anomaly-detection/tutorial.html)
+- [**Tutorial - Purchase Filtering**](https://quix.io/docs/quix-streams/tutorials/purchase-filtering/tutorial.html)
 
 
 ### Using the [Quix Cloud](https://quix.io/)
