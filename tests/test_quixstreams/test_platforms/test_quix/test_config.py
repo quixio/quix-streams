@@ -7,6 +7,7 @@ from unittest.mock import patch, call, create_autospec
 import pytest
 from requests import HTTPError, Response
 
+from quixstreams.platforms.quix.api import QuixPortalApiService
 from quixstreams.platforms.quix.config import (
     QUIX_CONNECTIONS_MAX_IDLE_MS,
     QUIX_METADATA_MAX_AGE_MS,
@@ -14,6 +15,10 @@ from quixstreams.platforms.quix.config import (
 
 
 class TestQuixKafkaConfigsBuilder:
+    def test_no_workspace_id_warning(self, quix_kafka_config_factory, caplog):
+        quix_kafka_config_factory(api_class=QuixPortalApiService(auth_token="12345"))
+        assert "No workspace ID was provided" in caplog.text
+
     def test_search_for_workspace_id(self, quix_kafka_config_factory):
         api_data_stub = {"workspaceId": "myworkspace12345", "name": "my workspace"}
         cfg_factory = quix_kafka_config_factory(
