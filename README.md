@@ -123,23 +123,19 @@ Under the hood, the `Application` will:
 - Manage the State store.
 - Handle OS signals and gracefully exit the application.
 
-### More Examples
-> You may find more examples in the `examples` folder **[here](https://github.com/quixio/quix-streams/tree/main/examples)**.
+### Tutorials
 
-### Advanced Usage
+To see Quix Streams in action, check out the Quickstart and Tutorials in the docs: 
 
-For more in-depth description of Quix Streams components, please
-follow these links:
-- ***[StreamingDataFrame](https://github.com/quixio/quix-streams/blob/main/docs/streamingdataframe.md)***.
-- ***[Serialization](https://github.com/quixio/quix-streams/blob/main/docs/serialization.md)***.
-- ***[Stateful Processing](https://github.com/quixio/quix-streams/blob/main/docs/stateful-processing.md)***.
-- ***[Usage with Quix SaaS Platform](https://github.com/quixio/quix-streams/blob/main/docs/quix-platform.md)***.
-- ***[Upgrading from Quix Streams <2.0](https://github.com/quixio/quix-streams/blob/main/docs/upgrading-legacy.md)***.
+- [**Quickstart**](https://quix.io/docs/quix-streams/quickstart.html)
+- [**Tutorial - Word Count**](tutorials/word-count/tutorial.md)
+- [**Tutorial - Anomaly Detection**](tutorials/anomaly-detection/tutorial.md)
+- [**Tutorial - Purchase Filtering**](tutorials/purchase-filtering/tutorial.md)
 
 
-### Using the [Quix Platform](https://quix.io/) - `Application.Quix()`
+### Using the [Quix Cloud](https://quix.io/)
 
-This library doesn't have any dependency on any commercial products, but if you use it together with Quix SaaS Platform you will get some advantages out of the box during your development process such as:
+This library doesn't have any dependency on any commercial products, but if you use it together with Quix Cloud you will get some advantages out of the box during your development process such as:
 - Auto-configuration.
 - Monitoring.
 - Data explorer.
@@ -149,15 +145,10 @@ This library doesn't have any dependency on any commercial products, but if you 
 
 and more.
 
-Quix Streams provides a seamless integration with Quix Platform via `Application.Quix()` class.
-This class will automatically configure the Application using Quix SDK Token.
-<br>
-If you are running this within the Quix platform it will be configured 
-automatically.
-<br>
-Otherwise, please see 
-[**Quix Platform Configuration**](https://github.com/quixio/quix-streams/blob/main/docs/quix-platform.md).
+Quix Streams provides a seamless integration with Quix Cloud, and it can automatically configure the `Application` using Quix SDK Token.
 
+Please see the [**Connecting to Quix Cloud**](https://quix.io/docs/quix-streams/quix-platform.html) page 
+to learn how to use Quix Streams and Quix Cloud together.
 
 ### What's Next
 
@@ -166,7 +157,7 @@ This library is being actively developed.
 Here are some of the planned improvements:
 
 - [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
-- [x] State recovery based on Kafka changelog topics
+- [x] [State recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html#fault-tolerance-recovery)
 - [ ] Windowed aggregations over Sliding windows
 - [ ] Group-bys and joins (for merging topics/keys)
 - [ ] Support for "exactly-once" Kafka processing (aka transactions)
