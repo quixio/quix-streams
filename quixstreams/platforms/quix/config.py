@@ -11,6 +11,7 @@ from requests import HTTPError
 from quixstreams.exceptions import QuixException
 from quixstreams.models.topics import Topic
 from .api import QuixPortalApiService
+from .exceptions import UndefinedQuixWorkspaceId
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class QuixKafkaConfigsBuilder:
 
         try:
             self._workspace_id = workspace_id or self.api.default_workspace_id
-        except self.api.UndefinedQuixWorkspaceId:
+        except UndefinedQuixWorkspaceId:
             self._workspace_id = None
             logger.warning(
                 "No workspace ID was provided directly or found via environment; "
