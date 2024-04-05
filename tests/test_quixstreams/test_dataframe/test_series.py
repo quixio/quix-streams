@@ -2,7 +2,7 @@ import pytest
 
 from quixstreams.dataframe.exceptions import (
     InvalidOperation,
-    MissingColumn,
+    ColumnDoesNotExist,
     InvalidColumnReference,
 )
 from quixstreams.dataframe.series import StreamingSeries
@@ -340,7 +340,7 @@ class TestStreamingSeries:
         Throw exception when user attempts an initial (SDF) column reference
         and key is missing.
         """
-        with pytest.raises(MissingColumn):
+        with pytest.raises(ColumnDoesNotExist):
             StreamingSeries("x").test({"y": 2})
 
     def test_sdf_value_invalid_type(self):
