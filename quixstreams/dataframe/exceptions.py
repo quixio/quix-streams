@@ -5,3 +5,9 @@ __all__ = ("InvalidOperation",)
 
 
 class InvalidOperation(QuixException): ...
+
+
+class ColumnDoesNotExist(QuixException): ...
+
+
+class InvalidColumnReference(QuixException): ...
