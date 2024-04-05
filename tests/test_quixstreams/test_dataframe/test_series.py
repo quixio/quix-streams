@@ -1,6 +1,10 @@
 import pytest
 
-from quixstreams.dataframe.exceptions import InvalidOperation
+from quixstreams.dataframe.exceptions import (
+    InvalidOperation,
+    ColumnDoesNotExist,
+    InvalidColumnReference,
+)
 from quixstreams.dataframe.series import StreamingSeries
 
 
@@ -330,3 +334,19 @@ class TestStreamingSeries:
     def test_cannot_use_logical_or(self):
         with pytest.raises(InvalidOperation):
             StreamingSeries("x") or StreamingSeries("y")
+
+    def test_sdf_column_missing(self):
+        """
+        Throw exception when user attempts an initial (SDF) column reference
+        and key is missing.
+        """
+        with pytest.raises(ColumnDoesNotExist):
+            StreamingSeries("x").test({"y": 2})
+
+    def test_sdf_value_invalid_type(self):
+        """
+        Raise special TypeError when the initial (SDF) data is not a dict and user
+        attempts a column reference.
+        """
+        with pytest.raises(InvalidColumnReference):
+            StreamingSeries("x").test(2)

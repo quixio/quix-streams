@@ -1,6 +1,6 @@
 import contextvars
 import operator
-from typing import Optional, Union, Callable, Container, Any, Mapping, overload
+from typing import Optional, Union, Callable, Container, Any, Mapping
 
 from typing_extensions import Self
 
@@ -9,9 +9,32 @@ from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, ColumnDoesNotExist, InvalidColumnReference
 
 __all__ = ("StreamingSeries",)
+
+
+def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
+    """
+    Special error handling around column referencing with SDF.
+
+    :param d: a dict-like object (usually just a dict).
+    :param column_name: the column name.
+
+    :return: Nested data from column name.
+    """
+    try:
+        return d[column_name]
+    except KeyError:
+        raise ColumnDoesNotExist(
+            f"Column '{column_name}' does not exist in the message value"
+        )
+    except TypeError:
+        raise InvalidColumnReference(
+            f"Cannot access column '{column_name}'; "
+            f"column referencing expects message value type 'dict', "
+            f"not '{d.__class__.__name__}'"
+        )
 
 
 class StreamingSeries(BaseStreaming):
@@ -71,7 +94,7 @@ class StreamingSeries(BaseStreaming):
     ):
         if not (name or stream):
             raise ValueError('Either "name" or "stream" must be passed')
-        self._stream = stream or Stream(func=ApplyFunction(lambda v: v[name]))
+        self._stream = stream or Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
 
     @classmethod
     def from_func(cls, func: StreamCallable) -> Self:
