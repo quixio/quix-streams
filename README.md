@@ -1,6 +1,6 @@
 ![Quix - React to data, fast](https://github.com/quixio/quix-streams/blob/main/images/quixstreams-banner.jpg)
 
-[![Docs](https://img.shields.io/badge/-Docs-red?logo=read-the-docs)](https://www.quix.io/docs/client-library-intro.html)
+[![Docs](https://img.shields.io/badge/-Docs-red?logo=read-the-docs)](https://quix.io/docs/quix-streams/introduction.html)
 [![Community Slack](https://img.shields.io/badge/Community%20Slack-blueviolet?logo=slack)](https://quix.io/slack-invite)
 [![Linkedin](https://img.shields.io/badge/LinkedIn-0A66C2.svg?logo=linkedin)](https://www.linkedin.com/company/70925173/)
 [![Quix on Twitter](https://img.shields.io/twitter/url?label=Twitter&style=social&url=https%3A%2F%2Ftwitter.com%2Fquix_io)](https://twitter.com/quix_io)
