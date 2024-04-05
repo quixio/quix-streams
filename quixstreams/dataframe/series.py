@@ -9,7 +9,7 @@ from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
-from .exceptions import InvalidOperation, MissingColumn, InvalidColumnReference
+from .exceptions import InvalidOperation, ColumnDoesNotExist, InvalidColumnReference
 
 __all__ = ("StreamingSeries",)
 
@@ -21,19 +21,19 @@ def _getitem(d: Mapping, column_name: Union[str, int]) -> object:
     :param d: a dict-like object (usually just a dict).
     :param column_name: the column name.
 
-    :return: Nested data from column name
+    :return: Nested data from column name.
     """
     try:
         return d[column_name]
     except KeyError:
-        raise MissingColumn(
-            f"Column name '{column_name}' does not exist in the StreamingDataFrame"
+        raise ColumnDoesNotExist(
+            f"Column '{column_name}' does not exist in the message value"
         )
     except TypeError:
-        d_type = getattr(type(d), "__name__", type(d))
         raise InvalidColumnReference(
-            f"Cannot reference column name '{column_name}' for StreamingDataFrame "
-            f"data type '{d_type}'; a dictionary is required."
+            f"Cannot access column '{column_name}'; "
+            f"column referencing expects message value type 'dict', "
+            f"not '{d.__class__.__name__}'"
         )
 
 
