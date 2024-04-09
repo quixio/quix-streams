@@ -781,6 +781,7 @@ class Application:
             start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
+            dataframe_composed = dataframe.compose()
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
                 dataframe.all_topics(),
@@ -792,7 +793,7 @@ class Application:
             # Start polling Kafka for messages and callbacks
             self._running = True
 
-            dataframe_composed = dataframe.compose()
+            # dataframe_composed = dataframe.compose()
 
             while self._running:
                 if self._state_manager.recovery_required:

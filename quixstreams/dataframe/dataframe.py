@@ -99,7 +99,6 @@ class StreamingDataFrame(BaseStreaming):
         self._topic_manager = topic_manager
         self._topic = topic
         self._branches = branches or {}
-        self._branches[self._topic.name] = self
         self._real_producer: Optional[RowProducerProto] = None
         self._state_manager = state_manager
 
@@ -257,7 +256,8 @@ class StreamingDataFrame(BaseStreaming):
             key_deserializer="string",
             value_deserializer="json",
         )
-        self.to_topic(groupby_topic, key=lambda row: row[column_name])
+        final = self.to_topic(groupby_topic, key=lambda row: row[column_name])
+        self._finalize_branch(final)
         return self._clone(topic=groupby_topic)
 
     @property
@@ -333,6 +333,12 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: self._produce(topic, value, key=key(value) if key else None)
         )
 
+    def _finalize_branch(self, branch: Self):
+        """
+        Add composed stream to topic branches.
+        """
+        self._branches[self._topic.name] = branch
+
     def compose(self) -> Dict[str, StreamCallable]:
         """
         Compose all functions of this StreamingDataFrame into one big closure.
@@ -361,7 +367,8 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return {k: v.stream.compose() for k, v in self._branches.items()}
+        self._finalize_branch(self)
+        return {name: sdf.stream.compose() for name, sdf in self._branches.items()}
 
     def test(self, value: object, ctx: Optional[MessageContext] = None) -> Any:
         """
