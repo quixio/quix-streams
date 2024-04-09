@@ -3,8 +3,19 @@ from __future__ import annotations
 import contextvars
 import functools
 import operator
+from collections import OrderedDict
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, TypeVar, Any, overload
+from typing import (
+    Optional,
+    Callable,
+    Union,
+    List,
+    TypeVar,
+    Any,
+    overload,
+    OrderedDict,
+    Dict,
+)
 
 from typing_extensions import Self
 
@@ -14,7 +25,7 @@ from quixstreams.context import (
     message_key,
 )
 from quixstreams.core.stream import StreamCallable, Stream
-from quixstreams.models import Topic, Row, MessageContext
+from quixstreams.models import Topic, Row, MessageContext, TopicManager
 from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
@@ -79,11 +90,16 @@ class StreamingDataFrame(BaseStreaming):
     def __init__(
         self,
         topic: Topic,
+        topic_manager: TopicManager,
         state_manager: StateStoreManager,
         stream: Optional[Stream] = None,
+        branches: Optional[Dict[str, Self]] = None,
     ):
         self._stream: Stream = stream or Stream()
+        self._topic_manager = topic_manager
         self._topic = topic
+        self._branches = branches or {}
+        self._branches[self._topic.name] = self
         self._real_producer: Optional[RowProducerProto] = None
         self._state_manager = state_manager
 
@@ -94,6 +110,9 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
+
+    def all_topics(self) -> List[Topic]:
+        return [sdf.topic for sdf in self._branches.values()]
 
     @property
     def state_manager(self) -> StateStoreManager:
@@ -230,6 +249,17 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_filter(func)
         return self._clone(stream=stream)
 
+    def group_by(self, column_name):
+        groupby_topic = self._topic_manager.topic(
+            name=f"GB__{column_name}__{self._topic.name}",
+            key_serializer="string",
+            value_serializer="json",
+            key_deserializer="string",
+            value_deserializer="json",
+        )
+        self.to_topic(groupby_topic, key=lambda row: row[column_name])
+        return self._clone(topic=groupby_topic)
+
     @property
     def producer(self) -> RowProducerProto:
         if self._real_producer is None:
@@ -303,7 +333,7 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: self._produce(topic, value, key=key(value) if key else None)
         )
 
-    def compose(self) -> StreamCallable:
+    def compose(self) -> Dict[str, StreamCallable]:
         """
         Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -331,7 +361,7 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return self.stream.compose()
+        return {k: v.stream.compose() for k, v in self._branches.items()}
 
     def test(self, value: object, ctx: Optional[MessageContext] = None) -> Any:
         """
@@ -517,9 +547,15 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
-    def _clone(self, stream: Stream) -> Self:
+    def _clone(
+        self, stream: Optional[Stream] = None, topic: Optional[Topic] = None
+    ) -> Self:
         clone = self.__class__(
-            stream=stream, topic=self._topic, state_manager=self._state_manager
+            stream=stream,
+            topic=topic or self._topic,
+            state_manager=self._state_manager,
+            topic_manager=self._topic_manager,
+            branches=self._branches,
         )
         if self._real_producer is not None:
             clone.producer = self._real_producer

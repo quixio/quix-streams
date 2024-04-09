@@ -545,7 +545,11 @@ class Application:
             to be used as an input topic.
         :return: `StreamingDataFrame` object
         """
-        sdf = StreamingDataFrame(topic=topic, state_manager=self._state_manager)
+        sdf = StreamingDataFrame(
+            topic=topic,
+            state_manager=self._state_manager,
+            topic_manager=self._topic_manager,
+        )
         sdf.producer = self._producer
         return sdf
 
@@ -691,7 +695,7 @@ class Application:
                 context.run(set_message_context, first_row.context)
                 try:
                     # Execute StreamingDataFrame in a context
-                    context.run(dataframe_composed, row.value)
+                    context.run(dataframe_composed[topic_name], row.value)
                 except Filtered:
                     # The message was filtered by StreamingDataFrame
                     continue
@@ -779,7 +783,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                [dataframe.topic],
+                dataframe.all_topics(),
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
