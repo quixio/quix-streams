@@ -12,8 +12,16 @@ In this guide, it's assumed that the Kafka cluster is up and running locally on 
 
 If you don't have Kafka installed yet, just [follow this simple one-liner](./tutorials/README.md#running-kafka-locally) to run it. 
 
+### Step 1. Install Quix Streams
 
-### Step 1. Producing data to Kafka
+Install Quix Streams with:
+
+```
+python -m pip install quixstreams
+```
+
+### Step 2. Producing data to Kafka
+
 In order to process events with Quix Streams, they first need to be in Kafka.  
 Let's create the file `producer.py` to generate some test data into the Kafka topic:
 
@@ -55,7 +63,8 @@ if __name__ == "__main__":
     main()
 ```
 
-### Step 2. Consuming data from Kafka
+### Step 3. Consuming data from Kafka
+
 Let's create the file `consumer.py` with streaming processing code.  
 It will start consuming messages from Kafka and applying transformations to them.
 
@@ -98,7 +107,7 @@ if __name__ == "__main__":
 ```
 
 
-### Step 3. Running the Producer
+### Step 4. Running the Producer
 
 Let's run the `producer.py` to fill the topic with data.  
 If the topic does not exist yet, Quix Streams will create it with the default number of partitions.
@@ -115,7 +124,7 @@ Produce event with key="id1" value="b'{"chat_id":"id1","text":"Do eiusmod tempor
 Produce event with key="id3" value="b'{"chat_id":"id3","text":"Mollis nunc sed id semper"}'"
 ```
 
-### Step 4. Running the Consumer
+### Step 5. Running the Consumer
 
 Now that you have a topic with data, you may start consuming events and process them.  
 Let's run the `consumer.py` to see the results:
