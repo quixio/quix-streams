@@ -7,20 +7,21 @@
 
 # Quix Streams
 
-Quix Streams is a cloud native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka with an easy to use Python interface.
+Quix Streams is a cloud native library for processing data in Kafka using pure Python. It’s designed to give you the power of a distributed system in a lightweight library by combining the low-level scalability and resiliency features of Kafka with an easy to use Python interface (to ease newcomers to stream processing).
 
 Quix Streams has the following benefits:
 
-- No JVM, no orchestrator, no server-side engine.
+- Pure Python (no JVM, no wrappers, no cross-language debugging). 
+- No orchestrator, no server-side engine.
+- Streaming DataFrame API (similar to pandas DataFrame) for tabular data transformations.
 - Easily integrates with the entire Python ecosystem (pandas, scikit-learn, TensorFlow, PyTorch etc).
 - Support for many serialization formats, including JSON (and Quix-specific).
 - Support for stateful operations using RocksDB.
-- Support for aggregations over tumbling and hopping time windows
-- A simple framework with Pandas-like interface to ease newcomers to streaming.
+- Support for aggregations over tumbling and hopping time windows.
 - "At-least-once" Kafka processing guarantees.
 - Designed to run and scale resiliently via container orchestration (like Kubernetes).
 - Easily runs locally and in Jupyter Notebook for convenient development and debugging.
-- Seamless integration with the Quix platform.
+- Seamless integration with the fully managed [Quix Cloud](https://quix.io/product) platform.
 
 Use Quix Streams to build event-driven, machine learning/AI or physics-based applications that depend on real-time data from Kafka.
 
