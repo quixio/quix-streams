@@ -177,8 +177,7 @@ class TestRocksDBStorePartitionChangelog:
         rocksdb_partition.recover_from_changelog_message(changelog_msg)
 
         with rocksdb_partition.begin() as tx:
-            with tx.with_prefix(kafka_key):
-                assert tx.get(user_store_key) == store_value
+            assert tx.get(user_store_key, prefix=kafka_key) == store_value
         assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
 
     @pytest.mark.parametrize(

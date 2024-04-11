@@ -7,7 +7,7 @@ from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
 from quixstreams.dataframe.exceptions import InvalidOperation
 from quixstreams.dataframe.windows import WindowResult
-from quixstreams.models import MessageTimestamp, Topic
+from quixstreams.models import MessageTimestamp
 from tests.utils import TopicPartitionStub
 
 
@@ -291,8 +291,7 @@ class TestStreamingDataFrameToTopic:
         )
         producer = row_producer_factory()
 
-        sdf = dataframe_factory()
-        sdf.producer = producer
+        sdf = dataframe_factory(producer=producer)
         sdf = sdf.to_topic(topic)
 
         value = {"x": 1, "y": 2}
@@ -331,8 +330,7 @@ class TestStreamingDataFrameToTopic:
         )
         producer = row_producer_factory()
 
-        sdf = dataframe_factory()
-        sdf.producer = producer
+        sdf = dataframe_factory(producer=producer)
 
         sdf = sdf.apply(lambda v: [v, v], expand=True).to_topic(topic)
 
@@ -377,8 +375,7 @@ class TestStreamingDataFrameToTopic:
         )
         producer = row_producer_factory()
 
-        sdf = dataframe_factory()
-        sdf.producer = producer
+        sdf = dataframe_factory(producer=producer)
 
         # Use value["x"] as a new key
         sdf = sdf.to_topic(topic, key=lambda v: v["x"])
@@ -412,17 +409,14 @@ class TestStreamingDataFrameToTopic:
         topic_manager_topic_factory,
     ):
         topic_0 = topic_manager_topic_factory(
-            value_serializer="json",
-            value_deserializer="json",
+            value_serializer="json", value_deserializer="json"
         )
         topic_1 = topic_manager_topic_factory(
-            value_serializer="json",
-            value_deserializer="json",
+            value_serializer="json", value_deserializer="json"
         )
         producer = row_producer_factory()
 
-        sdf = dataframe_factory()
-        sdf.producer = producer
+        sdf = dataframe_factory(producer=producer)
 
         sdf = sdf.to_topic(topic_0).to_topic(topic_1)
 
@@ -452,29 +446,6 @@ class TestStreamingDataFrameToTopic:
         for consumed_row in consumed_rows:
             assert consumed_row.key == ctx.key
             assert consumed_row.value == value
-
-    def test_to_topic_no_producer_assigned(
-        self, dataframe_factory, topic_manager_topic_factory
-    ):
-        topic = topic_manager_topic_factory()
-
-        sdf = dataframe_factory()
-        sdf = sdf.to_topic(topic)
-
-        value = {"x": "1", "y": "2"}
-        ctx = MessageContext(
-            key=b"test",
-            topic="test",
-            partition=0,
-            offset=0,
-            size=0,
-            timestamp=MessageTimestamp.create(0, 0),
-        )
-
-        with pytest.raises(
-            RuntimeError, match="Producer instance has not been provided"
-        ):
-            sdf.test(value, ctx=ctx)
 
 
 class TestStreamingDataframeStateful:
@@ -513,10 +484,7 @@ class TestStreamingDataframeStateful:
             timestamp=MessageTimestamp.create(0, 0),
         )
         for value in values:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                result = sdf.test(value, ctx)
+            result = sdf.test(value, ctx)
 
         assert result == 10
 
@@ -555,10 +523,7 @@ class TestStreamingDataframeStateful:
             timestamp=MessageTimestamp.create(0, 0),
         )
         for value in values:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                result = sdf.test(value, ctx)
+            result = sdf.test(value, ctx)
 
         assert result is not None
         assert result["max"] == 10
@@ -599,13 +564,10 @@ class TestStreamingDataframeStateful:
         )
         results = []
         for value in values:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                try:
-                    results.append(sdf.test(value, ctx))
-                except Filtered:
-                    pass
+            try:
+                results.append(sdf.test(value, ctx))
+            except Filtered:
+                pass
         assert len(results) == 1
         assert results[0]["max"] == 3
 
@@ -645,13 +607,10 @@ class TestStreamingDataframeStateful:
         )
         results = []
         for value in values:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                try:
-                    results.append(sdf.test(value, ctx))
-                except Filtered:
-                    pass
+            try:
+                results.append(sdf.test(value, ctx))
+            except Filtered:
+                pass
         assert len(results) == 1
         assert results[0]["max"] == 3
 
@@ -724,10 +683,7 @@ class TestStreamingDataFrameTumblingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                results += sdf.test(value=value, ctx=ctx)
+            results += sdf.test(value=value, ctx=ctx)
         assert len(results) == 3
         assert results == [
             WindowResult(value=1, start=0, end=10000),
@@ -768,11 +724,8 @@ class TestStreamingDataFrameTumblingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                result = sdf.test(value=value, ctx=ctx)
-                results += result
+            result = sdf.test(value=value, ctx=ctx)
+            results += result
 
         assert len(results) == 2
         assert results == [
@@ -812,11 +765,7 @@ class TestStreamingDataFrameTumblingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                result = sdf.test(value=value, ctx=ctx)
-                results += result
+            results += sdf.test(value=value, ctx=ctx)
 
         assert len(results) == 2
         assert results == [
@@ -850,10 +799,7 @@ class TestStreamingDataFrameTumblingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                results += sdf.test(value=value, ctx=ctx)
+            results += sdf.test(value=value, ctx=ctx)
 
         assert len(results) == 2
         # Ensure that the windows are returned with correct values and order
@@ -961,10 +907,7 @@ class TestStreamingDataFrameHoppingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                results += sdf.test(value=value, ctx=ctx)
+            results += sdf.test(value=value, ctx=ctx)
 
         assert len(results) == 9
         # Ensure that the windows are returned with correct values and order
@@ -1008,10 +951,7 @@ class TestStreamingDataFrameHoppingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                results += sdf.test(value=value, ctx=ctx)
+            results += sdf.test(value=value, ctx=ctx)
 
         assert len(results) == 5
         # Ensure that the windows are returned with correct values and order
@@ -1053,11 +993,9 @@ class TestStreamingDataFrameHoppingWindow:
         ]
 
         results = []
+
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                results += sdf.test(value=value, ctx=ctx)
+            results += sdf.test(value=value, ctx=ctx)
 
         assert len(results) == 3
         # Ensure that the windows are returned with correct values and order
@@ -1093,10 +1031,7 @@ class TestStreamingDataFrameHoppingWindow:
 
         results = []
         for value, ctx in messages:
-            with state_manager.start_store_transaction(
-                topic=ctx.topic, partition=ctx.partition, offset=ctx.offset
-            ):
-                results += sdf.test(value=value, ctx=ctx)
+            results += sdf.test(value=value, ctx=ctx)
 
         assert len(results) == 2
         # Ensure that the windows are returned with correct values and order

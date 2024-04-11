@@ -1,41 +1,13 @@
 import uuid
 from typing import Optional
-from unittest.mock import create_autospec
+from unittest.mock import create_autospec, MagicMock
 
 import pytest
 
 from quixstreams.state import ChangelogProducer, ChangelogProducerFactory
 from quixstreams.state.rocksdb import RocksDBStore
 from quixstreams.state.rocksdb.options import RocksDBOptions
-from quixstreams.state.rocksdb.partition import (
-    RocksDBStorePartition,
-)
-
-
-TEST_KEYS = [
-    "string",
-    123,
-    123.123,
-    (123, 456),
-]
-
-TEST_VALUES = [
-    None,
-    "string",
-    123,
-    123.123,
-    {"key": "value", "mapping": {"key": "value"}},
-    [123, 456],
-]
-
-TEST_PREFIXES = [
-    b"some_bytes",
-    "string",
-    123,
-    123.123,
-    (123, 456),
-    [123, 456],
-]
+from quixstreams.state.rocksdb.partition import RocksDBStorePartition
 
 
 @pytest.fixture()
@@ -90,3 +62,8 @@ def rocksdb_store(rocksdb_store_factory) -> RocksDBStore:
     store = rocksdb_store_factory()
     yield store
     store.close()
+
+
+@pytest.fixture()
+def changelog_producer_mock():
+    return MagicMock(spec_set=ChangelogProducer)

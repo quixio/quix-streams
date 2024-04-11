@@ -1,8 +1,4 @@
-import contextlib
-
-from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
-
-from typing_extensions import Self
+from typing import Protocol, Any, Optional, Callable, Dict, ClassVar
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.models.types import MessageHeadersMapping
@@ -60,9 +56,7 @@ class Store(Protocol):
         """
         ...
 
-    def start_partition_transaction(
-        self, partition: int
-    ) -> Optional["PartitionTransaction"]:
+    def start_partition_transaction(self, partition: int) -> "PartitionTransaction":
         """
         Start a new partition transaction.
 
@@ -189,17 +183,59 @@ class State(Protocol):
         ...
 
 
-class PartitionTransaction(State):
+class PartitionTransaction(Protocol):
     """
     A transaction class to perform simple key-value operations like
     "get", "set", "delete" and "exists" on a single storage partition.
     """
 
-    @property
-    def state(self) -> State:
+    def as_state(self, prefix: Any) -> State:
         """
-        An instance of State to be provided to `StreamingDataFrame` functions
-        :return:
+        Create an instance implementing the `State` protocol to be provided
+        to `StreamingDataFrame` functions.
+        All operations called on this State object will be prefixed with
+        the supplied `prefix`.
+
+        :return: an instance implementing the `State` protocol
+        """
+        ...
+
+    def get(self, key: Any, prefix: bytes, default: Any = None) -> Optional[Any]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param prefix: a key prefix
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    def set(self, key: Any, prefix: bytes, value: Any):
+        """
+        Set value for the key.
+        :param key: key
+        :param prefix: a key prefix
+        :param value: value
+        """
+        ...
+
+    def delete(self, key: Any, prefix: bytes):
+        """
+        Delete value for the key.
+
+        This function always returns `None`, even if value is not found.
+        :param key: key
+        :param prefix: a key prefix
+        """
+        ...
+
+    def exists(self, key: Any, prefix: bytes) -> bool:
+        """
+        Check if the key exists in state.
+        :param key: key
+        :param prefix: a key prefix
+        :return: True if key exists, False otherwise
         """
         ...
 
@@ -220,18 +256,6 @@ class PartitionTransaction(State):
 
         Completed transactions cannot be re-used.
         :return: bool
-        """
-        ...
-
-    @contextlib.contextmanager
-    def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
-        """
-        A context manager set the prefix for all keys in the scope.
-
-        Normally, it's called by `StreamingDataFrame` internals to ensure that every
-        message key is stored separately.
-        :param prefix: key prefix
-        :return: context manager
         """
         ...
 
@@ -305,9 +329,7 @@ class WindowedState(Protocol):
         ...
 
 
-class WindowedPartitionTransaction(WindowedState):
-    @property
-    def state(self) -> WindowedState: ...
+class WindowedPartitionTransaction(Protocol):
 
     @property
     def failed(self) -> bool:
@@ -329,14 +351,67 @@ class WindowedPartitionTransaction(WindowedState):
         """
         ...
 
-    def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
-        """
-        A context manager set the prefix for all keys in the scope.
+    def as_state(self, prefix: Any) -> WindowedState: ...
 
-        Normally, it's called by `StreamingDataFrame` internals to ensure that every
-        message key is stored separately.
-        :param prefix: key prefix
-        :return: context manager
+    def get_window(
+        self,
+        start_ms: int,
+        end_ms: int,
+        prefix: bytes,
+        default: Any = None,
+    ) -> Optional[Any]:
+        """
+        Get the value of the window defined by `start` and `end` timestamps
+        if the window is present in the state, else default
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param prefix: a key prefix
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    def update_window(
+        self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int, prefix: bytes
+    ):
+        """
+        Set a value for the window.
+
+        This method will also update the latest observed timestamp in state partition
+        using the provided `timestamp`.
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param value: value of the window
+        :param timestamp_ms: current message timestamp in milliseconds
+        :param prefix: a key prefix
+        """
+        ...
+
+    def get_latest_timestamp(self) -> int:
+        """
+        Get the latest observed timestamp for the current state partition.
+
+        Use this timestamp to determine if the arriving event is late and should be
+        discarded from the processing.
+
+        :return: latest observed event timestamp in milliseconds
+        """
+        ...
+
+    def expire_windows(self, duration_ms: int, prefix: bytes, grace_ms: int = 0):
+        """
+        Get a list of expired windows from RocksDB considering the current
+        latest timestamp, window duration and grace period.
+
+        It also marks the latest found window as expired in the expiration index, so
+        calling this method multiple times will yield different results for the same
+        "latest timestamp".
+
+        :param duration_ms: duration of the windows in milliseconds
+        :param prefix: a key prefix
+        :param grace_ms: grace period in milliseconds. Default - "0"
         """
         ...
 

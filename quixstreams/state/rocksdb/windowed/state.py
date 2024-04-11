@@ -7,15 +7,18 @@ if TYPE_CHECKING:
 
 
 class WindowedTransactionState(WindowedState):
-    __slots__ = ("_transaction",)
+    __slots__ = ("_transaction", "_prefix")
 
-    def __init__(self, transaction: "WindowedRocksDBPartitionTransaction"):
+    def __init__(
+        self, transaction: "WindowedRocksDBPartitionTransaction", prefix: bytes
+    ):
         """
         A windowed state to be provided into `StreamingDataFrame` window functions.
 
         :param transaction: instance of `WindowedRocksDBPartitionTransaction`
         """
         self._transaction = transaction
+        self._prefix = prefix
 
     def get_window(
         self, start_ms: int, end_ms: int, default: Any = None
@@ -30,7 +33,7 @@ class WindowedTransactionState(WindowedState):
         :return: value or None if the key is not found and `default` is not provided
         """
         return self._transaction.get_window(
-            start_ms=start_ms, end_ms=end_ms, default=default
+            start_ms=start_ms, end_ms=end_ms, default=default, prefix=self._prefix
         )
 
     def update_window(self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int):
@@ -47,7 +50,11 @@ class WindowedTransactionState(WindowedState):
         :param timestamp_ms: current message timestamp in milliseconds
         """
         return self._transaction.update_window(
-            start_ms=start_ms, end_ms=end_ms, timestamp_ms=timestamp_ms, value=value
+            start_ms=start_ms,
+            end_ms=end_ms,
+            timestamp_ms=timestamp_ms,
+            value=value,
+            prefix=self._prefix,
         )
 
     def get_latest_timestamp(self) -> int:
@@ -74,5 +81,5 @@ class WindowedTransactionState(WindowedState):
         "latest timestamp".
         """
         return self._transaction.expire_windows(
-            duration_ms=duration_ms, grace_ms=grace_ms
+            duration_ms=duration_ms, grace_ms=grace_ms, prefix=self._prefix
         )
