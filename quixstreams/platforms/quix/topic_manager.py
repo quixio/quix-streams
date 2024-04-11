@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
 from .config import QuixKafkaConfigsBuilder
@@ -62,6 +62,22 @@ class QuixTopicManager(TopicManager):
         :return: name with workspace ID prepended
         """
         return self._quix_config_builder.prepend_workspace_id(name)
+
+    def _format_groupby_name(
+        self,
+        operation: str,
+        consumer_group: str,
+        topic_name: str,
+        store_name: Optional[str] = None,
+    ):
+        strip_wid = self._quix_config_builder.strip_workspace_id_prefix
+        base_format = super()._format_groupby_name(
+            operation=operation,
+            consumer_group=strip_wid(consumer_group),
+            topic_name=strip_wid(topic_name),
+            store_name=store_name,
+        )
+        return self._quix_config_builder.prepend_workspace_id(base_format)
 
     def _format_changelog_name(
         self, consumer_group: str, topic_name: str, store_name: str

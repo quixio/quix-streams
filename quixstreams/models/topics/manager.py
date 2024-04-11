@@ -8,6 +8,7 @@ from .exceptions import (
     TopicNameLengthExceeded,
     TopicConfigurationMismatch,
     TopicNotFoundError,
+    TopicNameCollision,
 )
 from .topic import Topic, TopicConfig, TimestampExtractor
 
@@ -94,6 +95,18 @@ class TopicManager:
         """
         return name
 
+    def _validated_topic_name_length(self, name: str):
+        if len(name) > self._max_topic_name_len:
+            raise TopicNameLengthExceeded(
+                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
+            )
+        return name
+
+    def _internal_topic_suffix(
+        self, consumer_group: str, topic_name: str, store_name: Optional[str] = None
+    ):
+        return "--".join(filter(None, [consumer_group, topic_name, store_name]))
+
     def _format_changelog_name(
         self, consumer_group: str, topic_name: str, store_name: str
     ):
@@ -108,7 +121,16 @@ class TopicManager:
 
         :return: formatted topic name
         """
-        return f"changelog__{consumer_group}--{topic_name}--{store_name}"
+        return f"changelog__{self._internal_topic_suffix(consumer_group, topic_name, store_name)}"
+
+    def _format_groupby_name(
+        self,
+        operation: str,
+        consumer_group: str,
+        topic_name: str,
+        store_name: Optional[str] = None,
+    ):
+        return f"groupby__{operation}--{self._internal_topic_suffix(consumer_group, topic_name, store_name)}"
 
     def _create_topics(self, topics: List[Topic]):
         """
@@ -117,6 +139,20 @@ class TopicManager:
         :param topics: list of `Topic`s
         """
         self._admin.create_topics(topics, timeout=self._create_timeout)
+
+    def _get_source_topic_config(self, topic_name: str) -> TopicConfig:
+        """
+        Retrieve configs for a topic, defaulting to stored Topic objects if topic does
+        not exist in Kafka.
+
+        :param topic_name: name of the topic to get configs from
+
+        :return: a TopicConfig
+        """
+        return (
+            self._admin.inspect_topics([topic_name])[topic_name]
+            or self._topics[topic_name].config
+        )
 
     def topic_config(
         self,
@@ -148,6 +184,7 @@ class TopicManager:
         key_serializer: Optional[SerializerType] = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
+        add_to_cache: bool = True,
     ) -> Topic:
         """
         A convenience method for generating a `Topic`. Will use default config options
@@ -161,14 +198,11 @@ class TopicManager:
         :param config: optional topic configurations (for creation/validation)
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
+        :param add_to_cache: whether to cache resulting Topic in the TopicManager
 
         :return: Topic object with creation configs
         """
-        name = self._apply_topic_prefix(name)
-        if len(name) > self._max_topic_name_len:
-            raise TopicNameLengthExceeded(
-                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
-            )
+        name = self._validated_topic_name_length(self._apply_topic_prefix(name))
 
         if not config:
             config = TopicConfig(
@@ -185,8 +219,55 @@ class TopicManager:
             config=config,
             timestamp_extractor=timestamp_extractor,
         )
-        self._topics[name] = topic
+        if add_to_cache:
+            self._topics[name] = topic
         return topic
+
+    def groupby_topic(
+        self,
+        operation: str,
+        topic_name: str,
+        consumer_group: str,
+        store_name: Optional[str] = None,
+        config_topic: Optional[Topic] = None,
+    ) -> Topic:
+        """
+        Create a new "GroupBy" topic.
+
+        Can optionally provide another Topic, which will be used to configure the
+        GroupBy topic (besides the name).
+
+        :param operation: name of the GroupBy operation (column name or user-defined).
+        :param topic_name: name of the topic the GroupBy is sourced from.
+        :param consumer_group: name of consumer group.
+        :param store_name: optional state store name for joins or aggregates.
+        :param config_topic: optional topic to configure the new GroupBy topic off of.
+
+        # TODO: add non-private _key/_value serializer attributes on Topics?
+        """
+        name = self._format_groupby_name(
+            operation, consumer_group, topic_name, store_name
+        )
+        if name in self._topics:
+            raise TopicNameCollision(
+                f"group_by name '{operation}' already in use; "
+                f"choose a new unique value for StreamingDataFrame.group_by() "
+                f"'name' parameter."
+            )
+        return self.topic(
+            name=name,
+            key_serializer=config_topic._key_serializer if config_topic else "json",
+            value_serializer=config_topic._value_serializer if config_topic else "json",
+            key_deserializer=config_topic._key_deserializer if config_topic else "json",
+            value_deserializer=(
+                config_topic._value_deserializer if config_topic else "json"
+            ),
+            config=(
+                config_topic.config
+                if config_topic
+                else self._get_source_topic_config(topic_name)
+            ),
+        )
 
     def changelog_topic(
         self,
@@ -221,16 +302,12 @@ class TopicManager:
         """
 
         topic_name = self._apply_topic_prefix(topic_name)
-        name = self._format_changelog_name(consumer_group, topic_name, store_name)
-        if len(name) > self._max_topic_name_len:
-            raise TopicNameLengthExceeded(
-                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
-            )
-        # Get a configuration of the source topic
-        source_topic_config = (
-            self._admin.inspect_topics([topic_name])[topic_name]
-            or self._topics[topic_name].config
+        name = self._validated_topic_name_length(
+            self._format_changelog_name(consumer_group, topic_name, store_name)
         )
+
+        # Get a configuration of the source topic
+        source_topic_config = self._get_source_topic_config(topic_name)
 
         # Copy only certain configuration values from original topic
         # to the changelog topic

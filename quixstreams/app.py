@@ -442,6 +442,7 @@ class Application:
         key_serializer: SerializerType = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
+        add_to_cache: bool = True,
     ) -> Topic:
         """
         Create a topic definition.
@@ -477,8 +478,7 @@ class Application:
         :param value_serializer: a serializer type for values; default="json"
         :param key_serializer: a serializer type for keys; default="bytes"
         :param config: optional topic configurations (for creation/validation)
-            >***NOTE:*** will not create without Application's auto_create_topics set
-            to True (is True by default)
+        :param add_to_cache: whether to cache resulting Topic in the TopicManager
 
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message. Default - `None`.
@@ -511,6 +511,7 @@ class Application:
             value_deserializer=value_deserializer,
             config=config,
             timestamp_extractor=timestamp_extractor,
+            add_to_cache=add_to_cache,
         )
 
     def dataframe(
@@ -545,11 +546,7 @@ class Application:
             to be used as an input topic.
         :return: `StreamingDataFrame` object
         """
-        sdf = StreamingDataFrame(
-            topic=topic,
-            state_manager=self._state_manager,
-            topic_manager=self._topic_manager,
-        )
+        sdf = StreamingDataFrame(topic=topic, application=self)
         sdf.producer = self._producer
         return sdf
 
@@ -781,10 +778,11 @@ class Application:
             start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
+            # compose dataframe before subscribe so all internal topics are captured
             dataframe_composed = dataframe.compose()
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                dataframe.all_topics(),
+                dataframe.consumer_topics,
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
@@ -792,8 +790,6 @@ class Application:
             logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
             self._running = True
-
-            # dataframe_composed = dataframe.compose()
 
             while self._running:
                 if self._state_manager.recovery_required:
