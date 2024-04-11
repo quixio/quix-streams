@@ -9,6 +9,7 @@ from typing import Optional, List, Callable
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
+from .checkpoint import Checkpoint
 from .context import set_message_context, copy_context
 from .core.stream import Filtered
 from .dataframe import StreamingDataFrame
@@ -40,6 +41,7 @@ from .platforms.quix import (
     check_state_management_enabled,
     QuixTopicManager,
 )
+from .processing_context import ProcessingContext
 from .rowconsumer import RowConsumer
 from .rowproducer import RowProducer
 from .state import StateStoreManager
@@ -96,7 +98,7 @@ class Application:
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        auto_commit_enable: bool = True,
+        commit_interval: float = 5.0,
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
@@ -131,8 +133,7 @@ class Application:
             Default - "quixstreams-default" (set during init)
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param auto_commit_enable: If true, periodically commit offset of
-            the last message handed to the application. Default - `True`.
+
         :param partitioner: A function to be used to determine the outgoing message
             partition.
         :param consumer_extra_config: A dictionary with additional options that
@@ -213,7 +214,6 @@ class Application:
             )
             quix_configs = quix_config_builder.get_confluent_broker_config()
             # Check if the state dir points to the mounted PVC while running on Quix
-            # TODO: Do we still need this?
             check_state_dir(state_dir=state_dir)
 
             broker_address = quix_configs.pop("bootstrap.servers")
@@ -230,8 +230,8 @@ class Application:
         self._broker_address = broker_address
         self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
-        self._auto_commit_enable = auto_commit_enable
         self._partitioner = partitioner
+        self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
 
@@ -239,7 +239,7 @@ class Application:
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
-            auto_commit_enable=auto_commit_enable,
+            auto_commit_enable=False,  # Disable auto commit and manage commits manually
             assignment_strategy="cooperative-sticky",
             extra_config=consumer_extra_config,
             on_error=on_consumer_error,
@@ -267,21 +267,11 @@ class Application:
                 )
             )
         self._topic_manager = topic_manager
-
         self._state_manager = StateStoreManager(
             group_id=consumer_group,
             state_dir=state_dir,
             rocksdb_options=rocksdb_options,
-            producer=(
-                RowProducer(
-                    broker_address=broker_address,
-                    partitioner=partitioner,
-                    extra_config=producer_extra_config,
-                    on_error=on_producer_error,
-                )
-                if use_changelog_topics
-                else None
-            ),
+            producer=self._producer if use_changelog_topics else None,
             recovery_manager=(
                 RecoveryManager(
                     consumer=self._consumer,
@@ -291,13 +281,24 @@ class Application:
                 else None
             ),
         )
+        self._checkpoint = Checkpoint(
+            producer=self._producer,
+            consumer=self._consumer,
+            state_manager=self._state_manager,
+            commit_interval=self._commit_interval,
+        )
+        self._processing_context = ProcessingContext(
+            commit_interval=self._commit_interval,
+            producer=self._producer,
+            consumer=self._consumer,
+            state_manager=self._state_manager,
+        )
 
     @classmethod
     def Quix(
         cls,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        auto_commit_enable: bool = True,
         partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
@@ -356,8 +357,6 @@ class Application:
             Default - "quixstreams-default" (set during init).
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param auto_commit_enable: If true, periodically commit offset of
-            the last message handed to the application. Default - `True`.
         :param partitioner: A function to be used to determine the outgoing message
             partition.
         :param consumer_extra_config: A dictionary with additional options that
@@ -415,7 +414,6 @@ class Application:
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
             auto_offset_reset=auto_offset_reset,
-            auto_commit_enable=auto_commit_enable,
             partitioner=partitioner,
             on_consumer_error=on_consumer_error,
             on_processing_error=on_processing_error,
@@ -545,8 +543,9 @@ class Application:
             to be used as an input topic.
         :return: `StreamingDataFrame` object
         """
-        sdf = StreamingDataFrame(topic=topic, state_manager=self._state_manager)
-        sdf.producer = self._producer
+        sdf = StreamingDataFrame(
+            topic=topic, processing_context=self._processing_context
+        )
         return sdf
 
     def stop(self):
@@ -594,7 +593,7 @@ class Application:
             extra_config=self._producer_extra_config,
         )
 
-    def get_consumer(self) -> Consumer:
+    def get_consumer(self, auto_commit_enable: bool = True) -> Consumer:
         """
         Create and return a pre-configured Consumer instance.
         The Consumer is initialized with params passed to Application.
@@ -633,7 +632,7 @@ class Application:
             broker_address=self._broker_address,
             consumer_group=self._consumer_group,
             auto_offset_reset=self._auto_offset_reset,
-            auto_commit_enable=self._auto_commit_enable,
+            auto_commit_enable=auto_commit_enable,
             assignment_strategy="cooperative-sticky",
             extra_config=self._consumer_extra_config,
         )
@@ -644,78 +643,6 @@ class Application:
         """
         self._state_manager.clear_stores()
 
-    def _quix_runtime_init(self):
-        """
-        Do a runtime setup only applicable to an Application.Quix instance
-        - Ensure that "State management" flag is enabled for deployment if the app
-          is stateful and is running in Quix Cloud
-        """
-        # Ensure that state management is enabled if application is stateful
-        if self._state_manager.stores:
-            check_state_management_enabled()
-
-    def _setup_topics(self):
-        topics_list = ", ".join(
-            f'"{topic.name}"' for topic in self._topic_manager.all_topics
-        )
-        logger.info(f"Topics required for this application: {topics_list}")
-        if self._auto_create_topics:
-            self._topic_manager.create_all_topics()
-        self._topic_manager.validate_all_topics()
-
-    def _process_message(self, dataframe_composed, start_state_transaction):
-        # Serve producer callbacks
-        self._producer.poll(self._producer_poll_timeout)
-        rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
-
-        if rows is None:
-            return
-
-        # Deserializer may return multiple rows for a single message
-        rows = rows if isinstance(rows, list) else [rows]
-        if not rows:
-            return
-
-        first_row = rows[0]
-        topic_name, partition, offset = (
-            first_row.topic,
-            first_row.partition,
-            first_row.offset,
-        )
-
-        with start_state_transaction(
-            topic=topic_name, partition=partition, offset=offset
-        ):
-            for row in rows:
-                context = copy_context()
-                context.run(set_message_context, first_row.context)
-                try:
-                    # Execute StreamingDataFrame in a context
-                    context.run(dataframe_composed, row.value)
-                except Filtered:
-                    # The message was filtered by StreamingDataFrame
-                    continue
-                except Exception as exc:
-                    # TODO: This callback might be triggered because of Producer
-                    #  errors too because they happen within ".process()"
-                    to_suppress = self._on_processing_error(exc, row, logger)
-                    if not to_suppress:
-                        raise
-
-        # Store the message offset after it's successfully processed
-        self._consumer.store_offsets(
-            offsets=[
-                TopicPartition(
-                    topic=topic_name,
-                    partition=partition,
-                    offset=offset + 1,
-                )
-            ]
-        )
-
-        if self._on_message_processed is not None:
-            self._on_message_processed(topic_name, partition, offset)
-
     def run(
         self,
         dataframe: StreamingDataFrame,
@@ -723,7 +650,7 @@ class Application:
         """
         Start processing data from Kafka using provided `StreamingDataFrame`
 
-        One started, can be safely terminated with a `SIGTERM` signal
+        Once started, it can be safely terminated with a `SIGTERM` signal
         (like Kubernetes does) or a typical `KeyboardInterrupt` (`Ctrl+C`).
 
 
@@ -751,7 +678,8 @@ class Application:
             f"Starting the Application with the config: "
             f'broker_address="{self._broker_address}" '
             f'consumer_group="{self._consumer_group}" '
-            f'auto_offset_reset="{self._auto_offset_reset}"'
+            f'auto_offset_reset="{self._auto_offset_reset}" '
+            f"commit_interval={self._commit_interval}s"
         )
         if self._is_quix_app:
             self._quix_runtime_init()
@@ -768,14 +696,6 @@ class Application:
         )
         exit_stack.callback(lambda *_: self.stop())
 
-        if self._state_manager.stores:
-            # Store manager has stores registered, use real state transactions
-            # during processing
-            start_state_transaction = self._state_manager.start_store_transaction
-        else:
-            # Application is stateless, use dummy state transactions
-            start_state_transaction = _dummy_state_transaction
-
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
@@ -788,15 +708,83 @@ class Application:
             # Start polling Kafka for messages and callbacks
             self._running = True
 
+            # Initialize the checkpoint
+            self._processing_context.init_checkpoint()
+
             dataframe_composed = dataframe.compose()
 
             while self._running:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
-                    self._process_message(dataframe_composed, start_state_transaction)
+                    self._process_message(dataframe_composed)
+                    self._processing_context.commit_checkpoint()
 
+            self._processing_context.commit_checkpoint(force=True)
             logger.info("Stop processing of StreamingDataFrame")
+
+    def _quix_runtime_init(self):
+        """
+        Do a runtime setup only applicable to an Application.Quix instance
+        - Ensure that "State management" flag is enabled for deployment if the app
+          is stateful and is running in Quix Cloud
+        """
+        # Ensure that state management is enabled if application is stateful
+        if self._state_manager.stores:
+            check_state_management_enabled()
+
+    def _setup_topics(self):
+        topics_list = ", ".join(
+            f'"{topic.name}"' for topic in self._topic_manager.all_topics
+        )
+        logger.info(f"Topics required for this application: {topics_list}")
+        if self._auto_create_topics:
+            self._topic_manager.create_all_topics()
+        self._topic_manager.validate_all_topics()
+
+    def _process_message(self, dataframe_composed):
+        # Serve producer callbacks
+        self._producer.poll(self._producer_poll_timeout)
+        rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
+
+        if rows is None:
+            return
+
+        # Deserializer may return multiple rows for a single message
+        rows = rows if isinstance(rows, list) else [rows]
+        if not rows:
+            return
+
+        first_row = rows[0]
+        topic_name, partition, offset = (
+            first_row.topic,
+            first_row.partition,
+            first_row.offset,
+        )
+
+        for row in rows:
+            context = copy_context()
+            context.run(set_message_context, row.context)
+            try:
+                # Execute StreamingDataFrame in a context
+                context.run(dataframe_composed, row.value)
+            except Filtered:
+                # The message was filtered by StreamingDataFrame
+                continue
+            except Exception as exc:
+                # TODO: This callback might be triggered because of Producer
+                #  errors too because they happen within ".process()"
+                to_suppress = self._on_processing_error(exc, row, logger)
+                if not to_suppress:
+                    raise
+
+        # Store the message offset after it's successfully processed
+        self._processing_context.store_offset(
+            topic=topic_name, partition=partition, offset=offset
+        )
+
+        if self._on_message_processed is not None:
+            self._on_message_processed(topic_name, partition, offset)
 
     def _on_assign(self, _, topic_partitions: List[TopicPartition]):
         """
@@ -807,6 +795,11 @@ class Application:
         # sometimes "empty" calls happen, probably updating the consumer epoch
         if not topic_partitions:
             return
+
+        # First commit everything processed so far because assignment can take a while
+        # and fail
+        self._processing_context.commit_checkpoint(force=True)
+
         # assigning manually here (instead of allowing it handle it automatically)
         # enables pausing them during recovery to work as expected
         self._consumer.incremental_assign(topic_partitions)
@@ -843,6 +836,9 @@ class Application:
         """
         Revoke partitions from consumer and state
         """
+        # Commit everything processed so far
+        self._processing_context.commit_checkpoint(force=True)
+
         self._consumer.incremental_unassign(topic_partitions)
         if self._state_manager.stores:
             logger.debug(f"Rebalancing: revoking state store partitions")
@@ -872,10 +868,3 @@ class Application:
     def _on_sigterm(self, *_):
         logger.debug(f"Received SIGTERM, stopping the processing loop")
         self.stop()
-
-
-_nullcontext = contextlib.nullcontext()
-
-
-def _dummy_state_transaction(topic: str, partition: int, offset: int):
-    return _nullcontext

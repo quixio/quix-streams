@@ -18,6 +18,7 @@ from quixstreams.models import (
     JSONDeserializer,
     SerializationError,
     JSONSerializer,
+    TopicConfig,
 )
 from quixstreams.platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -848,8 +849,7 @@ class TestApplicationWithState:
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=partition_num) as tx:
             # All keys in state must be prefixed with the message key
-            with tx.with_prefix(message_key):
-                assert tx.get("total") == total_consumed.result()
+            assert tx.get("total", prefix=message_key) == total_consumed.result()
 
     def test_run_stateful_processing_fails(
         self,
@@ -860,7 +860,6 @@ class TestApplicationWithState:
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
-        partition_num = 0
         app = app_factory(
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
@@ -885,14 +884,12 @@ class TestApplicationWithState:
 
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {
-            "key": b"key",
-            "value": dumps({"key": "value"}),
-            "partition": partition_num,
-        }
+        key = b"key"
+        value = dumps({"key": "value"})
+
         with app.get_producer() as producer:
             for _ in range(total_messages):
-                producer.produce(topic_in.name, **data)
+                producer.produce(topic_in.name, key=key, value=value)
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, failed, 10.0)
@@ -905,11 +902,11 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+            TopicPartitionStub(topic=topic_in.name, partition=0)
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=partition_num) as tx:
-            assert tx.get("total") is None
+        with store.start_partition_transaction(partition=0) as tx:
+            assert tx.get("total", prefix=key) is None
 
     def test_run_stateful_suppress_processing_errors(
         self,
@@ -973,8 +970,7 @@ class TestApplicationWithState:
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=partition_num) as tx:
-            with tx.with_prefix(message_key):
-                assert tx.get("total") == total_consumed.result()
+            assert tx.get("total", prefix=message_key) == total_consumed.result()
 
     def test_on_assign_topic_offset_behind_warning(
         self,
@@ -1003,11 +999,11 @@ class TestApplicationWithState:
             state_partitions = state_manager.on_partition_assign(
                 TopicPartitionStub(topic=topic_in.name, partition=partition_num)
             )
-            with state_manager.start_store_transaction(
-                topic=topic_in.name, partition=partition_num, offset=9999
-            ):
-                tx = state_manager.get_store_transaction()
-                tx.set("key", "value")
+            store = state_manager.get_store(topic_in.name, "default")
+            tx = store.start_partition_transaction(partition_num)
+            # Do some change to probe the Writebatch
+            tx.set("key", "value", prefix=b"__key__")
+            tx.maybe_flush(offset=9999)
             assert state_partitions[partition_num].get_processed_offset() == 9999
 
         # Define some stateful function so the App assigns store partitions
@@ -1057,7 +1053,7 @@ class TestApplicationWithState:
         )
 
         topic_in_name, _ = topic_factory()
-        tx_prefix = b"key"
+        prefix = b"key"
 
         state_manager = state_manager_factory(
             group_id=consumer_group, state_dir=state_dir
@@ -1072,8 +1068,7 @@ class TestApplicationWithState:
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
                 # All keys in state must be prefixed with the message key
-                with tx.with_prefix(tx_prefix):
-                    tx.set("my_state", True)
+                tx.set(key="my_state", value=True, prefix=prefix)
 
         # Clear the state
         app.clear_state()
@@ -1086,9 +1081,7 @@ class TestApplicationWithState:
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
-                # All keys in state must be prefixed with the message key
-                with tx.with_prefix(tx_prefix):
-                    assert tx.get("my_state") is None
+                assert tx.get("my_state", prefix=prefix) is None
 
     def test_app_use_changelog_false(self, app_factory):
         """
@@ -1099,7 +1092,7 @@ class TestApplicationWithState:
         assert not app._state_manager.using_changelogs
 
 
-class TestAppRecovery:
+class TestApplicationRecovery:
     def test_changelog_recovery_default_store(
         self,
         app_factory,
@@ -1130,14 +1123,18 @@ class TestAppRecovery:
 
         def get_app():
             app = app_factory(
+                commit_interval=0,  # Commit every processed message
                 auto_offset_reset="earliest",
-                use_changelog_topics="True",
+                use_changelog_topics=True,
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
                 state_dir=state_dir,
             )
             topic = app.topic(
-                topic_name, config=app._topic_manager.topic_config(num_partitions=2)
+                topic_name,
+                config=TopicConfig(
+                    num_partitions=len(partition_msg_count), replication_factor=1
+                ),
             )
             sdf = app.dataframe(topic)
             sdf = sdf.apply(sum_value, stateful=True)
@@ -1149,23 +1146,19 @@ class TestAppRecovery:
                 state_dir=state_dir,
             ) as state_manager:
                 state_manager.register_store(topic.name, store_name)
-                for p_num in partition_msg_count:
+                for p_num, count in partition_msg_count.items():
                     state_manager.on_partition_assign(
                         TopicPartitionStub(topic=topic.name, partition=p_num)
                     )
-                store = state_manager.get_store(topic=topic.name, store_name=store_name)
-                for p_num, count in partition_msg_count.items():
-                    assert store._partitions[p_num].get_changelog_offset() == count
-                    with store.start_partition_transaction(partition=p_num) as tx:
-                        # All keys in state must be prefixed with the message key
-                        with tx.with_prefix(f"key{p_num}".encode()):
-                            assert tx.get(sum_key) == count * msg_int_value
-
-                for p_num in partition_msg_count:
-                    state_manager.on_partition_revoke(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
+                    store = state_manager.get_store(
+                        topic=topic.name, store_name=store_name
                     )
-                state_manager.clear_stores()
+                    partition = store.partitions[p_num]
+                    assert partition.get_changelog_offset() == count
+                    with partition.begin() as tx:
+                        # All keys in state must be prefixed with the message key
+                        prefix = f"key{p_num}".encode()
+                        assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
 
         # Produce messages to the topic and flush
         app, sdf, topic = get_app()
@@ -1174,25 +1167,26 @@ class TestAppRecovery:
                 serialized = topic.serialize(
                     key=f"key{p_num}".encode(), value={"my_value": msg_int_value}
                 )
-                data = {
-                    "key": serialized.key,
-                    "value": serialized.value,
-                    "partition": p_num,
-                }
                 for _ in range(count):
-                    producer.produce(topic.name, **data)
+                    producer.produce(
+                        topic.name,
+                        key=serialized.key,
+                        value=serialized.value,
+                        partition=p_num,
+                    )
 
-        # run app to populate state
+        # run app to populate state with data
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        processed_count = {0: 0, 1: 0}
         validate_state()
 
         # run the app again and validate the recovered state
+        processed_count = {0: 0, 1: 0}
         app, sdf, topic = get_app()
+        app.clear_state()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)
@@ -1253,14 +1247,18 @@ class TestAppRecovery:
 
         def get_app():
             app = app_factory(
+                commit_interval=0,  # Commit every processed message
                 auto_offset_reset="earliest",
-                use_changelog_topics="True",
+                use_changelog_topics=True,
                 consumer_group=consumer_group,
                 on_message_processed=on_message_processed,
                 state_dir=state_dir,
             )
             topic = app.topic(
-                topic_name, config=app._topic_manager.topic_config(num_partitions=2)
+                topic_name,
+                config=TopicConfig(
+                    num_partitions=len(partition_msg_count), replication_factor=1
+                ),
             )
             sdf = app.dataframe(topic)
             sdf = sdf.apply(lambda row: row["my_value"])
@@ -1286,12 +1284,14 @@ class TestAppRecovery:
                 group_id=consumer_group, state_dir=state_dir
             ) as state_manager:
                 state_manager.register_windowed_store(topic.name, store_name)
-                for p_num in partition_timestamps:
+                for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
                         TopicPartitionStub(topic=topic.name, partition=p_num)
                     )
-                store = state_manager.get_store(topic=topic.name, store_name=store_name)
-                for p_num, windows in expected_window_updates.items():
+                    store = state_manager.get_store(
+                        topic=topic.name, store_name=store_name
+                    )
+
                     # in this test, each expiration check only deletes one window,
                     # simplifying the offset counting.
                     expected_offset = sum(
@@ -1299,25 +1299,21 @@ class TestAppRecovery:
                     ) + 2 * len(expected_expired_windows[p_num])
                     assert (
                         expected_offset
-                        == store._partitions[p_num].get_changelog_offset()
+                        == store.partitions[p_num].get_changelog_offset()
                     )
 
-                    with store.start_partition_transaction(partition=p_num) as tx:
-                        with tx.with_prefix(f"key{p_num}".encode()):
-                            for window, count in windows.items():
-                                expected = count
-                                if window in expected_expired_windows[p_num]:
-                                    expected = None
-                                else:
-                                    # each message value was 10
-                                    expected *= msg_int_value
-                                assert tx.get_window(*window) == expected
+                    partition = store.partitions[p_num]
 
-                for p_num in partition_timestamps:
-                    state_manager.on_partition_revoke(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
-                    )
-                state_manager.clear_stores()
+                    with partition.begin() as tx:
+                        prefix = f"key{p_num}".encode()
+                        for window, count in windows.items():
+                            expected = count
+                            if window in expected_expired_windows[p_num]:
+                                expected = None
+                            else:
+                                # each message value was 10
+                                expected *= msg_int_value
+                            assert tx.get_window(*window, prefix=prefix) == expected
 
         app, sdf, topic = get_app()
         # Produce messages to the topic and flush
@@ -1341,11 +1337,12 @@ class TestAppRecovery:
         app.run(sdf)
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        processed_count = {0: 0, 1: 0}
         validate_state()
 
         # run the app again and validate the recovered state
+        processed_count = {0: 0, 1: 0}
         app, sdf, topic = get_app()
+        app.clear_state()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)

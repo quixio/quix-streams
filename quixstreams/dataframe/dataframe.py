@@ -11,12 +11,11 @@ from typing_extensions import Self
 from quixstreams.context import (
     message_context,
     set_message_context,
-    message_key,
 )
 from quixstreams.core.stream import StreamCallable, Stream
 from quixstreams.models import Topic, Row, MessageContext
-from quixstreams.rowproducer import RowProducerProto
-from quixstreams.state import StateStoreManager, State
+from quixstreams.processing_context import ProcessingContext
+from quixstreams.state import State
 from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .series import StreamingSeries
@@ -79,13 +78,17 @@ class StreamingDataFrame(BaseStreaming):
     def __init__(
         self,
         topic: Topic,
-        state_manager: StateStoreManager,
+        processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
-        self._real_producer: Optional[RowProducerProto] = None
-        self._state_manager = state_manager
+        self._processing_context = processing_context
+        self._producer = processing_context.producer
+
+    @property
+    def processing_context(self) -> ProcessingContext:
+        return self._processing_context
 
     @property
     def stream(self) -> Stream:
@@ -94,10 +97,6 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
-
-    @property
-    def state_manager(self) -> StateStoreManager:
-        return self._state_manager
 
     def __bool__(self):
         raise InvalidOperation(
@@ -144,7 +143,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, state_manager=self._state_manager)
+            func = _as_stateful(func=func, processing_context=self._processing_context)
 
         stream = self.stream.add_apply(func, expand=expand)
         return self._clone(stream=stream)
@@ -183,7 +182,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, state_manager=self._state_manager)
+            func = _as_stateful(func=func, processing_context=self._processing_context)
 
         stream = self.stream.add_update(func)
         return self._clone(stream=stream)
@@ -225,20 +224,10 @@ class StreamingDataFrame(BaseStreaming):
 
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, state_manager=self._state_manager)
+            func = _as_stateful(func=func, processing_context=self._processing_context)
 
         stream = self.stream.add_filter(func)
         return self._clone(stream=stream)
-
-    @property
-    def producer(self) -> RowProducerProto:
-        if self._real_producer is None:
-            raise RuntimeError("Producer instance has not been provided")
-        return self._real_producer
-
-    @producer.setter
-    def producer(self, producer: RowProducerProto):
-        self._real_producer = producer
 
     @staticmethod
     def contains(key: str) -> StreamingSeries:
@@ -519,23 +508,25 @@ class StreamingDataFrame(BaseStreaming):
 
     def _clone(self, stream: Stream) -> Self:
         clone = self.__class__(
-            stream=stream, topic=self._topic, state_manager=self._state_manager
+            stream=stream,
+            topic=self._topic,
+            processing_context=self._processing_context,
         )
-        if self._real_producer is not None:
-            clone.producer = self._real_producer
         return clone
 
     def _produce(self, topic: Topic, value: object, key: Optional[object] = None):
         ctx = message_context()
         key = key or ctx.key
         row = Row(value=value, context=ctx)  # noqa
-        self.producer.produce_row(row, topic, key=key)
+        self._producer.produce_row(row, topic, key=key)
 
     def _register_store(self):
         """
         Register the default store for input topic in StateStoreManager
         """
-        self._state_manager.register_store(topic_name=self._topic.name)
+        self._processing_context.state_manager.register_store(
+            topic_name=self._topic.name
+        )
 
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):
@@ -579,22 +570,24 @@ class StreamingDataFrame(BaseStreaming):
             # Take only certain keys from the dict and return a new dict
             return self.apply(lambda v: {k: v[k] for k in item})
         elif isinstance(item, str):
-            # Create a StreamingSeries based on key
+            # Create a StreamingSeries based on a column name
             return StreamingSeries(name=item)
         else:
             raise TypeError(f'Unsupported key type "{type(item)}"')
 
 
 def _as_stateful(
-    func: DataFrameStatefulFunc, state_manager: StateStoreManager
+    func: DataFrameStatefulFunc, processing_context: ProcessingContext
 ) -> DataFrameFunc:
     @functools.wraps(func)
     def wrapper(value: object) -> object:
-        transaction = state_manager.get_store_transaction()
-        key = message_key()
-        # Prefix all the state keys by the message key
-        with transaction.with_prefix(prefix=key):
-            # Pass a State object with an interface limited to the key updates only
-            return func(value, transaction.state)
+        ctx = message_context()
+        transaction = processing_context.checkpoint.get_store_transaction(
+            topic=ctx.topic, partition=ctx.partition
+        )
+        # Pass a State object with an interface limited to the key updates only
+        # and prefix all the state keys by the message key
+        state = transaction.as_state(prefix=ctx.key)
+        return func(value, state)
 
     return wrapper

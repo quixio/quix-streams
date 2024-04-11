@@ -38,12 +38,11 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
         )
 
         store_partition.recover_from_changelog_message(changelog_msg)
-
         with store_partition.begin() as tx:
-            with tx.with_prefix(kafka_key):
-                assert (
-                    tx.get_window(window["start_ms"], window["end_ms"]) == store_value
-                )
+            assert (
+                tx.get_window(window["start_ms"], window["end_ms"], prefix=kafka_key)
+                == store_value
+            )
         assert store_partition.get_changelog_offset() == changelog_msg.offset() + 1
 
     def test_recover_latest_expire_from_changelog_message(
@@ -70,12 +69,12 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
         store_partition.recover_from_changelog_message(changelog_msg)
 
         with store_partition.begin() as tx:
-            with tx.with_prefix(kafka_key):
-                assert (
-                    tx.get(
-                        LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
-                        cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
-                    )
-                    == store_value
+            assert (
+                tx.get(
+                    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+                    cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+                    prefix=kafka_key,
                 )
+                == store_value
+            )
         assert store_partition.get_changelog_offset() == changelog_msg.offset() + 1

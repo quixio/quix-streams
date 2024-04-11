@@ -1,10 +1,8 @@
-import contextlib
 import functools
 import logging
 from typing import Any, Union, Optional, Dict, NewType, TYPE_CHECKING
 
 from rocksdict import WriteBatch, ColumnFamily
-from typing_extensions import Self
 
 from quixstreams.state.types import (
     DumpsFunc,
@@ -33,16 +31,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
 Undefined = NewType("Undefined", object)
 
-_undefined = Undefined(object())
-_deleted = Undefined(object())
+UNDEFINED = Undefined(object())
+DELETED = Undefined(object())
 
-_DEFAULT_PREFIX = b""
+DEFAULT_PREFIX = b""
 
-
-__all__ = ("RocksDBPartitionTransaction",)
+__all__ = ("RocksDBPartitionTransaction", "DEFAULT_PREFIX", "DELETED")
 
 
 def _validate_transaction_state(func):
@@ -78,10 +74,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
     Prefixing
     *********
-    `RocksDBTransaction` allows to set prefixes for the keys in the given code block
-    using :meth:`with_prefix()` context manager.
-    Normally, `StreamingDataFrame` class will use message keys as prefixes
-    in order to namespace the stored keys across different messages.
+    Methods `get()`, `set()`, `delete()` and `exists()` methods require prefixes for
+    the keys.
+    Normally, the Kafka message keys are supposed to be used as prefixes.
 
     Transactional properties
     ************************
@@ -102,14 +97,11 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         "_partition",
         "_update_cache",
         "_batch",
-        "_prefix",
         "_failed",
         "_completed",
         "_dumps",
         "_loads",
-        "_state",
     )
-    _prefix: bytes
 
     def __init__(
         self,
@@ -128,47 +120,33 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             str, Dict[bytes, Dict[bytes, Union[bytes, Undefined]]]
         ] = {"default": {}}
         self._batch = WriteBatch(raw_mode=True)
-        self._prefix = _DEFAULT_PREFIX
         self._failed = False
         self._completed = False
         self._dumps = dumps
         self._loads = loads
-        self._state = TransactionState(transaction=self)
 
-    @property
-    def state(self) -> TransactionState:
-        return self._state
-
-    @contextlib.contextmanager
-    def with_prefix(self, prefix: Any = b"") -> Self:
+    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> TransactionState:
         """
-        A context manager set the prefix for all keys in the scope.
+        Create a one-time `TransactionState` object with a limited CRUD interface.
 
-        Normally, it's called by Streaming DataFrames engine to ensure that every
-        message key is stored separately.
+        The `TransactionState` will prefix all the keys with the supplied `prefix`
+        for all underlying operations.
 
-        The `with_prefix` calls should not be nested.
-        Only one prefix can be set at a time.
-
-        :param prefix: a prefix string to be used.
-            Should be either `bytes` or object serializable to `bytes`
-            by `dumps` function.
-            The prefix doesn't need to contain the separator, it will be added
-            automatically between the key and the prefix if the prefix
-            is not empty.
+        :param prefix: a prefix to be used for all keys
+        :return:
         """
-        self._prefix = (
-            prefix if isinstance(prefix, bytes) else self._serialize_value(prefix)
+        return TransactionState(
+            transaction=self,
+            prefix=(
+                prefix
+                if isinstance(prefix, bytes)
+                else serialize(prefix, dumps=self._dumps)
+            ),
         )
-
-        try:
-            yield self
-        finally:
-            self._prefix = _DEFAULT_PREFIX
 
     @_validate_transaction_state
     def get(
-        self, key: Any, default: Any = None, cf_name: str = "default"
+        self, key: Any, prefix: bytes, default: Any = None, cf_name: str = "default"
     ) -> Optional[Any]:
         """
         Get a key from the store.
@@ -179,6 +157,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         It returns `None` if the key is not found and `default` is not provided.
 
         :param key: a key to get from DB
+        :param prefix: a key prefix
         :param default: value to return if the key is not present in the state.
             It can be of any type.
         :param cf_name: rocksdb column family name. Default - "default"
@@ -187,40 +166,41 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         # First, check the update cache in case the value was previously written
         # Use _undefined sentinel as default because the actual value can be "None"
-        key_serialized = self._serialize_key(key)
+        key_serialized = self._serialize_key(key, prefix=prefix)
         cached = (
             self._update_cache.get(cf_name, {})
-            .get(self._prefix, {})
-            .get(key_serialized, _undefined)
+            .get(prefix, {})
+            .get(key_serialized, UNDEFINED)
         )
-        if cached is _deleted:
+        if cached is DELETED:
             return default
 
-        if cached is not _undefined:
+        if cached is not UNDEFINED:
             return self._deserialize_value(cached)
 
         # The value is not found in cache, check the db
-        stored = self._partition.get(key_serialized, _undefined, cf_name=cf_name)
-        if stored is not _undefined:
+        stored = self._partition.get(key_serialized, UNDEFINED, cf_name=cf_name)
+        if stored is not UNDEFINED:
             return self._deserialize_value(stored)
         return default
 
     @_validate_transaction_state
-    def set(self, key: Any, value: Any, cf_name: str = "default"):
+    def set(self, key: Any, value: Any, prefix: bytes, cf_name: str = "default"):
         """
         Set a key to the store.
 
         It first updates the key in the update cache.
 
         :param key: key to store in DB
+        :param prefix: a key prefix
         :param value: value to store in DB
         :param cf_name: rocksdb column family name. Default - "default"
         """
 
         try:
-            key_serialized = self._serialize_key(key)
+            key_serialized = self._serialize_key(key, prefix=prefix)
             value_serialized = self._serialize_value(value)
-            self._update_cache.setdefault(cf_name, {}).setdefault(self._prefix, {})[
+            self._update_cache.setdefault(cf_name, {}).setdefault(prefix, {})[
                 key_serialized
             ] = value_serialized
         except Exception:
@@ -228,47 +208,49 @@ class RocksDBPartitionTransaction(PartitionTransaction):
             raise
 
     @_validate_transaction_state
-    def delete(self, key: Any, cf_name: str = "default"):
+    def delete(self, key: Any, prefix: bytes, cf_name: str = "default"):
         """
         Delete a key from the store.
 
         It first deletes the key from the update cache.
 
-        :param key: key to delete from DB
+        :param key: a key to delete from DB
+        :param prefix: a key prefix
         :param cf_name: rocksdb column family name. Default - "default"
         """
         try:
-            key_serialized = self._serialize_key(key)
-            self._update_cache.setdefault(cf_name, {}).setdefault(self._prefix, {})[
+            key_serialized = self._serialize_key(key, prefix=prefix)
+            self._update_cache.setdefault(cf_name, {}).setdefault(prefix, {})[
                 key_serialized
-            ] = _deleted
+            ] = DELETED
 
         except Exception:
             self._failed = True
             raise
 
     @_validate_transaction_state
-    def exists(self, key: Any, cf_name: str = "default") -> bool:
+    def exists(self, key: Any, prefix: bytes, cf_name: str = "default") -> bool:
         """
         Check if a key exists in the store.
 
         It first looks up the key in the update cache.
 
         :param key: a key to check in DB
+        :param prefix: a key prefix
         :param cf_name: rocksdb column family name. Default - "default"
         :return: `True` if the key exists, `False` otherwise.
         """
 
-        key_serialized = self._serialize_key(key)
+        key_serialized = self._serialize_key(key, prefix=prefix)
         cached = (
             self._update_cache.get(cf_name, {})
-            .get(self._prefix, {})
-            .get(key_serialized, _undefined)
+            .get(prefix, {})
+            .get(key_serialized, UNDEFINED)
         )
-        if cached is _deleted:
+        if cached is DELETED:
             return False
 
-        if cached is not _undefined:
+        if cached is not UNDEFINED:
             return True
 
         return self._partition.exists(key_serialized, cf_name=cf_name)
@@ -309,7 +291,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                 for key, value in prefix_update_cache.items():
                     self._partition.produce_to_changelog(
                         key=key,
-                        value=value if value is not _deleted else None,
+                        value=value if value is not DELETED else None,
                         headers=headers,
                     )
                     offset += 1
@@ -341,7 +323,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                 cf_handle = self._partition.get_column_family_handle(cf_name)
                 for _prefix, prefix_update_cache in cf_update_cache.items():
                     for key, value in prefix_update_cache.items():
-                        if value is _deleted:
+                        if value is DELETED:
                             self._batch.delete(key, cf_handle)
                         else:
                             self._batch.put(key, value, cf_handle)
@@ -370,9 +352,9 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def _deserialize_value(self, value: bytes) -> Any:
         return deserialize(value, loads=self._loads)
 
-    def _serialize_key(self, key: Any) -> bytes:
+    def _serialize_key(self, key: Any, prefix: bytes) -> bytes:
         key_bytes = serialize(key, dumps=self._dumps)
-        prefix = self._prefix + PREFIX_SEPARATOR if self._prefix else b""
+        prefix = prefix + PREFIX_SEPARATOR if prefix else b""
         return prefix + key_bytes
 
     def __enter__(self):
