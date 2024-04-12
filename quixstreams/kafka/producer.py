@@ -1,13 +1,14 @@
 import logging
-from typing import Union, Optional
-from typing_extensions import Literal
-from quixstreams.models.types import Headers
+from typing import Union, Optional, Callable
 
 from confluent_kafka import (
     Producer as ConfluentProducer,
     KafkaError,
     Message,
 )
+from typing_extensions import Literal
+
+from quixstreams.models.types import Headers
 
 __all__ = (
     "Producer",
@@ -17,6 +18,8 @@ __all__ = (
 Partitioner = Literal[
     "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
 ]
+
+DeliveryCallback = Callable[[Optional[KafkaError], Message], None]
 
 logger = logging.getLogger(__name__)
 
@@ -29,26 +32,6 @@ def _default_error_cb(error: KafkaError):
     logger.error(
         f'Kafka producer error: {error.str()} code="{error_code}"',
     )
-
-
-def _on_delivery_cb(err: Optional[KafkaError], msg: Message):
-    if err is not None:
-        logger.debug(
-            'Delivery failed: topic="%s" partition="%s" key="%s" error=%s ' "code=%s",
-            msg.topic(),
-            msg.partition(),
-            msg.key(),
-            err.str(),
-            err.code(),
-        )
-    else:
-        logger.debug(
-            'Delivery succeeded: topic="%s" partition="%s" key="%s" value="%s"',
-            msg.topic(),
-            msg.partition(),
-            msg.key(),
-            msg.value(),
-        )
 
 
 class Producer:
@@ -87,9 +70,6 @@ class Producer:
         )
         self._producer_config = config
         self._inner_producer: Optional[ConfluentProducer] = None
-        # Optimization: pass `on_delivery` callbacks only in "debug" mode, otherwise
-        # it significantly reduces a throughput because of additional function calls
-        self._enable_delivery_callbacks = logger.isEnabledFor(logging.DEBUG)
 
     def produce(
         self,
@@ -101,10 +81,12 @@ class Producer:
         timestamp: Optional[int] = None,
         poll_timeout: float = 5.0,
         buffer_error_max_tries: int = 3,
+        on_delivery: Optional[DeliveryCallback] = None,
     ):
         """
-        Produce message to topic.
-        It also polls Kafka for callbacks before producing in order to minimize
+        Produce a message to a topic.
+
+        It also polls Kafka for callbacks before producing to minimize
         the probability of `BufferError`.
         If `BufferError` still happens, the method will poll Kafka with timeout
         to free up the buffer and try again.
@@ -118,6 +100,8 @@ class Producer:
         :param poll_timeout: timeout for `poll()` call in case of `BufferError`
         :param buffer_error_max_tries: max retries for `BufferError`.
             Pass `0` to not retry after `BufferError`.
+        :param on_delivery: the delivery callback to be triggered on `poll()`
+            for the produced message.
 
         """
 
@@ -125,9 +109,8 @@ class Producer:
             "partition": partition,
             "timestamp": timestamp,
             "headers": headers,
+            "on_delivery": on_delivery,
         }
-        if self._enable_delivery_callbacks:
-            kwargs["on_delivery"] = _on_delivery_cb
 
         # confluent_kafka doesn't like None for optional parameters
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
