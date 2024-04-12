@@ -19,13 +19,9 @@ class QuixTopicManager(TopicManager):
     See methods for details.
     """
 
-    _topic_partitions = 1
     # Setting it to None to use defaults defined in Quix Cloud
     _topic_replication = None
     _max_topic_name_len = 249
-
-    _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
-    _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
 
     def __init__(
         self,
@@ -63,30 +59,19 @@ class QuixTopicManager(TopicManager):
         """
         return self._quix_config_builder.prepend_workspace_id(name)
 
-    def _format_groupby_name(
+    def _internal_topic_name(
         self,
-        operation: str,
+        name: str,
         consumer_group: str,
         topic_name: str,
         store_name: Optional[str] = None,
-    ):
-        strip_wid = self._quix_config_builder.strip_workspace_id_prefix
-        base_format = super()._format_groupby_name(
-            operation=operation,
-            consumer_group=strip_wid(consumer_group),
-            topic_name=strip_wid(topic_name),
-            store_name=store_name,
-        )
-        return self._quix_config_builder.prepend_workspace_id(base_format)
-
-    def _format_changelog_name(
-        self, consumer_group: str, topic_name: str, store_name: str
     ):
         """
         Generate the name of the changelog topic based on the following parameters.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
+        :param name: a unique name for the internal topic (changelog, groupby, etc...)
         :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
         :param store_name: name of storage type (default, rolling10s, etc.)
@@ -94,9 +79,9 @@ class QuixTopicManager(TopicManager):
         :return: formatted topic name
         """
         strip_wid = self._quix_config_builder.strip_workspace_id_prefix
-        base_format = super()._format_changelog_name(
+        return super()._internal_topic_name(
+            name=name,
             consumer_group=strip_wid(consumer_group),
             topic_name=strip_wid(topic_name),
             store_name=store_name,
         )
-        return self._quix_config_builder.prepend_workspace_id(base_format)

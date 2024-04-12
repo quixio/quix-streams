@@ -94,8 +94,8 @@ class TestTopicManager:
 
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
 
-        assert changelog.name == topic_manager._format_changelog_name(
-            group, topic.name, store_name
+        assert changelog.name == topic_manager._internal_topic_name(
+            "changelog", group, topic.name, store_name
         )
         for attr in [
             "_key_serializer",

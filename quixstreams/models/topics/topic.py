@@ -93,7 +93,7 @@ class Topic:
     def __init__(
         self,
         name: str,
-        config: TopicConfig,
+        config: Union[TopicConfig, Callable[[], TopicConfig]],
         value_deserializer: Optional[DeserializerType] = None,
         key_deserializer: Optional[DeserializerType] = BytesDeserializer(),
         value_serializer: Optional[SerializerType] = None,
@@ -127,6 +127,8 @@ class Topic:
 
     @property
     def config(self) -> TopicConfig:
+        if callable(self._config):
+            self._config = self._config()
         return self._config
 
     def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
