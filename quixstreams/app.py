@@ -778,8 +778,6 @@ class Application:
             start_state_transaction = _dummy_state_transaction
 
         with exit_stack:
-            # compose dataframe before subscribe so all internal topics are captured
-            # dataframe_composed = dataframe.compose()
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
                 dataframe.consumer_topics,
