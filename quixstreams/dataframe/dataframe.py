@@ -329,9 +329,7 @@ class StreamingDataFrame(BaseStreaming):
             topic_name=self._topic.name,
         )
         self._finalize_branch(self.to_topic(groupby_topic, key=_gb_key_op))
-        clone = self._clone(topic=groupby_topic)
-        # self._branches[groupby_topic.name] = clone
-        return clone
+        return self._clone(topic=groupby_topic)
 
     @property
     def producer(self) -> RowProducerProto:
