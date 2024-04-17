@@ -472,6 +472,110 @@ class TestApplication:
         assert app._consumer_group == "quixstreams-default"
 
 
+class TestAppGroupBy:
+
+    def test_group_by(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
+    ):
+        """
+        Test that StreamingDataFrame processes 6 messages from Kafka and groups them
+        by each record's specified column value.
+        """
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        num_partitions = 2
+        processed_count = 0
+        user_0 = "jane"
+        user_1 = "john"
+        names = [user_0] * 3 + [user_1] * 3
+        expected_message_count = len(names)
+        total_messages = expected_message_count * 2  # groupby reproduces messages...
+        app = app_factory(
+            auto_offset_reset="earliest",
+            on_message_processed=on_message_processed,
+        )
+
+        app_topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer=JSONDeserializer(),
+            value_serializer=JSONSerializer(),
+            config=app._topic_manager.topic_config(num_partitions=num_partitions),
+        )
+        app_topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_serializer=JSONSerializer(),
+            value_deserializer=JSONDeserializer(),
+            config=app._topic_manager.topic_config(num_partitions=num_partitions),
+        )
+
+        sdf = app.dataframe(topic=app_topic_in)
+        sdf["new_col"] = "cool"
+        sdf = sdf.group_by("user")
+        sdf["new_col"] = sdf["new_col"] + "er"
+        sdf = sdf.to_topic(app_topic_out)
+
+        with app.get_producer() as producer:
+            for i in range(expected_message_count):
+                msg = app_topic_in.serialize(
+                    key=str(i),
+                    value={"user": names[i]},
+                )
+                producer.produce(app_topic_in.name, key=msg.key, value=msg.value)
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 15.0)
+        app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # messages on input topic are split across both partitions per user
+        # which validates that grouping actually happened
+        rows_out = []
+        name_partitions = {user_0: set(), user_1: set()}
+        with row_consumer_factory(
+            consumer_group=uuid.uuid4(), auto_offset_reset="earliest"
+        ) as row_consumer:
+            row_consumer.subscribe([app_topic_in])
+            while len(rows_out) < expected_message_count:
+                rows_out.append(row_consumer.poll_row(timeout=5))
+        assert len(rows_out) == expected_message_count
+        for row in rows_out:
+            name_partitions[row.value["user"]].add(row.partition)
+        assert len(name_partitions[user_0]) == len(name_partitions[user_1]) == 2
+
+        # output topic is grouped to 1 partition per user, has "new_col" transformation
+        rows_out = []
+        name_partitions = {user_0: set(), user_1: set()}
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([app_topic_out])
+            while len(rows_out) < expected_message_count:
+                rows_out.append(row_consumer.poll_row(timeout=5))
+        assert len(rows_out) == expected_message_count
+        for row in rows_out:
+            assert row.topic == app_topic_out.name
+            key = row.key.decode()
+            assert row.value == {"user": key, "new_col": "cooler"}
+            name_partitions[key].add(row.partition)
+        assert name_partitions[user_0] != name_partitions[user_1]
+        assert len(name_partitions[user_0]) == len(name_partitions[user_1]) == 1
+
+
 class TestQuixApplication:
     def test_init_with_quix_sdk_token_arg(self):
         def cfg():

@@ -57,6 +57,7 @@ class TopicManager:
         """
         self._admin = topic_admin
         self._topics: Dict[str, Topic] = {}
+        self._internal_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._create_timeout = create_timeout
 
@@ -66,7 +67,11 @@ class TopicManager:
 
     @property
     def topics_list(self) -> List[Topic]:
-        return dict_values(self._topics)
+        return list(self._topics.values())
+
+    @property
+    def consumer_internal_topics(self) -> Dict[str, Topic]:
+        return self._internal_topics
 
     @property
     def changelog_topics(self) -> Dict[str, Dict[str, Topic]]:
@@ -83,7 +88,11 @@ class TopicManager:
 
     @property
     def all_topics(self) -> List[Topic]:
-        return self.topics_list + self.changelog_topics_list
+        return (
+            self.topics_list
+            + list(self._internal_topics.values())
+            + self.changelog_topics_list
+        )
 
     def _apply_topic_prefix(self, name: str) -> str:
         """
@@ -271,7 +280,7 @@ class TopicManager:
                 )
             ),
         )
-        self._topics[name] = topic
+        self._internal_topics[name] = topic
         return topic
 
     def changelog_topic(

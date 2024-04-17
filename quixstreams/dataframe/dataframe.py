@@ -28,6 +28,7 @@ from quixstreams.context import (
 from quixstreams.core.stream import StreamCallable, Stream
 from quixstreams.models import (
     Topic,
+    TopicManager,
     Row,
     MessageContext,
     MessageTimestamp,
@@ -108,9 +109,9 @@ class StreamingDataFrame(BaseStreaming):
         self._topic = topic
         self._application = application
         self._branches = branches or {}
+        if self._topic.name not in self._branches:
+            self._branches[self._topic.name] = self
         self._real_producer: Optional[RowProducerProto] = None
-        self._topic_manager = self._application._topic_manager
-        self._state_manager = self._application._state_manager
 
     @property
     def stream(self) -> Stream:
@@ -121,12 +122,16 @@ class StreamingDataFrame(BaseStreaming):
         return self._topic
 
     @property
-    def consumer_topics(self) -> List[Topic]:
-        return [sdf.topic for sdf in self._branches.values()]
+    def _topic_manager(self) -> TopicManager:
+        return self._application._topic_manager
 
     @property
     def state_manager(self) -> StateStoreManager:
-        return self._state_manager
+        return self._application._state_manager
+
+    @property
+    def consumer_topics(self) -> List[Topic]:
+        return [sdf.topic for sdf in self._branches.values()]
 
     def __bool__(self):
         raise InvalidOperation(
@@ -173,7 +178,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, state_manager=self._state_manager)
+            func = _as_stateful(func=func, state_manager=self.state_manager)
 
         stream = self.stream.add_apply(func, expand=expand)
         return self._clone(stream=stream)
@@ -212,7 +217,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, state_manager=self._state_manager)
+            func = _as_stateful(func=func, state_manager=self.state_manager)
 
         stream = self.stream.add_update(func)
         return self._clone(stream=stream)
@@ -254,7 +259,7 @@ class StreamingDataFrame(BaseStreaming):
 
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, state_manager=self._state_manager)
+            func = _as_stateful(func=func, state_manager=self.state_manager)
 
         stream = self.stream.add_filter(func)
         return self._clone(stream=stream)
@@ -306,16 +311,10 @@ class StreamingDataFrame(BaseStreaming):
         :return: a clone with this operation added (assign to keep its effect).
         """
         if isinstance(key, str):
-
-            def _gb_key_op(row):
-                return row[key]
-
+            _gb_key_op = lambda row: row[key]
             name = name or key
         elif callable(key):
-
-            def _gb_key_op(row):
-                return key(row)
-
+            _gb_key_op = lambda row: key(row)
             if not name:
                 raise ValueError(
                     "group_by requires 'name' parameter when 'key' is a function"
@@ -330,7 +329,9 @@ class StreamingDataFrame(BaseStreaming):
             topic_name=self._topic.name,
         )
         self._finalize_branch(self.to_topic(groupby_topic, key=_gb_key_op))
-        return self._clone(topic=groupby_topic)
+        clone = self._clone(topic=groupby_topic)
+        # self._branches[groupby_topic.name] = clone
+        return clone
 
     @property
     def producer(self) -> RowProducerProto:
@@ -678,7 +679,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         Register the default store for input topic in StateStoreManager
         """
-        self._state_manager.register_store(topic_name=self._topic.name)
+        self.state_manager.register_store(topic_name=self._topic.name)
 
     def __setitem__(self, key, value: Union[Self, object]):
         if isinstance(value, self.__class__):

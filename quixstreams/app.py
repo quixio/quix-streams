@@ -779,7 +779,7 @@ class Application:
 
         with exit_stack:
             # compose dataframe before subscribe so all internal topics are captured
-            dataframe_composed = dataframe.compose()
+            # dataframe_composed = dataframe.compose()
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
                 dataframe.consumer_topics,
@@ -790,6 +790,8 @@ class Application:
             logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
             self._running = True
+
+            dataframe_composed = dataframe.compose()
 
             while self._running:
                 if self._state_manager.recovery_required:
