@@ -104,11 +104,13 @@ class StreamingDataFrame(BaseStreaming):
         application: Application,
         stream: Optional[Stream] = None,
         branches: Optional[Dict[str, Self]] = None,
+        stateful: bool = False,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
         self._application = application
         self._branches = branches or {}
+        self._stateful = stateful
         if self._topic.name not in self._branches:
             self._branches[self._topic.name] = self
         self._real_producer: Optional[RowProducerProto] = None
@@ -120,6 +122,10 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
+
+    @property
+    def is_stateful(self) -> bool:
+        return self._stateful
 
     @property
     def _topic_manager(self) -> TopicManager:
@@ -139,6 +145,11 @@ class StreamingDataFrame(BaseStreaming):
             f"using 'bool()' or any operations that rely on it; "
             f"use '&' or '|' for logical and/or comparisons"
         )
+
+    def is_stateful_branch(self, topic_name: Optional[str] = None) -> bool:
+        if not topic_name:
+            return self._stateful
+        return self._branches[topic_name].is_stateful
 
     def apply(
         self,
@@ -329,7 +340,7 @@ class StreamingDataFrame(BaseStreaming):
             topic_name=self._topic.name,
         )
         self._finalize_branch(self.to_topic(groupby_topic, key=_gb_key_op))
-        return self._clone(topic=groupby_topic)
+        return self._clone(topic=groupby_topic, stateful=False)
 
     @property
     def producer(self) -> RowProducerProto:
@@ -556,6 +567,7 @@ class StreamingDataFrame(BaseStreaming):
             like `sum`, `count`, etc. applied to the StreamingDataFrame.
 
         """
+        self._stateful = True
         duration_ms = ensure_milliseconds(duration_ms)
         grace_ms = ensure_milliseconds(grace_ms)
 
@@ -641,7 +653,7 @@ class StreamingDataFrame(BaseStreaming):
             This object can be further configured with aggregation functions
             like `sum`, `count`, etc. and applied to the StreamingDataFrame.
         """
-
+        self._stateful = True
         duration_ms = ensure_milliseconds(duration_ms)
         step_ms = ensure_milliseconds(step_ms)
         grace_ms = ensure_milliseconds(grace_ms)
@@ -655,13 +667,19 @@ class StreamingDataFrame(BaseStreaming):
         )
 
     def _clone(
-        self, stream: Optional[Stream] = None, topic: Optional[Topic] = None
+        self,
+        stream: Optional[Stream] = None,
+        topic: Optional[Topic] = None,
+        stateful: Optional[bool] = None,
     ) -> Self:
+        if stateful is None:
+            stateful = self._stateful
         clone = self.__class__(
             stream=stream,
             topic=topic or self._topic,
             application=self._application,
             branches=self._branches,
+            stateful=stateful,
         )
         if self._real_producer is not None:
             clone.producer = self._real_producer
@@ -677,6 +695,7 @@ class StreamingDataFrame(BaseStreaming):
         """
         Register the default store for input topic in StateStoreManager
         """
+        self._stateful = True
         self.state_manager.register_store(topic_name=self._topic.name)
 
     def __setitem__(self, key, value: Union[Self, object]):

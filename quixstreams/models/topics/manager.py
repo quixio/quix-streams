@@ -70,8 +70,8 @@ class TopicManager:
         return list(self._topics.values())
 
     @property
-    def consumer_internal_topics(self) -> Dict[str, Topic]:
-        return self._internal_topics
+    def _non_changelog_topics(self) -> Dict[str, Topic]:
+        return {**self._topics, **self._internal_topics}
 
     @property
     def changelog_topics(self) -> Dict[str, Dict[str, Topic]]:
@@ -155,7 +155,7 @@ class TopicManager:
         """
         topic_config = (
             self._admin.inspect_topics([topic_name])[topic_name]
-            or self._topics[topic_name].config
+            or self._non_changelog_topics[topic_name].config
         )
 
         # Copy only certain configuration values from original topic

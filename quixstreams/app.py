@@ -664,7 +664,7 @@ class Application:
             self._topic_manager.create_all_topics()
         self._topic_manager.validate_all_topics()
 
-    def _process_message(self, dataframe_composed, start_state_transaction):
+    def _process_message(self, dataframe, dataframe_composed):
         # Serve producer callbacks
         self._producer.poll(self._producer_poll_timeout)
         rows = self._consumer.poll_row(timeout=self._consumer_poll_timeout)
@@ -683,6 +683,11 @@ class Application:
             first_row.partition,
             first_row.offset,
         )
+
+        if dataframe.is_stateful_branch(topic_name):
+            start_state_transaction = self._state_manager.start_store_transaction
+        else:
+            start_state_transaction = _dummy_state_transaction
 
         with start_state_transaction(
             topic=topic_name, partition=partition, offset=offset
@@ -769,14 +774,6 @@ class Application:
         )
         exit_stack.callback(lambda *_: self.stop())
 
-        if self._state_manager.stores:
-            # Store manager has stores registered, use real state transactions
-            # during processing
-            start_state_transaction = self._state_manager.start_store_transaction
-        else:
-            # Application is stateless, use dummy state transactions
-            start_state_transaction = _dummy_state_transaction
-
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
@@ -795,7 +792,7 @@ class Application:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
-                    self._process_message(dataframe_composed, start_state_transaction)
+                    self._process_message(dataframe, dataframe_composed)
 
             logger.info("Stop processing of StreamingDataFrame")
 
