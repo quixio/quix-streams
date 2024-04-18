@@ -2,7 +2,8 @@
 
 ## What is a "GroupBy" operation?
 
-`GroupBy` is a common operation in things like Excel, SQL, or even Pandas.
+`GroupBy` is a common operation in things like SQL, Pandas, or even
+Excel (commonly done with pivot tables).
 
 It is basically a way of aggregating or organizing your data for performing certain 
 operations on particular subsets of it.
@@ -20,11 +21,14 @@ Suppose you had an `Orders` table like so:
 |    4     |  B   |    2     |
 |    2     |  A   |    2     |
 |    2     |  B   |    1     |
+
 <br>
 
-Normally, if you did a `SUM(quantity)` you could only get the `quantity` total: `18`.
+Suppose you want a summary of the quantities ordered. 
 
-However, with `GroupBy` you could instead determine `quantity` per `item`:
+Of course, you could get a simple total (`18`) using `SUM(quantity)`. 
+
+However, using `GroupBy`, you could additionally calculate `quantity` per `item`:
 
 `SELECT item, SUM(quantity) FROM Orders GROUPBY item` 
 
@@ -33,8 +37,8 @@ However, with `GroupBy` you could instead determine `quantity` per `item`:
 |  A   |    7     |
 |  C   |    8     |
 |  B   |    3     |
-<br>
 
+This is why GroupBy is so useful! So, how do we accomplish this using Kafka?
 
 ## How Does a "GroupBy" Translate to Kafka?
 
@@ -54,7 +58,7 @@ you have guarantees around message ordering for that key with respect to itself 
 
 > NOTE: Understanding keys is also very important for [stateful operations with Quix Streams](./advanced/stateful-processing.md)
 
-### Repartitioning your data by changing Kafka Keys
+### Repartitioning By Changing Keys
 
 A `GroupBy` for Kafka is simply reorganizing your messages by changing
 their message keys so that the respective data we wish to operate on shows up on the 
@@ -68,12 +72,12 @@ In this case, it's easier to understand with an example, like the one below:
 
 ## A Kafka "GroupBy" Example
 
-### The Setup
+### The Situation
 
-Imagine we have the same data from our [SQL example above](#a-groupby-example-using-sql), only now each row of the table is 
+Imagine you have the same data from the [SQL example above](#a-groupby-example-using-sql), only now each row of the table is 
 instead a message.
 
-Our message key is `store_id`, and the `item` and `quantity` columns are in the message value:
+The message key is `store_id`, and the `item` and `quantity` columns are in the message value:
 
 ```python
 message_1 = {"key": "store_4", "value": {"item": "A", "quantity": 5}}
@@ -88,19 +92,21 @@ just like our previous `SUM(quantity)`, ultimately sending each new updated tota
 
 > NOTE: storing/performing aggregations like this requires using [a state store](./processing.md#using-state-store) or [windowing](./windowing.md).
 
-### Message Structure Problems
+### Problematic Message Keys
 
 Unfortunately, the results won't be what you expect with the current message format.
 
-If you had two consumers, one consumer might get all messages related to `store_4`, while the other gets `store_2`, due to the 
-way Kafka divides partitions across consumers (remembering that matching keys end up on 
+If you had two consumers, one consumer might process all messages related to `store_4`, while the other processes `store_2`, due to the 
+way Kafka divides partitions across consumers (matching keys end up on 
 the same partition). 
 
-Basically, your totals right now are **actually**:
+Since these consumers don't share any state between each other, we have a problem.
+
+Basically, your the totals per consumer are **actually**:
 
 - _total quantity per store_ (which ignores `item` name)
 
-NOT the desired:
+which is NOT the desired:
 
 -  _total quantity per item_ (which ignores `store_id`).
 
@@ -114,18 +120,44 @@ message_1 = {"key": "A", "value": {"item": "A", "quantity": 5}}
 message_5 = {"key": "B", "value": {"item": "B", "quantity": 1}}
 ```
 
-then the per item totals will now be accurately generated since each message for the
-given `item` will be calculated using the same consumer instance.
+then the _per item_ totals will now be accurately generated since each message relating to
+a given `item` will handled by the same consumer instance.
 
-This can be easily accomplished with the `StreamingDataFrame.group_by()` operation.
+This re-keying can be easily accomplished with the `StreamingDataFrame.group_by()` operation.
 
 ## StreamingDataFrame.group_by()
 
-`StreamingDataFrame.group_by()` allows you to change message keys and then continue
-processing that message using the same `StreamingDataFrame` pipeline, 
-meaning a re-key does not require an entirely separate `Application`.
+### What it Does
 
-### Example
+`StreamingDataFrame.group_by()` allows you to seamlessly change message keys while also
+including further processing, all with the same `StreamingDataFrame` instance.
+
+> Note: State-based operations will also use the updated keys!
+
+Re-keying usually requires an additional application, but `.group_by()` eliminates that need.
+
+### Using .group_by()
+
+Assume you want to re-key messages to be the value from `column_X`.
+
+With `StreamingDataFrame.group_by()`, there are two options:
+
+1. provide a column name
+    - `StreamingDataFrame.group_by("column_X")`
+    - you can optionally provide a name for it
+
+2. provide a custom grouping function with a unique name
+    - `StreamingDataFrame.group_by(lambda row: row["column_X"], name="col-X")`
+    - the `name` field is required for this and must be unique per `.group_by()`
+
+> NOTE: Your message value must be valid json (like a dict) for `.group_by()`. See 
+> "Advanced Usage" for using other message value formats.
+
+In either case, the result will be processed onward with the updated key, including
+having it updated in `message.context()`.
+
+
+### Example (with column name)
 
 ```python
 sdf = StreamingDataFrame()
@@ -134,26 +166,6 @@ sdf = sdf.group_by("column_x")  # uses "column_x" as new message key
 sdf = sdf["new_column"] + "another_append"
 sdf = sdf.to_topic(topic_out)
 ```
-
-### Using group_by()
-
-Assume you want to re-key messages to be the value from `column_X`.
-
-With `StreamingDataFrame.group_by()`, You have two ways of doing so:
-
-1. provide a column name
-    - `StreamingDataFrame.group_by("column_X")`
-    - you can optionally provide a name for it
-
-2. provide a custom grouping function with a unique name
-   - `StreamingDataFrame.group_by(lambda row: row["column_X"], name="col-X")`
-   - the `name` field is required for this and must be unique per `.group_by()`
-
-> NOTE: Your message value must be valid json (like a dict) for `.group_by()`. See 
-> "Advanced Usage" for using other message value formats.
-
-In either case, the result will be processed onward with the updated key, including
-having it updated in `message.context()`.
 
 ## Advanced Usage 
 

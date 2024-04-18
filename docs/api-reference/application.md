@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L55)
 
 The main Application class.
 
@@ -81,7 +81,7 @@ def __init__(broker_address: Optional[str] = None,
              topic_manager: Optional[TopicManager] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L93)
 
 
 <br>
@@ -176,7 +176,7 @@ def Quix(cls,
          topic_manager: Optional[QuixTopicManager] = None) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L296)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L296)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -285,10 +285,11 @@ def topic(name: str,
           value_serializer: SerializerType = "json",
           key_serializer: SerializerType = "bytes",
           config: Optional[TopicConfig] = None,
-          timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
+          timestamp_extractor: Optional[TimestampExtractor] = None,
+          add_to_cache: bool = True) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L436)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L436)
 
 Create a topic definition.
 
@@ -329,8 +330,7 @@ be `<workspace_id>-<name>`
 - `value_serializer`: a serializer type for values; default="json"
 - `key_serializer`: a serializer type for keys; default="bytes"
 - `config`: optional topic configurations (for creation/validation)
->***NOTE:*** will not create without Application's auto_create_topics set
-to True (is True by default)
+- `add_to_cache`: whether to cache resulting Topic in the TopicManager
 - `timestamp_extractor`: a callable that returns a timestamp in
 milliseconds from a deserialized message. Default - `None`.
 
@@ -369,7 +369,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L516)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L517)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -419,7 +419,7 @@ to be used as an input topic.
 def stop()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L552)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L553)
 
 Stop the internal poll loop and the message processing.
 
@@ -439,7 +439,7 @@ To otherwise stop an application, either send a `SIGTERM` to the process
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L566)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L567)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -474,7 +474,7 @@ with app.get_producer() as producer:
 def get_consumer() -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L597)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L598)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -519,7 +519,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L641)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L642)
 
 Clear the state of the application.
 
@@ -533,7 +533,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/356d83c8caf613065f333dcd470e004443c12544/quixstreams/app.py#L719)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/fbc7096491954c22a9772fa6916b154d1621bf26/quixstreams/app.py#L720)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
