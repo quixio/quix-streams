@@ -12,10 +12,9 @@ from quixstreams.state.rocksdb import (
     RocksDBStorePartition,
     RocksDBOptions,
     RocksDBPartitionTransaction,
+    InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb.metadata import (
-    CHANGELOG_CF_MESSAGE_HEADER,
-)
+from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from quixstreams.state.rocksdb.serialization import serialize
 from quixstreams.utils.json import dumps
 
@@ -271,42 +270,28 @@ class TestRocksDBPartitionTransaction:
                     tx.exists("key", prefix=prefix)
 
                 with pytest.raises(StateTransactionError):
-                    tx.maybe_flush()
+                    tx.flush()
 
             assert not tx.completed
 
-    def test_flush_failed_transaction_failed(self, rocksdb_partition):
+    def test_update_key_prepared_transaction_fails(self, rocksdb_partition):
         """
-        Test that if the "maybe_flush()" fails the transaction is also marked
-        as failed and cannot be re-used anymore.
+        Test that any update operation (set or delete) fails if the transaction is
+        marked as prepared.
         """
 
         prefix = b"__key__"
-        with patch.object(
-            RocksDBStorePartition, "write", side_effect=ValueError("test")
-        ):
-            with rocksdb_partition.begin() as tx:
-                tx.set("key", "value", prefix=prefix)
+        tx = rocksdb_partition.begin()
 
-                with contextlib.suppress(ValueError):
-                    tx.maybe_flush()
+        tx.set(key="key", value="value", prefix=prefix)
+        tx.prepare()
+        assert tx.prepared
 
-                assert tx.failed
+        with pytest.raises(StateTransactionError):
+            tx.set("key", value="value", prefix=prefix)
 
-                # Ensure that Transaction cannot be used after it's failed
-                with pytest.raises(StateTransactionError):
-                    tx.set("key", "value", prefix=prefix)
-
-                with pytest.raises(StateTransactionError):
-                    tx.get("key", prefix=prefix)
-
-                with pytest.raises(StateTransactionError):
-                    tx.delete("key", prefix=prefix)
-
-                with pytest.raises(StateTransactionError):
-                    tx.exists("key", prefix=prefix)
-
-            assert tx.completed
+        with pytest.raises(StateTransactionError):
+            tx.delete("key", prefix=prefix)
 
     def test_transaction_not_flushed_on_error(self, rocksdb_partition):
         prefix = b"__key__"
@@ -390,12 +375,69 @@ class TestRocksDBPartitionTransaction:
         with rocksdb_partition.begin() as tx:
             assert tx.exists(key, cf_name="cf", prefix=prefix)
 
+    def test_flush_failed_transaction_failed(self, rocksdb_partition):
+        """
+        Test that if the "flush()" fails the transaction is also marked
+        as failed and cannot be re-used.
+        """
 
-class TestRocksDBPartitionTransactionChangelog:
-    def test_transaction_with_changelog_set(
-        self, rocksdb_partition_factory, changelog_producer_mock
-    ):
+        prefix = b"__key__"
+        with patch.object(
+            RocksDBStorePartition, "write", side_effect=ValueError("test")
+        ):
+            with rocksdb_partition.begin() as tx:
+                tx.set("key", "value", prefix=prefix)
 
+                with contextlib.suppress(ValueError):
+                    tx.flush()
+
+                assert tx.failed
+
+                # Ensure that Transaction cannot be used after it's failed
+                with pytest.raises(StateTransactionError):
+                    tx.set("key", "value", prefix=prefix)
+
+                with pytest.raises(StateTransactionError):
+                    tx.get("key", prefix=prefix)
+
+                with pytest.raises(StateTransactionError):
+                    tx.delete("key", prefix=prefix)
+
+                with pytest.raises(StateTransactionError):
+                    tx.exists("key", prefix=prefix)
+
+    @pytest.mark.parametrize(
+        "processed_offset, changelog_offset", [(None, None), (1, 1)]
+    )
+    def test_flush_success(self, processed_offset, changelog_offset, rocksdb_partition):
+        tx = rocksdb_partition.begin()
+
+        # Set some key to probe the transaction
+        tx.set(key="key", value="value", prefix=b"__key__")
+
+        tx.flush(processed_offset=processed_offset, changelog_offset=changelog_offset)
+        assert tx.completed
+
+        assert rocksdb_partition.get_changelog_offset() == changelog_offset
+        assert rocksdb_partition.get_processed_offset() == processed_offset
+
+    def test_flush_invalid_changelog_offset(self, rocksdb_partition):
+        tx1 = rocksdb_partition.begin()
+        # Set some key to probe the transaction
+        tx1.set(key="key", value="value", prefix=b"__key__")
+
+        # Flush first transaction to update the changelog offset
+        tx1.flush(changelog_offset=9999)
+        assert tx1.completed
+
+        tx2 = rocksdb_partition.begin()
+        tx2.set(key="key", value="value", prefix=b"__key__")
+        # Flush second transaction with a smaller changelog offset
+        with pytest.raises(InvalidChangelogOffset):
+            tx2.flush(changelog_offset=1)
+        assert tx2.failed
+
+    def test_set_and_prepare(self, rocksdb_partition_factory, changelog_producer_mock):
         data = [
             ("key1", "value1"),
             ("key2", "value2"),
@@ -407,16 +449,15 @@ class TestRocksDBPartitionTransactionChangelog:
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
-            assert partition.get_changelog_offset() is None
-
-            with partition.begin() as tx:
-                for key, value in data:
-                    tx.set(
-                        key=key,
-                        value=value,
-                        cf_name=cf,
-                        prefix=prefix,
-                    )
+            tx = partition.begin()
+            for key, value in data:
+                tx.set(
+                    key=key,
+                    value=value,
+                    cf_name=cf,
+                    prefix=prefix,
+                )
+            tx.prepare()
 
             assert changelog_producer_mock.produce.call_count == len(data)
             for (key, value), call in zip(
@@ -426,10 +467,9 @@ class TestRocksDBPartitionTransactionChangelog:
                 assert call.kwargs["value"] == tx._serialize_value(value=value)
                 assert call.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
 
-            assert tx.completed
-            assert partition.get_changelog_offset() == len(data)
+            assert tx.prepared
 
-    def test_transaction_with_changelog_delete(
+    def test_delete_and_prepare(
         self, rocksdb_partition_factory, changelog_producer_mock
     ):
         key, value = "key", "value"
@@ -439,30 +479,22 @@ class TestRocksDBPartitionTransactionChangelog:
             changelog_producer=changelog_producer_mock
         ) as partition:
 
-            assert partition.get_changelog_offset() is None
+            tx = partition.begin()
+            tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            with partition.begin() as tx:
-                tx.set(key=key, value=value, cf_name=cf, prefix=prefix)
+            tx.prepare()
 
-            with partition.begin() as tx:
-                tx.delete(key=key, cf_name=cf, prefix=prefix)
+            assert tx.prepared
+            assert changelog_producer_mock.produce.call_count == 1
 
-            assert partition.get_changelog_offset() == 2
-            assert changelog_producer_mock.produce.call_count == 2
-
-        set_changelog = changelog_producer_mock.produce.call_args_list[0]
-        assert set_changelog.kwargs["key"] == tx._serialize_key(key=key, prefix=prefix)
-        assert set_changelog.kwargs["value"] == tx._serialize_value(value=value)
-        assert set_changelog.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
-
-        delete_changelog = changelog_producer_mock.produce.call_args_list[1]
+        delete_changelog = changelog_producer_mock.produce.call_args_list[0]
         assert delete_changelog.kwargs["key"] == tx._serialize_key(
             key=key, prefix=prefix
         )
         assert delete_changelog.kwargs["value"] is None
         assert delete_changelog.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
 
-    def test_transaction_with_changelog_delete_cached(
+    def test_set_delete_and_prepare(
         self, rocksdb_partition_factory, changelog_producer_mock
     ):
         """
@@ -476,13 +508,13 @@ class TestRocksDBPartitionTransactionChangelog:
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
+            tx = partition.begin()
+            tx.set(key=key, value=value, cf_name=cf, prefix=prefix)
+            tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            assert partition.get_changelog_offset() is None
+            tx.prepare()
 
-            with partition.begin() as tx:
-                tx.set(key=key, value=value, cf_name=cf, prefix=prefix)
-                tx.delete(key=key, cf_name=cf, prefix=prefix)
-
+            assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
             delete_changelog = changelog_producer_mock.produce.call_args_list[0]
             assert delete_changelog.kwargs["key"] == tx._serialize_key(
@@ -492,30 +524,3 @@ class TestRocksDBPartitionTransactionChangelog:
             assert delete_changelog.kwargs["headers"] == {
                 CHANGELOG_CF_MESSAGE_HEADER: cf
             }
-
-            assert tx.completed
-            assert partition.get_changelog_offset() == 1
-
-    def test_transaction_with_changelog_delete_nonexisting_key(
-        self, rocksdb_partition_factory, changelog_producer_mock
-    ):
-        key = "key"
-        cf = "default"
-        prefix = b"__key__"
-
-        with rocksdb_partition_factory(
-            changelog_producer=changelog_producer_mock
-        ) as partition:
-
-            assert partition.get_changelog_offset() is None
-
-            with partition.begin() as tx:
-                tx.delete(key=key, cf_name=cf, prefix=prefix)
-            assert tx.completed
-            assert partition.get_changelog_offset() == 1
-
-        changelog_producer_mock.produce.assert_called_with(
-            key=tx._serialize_key(key=key, prefix=prefix),
-            value=None,
-            headers={CHANGELOG_CF_MESSAGE_HEADER: cf},
-        )

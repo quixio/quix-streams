@@ -6,6 +6,7 @@ __all__ = (
     "ColumnFamilyDoesNotExist",
     "ColumnFamilyAlreadyExists",
     "ColumnFamilyHeaderMissing",
+    "InvalidChangelogOffset",
 )
 
 
@@ -25,3 +26,6 @@ class ColumnFamilyAlreadyExists(StateError): ...
 
 
 class ColumnFamilyHeaderMissing(StateError): ...
+
+
+class InvalidChangelogOffset(StateError): ...

@@ -1,4 +1,5 @@
-from typing import Protocol, Any, Optional, Callable, Dict, ClassVar
+import enum
+from typing import Protocol, Any, Optional, Callable, Dict, ClassVar, Tuple
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.models.types import MessageHeadersMapping
@@ -252,17 +253,59 @@ class PartitionTransaction(Protocol):
     @property
     def completed(self) -> bool:
         """
-        Return `True` if transaction is completed.
+        Return `True` if transaction is successfully completed.
 
         Completed transactions cannot be re-used.
         :return: bool
         """
         ...
 
-    def maybe_flush(self, offset: Optional[int] = None):
+    @property
+    def prepared(self) -> bool:
         """
-        Flush the recent updates and last processed offset to the storage.
-        :param offset: offset of the last processed message, optional.
+        Return `True` if transaction is prepared completed.
+
+        Prepared transactions cannot receive new updates, but can be flushed.
+        :return: bool
+        """
+        ...
+
+    def prepare(self, processed_offset: Optional[int] = None):
+        """
+        Produce changelog messages to the changelog topic for all changes accumulated
+        in this transaction and prepare transcation to flush its state to the state
+        store.
+
+        After successful `prepare()`, the transaction status is changed to PREPARED,
+        and it cannot receive updates anymore.
+
+        If changelog is disabled for this application, no updates will be produced
+        to the changelog topic.
+
+        :param processed_offset: the offset of the latest processed message
+        """
+
+    @property
+    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
+        """
+        Return the changelog topic-partition for the StorePartition of this transaction.
+
+        Returns `None` if changelog_producer is not provided.
+
+        :return: (topic, partition) or None
+        """
+
+    def flush(
+        self,
+        processed_offset: Optional[int] = None,
+        changelog_offset: Optional[int] = None,
+    ):
+        """
+        Flush the recent updates to the storage.
+
+        :param processed_offset: offset of the last processed message, optional.
+        :param changelog_offset: offset of the last produced changelog message,
+            optional.
         """
 
     def __enter__(self): ...
@@ -344,12 +387,37 @@ class WindowedPartitionTransaction(Protocol):
     @property
     def completed(self) -> bool:
         """
-        Return `True` if transaction is completed.
+        Return `True` if transaction is successfully completed.
 
         Completed transactions cannot be re-used.
         :return: bool
         """
         ...
+
+    @property
+    def prepared(self) -> bool:
+        """
+        Return `True` if transaction is prepared completed.
+
+        Prepared transactions cannot receive new updates, but can be flushed.
+        :return: bool
+        """
+        ...
+
+    def prepare(self, processed_offset: Optional[int] = None):
+        """
+        Produce changelog messages to the changelog topic for all changes accumulated
+        in this transaction and prepare transcation to flush its state to the state
+        store.
+
+        After successful `prepare()`, the transaction status is changed to PREPARED,
+        and it cannot receive updates anymore.
+
+        If changelog is disabled for this application, no updates will be produced
+        to the changelog topic.
+
+        :param processed_offset: the offset of the latest processed message
+        """
 
     def as_state(self, prefix: Any) -> WindowedState: ...
 
@@ -415,10 +483,17 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def maybe_flush(self, offset: Optional[int] = None):
+    def flush(
+        self,
+        processed_offset: Optional[int] = None,
+        changelog_offset: Optional[int] = None,
+    ):
         """
-        Flush the recent updates and last processed offset to the storage.
-        :param offset: offset of the last processed message, optional.
+        Flush the recent updates to the storage.
+
+        :param processed_offset: offset of the last processed message, optional.
+        :param changelog_offset: offset of the last produced changelog message,
+            optional.
         """
 
     def __enter__(self): ...
@@ -435,6 +510,17 @@ class PartitionRecoveryTransaction(Protocol):
 
     def flush(self):
         """
-        Flush the recovery update and last processed offset to the storage.
+        Flush the recovery update to the storage.
         """
         ...
+
+
+class PartitionTransactionStatus(enum.Enum):
+    STARTED = 1  # Transaction is started and accepts updates
+
+    PREPARED = 2  # Transaction is prepared, it can no longer receive updates
+    # and can only be flushed
+
+    COMPLETE = 3  # Transaction is fully completed, it cannot be used anymore
+
+    FAILED = 4  # Transaction is failed, it cannot be used anymore
