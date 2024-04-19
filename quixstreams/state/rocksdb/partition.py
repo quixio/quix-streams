@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Union, Optional, List, Dict
+from typing import Any, Union, Optional, List, Dict, Tuple
 
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
 
@@ -76,6 +76,21 @@ class RocksDBStorePartition(StorePartition):
     @property
     def using_changelogs(self) -> bool:
         return bool(self._changelog_producer)
+
+    @property
+    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
+        """
+        Return the changelog topic-partition for the given StorePartition.
+
+        Returns `None` if changelog_producer is not provided.
+
+        :return: (topic, partition) or None
+        """
+        if self._changelog_producer is not None:
+            return (
+                self._changelog_producer.changelog_name,
+                self._changelog_producer.partition,
+            )
 
     def begin(
         self,

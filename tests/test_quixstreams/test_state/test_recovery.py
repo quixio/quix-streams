@@ -84,7 +84,7 @@ class TestChangelogProducer:
 
         writer = ChangelogProducer(
             changelog_name=changelog.name,
-            partition_num=p_num,
+            partition=p_num,
             producer=row_producer_factory(),
         )
         writer.produce(

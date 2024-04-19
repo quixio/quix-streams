@@ -79,14 +79,20 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         key = encode_window_key(start_ms, end_ms)
         self.delete(key=key, prefix=prefix)
 
-    def maybe_flush(self, offset: Optional[int] = None):
+    def flush(
+        self,
+        processed_offset: Optional[int] = None,
+        changelog_offset: Optional[int] = None,
+    ):
         cf_handle = self._partition.get_column_family_handle(METADATA_CF_NAME)
         self._batch.put(
             LATEST_TIMESTAMP_KEY,
             int_to_int64_bytes(self._latest_timestamp_ms),
             cf_handle,
         )
-        super().maybe_flush(offset=offset)
+        super().flush(
+            processed_offset=processed_offset, changelog_offset=changelog_offset
+        )
         self._partition.set_latest_timestamp(self._latest_timestamp_ms)
 
     def expire_windows(
