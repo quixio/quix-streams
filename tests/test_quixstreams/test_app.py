@@ -12,6 +12,7 @@ from confluent_kafka import KafkaException, TopicPartition
 from quixstreams.app import Application
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
+from quixstreams.kafka.exceptions import KafkaException
 from quixstreams.models import (
     DoubleDeserializer,
     DoubleSerializer,
@@ -24,10 +25,7 @@ from quixstreams.platforms.quix import (
     QuixKafkaConfigsBuilder,
 )
 from quixstreams.platforms.quix.env import QuixEnvironment
-from quixstreams.rowconsumer import (
-    KafkaMessageError,
-    RowConsumer,
-)
+from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state import State
 from tests.utils import TopicPartitionStub
 
@@ -184,7 +182,7 @@ class TestApplication:
 
         # Stop app after 10s if nothing failed
         executor.submit(_stop_app_on_timeout, app, 10.0)
-        with pytest.raises(KafkaMessageError):
+        with pytest.raises(KafkaException):
             app.run(sdf)
 
     def test_run_deserialization_error_raised(self, app_factory, executor):
