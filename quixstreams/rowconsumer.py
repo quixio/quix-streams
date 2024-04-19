@@ -2,59 +2,21 @@ import logging
 from typing import Optional, Callable, List, Union, Mapping
 
 from confluent_kafka import KafkaError, TopicPartition
-from typing_extensions import Protocol
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
-from .exceptions import QuixException, PartitionAssignmentError
+from .exceptions import PartitionAssignmentError
 from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset
 from .kafka.consumer import RebalancingCallback
+from .kafka.exceptions import KafkaException
 from .models import Topic, Row
 from .models.serializers.exceptions import IgnoreMessage
 
 logger = logging.getLogger(__name__)
 
-
-class KafkaMessageError(QuixException):
-    def __init__(self, error: KafkaError):
-        self.error = error
-
-    @property
-    def code(self) -> int:
-        return self.error.code()
-
-    @property
-    def description(self):
-        return self.error.str()
-
-    def __str__(self):
-        return (
-            f"<{self.__class__.__name__} "
-            f'code="{self.code}" '
-            f'description="{self.description}">'
-        )
-
-    def __repr__(self):
-        return str(self)
+__all__ = ("RowConsumer",)
 
 
-class RowConsumerProto(Protocol):
-    def commit(
-        self,
-        message=None,
-        offsets: List[TopicPartition] = None,
-        asynchronous: bool = True,
-    ) -> Optional[List[TopicPartition]]: ...
-
-    def subscribe(
-        self,
-        topics: List[Topic],
-        on_assign: Optional[RebalancingCallback] = None,
-        on_revoke: Optional[RebalancingCallback] = None,
-        on_lost: Optional[RebalancingCallback] = None,
-    ): ...
-
-
-class RowConsumer(Consumer, RowConsumerProto):
+class RowConsumer(Consumer):
     def __init__(
         self,
         broker_address: str,
@@ -172,7 +134,7 @@ class RowConsumer(Consumer, RowConsumerProto):
         topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
         try:
             if msg.error():
-                raise KafkaMessageError(error=msg.error())
+                raise KafkaException(error=msg.error())
 
             topic = self._topics[topic_name]
 
