@@ -7,6 +7,10 @@ from unittest.mock import patch, call, create_autospec
 import pytest
 from requests import HTTPError, Response
 
+from quixstreams.platforms.quix.exceptions import (
+    QuixCreateTopicTimeout,
+    QuixCreateTopicFailure,
+)
 from quixstreams.platforms.quix.api import QuixPortalApiService
 from quixstreams.platforms.quix.config import (
     QUIX_CONNECTIONS_MAX_IDLE_MS,
@@ -622,6 +626,44 @@ class TestQuixKafkaConfigsBuilder:
             )
         assert get_topics.call_count == 2
 
+    def test__finalize_create_error(self, quix_kafka_config_factory):
+        def side_effect():
+            def nested():
+                data = [
+                    {
+                        "id": "12345-topic_a",
+                        "name": "topic_a",
+                        "status": "Ready",
+                    },
+                    {
+                        "id": "12345-topic_b",
+                        "name": "topic_b",
+                        "status": "Error",
+                        "errorStatus": "my error",
+                        "lastError": "a previous error",
+                    },
+                    {
+                        "id": "12345-topic_c",
+                        "name": "topic_c",
+                        "status": "Error",
+                        "errorStatus": "my error",
+                        "lastError": "a previous error",
+                    },
+                ]
+                for i in data:
+                    yield i
+
+            n = nested()
+            return lambda: next(n)
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        with patch.object(cfg_factory, "get_topics") as get_topics:
+            get_topics.side_effect = side_effect()
+            cfg_factory._finalize_create(
+                {"12345-topic_b", "12345-topic_c", "12345-topic_d"}
+            )
+        assert get_topics.call_count == 2
+
     def test__finalize_create_timeout(self, quix_kafka_config_factory):
         get_topics_return = [
             {
@@ -639,7 +681,7 @@ class TestQuixKafkaConfigsBuilder:
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
         with patch.object(cfg_factory, "get_topics") as get_topics:
             get_topics.return_value = get_topics_return
-            with pytest.raises(cfg_factory.CreateTopicTimeout) as e:
+            with pytest.raises(QuixCreateTopicTimeout) as e:
                 cfg_factory._finalize_create(
                     {"12345-topic_b", "12345-topic_c", "12345-topic_d"}, timeout=1
                 )
