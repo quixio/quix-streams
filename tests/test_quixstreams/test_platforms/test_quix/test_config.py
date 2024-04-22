@@ -645,15 +645,15 @@ class TestQuixKafkaConfigsBuilder:
                 "id": "12345-topic_c",
                 "name": "topic_c",
                 "status": "Error",
-                "errorStatus": "my c error",
-                "lastError": "a previous c error",
+                "errorStatus": "frontend c error status",
+                "lastError": "kafka c error",
             },
             {
                 "id": "12345-topic_d",
                 "name": "topic_d",
                 "status": "Error",
-                "errorStatus": "my d error",
-                "lastError": "a previous d error",
+                "errorStatus": "frontend d error status",
+                "lastError": "kafka d error",
             },
         ]
 

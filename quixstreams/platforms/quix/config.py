@@ -361,12 +361,7 @@ class QuixKafkaConfigsBuilder:
                     topics.remove(topic["id"])
                 elif topic["status"] == "Error":
                     logger.debug(f"Topic {topic['name']} encountered an error")
-                    exceptions[topic["name"]] = (
-                        {
-                            "current_error": topic["errorStatus"],
-                            "previous_error": topic["lastError"],
-                        },
-                    )
+                    exceptions[topic["name"]] = topic["lastError"]
                     topics.remove(topic["id"])
         if exceptions:
             raise QuixCreateTopicFailure(f"Failed to create Quix topics: {exceptions}")
