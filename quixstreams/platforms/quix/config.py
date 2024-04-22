@@ -8,10 +8,16 @@ from typing import Optional, Tuple, Set, Mapping, Union, List
 
 from requests import HTTPError
 
-from quixstreams.exceptions import QuixException
 from quixstreams.models.topics import Topic
 from .api import QuixPortalApiService
-from .exceptions import UndefinedQuixWorkspaceId
+from .exceptions import (
+    NoWorkspaceFound,
+    MultipleWorkspaces,
+    MissingQuixTopics,
+    UndefinedQuixWorkspaceId,
+    QuixCreateTopicFailure,
+    QuixCreateTopicTimeout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,14 +144,6 @@ class QuixKafkaConfigsBuilder:
         self._quix_broker_settings = None
         self._workspace_meta = None
 
-    class NoWorkspaceFound(QuixException): ...
-
-    class MultipleWorkspaces(QuixException): ...
-
-    class MissingQuixTopics(QuixException): ...
-
-    class CreateTopicTimeout(QuixException): ...
-
     @property
     def workspace_id(self) -> str:
         if not self._workspace_id:
@@ -238,7 +236,7 @@ class QuixKafkaConfigsBuilder:
         else:
             ws_data = self.search_for_topic_workspace(known_workspace_topic)
         if not ws_data:
-            raise self.NoWorkspaceFound(
+            raise NoWorkspaceFound(
                 "No workspace was found for the given workspace/auth-token/topic combo"
             )
         self._workspace_id = ws_data.pop("workspaceId")
@@ -281,7 +279,7 @@ class QuixKafkaConfigsBuilder:
         if len(ws_list) == 1:
             return ws_list[0]
         if topic is None:
-            raise self.MultipleWorkspaces(
+            raise MultipleWorkspaces(
                 "More than 1 workspace was found, so you must provide a topic name "
                 "to find the correct workspace"
             )
@@ -352,6 +350,7 @@ class QuixKafkaConfigsBuilder:
         :param topics: set of topic names
         :param timeout: amount of seconds allowed to finalize, else raise exception
         """
+        exceptions = {}
         stop_time = time.time() + (timeout or len(topics) * 30)
         while topics and time.time() < stop_time:
             # Each topic seems to take 10-15 seconds each to finalize (at least in dev)
@@ -360,8 +359,14 @@ class QuixKafkaConfigsBuilder:
                 if topic["status"] == "Ready":
                     logger.debug(f"Topic {topic['name']} creation finalized")
                     topics.remove(topic["id"])
+                elif topic["status"] == "Error":
+                    logger.debug(f"Topic {topic['name']} encountered an error")
+                    exceptions[topic["name"]] = topic["lastError"]
+                    topics.remove(topic["id"])
+        if exceptions:
+            raise QuixCreateTopicFailure(f"Failed to create Quix topics: {exceptions}")
         if topics:
-            raise self.CreateTopicTimeout(
+            raise QuixCreateTopicTimeout(
                 f"Creation succeeded, but waiting for 'Ready' status timed out "
                 f"for topics: {[self.strip_workspace_id_prefix(t) for t in topics]}"
             )
@@ -432,7 +437,7 @@ class QuixKafkaConfigsBuilder:
             else:
                 logger.debug(f"Topic {self.strip_workspace_id_prefix(name)} confirmed!")
         if missing_topics:
-            raise self.MissingQuixTopics(f"Topics do no exist: {missing_topics}")
+            raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
     def _set_workspace_cert(self) -> str:
         """

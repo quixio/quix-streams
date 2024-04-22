@@ -12,6 +12,13 @@ from quixstreams.platforms.quix.config import (
     QUIX_CONNECTIONS_MAX_IDLE_MS,
     QUIX_METADATA_MAX_AGE_MS,
 )
+from quixstreams.platforms.quix.exceptions import (
+    NoWorkspaceFound,
+    MultipleWorkspaces,
+    MissingQuixTopics,
+    QuixCreateTopicTimeout,
+    QuixCreateTopicFailure,
+)
 
 
 class TestQuixKafkaConfigsBuilder:
@@ -104,7 +111,7 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345",
             api_responses={"get_workspace": deepcopy(api_response)},
         )
-        with pytest.raises(cfg_factory.NoWorkspaceFound):
+        with pytest.raises(NoWorkspaceFound):
             cfg_factory.get_workspace_info()
         cfg_factory.api.get_workspace.assert_called_with(cfg_factory.workspace_id)
 
@@ -223,7 +230,7 @@ class TestQuixKafkaConfigsBuilder:
         cfg_factory = quix_kafka_config_factory(
             api_responses={"get_workspaces": api_data_stub}
         )
-        with pytest.raises(cfg_factory.MultipleWorkspaces):
+        with pytest.raises(MultipleWorkspaces):
             cfg_factory.search_for_topic_workspace(None)
         cfg_factory.api.get_workspaces.assert_called()
 
@@ -622,6 +629,45 @@ class TestQuixKafkaConfigsBuilder:
             )
         assert get_topics.call_count == 2
 
+    def test__finalize_create_error(self, quix_kafka_config_factory):
+        data = [
+            {
+                "id": "12345-topic_a",
+                "name": "topic_a",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_b",
+                "name": "topic_b",
+                "status": "Ready",
+            },
+            {
+                "id": "12345-topic_c",
+                "name": "topic_c",
+                "status": "Error",
+                "errorStatus": "frontend c error status",
+                "lastError": "kafka c error",
+            },
+            {
+                "id": "12345-topic_d",
+                "name": "topic_d",
+                "status": "Error",
+                "errorStatus": "frontend d error status",
+                "lastError": "kafka d error",
+            },
+        ]
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        with patch.object(cfg_factory, "get_topics") as get_topics:
+            topics = {"12345-topic_b", "12345-topic_c", "12345-topic_d"}
+            get_topics.return_value = data
+            with pytest.raises(QuixCreateTopicFailure) as e:
+                cfg_factory._finalize_create(topics)
+        assert get_topics.call_count == 1
+        for topic in ["topic_c", "topic_d"]:
+            assert topic in str(e)
+        assert "topic_b" not in str(e)
+
     def test__finalize_create_timeout(self, quix_kafka_config_factory):
         get_topics_return = [
             {
@@ -639,7 +685,7 @@ class TestQuixKafkaConfigsBuilder:
         cfg_factory = quix_kafka_config_factory(workspace_id="12345")
         with patch.object(cfg_factory, "get_topics") as get_topics:
             get_topics.return_value = get_topics_return
-            with pytest.raises(cfg_factory.CreateTopicTimeout) as e:
+            with pytest.raises(QuixCreateTopicTimeout) as e:
                 cfg_factory._finalize_create(
                     {"12345-topic_b", "12345-topic_c", "12345-topic_d"}, timeout=1
                 )
@@ -705,7 +751,7 @@ class TestQuixKafkaConfigsBuilder:
         cfg_factory = quix_kafka_config_factory(
             workspace_id="12345", api_responses={"get_topics": api_data_stub}
         )
-        with pytest.raises(cfg_factory.MissingQuixTopics) as e:
+        with pytest.raises(MissingQuixTopics) as e:
             cfg_factory.confirm_topics_exist([topic_b, topic_c, topic_d])
         e = e.value.args[0]
         assert "topic_c" in e and "topic_d" in e
