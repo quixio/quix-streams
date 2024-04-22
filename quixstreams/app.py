@@ -442,7 +442,6 @@ class Application:
         key_serializer: SerializerType = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
-        add_to_cache: bool = True,
     ) -> Topic:
         """
         Create a topic definition.
@@ -478,7 +477,6 @@ class Application:
         :param value_serializer: a serializer type for values; default="json"
         :param key_serializer: a serializer type for keys; default="bytes"
         :param config: optional topic configurations (for creation/validation)
-        :param add_to_cache: whether to cache resulting Topic in the TopicManager
 
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message. Default - `None`.
@@ -511,7 +509,6 @@ class Application:
             value_deserializer=value_deserializer,
             config=config,
             timestamp_extractor=timestamp_extractor,
-            add_to_cache=add_to_cache,
         )
 
     def dataframe(

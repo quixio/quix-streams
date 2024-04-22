@@ -173,43 +173,30 @@ Most users will likely not need this, but here are more details around how
 `StreamingDataFrame.group_by()` works, and how to additionally configure it.
 
 ### How GroupBy works
-Each `GroupBy` operation is facilitated by a unique "internal" topic. By 
-default, its settings are inherited from its origin topic. 
+Each `GroupBy` operation is facilitated by a unique internal (not intended for users) 
+"repartition" topic. By default, its settings are inherited from its origin topic and 
+is automatically created for you.
 
-It also uses `JSON` serialization and deserialization by default for keys AND values, 
-but you can configure them as shown below.
+The `Application` basically subscribes to it and knows where in the `StreamingDataFrame` 
+pipeline it should start from based on what topic a given message was consumed from.
 
 ### Configuring the Internal Topic
 
-Though you cannot provide alter the `GroupBy` topic name that will be used, 
-you _can_ alter its config like serialization, partition count, and any other topic 
-settings (like retention).
+Though you cannot configure the internal `GroupBy` Kafka configuration, 
+you _can_ provide your own serializers in case the `JSON` defaults are inappropriate 
+(should be rare if using typical `StreamingDataFrame` features).
 
-Here is an example of doing so (noting the topic name will be ignored):
+Here is an example of doing so:
 
 ```python
 from quixstreams import Application
-from quixstreams.models.topics import TopicConfig
-
-app = Application(broker_address='localhost:9092')
-input_topic = app.topic("input_topic")
-groupby_config = app.topic(
-   "my_groupby", 
-   value_serializer="string",
-   value_deserializer="string",
-   config=TopicConfig(num_partitions=2, replication_factor=1),
-   add_to_cache=False
-)
 
 sdf = app.dataframe(input_topic)
-sdf = sdf.group_by('my_col_name', config_topic=groupby_config)
+sdf = sdf.group_by(
+    "my_col_name",
+    value_deserializer="int",
+    key_deserializer="string",
+    value_serializer="int",
+    key_serializer="string"
+)
 ```
-
-> NOTE: you'll likely need to define both serializers and deserializers for your own
-> non-json data types
-
-Note the `add_to_cache` option on the `app.topic()`, which means the topic will be
-ignored during topic creation.
-
-We simply pass the `my_groupby_settings` to the `.groupby()` as a `config_topic` and 
-those will be the settings used by the `GroupBy` topic.

@@ -197,7 +197,6 @@ class TopicManager:
         key_serializer: Optional[SerializerType] = "bytes",
         config: Optional[TopicConfig] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
-        add_to_cache: bool = True,
     ) -> Topic:
         """
         A convenience method for generating a `Topic`. Will use default config options
@@ -211,7 +210,6 @@ class TopicManager:
         :param config: optional topic configurations (for creation/validation)
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
-        :param add_to_cache: whether to cache resulting Topic in the TopicManager.
 
         :return: Topic object with creation configs
         """
@@ -232,52 +230,45 @@ class TopicManager:
             config=config,
             timestamp_extractor=timestamp_extractor,
         )
-        if add_to_cache:
-            self._topics[name] = topic
+        self._topics[name] = topic
         return topic
 
-    def groupby_topic(
+    def repartition_topic(
         self,
         operation: str,
         topic_name: str,
         consumer_group: str,
         store_name: Optional[str] = None,
-        config_topic: Optional[Topic] = None,
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "json",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "json",
     ) -> Topic:
         """
-        Create a new "GroupBy" topic.
-
-        Can optionally provide another Topic, which will be used to configure the
-        GroupBy topic (besides the name).
+        Create an internal repartition topic.
 
         :param operation: name of the GroupBy operation (column name or user-defined).
         :param topic_name: name of the topic the GroupBy is sourced from.
         :param consumer_group: name of consumer group.
         :param store_name: optional state store name for joins or aggregates.
-        :param config_topic: optional Topic to configure the new GroupBy topic off of.
+        :param value_deserializer: a deserializer type for values; default - JSON
+        :param key_deserializer: a deserializer type for keys; default - JSON
+        :param value_serializer: a serializer type for values; default - JSON
+        :param key_serializer: a serializer type for keys; default - JSON
 
-        # TODO: add non-private _key/_value serializer attributes on Topics?
         """
         name = self._internal_topic_name(
-            f"groupby--{operation}", consumer_group, topic_name, store_name
+            f"repartition--{operation}", consumer_group, topic_name, store_name
         )
         topic = Topic(
             name=name,
-            key_serializer=config_topic._key_serializer if config_topic else "json",
-            value_serializer=config_topic._value_serializer if config_topic else "json",
-            key_deserializer=config_topic._key_deserializer if config_topic else "json",
-            value_deserializer=(
-                config_topic._value_deserializer if config_topic else "json"
-            ),
-            config=(
-                config_topic.config
-                if config_topic
-                # callable enables waiting to call Kafka until App create topics
-                # which allows SDF.test() to work without a Kafka instance
-                else lambda: self._get_source_topic_config(
-                    topic_name,
-                    extras_imports=self._groupby_extra_config_imports_defaults,
-                )
+            value_deserializer=value_deserializer,
+            key_deserializer=key_deserializer,
+            value_serializer=value_serializer,
+            key_serializer=key_serializer,
+            config=lambda: self._get_source_topic_config(
+                topic_name,
+                extras_imports=self._groupby_extra_config_imports_defaults,
             ),
         )
         self._internal_topics[name] = topic

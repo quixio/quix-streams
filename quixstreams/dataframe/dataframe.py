@@ -34,6 +34,7 @@ from quixstreams.models import (
     MessageTimestamp,
     TimestampType,
 )
+from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.rowproducer import RowProducerProto
 from quixstreams.state import StateStoreManager, State
 from .base import BaseStreaming
@@ -279,7 +280,10 @@ class StreamingDataFrame(BaseStreaming):
         self,
         key: Union[str, DataFrameFunc],
         name: Optional[str] = None,
-        config_topic: Optional[Topic] = None,
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "json",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "json",
     ) -> Self:
         """
         "Groups" messages by re-keying them via the provided group_by operation
@@ -315,9 +319,10 @@ class StreamingDataFrame(BaseStreaming):
             requires a column name (string) or a callable that takes the message value.
         :param name: a name for the op (must be unique per group-by), required if `key`
             is a custom callable.
-        :param config_topic: a Topic to configure the internal group-by Topic with (
-            except name). Generally only necessary if JSON serialization fails, or
-            things like partition count or retention need adjusting.
+        :param value_deserializer: a deserializer type for values; default - JSON
+        :param key_deserializer: a deserializer type for keys; default - JSON
+        :param value_serializer: a serializer type for values; default - JSON
+        :param key_serializer: a serializer type for keys; default - JSON
 
         :return: a clone with this operation added (assign to keep its effect).
         """
@@ -333,11 +338,14 @@ class StreamingDataFrame(BaseStreaming):
         else:
             raise TypeError("group_by 'key' must be callable or a string (column name)")
 
-        groupby_topic = self._topic_manager.groupby_topic(
+        groupby_topic = self._topic_manager.repartition_topic(
             operation=name,
-            config_topic=config_topic,
             consumer_group=self._application._consumer_group,
             topic_name=self._topic.name,
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
+            key_deserializer=key_deserializer,
+            value_deserializer=value_deserializer,
         )
         self._finalize_branch(self.to_topic(groupby_topic, key=_gb_key_op))
         return self._clone(topic=groupby_topic, stateful=False)
