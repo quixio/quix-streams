@@ -61,7 +61,7 @@ class QuixTopicManager(TopicManager):
 
         :return: name with workspace ID prepended
         """
-        return self._quix_config_builder.prepend_workspace_id(name)
+        return self._quix_config_builder.get_topic_id(name)
 
     def _format_changelog_name(
         self, consumer_group: str, topic_name: str, store_name: str

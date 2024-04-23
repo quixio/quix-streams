@@ -17,6 +17,7 @@ from .exceptions import (
     UndefinedQuixWorkspaceId,
     QuixCreateTopicFailure,
     QuixCreateTopicTimeout,
+    QuixApiRequestFailure,
 )
 
 logger = logging.getLogger(__name__)
@@ -419,6 +420,22 @@ class QuixKafkaConfigsBuilder:
 
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
+
+    def get_topic_id(self, topic_name: str) -> str:
+        """
+        If a topic exists, return the topic ID, which is the actual topic name in the
+        cluster.
+
+        Otherwise, return the topic name with the workspace ID prepended.
+        """
+        try:
+            return self.api.get_topic(topic_name, workspace_id=self.workspace_id)["id"]
+        except QuixApiRequestFailure as e:
+            if "Topic was not found" in e:
+                logger.debug(
+                    f"topic {topic_name} does not exist; will create a Quix topic"
+                )
+                return self.prepend_workspace_id(topic_name)
 
     def confirm_topics_exist(self, topics: Union[List[Topic], List[str]]):
         """
