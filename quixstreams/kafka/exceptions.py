@@ -3,7 +3,7 @@ from confluent_kafka import KafkaError
 from quixstreams.exceptions import QuixException
 
 
-class KafkaException(QuixException):
+class BaseKafkaException(QuixException):
     def __init__(self, error: KafkaError):
         self.error = error
 
@@ -24,3 +24,9 @@ class KafkaException(QuixException):
 
     def __repr__(self):
         return str(self)
+
+
+class KafkaConsumerException(BaseKafkaException): ...
+
+
+class KafkaProducerDeliveryError(BaseKafkaException): ...

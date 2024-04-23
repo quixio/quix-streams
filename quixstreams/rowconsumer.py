@@ -7,7 +7,7 @@ from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
 from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset
 from .kafka.consumer import RebalancingCallback
-from .kafka.exceptions import KafkaException
+from .kafka.exceptions import KafkaConsumerException
 from .models import Topic, Row
 from .models.serializers.exceptions import IgnoreMessage
 
@@ -134,7 +134,7 @@ class RowConsumer(Consumer):
         topic_name, partition, offset = msg.topic(), msg.partition(), msg.offset()
         try:
             if msg.error():
-                raise KafkaException(error=msg.error())
+                raise KafkaConsumerException(error=msg.error())
 
             topic = self._topics[topic_name]
 

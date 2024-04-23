@@ -2,7 +2,7 @@ from concurrent.futures import Future
 
 import pytest
 from confluent_kafka import KafkaException as ConfluentKafkaException
-from quixstreams.kafka.exceptions import KafkaException
+from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 
 from quixstreams.models import (
     JSONSerializer,
@@ -142,7 +142,7 @@ class TestRowProducer:
         # Poll for delivery callbacks
         producer.poll(5)
         # The next produce should fail after
-        with pytest.raises(KafkaException):
+        with pytest.raises(KafkaProducerDeliveryError):
             producer.produce(topic=topic.name, key=key, value=value)
 
     def test_produce_delivery_error_raised_on_flush(
@@ -158,5 +158,5 @@ class TestRowProducer:
         # in the delivery callback
         producer.produce(topic=topic.name, key=key, value=value, partition=3)
         # The flush should fail after that
-        with pytest.raises(KafkaException):
+        with pytest.raises(KafkaProducerDeliveryError):
             producer.flush()
