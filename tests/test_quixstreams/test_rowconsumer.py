@@ -7,7 +7,7 @@ from quixstreams.models import (
     IgnoreMessage,
     SerializationError,
 )
-from quixstreams.kafka.exceptions import KafkaException
+from quixstreams.kafka.exceptions import KafkaConsumerException
 from tests.utils import Timeout
 
 
@@ -61,7 +61,7 @@ class TestRowConsumer:
             auto_offset_reset="earliest",
         ) as consumer:
             consumer.subscribe([topic])
-            with pytest.raises(KafkaException) as raised:
+            with pytest.raises(KafkaConsumerException) as raised:
                 consumer.poll_row(10.0)
         exc = raised.value
         assert exc.code == KafkaError.UNKNOWN_TOPIC_OR_PART
@@ -112,7 +112,7 @@ class TestRowConsumer:
             producer.produce(topic.name, key=b"key", value=b"value")
             producer.flush()
             consumer.subscribe([topic])
-            with pytest.raises(KafkaException):
+            with pytest.raises(KafkaConsumerException):
                 consumer.poll_row(10.0)
 
     def test_poll_row_deserialization_error_suppress(
@@ -147,7 +147,7 @@ class TestRowConsumer:
         suppressed = False
 
         def on_error(exc, *args):
-            assert isinstance(exc, KafkaException)
+            assert isinstance(exc, KafkaConsumerException)
             nonlocal suppressed
             suppressed = True
             return True

@@ -4,7 +4,7 @@ from typing import Optional, Any, Union, Dict, Tuple
 from confluent_kafka import KafkaError, Message
 
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
-from .kafka.exceptions import KafkaException
+from .kafka.exceptions import KafkaProducerDeliveryError
 from .kafka.producer import Producer, Partitioner
 from .models import Topic, Row, Headers
 
@@ -143,7 +143,7 @@ class RowProducer:
 
     def _raise_for_error(self):
         if self._error is not None:
-            exc = KafkaException(self._error)
+            exc = KafkaProducerDeliveryError(self._error)
             self._error = None
             raise exc
 
