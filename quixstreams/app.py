@@ -1,4 +1,5 @@
 import contextlib
+import enum
 import functools
 import logging
 import os
@@ -9,7 +10,6 @@ from typing import Optional, List, Callable
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
-from .checkpoint import Checkpoint
 from .context import set_message_context, copy_context
 from .core.stream import Filtered
 from .dataframe import StreamingDataFrame
@@ -52,6 +52,13 @@ __all__ = ("Application",)
 
 logger = logging.getLogger(__name__)
 MessageProcessedCallback = Callable[[str, int, int], None]
+
+
+class ApplicationStatus(enum.Enum):
+    CREATED = 1
+    RUNNING = 2
+    FAILED = 3
+    STOPPED = 4
 
 
 class Application:
@@ -234,7 +241,6 @@ class Application:
         self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
-
         self._consumer = RowConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -253,11 +259,10 @@ class Application:
 
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
-        self._running = False
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
         self._auto_create_topics = auto_create_topics
-        self._do_recovery_check = False
+        self._status: ApplicationStatus = ApplicationStatus.CREATED
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -280,12 +285,6 @@ class Application:
                 if use_changelog_topics
                 else None
             ),
-        )
-        self._checkpoint = Checkpoint(
-            producer=self._producer,
-            consumer=self._consumer,
-            state_manager=self._state_manager,
-            commit_interval=self._commit_interval,
         )
         self._processing_context = ProcessingContext(
             commit_interval=self._commit_interval,
@@ -548,7 +547,7 @@ class Application:
         )
         return sdf
 
-    def stop(self):
+    def stop(self, fail: bool = False):
         """
         Stop the internal poll loop and the message processing.
 
@@ -557,8 +556,11 @@ class Application:
 
         To otherwise stop an application, either send a `SIGTERM` to the process
         (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
+
+        :param fail: if True, signals that application is stopped due
+            to unhandled exception and it shouldn't commit the current checkpoint.
         """
-        self._running = False
+        self._status = ApplicationStatus.FAILED if fail else ApplicationStatus.STOPPED
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
 
@@ -687,14 +689,11 @@ class Application:
         self._setup_topics()
 
         exit_stack = contextlib.ExitStack()
-        exit_stack.enter_context(self._producer)
-        exit_stack.enter_context(self._consumer)
         exit_stack.enter_context(self._state_manager)
-
-        exit_stack.callback(
-            lambda *_: logger.debug("Closing Kafka consumers & producers")
+        exit_stack.enter_context(self._consumer)
+        exit_stack.push(
+            lambda exc_type, exc_val, exc_tb: self.stop(fail=exc_val is not None)
         )
-        exit_stack.callback(lambda *_: self.stop())
 
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
@@ -706,21 +705,20 @@ class Application:
             )
             logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
-            self._running = True
+            self._status = ApplicationStatus.RUNNING
 
             # Initialize the checkpoint
             self._processing_context.init_checkpoint()
 
             dataframe_composed = dataframe.compose()
 
-            while self._running:
+            while self._status == ApplicationStatus.RUNNING:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
                     self._process_message(dataframe_composed)
                     self._processing_context.commit_checkpoint()
 
-            self._processing_context.commit_checkpoint(force=True)
             logger.info("Stop processing of StreamingDataFrame")
 
     def _quix_runtime_init(self):
@@ -836,8 +834,12 @@ class Application:
         """
         Revoke partitions from consumer and state
         """
-        # Commit everything processed so far
-        self._processing_context.commit_checkpoint(force=True)
+        # Commit everything processed so far unless the application is closing
+        # because of unhandled exception.
+        # In this case, we should drop the checkpoint and let another consumer
+        # pick up from the latest one
+        if not self._status == ApplicationStatus.FAILED:
+            self._processing_context.commit_checkpoint(force=True)
 
         self._consumer.incremental_unassign(topic_partitions)
         if self._state_manager.stores:
