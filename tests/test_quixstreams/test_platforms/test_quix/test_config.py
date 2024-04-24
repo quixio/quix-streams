@@ -785,7 +785,7 @@ class TestQuixKafkaConfigsBuilder:
         )
         assert quix_kafka_config.get_topic(topic_name) == api_response["get_topic"]
 
-    def test_get_topic_failure(self, quix_kafka_config_factory):
+    def test_get_topic_does_not_exist(self, quix_kafka_config_factory):
         """
         Topic query should return None if topic "does not exist" (AKA not found).
         """
@@ -801,3 +801,23 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", api_responses=api_response
         )
         assert quix_kafka_config.get_topic(topic_name) is None
+
+    def test_get_topic_error(self, quix_kafka_config_factory):
+        """
+        Non-404 errors should still be raised when doing get_topic
+        """
+        topic_name = "topic_in"
+        exception = QuixApiRequestFailure(
+            status_code=403,
+            url=f"topic_endpoint/{topic_name}",
+            error_text="Access Denied",
+        )
+        topic_name = "topic_in"
+        api_response = {"get_topic": exception}
+        quix_kafka_config = quix_kafka_config_factory(
+            workspace_id="12345", api_responses=api_response
+        )
+        with pytest.raises(QuixApiRequestFailure) as e:
+            quix_kafka_config.get_topic(topic_name)
+
+        assert e.value.status_code == exception.status_code
