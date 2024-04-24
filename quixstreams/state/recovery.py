@@ -4,7 +4,7 @@ from typing import Optional, Dict, List
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
-from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models import ConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicManager
 from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
@@ -14,7 +14,12 @@ from quixstreams.utils.dicts import dict_values
 logger = logging.getLogger(__name__)
 
 
-__all__ = ("ChangelogProducer", "ChangelogProducerFactory", "RecoveryManager")
+__all__ = (
+    "ChangelogProducer",
+    "ChangelogProducerFactory",
+    "RecoveryManager",
+    "RecoveryPartition",
+)
 
 
 class RecoveryPartition:
@@ -52,7 +57,7 @@ class RecoveryPartition:
         Determine whether recovery is necessary for underlying `StorePartition`.
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
-        state_is_behind = (self._changelog_highwater - self.offset) > 0
+        state_is_behind = self._changelog_highwater > self.offset
         return has_consumable_offsets and state_is_behind
 
     @property
@@ -62,7 +67,7 @@ class RecoveryPartition:
 
         Usually checked during assign if recovery was not required.
         """
-        return self._changelog_highwater and (self.offset != self._changelog_highwater)
+        return self._changelog_highwater and (self._changelog_highwater < self.offset)
 
     def update_offset(self):
         """
@@ -122,7 +127,7 @@ class ChangelogProducerFactory:
         self._changelog_name = changelog_name
         self._producer = producer
 
-    def get_partition_producer(self, partition_num):
+    def get_partition_producer(self, partition_num) -> "ChangelogProducer":
         """
         Generate a ChangelogProducer for producing to a specific partition number
         (and thus StorePartition).
@@ -140,15 +145,23 @@ class ChangelogProducer:
     kafka changelog partition.
     """
 
-    def __init__(self, changelog_name: str, partition_num: int, producer: RowProducer):
+    def __init__(self, changelog_name: str, partition: int, producer: RowProducer):
         """
         :param changelog_name: A changelog topic name
-        :param partition_num: source topic partition number
+        :param partition: source topic partition number
         :param producer: a RowProducer (not shared with `Application` instance)
         """
         self._changelog_name = changelog_name
-        self._partition_num = partition_num
+        self._partition_num = partition
         self._producer = producer
+
+    @property
+    def changelog_name(self) -> str:
+        return self._changelog_name
+
+    @property
+    def partition(self) -> int:
+        return self._partition_num
 
     def produce(
         self,
@@ -211,7 +224,9 @@ class RecoveryManager:
         """
         return self.has_assignments and self._running
 
-    def register_changelog(self, topic_name: str, store_name: str, consumer_group: str):
+    def register_changelog(
+        self, topic_name: str, store_name: str, consumer_group: str
+    ) -> Topic:
         """
         Register a changelog Topic with the TopicManager.
 
