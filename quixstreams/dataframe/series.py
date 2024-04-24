@@ -1,6 +1,6 @@
 import contextvars
 import operator
-from typing import Optional, Union, Callable, Container, Any, Mapping, overload
+from typing import Optional, Union, Callable, Container, Any, Mapping
 
 from typing_extensions import Self
 
