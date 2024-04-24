@@ -241,6 +241,11 @@ def row_producer_factory(kafka_container):
 
 
 @pytest.fixture()
+def row_producer(row_producer_factory):
+    return row_producer_factory()
+
+
+@pytest.fixture()
 def row_factory():
     """
     This factory includes only the fields typically handed to a producer when

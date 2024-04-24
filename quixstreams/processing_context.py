@@ -2,7 +2,7 @@ import dataclasses
 import logging
 from typing import Optional
 
-from quixstreams.checkpoint import Checkpoint
+from quixstreams.checkpointing import Checkpoint
 from quixstreams.exceptions import QuixException
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
