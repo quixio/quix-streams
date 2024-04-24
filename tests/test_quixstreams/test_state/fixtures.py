@@ -1,12 +1,20 @@
-import pytest
 import uuid
-
 from typing import Optional
 from unittest.mock import create_autospec
+
+import pytest
 
 from quixstreams.kafka import Consumer
 from quixstreams.state.recovery import RecoveryPartition, RecoveryManager
 from quixstreams.state.types import StorePartition
+
+
+@pytest.fixture()
+def recovery_manager_factory(topic_manager_factory):
+    def factory(consumer: Consumer) -> RecoveryManager:
+        return RecoveryManager(topic_manager=topic_manager_factory(), consumer=consumer)
+
+    return factory
 
 
 @pytest.fixture()
