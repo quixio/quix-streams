@@ -418,24 +418,24 @@ class QuixKafkaConfigsBuilder:
         )
         self._finalize_create(finalize, timeout=finalize_timeout_seconds)
 
-    def get_topics(self) -> List[dict]:
-        return self.api.get_topics(workspace_id=self.workspace_id)
-
-    def get_topic_id(self, topic_name: str) -> str:
+    def get_topic(self, topic_name: str) -> Optional[dict]:
         """
-        If a topic exists, return the topic ID, which is the actual topic name in the
-        cluster.
+        return the topic ID (the actual cluster topic name) if it exists, else None
 
-        Otherwise, return the topic name with the workspace ID prepended.
+        >NOTE: if the name registered in Quix is instead the workspace-prefixed version,
+        this returns None unless that exact name was created WITHOUT the Quix API.
+
+        :param topic_name: name of the topic
         """
         try:
-            return self.api.get_topic(topic_name, workspace_id=self.workspace_id)["id"]
+            return self.api.get_topic(topic_name, workspace_id=self.workspace_id)
         except QuixApiRequestFailure as e:
-            if "Topic was not found" in e:
-                logger.debug(
-                    f"topic {topic_name} does not exist; will create a Quix topic"
-                )
-                return self.prepend_workspace_id(topic_name)
+            if e.status_code == 404:
+                return None
+            raise
+
+    def get_topics(self) -> List[dict]:
+        return self.api.get_topics(workspace_id=self.workspace_id)
 
     def confirm_topics_exist(self, topics: Union[List[Topic], List[str]]):
         """

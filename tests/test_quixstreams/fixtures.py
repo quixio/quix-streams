@@ -369,6 +369,9 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder.strip_workspace_id_prefix.side_effect = lambda s: (
             strip_workspace_id_prefix(workspace_id, s) if workspace_id else s
         )
+        cfg_builder.get_topic.side_effect = lambda topic: {
+            "id": cfg_builder.prepend_workspace_id(topic)
+        }
         return cfg_builder
 
     return factory
@@ -382,13 +385,17 @@ def quix_topic_manager_factory(
     Allows for creating topics with a test cluster while keeping the workspace aspects
     """
 
-    def factory(workspace_id: Optional[str] = None):
+    def factory(
+        workspace_id: Optional[str] = None,
+        quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
+    ):
         topic_manager = topic_manager_factory(topic_admin)
-        quix_topic_manager = QuixTopicManager(
-            topic_admin=topic_admin,
-            quix_config_builder=quix_mock_config_builder_factory(
+        if not quix_config_builder:
+            quix_config_builder = quix_mock_config_builder_factory(
                 workspace_id=workspace_id
-            ),
+            )
+        quix_topic_manager = QuixTopicManager(
+            topic_admin=topic_admin, quix_config_builder=quix_config_builder
         )
         quix_topic_manager._create_topics = topic_manager._create_topics
         return quix_topic_manager

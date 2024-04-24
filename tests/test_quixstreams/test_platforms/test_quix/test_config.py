@@ -18,6 +18,7 @@ from quixstreams.platforms.quix.exceptions import (
     MissingQuixTopics,
     QuixCreateTopicTimeout,
     QuixCreateTopicFailure,
+    QuixApiRequestFailure,
 )
 
 
@@ -756,3 +757,47 @@ class TestQuixKafkaConfigsBuilder:
         e = e.value.args[0]
         assert "topic_c" in e and "topic_d" in e
         assert "topic_b" not in e
+
+    def test_get_topic_success(self, quix_kafka_config_factory):
+        workspace_id = "12345"
+        topic_name = "topic_in"
+        api_response = {
+            "get_topic": {
+                "id": f"{workspace_id}-{topic_name}",
+                "name": topic_name,
+                "createdAt": "2023-10-16T22:27:39.943Z",
+                "updatedAt": "2023-10-16T22:28:27.17Z",
+                "persisted": False,
+                "persistedStatus": "Complete",
+                "external": False,
+                "workspaceId": "12345",
+                "status": "Ready",
+                "configuration": {
+                    "partitions": 2,
+                    "replicationFactor": 2,
+                    "retentionInMinutes": 10080,
+                    "retentionInBytes": 52428800,
+                },
+            }
+        }
+        quix_kafka_config = quix_kafka_config_factory(
+            workspace_id=workspace_id, api_responses=api_response
+        )
+        assert quix_kafka_config.get_topic(topic_name) == api_response["get_topic"]
+
+    def test_get_topic_failure(self, quix_kafka_config_factory):
+        """
+        Topic query should return None if topic "does not exist" (AKA not found).
+        """
+        topic_name = "topic_in"
+        api_response = {
+            "get_topic": QuixApiRequestFailure(
+                status_code=404,
+                url=f"topic_endpoint/{topic_name}",
+                error_text="Topic does not exist",
+            )
+        }
+        quix_kafka_config = quix_kafka_config_factory(
+            workspace_id="12345", api_responses=api_response
+        )
+        assert quix_kafka_config.get_topic(topic_name) is None

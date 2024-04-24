@@ -55,13 +55,15 @@ class QuixTopicManager(TopicManager):
 
     def _apply_topic_prefix(self, name: str) -> str:
         """
-        Prepend workspace ID to a given topic name
+        Prepend workspace ID to a given topic name, if required.
 
         :param name: topic name
 
         :return: name with workspace ID prepended
         """
-        return self._quix_config_builder.get_topic_id(name)
+        if quix_topic := self._quix_config_builder.get_topic(name):
+            return quix_topic["id"]
+        return self._quix_config_builder.prepend_workspace_id(name)
 
     def _format_changelog_name(
         self, consumer_group: str, topic_name: str, store_name: str

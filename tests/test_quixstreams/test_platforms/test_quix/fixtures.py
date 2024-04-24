@@ -43,8 +43,11 @@ def mock_quix_portal_api_factory():
             api_responses = {}
         api_obj = create_autospec(QuixPortalApiService)
         api_obj.default_workspace_id = None
-        for call, data in api_responses.items():
-            api_obj.__getattribute__(call).return_value = data
+        for call, result in api_responses.items():
+            if isinstance(result, Exception):
+                api_obj.__getattribute__(call).side_effect = result
+            else:
+                api_obj.__getattribute__(call).return_value = result
         return api_obj
 
     return mock_quix_portal_api

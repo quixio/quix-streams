@@ -2,17 +2,45 @@ from quixstreams.models import TopicConfig
 
 
 class TestQuixTopicManager:
-    def test_quix_topic_name(self, quix_topic_manager_factory):
+    def test_quix_topic_name_found(
+        self, quix_topic_manager_factory, quix_mock_config_builder_factory
+    ):
+        """
+        Topic name should be "id" field from the Quix API get_topic result if found
+        """
         topic_name = "my_topic"
         workspace_id = "my_wid"
-        expected = f"{workspace_id}-{topic_name}"
-        topic_manager = quix_topic_manager_factory(workspace_id=workspace_id)
+        expected_name = "get_topic_result_id"
 
-        # should be the same regardless of workspace_id being included
-        assert topic_manager.topic(topic_name).name == expected
-        assert topic_manager.topic(expected).name == expected
+        config_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        config_builder.get_topic.side_effect = lambda topic: {"id": expected_name}
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=config_builder
+        )
+
+        assert topic_manager.topic(topic_name).name == expected_name
         # Replication factor should be None by default
-        assert topic_manager.topic(expected).config.replication_factor is None
+        assert topic_manager.topic(expected_name).config.replication_factor is None
+
+    def test_quix_topic_name_not_found(
+        self, quix_topic_manager_factory, quix_mock_config_builder_factory
+    ):
+        """
+        Workspace-appended name is returned when config builder returns None
+        """
+        topic_name = "my_topic"
+        workspace_id = "my_wid"
+
+        config_builder = quix_mock_config_builder_factory(workspace_id=workspace_id)
+        config_builder.get_topic.side_effect = lambda topic: None
+        expected_name = config_builder.prepend_workspace_id(topic_name)
+        topic_manager = quix_topic_manager_factory(
+            workspace_id=workspace_id, quix_config_builder=config_builder
+        )
+
+        assert topic_manager.topic(topic_name).name == expected_name
+        # Replication factor should be None by default
+        assert topic_manager.topic(expected_name).config.replication_factor is None
 
     def test_quix_changelog_topic(self, quix_topic_manager_factory):
         """
