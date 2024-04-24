@@ -93,7 +93,7 @@ class TestApplication:
         for msg in consumed_messages:
             assert msg in messages_to_produce
 
-    def test_run_consume_and_produce(
+    def test_run_success(
         self,
         app_factory,
         row_consumer_factory,
@@ -171,6 +171,62 @@ class TestApplication:
             assert row.topic == topic_out.name
             assert row.key == data["key"]
             assert row.value == {column_name: loads(data["value"].decode())}
+
+    def test_run_fails_no_commit(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
+    ):
+        """
+        Test that Application doesn't commit the checkpoint in case of failure
+        """
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            commit_interval=9999,  # Set a high commit interval to ensure no autocommit
+        )
+
+        partition_num = 0
+        topic_in = app.topic(str(uuid.uuid4()))
+
+        def count_and_fail(_):
+            # Count the incoming messages and fail on processing the last one
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                failed.set_result(True)
+                raise ValueError("test")
+
+        sdf = app.dataframe(topic_in).apply(count_and_fail)
+
+        processed_count = 0
+        total_messages = 3
+        # Produce messages to the topic and flush
+        data = {"key": b"key", "value": b'"value"', "partition": partition_num}
+        with app.get_producer() as producer:
+            for _ in range(total_messages):
+                producer.produce(topic_in.name, **data)
+
+        failed = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, failed, 15.0)
+        with pytest.raises(ValueError):
+            app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure the offset is not committed to Kafka
+        with row_consumer_factory() as row_consumer:
+            committed, *_ = row_consumer.committed(
+                [TopicPartition(topic_in.name, partition_num)]
+            )
+        assert committed.offset == -1001
 
     def test_run_consumer_error_raised(self, app_factory, executor):
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
@@ -900,7 +956,7 @@ class TestApplicationWithState:
             # All keys in state must be prefixed with the message key
             assert tx.get("total", prefix=message_key) == total_consumed.result()
 
-    def test_run_stateful_processing_fails(
+    def test_run_stateful_fails_no_commit(
         self,
         app_factory,
         executor,
@@ -913,23 +969,24 @@ class TestApplicationWithState:
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
             state_dir=state_dir,
+            commit_interval=9999,  # Set a high commit interval to ensure no autocommit
         )
 
         topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, state: State):
+        def count_and_fail(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
+            # Fail after processing all messages
+            if total == total_messages:
+                failed.set_result(True)
+                raise ValueError("test")
 
         failed = Future()
 
-        def fail(*_):
-            failed.set_result(True)
-            raise ValueError("test")
-
-        sdf = app.dataframe(topic_in).update(count, stateful=True).update(fail)
+        sdf = app.dataframe(topic_in).update(count_and_fail, stateful=True)
 
         total_messages = 3
         # Produce messages to the topic and flush
@@ -1052,7 +1109,7 @@ class TestApplicationWithState:
             tx = store.start_partition_transaction(partition_num)
             # Do some change to probe the Writebatch
             tx.set("key", "value", prefix=b"__key__")
-            tx.maybe_flush(offset=9999)
+            tx.flush(processed_offset=9999)
             assert state_partitions[partition_num].get_processed_offset() == 9999
 
         # Define some stateful function so the App assigns store partitions
@@ -1231,11 +1288,11 @@ class TestApplicationRecovery:
         # validate and then delete the state
         assert processed_count == partition_msg_count
         validate_state()
+        app.clear_state()
 
         # run the app again and validate the recovered state
         processed_count = {0: 0, 1: 0}
         app, sdf, topic = get_app()
-        app.clear_state()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)
