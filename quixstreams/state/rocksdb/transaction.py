@@ -357,6 +357,12 @@ class RocksDBPartitionTransaction(PartitionTransaction):
                 int_to_int64_bytes(changelog_offset),
                 meta_cf_handle,
             )
+        logger.debug(
+            f"Flushing state changes to the disk "
+            f'path="{self._partition.path}" '
+            f"processed_offset={processed_offset} "
+            f"changelog_offset={changelog_offset}"
+        )
         self._partition.write(self._batch)
 
     @_validate_transaction_status(PartitionTransactionStatus.STARTED)
