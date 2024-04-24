@@ -422,10 +422,13 @@ class QuixKafkaConfigsBuilder:
         """
         return the topic ID (the actual cluster topic name) if it exists, else None
 
-        >NOTE: if the name registered in Quix is instead the workspace-prefixed version,
-        this returns None unless that exact name was created WITHOUT the Quix API.
+        >***NOTE***: if the name registered in Quix is instead the workspace-prefixed
+        version, this returns None unless that exact name was created WITHOUT the
+        Quix API.
 
         :param topic_name: name of the topic
+
+        :return: response dict of the topic info if topic found, else None
         """
         try:
             return self.api.get_topic(topic_name, workspace_id=self.workspace_id)

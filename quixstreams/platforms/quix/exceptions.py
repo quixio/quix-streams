@@ -26,7 +26,7 @@ class QuixApiRequestFailure(QuixException):
         self.url = url
         self.error_text = error_text
 
-    def __str__(self):
+    def __str__(self) -> str:
         str_out = f'Error {self.status_code} for url "{self.url}"'
         if self.error_text is not None:
             str_out = f"{str_out}: {self.error_text}"
