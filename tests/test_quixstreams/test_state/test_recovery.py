@@ -2,10 +2,8 @@ import logging
 import uuid
 from unittest.mock import patch
 
-from quixstreams.state.recovery import (
-    ChangelogProducer,
-    ConfluentPartition,
-)
+from quixstreams.state.recovery import ChangelogProducer
+from confluent_kafka import TopicPartition as ConfluentPartition
 from quixstreams.state.recovery import ChangelogProducerFactory
 from ..utils import ConfluentKafkaMessageStub
 
@@ -26,8 +24,9 @@ class TestRecoveryPartition:
         recovery_partition.store_partition.get_changelog_offset.return_value = 20
         assert not recovery_partition_store_mock.needs_recovery
 
-    def test_needs_recovery_no_valid_offsets(self, recovery_partition_store_mock):
-        recovery_partition = recovery_partition_store_mock
+    def test_needs_recovery_no_valid_offsets(self, recovery_partition_factory):
+        # Create a RecoveryPartition with the offset ahead of the watermark
+        recovery_partition = recovery_partition_factory(mocked_changelog_offset=101)
         recovery_partition.set_watermarks(100, 100)
         assert not recovery_partition.needs_recovery
         assert recovery_partition.needs_offset_update
