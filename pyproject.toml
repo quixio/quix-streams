@@ -27,7 +27,7 @@ classifiers = [
 Homepage = "https://github.com/quixio/quix-streams"
 
 [tool.setuptools.packages.find]
-include = ["quixstreams"]
+include = ["quixstreams*"]
 exclude = ["tests*", "docs*", "examples*"]
 
 [tool.setuptools.dynamic]
