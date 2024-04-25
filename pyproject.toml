@@ -6,14 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "quixstreams"
 dynamic = ["version", "dependencies", "optional-dependencies"]
 description = "Python library for building stream processing applications with Apache Kafka"
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.8, <4"
-keywords = ["Quix", "streaming", "pipeline", "Kafka", "Faust", "Confluent", "event", "processing", "real", "time", "series", "Pandas", "DataFrame"]
+keywords = ["streaming", "processing", "pipeline", "event", "real-time", "time series", "DataFrame", "Kafka", "Quix"]
 authors = [
     { name = "Quix Analytics Ltd", email = "devs@quix.io" },
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: Microsoft :: Windows",
@@ -23,16 +24,14 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://www.quix.io"
-Repository = "https://github.com/quixio/quix-streams"
-Documentation = "https://quix.io/docs/quix-streams/introduction.html"
+Homepage = "https://github.com/quixio/quix-streams"
 
 [tool.setuptools.packages.find]
+include = ["quixstreams"]
 exclude = ["tests*", "docs*", "examples*"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = {file = ["requirements-dev.txt", "tests/requirements.txt"]}, test = {file = ["tests/requirements.txt"]}}
 version = {attr = "quixstreams.__version__"}
 
 
