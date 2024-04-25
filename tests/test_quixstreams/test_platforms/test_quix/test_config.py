@@ -114,7 +114,7 @@ class TestQuixKafkaConfigsBuilder:
         api.get_workspace.assert_called_with(cfg_factory.workspace_id)
 
     def test_get_workspace_info_no_wid_one_ws(self, quix_kafka_config_factory):
-        api_response = {
+        api_data_stub = {
             "workspaceId": "12345",
             "name": "12345",
             "status": "Ready",
@@ -139,17 +139,18 @@ class TestQuixKafkaConfigsBuilder:
             "branchProtected": False,
         }
         api = create_autospec(QuixPortalApiService)
+        api.default_workspace_id = None
         cfg_factory = quix_kafka_config_factory(api_class=api)
         with patch.object(
             cfg_factory,
             "search_for_topic_workspace",
-            return_value=deepcopy(api_response),
+            return_value=deepcopy(api_data_stub),
         ) as search:
             cfg_factory.get_workspace_info(known_workspace_topic="a_topic")
             search.assert_called_with("a_topic")
-        assert cfg_factory.workspace_id == api_response["workspaceId"]
-        assert cfg_factory.quix_broker_config == api_response["broker"]
-        assert cfg_factory.quix_broker_settings == api_response["brokerSettings"]
+        assert cfg_factory.workspace_id == api_data_stub["workspaceId"]
+        assert cfg_factory.quix_broker_config == api_data_stub["broker"]
+        assert cfg_factory.quix_broker_settings == api_data_stub["brokerSettings"]
         assert cfg_factory.workspace_meta == {
             "name": "12345",
             "status": "Ready",
@@ -166,7 +167,7 @@ class TestQuixKafkaConfigsBuilder:
 
     def test_get_workspace_info_no_wid_one_ws_v1(self, quix_kafka_config_factory):
         """Confirm a workspace v1 response is handled correctly"""
-        api_response = {
+        api_data_stub = {
             "workspaceId": "12345",
             "name": "12345",
             "status": "Ready",
@@ -187,16 +188,17 @@ class TestQuixKafkaConfigsBuilder:
             "branchProtected": False,
         }
         api = create_autospec(QuixPortalApiService)
+        api.default_workspace_id = None
         cfg_factory = quix_kafka_config_factory(api_class=api)
         with patch.object(
             cfg_factory,
             "search_for_topic_workspace",
-            return_value=deepcopy(api_response),
+            return_value=deepcopy(api_data_stub),
         ) as search:
             cfg_factory.get_workspace_info(known_workspace_topic="a_topic")
             search.assert_called_with("a_topic")
-        assert cfg_factory.workspace_id == api_response["workspaceId"]
-        assert cfg_factory.quix_broker_config == api_response["broker"]
+        assert cfg_factory.workspace_id == api_data_stub["workspaceId"]
+        assert cfg_factory.quix_broker_config == api_data_stub["broker"]
         assert cfg_factory.quix_broker_settings == {
             "brokerType": "SharedKafka",
             "syncTopics": False,
