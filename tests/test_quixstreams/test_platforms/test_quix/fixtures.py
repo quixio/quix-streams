@@ -37,15 +37,5 @@ class MockResponse:
 
 
 @pytest.fixture()
-def quix_kafka_config_factory():
-    def mock_quix_kafka_configs(workspace_id: str = None, api_class=None, **kwargs):
-        return QuixKafkaConfigsBuilder(
-            quix_portal_api_service=api_class, workspace_id=workspace_id, **kwargs
-        )
-
-    return mock_quix_kafka_configs
-
-
-@pytest.fixture()
 def mock_response_factory():
     return MockResponse
