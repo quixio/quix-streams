@@ -29,33 +29,27 @@ class TestQuixKafkaConfigsBuilder:
 
     def test_search_for_workspace_id(self, quix_kafka_config_factory):
         api_data_stub = {"workspaceId": "myworkspace12345", "name": "my workspace"}
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-            api_responses={"get_workspace": api_data_stub},
-        )
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_workspace.return_value = api_data_stub
 
         result = cfg_factory.search_for_workspace("my workspace")
         cfg_factory.api.get_workspace.assert_called()
-        assert result == {"workspaceId": "myworkspace12345", "name": "my workspace"}
+        assert result == api_data_stub
 
     def test_search_for_workspace_non_id(self, quix_kafka_config_factory):
+        matching_ws = {"workspaceId": "myworkspace12345", "name": "my workspace"}
         api_data_stub = [
-            {"workspaceId": "myworkspace12345", "name": "my workspace"},
+            matching_ws,
             {"workspaceId": "myotherworkspace67890", "name": "my other workspace"},
         ]
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-            api_responses={"get_workspaces": api_data_stub},
-        )
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_workspaces.return_value = api_data_stub
+        cfg_factory.api.get_workspace.side_effect = HTTPError
 
-        with patch.object(
-            cfg_factory.api, "get_workspace", side_effect=HTTPError
-        ) as get_ws:
-            result = cfg_factory.search_for_workspace("my workspace")
-
-        get_ws.assert_called_with(workspace_id="my workspace")
+        result = cfg_factory.search_for_workspace("my workspace")
+        cfg_factory.api.get_workspace.assert_called_with(workspace_id="my workspace")
         cfg_factory.api.get_workspaces.assert_called()
-        assert result == {"workspaceId": "myworkspace12345", "name": "my workspace"}
+        assert result == matching_ws
 
     def test_get_workspace_info_has_wid(self, quix_kafka_config_factory):
         api_data = {
@@ -107,11 +101,10 @@ class TestQuixKafkaConfigsBuilder:
         }
 
     def test_get_workspace_info_no_wid_not_found(self, quix_kafka_config_factory):
-        api_response = []
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-            api_responses={"get_workspace": deepcopy(api_response)},
-        )
+        api_data_stub = []
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_workspace.return_value = api_data_stub
+
         with pytest.raises(NoWorkspaceFound):
             cfg_factory.get_workspace_info()
         cfg_factory.api.get_workspace.assert_called_with(cfg_factory.workspace_id)
@@ -228,9 +221,9 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             },
         ]
-        cfg_factory = quix_kafka_config_factory(
-            api_responses={"get_workspaces": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_workspaces.return_value = api_data_stub
+
         with pytest.raises(MultipleWorkspaces):
             cfg_factory.search_for_topic_workspace(None)
         cfg_factory.api.get_workspaces.assert_called()
@@ -250,9 +243,9 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             },
         ]
-        cfg_factory = quix_kafka_config_factory(
-            api_responses={"get_workspaces": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_workspaces.return_value = api_data_stub
+
         with patch.object(
             cfg_factory, "search_workspace_for_topic", return_value=None
         ) as search:
@@ -275,9 +268,9 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             },
         ]
-        cfg_factory = quix_kafka_config_factory(
-            api_responses={"get_workspaces": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_workspaces.return_value = api_data_stub
+
         with patch.object(cfg_factory, "search_workspace_for_topic") as search:
             search.side_effect = [None, "67890"]
             result = cfg_factory.search_for_topic_workspace("topic_3")
@@ -306,9 +299,9 @@ class TestQuixKafkaConfigsBuilder:
             },
         ]
 
-        cfg_factory = quix_kafka_config_factory(
-            api_responses={"get_topics": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_topics.return_value = api_data_stub
+
         result = cfg_factory.search_workspace_for_topic(
             workspace_id="12345", topic="topic_2"
         )
@@ -328,9 +321,9 @@ class TestQuixKafkaConfigsBuilder:
                 "other_fields": "other_values",
             },
         ]
-        cfg_factory = quix_kafka_config_factory(
-            api_responses={"get_topics": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_topics.return_value = api_data_stub
+
         result = cfg_factory.search_workspace_for_topic(
             workspace_id="12345", topic="12345-topic_2"
         )
@@ -348,9 +341,8 @@ class TestQuixKafkaConfigsBuilder:
                 "name": "topic_2",
             },
         ]
-        cfg_factory = quix_kafka_config_factory(
-            api_responses={"get_topics": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_topics.return_value = api_data_stub
         result = cfg_factory.search_workspace_for_topic(
             workspace_id="12345", topic="topic_3"
         )
@@ -358,29 +350,25 @@ class TestQuixKafkaConfigsBuilder:
         assert result is None
 
     def test_get_workspace_ssl_cert(self, quix_kafka_config_factory, tmp_path):
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-            api_responses={"get_workspace_certificate": b"my cool cert stuff"},
-        )
+        api_data_stub = b"my cool cert stuff"
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_workspace_certificate.return_value = api_data_stub
         cfg_factory.get_workspace_ssl_cert(extract_to_folder=tmp_path)
 
         with open(tmp_path / "ca.cert", "r") as f:
             s = f.read()
-        assert s == "my cool cert stuff"
+        assert s == api_data_stub.decode()
 
     def test_get_workspace_ssl_cert_empty(self, quix_kafka_config_factory, tmp_path):
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-            api_responses={"get_workspace_certificate": None},
-        )
+        cfg_factory = quix_kafka_config_factory()
+        cfg_factory.api.get_workspace_certificate.return_value = None
         assert cfg_factory.get_workspace_ssl_cert(extract_to_folder=tmp_path) is None
 
     def test__set_workspace_cert_has_path(self, quix_kafka_config_factory):
         path = Path(getcwd()) / "certificates" / "12345"
         expected = (path / "ca.cert").as_posix()
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345",
-        )
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+
         with patch.object(
             cfg_factory, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
@@ -482,7 +470,7 @@ class TestQuixKafkaConfigsBuilder:
         )
 
     def test_get_topics(self, quix_kafka_config_factory):
-        api_data = [
+        api_data_stub = [
             {
                 "id": "12345-topic_in",
                 "name": "topic_in",
@@ -518,10 +506,9 @@ class TestQuixKafkaConfigsBuilder:
                 },
             },
         ]
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345", api_responses={"get_topics": api_data}
-        )
-        assert cfg_factory.get_topics() == api_data
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_topics.return_value = api_data_stub
+        assert cfg_factory.get_topics() == api_data_stub
 
     def test_create_topics(
         self, quix_kafka_config_factory, topic_manager_topic_factory
@@ -724,9 +711,9 @@ class TestQuixKafkaConfigsBuilder:
         topic_c = topic_manager_topic_factory("12345-topic_c")
         topic_d = topic_manager_topic_factory("12345-topic_d")
 
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345", api_responses={"get_topics": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_topics.return_value = api_data_stub
+
         cfg_factory.confirm_topics_exist([topic_b, topic_c, topic_d])
 
     def test_confirm_topics_exist_topics_missing(
@@ -749,9 +736,9 @@ class TestQuixKafkaConfigsBuilder:
         topic_c = topic_manager_topic_factory("12345-topic_c")
         topic_d = topic_manager_topic_factory("12345-topic_d")
 
-        cfg_factory = quix_kafka_config_factory(
-            workspace_id="12345", api_responses={"get_topics": api_data_stub}
-        )
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_topics.return_value = api_data_stub
+
         with pytest.raises(MissingQuixTopics) as e:
             cfg_factory.confirm_topics_exist([topic_b, topic_c, topic_d])
         e = e.value.args[0]
@@ -761,63 +748,58 @@ class TestQuixKafkaConfigsBuilder:
     def test_get_topic_success(self, quix_kafka_config_factory):
         workspace_id = "12345"
         topic_name = "topic_in"
-        api_response = {
-            "get_topic": {
-                "id": f"{workspace_id}-{topic_name}",
-                "name": topic_name,
-                "createdAt": "2023-10-16T22:27:39.943Z",
-                "updatedAt": "2023-10-16T22:28:27.17Z",
-                "persisted": False,
-                "persistedStatus": "Complete",
-                "external": False,
-                "workspaceId": "12345",
-                "status": "Ready",
-                "configuration": {
-                    "partitions": 2,
-                    "replicationFactor": 2,
-                    "retentionInMinutes": 10080,
-                    "retentionInBytes": 52428800,
-                },
-            }
+        api_data_stub = {
+            "id": f"{workspace_id}-{topic_name}",
+            "name": topic_name,
+            "createdAt": "2023-10-16T22:27:39.943Z",
+            "updatedAt": "2023-10-16T22:28:27.17Z",
+            "persisted": False,
+            "persistedStatus": "Complete",
+            "external": False,
+            "workspaceId": "12345",
+            "status": "Ready",
+            "configuration": {
+                "partitions": 2,
+                "replicationFactor": 2,
+                "retentionInMinutes": 10080,
+                "retentionInBytes": 52428800,
+            },
         }
-        quix_kafka_config = quix_kafka_config_factory(
-            workspace_id=workspace_id, api_responses=api_response
-        )
-        assert quix_kafka_config.get_topic(topic_name) == api_response["get_topic"]
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_topic.return_value = api_data_stub
+
+        assert cfg_factory.get_topic(topic_name) == api_data_stub
 
     def test_get_topic_does_not_exist(self, quix_kafka_config_factory):
         """
         Topic query should return None if topic "does not exist" (AKA not found).
         """
         topic_name = "topic_in"
-        api_response = {
-            "get_topic": QuixApiRequestFailure(
-                status_code=404,
-                url=f"topic_endpoint/{topic_name}",
-                error_text="Topic does not exist",
-            )
-        }
-        quix_kafka_config = quix_kafka_config_factory(
-            workspace_id="12345", api_responses=api_response
+        api_error = QuixApiRequestFailure(
+            status_code=404,
+            url=f"topic_endpoint/{topic_name}",
+            error_text="Topic does not exist",
         )
-        assert quix_kafka_config.get_topic(topic_name) is None
+
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_topic.side_effect = api_error
+
+        assert cfg_factory.get_topic(topic_name) is None
 
     def test_get_topic_error(self, quix_kafka_config_factory):
         """
         Non-404 errors should still be raised when doing get_topic
         """
         topic_name = "topic_in"
-        exception = QuixApiRequestFailure(
+        api_error = QuixApiRequestFailure(
             status_code=403,
             url=f"topic_endpoint/{topic_name}",
             error_text="Access Denied",
         )
-        topic_name = "topic_in"
-        api_response = {"get_topic": exception}
-        quix_kafka_config = quix_kafka_config_factory(
-            workspace_id="12345", api_responses=api_response
-        )
-        with pytest.raises(QuixApiRequestFailure) as e:
-            quix_kafka_config.get_topic(topic_name)
+        cfg_factory = quix_kafka_config_factory(workspace_id="12345")
+        cfg_factory.api.get_topic.side_effect = api_error
 
-        assert e.value.status_code == exception.status_code
+        with pytest.raises(QuixApiRequestFailure) as e:
+            cfg_factory.get_topic(topic_name)
+
+        assert e.value.status_code == api_error.status_code

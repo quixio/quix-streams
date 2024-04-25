@@ -53,13 +53,18 @@ class QuixTopicManager(TopicManager):
             topics, finalize_timeout_seconds=self._create_timeout
         )
 
-    def _apply_topic_prefix(self, name: str) -> str:
+    def _resolve_topic_name(self, name: str) -> str:
         """
-        Prepend workspace ID to a given topic name, if required.
+        Checks if provided topic name is registered via Quix API; if yes,
+        return its corresponding topic ID (AKA the actual topic name, usually
+        just has prepended workspace ID).
+
+        Otherwise, assume it doesn't exist and prepend the workspace ID to match the
+        topic naming pattern in Quix.
 
         :param name: topic name
 
-        :return: name with workspace ID prepended
+        :return: actual cluster topic name to use
         """
         if quix_topic := self._quix_config_builder.get_topic(name):
             return quix_topic["id"]

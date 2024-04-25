@@ -434,7 +434,7 @@ class QuixKafkaConfigsBuilder:
             return self.api.get_topic(topic_name, workspace_id=self.workspace_id)
         except QuixApiRequestFailure as e:
             if e.status_code == 404:
-                return None
+                return
             raise
 
     def get_topics(self) -> List[dict]:

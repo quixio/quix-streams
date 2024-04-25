@@ -38,16 +38,9 @@ class MockResponse:
 
 @pytest.fixture()
 def mock_quix_portal_api_factory():
-    def mock_quix_portal_api(api_responses: dict = None):
-        if not api_responses:
-            api_responses = {}
+    def mock_quix_portal_api():
         api_obj = create_autospec(QuixPortalApiService)
         api_obj.default_workspace_id = None
-        for call, result in api_responses.items():
-            if isinstance(result, Exception):
-                api_obj.__getattribute__(call).side_effect = result
-            else:
-                api_obj.__getattribute__(call).return_value = result
         return api_obj
 
     return mock_quix_portal_api
@@ -55,11 +48,9 @@ def mock_quix_portal_api_factory():
 
 @pytest.fixture()
 def quix_kafka_config_factory(mock_quix_portal_api_factory):
-    def mock_quix_kafka_configs(
-        workspace_id: str = None, api_responses: dict = None, api_class=None, **kwargs
-    ):
+    def mock_quix_kafka_configs(workspace_id: str = None, api_class=None, **kwargs):
         if not api_class:
-            api_class = mock_quix_portal_api_factory(api_responses)
+            api_class = mock_quix_portal_api_factory()
         return QuixKafkaConfigsBuilder(
             quix_portal_api_service=api_class, workspace_id=workspace_id, **kwargs
         )
