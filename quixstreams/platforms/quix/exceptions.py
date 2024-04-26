@@ -1,5 +1,6 @@
-from quixstreams.exceptions.base import QuixException
+from typing import Optional
 
+from quixstreams.exceptions.base import QuixException
 
 __all__ = (
     "MissingConnectionRequirements",
@@ -14,7 +15,22 @@ class MissingConnectionRequirements(QuixException): ...
 class UndefinedQuixWorkspaceId(QuixException): ...
 
 
-class QuixApiRequestFailure(QuixException): ...
+class QuixApiRequestFailure(QuixException):
+    def __init__(
+        self,
+        status_code: int,
+        url: str,
+        error_text: Optional[object] = None,
+    ):
+        self.status_code = status_code
+        self.url = url
+        self.error_text = error_text
+
+    def __str__(self) -> str:
+        str_out = f'Error {self.status_code} for url "{self.url}"'
+        if self.error_text is not None:
+            str_out = f"{str_out}: {self.error_text}"
+        return str_out
 
 
 class NoWorkspaceFound(QuixException): ...

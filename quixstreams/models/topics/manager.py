@@ -84,13 +84,11 @@ class TopicManager:
     def all_topics(self) -> List[Topic]:
         return self.topics_list + self.changelog_topics_list
 
-    def _apply_topic_prefix(self, name: str) -> str:
+    def _resolve_topic_name(self, name: str) -> str:
         """
-        Apply a prefix to the given name, or return if it already contains it.
+        Here primarily for adjusting the topic name for Quix topics.
 
-        :param name: topic name
-
-        :return: name with prefix added as required
+        :return: name, no changes (identity function)
         """
         return name
 
@@ -164,7 +162,7 @@ class TopicManager:
 
         :return: Topic object with creation configs
         """
-        name = self._apply_topic_prefix(name)
+        name = self._resolve_topic_name(name)
         if len(name) > self._max_topic_name_len:
             raise TopicNameLengthExceeded(
                 f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
@@ -220,7 +218,7 @@ class TopicManager:
         :return: `Topic` object (which is also stored on the TopicManager)
         """
 
-        topic_name = self._apply_topic_prefix(topic_name)
+        topic_name = self._resolve_topic_name(topic_name)
         name = self._format_changelog_name(consumer_group, topic_name, store_name)
         if len(name) > self._max_topic_name_len:
             raise TopicNameLengthExceeded(
