@@ -162,7 +162,9 @@ class TestTopicManager:
         topic_manager.create_topics(topics)
 
         topic_admin_mock.create_topics.assert_called_with(
-            topics, timeout=topic_manager._create_timeout
+            topics,
+            timeout=topic_manager._timeout,
+            finalize_timeout=topic_manager._create_timeout,
         )
 
     def test_validate_all_topics(self, topic_manager_factory, topic_admin_mock):

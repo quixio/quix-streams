@@ -541,11 +541,13 @@ def topic_manager_factory(topic_admin, random_consumer_group):
     def factory(
         topic_admin_: Optional[TopicAdmin] = None,
         consumer_group: str = random_consumer_group,
-        create_timeout: int = 10,
+        timeout: float = 5,
+        create_timeout: float = 15,
     ) -> TopicManager:
         return TopicManager(
             topic_admin=topic_admin_ or topic_admin,
             consumer_group=consumer_group,
+            timeout=timeout,
             create_timeout=create_timeout,
         )
 

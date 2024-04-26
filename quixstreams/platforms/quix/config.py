@@ -111,6 +111,8 @@ class QuixKafkaConfigsBuilder:
         workspace_id: Optional[str] = None,
         workspace_cert_path: Optional[str] = None,
         quix_portal_api_service: Optional[QuixPortalApiService] = None,
+        timeout: float = 30,
+        topic_create_timeout: float = 60,
     ):
         """
         :param quix_portal_api_service: A QuixPortalApiService instance (else generated)
@@ -144,6 +146,8 @@ class QuixKafkaConfigsBuilder:
         self._quix_broker_config = None
         self._quix_broker_settings = None
         self._workspace_meta = None
+        self._timeout = timeout
+        self._topic_create_timeout = topic_create_timeout
 
     @property
     def workspace_id(self) -> str:
@@ -202,7 +206,9 @@ class QuixKafkaConfigsBuilder:
         return prepend_workspace_id(self.workspace_id, s)
 
     def search_for_workspace(
-        self, workspace_name_or_id: Optional[str] = None
+        self,
+        workspace_name_or_id: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> Optional[dict]:
         # TODO: there is more to do here to accommodate the new "environments" in v2
         # as it stands now, the search won't work with Quix v2 platform correctly if
@@ -211,31 +217,45 @@ class QuixKafkaConfigsBuilder:
         Search for a workspace given an expected workspace name or id.
 
         :param workspace_name_or_id: the expected name or id of a workspace
+        :param timeout: response timeout (seconds); Default 30
+
         :return: the workspace data dict if search success, else None
         """
+        timeout = timeout if timeout is not None else self._timeout
         if not workspace_name_or_id:
             workspace_name_or_id = self._workspace_id
         try:
-            return self.api.get_workspace(workspace_id=workspace_name_or_id)
+            return self.api.get_workspace(
+                workspace_id=workspace_name_or_id, timeout=timeout
+            )
         except HTTPError:
             # check to see if they provided the workspace name instead
-            ws_list = self.api.get_workspaces()
+            ws_list = self.api.get_workspaces(timeout=timeout)
             for ws in ws_list:
                 if ws["name"] == workspace_name_or_id:
                     return ws
 
-    def get_workspace_info(self, known_workspace_topic: Optional[str] = None):
+    def get_workspace_info(
+        self,
+        known_workspace_topic: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ):
         """
         Queries for workspace data from the Quix API, regardless of instance cache,
         and updates instance attributes from query result.
 
         :param known_workspace_topic: a topic you know to exist in some workspace
+        :param timeout: response timeout (seconds); Default 30
         """
         # TODO: more error handling with the wrong combo of ws_id and topic
         if self._workspace_id:
-            ws_data = self.search_for_workspace(workspace_name_or_id=self._workspace_id)
+            ws_data = self.search_for_workspace(
+                workspace_name_or_id=self._workspace_id, timeout=timeout
+            )
         else:
-            ws_data = self.search_for_topic_workspace(known_workspace_topic)
+            ws_data = self.search_for_topic_workspace(
+                known_workspace_topic, timeout=timeout
+            )
         if not ws_data:
             raise NoWorkspaceFound(
                 "No workspace was found for the given workspace/auth-token/topic combo"
@@ -252,7 +272,7 @@ class QuixKafkaConfigsBuilder:
         self._workspace_meta = ws_data
 
     def search_workspace_for_topic(
-        self, workspace_id: str, topic: str
+        self, workspace_id: str, topic: str, timeout: Optional[float] = None
     ) -> Optional[str]:
         """
         Search through all the topics in the given workspace id to see if there is a
@@ -260,23 +280,34 @@ class QuixKafkaConfigsBuilder:
 
         :param workspace_id: the workspace to search in
         :param topic: the topic to search for
+        :param timeout: response timeout (seconds); Default 30
+
         :return: the workspace_id if success, else None
         """
-        topics = self.api.get_topics(workspace_id=workspace_id)
+        topics = self.api.get_topics(
+            workspace_id=workspace_id,
+            timeout=timeout if timeout is not None else self._timeout,
+        )
         for t in topics:
             if t["name"] == topic or t["id"] == topic:
                 return workspace_id
 
-    def search_for_topic_workspace(self, topic: str) -> Optional[dict]:
+    def search_for_topic_workspace(
+        self, topic: str, timeout: Optional[float] = None
+    ) -> Optional[dict]:
         """
         Find what workspace a topic belongs to.
         If there is only one workspace altogether, it is assumed to be the workspace.
         More than one means each workspace will be searched until the first hit.
 
         :param topic: the topic to search for
+        :param timeout: response timeout (seconds); Default 30
+
         :return: workspace data dict if topic search success, else None
         """
-        ws_list = self.api.get_workspaces()
+        ws_list = self.api.get_workspaces(
+            timeout=timeout if timeout is not None else self._timeout
+        )
         if len(ws_list) == 1:
             return ws_list[0]
         if topic is None:
@@ -285,11 +316,13 @@ class QuixKafkaConfigsBuilder:
                 "to find the correct workspace"
             )
         for ws in ws_list:
-            if self.search_workspace_for_topic(ws["workspaceId"], topic):
+            if self.search_workspace_for_topic(
+                ws["workspaceId"], topic, timeout=timeout
+            ):
                 return ws
 
     def get_workspace_ssl_cert(
-        self, extract_to_folder: Optional[Path] = None
+        self, extract_to_folder: Optional[Path] = None, timeout: Optional[float] = None
     ) -> Optional[str]:
         """
         Gets and extracts zipped certificate from the API to provided folder if the
@@ -298,10 +331,13 @@ class QuixKafkaConfigsBuilder:
         If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
 
         :param extract_to_folder: path to folder to dump zipped cert file to
+        :param timeout: response timeout (seconds); Default 30
+
         :return: full cert filepath as string or `None` if certificate is not specified
         """
         certificate_bytes = self.api.get_workspace_certificate(
-            workspace_id=self._workspace_id
+            workspace_id=self._workspace_id,
+            timeout=timeout if timeout is not None else self._timeout,
         )
         if certificate_bytes is None:
             return
@@ -313,7 +349,7 @@ class QuixKafkaConfigsBuilder:
                 f.write(certificate_bytes)
         return full_path.as_posix()
 
-    def _create_topic(self, topic: Topic):
+    def _create_topic(self, topic: Topic, timeout: Optional[float] = None):
         """
         The actual API call to create the topic
 
@@ -335,13 +371,16 @@ class QuixKafkaConfigsBuilder:
             topic_ret_bytes=ret_bytes if ret_bytes is None else int(ret_bytes),
             topic_ret_minutes=ret_ms if ret_ms is None else int(ret_ms) // 60000,
             cleanup_policy=cfg.extra_config.get("cleanup.policy"),
+            timeout=timeout if timeout is not None else self._timeout,
         )
         logger.info(
             f"Creation of topic {topic_name} acknowledged by broker. Must wait "
             f"for 'Ready' status before topic is actually available"
         )
 
-    def _finalize_create(self, topics: Set[str], timeout: Optional[int] = None):
+    def _finalize_create(
+        self, topics: Set[str], finalize_timeout: Optional[float] = None
+    ):
         """
         After the broker acknowledges the topics are created, they will be in a
         "Creating", and will not be ready to consume from/produce to until they are
@@ -349,10 +388,12 @@ class QuixKafkaConfigsBuilder:
         as "Ready" or the timeout is hit.
 
         :param topics: set of topic names
-        :param timeout: amount of seconds allowed to finalize, else raise exception
+        :param finalize_timeout: topic finalization timeout (seconds); Default 60
         """
         exceptions = {}
-        stop_time = time.time() + (timeout or len(topics) * 30)
+        stop_time = time.time() + (
+            finalize_timeout if finalize_timeout else self._topic_create_timeout
+        )
         while topics and time.time() < stop_time:
             # Each topic seems to take 10-15 seconds each to finalize (at least in dev)
             time.sleep(1)
@@ -375,17 +416,19 @@ class QuixKafkaConfigsBuilder:
     def create_topics(
         self,
         topics: List[Topic],
-        finalize_timeout_seconds: Optional[int] = None,
+        timeout: Optional[float] = None,
+        finalize_timeout: Optional[float] = None,
     ):
         """
         Create topics in a Quix cluster.
 
         :param topics: a list of `Topic` objects
-        :param finalize_timeout_seconds: How long to wait for the topics to be
+        :param timeout: response timeout (seconds); Default 30
+        :param finalize_timeout: topic finalization timeout (seconds); Default 60
         marked as "Ready" (and thus ready to produce to/consume from).
         """
         logger.info("Attempting to create topics...")
-        current_topics = {t["id"]: t for t in self.get_topics()}
+        current_topics = {t["id"]: t for t in self.get_topics(timeout=timeout)}
         finalize = set()
         for topic in topics:
             topic_name = self.prepend_workspace_id(topic.name)
@@ -398,7 +441,7 @@ class QuixKafkaConfigsBuilder:
                     )
                 else:
                     try:
-                        self._create_topic(topic)
+                        self._create_topic(topic, timeout=timeout)
                     # TODO: more robust error handling to better identify issues
                     # See how it's handled in the admin client and maybe consolidate
                     # logic via TopicManager
@@ -416,7 +459,7 @@ class QuixKafkaConfigsBuilder:
             if finalize
             else "No topic creations required!"
         )
-        self._finalize_create(finalize, timeout=finalize_timeout_seconds)
+        self._finalize_create(finalize, finalize_timeout=finalize_timeout)
 
     def get_topic(self, topic_name: str) -> Optional[dict]:
         """
@@ -437,19 +480,24 @@ class QuixKafkaConfigsBuilder:
                 return
             raise
 
-    def get_topics(self) -> List[dict]:
-        return self.api.get_topics(workspace_id=self.workspace_id)
-
-    def confirm_topics_exist(self, topics: Union[List[Topic], List[str]]):
+    def get_topics(self, timeout: Optional[float] = None) -> List[dict]:
+        return self.api.get_topics(
+            workspace_id=self.workspace_id,
+            timeout=timeout if timeout is not None else self._timeout,
+        )
+    def confirm_topics_exist(
+        self, topics: Union[List[Topic], List[str]], timeout: Optional[float] = None
+    ):
         """
         Confirm whether the desired set of topics exists in the Quix workspace.
 
         :param topics: a list of `Topic` or topic names
+        :param timeout: response timeout (seconds); Default 30
         """
         if isinstance(topics[0], Topic):
             topics = [topic.name for topic in topics]
         logger.info("Confirming required topics exist...")
-        current_topics = [t["id"] for t in self.get_topics()]
+        current_topics = [t["id"] for t in self.get_topics(timeout=timeout)]
         missing_topics = []
         for name in topics:
             if name not in current_topics:
@@ -459,7 +507,7 @@ class QuixKafkaConfigsBuilder:
         if missing_topics:
             raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
-    def _set_workspace_cert(self) -> str:
+    def _set_workspace_cert(self, timeout: Optional[float] = None) -> str:
         """
         Will create a cert and assigns it to the workspace_cert_path property.
         If there was no path provided at init, one is generated based on the cwd and
@@ -476,11 +524,13 @@ class QuixKafkaConfigsBuilder:
         else:
             folder = Path(getcwd()) / "certificates" / self.workspace_id
         self._workspace_cert_path = self.get_workspace_ssl_cert(
-            extract_to_folder=folder
+            extract_to_folder=folder, timeout=timeout
         )
         return self._workspace_cert_path
 
-    def get_confluent_broker_config(self, known_topic: Optional[str] = None) -> dict:
+    def get_confluent_broker_config(
+        self, known_topic: Optional[str] = None, timeout: Optional[float] = None
+    ) -> dict:
         """
         Get the full client config dictionary required to authenticate a confluent-kafka
         client to a Quix platform broker/workspace.
@@ -489,10 +539,12 @@ class QuixKafkaConfigsBuilder:
         producer (add your producer/consumer-specific configs afterward).
 
         :param known_topic: a topic known to exist in some workspace
+        :param timeout: response timeout (seconds); Default 30
+
         :return: a dict of confluent-kafka-python client settings (see librdkafka
         config for more details)
         """
-        self.get_workspace_info(known_workspace_topic=known_topic)
+        self.get_workspace_info(known_workspace_topic=known_topic, timeout=timeout)
         cfg_out = {}
         for quix_param_name, rdkafka_param_name in _QUIX_PARAMS_NAMES_MAP.items():
             # Map broker config received from Quix to librdkafka format
@@ -526,7 +578,10 @@ class QuixKafkaConfigsBuilder:
         return self._confluent_broker_config
 
     def get_confluent_client_configs(
-        self, topics: list, consumer_group_id: Optional[str] = None
+        self,
+        topics: list,
+        consumer_group_id: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> Tuple[dict, List[str], Optional[str]]:
         """
         Get all the values you need in order to use a confluent_kafka-based client
@@ -539,11 +594,13 @@ class QuixKafkaConfigsBuilder:
 
         :param topics: list of topics
         :param consumer_group_id: consumer group id, if needed
+        :param timeout: response timeout (seconds); Default 30
+
         :return: a tuple with configs and altered versions of the topics
         and consumer group name
         """
         return (
-            self.get_confluent_broker_config(topics[0]),
+            self.get_confluent_broker_config(topics[0], timeout=timeout),
             [self.prepend_workspace_id(t) for t in topics],
             self.prepend_workspace_id(consumer_group_id) if consumer_group_id else None,
         )

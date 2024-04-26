@@ -58,7 +58,8 @@ class QuixPortalApiService:
             super().__init__()
 
         def request(self, method, url, **kwargs):
-            timeout = kwargs.pop("timeout", 10)
+            # provided methods have timeout defined, but keep a default for adhoc calls
+            timeout = kwargs.pop("timeout", 30)
             return super().request(
                 method, urljoin(base=self.url_base, url=url), timeout=timeout, **kwargs
             )
@@ -110,7 +111,7 @@ class QuixPortalApiService:
         return s
 
     def get_workspace_certificate(
-        self, workspace_id: Optional[str] = None
+        self, workspace_id: Optional[str] = None, timeout: float = 30
     ) -> Optional[bytes]:
         """
         Get a workspace TLS certificate if available.
@@ -118,10 +119,13 @@ class QuixPortalApiService:
         Returns `None` if certificate is not specified.
 
         :param workspace_id: workspace id, optional
+        :param timeout: request timeout; Default 30
         :return: certificate as bytes if present, or None
         """
         workspace_id = workspace_id or self.default_workspace_id
-        content = self.session.get(f"/workspaces/{workspace_id}/certificates").content
+        content = self.session.get(
+            f"/workspaces/{workspace_id}/certificates", timeout=timeout
+        ).content
         if not content:
             return
 
@@ -129,24 +133,34 @@ class QuixPortalApiService:
             with z.open("ca.cert") as f:
                 return f.read()
 
-    def get_auth_token_details(self) -> dict:
-        return self.session.get(f"/auth/token/details").json()
+    def get_auth_token_details(self, timeout: float = 30) -> dict:
+        return self.session.get(f"/auth/token/details", timeout=timeout).json()
 
-    def get_workspace(self, workspace_id: Optional[str] = None) -> dict:
+    def get_workspace(
+        self, workspace_id: Optional[str] = None, timeout: float = 30
+    ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
-        return self.session.get(f"/workspaces/{workspace_id}").json()
+        return self.session.get(f"/workspaces/{workspace_id}", timeout=timeout).json()
 
-    def get_workspaces(self) -> List[dict]:
+    def get_workspaces(self, timeout: float = 30) -> List[dict]:
         # TODO: This seems only return [] with Personal Access Tokens as of Sept 7 '23
-        return self.session.get("/workspaces").json()
+        return self.session.get("/workspaces", timeout=timeout).json()
 
-    def get_topic(self, topic_name: str, workspace_id: Optional[str] = None) -> dict:
+    def get_topic(
+        self, topic_name: str, workspace_id: Optional[str] = None, timeout: float = 30
+    ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
-        return self.session.get(f"/{workspace_id}/topics/{topic_name}").json()
+        return self.session.get(
+            f"/{workspace_id}/topics/{topic_name}", timeout=timeout
+        ).json()
 
-    def get_topics(self, workspace_id: Optional[str] = None) -> List[dict]:
+    def get_topics(
+        self,
+        workspace_id: Optional[str] = None,
+        timeout: float = 30,
+    ) -> List[dict]:
         workspace_id = workspace_id or self.default_workspace_id
-        return self.session.get(f"/{workspace_id}/topics").json()
+        return self.session.get(f"/{workspace_id}/topics", timeout=timeout).json()
 
     def post_topic(
         self,
@@ -157,6 +171,7 @@ class QuixPortalApiService:
         topic_ret_bytes: Optional[int] = None,
         cleanup_policy: Optional[Literal["compact", "delete"]] = None,
         workspace_id: Optional[str] = None,
+        timeout: float = 30,
     ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
         d = {
@@ -169,4 +184,6 @@ class QuixPortalApiService:
                 "cleanupPolicy": cleanup_policy,
             },
         }
-        return self.session.post(f"/{workspace_id}/topics", json=d).json()
+        return self.session.post(
+            f"/{workspace_id}/topics", json=d, timeout=timeout
+        ).json()

@@ -54,11 +54,13 @@ class TopicManager:
         self,
         topic_admin: TopicAdmin,
         consumer_group: str,
-        create_timeout: int = 60,
+        timeout: float = 30,
+        create_timeout: float = 60,
     ):
         """
         :param topic_admin: an `Admin` instance (required for some functionality)
         :param consumer_group: the consumer group (of the `Application`)
+        :param timeout: response timeout (seconds)
         :param create_timeout: timeout for topic creation
         """
         self._admin = topic_admin
@@ -66,6 +68,7 @@ class TopicManager:
         self._topics: Dict[str, Topic] = {}
         self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
+        self._timeout = timeout
         self._create_timeout = create_timeout
 
     @property
@@ -171,13 +174,19 @@ class TopicManager:
             f"{topic_type}__{'--'.join([self._consumer_group, nested_name, suffix])}"
         )
 
-    def _create_topics(self, topics: List[Topic]):
+    def _create_topics(
+        self, topics: List[Topic], timeout: float, create_timeout: float
+    ):
         """
         Method that actually creates the topics in Kafka via an `Admin` instance.
 
         :param topics: list of `Topic`s
+        :param timeout: creation acknowledge timeout (seconds)
+        :param create_timeout: topic finalization timeout (seconds)
         """
-        self._admin.create_topics(topics, timeout=self._create_timeout)
+        self._admin.create_topics(
+            topics, timeout=timeout, finalize_timeout=create_timeout
+        )
 
     def _get_source_topic_config(
         self, topic_name: str, extras_imports: Optional[Set[str]] = None
@@ -310,6 +319,7 @@ class TopicManager:
         self,
         topic_name: str,
         store_name: str,
+        timeout: Optional[float] = None,
     ) -> Topic:
         """
         Performs all the logic necessary to generate a changelog topic based on a
@@ -332,6 +342,8 @@ class TopicManager:
             > NOTE: normally contain any prefixes added by TopicManager.topic()
         :param store_name: name of the store this changelog belongs to
             (default, rolling10s, etc.)
+        :param timeout: config lookup timeout (seconds); Default 30
+
 
         :return: `Topic` object (which is also stored on the TopicManager)
         """
@@ -359,7 +371,12 @@ class TopicManager:
         self._changelog_topics.setdefault(topic_name, {})[store_name] = topic
         return topic
 
-    def create_topics(self, topics: List[Topic]):
+    def create_topics(
+        self,
+        topics: List[Topic],
+        timeout: Optional[float] = None,
+        create_timeout: Optional[float] = None,
+    ):
         """
         Creates topics via an explicit list of provided `Topics`.
 
@@ -367,18 +384,33 @@ class TopicManager:
         `create_all_topics()` is generally simpler.
 
         :param topics: list of `Topic`s
+        :param timeout: creation acknowledge timeout (seconds); Default 30
+        :param create_timeout: topic finalization timeout (seconds); Default 60
         """
         if not topics:
             logger.debug("No topics provided for creation...skipping!")
             return
         affirm_ready_for_create(topics)
-        self._create_topics(topics)
+        self._create_topics(
+            self.all_topics,
+            timeout=timeout if timeout is not None else self._timeout,
+            create_timeout=(
+                create_timeout if create_timeout is not None else self._create_timeout
+            ),
+        )
 
-    def create_all_topics(self):
+    def create_all_topics(
+        self, timeout: Optional[float] = None, create_timeout: Optional[float] = None
+    ):
         """
         A convenience method to create all Topic objects stored on this TopicManager.
+
+        :param timeout: creation acknowledge timeout (seconds); Default 30
+        :param create_timeout: topic finalization timeout (seconds); Default 60
         """
-        self.create_topics(self._all_topics_list)
+        self.create_topics(
+            self._all_topics_list, timeout=timeout, create_timeout=create_timeout
+        )
 
     def validate_all_topics(self):
         """

@@ -117,6 +117,8 @@ class Application:
         use_changelog_topics: bool = True,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
         topic_manager: Optional[TopicManager] = None,
+        request_timeout: float = 30,
+        topic_create_timeout: float = 60,
     ):
         """
         :param broker_address: Kafka broker host and port in format `<host>:<port>`.
@@ -162,6 +164,8 @@ class Application:
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
         :param topic_manager: A `TopicManager` instance
+        :param request_timeout: timeout (seconds) for REST-based requests
+        :param topic_create_timeout: timeout (seconds) for topic create finalization
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -276,6 +280,8 @@ class Application:
                     extra_config=producer_extra_config,
                 ),
                 consumer_group=consumer_group,
+                timeout=request_timeout,
+                create_timeout=topic_create_timeout,
             )
         self._topic_manager = topic_manager
         self._state_manager = StateStoreManager(
@@ -320,6 +326,8 @@ class Application:
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_manager: Optional[QuixTopicManager] = None,
+        request_timeout: float = 30,
+        topic_create_timeout: float = 60,
     ) -> Self:
         """
         >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
@@ -387,6 +395,8 @@ class Application:
         :param use_changelog_topics: Use changelog topics to back stateful operations
             Default - `True`
         :param topic_manager: A `QuixTopicManager` instance
+        :param request_timeout: timeout (seconds) for REST-based requests
+        :param topic_create_timeout: timeout (seconds) for topic create finalization
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -432,6 +442,8 @@ class Application:
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
+            request_timeout=request_timeout,
+            topic_create_timeout=topic_create_timeout,
             quix_config_builder=quix_config_builder,
         )
         return app
