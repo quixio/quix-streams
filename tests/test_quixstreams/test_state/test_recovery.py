@@ -79,18 +79,20 @@ class TestChangelogProducer:
             value_serializer="bytes",
             config=topic_manager.topic_config(num_partitions=3),
         )
+        source_topic_name = "source-topic"
         topic_manager.create_topics([changelog])
 
-        writer = ChangelogProducer(
+        producer = ChangelogProducer(
             changelog_name=changelog.name,
             partition=p_num,
+            source_topic_name=source_topic_name,
             producer=row_producer_factory(),
         )
-        writer.produce(
+        producer.produce(
             **{k: v for k, v in expected.items() if k in ["key", "value"]},
             headers={cf_header: cf},
         )
-        writer._producer.flush(5)
+        producer.flush()
 
         consumer = consumer_factory(auto_offset_reset="earliest")
         consumer.subscribe([changelog.name])
@@ -103,16 +105,19 @@ class TestChangelogProducer:
 class TestChangelogProducerFactory:
     def test_get_partition_producer(self, row_producer_factory):
         changelog_name = "changelog__topic"
+        source_topic_name = "source-topic"
         producer = row_producer_factory()
 
         p_num = 1
 
         changelog_producer = ChangelogProducerFactory(
-            changelog_name=changelog_name, producer=producer
+            changelog_name=changelog_name,
+            producer=producer,
+            source_topic_name=source_topic_name,
         ).get_partition_producer(partition_num=p_num)
-        assert changelog_producer._changelog_name == changelog_name
-        assert changelog_producer._partition_num == p_num
-        assert changelog_producer._producer == producer
+        assert changelog_producer.changelog_name == changelog_name
+        assert changelog_producer.partition == p_num
+        assert changelog_producer.source_topic_name == source_topic_name
 
 
 class TestRecoveryManager:

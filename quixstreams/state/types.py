@@ -107,17 +107,6 @@ class StorePartition(Protocol):
         """
         ...
 
-    def produce_to_changelog(
-        self,
-        key: bytes,
-        value: Optional[bytes] = None,
-        headers: Optional[MessageHeadersMapping] = None,
-    ):
-        """
-        Produce a message to the StorePartitions respective changelog.
-        """
-        ...
-
     def get_processed_offset(self) -> Optional[int]:
         """
         Get last processed offset for the given partition
@@ -270,7 +259,7 @@ class PartitionTransaction(Protocol):
         """
         ...
 
-    def prepare(self, processed_offset: Optional[int] = None):
+    def prepare(self, processed_offset: int):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transcation to flush its state to the state
@@ -404,7 +393,7 @@ class WindowedPartitionTransaction(Protocol):
         """
         ...
 
-    def prepare(self, processed_offset: Optional[int] = None):
+    def prepare(self, processed_offset: int):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
         in this transaction and prepare transcation to flush its state to the state
@@ -494,6 +483,16 @@ class WindowedPartitionTransaction(Protocol):
         :param processed_offset: offset of the last processed message, optional.
         :param changelog_offset: offset of the last produced changelog message,
             optional.
+        """
+
+    @property
+    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
+        """
+        Return the changelog topic-partition for the StorePartition of this transaction.
+
+        Returns `None` if changelog_producer is not provided.
+
+        :return: (topic, partition) or None
         """
 
     def __enter__(self): ...

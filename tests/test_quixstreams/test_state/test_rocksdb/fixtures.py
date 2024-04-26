@@ -1,6 +1,6 @@
 import uuid
 from typing import Optional
-from unittest.mock import create_autospec, MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
@@ -11,7 +11,7 @@ from quixstreams.state.rocksdb.partition import RocksDBStorePartition
 
 
 @pytest.fixture()
-def rocksdb_partition_factory(tmp_path):
+def rocksdb_partition_factory(tmp_path, changelog_producer_mock):
     def factory(
         name: str = "db",
         options: Optional[RocksDBOptions] = None,
@@ -19,13 +19,9 @@ def rocksdb_partition_factory(tmp_path):
     ) -> RocksDBStorePartition:
         path = (tmp_path / name).as_posix()
         _options = options or RocksDBOptions(open_max_retries=0, open_retry_backoff=3.0)
-        if not changelog_producer:
-            changelog_producer = create_autospec(ChangelogProducer)(
-                "topic", "partition", "producer"
-            )
         return RocksDBStorePartition(
             path,
-            changelog_producer=changelog_producer,
+            changelog_producer=changelog_producer or changelog_producer_mock,
             options=_options,
         )
 
@@ -66,4 +62,8 @@ def rocksdb_store(rocksdb_store_factory) -> RocksDBStore:
 
 @pytest.fixture()
 def changelog_producer_mock():
-    return MagicMock(spec_set=ChangelogProducer)
+    producer = MagicMock(spec_set=ChangelogProducer)
+    type(producer).source_topic_name = PropertyMock(return_value="test-source-topic")
+    type(producer).changelog_name = PropertyMock(return_value="test-changelog-topic")
+    type(producer).partition = PropertyMock(return_value=0)
+    return producer

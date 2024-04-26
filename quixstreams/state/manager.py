@@ -122,13 +122,15 @@ class StateStoreManager:
                 f'State Manager: registering changelog for store "{store_name}" '
                 f'(topic "{topic_name}")'
             )
+            changelog_topic = self._recovery_manager.register_changelog(
+                topic_name=topic_name,
+                store_name=store_name,
+                consumer_group=self._group_id,
+            )
             return ChangelogProducerFactory(
-                self._recovery_manager.register_changelog(
-                    topic_name=topic_name,
-                    store_name=store_name,
-                    consumer_group=self._group_id,
-                ).name,
-                self._producer,
+                changelog_name=changelog_topic.name,
+                source_topic_name=topic_name,
+                producer=self._producer,
             )
 
     def register_store(

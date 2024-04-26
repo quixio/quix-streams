@@ -21,9 +21,7 @@ from quixstreams.models import (
     JSONSerializer,
     TopicConfig,
 )
-from quixstreams.platforms.quix import (
-    QuixKafkaConfigsBuilder,
-)
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state import State
@@ -198,7 +196,6 @@ class TestApplication:
             processed_count += 1
             # Stop processing after consuming all the messages
             if processed_count == total_messages:
-                failed.set_result(True)
                 raise ValueError("test")
 
         sdf = app.dataframe(topic_in).apply(count_and_fail)
@@ -983,7 +980,6 @@ class TestApplicationWithState:
             state.set("total", total)
             # Fail after processing all messages
             if total == total_messages:
-                failed.set_result(True)
                 raise ValueError("test")
 
         failed = Future()
