@@ -1,7 +1,11 @@
 import pytest
 
-from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.rocksdb.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+)
 from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
+from quixstreams.utils.json import dumps
 
 
 class TestWindowedRocksDBPartitionTransaction:
@@ -317,6 +321,11 @@ class TestWindowedRocksDBPartitionTransaction:
         start_ms = 0
         end_ms = 10
         value = 1
+        source_topic_name, source_partition = (
+            changelog_producer_mock.source_topic_name,
+            changelog_producer_mock.partition,
+        )
+        processed_offset = 1
 
         with windowed_rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -329,7 +338,7 @@ class TestWindowedRocksDBPartitionTransaction:
                 timestamp_ms=2,
                 prefix=prefix,
             )
-            tx.prepare()
+            tx.prepare(processed_offset=processed_offset)
             assert tx.prepared
 
         assert changelog_producer_mock.produce.call_count == 1
@@ -340,23 +349,37 @@ class TestWindowedRocksDBPartitionTransaction:
         changelog_producer_mock.produce.assert_called_with(
             key=expected_produced_key,
             value=expected_produced_value,
-            headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+            headers={
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
+                    [
+                        source_topic_name,
+                        source_partition,
+                        processed_offset,
+                    ]
+                ),
+            },
         )
 
     def test_delete_window_and_prepare(
         self, windowed_rocksdb_partition_factory, changelog_producer_mock
     ):
+        prefix = b"__key__"
+        start_ms = 0
+        end_ms = 10
+        source_topic_name, source_partition = (
+            changelog_producer_mock.source_topic_name,
+            changelog_producer_mock.partition,
+        )
+        processed_offset = 1
+
         with windowed_rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as store_partition:
 
-            prefix = b"__key__"
-            start_ms = 0
-            end_ms = 10
-
             tx = store_partition.begin()
             tx.delete_window(start_ms=start_ms, end_ms=end_ms, prefix=prefix)
-            tx.prepare()
+            tx.prepare(processed_offset=processed_offset)
             assert tx.prepared
 
         assert changelog_producer_mock.produce.call_count == 1
@@ -366,5 +389,14 @@ class TestWindowedRocksDBPartitionTransaction:
         changelog_producer_mock.produce.assert_called_with(
             key=expected_produced_key,
             value=None,
-            headers={CHANGELOG_CF_MESSAGE_HEADER: "default"},
+            headers={
+                CHANGELOG_CF_MESSAGE_HEADER: "default",
+                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
+                    [
+                        source_topic_name,
+                        source_partition,
+                        processed_offset,
+                    ]
+                ),
+            },
         )

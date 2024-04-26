@@ -50,19 +50,21 @@ def windowed_rocksdb_partition_factory(tmp_path):
 
 
 @pytest.fixture()
-def windowed_rocksdb_store_factory_changelog(tmp_path):
+def windowed_rocksdb_store_factory_changelog(tmp_path, changelog_producer_mock):
     def factory(
         topic: Optional[str] = None,
         changelog: Optional[str] = None,
         name: str = "default",
         producer: Optional[RowProducer] = None,
     ) -> WindowedRocksDBStore:
+        topic = topic or str(uuid.uuid4())
         return WindowedRocksDBStore(
-            topic=topic or str(uuid.uuid4()),
+            topic=topic,
             name=name,
             base_dir=str(tmp_path),
             changelog_producer_factory=ChangelogProducerFactory(
                 changelog_name=changelog or str(uuid.uuid4()),
+                source_topic_name=topic,
                 producer=producer or create_autospec(RowProducer)("address"),
             ),
         )

@@ -46,7 +46,6 @@ class RocksDBStorePartition(StorePartition):
      1. Managing access to the RocksDB instance
      2. Creating transactions to interact with data
      3. Flushing WriteBatches to the RocksDB
-     4. Producing state-related changelog messages
 
     It opens the RocksDB on `__init__`. If the db is locked by another process,
     it will retry according to `open_max_retries` and `open_retry_backoff` options.
@@ -73,25 +72,6 @@ class RocksDBStorePartition(StorePartition):
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
         self._changelog_producer = changelog_producer
 
-    @property
-    def using_changelogs(self) -> bool:
-        return bool(self._changelog_producer)
-
-    @property
-    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
-        """
-        Return the changelog topic-partition for the given StorePartition.
-
-        Returns `None` if changelog_producer is not provided.
-
-        :return: (topic, partition) or None
-        """
-        if self._changelog_producer is not None:
-            return (
-                self._changelog_producer.changelog_name,
-                self._changelog_producer.partition,
-            )
-
     def begin(
         self,
     ) -> RocksDBPartitionTransaction:
@@ -105,6 +85,7 @@ class RocksDBStorePartition(StorePartition):
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
+            changelog_producer=self._changelog_producer,
         )
 
     def _changelog_recover_flush(self, changelog_offset: int, batch: WriteBatch):
@@ -151,17 +132,6 @@ class RocksDBStorePartition(StorePartition):
         :param changelog_offset: A changelog offset
         """
         self._changelog_recover_flush(changelog_offset, WriteBatch(raw_mode=True))
-
-    def produce_to_changelog(
-        self,
-        key: bytes,
-        value: Optional[bytes] = None,
-        headers: Optional[MessageHeadersMapping] = None,
-    ):
-        """
-        Produce a message to the StorePartitions respective changelog.
-        """
-        self._changelog_producer.produce(key=key, value=value, headers=headers)
 
     def write(self, batch: WriteBatch):
         """
@@ -227,8 +197,6 @@ class RocksDBStorePartition(StorePartition):
         self._cf_handle_cache = {}
         self._cf_cache = {}
         self._db.close()
-        if self._changelog_producer:
-            self._changelog_producer.flush()
         logger.debug(f'Closed rocksdb partition on "{self._path}"')
 
     @property
@@ -327,9 +295,6 @@ class RocksDBStorePartition(StorePartition):
             options=options,
             access_type=AccessType.read_write(),
         )
-        # write_opts = WriteOptions()
-        # write_opts.disable_wal = True
-        # rdict.set_write_options(write_opts)
         # Ensure metadata column family is created without defining it upfront
         try:
             rdict.get_column_family(METADATA_CF_NAME)

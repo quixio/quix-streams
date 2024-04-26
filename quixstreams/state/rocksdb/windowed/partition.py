@@ -57,6 +57,7 @@ class WindowedRocksDBStorePartition(RocksDBStorePartition):
             dumps=self._dumps,
             loads=self._loads,
             latest_timestamp_ms=self._latest_timestamp_ms,
+            changelog_producer=self._changelog_producer,
         )
 
     def set_latest_timestamp(self, timestamp_ms: int):

@@ -2,6 +2,7 @@ from typing import Any, Optional, List, Tuple, TYPE_CHECKING, cast
 
 from rocksdict import ReadOptions
 
+from quixstreams.state.recovery import ChangelogProducer
 from .metadata import LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY, LATEST_EXPIRED_WINDOW_CF_NAME
 from .serialization import encode_window_key, encode_window_prefix, parse_window_key
 from .state import WindowedTransactionState
@@ -27,8 +28,14 @@ class WindowedRocksDBPartitionTransaction(RocksDBPartitionTransaction):
         dumps: DumpsFunc,
         loads: LoadsFunc,
         latest_timestamp_ms: int,
+        changelog_producer: Optional[ChangelogProducer] = None,
     ):
-        super().__init__(partition=partition, dumps=dumps, loads=loads)
+        super().__init__(
+            partition=partition,
+            dumps=dumps,
+            loads=loads,
+            changelog_producer=changelog_producer,
+        )
         self._partition = cast("WindowedRocksDBStorePartition", self._partition)
         self._latest_timestamp_ms = latest_timestamp_ms
 

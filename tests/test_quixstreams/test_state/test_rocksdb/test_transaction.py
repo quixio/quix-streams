@@ -14,7 +14,10 @@ from quixstreams.state.rocksdb import (
     RocksDBPartitionTransaction,
     InvalidChangelogOffset,
 )
-from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
+from quixstreams.state.rocksdb.metadata import (
+    CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+)
 from quixstreams.state.rocksdb.serialization import serialize
 from quixstreams.utils.json import dumps
 
@@ -284,7 +287,7 @@ class TestRocksDBPartitionTransaction:
         tx = rocksdb_partition.begin()
 
         tx.set(key="key", value="value", prefix=prefix)
-        tx.prepare()
+        tx.prepare(processed_offset=1)
         assert tx.prepared
 
         with pytest.raises(StateTransactionError):
@@ -445,6 +448,11 @@ class TestRocksDBPartitionTransaction:
         ]
         cf = "default"
         prefix = b"__key__"
+        source_topic_name, source_partition = (
+            changelog_producer_mock.source_topic_name,
+            changelog_producer_mock.partition,
+        )
+        processed_offset = 1
 
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -457,15 +465,25 @@ class TestRocksDBPartitionTransaction:
                     cf_name=cf,
                     prefix=prefix,
                 )
-            tx.prepare()
+            tx.prepare(processed_offset=processed_offset)
 
             assert changelog_producer_mock.produce.call_count == len(data)
+
             for (key, value), call in zip(
                 data, changelog_producer_mock.produce.call_args_list
             ):
                 assert call.kwargs["key"] == tx._serialize_key(key=key, prefix=prefix)
                 assert call.kwargs["value"] == tx._serialize_value(value=value)
-                assert call.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
+                assert call.kwargs["headers"] == {
+                    CHANGELOG_CF_MESSAGE_HEADER: cf,
+                    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
+                        [
+                            source_topic_name,
+                            source_partition,
+                            processed_offset,
+                        ]
+                    ),
+                }
 
             assert tx.prepared
 
@@ -475,6 +493,12 @@ class TestRocksDBPartitionTransaction:
         key, value = "key", "value"
         cf = "default"
         prefix = b"__key__"
+        source_topic_name, source_partition = (
+            changelog_producer_mock.source_topic_name,
+            changelog_producer_mock.partition,
+        )
+        processed_offset = 1
+
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
         ) as partition:
@@ -482,7 +506,7 @@ class TestRocksDBPartitionTransaction:
             tx = partition.begin()
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            tx.prepare()
+            tx.prepare(processed_offset=processed_offset)
 
             assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
@@ -492,7 +516,16 @@ class TestRocksDBPartitionTransaction:
             key=key, prefix=prefix
         )
         assert delete_changelog.kwargs["value"] is None
-        assert delete_changelog.kwargs["headers"] == {CHANGELOG_CF_MESSAGE_HEADER: cf}
+        assert delete_changelog.kwargs["headers"] == {
+            CHANGELOG_CF_MESSAGE_HEADER: cf,
+            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
+                [
+                    source_topic_name,
+                    source_partition,
+                    processed_offset,
+                ]
+            ),
+        }
 
     def test_set_delete_and_prepare(
         self, rocksdb_partition_factory, changelog_producer_mock
@@ -504,6 +537,11 @@ class TestRocksDBPartitionTransaction:
         key, value = "key", "value"
         cf = "default"
         prefix = b"__key__"
+        source_topic_name, source_partition = (
+            changelog_producer_mock.source_topic_name,
+            changelog_producer_mock.partition,
+        )
+        processed_offset = 1
 
         with rocksdb_partition_factory(
             changelog_producer=changelog_producer_mock
@@ -512,7 +550,7 @@ class TestRocksDBPartitionTransaction:
             tx.set(key=key, value=value, cf_name=cf, prefix=prefix)
             tx.delete(key=key, cf_name=cf, prefix=prefix)
 
-            tx.prepare()
+            tx.prepare(processed_offset=processed_offset)
 
             assert tx.prepared
             assert changelog_producer_mock.produce.call_count == 1
@@ -522,5 +560,12 @@ class TestRocksDBPartitionTransaction:
             )
             assert delete_changelog.kwargs["value"] is None
             assert delete_changelog.kwargs["headers"] == {
-                CHANGELOG_CF_MESSAGE_HEADER: cf
+                CHANGELOG_CF_MESSAGE_HEADER: cf,
+                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
+                    [
+                        source_topic_name,
+                        source_partition,
+                        processed_offset,
+                    ]
+                ),
             }

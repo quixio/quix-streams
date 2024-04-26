@@ -3,7 +3,8 @@ import logging
 from typing import Any, Union, Optional, Dict, NewType, TYPE_CHECKING, Tuple
 
 from rocksdict import WriteBatch
-
+from quixstreams.utils.json import dumps as json_dumps
+from quixstreams.state.recovery import ChangelogProducer
 from quixstreams.state.types import (
     DumpsFunc,
     LoadsFunc,
@@ -17,6 +18,7 @@ from .metadata import (
     CHANGELOG_OFFSET_KEY,
     PREFIX_SEPARATOR,
     CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
 from .serialization import serialize, deserialize, int_to_int64_bytes
 from ..state import TransactionState
@@ -100,6 +102,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         partition: "RocksDBStorePartition",
         dumps: DumpsFunc,
         loads: LoadsFunc,
+        changelog_producer: Optional[ChangelogProducer] = None,
     ):
         """
         :param partition: instance of `RocksDBStatePartition` to be used for accessing
@@ -115,26 +118,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         self._dumps = dumps
         self._loads = loads
         self._status = PartitionTransactionStatus.STARTED
-
-    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> TransactionState:
-        """
-        Create a one-time use `TransactionState` object with a limited CRUD interface
-        to be provided to `StreamingDataFrame` operations.
-
-        The `TransactionState` will prefix all the keys with the supplied `prefix`
-        for all underlying operations.
-
-        :param prefix: a prefix to be used for all keys
-        :return: an instance of `TransactionState`
-        """
-        return TransactionState(
-            transaction=self,
-            prefix=(
-                prefix
-                if isinstance(prefix, bytes)
-                else serialize(prefix, dumps=self._dumps)
-            ),
-        )
+        self._changelog_producer = changelog_producer
 
     @_validate_transaction_status(PartitionTransactionStatus.STARTED)
     def get(
@@ -247,6 +231,61 @@ class RocksDBPartitionTransaction(PartitionTransaction):
 
         return self._partition.exists(key_serialized, cf_name=cf_name)
 
+    @_validate_transaction_status(PartitionTransactionStatus.STARTED)
+    def prepare(self, processed_offset: int):
+        """
+        Produce changelog messages to the changelog topic for all changes accumulated
+        in this transaction and prepare transcation to flush its state to the state
+        store.
+
+        After successful `prepare()`, the transaction status is changed to PREPARED,
+        and it cannot receive updates anymore.
+
+        If changelog is disabled for this application, no updates will be produced
+        to the changelog topic.
+
+        :param processed_offset: the offset of the latest processed message
+        """
+        try:
+            self._produce_changelog(processed_offset=processed_offset)
+            self._status = PartitionTransactionStatus.PREPARED
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+
+    @_validate_transaction_status(
+        PartitionTransactionStatus.STARTED, PartitionTransactionStatus.PREPARED
+    )
+    def flush(
+        self,
+        processed_offset: Optional[int] = None,
+        changelog_offset: Optional[int] = None,
+    ):
+        """
+        Flush the recent updates to the database.
+        It writes the WriteBatch to RocksDB and marks itself as finished.
+
+        If writing fails, the transaction is marked as failed and
+        cannot be used anymore.
+
+        >***NOTE:*** If no keys have been modified during the transaction
+            (i.e. no "set" or "delete" have been called at least once), it will
+            not flush ANY data to the database including the offset to optimize
+            I/O.
+
+        :param processed_offset: offset of the last processed message, optional.
+        :param changelog_offset: offset of the last produced changelog message,
+            optional.
+        """
+        try:
+            self._flush_state(
+                processed_offset=processed_offset, changelog_offset=changelog_offset
+            )
+            self._status = PartitionTransactionStatus.COMPLETE
+        except Exception:
+            self._status = PartitionTransactionStatus.FAILED
+            raise
+
     @property
     def status(self) -> PartitionTransactionStatus:
         return self._status
@@ -289,25 +328,70 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
         return self._status == PartitionTransactionStatus.FAILED
 
+    @property
+    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
+        """
+        Return the changelog topic-partition for the StorePartition of this transaction.
+
+        Returns `None` if changelog_producer is not provided.
+
+        :return: (topic, partition) or None
+        """
+        if self._changelog_producer is not None:
+            return (
+                self._changelog_producer.changelog_name,
+                self._changelog_producer.partition,
+            )
+
+    def as_state(self, prefix: Any = DEFAULT_PREFIX) -> TransactionState:
+        """
+        Create a one-time use `TransactionState` object with a limited CRUD interface
+        to be provided to `StreamingDataFrame` operations.
+
+        The `TransactionState` will prefix all the keys with the supplied `prefix`
+        for all underlying operations.
+
+        :param prefix: a prefix to be used for all keys
+        :return: an instance of `TransactionState`
+        """
+        return TransactionState(
+            transaction=self,
+            prefix=(
+                prefix
+                if isinstance(prefix, bytes)
+                else serialize(prefix, dumps=self._dumps)
+            ),
+        )
+
     def _produce_changelog(self, processed_offset: Optional[int] = None):
-        if not self._partition.using_changelogs:
+        changelog_producer = self._changelog_producer
+        if changelog_producer is None:
             return
 
-        # TODO: Add topic offset to the changelog headers
-        changelog_topic, changelog_partition = self._partition.changelog_topic_partition
+        source_topic, changelog_topic, partition = (
+            changelog_producer.source_topic_name,
+            changelog_producer.changelog_name,
+            changelog_producer.partition,
+        )
         logger.debug(
             f"Flushing state changes to the changelog topic "
             f'topic_name="{changelog_topic}" '
-            f"partition={changelog_partition} "
+            f"partition={partition} "
             f"processed_offset={processed_offset}"
         )
         # Iterate over the transaction update cache
         for cf_name, cf_update_cache in self._update_cache.items():
-            headers = {CHANGELOG_CF_MESSAGE_HEADER: cf_name}
+            source_tp_offset_header = json_dumps(
+                [source_topic, partition, processed_offset]
+            )
+            headers = {
+                CHANGELOG_CF_MESSAGE_HEADER: cf_name,
+                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: source_tp_offset_header,
+            }
             for _prefix, prefix_update_cache in cf_update_cache.items():
                 for key, value in prefix_update_cache.items():
                     # Produce changes to the changelog topic
-                    self._partition.produce_to_changelog(
+                    self._changelog_producer.produce(
                         key=key,
                         value=value if value is not DELETED else None,
                         headers=headers,
@@ -365,72 +449,6 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         )
         self._partition.write(self._batch)
 
-    @_validate_transaction_status(PartitionTransactionStatus.STARTED)
-    def prepare(self, processed_offset: Optional[int] = None):
-        """
-        Produce changelog messages to the changelog topic for all changes accumulated
-        in this transaction and prepare transcation to flush its state to the state
-        store.
-
-        After successful `prepare()`, the transaction status is changed to PREPARED,
-        and it cannot receive updates anymore.
-
-        If changelog is disabled for this application, no updates will be produced
-        to the changelog topic.
-
-        :param processed_offset: the offset of the latest processed message
-        """
-        try:
-            self._produce_changelog(processed_offset=processed_offset)
-            self._status = PartitionTransactionStatus.PREPARED
-        except Exception:
-            self._status = PartitionTransactionStatus.FAILED
-            raise
-
-    @_validate_transaction_status(
-        PartitionTransactionStatus.STARTED, PartitionTransactionStatus.PREPARED
-    )
-    def flush(
-        self,
-        processed_offset: Optional[int] = None,
-        changelog_offset: Optional[int] = None,
-    ):
-        """
-        Flush the recent updates to the database.
-        It writes the WriteBatch to RocksDB and marks itself as finished.
-
-        If writing fails, the transaction is marked as failed and
-        cannot be used anymore.
-
-        >***NOTE:*** If no keys have been modified during the transaction
-            (i.e. no "set" or "delete" have been called at least once), it will
-            not flush ANY data to the database including the offset to optimize
-            I/O.
-
-        :param processed_offset: offset of the last processed message, optional.
-        :param changelog_offset: offset of the last produced changelog message,
-            optional.
-        """
-        try:
-            self._flush_state(
-                processed_offset=processed_offset, changelog_offset=changelog_offset
-            )
-            self._status = PartitionTransactionStatus.COMPLETE
-        except Exception:
-            self._status = PartitionTransactionStatus.FAILED
-            raise
-
-    @property
-    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
-        """
-        Return the changelog topic-partition for the StorePartition of this transaction.
-
-        Returns `None` if changelog_producer is not provided.
-
-        :return: (topic, partition) or None
-        """
-        return self._partition.changelog_topic_partition
-
     def _serialize_value(self, value: Any) -> bytes:
         return serialize(value, dumps=self._dumps)
 
@@ -446,7 +464,13 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Note: with state transactions, context managers are meant to be used mostly
-        # in tests
+        """
+        Note: with state transactions, context manager interface is meant
+        to be used mostly in unit tests.
+
+        Normally, the Checkpoint class is responsible for managing and flushing
+        the transactions.
+        """
+
         if exc_val is None and not self.failed:
             self.flush()

@@ -117,7 +117,9 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(self, changelog_name: str, producer: RowProducer):
+    def __init__(
+        self, changelog_name: str, source_topic_name: str, producer: RowProducer
+    ):
         """
         :param changelog_name: changelog topic name
         :param producer: a RowProducer (not shared with `Application` instance)
@@ -125,6 +127,7 @@ class ChangelogProducerFactory:
         :return: a ChangelogWriter instance
         """
         self._changelog_name = changelog_name
+        self._source_topic_name = source_topic_name
         self._producer = producer
 
     def get_partition_producer(self, partition_num) -> "ChangelogProducer":
@@ -135,7 +138,10 @@ class ChangelogProducerFactory:
         :param partition_num: source topic partition number
         """
         return ChangelogProducer(
-            self._changelog_name, partition_num, producer=self._producer
+            changelog_name=self._changelog_name,
+            source_topic_name=self._source_topic_name,
+            partition=partition_num,
+            producer=self._producer,
         )
 
 
@@ -145,15 +151,26 @@ class ChangelogProducer:
     kafka changelog partition.
     """
 
-    def __init__(self, changelog_name: str, partition: int, producer: RowProducer):
+    def __init__(
+        self,
+        changelog_name: str,
+        source_topic_name: str,
+        partition: int,
+        producer: RowProducer,
+    ):
         """
         :param changelog_name: A changelog topic name
         :param partition: source topic partition number
         :param producer: a RowProducer (not shared with `Application` instance)
         """
         self._changelog_name = changelog_name
+        self._source_topic_name = source_topic_name
         self._partition_num = partition
         self._producer = producer
+
+    @property
+    def source_topic_name(self) -> str:
+        return self._source_topic_name
 
     @property
     def changelog_name(self) -> str:
@@ -184,8 +201,8 @@ class ChangelogProducer:
             topic=self._changelog_name,
         )
 
-    def flush(self):
-        self._producer.flush()
+    def flush(self, timeout: Optional[float] = None) -> int:
+        return self._producer.flush(timeout=timeout)
 
 
 class RecoveryManager:
