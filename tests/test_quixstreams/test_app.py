@@ -598,9 +598,11 @@ class TestQuixApplication:
         error_str = "Cannot provide both broker address and Quix SDK Token"
         assert error_str in e_info.value.args
 
-    def test_topic_name_and_config(self, quix_app_factory):
+    def test_topic_name_and_config(
+        self, quix_app_factory, quix_mock_config_builder_factory
+    ):
         """
-        Topic names created from Quix apps are prefixed by the workspace id
+        Topic names created with Quix API have workspace id prefixed
         Topic config has provided values else defaults
         """
         workspace_id = "my-workspace"

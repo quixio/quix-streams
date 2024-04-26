@@ -17,6 +17,7 @@ from .exceptions import (
     UndefinedQuixWorkspaceId,
     QuixCreateTopicFailure,
     QuixCreateTopicTimeout,
+    QuixApiRequestFailure,
 )
 
 logger = logging.getLogger(__name__)
@@ -416,6 +417,25 @@ class QuixKafkaConfigsBuilder:
             else "No topic creations required!"
         )
         self._finalize_create(finalize, timeout=finalize_timeout_seconds)
+
+    def get_topic(self, topic_name: str) -> Optional[dict]:
+        """
+        return the topic ID (the actual cluster topic name) if it exists, else None
+
+        >***NOTE***: if the name registered in Quix is instead the workspace-prefixed
+        version, this returns None unless that exact name was created WITHOUT the
+        Quix API.
+
+        :param topic_name: name of the topic
+
+        :return: response dict of the topic info if topic found, else None
+        """
+        try:
+            return self.api.get_topic(topic_name, workspace_id=self.workspace_id)
+        except QuixApiRequestFailure as e:
+            if e.status_code == 404:
+                return
+            raise
 
     def get_topics(self) -> List[dict]:
         return self.api.get_topics(workspace_id=self.workspace_id)
