@@ -379,7 +379,10 @@ class QuixKafkaConfigsBuilder:
         )
 
     def _finalize_create(
-        self, topics: Set[str], finalize_timeout: Optional[float] = None
+        self,
+        topics: Set[str],
+        timeout: Optional[float] = None,
+        finalize_timeout: Optional[float] = None,
     ):
         """
         After the broker acknowledges the topics are created, they will be in a
@@ -397,7 +400,9 @@ class QuixKafkaConfigsBuilder:
         while topics and time.time() < stop_time:
             # Each topic seems to take 10-15 seconds each to finalize (at least in dev)
             time.sleep(1)
-            for topic in [t for t in self.get_topics() if t["id"] in topics.copy()]:
+            for topic in [
+                t for t in self.get_topics(timeout=timeout) if t["id"] in topics.copy()
+            ]:
                 if topic["status"] == "Ready":
                     logger.debug(f"Topic {topic['name']} creation finalized")
                     topics.remove(topic["id"])
@@ -459,7 +464,9 @@ class QuixKafkaConfigsBuilder:
             if finalize
             else "No topic creations required!"
         )
-        self._finalize_create(finalize, finalize_timeout=finalize_timeout)
+        self._finalize_create(
+            finalize, timeout=timeout, finalize_timeout=finalize_timeout
+        )
 
     def get_topic(self, topic_name: str) -> Optional[dict]:
         """
@@ -485,6 +492,7 @@ class QuixKafkaConfigsBuilder:
             workspace_id=self.workspace_id,
             timeout=timeout if timeout is not None else self._timeout,
         )
+
     def confirm_topics_exist(
         self, topics: Union[List[Topic], List[str]], timeout: Optional[float] = None
     ):

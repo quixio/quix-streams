@@ -43,9 +43,10 @@ class TestQuixKafkaConfigsBuilder:
         assert result == api_data_stub
 
     def test_search_for_workspace_non_id(self):
-        matching_ws = {"workspaceId": "myworkspace12345", "name": "my workspace"}
+        matching_ws = "my workspace"
+        matching_ws_data = {"workspaceId": "myworkspace12345", "name": matching_ws}
         api_data_stub = [
-            matching_ws,
+            matching_ws_data,
             {"workspaceId": "myotherworkspace67890", "name": "my other workspace"},
         ]
         api = create_autospec(QuixPortalApiService)
@@ -55,10 +56,12 @@ class TestQuixKafkaConfigsBuilder:
         api.get_workspaces.return_value = api_data_stub
         api.get_workspace.side_effect = HTTPError
 
-        result = cfg_builder.search_for_workspace("my workspace")
-        api.get_workspace.assert_called_with(workspace_id="my workspace")
+        result = cfg_builder.search_for_workspace(matching_ws)
+        api.get_workspace.assert_called_with(
+            workspace_id=matching_ws, timeout=cfg_builder._timeout
+        )
         api.get_workspaces.assert_called()
-        assert result == matching_ws
+        assert result == matching_ws_data
 
     def test_get_workspace_info_has_wid(self):
         api_data = {
@@ -89,12 +92,15 @@ class TestQuixKafkaConfigsBuilder:
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
         )
+        timeout = 2.2
         with patch.object(
             cfg_builder, "search_for_workspace", return_value=deepcopy(api_data)
         ) as get_ws:
-            cfg_builder.get_workspace_info()
+            cfg_builder.get_workspace_info(timeout=timeout)
 
-        get_ws.assert_called_with(workspace_name_or_id=cfg_builder.workspace_id)
+        get_ws.assert_called_with(
+            workspace_name_or_id=cfg_builder.workspace_id, timeout=timeout
+        )
         assert cfg_builder.workspace_id == api_data["workspaceId"]
         assert cfg_builder.quix_broker_config == api_data["broker"]
         assert cfg_builder.quix_broker_settings == api_data["brokerSettings"]
@@ -119,10 +125,11 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", quix_portal_api_service=api
         )
         api.get_workspace.return_value = api_data_stub
+        timeout = 2.2
 
         with pytest.raises(NoWorkspaceFound):
-            cfg_builder.get_workspace_info()
-        api.get_workspace.assert_called_with(cfg_builder.workspace_id)
+            cfg_builder.get_workspace_info(timeout=timeout)
+        api.get_workspace.assert_called_with(cfg_builder.workspace_id, timeout=timeout)
 
     def test_get_workspace_info_no_wid_one_ws(self):
         api_data_stub = {
@@ -152,13 +159,18 @@ class TestQuixKafkaConfigsBuilder:
         api = create_autospec(QuixPortalApiService)
         api.default_workspace_id = None
         cfg_builder = QuixKafkaConfigsBuilder(quix_portal_api_service=api)
+        timeout = 2.2
+
         with patch.object(
             cfg_builder,
             "search_for_topic_workspace",
             return_value=deepcopy(api_data_stub),
         ) as search:
-            cfg_builder.get_workspace_info(known_workspace_topic="a_topic")
-            search.assert_called_with("a_topic")
+            cfg_builder.get_workspace_info(
+                known_workspace_topic="a_topic", timeout=timeout
+            )
+
+        search.assert_called_with("a_topic", timeout=timeout)
         assert cfg_builder.workspace_id == api_data_stub["workspaceId"]
         assert cfg_builder.quix_broker_config == api_data_stub["broker"]
         assert cfg_builder.quix_broker_settings == api_data_stub["brokerSettings"]
@@ -201,13 +213,18 @@ class TestQuixKafkaConfigsBuilder:
         api = create_autospec(QuixPortalApiService)
         api.default_workspace_id = None
         cfg_builder = QuixKafkaConfigsBuilder(quix_portal_api_service=api)
+        timeout = 2.2
+
         with patch.object(
             cfg_builder,
             "search_for_topic_workspace",
             return_value=deepcopy(api_data_stub),
         ) as search:
-            cfg_builder.get_workspace_info(known_workspace_topic="a_topic")
-            search.assert_called_with("a_topic")
+            cfg_builder.get_workspace_info(
+                known_workspace_topic="a_topic", timeout=timeout
+            )
+
+        search.assert_called_with("a_topic", timeout=timeout)
         assert cfg_builder.workspace_id == api_data_stub["workspaceId"]
         assert cfg_builder.quix_broker_config == api_data_stub["broker"]
         assert cfg_builder.quix_broker_settings == {
@@ -225,7 +242,8 @@ class TestQuixKafkaConfigsBuilder:
             "branchProtected": False,
         }
 
-    def test_search_for_topic_workspace_no_topic(self):
+    @pytest.mark.parametrize("timeout", [None, 2.2])
+    def test_search_for_topic_workspace_no_topic(self, timeout):
         api_data_stub = [
             {
                 "workspaceId": "12345",
@@ -240,17 +258,21 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             },
         ]
+        default_timeout = 1
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345", quix_portal_api_service=api, timeout=default_timeout
         )
         api.get_workspaces.return_value = api_data_stub
 
         with pytest.raises(MultipleWorkspaces):
-            cfg_builder.search_for_topic_workspace(None)
-        api.get_workspaces.assert_called()
+            cfg_builder.search_for_topic_workspace(None, timeout=timeout)
+        api.get_workspaces.assert_called_with(
+            timeout=timeout if timeout is not None else default_timeout
+        )
 
-    def test_search_for_topic_workspace_no_match(self):
+    @pytest.mark.parametrize("timeout", [None, 2.2])
+    def test_search_for_topic_workspace_no_match(self, timeout):
         api_data_stub = [
             {
                 "workspaceId": "12345",
@@ -265,20 +287,29 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             },
         ]
+        default_timeout = 1
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345", quix_portal_api_service=api, timeout=default_timeout
         )
         api.get_workspaces.return_value = api_data_stub
 
         with patch.object(
             cfg_builder, "search_workspace_for_topic", return_value=None
         ) as search:
-            cfg_builder.search_for_topic_workspace("topic")
-            api.get_workspaces.assert_called()
-            search.assert_has_calls([call("12345", "topic"), call("67890", "topic")])
+            cfg_builder.search_for_topic_workspace("topic", timeout=timeout)
+            api.get_workspaces.assert_called_with(
+                timeout=timeout if timeout is not None else default_timeout
+            )
+            search.assert_has_calls(
+                [
+                    call("12345", "topic", timeout=timeout),
+                    call("67890", "topic", timeout=timeout),
+                ]
+            )
 
-    def test_search_for_topic_workspace_match(self):
+    @pytest.mark.parametrize("timeout", [None, 2.2])
+    def test_search_for_topic_workspace_match(self, timeout):
         api_data_stub = [
             {
                 "workspaceId": "12345",
@@ -293,18 +324,24 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             },
         ]
+        default_timeout = 1
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345", quix_portal_api_service=api, timeout=default_timeout
         )
         api.get_workspaces.return_value = api_data_stub
 
         with patch.object(cfg_builder, "search_workspace_for_topic") as search:
             search.side_effect = [None, "67890"]
-            result = cfg_builder.search_for_topic_workspace("topic_3")
-            api.get_workspaces.assert_called()
+            result = cfg_builder.search_for_topic_workspace("topic_3", timeout=timeout)
+            api.get_workspaces.assert_called_with(
+                timeout=timeout if timeout is not None else default_timeout
+            )
             search.assert_has_calls(
-                [call("12345", "topic_3"), call("67890", "topic_3")]
+                [
+                    call("12345", "topic_3", timeout=timeout),
+                    call("67890", "topic_3", timeout=timeout),
+                ]
             )
             assert result == {
                 "workspaceId": "67890",
@@ -313,7 +350,8 @@ class TestQuixKafkaConfigsBuilder:
                 "other": "stuff",
             }
 
-    def test_search_workspace_for_topic_match_name(self):
+    @pytest.mark.parametrize("timeout", [None, 2.2])
+    def test_search_workspace_for_topic_match_name(self, timeout):
         api_data_stub = [
             {
                 "id": "12345-topic_1",
@@ -327,19 +365,23 @@ class TestQuixKafkaConfigsBuilder:
             },
         ]
 
+        default_timeout = 1
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345", quix_portal_api_service=api, timeout=default_timeout
         )
         api.get_topics.return_value = api_data_stub
 
         result = cfg_builder.search_workspace_for_topic(
-            workspace_id="12345", topic="topic_2"
+            workspace_id="12345", topic="topic_2", timeout=timeout
         )
-        api.get_topics.assert_called_with("12345")
+        api.get_topics.assert_called_with(
+            "12345", timeout=timeout if timeout is not None else default_timeout
+        )
         assert result == "12345"
 
-    def test_search_workspace_for_topic_match_id(self):
+    @pytest.mark.parametrize("timeout", [None, 2.2])
+    def test_search_workspace_for_topic_match_id(self, timeout):
         api_data_stub = [
             {
                 "id": "12345-topic_1",
@@ -352,19 +394,23 @@ class TestQuixKafkaConfigsBuilder:
                 "other_fields": "other_values",
             },
         ]
+        default_timeout = 1
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345", quix_portal_api_service=api, timeout=default_timeout
         )
         api.get_topics.return_value = api_data_stub
 
         result = cfg_builder.search_workspace_for_topic(
-            workspace_id="12345", topic="12345-topic_2"
+            workspace_id="12345", topic="12345-topic_2", timeout=timeout
         )
-        api.get_topics.assert_called_with("12345")
+        api.get_topics.assert_called_with(
+            "12345", timeout=timeout if timeout is not None else default_timeout
+        )
         assert result == "12345"
 
-    def test_search_workspace_for_topic_no_match(self):
+    @pytest.mark.parametrize("timeout", [None, 2.2])
+    def test_search_workspace_for_topic_no_match(self, timeout):
         api_data_stub = [
             {
                 "id": "12345-topic_1",
@@ -375,22 +421,27 @@ class TestQuixKafkaConfigsBuilder:
                 "name": "topic_2",
             },
         ]
+        default_timeout = 1
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345", quix_portal_api_service=api, timeout=default_timeout
         )
         api.get_topics.return_value = api_data_stub
         result = cfg_builder.search_workspace_for_topic(
-            workspace_id="12345", topic="topic_3"
+            workspace_id="12345", topic="topic_3", timeout=timeout
         )
-        api.get_topics.assert_called_with("12345")
+
+        api.get_topics.assert_called_with(
+            "12345", timeout=timeout if timeout is not None else default_timeout
+        )
         assert result is None
 
     def test_get_workspace_ssl_cert(self, tmp_path):
         api_data_stub = b"my cool cert stuff"
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345",
+            quix_portal_api_service=api,
         )
         api.get_workspace_certificate.return_value = api_data_stub
         cfg_builder.get_workspace_ssl_cert(extract_to_folder=tmp_path)
@@ -410,6 +461,7 @@ class TestQuixKafkaConfigsBuilder:
     def test__set_workspace_cert_has_path(self):
         path = Path(getcwd()) / "certificates" / "12345"
         expected = (path / "ca.cert").as_posix()
+        timeout = 2.2
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -418,23 +470,25 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
-            r = cfg_builder._set_workspace_cert()
-            get_cert.assert_called_with(extract_to_folder=path)
+            r = cfg_builder._set_workspace_cert(timeout=timeout)
+        get_cert.assert_called_with(extract_to_folder=path, timeout=timeout)
         assert cfg_builder.workspace_cert_path == r == expected
 
     def test__set_workspace_cert_path(self, tmp_path):
         expected = (tmp_path / "ca.cert").as_posix()
+        timeout = 2.2
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345",
             quix_portal_api_service=api,
             workspace_cert_path=expected,
         )
+
         with patch.object(
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
-            r = cfg_builder._set_workspace_cert()
-            get_cert.assert_called_with(extract_to_folder=tmp_path)
+            r = cfg_builder._set_workspace_cert(timeout=timeout)
+        get_cert.assert_called_with(extract_to_folder=tmp_path, timeout=timeout)
         assert cfg_builder.workspace_cert_path == r == expected
 
     @pytest.mark.parametrize(
@@ -463,6 +517,7 @@ class TestQuixKafkaConfigsBuilder:
         quix_sasl_mechanisms,
         rdkafka_sasl_mechanisms,
     ):
+        timeout = 2.2
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -480,9 +535,11 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(cfg_builder, "get_workspace_info") as get_ws:
             with patch.object(cfg_builder, "_set_workspace_cert") as set_cert:
                 set_cert.return_value = "/mock/dir/ca.cert"
-                cfg_builder.get_confluent_broker_config(known_topic="topic")
+                cfg_builder.get_confluent_broker_config(
+                    known_topic="topic", timeout=timeout
+                )
 
-        get_ws.assert_called_with(known_workspace_topic="topic")
+        get_ws.assert_called_with(known_workspace_topic="topic", timeout=timeout)
         set_cert.assert_called()
         assert cfg_builder.confluent_broker_config == {
             "sasl.mechanisms": rdkafka_sasl_mechanisms,
@@ -512,17 +569,21 @@ class TestQuixKafkaConfigsBuilder:
         assert cfg_builder.strip_workspace_id_prefix("topic") == "topic"
 
     def test_get_confluent_client_config(self):
+        timeout = 2.2
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
+            workspace_id="12345",
+            quix_portal_api_service=api,
         )
         topics = ["topic_1", "topic_2"]
         group_id = "my_consumer_group"
         with patch.object(
             cfg_builder, "get_confluent_broker_config", return_value={"cfgs": "here"}
         ) as cfg:
-            result = cfg_builder.get_confluent_client_configs(topics, group_id)
-            cfg.assert_called_with("topic_1")
+            result = cfg_builder.get_confluent_client_configs(
+                topics, group_id, timeout=timeout
+            )
+            cfg.assert_called_with("topic_1", timeout=timeout)
         assert result == (
             {"cfgs": "here"},
             ["12345-topic_1", "12345-topic_2"],
@@ -596,6 +657,8 @@ class TestQuixKafkaConfigsBuilder:
         topic_c = topic_manager_topic_factory("12345-topic_c")
         topic_d = topic_manager_topic_factory("12345-topic_d")
 
+        timeout = 2.2
+        finalize_timeout = 3.3
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -606,11 +669,17 @@ class TestQuixKafkaConfigsBuilder:
         get_topics.return_value = get_topics_return
         finalize = stack.enter_context(patch.object(cfg_builder, "_finalize_create"))
         cfg_builder.create_topics(
-            [topic_b, topic_c, topic_d], finalize_timeout_seconds=1
+            [topic_b, topic_c, topic_d],
+            timeout=timeout,
+            finalize_timeout=finalize_timeout,
         )
         stack.close()
-        create_topic.assert_called_once_with(topic_d)
-        finalize.assert_called_with({t.name for t in [topic_c, topic_d]}, timeout=1)
+        create_topic.assert_called_once_with(topic_d, timeout=timeout)
+        finalize.assert_called_with(
+            {t.name for t in [topic_c, topic_d]},
+            timeout=timeout,
+            finalize_timeout=finalize_timeout,
+        )
 
     def test_create_topics_parallel_create_attempt(self, topic_manager_topic_factory):
         """When another app or something tries to create a topic at the same time"""
@@ -627,6 +696,8 @@ class TestQuixKafkaConfigsBuilder:
         mock_response = create_autospec(Response)
         mock_response.text = "already exists"
 
+        timeout = 2.2
+        finalize_timeout = 3.3
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -637,10 +708,14 @@ class TestQuixKafkaConfigsBuilder:
         get_topics = stack.enter_context(patch.object(cfg_builder, "get_topics"))
         get_topics.return_value = get_topics_return
         finalize = stack.enter_context(patch.object(cfg_builder, "_finalize_create"))
-        cfg_builder.create_topics([topic_b])
+        cfg_builder.create_topics(
+            [topic_b], timeout=timeout, finalize_timeout=finalize_timeout
+        )
         stack.close()
-        create_topic.assert_called_once_with(topic_b)
-        finalize.assert_called_with({topic_b.name}, timeout=None)
+        create_topic.assert_called_once_with(topic_b, timeout=timeout)
+        finalize.assert_called_with(
+            {topic_b.name}, timeout=timeout, finalize_timeout=finalize_timeout
+        )
 
     def test__finalize_create(self):
         def side_effect():
@@ -672,8 +747,9 @@ class TestQuixKafkaConfigsBuilder:
                     yield data
 
             n = nested()
-            return lambda: next(n)
+            return lambda timeout: next(n)
 
+        timeout = 2.2
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -681,8 +757,11 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(cfg_builder, "get_topics") as get_topics:
             get_topics.side_effect = side_effect()
             cfg_builder._finalize_create(
-                {"12345-topic_b", "12345-topic_c", "12345-topic_d"}
+                topics={"12345-topic_b", "12345-topic_c", "12345-topic_d"},
+                timeout=timeout,
             )
+
+        get_topics.assert_has_calls([call(timeout=timeout)] * 2)
         assert get_topics.call_count == 2
 
     def test__finalize_create_error(self):
@@ -749,7 +828,8 @@ class TestQuixKafkaConfigsBuilder:
             get_topics.return_value = get_topics_return
             with pytest.raises(QuixCreateTopicTimeout) as e:
                 cfg_builder._finalize_create(
-                    {"12345-topic_b", "12345-topic_c", "12345-topic_d"}, timeout=1
+                    {"12345-topic_b", "12345-topic_c", "12345-topic_d"},
+                    finalize_timeout=0.01,
                 )
         e = e.value.args[0]
         assert "topic_c" not in e and "topic_d" in e

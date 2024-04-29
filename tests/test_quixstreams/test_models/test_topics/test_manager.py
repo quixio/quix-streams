@@ -157,14 +157,18 @@ class TestTopicManager:
         assert "ignore.this" not in changelog.config.extra_config
 
     def test_create_all_topics(self, topic_manager_factory, topic_admin_mock):
-        topic_manager = topic_manager_factory(topic_admin_mock)
+        timeout = 1
+        create_timeout = 2
+        topic_manager = topic_manager_factory(
+            topic_admin_mock, timeout=timeout, create_timeout=create_timeout
+        )
         topics = [topic_manager.topic(name=n) for n in ["topic1", "topic2"]]
         topic_manager.create_topics(topics)
 
         topic_admin_mock.create_topics.assert_called_with(
             topics,
-            timeout=topic_manager._timeout,
-            finalize_timeout=topic_manager._create_timeout,
+            timeout=timeout,
+            finalize_timeout=create_timeout,
         )
 
     def test_validate_all_topics(self, topic_manager_factory, topic_admin_mock):

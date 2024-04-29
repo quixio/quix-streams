@@ -67,7 +67,7 @@ class TopicAdmin:
         }
 
     @property
-    def _admin_client(self) -> AdminClient:
+    def admin_client(self) -> AdminClient:
         if not self._inner_admin:
             self._inner_admin = AdminClient(self._config)
         return self._inner_admin
@@ -81,9 +81,7 @@ class TopicAdmin:
         :return: a dict of topic names and their metadata objects
         """
         # TODO: allow filtering based on a prefix ignore list?
-        return self._admin_client.list_topics(
-            timeout=timeout if timeout is not None else self._timeout
-        ).topics
+        return self.admin_client.list_topics(timeout=timeout).topics
 
     def inspect_topics(
         self,
@@ -104,8 +102,9 @@ class TopicAdmin:
         if existing_topics := [
             topic for topic in topic_names if topic in cluster_topics
         ]:
-            futures_dict = self._admin_client.describe_configs(
-                [confluent_topic_config(topic) for topic in existing_topics]
+            futures_dict = self.admin_client.describe_configs(
+                [confluent_topic_config(topic) for topic in existing_topics],
+                timeout=timeout,
             )
         configs = {
             config_resource.name: {c.name: c.value for c in config.result().values()}
@@ -180,7 +179,7 @@ class TopicAdmin:
         >***NOTE***: `timeout` must be >0 here (expects non-neg, and 0 is not inf).
         """
 
-        existing_topics = self.list_topics()
+        existing_topics = self.list_topics(timeout=timeout)
         topics_to_create = [
             topic for topic in topics if topic.name not in existing_topics
         ]
@@ -194,7 +193,7 @@ class TopicAdmin:
             )
 
         self._finalize_create(
-            self._admin_client.create_topics(
+            self.admin_client.create_topics(
                 convert_topic_list(topics_to_create),
                 request_timeout=timeout,
             ),
