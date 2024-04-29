@@ -17,7 +17,7 @@ from quixstreams.state.rocksdb.metadata import (
     PREFIX_SEPARATOR,
 )
 from quixstreams.utils.json import dumps
-from ...utils import ConfluentKafkaMessageStub
+from tests.utils import ConfluentKafkaMessageStub
 
 
 class TestRocksDBStorePartition:
@@ -174,7 +174,9 @@ class TestRocksDBStorePartitionChangelog:
             offset=50,
         )
 
-        rocksdb_partition.recover_from_changelog_message(changelog_msg)
+        rocksdb_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=-1001
+        )
 
         with rocksdb_partition.begin() as tx:
             assert tx.get(user_store_key, prefix=kafka_key) == store_value
@@ -197,5 +199,7 @@ class TestRocksDBStorePartitionChangelog:
             offset=50,
         )
         with pytest.raises(error):
-            rocksdb_partition.recover_from_changelog_message(changelog_msg)
+            rocksdb_partition.recover_from_changelog_message(
+                changelog_msg, committed_offset=-1001
+            )
         assert rocksdb_partition.get_changelog_offset() is None

@@ -10,7 +10,7 @@ from quixstreams.state.rocksdb.windowed.metadata import (
 )
 from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
 from quixstreams.utils.json import dumps
-from tests.test_quixstreams.utils import ConfluentKafkaMessageStub
+from tests.utils import ConfluentKafkaMessageStub
 
 
 class TestWindowedRocksDBPartitionTransactionChangelog:
@@ -37,7 +37,9 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
             offset=50,
         )
 
-        store_partition.recover_from_changelog_message(changelog_msg)
+        store_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=-1001
+        )
         with store_partition.begin() as tx:
             assert (
                 tx.get_window(window["start_ms"], window["end_ms"], prefix=kafka_key)
@@ -66,7 +68,9 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
             offset=50,
         )
 
-        store_partition.recover_from_changelog_message(changelog_msg)
+        store_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=-1001
+        )
 
         with store_partition.begin() as tx:
             assert (

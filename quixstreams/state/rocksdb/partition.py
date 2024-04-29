@@ -1,12 +1,12 @@
 import logging
 import time
-from typing import Any, Union, Optional, List, Dict, Tuple
+from typing import Any, Union, Optional, List, Dict
 
-from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType, WriteOptions
+from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.utils.json import loads as json_loads
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.state.types import (
     StorePartition,
 )
@@ -20,6 +20,7 @@ from .metadata import (
     PROCESSED_OFFSET_KEY,
     CHANGELOG_OFFSET_KEY,
     CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
 from .options import RocksDBOptions
 from .serialization import (
@@ -100,27 +101,30 @@ class RocksDBStorePartition(StorePartition):
         self.write(batch)
 
     def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto
+        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
     ):
         """
         Updates state from a given changelog message.
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
+        :param committed_offset: latest committed offset for the partition
         """
-        try:
-            cf_handle = self.get_column_family_handle(
-                changelog_message.headers()[0][1].decode()
-            )
-        except IndexError:
+        headers = dict(changelog_message.headers() or ())
+        # Parse the column family name from message headers
+        cf_name = headers.get(CHANGELOG_CF_MESSAGE_HEADER, b"").decode()
+        if not cf_name:
             raise ColumnFamilyHeaderMissing(
-                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
+                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message"
             )
+        cf_handle = self.get_column_family_handle(cf_name)
+
         batch = WriteBatch(raw_mode=True)
         key = changelog_message.key()
         if value := changelog_message.value():
             batch.put(key, value, cf_handle)
         else:
             batch.delete(key, cf_handle)
+
         self._changelog_recover_flush(changelog_message.offset(), batch)
 
     def set_changelog_offset(self, changelog_offset: int):

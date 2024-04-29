@@ -25,7 +25,6 @@ from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state import State
-from tests.utils import TopicPartitionStub
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -948,7 +947,7 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+            topic=topic_in.name, partition=partition_num, committed_offset=-1001
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=partition_num) as tx:
@@ -1006,7 +1005,7 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=0)
+            topic=topic_in.name, partition=0, committed_offset=-1001
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=0) as tx:
@@ -1070,7 +1069,7 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+            topic=topic_in.name, partition=partition_num, committed_offset=-1001
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=partition_num) as tx:
@@ -1101,7 +1100,7 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in.name, "default")
             state_partitions = state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+                topic=topic_in.name, partition=partition_num, committed_offset=-1001
             )
             store = state_manager.get_store(topic_in.name, "default")
             tx = store.start_partition_transaction(partition_num)
@@ -1167,7 +1166,7 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in_name, partition=0)
+                topic=topic_in_name, partition=0, committed_offset=-1001
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
@@ -1181,7 +1180,7 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in_name, partition=0)
+                topic=topic_in_name, partition=0, committed_offset=-1001
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
@@ -1252,7 +1251,7 @@ class TestApplicationRecovery:
                 state_manager.register_store(topic.name, store_name)
                 for p_num, count in partition_msg_count.items():
                     state_manager.on_partition_assign(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
+                        topic=topic.name, partition=p_num, committed_offset=-1001
                     )
                     store = state_manager.get_store(
                         topic=topic.name, store_name=store_name
@@ -1390,7 +1389,7 @@ class TestApplicationRecovery:
                 state_manager.register_windowed_store(topic.name, store_name)
                 for p_num, windows in expected_window_updates.items():
                     state_manager.on_partition_assign(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
+                        topic=topic.name, partition=p_num, committed_offset=-1001
                     )
                     store = state_manager.get_store(
                         topic=topic.name, store_name=store_name

@@ -343,21 +343,6 @@ def state_manager(state_manager_factory) -> StateStoreManager:
 
 
 @pytest.fixture()
-def state_manager_changelogs(
-    state_manager_factory,
-    topic_admin,
-    recovery_manager_mock_consumer,
-) -> StateStoreManager:
-    manager = state_manager_factory(
-        producer=create_autospec(RowProducer)("broker"),
-        recovery_manager=recovery_manager_mock_consumer,
-    )
-    manager.init()
-    yield manager
-    manager.close()
-
-
-@pytest.fixture()
 def quix_mock_config_builder_factory(kafka_container):
     def factory(workspace_id: Optional[str] = None):
         if not workspace_id:
