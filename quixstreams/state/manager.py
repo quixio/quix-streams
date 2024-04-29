@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 from quixstreams.rowproducer import RowProducer
-from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
     PartitionStoreIsUsed,
@@ -196,45 +195,44 @@ class StateStoreManager:
 
         shutil.rmtree(self._state_dir)
 
-    def on_partition_assign(self, tp: TopicPartition) -> List[StorePartition]:
+    def on_partition_assign(
+        self, topic: str, partition: int, committed_offset: int
+    ) -> List[StorePartition]:
         """
         Assign store partitions for each registered store for the given `TopicPartition`
         and return a list of assigned `StorePartition` objects.
 
-        :param tp: `TopicPartition` from Kafka consumer
+        :param topic: Kafka topic name
+        :param partition: Kafka topic partition
+        :param committed_offset: latest committed offset for the partition
         :return: list of assigned `StorePartition`
         """
 
         store_partitions = {}
-        for name, store in self._stores.get(tp.topic, {}).items():
-            store_partition = store.assign_partition(tp.partition)
+        for name, store in self._stores.get(topic, {}).items():
+            store_partition = store.assign_partition(partition)
             store_partitions[name] = store_partition
         if self._recovery_manager and store_partitions:
             self._recovery_manager.assign_partition(
-                tp.topic, tp.partition, store_partitions
+                topic=topic,
+                partition=partition,
+                committed_offset=committed_offset,
+                store_partitions=store_partitions,
             )
         return list(store_partitions.values())
 
-    def on_partition_revoke(self, tp: TopicPartition):
+    def on_partition_revoke(self, topic: str, partition: int):
         """
         Revoke store partitions for each registered store for the given `TopicPartition`
 
-        :param tp: `TopicPartition` from Kafka consumer
+        :param topic: Kafka topic name
+        :param partition: Kafka topic partition
         """
-        if stores := self._stores.get(tp.topic, {}).values():
+        if stores := self._stores.get(topic, {}).values():
             if self._recovery_manager:
-                self._recovery_manager.revoke_partition(tp.partition)
+                self._recovery_manager.revoke_partition(partition_num=partition)
             for store in stores:
-                store.revoke_partition(tp.partition)
-
-    def on_partition_lost(self, tp: TopicPartition):
-        """
-        Revoke and close store partitions for each registered store for the given
-        `TopicPartition`
-
-        :param tp: `TopicPartition` from Kafka consumer
-        """
-        self.on_partition_revoke(tp)
+                store.revoke_partition(partition=partition)
 
     def init(self):
         """

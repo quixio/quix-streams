@@ -1,15 +1,15 @@
 import os
 import uuid
-from unittest.mock import patch, call
+from unittest.mock import MagicMock
 
 import pytest
 
+from quixstreams.kafka import Consumer
 from quixstreams.state.exceptions import (
     StoreNotRegisteredError,
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
-from quixstreams.state.recovery import ChangelogProducerFactory
 from tests.utils import TopicPartitionStub
 
 
@@ -40,11 +40,11 @@ class TestStateStoreManager:
                 ...
 
     def test_rebalance_partitions_stores_not_registered(self, state_manager):
-        tp = TopicPartitionStub("topic", 0)
         # It's ok to rebalance partitions when there are no stores registered
-        state_manager.on_partition_assign(tp)
-        state_manager.on_partition_revoke(tp)
-        state_manager.on_partition_lost(tp)
+        state_manager.on_partition_assign(
+            topic="topic", partition=0, committed_offset=-1001
+        )
+        state_manager.on_partition_revoke(topic="topic", partition=0)
 
     def test_register_store(self, state_manager):
         state_manager = state_manager
@@ -66,7 +66,11 @@ class TestStateStoreManager:
 
         store_partitions = []
         for tp in partitions:
-            store_partitions.extend(state_manager.on_partition_assign(tp))
+            store_partitions.extend(
+                state_manager.on_partition_assign(
+                    topic=tp.topic, partition=tp.partition, committed_offset=-1001
+                )
+            )
         assert len(store_partitions) == 3
 
         assert len(state_manager.get_store("topic1", "store1").partitions) == 1
@@ -74,33 +78,7 @@ class TestStateStoreManager:
         assert len(state_manager.get_store("topic2", "store1").partitions) == 1
 
         for tp in partitions:
-            state_manager.on_partition_revoke(tp)
-
-        assert not state_manager.get_store("topic1", "store1").partitions
-        assert not state_manager.get_store("topic1", "store2").partitions
-        assert not state_manager.get_store("topic2", "store1").partitions
-
-    def test_assign_lose_partitions_stores_registered(self, state_manager):
-        state_manager.register_store("topic1", store_name="store1")
-        state_manager.register_store("topic1", store_name="store2")
-        state_manager.register_store("topic2", store_name="store1")
-
-        stores_list = [s for d in state_manager.stores.values() for s in d.values()]
-        assert len(stores_list) == 3
-
-        partitions = [
-            TopicPartitionStub("topic1", 0),
-            TopicPartitionStub("topic2", 0),
-        ]
-
-        for tp in partitions:
-            state_manager.on_partition_assign(tp)
-        assert len(state_manager.get_store("topic1", "store1").partitions) == 1
-        assert len(state_manager.get_store("topic1", "store2").partitions) == 1
-        assert len(state_manager.get_store("topic2", "store1").partitions) == 1
-
-        for tp in partitions:
-            state_manager.on_partition_lost(tp)
+            state_manager.on_partition_revoke(topic=tp.topic, partition=tp.partition)
 
         assert not state_manager.get_store("topic1", "store1").partitions
         assert not state_manager.get_store("topic1", "store2").partitions
@@ -138,7 +116,9 @@ class TestStateStoreManager:
 
         # Assign partitions
         for tp in partitions:
-            state_manager.on_partition_assign(tp)
+            state_manager.on_partition_assign(
+                topic=tp.topic, partition=tp.partition, committed_offset=-1001
+            )
 
         # Collect paths of stores to be deleted
         stores_to_delete = [
@@ -150,7 +130,7 @@ class TestStateStoreManager:
 
         # Revoke partitions
         for tp in partitions:
-            state_manager.on_partition_revoke(tp)
+            state_manager.on_partition_revoke(topic=tp.topic, partition=tp.partition)
 
         # Act - Delete stores
         state_manager.clear_stores()
@@ -163,89 +143,76 @@ class TestStateStoreManager:
         # Register stores
         state_manager.register_store("topic1", store_name="store1")
 
-        # Define the partition
-        partition = TopicPartitionStub("topic1", 0)
-
         # Assign the partition
-        state_manager.on_partition_assign(partition)
+        state_manager.on_partition_assign(
+            topic="topic1", partition=0, committed_offset=-1001
+        )
 
         # Act - Delete stores
         with pytest.raises(PartitionStoreIsUsed):
             state_manager.clear_stores()
 
 
-class TestStateStoreManagerChangelog:
-    def test_rebalance_partitions_stores_not_registered(self, state_manager_changelogs):
-        state_manager = state_manager_changelogs
-        tp = TopicPartitionStub("topic", 0)
+class TestStateStoreManagerWithRecovery:
+    def test_rebalance_partitions_stores_not_registered(
+        self, state_manager_factory, recovery_manager_factory
+    ):
+        state_manager = state_manager_factory(
+            recovery_manager=recovery_manager_factory()
+        )
         # It's ok to rebalance partitions when there are no stores registered
-        state_manager.on_partition_assign(tp)
-        state_manager.on_partition_revoke(tp)
-        state_manager.on_partition_lost(tp)
+        state_manager.on_partition_assign(
+            topic="topic", partition=0, committed_offset=-1001
+        )
+        state_manager.on_partition_revoke(topic="topic", partition=0)
 
-    def test_register_store(self, state_manager_changelogs):
-        state_manager = state_manager_changelogs
-        topic_manager = state_manager._recovery_manager._topic_manager
+    def test_register_store(
+        self, state_manager_factory, recovery_manager_factory, topic_manager_factory
+    ):
+        topic_manager = topic_manager_factory()
+        recovery_manager = recovery_manager_factory(topic_manager=topic_manager)
+        state_manager = state_manager_factory(recovery_manager=recovery_manager)
+
+        # Create a topic
         topic = topic_manager.topic(name="topic1")
+
+        # Register a store
         store_name = "default"
         state_manager.register_store(topic.name, store_name=store_name)
 
-        assert store_name in state_manager._stores[topic.name]
+        # Check that the store is registered
+        assert store_name in state_manager.stores[topic.name]
+        # Check that changelog topic is created
         assert store_name in topic_manager.changelog_topics[topic.name]
 
     def test_assign_revoke_partitions_stores_registered(
-        self,
-        state_manager_changelogs,
+        self, state_manager_factory, recovery_manager_factory, topic_manager_factory
     ):
-        state_manager = state_manager_changelogs
-        recovery_manager = state_manager._recovery_manager
-        topic_manager = recovery_manager._topic_manager
+        topic_manager = topic_manager_factory()
+        consumer = MagicMock(spec_set=Consumer)
+        consumer.get_watermark_offsets.return_value = (0, 10)
+        recovery_manager = recovery_manager_factory(
+            topic_manager=topic_manager, consumer=consumer
+        )
+        state_manager = state_manager_factory(recovery_manager=recovery_manager)
+        topic_name = "topic1"
+        partition = 0
+        topic_manager.topic(name=topic_name)
+        store_name = "store1"
 
-        changelog_assign = patch.object(recovery_manager, "assign_partition").start()
-        changelog_revoke = patch.object(recovery_manager, "revoke_partition").start()
-        topic_manager.topic(name="topic1")
-        topic_manager.topic(name="topic2")
-        state_manager.register_store("topic1", store_name="store1")
-        state_manager.register_store("topic1", store_name="store2")
-        state_manager.register_store("topic2", store_name="store1")
+        # Register a store
+        state_manager.register_store(topic_name, store_name=store_name)
 
-        stores_list = [s for d in state_manager.stores.values() for s in d.values()]
-        assert len(stores_list) == 3
+        # Assign a topic partition
+        state_manager.on_partition_assign(
+            topic=topic_name, partition=partition, committed_offset=-1001
+        )
 
-        partitions = [
-            TopicPartitionStub("topic1", 0),
-            TopicPartitionStub("topic2", 0),
-        ]
+        # Check that RecoveryManager has a partition assigned
+        assert recovery_manager.partitions
 
-        store_partitions = []
-        assign_calls = []
-        for tp in partitions:
-            store_partitions.extend(state_manager.on_partition_assign(tp))
-            assign_calls.append(
-                call(
-                    tp.topic,
-                    tp.partition,
-                    {
-                        name: store.partitions[tp.partition]
-                        for name, store in state_manager._stores[tp.topic].items()
-                    },
-                )
-            )
-        assert changelog_assign.call_count == len(assign_calls)
-        assert len(store_partitions) == 3
+        # Revoke a topic partition
+        state_manager.on_partition_revoke(topic=topic_name, partition=partition)
 
-        for store in stores_list:
-            assert len(store.partitions) == 1
-            assert isinstance(
-                store._changelog_producer_factory, ChangelogProducerFactory
-            )
-
-        revoke_calls = []
-        for tp in partitions:
-            state_manager.on_partition_revoke(tp)
-            revoke_calls.append(call(tp.partition))
-        changelog_revoke.assert_has_calls(revoke_calls)
-        assert changelog_revoke.call_count == len(revoke_calls)
-
-        for store in stores_list:
-            assert not store.partitions
+        # Check that RecoveryManager has a partition revoked too
+        assert not recovery_manager.partitions

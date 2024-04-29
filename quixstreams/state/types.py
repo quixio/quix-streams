@@ -98,12 +98,13 @@ class StorePartition(Protocol):
         """
 
     def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto
+        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
     ):
         """
         Updates state from a given changelog message.
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
+        :param committed_offset: latest committed offset for the partition
         """
         ...
 
