@@ -92,7 +92,7 @@ class TestQuixKafkaConfigsBuilder:
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
         )
-        timeout = 2.2
+        timeout = 4.5
         with patch.object(
             cfg_builder, "search_for_workspace", return_value=deepcopy(api_data)
         ) as get_ws:
@@ -125,7 +125,7 @@ class TestQuixKafkaConfigsBuilder:
             workspace_id="12345", quix_portal_api_service=api
         )
         api.get_workspace.return_value = api_data_stub
-        timeout = 2.2
+        timeout = 4.5
 
         with pytest.raises(NoWorkspaceFound):
             cfg_builder.get_workspace_info(timeout=timeout)
@@ -159,7 +159,7 @@ class TestQuixKafkaConfigsBuilder:
         api = create_autospec(QuixPortalApiService)
         api.default_workspace_id = None
         cfg_builder = QuixKafkaConfigsBuilder(quix_portal_api_service=api)
-        timeout = 2.2
+        timeout = 4.5
 
         with patch.object(
             cfg_builder,
@@ -213,7 +213,7 @@ class TestQuixKafkaConfigsBuilder:
         api = create_autospec(QuixPortalApiService)
         api.default_workspace_id = None
         cfg_builder = QuixKafkaConfigsBuilder(quix_portal_api_service=api)
-        timeout = 2.2
+        timeout = 4.5
 
         with patch.object(
             cfg_builder,
@@ -461,7 +461,7 @@ class TestQuixKafkaConfigsBuilder:
     def test__set_workspace_cert_has_path(self):
         path = Path(getcwd()) / "certificates" / "12345"
         expected = (path / "ca.cert").as_posix()
-        timeout = 2.2
+        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -476,7 +476,7 @@ class TestQuixKafkaConfigsBuilder:
 
     def test__set_workspace_cert_path(self, tmp_path):
         expected = (tmp_path / "ca.cert").as_posix()
-        timeout = 2.2
+        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345",
@@ -517,7 +517,7 @@ class TestQuixKafkaConfigsBuilder:
         quix_sasl_mechanisms,
         rdkafka_sasl_mechanisms,
     ):
-        timeout = 2.2
+        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -569,7 +569,7 @@ class TestQuixKafkaConfigsBuilder:
         assert cfg_builder.strip_workspace_id_prefix("topic") == "topic"
 
     def test_get_confluent_client_config(self):
-        timeout = 2.2
+        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345",
@@ -657,8 +657,8 @@ class TestQuixKafkaConfigsBuilder:
         topic_c = topic_manager_topic_factory("12345-topic_c")
         topic_d = topic_manager_topic_factory("12345-topic_d")
 
-        timeout = 2.2
-        finalize_timeout = 3.3
+        timeout = 4.5
+        finalize_timeout = 9.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -696,8 +696,8 @@ class TestQuixKafkaConfigsBuilder:
         mock_response = create_autospec(Response)
         mock_response.text = "already exists"
 
-        timeout = 2.2
-        finalize_timeout = 3.3
+        timeout = 4.5
+        finalize_timeout = 9.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -749,7 +749,7 @@ class TestQuixKafkaConfigsBuilder:
             n = nested()
             return lambda timeout: next(n)
 
-        timeout = 2.2
+        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api

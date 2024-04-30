@@ -412,7 +412,7 @@ class TopicManager:
             self._all_topics_list, timeout=timeout, create_timeout=create_timeout
         )
 
-    def validate_all_topics(self):
+    def validate_all_topics(self, timeout: Optional[float] = None):
         """
         Validates all topics exist and changelogs have correct topic and rep factor.
 
@@ -421,7 +421,10 @@ class TopicManager:
         logger.info(f"Validating Kafka topics exist and are configured correctly...")
         topics = self._all_topics_list
         changelog_names = [topic.name for topic in self._changelog_topics_list]
-        actual_configs = self._admin.inspect_topics([t.name for t in topics])
+        actual_configs = self._admin.inspect_topics(
+            [t.name for t in topics],
+            timeout=timeout if timeout is not None else self._timeout,
+        )
 
         for topic in topics:
             # Validate that topic exists

@@ -1,12 +1,12 @@
 import logging
 from contextlib import ExitStack
-from unittest.mock import patch
+from unittest.mock import patch, PropertyMock
 from uuid import uuid4
 
 import pytest
 from confluent_kafka.admin import TopicMetadata
 
-from quixstreams.models.topics import TopicConfig
+from quixstreams.models.topics import TopicConfig, TopicAdmin
 from quixstreams.models.topics.admin import confluent_topic_config, convert_topic_list
 from quixstreams.models.topics.exceptions import CreateTopicTimeout, CreateTopicFailure
 
@@ -34,10 +34,10 @@ class TestTopicAdmin:
         """
         Confirm timeout argument passthrough.
         """
-        timeout = 2.2
+        timeout = 8.5
         topic_manager = topic_manager_factory(topic_admin)
         topic = topic_manager.topic(name=str(uuid4()))
-        topic_manager.create_all_topics()
+        topic_manager.create_topics([topic])
 
         list_topics_result = topic_admin.list_topics()
         describe_topics = [confluent_topic_config(topic.name)]
@@ -45,16 +45,31 @@ class TestTopicAdmin:
             describe_topics
         )
 
-        with patch.object(topic_admin, "list_topics") as list_topics:
-            list_topics.return_value = list_topics_result
-            with patch.object(
-                topic_admin.admin_client, "describe_configs"
-            ) as describe_configs:
-                describe_configs.return_value = describe_configs_result
-                topic_admin.inspect_topics([topic.name], timeout=timeout)
+        stack = ExitStack()
+        # mocking a property like this allows mocking its respective methods.
+        stack.enter_context(
+            patch.object(
+                TopicAdmin,
+                "admin_client",
+                new_callable=PropertyMock,
+                return_value=topic_admin._inner_admin,
+            )
+        )
+        describe_configs = stack.enter_context(
+            patch.object(
+                topic_admin.admin_client,
+                "describe_configs",
+                return_value=describe_configs_result,
+            )
+        )
+        list_topics = stack.enter_context(
+            patch.object(topic_admin, "list_topics", return_value=list_topics_result)
+        )
 
+        topic_admin.inspect_topics([topic.name], timeout=timeout)
         list_topics.assert_called_with(timeout=timeout)
-        describe_configs.assert_called_with(describe_topics, timeout=timeout)
+        describe_configs.assert_called_with(describe_topics, request_timeout=timeout)
+        stack.close()
 
     def test_create_topics(self, topic_admin, topic_manager_factory):
         topic_manager = topic_manager_factory()
@@ -71,13 +86,21 @@ class TestTopicAdmin:
         """
         Confirm timeout argument passthrough.
         """
-        timeout = 2.2
-        finalize_timeout = 3.3
+        timeout = 8.5
+        finalize_timeout = 9.5
         topic_manager = topic_manager_factory()
         topic = topic_manager.topic(name=str(uuid4()))
         create_topics_result = {topic.name: "create_topics_result"}
 
         stack = ExitStack()
+        stack.enter_context(
+            patch.object(
+                TopicAdmin,
+                "admin_client",
+                new_callable=PropertyMock,
+                return_value=topic_admin._inner_admin,
+            )
+        )
         list_topics = stack.enter_context(patch.object(topic_admin, "list_topics"))
         create_topics = stack.enter_context(
             patch.object(

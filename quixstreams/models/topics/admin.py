@@ -86,14 +86,16 @@ class TopicAdmin:
     def inspect_topics(
         self,
         topic_names: List[str],
-        timeout: float = -1,
+        timeout: float = 30,
     ) -> Dict[str, Optional[TopicConfig]]:
         """
         A simplified way of getting the topic configurations of the provided topics
         from the cluster (if they exist).
 
         :param topic_names: a list of topic names
-        :param timeout: response timeout (seconds); Default inf (-1)
+        :param timeout: response timeout (seconds)
+
+        >***NOTE***: `timeout` must be >0 here (expects non-neg, and 0 != inf).
 
         :return: a dict with topic names and their respective `TopicConfig`
         """
@@ -104,7 +106,7 @@ class TopicAdmin:
         ]:
             futures_dict = self.admin_client.describe_configs(
                 [confluent_topic_config(topic) for topic in existing_topics],
-                timeout=timeout,
+                request_timeout=timeout,
             )
         configs = {
             config_resource.name: {c.name: c.value for c in config.result().values()}
@@ -176,7 +178,7 @@ class TopicAdmin:
         :param timeout: creation acknowledge timeout (seconds)
         :param finalize_timeout: topic finalization timeout (seconds)
 
-        >***NOTE***: `timeout` must be >0 here (expects non-neg, and 0 is not inf).
+        >***NOTE***: `timeout` must be >0 here (expects non-neg, and 0 != inf).
         """
 
         existing_topics = self.list_topics(timeout=timeout)

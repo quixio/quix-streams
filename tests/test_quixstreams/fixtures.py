@@ -529,7 +529,9 @@ def message_context_factory():
 
 @pytest.fixture()
 def topic_admin(kafka_container):
-    return TopicAdmin(broker_address=kafka_container.broker_address)
+    t = TopicAdmin(broker_address=kafka_container.broker_address)
+    t.admin_client  # init the underlying admin so mocks can be applied whenever
+    return t
 
 
 @pytest.fixture()
