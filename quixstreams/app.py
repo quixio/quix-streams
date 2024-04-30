@@ -1,5 +1,4 @@
 import contextlib
-import enum
 import functools
 import logging
 import os
@@ -52,13 +51,6 @@ __all__ = ("Application",)
 
 logger = logging.getLogger(__name__)
 MessageProcessedCallback = Callable[[str, int, int], None]
-
-
-class ApplicationStatus(enum.Enum):
-    CREATED = 1
-    RUNNING = 2
-    FAILED = 3
-    STOPPED = 4
 
 
 class Application:
@@ -262,7 +254,8 @@ class Application:
         self._on_processing_error = on_processing_error or default_on_processing_error
         self._on_message_processed = on_message_processed
         self._auto_create_topics = auto_create_topics
-        self._status: ApplicationStatus = ApplicationStatus.CREATED
+        self._running = False
+        self._failed = False
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -558,9 +551,15 @@ class Application:
         (like Kubernetes does) or perform a typical `KeyboardInterrupt` (`Ctrl+C`).
 
         :param fail: if True, signals that application is stopped due
-            to unhandled exception and it shouldn't commit the current checkpoint.
+            to unhandled exception, and it shouldn't commit the current checkpoint.
         """
-        self._status = ApplicationStatus.FAILED if fail else ApplicationStatus.STOPPED
+
+        self._running = False
+        if fail:
+            # Update "_failed" only when fail=True to prevent stop(failed=False) from
+            # resetting it
+            self._failed = True
+
         if self._state_manager.using_changelogs:
             self._state_manager.stop_recovery()
 
@@ -705,14 +704,14 @@ class Application:
             )
             logger.info("Waiting for incoming messages")
             # Start polling Kafka for messages and callbacks
-            self._status = ApplicationStatus.RUNNING
+            self._running = True
 
             # Initialize the checkpoint
             self._processing_context.init_checkpoint()
 
             dataframe_composed = dataframe.compose()
 
-            while self._status == ApplicationStatus.RUNNING:
+            while self._running:
                 if self._state_manager.recovery_required:
                     self._state_manager.do_recovery()
                 else:
@@ -842,10 +841,15 @@ class Application:
         Revoke partitions from consumer and state
         """
         # Commit everything processed so far unless the application is closing
-        # because of unhandled exception.
+        # because of the unhandled exception.
         # In this case, we should drop the checkpoint and let another consumer
         # pick up from the latest one
-        if not self._status == ApplicationStatus.FAILED:
+        if self._failed:
+            logger.warning(
+                "Application is stopping due to failure, "
+                "latest checkpoint will not be committed."
+            )
+        else:
             self._processing_context.commit_checkpoint(force=True)
 
         self._consumer.incremental_unassign(topic_partitions)
