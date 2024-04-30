@@ -100,11 +100,47 @@ class RocksDBStorePartition(StorePartition):
         )
         self.write(batch)
 
+    def _should_skip_changelog(
+        self, headers: Dict[str, bytes], committed_offset: int
+    ) -> bool:
+        """
+        Determine whether the changelog update should be skipped.
+
+        :param headers: changelog message headers
+        :param committed_offset: latest committed offset of the source topic partition
+        :return: True if update should be skipped, else False.
+        """
+        # Parse the processed topic-partition-offset info from the changelog message
+        # headers to determine whether the update should be applied or skipped.
+        # It can be empty if the message was produced by the older version of the lib.
+        processed_offset_header = headers.get(
+            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER, b"[]"
+        )
+        processed_offset_data = json_loads(processed_offset_header)
+        if processed_offset_data:
+            # Skip recovering from the message if its processed offset is ahead of the
+            # current committed offset.
+            # This way it will recover to a consistent state if the checkpointing code
+            # produced the changelog messages but failed to commit
+            # the source topic offset.
+            _, _, processed_offset = processed_offset_data
+            return processed_offset >= committed_offset
+        return False
+
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
     ):
         """
         Updates state from a given changelog message.
+
+        The actual update may be skipped when both conditions are met:
+
+        - The changelog message has headers with the processed message offset.
+        - This processed offset is larger than the latest committed offset for the same
+          topic partition.
+
+        This way the state does not apply the state changes for not-yet-committed
+        messages and improves the state consistency guarantees.
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
         :param committed_offset: latest committed offset for the partition
@@ -119,11 +155,16 @@ class RocksDBStorePartition(StorePartition):
         cf_handle = self.get_column_family_handle(cf_name)
 
         batch = WriteBatch(raw_mode=True)
-        key = changelog_message.key()
-        if value := changelog_message.value():
-            batch.put(key, value, cf_handle)
-        else:
-            batch.delete(key, cf_handle)
+        # Determine whether the update should be applied or skipped based on the
+        # latest committed offset and processed offset from the changelog message header
+        if not self._should_skip_changelog(
+            headers=headers, committed_offset=committed_offset
+        ):
+            key = changelog_message.key()
+            if value := changelog_message.value():
+                batch.put(key, value, cf_handle)
+            else:
+                batch.delete(key, cf_handle)
 
         self._changelog_recover_flush(changelog_message.offset(), batch)
 

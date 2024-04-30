@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import time
@@ -12,6 +13,7 @@ from confluent_kafka import KafkaException, TopicPartition
 from quixstreams.app import Application
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
+from quixstreams.exceptions import PartitionAssignmentError
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
     DoubleDeserializer,
@@ -210,7 +212,7 @@ class TestApplication:
         failed = Future()
 
         # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, failed, 15.0)
+        executor.submit(_stop_app_on_future, app, failed, 10.0)
         with pytest.raises(ValueError):
             app.run(sdf)
 
@@ -1452,4 +1454,132 @@ class TestApplicationRecovery:
         # no messages should have been processed outside of recovery loop
         assert processed_count == {0: 0, 1: 0}
         # State should be the same as before deletion
+        validate_state()
+
+    def test_changelog_recovery_consistent_after_failed_commit(
+        self, app_factory, executor, tmp_path, state_manager_factory, consumer_factory
+    ):
+        """
+        Scenario: application processes messages and successfully produces changelog
+        messages but fails to commit the topic offsets.
+
+        We expect that the app will be recovered to a consistent state and changes
+        for the yet uncommitted messages will not be applied.
+        """
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        topic_name = str(uuid.uuid4())
+        store_name = "default"
+
+        # Messages to be processed successfully
+        succeeded_messages = [
+            ("key1", "1"),
+            ("key2", "2"),
+            ("key3", "3"),
+        ]
+        # Messages to fail
+        failed_messages = [
+            ("key1", "4"),
+            ("key2", "5"),
+            ("key3", "6"),
+        ]
+        # Ensure the same number of messages in both sets to simplift testing
+        assert len(failed_messages) == len(succeeded_messages)
+        total_count = len(succeeded_messages)
+        processed_count = 0
+
+        def on_message_processed(topic_, partition, offset):
+            nonlocal processed_count
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            processed_count += 1
+            if processed_count == total_count:
+                done.set_result(True)
+
+        def get_app():
+            app = app_factory(
+                commit_interval=999,  # Simulate a very long commit interval
+                auto_offset_reset="earliest",
+                use_changelog_topics=True,
+                on_message_processed=on_message_processed,
+                consumer_group=consumer_group,
+                state_dir=state_dir,
+            )
+            topic = app.topic(topic_name)
+            sdf = app.dataframe(topic)
+            sdf = sdf.update(
+                lambda value, state: state.set("latest", value["number"]), stateful=True
+            )
+            return app, sdf, topic
+
+        def validate_state():
+            with state_manager_factory(
+                group_id=consumer_group,
+                state_dir=state_dir,
+            ) as state_manager, consumer_factory(
+                consumer_group=consumer_group
+            ) as consumer:
+                committed_offset = consumer.committed(
+                    [TopicPartition(topic=topic_name, partition=0)]
+                )[0].offset
+                state_manager.register_store(topic.name, store_name)
+                partition = state_manager.on_partition_assign(
+                    topic=topic.name, partition=0, committed_offset=committed_offset
+                )[0]
+                with partition.begin() as tx:
+                    for key, value in succeeded_messages:
+                        state = tx.as_state(prefix=key.encode())
+                        assert state.get("latest") == value
+
+        # Produce messages from the "succeded" set
+        app, sdf, topic = get_app()
+        with app.get_producer() as producer:
+            for key, value in succeeded_messages:
+                serialized = topic.serialize(key=key.encode(), value={"number": value})
+                producer.produce(topic.name, key=serialized.key, value=serialized.value)
+
+        # Run the application to apply changes to state
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+        assert processed_count == total_count
+        # Validate the state
+        validate_state()
+
+        # Init application again
+        processed_count = 0
+        app, sdf, topic = get_app()
+
+        # Produce messages from the "failed" set
+        with app.get_producer() as producer:
+            for key, value in failed_messages:
+                serialized = topic.serialize(key=key.encode(), value={"number": value})
+                producer.produce(topic.name, key=serialized.key, value=serialized.value)
+
+        # Run the app second time and fail the consumer commit
+        with patch.object(
+            RowConsumer, "commit", side_effect=ValueError("commit failed")
+        ):
+            done = Future()
+            executor.submit(_stop_app_on_future, app, done, 10.0)
+            with contextlib.suppress(PartitionAssignmentError):
+                app.run(sdf)
+
+            validate_state()
+
+        # Run the app again to recover the state
+        app, sdf, topic = get_app()
+        # Clear the state to recover from scratch
+        app.clear_state()
+
+        # Run app for the third time and fail on commit to prevent state changes
+        with patch.object(
+            RowConsumer, "commit", side_effect=ValueError("commit failed")
+        ):
+            done = Future()
+            executor.submit(_stop_app_on_future, app, done, 10.0)
+            with contextlib.suppress(PartitionAssignmentError):
+                app.run(sdf)
+
+        # The app should be recovered
         validate_state()
