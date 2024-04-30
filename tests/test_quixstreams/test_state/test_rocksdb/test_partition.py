@@ -15,6 +15,7 @@ from quixstreams.state.rocksdb import (
 from quixstreams.state.rocksdb.metadata import (
     CHANGELOG_CF_MESSAGE_HEADER,
     PREFIX_SEPARATOR,
+    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
 from quixstreams.utils.json import dumps
 from tests.utils import ConfluentKafkaMessageStub
@@ -161,7 +162,9 @@ class TestRocksDBStorePartition:
 
 class TestRocksDBStorePartitionChangelog:
     @pytest.mark.parametrize("store_value", [10, None])
-    def test_recover_from_changelog_message(self, rocksdb_partition, store_value):
+    def test_recover_from_changelog_message_no_processed_offset(
+        self, rocksdb_partition, store_value
+    ):
         """
         Tests both a put (10) and delete (None)
         """
@@ -189,7 +192,7 @@ class TestRocksDBStorePartitionChangelog:
             ([], ColumnFamilyHeaderMissing),
         ],
     )
-    def test_recover_from_changelog_message_cf_errors(
+    def test_recover_from_changelog_message_missing_cf_headers(
         self, rocksdb_partition, headers, error
     ):
         changelog_msg = ConfluentKafkaMessageStub(
@@ -203,3 +206,82 @@ class TestRocksDBStorePartitionChangelog:
                 changelog_msg, committed_offset=-1001
             )
         assert rocksdb_partition.get_changelog_offset() is None
+
+    def test_recover_from_changelog_message_with_processed_offset_behind_committed(
+        self, rocksdb_partition
+    ):
+        """
+        Test that changes from the changelog topic are applied if the
+        source topic offset header is present and is smaller than the latest committed
+        offset.
+        """
+        kafka_key = b"my_key"
+        user_store_key = "count"
+
+        processed_offset_header = (
+            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+            dumps(["topic", 0, 1]),
+        )
+        committted_offset = 2
+        changelog_msg = ConfluentKafkaMessageStub(
+            key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),
+            value=dumps(10),
+            headers=[
+                (CHANGELOG_CF_MESSAGE_HEADER, b"default"),
+                processed_offset_header,
+            ],
+        )
+
+        rocksdb_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=committted_offset
+        )
+
+        with rocksdb_partition.begin() as tx:
+            assert tx.get(user_store_key, prefix=kafka_key) == 10
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
+
+    def test_recover_from_changelog_message_with_processed_offset_ahead_committed(
+        self, rocksdb_partition
+    ):
+        """
+        Test that changes from the changelog topic are NOT applied if the
+        source topic offset header is present but larger than the latest committed
+        offset.
+        It means that the changelog messages were produced during the checkpoint,
+        but the topic offset was not committed.
+        Possible reasons:
+          - Producer couldn't verify the delivery of every changelog message
+          - Consumer failed to commit the source topic offsets
+        """
+        kafka_key = b"my_key"
+        user_store_key = "count"
+        # Processed offset should be strictly lower than committed offset for
+        # the change to be applied
+        processed_offset = 2
+        committed_offset = 2
+
+        # Generate the changelog message with processed offset ahead of the committed
+        # one
+        processed_offset_header = (
+            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
+            dumps(["topic", 0, processed_offset]),
+        )
+        changelog_msg = ConfluentKafkaMessageStub(
+            key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),
+            value=dumps(10),
+            headers=[
+                (CHANGELOG_CF_MESSAGE_HEADER, b"default"),
+                processed_offset_header,
+            ],
+        )
+
+        # Recover from the message
+        rocksdb_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=committed_offset
+        )
+
+        # Check that the changes have not been applied, but the changelog offset
+        # increased
+        with rocksdb_partition.begin() as tx:
+            assert tx.get(user_store_key, prefix=kafka_key) is None
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1

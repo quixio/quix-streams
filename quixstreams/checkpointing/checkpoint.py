@@ -149,7 +149,7 @@ class Checkpoint:
             offset = self._tp_offsets[(topic, partition)]
 
             # Get the changelog topic-partition for the given transaction
-            # It can be None if changelog topics are disabled in the app
+            # It can be None if changelog topics are disabled in the app config
             changelog_tp = transaction.changelog_topic_partition
             # The changelog offset also can be None if no updates happened
             # during transaction
