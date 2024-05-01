@@ -491,11 +491,11 @@ class TestApplication:
         Test that producer receives the Application extra configs
         """
         app = app_factory(
-            producer_extra_config={"max.in.flight": "123"},
+            producer_extra_config={"linger.ms": 10},
         )
 
         with app.get_producer() as x:
-            assert x._producer_config["max.in.flight"] is "123"
+            assert x._producer_config["linger.ms"] == 10
 
     def test_missing_broker_id_raise(self):
         # confirm environment is empty
@@ -544,7 +544,12 @@ class TestQuixApplication:
             **auth_params,
             "bootstrap.servers": broker_address,
         }
-        expected_extra_config = {**auth_params, **extra_config}
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
@@ -572,12 +577,12 @@ class TestQuixApplication:
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
         assert producer_call_kwargs["broker_address"] == broker_address
-        assert producer_call_kwargs["extra_config"] == expected_extra_config
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
         assert consumer_call_kwargs["broker_address"] == broker_address
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
-        assert consumer_call_kwargs["extra_config"] == expected_extra_config
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
     def test_init_with_quix_sdk_token_env(self, monkeypatch):
         consumer_group = "c_group"
@@ -597,7 +602,12 @@ class TestQuixApplication:
             **auth_params,
             "bootstrap.servers": broker_address,
         }
-        expected_extra_config = {**auth_params, **extra_config}
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
@@ -624,12 +634,12 @@ class TestQuixApplication:
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
         assert producer_call_kwargs["broker_address"] == broker_address
-        assert producer_call_kwargs["extra_config"] == expected_extra_config
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
         assert consumer_call_kwargs["broker_address"] == broker_address
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
-        assert consumer_call_kwargs["extra_config"] == expected_extra_config
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
     def test_init_with_quix_config_builder(self):
         consumer_group = "c_group"
@@ -649,7 +659,12 @@ class TestQuixApplication:
             **auth_params,
             "bootstrap.servers": broker_address,
         }
-        expected_extra_config = {**auth_params, **extra_config}
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
@@ -674,12 +689,12 @@ class TestQuixApplication:
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
         assert producer_call_kwargs["broker_address"] == broker_address
-        assert producer_call_kwargs["extra_config"] == expected_extra_config
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
         assert consumer_call_kwargs["broker_address"] == broker_address
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
-        assert consumer_call_kwargs["extra_config"] == expected_extra_config
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
     def test_init_with_broker_id_raises(self):
         with pytest.raises(ValueError) as e_info:
@@ -788,7 +803,12 @@ class TestDeprecatedApplicationDotQuix:
             **auth_params,
             "bootstrap.servers": broker_address,
         }
-        expected_extra_config = {**auth_params, **extra_config}
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
 
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder.get_confluent_broker_config.return_value = confluent_broker_config
@@ -808,12 +828,12 @@ class TestDeprecatedApplicationDotQuix:
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
         assert producer_call_kwargs["broker_address"] == broker_address
-        assert producer_call_kwargs["extra_config"] == expected_extra_config
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
         assert consumer_call_kwargs["broker_address"] == broker_address
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
-        assert consumer_call_kwargs["extra_config"] == expected_extra_config
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
         cfg_builder.prepend_workspace_id.assert_called_with("c_group")
 

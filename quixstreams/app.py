@@ -52,6 +52,9 @@ __all__ = ("Application",)
 logger = logging.getLogger(__name__)
 MessageProcessedCallback = Callable[[str, int, int], None]
 
+# Enforce idempotent producing for the internal RowProducer
+_default_producer_extra_config = {"enable.idempotence": True}
+
 
 class Application:
     """
@@ -176,6 +179,15 @@ class Application:
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
         configure_logging(loglevel=loglevel)
+        producer_extra_config = producer_extra_config or {}
+        consumer_extra_config = consumer_extra_config or {}
+
+        # Add default values to the producer config, but allow them to be overwritten
+        # by the provided producer_extra_config dict
+        producer_extra_config = {
+            **_default_producer_extra_config,
+            **producer_extra_config,
+        }
 
         # We can't use os.getenv as defaults (and have testing work nicely)
         # since it evaluates getenv when the function is defined.
@@ -218,8 +230,8 @@ class Application:
             broker_address = quix_configs.pop("bootstrap.servers")
             # Quix Cloud prefixes consumer group with workspace id
             consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
-            consumer_extra_config = {**quix_configs, **(consumer_extra_config or {})}
-            producer_extra_config = {**quix_configs, **(producer_extra_config or {})}
+            consumer_extra_config = {**quix_configs, **consumer_extra_config}
+            producer_extra_config = {**quix_configs, **producer_extra_config}
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
