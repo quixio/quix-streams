@@ -261,7 +261,6 @@ class Application:
             extra_config=producer_extra_config,
             on_error=on_producer_error,
         )
-
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._on_processing_error = on_processing_error or default_on_processing_error
@@ -549,7 +548,9 @@ class Application:
         :return: `StreamingDataFrame` object
         """
         sdf = StreamingDataFrame(
-            topic=topic, processing_context=self._processing_context
+            topic=topic,
+            topic_manager=self._topic_manager,
+            processing_context=self._processing_context,
         )
         return sdf
 
@@ -710,7 +711,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                [dataframe.topic],
+                dataframe.consumer_topics,
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,

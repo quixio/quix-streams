@@ -70,7 +70,12 @@ class RowConsumer(Consumer):
         self._on_error: Optional[ConsumerErrorCallback] = (
             on_error or default_on_consumer_error
         )
+        self._consumer_group = consumer_group
         self._topics: Mapping[str, Topic] = {}
+
+    @property
+    def consumer_group(self):
+        return self._consumer_group
 
     def subscribe(
         self,
