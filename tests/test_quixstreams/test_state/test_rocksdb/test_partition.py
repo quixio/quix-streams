@@ -220,7 +220,7 @@ class TestRocksDBStorePartitionChangelog:
 
         processed_offset_header = (
             CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
-            dumps(["topic", 0, 1]),
+            dumps(1),
         )
         committted_offset = 2
         changelog_msg = ConfluentKafkaMessageStub(
@@ -264,7 +264,7 @@ class TestRocksDBStorePartitionChangelog:
         # one
         processed_offset_header = (
             CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
-            dumps(["topic", 0, processed_offset]),
+            dumps(processed_offset),
         )
         changelog_msg = ConfluentKafkaMessageStub(
             key=kafka_key + PREFIX_SEPARATOR + dumps(user_store_key),

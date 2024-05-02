@@ -321,10 +321,6 @@ class TestWindowedRocksDBPartitionTransaction:
         start_ms = 0
         end_ms = 10
         value = 1
-        source_topic_name, source_partition = (
-            changelog_producer_mock.source_topic_name,
-            changelog_producer_mock.partition,
-        )
         processed_offset = 1
 
         with windowed_rocksdb_partition_factory(
@@ -351,13 +347,7 @@ class TestWindowedRocksDBPartitionTransaction:
             value=expected_produced_value,
             headers={
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
-                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
-                    [
-                        source_topic_name,
-                        source_partition,
-                        processed_offset,
-                    ]
-                ),
+                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(processed_offset),
             },
         )
 
@@ -367,10 +357,6 @@ class TestWindowedRocksDBPartitionTransaction:
         prefix = b"__key__"
         start_ms = 0
         end_ms = 10
-        source_topic_name, source_partition = (
-            changelog_producer_mock.source_topic_name,
-            changelog_producer_mock.partition,
-        )
         processed_offset = 1
 
         with windowed_rocksdb_partition_factory(
@@ -391,12 +377,6 @@ class TestWindowedRocksDBPartitionTransaction:
             value=None,
             headers={
                 CHANGELOG_CF_MESSAGE_HEADER: "default",
-                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(
-                    [
-                        source_topic_name,
-                        source_partition,
-                        processed_offset,
-                    ]
-                ),
+                CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: dumps(processed_offset),
             },
         )

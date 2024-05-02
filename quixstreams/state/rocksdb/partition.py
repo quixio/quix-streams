@@ -34,7 +34,6 @@ from .types import RocksDBOptionsType
 
 __all__ = ("RocksDBStorePartition",)
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -114,16 +113,15 @@ class RocksDBStorePartition(StorePartition):
         # headers to determine whether the update should be applied or skipped.
         # It can be empty if the message was produced by the older version of the lib.
         processed_offset_header = headers.get(
-            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER, b"[]"
+            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER, b"null"
         )
-        processed_offset_data = json_loads(processed_offset_header)
-        if processed_offset_data:
+        processed_offset = json_loads(processed_offset_header)
+        if processed_offset is not None:
             # Skip recovering from the message if its processed offset is ahead of the
             # current committed offset.
             # This way it will recover to a consistent state if the checkpointing code
             # produced the changelog messages but failed to commit
             # the source topic offset.
-            _, _, processed_offset = processed_offset_data
             return processed_offset >= committed_offset
         return False
 

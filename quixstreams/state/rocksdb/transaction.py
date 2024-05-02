@@ -381,9 +381,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         )
         # Iterate over the transaction update cache
         for cf_name, cf_update_cache in self._update_cache.items():
-            source_tp_offset_header = json_dumps(
-                [source_topic, partition, processed_offset]
-            )
+            source_tp_offset_header = json_dumps(processed_offset)
             headers = {
                 CHANGELOG_CF_MESSAGE_HEADER: cf_name,
                 CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER: source_tp_offset_header,
