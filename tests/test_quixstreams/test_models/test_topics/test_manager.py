@@ -78,24 +78,23 @@ class TestTopicManager:
         and is added to the changelog topic list stored on the `TopicManager`.
         """
 
-        topic_manager = topic_manager_factory()
+        group = "my_consumer_group"
+        topic_manager = topic_manager_factory(consumer_group=group)
         topic = topic_manager.topic(
             name="my_topic",
             config=topic_manager.topic_config(num_partitions=5),
         )
 
         store_name = "default"
-        group = "my_consumer_group"
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
             store_name=store_name,
-            consumer_group=group,
         )
 
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
 
-        assert changelog.name == topic_manager._format_changelog_name(
-            group, topic.name, store_name
+        assert changelog.name == topic_manager._internal_topic_name(
+            "changelog", topic.name, store_name
         )
         for attr in [
             "_key_serializer",
@@ -124,7 +123,6 @@ class TestTopicManager:
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
             store_name="default",
-            consumer_group="my_consumer_group",
         )
 
         assert "import.this" in changelog.config.extra_config
@@ -152,7 +150,6 @@ class TestTopicManager:
         changelog = topic_manager.changelog_topic(
             topic_name=topic.name,
             store_name="default",
-            consumer_group="my_consumer_group",
         )
 
         assert changelog.config.num_partitions == partitions == 5
@@ -183,9 +180,7 @@ class TestTopicManager:
             for n in range(3)
         ]
         changelogs = [
-            topic_manager.changelog_topic(
-                topic_name=topic_name, consumer_group="group", store_name="default"
-            )
+            topic_manager.changelog_topic(topic_name=topic_name, store_name="default")
             for topic_name in topic_manager.topics
         ]
         topic_admin_mock.inspect_topics.return_value = {
@@ -234,7 +229,7 @@ class TestTopicManager:
         )
 
         changelog_topic = topic_manager.changelog_topic(
-            topic_name=source_topic.name, consumer_group="group", store_name="default"
+            topic_name=source_topic.name, store_name="default"
         )
         topic_admin_mock.inspect_topics.return_value = {
             source_topic.name: source_topic_config,
@@ -265,7 +260,6 @@ class TestTopicManager:
 
         changelog_topic = topic_manager.changelog_topic(
             topic_name=source_topic.name,
-            consumer_group="group",
             store_name="default",
         )
 
@@ -294,5 +288,5 @@ class TestTopicManager:
         topic = topic_manager.topic("good_name")
         with pytest.raises(TopicNameLengthExceeded):
             topic_manager.changelog_topic(
-                topic_name=topic.name, consumer_group="a" * 300, store_name="store"
+                topic_name=topic.name, store_name="store" * 100
             )

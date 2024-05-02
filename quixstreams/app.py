@@ -274,7 +274,8 @@ class Application:
                 topic_admin=TopicAdmin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
-                )
+                ),
+                consumer_group=consumer_group,
             )
         self._topic_manager = topic_manager
         self._state_manager = StateStoreManager(

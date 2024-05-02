@@ -39,7 +39,6 @@ class StateStoreManager:
         producer: Optional[RowProducer] = None,
         recovery_manager: Optional[RecoveryManager] = None,
     ):
-        self._group_id = group_id
         self._state_dir = (Path(state_dir) / group_id).absolute()
         self._rocksdb_options = rocksdb_options
         self._stores: Dict[str, Dict[str, Store]] = {}
@@ -124,7 +123,6 @@ class StateStoreManager:
             changelog_topic = self._recovery_manager.register_changelog(
                 topic_name=topic_name,
                 store_name=store_name,
-                consumer_group=self._group_id,
             )
             return ChangelogProducerFactory(
                 changelog_name=changelog_topic.name,

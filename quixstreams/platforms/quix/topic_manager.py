@@ -26,6 +26,7 @@ class QuixTopicManager(TopicManager):
     def __init__(
         self,
         topic_admin: TopicAdmin,
+        consumer_group: str,
         quix_config_builder: QuixKafkaConfigsBuilder,
         create_timeout: int = 60,
     ):
@@ -35,7 +36,13 @@ class QuixTopicManager(TopicManager):
         :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
             generated for you.
         """
-        super().__init__(create_timeout=create_timeout, topic_admin=topic_admin)
+        super().__init__(
+            topic_admin=topic_admin,
+            consumer_group=quix_config_builder.strip_workspace_id_prefix(
+                consumer_group
+            ),
+            create_timeout=create_timeout,
+        )
         self._quix_config_builder = quix_config_builder
 
     def _create_topics(self, topics: List[Topic]):
@@ -69,7 +76,6 @@ class QuixTopicManager(TopicManager):
     def _internal_topic_name(
         self,
         name: str,
-        consumer_group: str,
         topic_name: str,
         store_name: Optional[str] = None,
     ):
@@ -79,7 +85,6 @@ class QuixTopicManager(TopicManager):
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
         :param name: a unique name for the internal topic (changelog, groupby, etc...)
-        :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
         :param store_name: name of storage type (default, rolling10s, etc.)
 
@@ -88,7 +93,6 @@ class QuixTopicManager(TopicManager):
         strip_wid = self._quix_config_builder.strip_workspace_id_prefix
         return super()._internal_topic_name(
             name=name,
-            consumer_group=strip_wid(consumer_group),
             topic_name=strip_wid(topic_name),
             store_name=store_name,
         )

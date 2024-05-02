@@ -98,7 +98,6 @@ class StreamingDataFrame(BaseStreaming):
             self._branches[self._topic.name] = self
         self._processing_context = processing_context
         self._producer = processing_context.producer
-        self._consumer_group = processing_context.consumer.consumer_group
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -311,7 +310,6 @@ class StreamingDataFrame(BaseStreaming):
 
         groupby_topic = self._topic_manager.repartition_topic(
             operation=name,
-            consumer_group=self._consumer_group,
             topic_name=self._topic.name,
             key_serializer=key_serializer,
             value_serializer=value_serializer,

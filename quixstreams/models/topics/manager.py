@@ -49,17 +49,24 @@ class TopicManager:
     def __init__(
         self,
         topic_admin: TopicAdmin,
+        consumer_group: str,
         create_timeout: int = 60,
     ):
         """
         :param topic_admin: an `Admin` instance (required for some functionality)
+        :param consumer_group: the consumer group (of the `Application`)
         :param create_timeout: timeout for topic creation
         """
         self._admin = topic_admin
+        self._consumer_group = consumer_group
         self._topics: Dict[str, Topic] = {}
         self._internal_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._create_timeout = create_timeout
+
+    @property
+    def consumer_group(self) -> str:
+        return self._consumer_group
 
     @property
     def topics(self) -> Dict[str, Topic]:
@@ -112,7 +119,6 @@ class TopicManager:
     def _internal_topic_name(
         self,
         name: str,
-        consumer_group: str,
         topic_name: str,
         store_name: Optional[str] = None,
     ):
@@ -120,7 +126,6 @@ class TopicManager:
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
         :param name: a unique name for the internal topic (changelog, groupby, etc...)
-        :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
         :param store_name: name of storage type (default, rolling10s, etc.)
 
@@ -128,7 +133,7 @@ class TopicManager:
         """
         return self._validated_topic_name_length(
             self._resolve_topic_name(
-                f"{name}__{'--'.join(filter(None, [consumer_group, topic_name, store_name]))}"
+                f"{name}__{'--'.join(filter(None, [self._consumer_group, topic_name, store_name]))}"
             )
         )
 
@@ -235,7 +240,6 @@ class TopicManager:
         self,
         operation: str,
         topic_name: str,
-        consumer_group: str,
         store_name: Optional[str] = None,
         value_deserializer: Optional[DeserializerType] = "json",
         key_deserializer: Optional[DeserializerType] = "json",
@@ -247,7 +251,6 @@ class TopicManager:
 
         :param operation: name of the GroupBy operation (column name or user-defined).
         :param topic_name: name of the topic the GroupBy is sourced from.
-        :param consumer_group: name of consumer group.
         :param store_name: optional state store name for joins or aggregates.
         :param value_deserializer: a deserializer type for values; default - JSON
         :param key_deserializer: a deserializer type for keys; default - JSON
@@ -256,7 +259,7 @@ class TopicManager:
 
         """
         name = self._internal_topic_name(
-            f"repartition--{operation}", consumer_group, topic_name, store_name
+            f"repartition--{operation}", topic_name, store_name
         )
         topic = Topic(
             name=name,
@@ -276,7 +279,6 @@ class TopicManager:
         self,
         topic_name: str,
         store_name: str,
-        consumer_group: str,
     ) -> Topic:
         """
         Performs all the logic necessary to generate a changelog topic based on a
@@ -295,7 +297,6 @@ class TopicManager:
         generate changelog topics. To turn off changelogs, init an Application with
         "use_changelog_topics"=`False`.
 
-        :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
             > NOTE: normally contain any prefixes added by TopicManager.topic()
         :param store_name: name of the store this changelog belongs to
@@ -306,9 +307,7 @@ class TopicManager:
 
         topic_name = self._resolve_topic_name(topic_name)
         name = self._validated_topic_name_length(
-            self._internal_topic_name(
-                "changelog", consumer_group, topic_name, store_name
-            )
+            self._internal_topic_name("changelog", topic_name, store_name)
         )
 
         source_topic_config = self._get_source_topic_config(
