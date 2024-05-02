@@ -778,7 +778,7 @@ class Application:
             context.run(set_message_context, row.context)
             try:
                 # Execute StreamingDataFrame in a context
-                context.run(dataframe_composed, row.value)
+                context.run(dataframe_composed[topic_name], row.value)
             except Filtered:
                 # The message was filtered by StreamingDataFrame
                 continue
