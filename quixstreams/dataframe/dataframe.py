@@ -4,7 +4,7 @@ import contextvars
 import functools
 import operator
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, TypeVar, Any, overload
+from typing import Optional, Callable, Union, List, TypeVar, Any, overload, Dict
 
 from typing_extensions import Self
 
@@ -13,14 +13,21 @@ from quixstreams.context import (
     set_message_context,
 )
 from quixstreams.core.stream import StreamCallable, Stream
-from quixstreams.models import Topic, Row, MessageContext
+from quixstreams.models import (
+    Topic,
+    TopicManager,
+    Row,
+    MessageContext,
+)
 from quixstreams.processing_context import ProcessingContext
+from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.state import State
 from .base import BaseStreaming
 from .exceptions import InvalidOperation
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
+
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -78,13 +85,20 @@ class StreamingDataFrame(BaseStreaming):
     def __init__(
         self,
         topic: Topic,
+        topic_manager: TopicManager,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
+        branches: Optional[Dict[str, Self]] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
+        self._topic_manager = topic_manager
+        self._branches = branches or {}
+        if self._topic.name not in self._branches:
+            self._branches[self._topic.name] = self
         self._processing_context = processing_context
         self._producer = processing_context.producer
+        self._consumer_group = processing_context.consumer.consumer_group
 
     @property
     def processing_context(self) -> ProcessingContext:
@@ -97,6 +111,10 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
+
+    @property
+    def consumer_topics(self) -> List[Topic]:
+        return [sdf.topic for sdf in self._branches.values()]
 
     def __bool__(self):
         raise InvalidOperation(
@@ -229,6 +247,80 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_filter(func)
         return self._clone(stream=stream)
 
+    def group_by(
+        self,
+        key: Union[str, DataFrameFunc],
+        name: Optional[str] = None,
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "json",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "json",
+    ) -> Self:
+        """
+        "Groups" messages by re-keying them via the provided group_by operation
+        on their message values.
+
+        This enables things like aggregations on messages with non-matching keys.
+
+        You can provide a column name (uses the column's value) or a custom function
+        to generate this new key.
+
+        >**NOTE:** group_by generates a topic that copies the original topic's settings.
+
+        Example Snippet:
+
+        ```python
+        # We have customer purchase events where the message key is the "store_id",
+        # but we want to calculate sales per customer (by "customer_account_id").
+
+        def func(d: dict, state: State):
+            current_total = state.get("customer_sum", 0)
+            new_total = current_total + d["customer_spent"]
+            state.set("customer_sum", new_total)
+            d["customer_total"] = new_total
+            return d
+
+        sdf = StreamingDataframe()
+        sdf = sdf.group_by("customer_account_id")
+        sdf = sdf.apply(func, stateful=True)
+        ```
+
+
+        :param key: how the new key should be generated from the message value;
+            requires a column name (string) or a callable that takes the message value.
+        :param name: a name for the op (must be unique per group-by), required if `key`
+            is a custom callable.
+        :param value_deserializer: a deserializer type for values; default - JSON
+        :param key_deserializer: a deserializer type for keys; default - JSON
+        :param value_serializer: a serializer type for values; default - JSON
+        :param key_serializer: a serializer type for keys; default - JSON
+
+        :return: a clone with this operation added (assign to keep its effect).
+        """
+        if isinstance(key, str):
+            _gb_key_op = lambda row: row[key]
+            name = name or key
+        elif callable(key):
+            _gb_key_op = lambda row: key(row)
+            if not name:
+                raise ValueError(
+                    "group_by requires 'name' parameter when 'key' is a function"
+                )
+        else:
+            raise TypeError("group_by 'key' must be callable or a string (column name)")
+
+        groupby_topic = self._topic_manager.repartition_topic(
+            operation=name,
+            consumer_group=self._consumer_group,
+            topic_name=self._topic.name,
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
+            key_deserializer=key_deserializer,
+            value_deserializer=value_deserializer,
+        )
+        self._finalize_branch(self.to_topic(groupby_topic, key=_gb_key_op))
+        return self._clone(topic=groupby_topic)
+
     @staticmethod
     def contains(key: str) -> StreamingSeries:
         """
@@ -247,7 +339,7 @@ class StreamingDataFrame(BaseStreaming):
 
 
         :param key: a column name to check.
-        :returns: a Column object that evaluates to True if the key is present
+        :return: a Column object that evaluates to True if the key is present
             or False otherwise.
         """
 
@@ -292,7 +384,17 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: self._produce(topic, value, key=key(value) if key else None)
         )
 
-    def compose(self) -> StreamCallable:
+    def _finalize_branch(self, branch: Self):
+        """
+        Add a StreamingDataFrame to the branch cache via its corresponding topic name.
+
+        Implies no further operations will be added to that branch.
+
+        :param branch: a StreamingDataFrame instance
+        """
+        self._branches[self._topic.name] = branch
+
+    def compose(self) -> Dict[str, StreamCallable]:
         """
         Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -320,9 +422,14 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return self.stream.compose()
+        self._finalize_branch(self)
+        return {name: sdf.stream.compose() for name, sdf in self._branches.items()}
 
-    def test(self, value: object, ctx: Optional[MessageContext] = None) -> Any:
+    def test(
+        self,
+        value: object,
+        ctx: Optional[MessageContext] = None,
+    ) -> Any:
         """
         A shorthand to test `StreamingDataFrame` with provided value
         and `MessageContext`.
@@ -338,7 +445,9 @@ class StreamingDataFrame(BaseStreaming):
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
         composed = self.compose()
-        return context.run(composed, value)
+        for k in composed:
+            value = context.run(composed[k], value)
+        return value
 
     def tumbling_window(
         self,
@@ -506,11 +615,17 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
-    def _clone(self, stream: Stream) -> Self:
+    def _clone(
+        self,
+        stream: Optional[Stream] = None,
+        topic: Optional[Topic] = None,
+    ) -> Self:
         clone = self.__class__(
             stream=stream,
-            topic=self._topic,
+            topic=topic or self._topic,
             processing_context=self._processing_context,
+            topic_manager=self._topic_manager,
+            branches=self._branches,
         )
         return clone
 
