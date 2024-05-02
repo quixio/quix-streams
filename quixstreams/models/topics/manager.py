@@ -65,10 +65,6 @@ class TopicManager:
         self._create_timeout = create_timeout
 
     @property
-    def consumer_group(self) -> str:
-        return self._consumer_group
-
-    @property
     def topics(self) -> Dict[str, Topic]:
         return self._topics
 
