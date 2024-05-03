@@ -1,6 +1,6 @@
 # Tutorial: Anomaly Detection
 
-You will learn how to build a simple anomaly detection system, a common use case of stateful streaming applications. This will show how to use a QuixStreams Application to:
+You will learn how to build a simple anomaly detection system, a common use case of stateful streaming applications. This will show how to use a Quix Streams application to:
 
 - Create a topic
 - Use stateful windowed operations
