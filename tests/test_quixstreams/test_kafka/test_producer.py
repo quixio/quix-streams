@@ -28,6 +28,17 @@ class TestProducer:
                 on_delivery=lambda error, msg: offsets.append(msg.offset()),
             )
         assert len(offsets) == 1
+    
+    def test_produce_using_app_topic(self, producer, app_factory):
+        app = app_factory(auto_offset_reset="earliest")
+        topic = app.topic("test_topic")
+        with producer:
+            producer.produce(
+                topic=topic,
+                key="test",
+                value=b"test",
+            )
+            producer.poll(1.0)
 
     def test_produce_failure_no_error(self, producer_factory, topic_factory):
         topic_name, _ = topic_factory()

@@ -1,7 +1,7 @@
 import functools
 import logging
 import typing
-from typing import List, Optional, Callable, Tuple
+from typing import List, Optional, Callable, Tuple, Union
 
 from confluent_kafka import (
     TopicPartition,
@@ -12,6 +12,7 @@ from confluent_kafka import (
 from confluent_kafka.admin import ClusterMetadata
 
 from quixstreams.exceptions import PartitionAssignmentError, KafkaPartitionError
+from quixstreams.models.topics.topic import Topic
 
 __all__ = (
     "Consumer",
@@ -143,7 +144,7 @@ class Consumer:
 
     def subscribe(
         self,
-        topics: List[str],
+        topics: List[Union[str, Topic]],
         on_assign: Optional[RebalancingCallback] = None,
         on_revoke: Optional[RebalancingCallback] = None,
         on_lost: Optional[RebalancingCallback] = None,
@@ -152,7 +153,7 @@ class Consumer:
         Set subscription to supplied list of topics
         This replaces a previous subscription.
 
-        :param list(str) topics: List of topics (strings) to subscribe to.
+        :param topics: List of topics (strings or Topics) to subscribe to.
         :param callable on_assign: callback to provide handling of customized offsets
             on completion of a successful partition re-assignment.
         :param callable on_revoke: callback to provide handling of offset commits to
@@ -228,8 +229,16 @@ class Consumer:
             if on_lost is not None:
                 on_lost(consumer, partitions)
 
+        topics_str = []
+
+        for topic in topics:
+            if isinstance(topic, Topic):
+                topics_str.append(topic.name)
+            else:
+                topics_str.append(topic)
+
         return self._consumer.subscribe(
-            topics=topics,
+            topics=topics_str,
             on_assign=_on_assign_wrapper,
             on_revoke=_on_revoke_wrapper,
             on_lost=_on_lost_wrapper,

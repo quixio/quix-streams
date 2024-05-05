@@ -52,6 +52,24 @@ class TestConsumerSubscribe:
             assert topic_name in metadata.topics
             assert len(metadata.topics[topic_name].partitions) == num_partitions
 
+    def test_consumer_subscribe_app_topic_exists(
+        self,
+        consumer,
+        topic_factory,
+        app_factory,
+    ):
+        topic_name, num_partitions = topic_factory()
+        app = app_factory(auto_offset_reset="earliest")
+        topic = app.topic(topic_name)
+
+        with consumer:
+            consumer.subscribe(topics=[topic])
+            msg = consumer.poll(timeout=1)
+            assert msg is None
+            metadata = consumer.list_topics()
+            assert topic_name in metadata.topics
+            assert len(metadata.topics[topic_name].partitions) == num_partitions
+
     def test_consumer_subscribe_topic_doesnt_exist(self, consumer):
         topic_name = str(uuid.uuid4())
 

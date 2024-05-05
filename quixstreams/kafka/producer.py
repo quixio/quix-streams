@@ -1,5 +1,6 @@
 import logging
 from typing import Union, Optional, Callable
+from quixstreams.models.topics.topic import Topic
 
 from confluent_kafka import (
     Producer as ConfluentProducer,
@@ -73,7 +74,7 @@ class Producer:
 
     def produce(
         self,
-        topic: str,
+        topic: Union[str, Topic],
         value: Optional[Union[str, bytes]] = None,
         key: Optional[Union[str, bytes]] = None,
         headers: Optional[Headers] = None,
@@ -91,7 +92,7 @@ class Producer:
         If `BufferError` still happens, the method will poll Kafka with timeout
         to free up the buffer and try again.
 
-        :param topic: topic name
+        :param topic: Topic or topic name
         :param value: message value
         :param key: message key
         :param headers: message headers
@@ -111,6 +112,8 @@ class Producer:
             "headers": headers,
             "on_delivery": on_delivery,
         }
+        if isinstance(topic, Topic):
+            topic = topic.name
 
         # confluent_kafka doesn't like None for optional parameters
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
