@@ -216,9 +216,13 @@ class Application:
             quix_config_builder = QuixKafkaConfigsBuilder(quix_sdk_token=quix_sdk_token)
 
         if broker_address and quix_config_builder:
-            raise ValueError("Cannot provide both broker address and Quix SDK Token")
+            raise ValueError(
+                'Cannot provide both "broker_address" and "quix_sdk_token"'
+            )
         elif not (broker_address or quix_config_builder):
-            raise ValueError("Either broker address or Quix SDK Token must be provided")
+            raise ValueError(
+                'Either "broker_address" or "quix_sdk_token" must be provided'
+            )
         elif quix_config_builder:
             # SDK Token or QuixKafkaConfigsBuilder were provided
             logger.info(

@@ -503,7 +503,7 @@ class TestApplication:
         with patch.dict(os.environ, {}, clear=True):
             with pytest.raises(ValueError) as e_info:
                 Application()
-            error_str = "Either broker address or Quix SDK Token must be provided"
+            error_str = 'Either "broker_address" or "quix_sdk_token" must be provided'
             assert error_str in e_info.value.args
 
     def test_consumer_group_env(self):
@@ -879,7 +879,7 @@ class TestQuixApplication:
                 broker_address="address",
                 quix_config_builder=create_autospec(QuixKafkaConfigsBuilder),
             )
-        error_str = "Cannot provide both broker address and Quix SDK Token"
+        error_str = 'Cannot provide both "broker_address" and "quix_sdk_token"'
         assert error_str in e_info.value.args
 
     def test_topic_name_and_config(
