@@ -368,8 +368,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         if changelog_producer is None:
             return
 
-        source_topic, changelog_topic, partition = (
-            changelog_producer.source_topic_name,
+        changelog_topic, partition = (
             changelog_producer.changelog_name,
             changelog_producer.partition,
         )

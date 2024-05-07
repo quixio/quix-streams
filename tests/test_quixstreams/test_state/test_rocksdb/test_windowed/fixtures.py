@@ -64,7 +64,6 @@ def windowed_rocksdb_store_factory_changelog(tmp_path, changelog_producer_mock):
             base_dir=str(tmp_path),
             changelog_producer_factory=ChangelogProducerFactory(
                 changelog_name=changelog or str(uuid.uuid4()),
-                source_topic_name=topic,
                 producer=producer or create_autospec(RowProducer)("address"),
             ),
         )

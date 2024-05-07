@@ -134,9 +134,7 @@ class ChangelogProducerFactory:
     Generates ChangelogProducers, which produce changelog messages to a StorePartition.
     """
 
-    def __init__(
-        self, changelog_name: str, source_topic_name: str, producer: RowProducer
-    ):
+    def __init__(self, changelog_name: str, producer: RowProducer):
         """
         :param changelog_name: changelog topic name
         :param producer: a RowProducer (not shared with `Application` instance)
@@ -144,7 +142,6 @@ class ChangelogProducerFactory:
         :return: a ChangelogWriter instance
         """
         self._changelog_name = changelog_name
-        self._source_topic_name = source_topic_name
         self._producer = producer
 
     def get_partition_producer(self, partition_num) -> "ChangelogProducer":
@@ -156,7 +153,6 @@ class ChangelogProducerFactory:
         """
         return ChangelogProducer(
             changelog_name=self._changelog_name,
-            source_topic_name=self._source_topic_name,
             partition=partition_num,
             producer=self._producer,
         )
@@ -171,7 +167,6 @@ class ChangelogProducer:
     def __init__(
         self,
         changelog_name: str,
-        source_topic_name: str,
         partition: int,
         producer: RowProducer,
     ):
@@ -181,13 +176,8 @@ class ChangelogProducer:
         :param producer: a RowProducer (not shared with `Application` instance)
         """
         self._changelog_name = changelog_name
-        self._source_topic_name = source_topic_name
         self._partition = partition
         self._producer = producer
-
-    @property
-    def source_topic_name(self) -> str:
-        return self._source_topic_name
 
     @property
     def changelog_name(self) -> str:

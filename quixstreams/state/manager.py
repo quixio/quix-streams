@@ -128,7 +128,6 @@ class StateStoreManager:
             )
             return ChangelogProducerFactory(
                 changelog_name=changelog_topic.name,
-                source_topic_name=topic_name,
                 producer=self._producer,
             )
 
