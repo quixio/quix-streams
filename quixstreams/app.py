@@ -817,7 +817,7 @@ class Application:
         if self._state_manager.stores:
             logger.debug(f"Rebalancing: assigning state store partitions")
             for tp in topic_partitions:
-                # Get the latest committed offset for the assgined topic partition
+                # Get the latest committed offset for the assigned topic partition
                 tp_committed = self._consumer.committed([tp], timeout=30)[0]
                 # Assign store partitions
                 store_partitions = self._state_manager.on_partition_assign(
