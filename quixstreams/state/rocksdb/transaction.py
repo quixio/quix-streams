@@ -235,7 +235,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
     def prepare(self, processed_offset: int):
         """
         Produce changelog messages to the changelog topic for all changes accumulated
-        in this transaction and prepare transcation to flush its state to the state
+        in this transaction and prepare transaction to flush its state to the state
         store.
 
         After successful `prepare()`, the transaction status is changed to PREPARED,
