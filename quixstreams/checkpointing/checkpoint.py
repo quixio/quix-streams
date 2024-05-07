@@ -103,9 +103,10 @@ class Checkpoint:
         Commit the checkpoint.
 
         This method will:
-         1. Flush the changelogs for each state store and ensure everything is produced.
-         2. Commit topic offsets.
-         3. Flush each state store partition to the disk.
+         1. Produce the changelogs for each state store
+         2. Flush the producer to ensure everything is delivered.
+         3. Commit topic offsets.
+         4. Flush each state store partition to the disk.
         """
 
         if not self._tp_offsets:
