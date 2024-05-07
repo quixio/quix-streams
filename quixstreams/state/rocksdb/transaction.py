@@ -309,7 +309,7 @@ class RocksDBPartitionTransaction(PartitionTransaction):
         """
         Check if the transaction is in PREPARED status.
 
-        Prepared transaction successefully flushed its changelog and cannot receive
+        Prepared transaction successfully flushed its changelog and cannot receive
         updates anymore, but its state is not yet flushed to the disk
 
         :return: `True` if transaction is prepared, `False` otherwise.
