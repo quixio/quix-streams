@@ -26,15 +26,16 @@ class TestRocksDBStore:
         rocksdb_store.revoke_partition(0)
 
     def test_create_transaction(self, rocksdb_store):
+        prefix = b"__key__"
         rocksdb_store.assign_partition(0)
         with rocksdb_store.start_partition_transaction(0) as tx:
-            tx.set("key", "value")
+            tx.set("key", "value", prefix=prefix)
         rocksdb_store.revoke_partition(0)
 
         # Assign partition again and check the value
         rocksdb_store.assign_partition(0)
         with rocksdb_store.start_partition_transaction(0) as tx:
-            assert tx.get("key") == "value"
+            assert tx.get("key", prefix=prefix) == "value"
         assert rocksdb_store._changelog_producer_factory is None
 
     def test_get_transaction_partition_not_assigned(self, rocksdb_store):

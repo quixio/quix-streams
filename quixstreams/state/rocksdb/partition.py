@@ -5,8 +5,8 @@ from typing import Any, Union, Optional, List, Dict
 from rocksdict import WriteBatch, Rdict, ColumnFamily, AccessType
 
 from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.utils.json import loads as json_loads
 from quixstreams.state.recovery import ChangelogProducer
-from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.state.types import (
     StorePartition,
 )
@@ -20,6 +20,7 @@ from .metadata import (
     PROCESSED_OFFSET_KEY,
     CHANGELOG_OFFSET_KEY,
     CHANGELOG_CF_MESSAGE_HEADER,
+    CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER,
 )
 from .options import RocksDBOptions
 from .serialization import (
@@ -33,7 +34,6 @@ from .types import RocksDBOptionsType
 
 __all__ = ("RocksDBStorePartition",)
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +46,6 @@ class RocksDBStorePartition(StorePartition):
      1. Managing access to the RocksDB instance
      2. Creating transactions to interact with data
      3. Flushing WriteBatches to the RocksDB
-     4. Producing state-related changelog messages
 
     It opens the RocksDB on `__init__`. If the db is locked by another process,
     it will retry according to `open_max_retries` and `open_retry_backoff` options.
@@ -73,10 +72,6 @@ class RocksDBStorePartition(StorePartition):
         self._cf_handle_cache: Dict[str, ColumnFamily] = {}
         self._changelog_producer = changelog_producer
 
-    @property
-    def using_changelogs(self) -> bool:
-        return bool(self._changelog_producer)
-
     def begin(
         self,
     ) -> RocksDBPartitionTransaction:
@@ -90,6 +85,7 @@ class RocksDBStorePartition(StorePartition):
             partition=self,
             dumps=self._dumps,
             loads=self._loads,
+            changelog_producer=self._changelog_producer,
         )
 
     def _changelog_recover_flush(self, changelog_offset: int, batch: WriteBatch):
@@ -103,28 +99,71 @@ class RocksDBStorePartition(StorePartition):
         )
         self.write(batch)
 
+    def _should_apply_changelog(
+        self, headers: Dict[str, bytes], committed_offset: int
+    ) -> bool:
+        """
+        Determine whether the changelog update should be skipped.
+
+        :param headers: changelog message headers
+        :param committed_offset: latest committed offset of the source topic partition
+        :return: True if update should be applied, else False.
+        """
+        # Parse the processed topic-partition-offset info from the changelog message
+        # headers to determine whether the update should be applied or skipped.
+        # It can be empty if the message was produced by the older version of the lib.
+        processed_offset_header = headers.get(
+            CHANGELOG_PROCESSED_OFFSET_MESSAGE_HEADER, b"null"
+        )
+        processed_offset = json_loads(processed_offset_header)
+        if processed_offset is not None:
+            # Skip recovering from the message if its processed offset is ahead of the
+            # current committed offset.
+            # This way it will recover to a consistent state if the checkpointing code
+            # produced the changelog messages but failed to commit
+            # the source topic offset.
+            return processed_offset < committed_offset
+        return True
+
     def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto
+        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
     ):
         """
         Updates state from a given changelog message.
 
+        The actual update may be skipped when both conditions are met:
+
+        - The changelog message has headers with the processed message offset.
+        - This processed offset is larger than the latest committed offset for the same
+          topic partition.
+
+        This way the state does not apply the state changes for not-yet-committed
+        messages and improves the state consistency guarantees.
+
         :param changelog_message: A raw Confluent message read from a changelog topic.
+        :param committed_offset: latest committed offset for the partition
         """
-        try:
-            cf_handle = self.get_column_family_handle(
-                changelog_message.headers()[0][1].decode()
-            )
-        except IndexError:
+        headers = dict(changelog_message.headers() or ())
+        # Parse the column family name from message headers
+        cf_name = headers.get(CHANGELOG_CF_MESSAGE_HEADER, b"").decode()
+        if not cf_name:
             raise ColumnFamilyHeaderMissing(
-                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message!"
+                f"Header '{CHANGELOG_CF_MESSAGE_HEADER}' missing from changelog message"
             )
+        cf_handle = self.get_column_family_handle(cf_name)
+
         batch = WriteBatch(raw_mode=True)
-        key = changelog_message.key()
-        if value := changelog_message.value():
-            batch.put(key, value, cf_handle)
-        else:
-            batch.delete(key, cf_handle)
+        # Determine whether the update should be applied or skipped based on the
+        # latest committed offset and processed offset from the changelog message header
+        if self._should_apply_changelog(
+            headers=headers, committed_offset=committed_offset
+        ):
+            key = changelog_message.key()
+            if value := changelog_message.value():
+                batch.put(key, value, cf_handle)
+            else:
+                batch.delete(key, cf_handle)
+
         self._changelog_recover_flush(changelog_message.offset(), batch)
 
     def set_changelog_offset(self, changelog_offset: int):
@@ -136,17 +175,6 @@ class RocksDBStorePartition(StorePartition):
         :param changelog_offset: A changelog offset
         """
         self._changelog_recover_flush(changelog_offset, WriteBatch(raw_mode=True))
-
-    def produce_to_changelog(
-        self,
-        key: bytes,
-        value: Optional[bytes] = None,
-        headers: Optional[MessageHeadersMapping] = None,
-    ):
-        """
-        Produce a message to the StorePartitions respective changelog.
-        """
-        self._changelog_producer.produce(key=key, value=value, headers=headers)
 
     def write(self, batch: WriteBatch):
         """
@@ -212,8 +240,6 @@ class RocksDBStorePartition(StorePartition):
         self._cf_handle_cache = {}
         self._cf_cache = {}
         self._db.close()
-        if self._changelog_producer:
-            self._changelog_producer.flush()
         logger.debug(f'Closed rocksdb partition on "{self._path}"')
 
     @property

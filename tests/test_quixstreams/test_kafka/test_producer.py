@@ -16,6 +16,19 @@ class TestProducer:
             )
             producer.poll(1.0)
 
+    def test_produce_on_delivery_callback(self, producer, topic_factory):
+        topic_name, _ = topic_factory()
+
+        offsets = []
+        with producer:
+            producer.produce(
+                topic=topic_name,
+                key="test",
+                value=b"test",
+                on_delivery=lambda error, msg: offsets.append(msg.offset()),
+            )
+        assert len(offsets) == 1
+
     def test_produce_failure_no_error(self, producer_factory, topic_factory):
         topic_name, _ = topic_factory()
         extra_config = {

@@ -4,7 +4,7 @@ from typing import Optional, Dict, List
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
-from quixstreams.models import ConfluentKafkaMessageProto
+from quixstreams.models import ConfluentKafkaMessageProto, Topic
 from quixstreams.models.topics import TopicManager
 from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
@@ -13,8 +13,12 @@ from quixstreams.utils.dicts import dict_values
 
 logger = logging.getLogger(__name__)
 
-
-__all__ = ("ChangelogProducer", "ChangelogProducerFactory", "RecoveryManager")
+__all__ = (
+    "ChangelogProducer",
+    "ChangelogProducerFactory",
+    "RecoveryManager",
+    "RecoveryPartition",
+)
 
 
 class RecoveryPartition:
@@ -30,12 +34,30 @@ class RecoveryPartition:
         changelog_name: str,
         partition_num: int,
         store_partition: StorePartition,
+        committed_offset: int,
     ):
-        self.changelog_name = changelog_name
-        self.partition_num = partition_num
-        self.store_partition = store_partition
+        self._changelog_name = changelog_name
+        self._partition_num = partition_num
+        self._store_partition = store_partition
         self._changelog_lowwater: Optional[int] = None
         self._changelog_highwater: Optional[int] = None
+        self._committed_offset = committed_offset
+
+    @property
+    def changelog_name(self) -> str:
+        return self._changelog_name
+
+    @property
+    def partition_num(self) -> int:
+        return self._partition_num
+
+    @property
+    def changelog_highwater(self) -> Optional[int]:
+        return self._changelog_highwater
+
+    @property
+    def changelog_lowwater(self) -> Optional[int]:
+        return self._changelog_lowwater
 
     @property
     def offset(self) -> int:
@@ -44,7 +66,7 @@ class RecoveryPartition:
 
         :return: changelog offset (int)
         """
-        return self.store_partition.get_changelog_offset() or 0
+        return self._store_partition.get_changelog_offset() or 0
 
     @property
     def needs_recovery(self):
@@ -52,7 +74,7 @@ class RecoveryPartition:
         Determine whether recovery is necessary for underlying `StorePartition`.
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
-        state_is_behind = (self._changelog_highwater - self.offset) > 0
+        state_is_behind = self._changelog_highwater > self.offset
         return has_consumable_offsets and state_is_behind
 
     @property
@@ -62,7 +84,7 @@ class RecoveryPartition:
 
         Usually checked during assign if recovery was not required.
         """
-        return self._changelog_highwater and (self.offset != self._changelog_highwater)
+        return self._changelog_highwater and (self._changelog_highwater < self.offset)
 
     def update_offset(self):
         """
@@ -80,7 +102,7 @@ class RecoveryPartition:
                 f"network issues. State may be inaccurate for any affected keys. "
                 f"The offset will now be set to {self._changelog_highwater}."
             )
-        self.store_partition.set_changelog_offset(
+        self._store_partition.set_changelog_offset(
             changelog_offset=self._changelog_highwater - 1
         )
 
@@ -92,8 +114,8 @@ class RecoveryPartition:
 
         :param changelog_message: A confluent kafka message (everything as bytes)
         """
-        self.store_partition.recover_from_changelog_message(
-            changelog_message=changelog_message
+        self._store_partition.recover_from_changelog_message(
+            changelog_message=changelog_message, committed_offset=self._committed_offset
         )
 
     def set_watermarks(self, lowwater: int, highwater: int):
@@ -122,7 +144,7 @@ class ChangelogProducerFactory:
         self._changelog_name = changelog_name
         self._producer = producer
 
-    def get_partition_producer(self, partition_num):
+    def get_partition_producer(self, partition_num) -> "ChangelogProducer":
         """
         Generate a ChangelogProducer for producing to a specific partition number
         (and thus StorePartition).
@@ -130,7 +152,9 @@ class ChangelogProducerFactory:
         :param partition_num: source topic partition number
         """
         return ChangelogProducer(
-            self._changelog_name, partition_num, producer=self._producer
+            changelog_name=self._changelog_name,
+            partition=partition_num,
+            producer=self._producer,
         )
 
 
@@ -140,15 +164,28 @@ class ChangelogProducer:
     kafka changelog partition.
     """
 
-    def __init__(self, changelog_name: str, partition_num: int, producer: RowProducer):
+    def __init__(
+        self,
+        changelog_name: str,
+        partition: int,
+        producer: RowProducer,
+    ):
         """
         :param changelog_name: A changelog topic name
-        :param partition_num: source topic partition number
+        :param partition: source topic partition number
         :param producer: a RowProducer (not shared with `Application` instance)
         """
         self._changelog_name = changelog_name
-        self._partition_num = partition_num
+        self._partition = partition
         self._producer = producer
+
+    @property
+    def changelog_name(self) -> str:
+        return self._changelog_name
+
+    @property
+    def partition(self) -> int:
+        return self._partition
 
     def produce(
         self,
@@ -167,12 +204,12 @@ class ChangelogProducer:
             key=key,
             value=value,
             headers=headers,
-            partition=self._partition_num,
+            partition=self._partition,
             topic=self._changelog_name,
         )
 
-    def flush(self):
-        self._producer.flush()
+    def flush(self, timeout: Optional[float] = None) -> int:
+        return self._producer.flush(timeout=timeout)
 
 
 class RecoveryManager:
@@ -194,6 +231,14 @@ class RecoveryManager:
         self._recovery_partitions: Dict[int, Dict[str, RecoveryPartition]] = {}
 
     @property
+    def partitions(self) -> Dict[int, Dict[str, RecoveryPartition]]:
+        """
+        Returns a mapping of assigned RecoveryPartitions in the following format:
+        {<partition>: {<store_name>: <RecoveryPartition>}}
+        """
+        return self._recovery_partitions
+
+    @property
     def has_assignments(self) -> bool:
         """
         Whether the Application has assigned RecoveryPartitions
@@ -211,7 +256,9 @@ class RecoveryManager:
         """
         return self.has_assignments and self._running
 
-    def register_changelog(self, topic_name: str, store_name: str, consumer_group: str):
+    def register_changelog(
+        self, topic_name: str, store_name: str, consumer_group: str
+    ) -> Topic:
         """
         Register a changelog Topic with the TopicManager.
 
@@ -252,29 +299,37 @@ class RecoveryManager:
         topic_name: str,
         partition_num: int,
         store_partitions: Dict[str, StorePartition],
+        committed_offset: int,
     ) -> List[RecoveryPartition]:
-        recovery_partitions = [
-            RecoveryPartition(
-                changelog_name=self._topic_manager.changelog_topics[topic_name][
-                    store_name
-                ].name,
+        partitions = []
+        for store_name, store_partition in store_partitions.items():
+            changelog_topic = self._topic_manager.changelog_topics[topic_name][
+                store_name
+            ]
+            recovery_partition = RecoveryPartition(
+                changelog_name=changelog_topic.name,
                 partition_num=partition_num,
                 store_partition=store_partition,
+                committed_offset=committed_offset,
             )
-            for store_name, store_partition in store_partitions.items()
-        ]
-        for rp in recovery_partitions:
-            rp.set_watermarks(
-                *self._consumer.get_watermark_offsets(
-                    ConfluentPartition(rp.changelog_name, rp.partition_num), timeout=10
-                )
+
+            lowwater, highwater = self._consumer.get_watermark_offsets(
+                ConfluentPartition(
+                    topic=recovery_partition.changelog_name,
+                    partition=recovery_partition.partition_num,
+                ),
+                timeout=10,
             )
-        return recovery_partitions
+            recovery_partition.set_watermarks(lowwater=lowwater, highwater=highwater)
+
+            partitions.append(recovery_partition)
+        return partitions
 
     def assign_partition(
         self,
-        topic_name: str,
-        partition_num: int,
+        topic: str,
+        partition: int,
+        committed_offset: int,
         store_partitions: Dict[str, StorePartition],
     ):
         """
@@ -283,32 +338,36 @@ class RecoveryManager:
         Pauses active consumer partitions as needed.
         """
         recovery_partitions = self._generate_recovery_partitions(
-            topic_name=topic_name,
-            partition_num=partition_num,
+            topic_name=topic,
+            partition_num=partition,
             store_partitions=store_partitions,
+            committed_offset=committed_offset,
         )
         for rp in recovery_partitions:
-            c_name, p_num = rp.changelog_name, rp.partition_num
+            changelog_name, partition = rp.changelog_name, rp.partition_num
             if rp.needs_recovery:
-                logger.info(f"Recovery required for {c_name}[{p_num}]")
-                self._recovery_partitions.setdefault(p_num, {})[c_name] = rp
+                logger.info(f"Recovery required for {changelog_name}[{partition}]")
+                self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
                 self._consumer.incremental_assign(
-                    [ConfluentPartition(c_name, p_num, rp.offset)]
+                    [ConfluentPartition(changelog_name, partition, rp.offset)]
                 )
             elif rp.needs_offset_update:
                 # nothing to recover, but offset is off...likely that offset >
                 # highwater due to At Least Once processing behavior.
                 rp.update_offset()
 
-        # figure out if any pausing is required
-        if self.recovering:
-            # was already recovering, so pause source topic only
-            self._consumer.pause([ConfluentPartition(topic_name, partition_num)])
-            logger.info("Continuing recovery...")
-        elif self.has_assignments:
-            # pause ALL partitions while we wait for Application to start recovery
-            # (all newly assigned partitions are available on `.assignment`).
-            self._consumer.pause(self._consumer.assignment())
+        # Figure out if we need to pause any topic partitions
+        if self._recovery_partitions:
+            if self._running:
+                # Some partitions are already recovering,
+                # pausing only the source topic partition
+                self._consumer.pause(
+                    [ConfluentPartition(topic=topic, partition=partition)]
+                )
+            else:
+                # Recovery hasn't started yet, so pause ALL partitions
+                # and wait for Application to start recovery
+                self._consumer.pause(self._consumer.assignment())
 
     def _revoke_recovery_partitions(
         self,

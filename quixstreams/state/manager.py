@@ -1,31 +1,24 @@
-import contextlib
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional, Iterator
+from typing import List, Dict, Optional
 
 from quixstreams.rowproducer import RowProducer
-from quixstreams.types import TopicPartition
 from .exceptions import (
     StoreNotRegisteredError,
-    InvalidStoreTransactionStateError,
     PartitionStoreIsUsed,
     WindowedStoreAlreadyRegisteredError,
 )
 from .recovery import RecoveryManager, ChangelogProducerFactory
 from .rocksdb import RocksDBStore, RocksDBOptionsType
 from .rocksdb.windowed.store import WindowedRocksDBStore
-from .types import (
-    Store,
-    PartitionTransaction,
-    StorePartition,
-)
+from .types import Store, StorePartition
 
-__all__ = ("StateStoreManager",)
+__all__ = ("StateStoreManager", "DEFAULT_STATE_STORE_NAME")
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_STATE_STORE_NAME = "default"
+DEFAULT_STATE_STORE_NAME = "default"
 
 
 class StateStoreManager:
@@ -52,7 +45,6 @@ class StateStoreManager:
         self._stores: Dict[str, Dict[str, Store]] = {}
         self._producer = producer
         self._recovery_manager = recovery_manager
-        self._transaction: Optional[_MultiStoreTransaction] = None
 
     def _init_state_dir(self):
         logger.info(f'Initializing state directory at "{self._state_dir}"')
@@ -106,7 +98,7 @@ class StateStoreManager:
         return self._recovery_manager.stop_recovery()
 
     def get_store(
-        self, topic: str, store_name: str = _DEFAULT_STATE_STORE_NAME
+        self, topic: str, store_name: str = DEFAULT_STATE_STORE_NAME
     ) -> Store:
         """
         Get a store for given name and topic
@@ -129,17 +121,18 @@ class StateStoreManager:
                 f'State Manager: registering changelog for store "{store_name}" '
                 f'(topic "{topic_name}")'
             )
+            changelog_topic = self._recovery_manager.register_changelog(
+                topic_name=topic_name,
+                store_name=store_name,
+                consumer_group=self._group_id,
+            )
             return ChangelogProducerFactory(
-                self._recovery_manager.register_changelog(
-                    topic_name=topic_name,
-                    store_name=store_name,
-                    consumer_group=self._group_id,
-                ).name,
-                self._producer,
+                changelog_name=changelog_topic.name,
+                producer=self._producer,
             )
 
     def register_store(
-        self, topic_name: str, store_name: str = _DEFAULT_STATE_STORE_NAME
+        self, topic_name: str, store_name: str = DEFAULT_STATE_STORE_NAME
     ):
         """
         Register a state store to be managed by StateStoreManager.
@@ -201,45 +194,44 @@ class StateStoreManager:
 
         shutil.rmtree(self._state_dir)
 
-    def on_partition_assign(self, tp: TopicPartition) -> List[StorePartition]:
+    def on_partition_assign(
+        self, topic: str, partition: int, committed_offset: int
+    ) -> List[StorePartition]:
         """
         Assign store partitions for each registered store for the given `TopicPartition`
         and return a list of assigned `StorePartition` objects.
 
-        :param tp: `TopicPartition` from Kafka consumer
+        :param topic: Kafka topic name
+        :param partition: Kafka topic partition
+        :param committed_offset: latest committed offset for the partition
         :return: list of assigned `StorePartition`
         """
 
         store_partitions = {}
-        for name, store in self._stores.get(tp.topic, {}).items():
-            store_partition = store.assign_partition(tp.partition)
+        for name, store in self._stores.get(topic, {}).items():
+            store_partition = store.assign_partition(partition)
             store_partitions[name] = store_partition
         if self._recovery_manager and store_partitions:
             self._recovery_manager.assign_partition(
-                tp.topic, tp.partition, store_partitions
+                topic=topic,
+                partition=partition,
+                committed_offset=committed_offset,
+                store_partitions=store_partitions,
             )
         return list(store_partitions.values())
 
-    def on_partition_revoke(self, tp: TopicPartition):
+    def on_partition_revoke(self, topic: str, partition: int):
         """
         Revoke store partitions for each registered store for the given `TopicPartition`
 
-        :param tp: `TopicPartition` from Kafka consumer
+        :param topic: Kafka topic name
+        :param partition: Kafka topic partition
         """
-        if stores := self._stores.get(tp.topic, {}).values():
+        if stores := self._stores.get(topic, {}).values():
             if self._recovery_manager:
-                self._recovery_manager.revoke_partition(tp.partition)
+                self._recovery_manager.revoke_partition(partition_num=partition)
             for store in stores:
-                store.revoke_partition(tp.partition)
-
-    def on_partition_lost(self, tp: TopicPartition):
-        """
-        Revoke and close store partitions for each registered store for the given
-        `TopicPartition`
-
-        :param tp: `TopicPartition` from Kafka consumer
-        """
-        self.on_partition_revoke(tp)
+                store.revoke_partition(partition=partition)
 
     def init(self):
         """
@@ -256,123 +248,9 @@ class StateStoreManager:
             for store in topic_stores.values():
                 store.close()
 
-    def get_store_transaction(
-        self, store_name: str = _DEFAULT_STATE_STORE_NAME
-    ) -> PartitionTransaction:
-        """
-        Get active `PartitionTransaction` for the store
-        :param store_name:
-        :return:
-        """
-        if self._transaction is None:
-            raise InvalidStoreTransactionStateError(
-                "Store transaction is not started yet"
-            )
-        return self._transaction.get_store_transaction(store_name=store_name)
-
-    @contextlib.contextmanager
-    def start_store_transaction(
-        self, topic: str, partition: int, offset: int
-    ) -> Iterator["_MultiStoreTransaction"]:
-        """
-        Starting the multi-store transaction for the Kafka message.
-
-        This transaction will keep track of all used stores and flush them in the end.
-        If any exception is caught during this transaction, none of them
-        will be flushed as a best effort to keep stores consistent in "at-least-once" setting.
-
-        There can be only one active transaction at a time. Starting a new transaction
-        before the end of the current one will fail.
-
-
-        :param topic: message topic
-        :param partition: message partition
-        :param offset: message offset
-        """
-        if not self._stores.get(topic):
-            raise StoreNotRegisteredError(
-                f'Topic "{topic}" does not have stores registered'
-            )
-
-        if self._transaction is not None:
-            raise InvalidStoreTransactionStateError(
-                "Another transaction is already in progress"
-            )
-        self._transaction = _MultiStoreTransaction(
-            manager=self, topic=topic, partition=partition, offset=offset
-        )
-        try:
-            yield self._transaction
-            self._transaction.flush()
-        finally:
-            self._transaction = None
-
     def __enter__(self):
         self.init()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-
-
-class _MultiStoreTransaction:
-    """
-    A transaction-like class to manage flushing of multiple state partitions for each
-    processed message.
-
-    It is responsible for:
-    - Keeping track of actual DBTransactions for the individual stores
-    - Flushing of the opened transactions in the end
-
-    """
-
-    def __init__(
-        self, manager: "StateStoreManager", topic: str, partition: int, offset: int
-    ):
-        self._manager = manager
-        self._transactions: Dict[str, PartitionTransaction] = {}
-        self._topic = topic
-        self._partition = partition
-        self._offset = offset
-
-    def get_store_transaction(
-        self, store_name: str = _DEFAULT_STATE_STORE_NAME
-    ) -> PartitionTransaction:
-        """
-        Get a PartitionTransaction for the given store
-
-        It will return already started transaction if there's one.
-
-        :param store_name: store name
-        :return: instance of `PartitionTransaction`
-        """
-        transaction = self._transactions.get(store_name)
-        if transaction is not None:
-            return transaction
-
-        store = self._manager.get_store(topic=self._topic, store_name=store_name)
-        transaction = store.start_partition_transaction(partition=self._partition)
-        self._transactions[store_name] = transaction
-        return transaction
-
-    def flush(self):
-        """
-        Flush all `PartitionTransaction` instances for each registered store and
-        save the last processed offset for each partition.
-
-        Empty transactions without any updates will not be flushed.
-
-        If there are any failed transactions, no transactions will be flushed
-        to keep the stores consistent.
-        """
-        for store_name, transaction in self._transactions.items():
-            if transaction.failed:
-                logger.warning(
-                    f'Detected failed transaction for store "{store_name}" '
-                    f'(topic "{self._topic}" partition "{self._partition}" '
-                    f'offset "{self._offset}), state transactions will not be flushed"'
-                )
-                return
-
-        for transaction in self._transactions.values():
-            transaction.maybe_flush(offset=self._offset)

@@ -10,7 +10,7 @@ from quixstreams.state.rocksdb.windowed.metadata import (
 )
 from quixstreams.state.rocksdb.windowed.serialization import encode_window_key
 from quixstreams.utils.json import dumps
-from tests.test_quixstreams.utils import ConfluentKafkaMessageStub
+from tests.utils import ConfluentKafkaMessageStub
 
 
 class TestWindowedRocksDBPartitionTransactionChangelog:
@@ -37,13 +37,14 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
             offset=50,
         )
 
-        store_partition.recover_from_changelog_message(changelog_msg)
-
+        store_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=-1001
+        )
         with store_partition.begin() as tx:
-            with tx.with_prefix(kafka_key):
-                assert (
-                    tx.get_window(window["start_ms"], window["end_ms"]) == store_value
-                )
+            assert (
+                tx.get_window(window["start_ms"], window["end_ms"], prefix=kafka_key)
+                == store_value
+            )
         assert store_partition.get_changelog_offset() == changelog_msg.offset() + 1
 
     def test_recover_latest_expire_from_changelog_message(
@@ -67,15 +68,17 @@ class TestWindowedRocksDBPartitionTransactionChangelog:
             offset=50,
         )
 
-        store_partition.recover_from_changelog_message(changelog_msg)
+        store_partition.recover_from_changelog_message(
+            changelog_msg, committed_offset=-1001
+        )
 
         with store_partition.begin() as tx:
-            with tx.with_prefix(kafka_key):
-                assert (
-                    tx.get(
-                        LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
-                        cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
-                    )
-                    == store_value
+            assert (
+                tx.get(
+                    LATEST_EXPIRED_WINDOW_TIMESTAMP_KEY,
+                    cf_name=LATEST_EXPIRED_WINDOW_CF_NAME,
+                    prefix=kafka_key,
                 )
+                == store_value
+            )
         assert store_partition.get_changelog_offset() == changelog_msg.offset() + 1

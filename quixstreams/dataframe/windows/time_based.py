@@ -1,16 +1,10 @@
-import logging
 import functools
+import logging
 from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple
 
-from quixstreams.context import (
-    message_context,
-    message_key,
-)
-from quixstreams.state import (
-    StateStoreManager,
-    WindowedPartitionTransaction,
-    WindowedState,
-)
+from quixstreams.context import message_context
+from quixstreams.processing_context import ProcessingContext
+from quixstreams.state import WindowedPartitionTransaction, WindowedState
 from .base import (
     WindowedDataFrameFunc,
     WindowAggregateFunc,
@@ -161,7 +155,7 @@ class FixedTimeWindow:
         )
 
     def register_store(self):
-        self._dataframe.state_manager.register_windowed_store(
+        self._dataframe.processing_context.state_manager.register_windowed_store(
             topic_name=self._dataframe.topic.name, store_name=self._name
         )
 
@@ -177,7 +171,9 @@ class FixedTimeWindow:
         self.register_store()
 
         func = _as_windowed(
-            func=func, state_manager=self._dataframe.state_manager, store_name=name
+            func=func,
+            processing_context=self._dataframe.processing_context,
+            store_name=name,
         )
 
         return self._dataframe.apply(func=func, expand=expand)
@@ -194,23 +190,25 @@ def _noop() -> Any:
 
 
 def _as_windowed(
-    func: WindowedDataFrameFunc, state_manager: StateStoreManager, store_name: str
+    func: WindowedDataFrameFunc, processing_context: ProcessingContext, store_name: str
 ) -> "DataFrameFunc":
     @functools.wraps(func)
     def wrapper(value: object) -> object:
+        ctx = message_context()
+        key = ctx.key
         transaction = cast(
             WindowedPartitionTransaction,
-            state_manager.get_store_transaction(store_name=store_name),
+            processing_context.checkpoint.get_store_transaction(
+                topic=ctx.topic, partition=ctx.partition, store_name=store_name
+            ),
         )
-        key = message_key()
         if key is None:
-            ctx = message_context()
             logger.warning(
                 f"Skipping window processing for a message because the key is None, "
                 f"partition='{ctx.topic}[{ctx.partition}]' offset='{ctx.offset}'."
             )
             return _noop()
-        with transaction.with_prefix(prefix=key):
-            return func(value, transaction.state)
+        state = transaction.as_state(prefix=key)
+        return func(value, state)
 
     return wrapper

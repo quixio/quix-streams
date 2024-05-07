@@ -241,6 +241,11 @@ def row_producer_factory(kafka_container):
 
 
 @pytest.fixture()
+def row_producer(row_producer_factory):
+    return row_producer_factory()
+
+
+@pytest.fixture()
 def row_factory():
     """
     This factory includes only the fields typically handed to a producer when
@@ -276,6 +281,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
     def factory(
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
+        commit_interval: float = 5.0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         on_consumer_error: Optional[ConsumerErrorCallback] = None,
@@ -292,6 +298,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             broker_address=kafka_container.broker_address,
             consumer_group=consumer_group or random_consumer_group,
             auto_offset_reset=auto_offset_reset,
+            commit_interval=commit_interval,
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
             on_consumer_error=on_consumer_error,
@@ -330,21 +337,6 @@ def state_manager_factory(tmp_path):
 @pytest.fixture()
 def state_manager(state_manager_factory) -> StateStoreManager:
     manager = state_manager_factory()
-    manager.init()
-    yield manager
-    manager.close()
-
-
-@pytest.fixture()
-def state_manager_changelogs(
-    state_manager_factory,
-    topic_admin,
-    recovery_manager_mock_consumer,
-) -> StateStoreManager:
-    manager = state_manager_factory(
-        producer=create_autospec(RowProducer)("broker"),
-        recovery_manager=recovery_manager_mock_consumer,
-    )
     manager.init()
     yield manager
     manager.close()

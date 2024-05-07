@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import time
@@ -12,23 +13,20 @@ from confluent_kafka import KafkaException, TopicPartition
 from quixstreams.app import Application
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
+from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
     DoubleDeserializer,
     DoubleSerializer,
     JSONDeserializer,
     SerializationError,
     JSONSerializer,
+    TopicConfig,
 )
-from quixstreams.platforms.quix import (
-    QuixKafkaConfigsBuilder,
-)
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.env import QuixEnvironment
-from quixstreams.rowconsumer import (
-    KafkaMessageError,
-    RowConsumer,
-)
+from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state import State
-from tests.utils import TopicPartitionStub
 
 
 def _stop_app_on_future(app: Application, future: Future, timeout: float):
@@ -94,7 +92,7 @@ class TestApplication:
         for msg in consumed_messages:
             assert msg in messages_to_produce
 
-    def test_run_consume_and_produce(
+    def test_run_success(
         self,
         app_factory,
         row_consumer_factory,
@@ -173,6 +171,61 @@ class TestApplication:
             assert row.key == data["key"]
             assert row.value == {column_name: loads(data["value"].decode())}
 
+    def test_run_fails_no_commit(
+        self,
+        app_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
+    ):
+        """
+        Test that Application doesn't commit the checkpoint in case of failure
+        """
+
+        app = app_factory(
+            auto_offset_reset="earliest",
+            commit_interval=9999,  # Set a high commit interval to ensure no autocommit
+        )
+
+        partition_num = 0
+        topic_in = app.topic(str(uuid.uuid4()))
+
+        def count_and_fail(_):
+            # Count the incoming messages and fail on processing the last one
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                raise ValueError("test")
+
+        sdf = app.dataframe(topic_in).apply(count_and_fail)
+
+        processed_count = 0
+        total_messages = 3
+        # Produce messages to the topic and flush
+        data = {"key": b"key", "value": b'"value"', "partition": partition_num}
+        with app.get_producer() as producer:
+            for _ in range(total_messages):
+                producer.produce(topic_in.name, **data)
+
+        failed = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, failed, 10.0)
+        with pytest.raises(ValueError):
+            app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Ensure the offset is not committed to Kafka
+        with row_consumer_factory() as row_consumer:
+            committed, *_ = row_consumer.committed(
+                [TopicPartition(topic_in.name, partition_num)]
+            )
+        assert committed.offset == -1001
+
     def test_run_consumer_error_raised(self, app_factory, executor):
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         app = app_factory(auto_offset_reset="error")
@@ -183,7 +236,7 @@ class TestApplication:
 
         # Stop app after 10s if nothing failed
         executor.submit(_stop_app_on_timeout, app, 10.0)
-        with pytest.raises(KafkaMessageError):
+        with pytest.raises(KafkaConsumerException):
             app.run(sdf)
 
     def test_run_deserialization_error_raised(self, app_factory, executor):
@@ -438,11 +491,11 @@ class TestApplication:
         Test that producer receives the Application extra configs
         """
         app = app_factory(
-            producer_extra_config={"max.in.flight": "123"},
+            producer_extra_config={"linger.ms": 10},
         )
 
         with app.get_producer() as x:
-            assert x._producer_config["max.in.flight"] is "123"
+            assert x._producer_config["linger.ms"] == 10
 
     def test_missing_broker_id_raise(self):
         # confirm environment is empty
@@ -474,120 +527,174 @@ class TestApplication:
 
 class TestQuixApplication:
     def test_init_with_quix_sdk_token_arg(self):
-        def cfg():
-            return {
-                "sasl.mechanisms": "SCRAM-SHA-256",
-                "security.protocol": "SASL_SSL",
-                "bootstrap.servers": "address1,address2",
-                "sasl.username": "my-username",
-                "sasl.password": "my-password",
-                "ssl.ca.location": "/mock/dir/ca.cert",
-            }
-
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
+        broker_address = "address1,address2"
+
+        extra_config = {"extra": "config"}
+        auth_params = {
+            "sasl.mechanisms": "SCRAM-SHA-256",
+            "security.protocol": "SASL_SSL",
+            "sasl.username": "my-username",
+            "sasl.password": "my-password",
+            "ssl.ca.location": "/mock/dir/ca.cert",
+        }
+        confluent_broker_config = {
+            **auth_params,
+            "bootstrap.servers": broker_address,
+        }
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.side_effect = cfg
+            cfg_builder.get_confluent_broker_config.return_value = (
+                confluent_broker_config
+            )
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
             return cfg_builder
 
-        with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder):
-            app = Application(
+        # Mock consumer and producer to check the init args
+        with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder), patch(
+            "quixstreams.app.RowConsumer"
+        ) as consumer_init_mock, patch(
+            "quixstreams.app.RowProducer"
+        ) as producer_init_mock:
+            Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
+                consumer_extra_config=extra_config,
+                producer_extra_config=extra_config,
+            )
+
+        # Check if items from the Quix config have been passed
+        # to the low-level configs of producer and consumer
+        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
+
+        consumer_call_kwargs = consumer_init_mock.call_args.kwargs
+        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
+
+    def test_init_with_quix_sdk_token_env(self, monkeypatch):
+        consumer_group = "c_group"
+        expected_workspace_cgroup = f"my_ws-{consumer_group}"
+        quix_sdk_token = "my_sdk_token"
+        broker_address = "address1,address2"
+
+        extra_config = {"extra": "config"}
+        auth_params = {
+            "sasl.mechanisms": "SCRAM-SHA-256",
+            "security.protocol": "SASL_SSL",
+            "sasl.username": "my-username",
+            "sasl.password": "my-password",
+            "ssl.ca.location": "/mock/dir/ca.cert",
+        }
+        confluent_broker_config = {
+            **auth_params,
+            "bootstrap.servers": broker_address,
+        }
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
+
+        def get_cfg_builder(quix_sdk_token):
+            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.get_confluent_broker_config.return_value = (
+                confluent_broker_config
+            )
+            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+            cfg_builder.quix_sdk_token = quix_sdk_token
+            return cfg_builder
+
+        monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
+        with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder), patch(
+            "quixstreams.app.RowConsumer"
+        ) as consumer_init_mock, patch(
+            "quixstreams.app.RowProducer"
+        ) as producer_init_mock:
+            Application(
+                consumer_group=consumer_group,
+                consumer_extra_config=extra_config,
+                producer_extra_config=extra_config,
+            )
+
+        # Check if items from the Quix config have been passed
+        # to the low-level configs of producer and consumer
+        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
+
+        consumer_call_kwargs = consumer_init_mock.call_args.kwargs
+        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
+
+    def test_init_with_quix_config_builder(self):
+        consumer_group = "c_group"
+        expected_workspace_cgroup = f"my_ws-{consumer_group}"
+        quix_sdk_token = "my_sdk_token"
+        broker_address = "address1,address2"
+
+        extra_config = {"extra": "config"}
+        auth_params = {
+            "sasl.mechanisms": "SCRAM-SHA-256",
+            "security.protocol": "SASL_SSL",
+            "sasl.username": "my-username",
+            "sasl.password": "my-password",
+            "ssl.ca.location": "/mock/dir/ca.cert",
+        }
+        confluent_broker_config = {
+            **auth_params,
+            "bootstrap.servers": broker_address,
+        }
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
+
+        def get_cfg_builder(quix_sdk_token):
+            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.get_confluent_broker_config.return_value = (
+                confluent_broker_config
+            )
+            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+            cfg_builder.quix_sdk_token = quix_sdk_token
+            return cfg_builder
+
+        with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(
+            "quixstreams.app.RowProducer"
+        ) as producer_init_mock:
+            Application(
+                consumer_group=consumer_group,
+                quix_config_builder=get_cfg_builder(quix_sdk_token),
                 consumer_extra_config={"extra": "config"},
                 producer_extra_config={"extra": "config"},
             )
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        assert cfg().items() <= app._producer._producer_config.items()
-        assert cfg().items() <= app._consumer._consumer_config.items()
+        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
-        assert app._producer._producer_config["extra"] == "config"
-        assert app._consumer._consumer_config["extra"] == "config"
-        assert app._consumer._consumer_config["group.id"] == expected_workspace_cgroup
-
-    def test_init_with_quix_sdk_token_env(self):
-        def cfg():
-            return {
-                "sasl.mechanisms": "SCRAM-SHA-256",
-                "security.protocol": "SASL_SSL",
-                "bootstrap.servers": "address1,address2",
-                "sasl.username": "my-username",
-                "sasl.password": "my-password",
-                "ssl.ca.location": "/mock/dir/ca.cert",
-            }
-
-        consumer_group = "c_group"
-        expected_workspace_cgroup = f"my_ws-{consumer_group}"
-        quix_sdk_token = "my_sdk_token"
-
-        def get_cfg_builder(quix_sdk_token):
-            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.side_effect = cfg
-            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
-            cfg_builder.quix_sdk_token = quix_sdk_token
-            return cfg_builder
-
-        with patch.dict(os.environ, {"Quix__Sdk__Token": quix_sdk_token}):
-            with patch("quixstreams.app.QuixKafkaConfigsBuilder", get_cfg_builder):
-                app = Application(
-                    consumer_group=consumer_group,
-                    consumer_extra_config={"extra": "config"},
-                    producer_extra_config={"extra": "config"},
-                )
-
-        # Check if items from the Quix config have been passed
-        # to the low-level configs of producer and consumer
-        assert cfg().items() <= app._producer._producer_config.items()
-        assert cfg().items() <= app._consumer._consumer_config.items()
-
-        assert app._producer._producer_config["extra"] == "config"
-        assert app._consumer._consumer_config["extra"] == "config"
-        assert app._consumer._consumer_config["group.id"] == expected_workspace_cgroup
-
-    def test_init_with_quix_config_builder(self):
-        def cfg():
-            return {
-                "sasl.mechanisms": "SCRAM-SHA-256",
-                "security.protocol": "SASL_SSL",
-                "bootstrap.servers": "address1,address2",
-                "sasl.username": "my-username",
-                "sasl.password": "my-password",
-                "ssl.ca.location": "/mock/dir/ca.cert",
-            }
-
-        consumer_group = "c_group"
-        expected_workspace_cgroup = f"my_ws-{consumer_group}"
-        quix_sdk_token = "my_sdk_token"
-
-        def get_cfg_builder(quix_sdk_token):
-            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.side_effect = cfg
-            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
-            cfg_builder.quix_sdk_token = quix_sdk_token
-            return cfg_builder
-
-        app = Application(
-            consumer_group=consumer_group,
-            quix_config_builder=get_cfg_builder(quix_sdk_token),
-            consumer_extra_config={"extra": "config"},
-            producer_extra_config={"extra": "config"},
-        )
-
-        # Check if items from the Quix config have been passed
-        # to the low-level configs of producer and consumer
-        assert cfg().items() <= app._producer._producer_config.items()
-        assert cfg().items() <= app._consumer._consumer_config.items()
-
-        assert app._producer._producer_config["extra"] == "config"
-        assert app._consumer._consumer_config["extra"] == "config"
-        assert app._consumer._consumer_config["group.id"] == expected_workspace_cgroup
+        consumer_call_kwargs = consumer_init_mock.call_args.kwargs
+        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
     def test_init_with_broker_id_raises(self):
         with pytest.raises(ValueError) as e_info:
@@ -680,35 +787,54 @@ class TestDeprecatedApplicationDotQuix:
     """
 
     def test_init(self):
-        def cfg():
-            return {
-                "sasl.mechanisms": "SCRAM-SHA-256",
-                "security.protocol": "SASL_SSL",
-                "bootstrap.servers": "address1,address2",
-                "sasl.username": "my-username",
-                "sasl.password": "my-password",
-                "ssl.ca.location": "/mock/dir/ca.cert",
-            }
+        consumer_group = "c_group"
+        expected_workspace_cgroup = f"my_ws-{consumer_group}"
+        broker_address = "address1,address2"
+
+        extra_config = {"extra": "config"}
+        auth_params = {
+            "sasl.mechanisms": "SCRAM-SHA-256",
+            "security.protocol": "SASL_SSL",
+            "sasl.username": "my-username",
+            "sasl.password": "my-password",
+            "ssl.ca.location": "/mock/dir/ca.cert",
+        }
+        confluent_broker_config = {
+            **auth_params,
+            "bootstrap.servers": broker_address,
+        }
+        expected_producer_extra_config = {
+            "enable.idempotence": True,
+            **auth_params,
+            **extra_config,
+        }
+        expected_consumer_extra_config = {**auth_params, **extra_config}
 
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg_builder.get_confluent_broker_config.side_effect = cfg
+        cfg_builder.get_confluent_broker_config.return_value = confluent_broker_config
         cfg_builder.prepend_workspace_id.return_value = "my_ws-c_group"
         cfg_builder.strip_workspace_id_prefix.return_value = "c_group"
-        app = Application.Quix(
-            quix_config_builder=cfg_builder,
-            consumer_group="c_group",
-            consumer_extra_config={"extra": "config"},
-            producer_extra_config={"extra": "config"},
-        )
+        with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(
+            "quixstreams.app.RowProducer"
+        ) as producer_init_mock:
+            Application.Quix(
+                quix_config_builder=cfg_builder,
+                consumer_group="c_group",
+                consumer_extra_config={"extra": "config"},
+                producer_extra_config={"extra": "config"},
+            )
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
-        assert cfg().items() <= app._producer._producer_config.items()
-        assert cfg().items() <= app._consumer._consumer_config.items()
+        producer_call_kwargs = producer_init_mock.call_args.kwargs
+        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
-        assert app._producer._producer_config["extra"] == "config"
-        assert app._consumer._consumer_config["extra"] == "config"
-        assert app._consumer._consumer_config["group.id"] == "my_ws-c_group"
+        consumer_call_kwargs = consumer_init_mock.call_args.kwargs
+        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
+        assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
+
         cfg_builder.prepend_workspace_id.assert_called_with("c_group")
 
     def test_topic_name_and_config(self, app_dot_quix_factory):
@@ -843,15 +969,14 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+            topic=topic_in.name, partition=partition_num, committed_offset=-1001
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=partition_num) as tx:
             # All keys in state must be prefixed with the message key
-            with tx.with_prefix(message_key):
-                assert tx.get("total") == total_consumed.result()
+            assert tx.get("total", prefix=message_key) == total_consumed.result()
 
-    def test_run_stateful_processing_fails(
+    def test_run_stateful_fails_no_commit(
         self,
         app_factory,
         executor,
@@ -860,39 +985,36 @@ class TestApplicationWithState:
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
-        partition_num = 0
         app = app_factory(
             consumer_group=consumer_group,
             auto_offset_reset="earliest",
             state_dir=state_dir,
+            commit_interval=9999,  # Set a high commit interval to ensure no autocommit
         )
 
         topic_in = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
 
         # Define a function that counts incoming Rows using state
-        def count(_, state: State):
+        def count_and_fail(_, state: State):
             total = state.get("total", 0)
             total += 1
             state.set("total", total)
+            # Fail after processing all messages
+            if total == total_messages:
+                raise ValueError("test")
 
         failed = Future()
 
-        def fail(*_):
-            failed.set_result(True)
-            raise ValueError("test")
-
-        sdf = app.dataframe(topic_in).update(count, stateful=True).update(fail)
+        sdf = app.dataframe(topic_in).update(count_and_fail, stateful=True)
 
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {
-            "key": b"key",
-            "value": dumps({"key": "value"}),
-            "partition": partition_num,
-        }
+        key = b"key"
+        value = dumps({"key": "value"})
+
         with app.get_producer() as producer:
             for _ in range(total_messages):
-                producer.produce(topic_in.name, **data)
+                producer.produce(topic_in.name, key=key, value=value)
 
         # Stop app when the future is resolved
         executor.submit(_stop_app_on_future, app, failed, 10.0)
@@ -905,11 +1027,11 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+            topic=topic_in.name, partition=0, committed_offset=-1001
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
-        with store.start_partition_transaction(partition=partition_num) as tx:
-            assert tx.get("total") is None
+        with store.start_partition_transaction(partition=0) as tx:
+            assert tx.get("total", prefix=key) is None
 
     def test_run_stateful_suppress_processing_errors(
         self,
@@ -969,12 +1091,11 @@ class TestApplicationWithState:
         )
         state_manager.register_store(topic_in.name, "default")
         state_manager.on_partition_assign(
-            TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+            topic=topic_in.name, partition=partition_num, committed_offset=-1001
         )
         store = state_manager.get_store(topic=topic_in.name, store_name="default")
         with store.start_partition_transaction(partition=partition_num) as tx:
-            with tx.with_prefix(message_key):
-                assert tx.get("total") == total_consumed.result()
+            assert tx.get("total", prefix=message_key) == total_consumed.result()
 
     def test_on_assign_topic_offset_behind_warning(
         self,
@@ -1001,13 +1122,13 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in.name, "default")
             state_partitions = state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in.name, partition=partition_num)
+                topic=topic_in.name, partition=partition_num, committed_offset=-1001
             )
-            with state_manager.start_store_transaction(
-                topic=topic_in.name, partition=partition_num, offset=9999
-            ):
-                tx = state_manager.get_store_transaction()
-                tx.set("key", "value")
+            store = state_manager.get_store(topic_in.name, "default")
+            tx = store.start_partition_transaction(partition_num)
+            # Do some change to probe the Writebatch
+            tx.set("key", "value", prefix=b"__key__")
+            tx.flush(processed_offset=9999)
             assert state_partitions[partition_num].get_processed_offset() == 9999
 
         # Define some stateful function so the App assigns store partitions
@@ -1057,7 +1178,7 @@ class TestApplicationWithState:
         )
 
         topic_in_name, _ = topic_factory()
-        tx_prefix = b"key"
+        prefix = b"key"
 
         state_manager = state_manager_factory(
             group_id=consumer_group, state_dir=state_dir
@@ -1067,13 +1188,12 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in_name, partition=0)
+                topic=topic_in_name, partition=0, committed_offset=-1001
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
                 # All keys in state must be prefixed with the message key
-                with tx.with_prefix(tx_prefix):
-                    tx.set("my_state", True)
+                tx.set(key="my_state", value=True, prefix=prefix)
 
         # Clear the state
         app.clear_state()
@@ -1082,13 +1202,11 @@ class TestApplicationWithState:
         with state_manager:
             state_manager.register_store(topic_in_name, "default")
             state_manager.on_partition_assign(
-                TopicPartitionStub(topic=topic_in_name, partition=0)
+                topic=topic_in_name, partition=0, committed_offset=-1001
             )
             store = state_manager.get_store(topic=topic_in_name, store_name="default")
             with store.start_partition_transaction(partition=0) as tx:
-                # All keys in state must be prefixed with the message key
-                with tx.with_prefix(tx_prefix):
-                    assert tx.get("my_state") is None
+                assert tx.get("my_state", prefix=prefix) is None
 
     def test_app_use_changelog_false(self, app_factory):
         """
@@ -1099,7 +1217,7 @@ class TestApplicationWithState:
         assert not app._state_manager.using_changelogs
 
 
-class TestAppRecovery:
+class TestApplicationRecovery:
     def test_changelog_recovery_default_store(
         self,
         app_factory,
@@ -1130,14 +1248,18 @@ class TestAppRecovery:
 
         def get_app():
             app = app_factory(
+                commit_interval=0,  # Commit every processed message
                 auto_offset_reset="earliest",
-                use_changelog_topics="True",
+                use_changelog_topics=True,
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
                 state_dir=state_dir,
             )
             topic = app.topic(
-                topic_name, config=app._topic_manager.topic_config(num_partitions=2)
+                topic_name,
+                config=TopicConfig(
+                    num_partitions=len(partition_msg_count), replication_factor=1
+                ),
             )
             sdf = app.dataframe(topic)
             sdf = sdf.apply(sum_value, stateful=True)
@@ -1149,23 +1271,19 @@ class TestAppRecovery:
                 state_dir=state_dir,
             ) as state_manager:
                 state_manager.register_store(topic.name, store_name)
-                for p_num in partition_msg_count:
-                    state_manager.on_partition_assign(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
-                    )
-                store = state_manager.get_store(topic=topic.name, store_name=store_name)
                 for p_num, count in partition_msg_count.items():
-                    assert store._partitions[p_num].get_changelog_offset() == count
-                    with store.start_partition_transaction(partition=p_num) as tx:
-                        # All keys in state must be prefixed with the message key
-                        with tx.with_prefix(f"key{p_num}".encode()):
-                            assert tx.get(sum_key) == count * msg_int_value
-
-                for p_num in partition_msg_count:
-                    state_manager.on_partition_revoke(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
+                    state_manager.on_partition_assign(
+                        topic=topic.name, partition=p_num, committed_offset=-1001
                     )
-                state_manager.clear_stores()
+                    store = state_manager.get_store(
+                        topic=topic.name, store_name=store_name
+                    )
+                    partition = store.partitions[p_num]
+                    assert partition.get_changelog_offset() == count
+                    with partition.begin() as tx:
+                        # All keys in state must be prefixed with the message key
+                        prefix = f"key{p_num}".encode()
+                        assert tx.get(sum_key, prefix=prefix) == count * msg_int_value
 
         # Produce messages to the topic and flush
         app, sdf, topic = get_app()
@@ -1174,24 +1292,25 @@ class TestAppRecovery:
                 serialized = topic.serialize(
                     key=f"key{p_num}".encode(), value={"my_value": msg_int_value}
                 )
-                data = {
-                    "key": serialized.key,
-                    "value": serialized.value,
-                    "partition": p_num,
-                }
                 for _ in range(count):
-                    producer.produce(topic.name, **data)
+                    producer.produce(
+                        topic.name,
+                        key=serialized.key,
+                        value=serialized.value,
+                        partition=p_num,
+                    )
 
-        # run app to populate state
+        # run app to populate state with data
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        processed_count = {0: 0, 1: 0}
         validate_state()
+        app.clear_state()
 
         # run the app again and validate the recovered state
+        processed_count = {0: 0, 1: 0}
         app, sdf, topic = get_app()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
@@ -1253,14 +1372,18 @@ class TestAppRecovery:
 
         def get_app():
             app = app_factory(
+                commit_interval=0,  # Commit every processed message
                 auto_offset_reset="earliest",
-                use_changelog_topics="True",
+                use_changelog_topics=True,
                 consumer_group=consumer_group,
                 on_message_processed=on_message_processed,
                 state_dir=state_dir,
             )
             topic = app.topic(
-                topic_name, config=app._topic_manager.topic_config(num_partitions=2)
+                topic_name,
+                config=TopicConfig(
+                    num_partitions=len(partition_msg_count), replication_factor=1
+                ),
             )
             sdf = app.dataframe(topic)
             sdf = sdf.apply(lambda row: row["my_value"])
@@ -1286,12 +1409,14 @@ class TestAppRecovery:
                 group_id=consumer_group, state_dir=state_dir
             ) as state_manager:
                 state_manager.register_windowed_store(topic.name, store_name)
-                for p_num in partition_timestamps:
-                    state_manager.on_partition_assign(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
-                    )
-                store = state_manager.get_store(topic=topic.name, store_name=store_name)
                 for p_num, windows in expected_window_updates.items():
+                    state_manager.on_partition_assign(
+                        topic=topic.name, partition=p_num, committed_offset=-1001
+                    )
+                    store = state_manager.get_store(
+                        topic=topic.name, store_name=store_name
+                    )
+
                     # in this test, each expiration check only deletes one window,
                     # simplifying the offset counting.
                     expected_offset = sum(
@@ -1299,25 +1424,21 @@ class TestAppRecovery:
                     ) + 2 * len(expected_expired_windows[p_num])
                     assert (
                         expected_offset
-                        == store._partitions[p_num].get_changelog_offset()
+                        == store.partitions[p_num].get_changelog_offset()
                     )
 
-                    with store.start_partition_transaction(partition=p_num) as tx:
-                        with tx.with_prefix(f"key{p_num}".encode()):
-                            for window, count in windows.items():
-                                expected = count
-                                if window in expected_expired_windows[p_num]:
-                                    expected = None
-                                else:
-                                    # each message value was 10
-                                    expected *= msg_int_value
-                                assert tx.get_window(*window) == expected
+                    partition = store.partitions[p_num]
 
-                for p_num in partition_timestamps:
-                    state_manager.on_partition_revoke(
-                        TopicPartitionStub(topic=topic.name, partition=p_num)
-                    )
-                state_manager.clear_stores()
+                    with partition.begin() as tx:
+                        prefix = f"key{p_num}".encode()
+                        for window, count in windows.items():
+                            expected = count
+                            if window in expected_expired_windows[p_num]:
+                                expected = None
+                            else:
+                                # each message value was 10
+                                expected *= msg_int_value
+                            assert tx.get_window(*window, prefix=prefix) == expected
 
         app, sdf, topic = get_app()
         # Produce messages to the topic and flush
@@ -1341,15 +1462,144 @@ class TestAppRecovery:
         app.run(sdf)
         # validate and then delete the state
         assert processed_count == partition_msg_count
-        processed_count = {0: 0, 1: 0}
         validate_state()
 
         # run the app again and validate the recovered state
+        processed_count = {0: 0, 1: 0}
         app, sdf, topic = get_app()
+        app.clear_state()
         done = Future()
         executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)
         # no messages should have been processed outside of recovery loop
         assert processed_count == {0: 0, 1: 0}
         # State should be the same as before deletion
+        validate_state()
+
+    def test_changelog_recovery_consistent_after_failed_commit(
+        self, app_factory, executor, tmp_path, state_manager_factory, consumer_factory
+    ):
+        """
+        Scenario: application processes messages and successfully produces changelog
+        messages but fails to commit the topic offsets.
+
+        We expect that the app will be recovered to a consistent state and changes
+        for the yet uncommitted messages will not be applied.
+        """
+        consumer_group = str(uuid.uuid4())
+        state_dir = (tmp_path / "state").absolute()
+        topic_name = str(uuid.uuid4())
+        store_name = "default"
+
+        # Messages to be processed successfully
+        succeeded_messages = [
+            ("key1", "1"),
+            ("key2", "2"),
+            ("key3", "3"),
+        ]
+        # Messages to fail
+        failed_messages = [
+            ("key1", "4"),
+            ("key2", "5"),
+            ("key3", "6"),
+        ]
+        # Ensure the same number of messages in both sets to simplift testing
+        assert len(failed_messages) == len(succeeded_messages)
+        total_count = len(succeeded_messages)
+        processed_count = 0
+
+        def on_message_processed(topic_, partition, offset):
+            nonlocal processed_count
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            processed_count += 1
+            if processed_count == total_count:
+                done.set_result(True)
+
+        def get_app():
+            app = app_factory(
+                commit_interval=999,  # Simulate a very long commit interval
+                auto_offset_reset="earliest",
+                use_changelog_topics=True,
+                on_message_processed=on_message_processed,
+                consumer_group=consumer_group,
+                state_dir=state_dir,
+            )
+            topic = app.topic(topic_name)
+            sdf = app.dataframe(topic)
+            sdf = sdf.update(
+                lambda value, state: state.set("latest", value["number"]), stateful=True
+            )
+            return app, sdf, topic
+
+        def validate_state():
+            with state_manager_factory(
+                group_id=consumer_group,
+                state_dir=state_dir,
+            ) as state_manager, consumer_factory(
+                consumer_group=consumer_group
+            ) as consumer:
+                committed_offset = consumer.committed(
+                    [TopicPartition(topic=topic_name, partition=0)]
+                )[0].offset
+                state_manager.register_store(topic.name, store_name)
+                partition = state_manager.on_partition_assign(
+                    topic=topic.name, partition=0, committed_offset=committed_offset
+                )[0]
+                with partition.begin() as tx:
+                    for key, value in succeeded_messages:
+                        state = tx.as_state(prefix=key.encode())
+                        assert state.get("latest") == value
+
+        # Produce messages from the "succeded" set
+        app, sdf, topic = get_app()
+        with app.get_producer() as producer:
+            for key, value in succeeded_messages:
+                serialized = topic.serialize(key=key.encode(), value={"number": value})
+                producer.produce(topic.name, key=serialized.key, value=serialized.value)
+
+        # Run the application to apply changes to state
+        done = Future()
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+        assert processed_count == total_count
+        # Validate the state
+        validate_state()
+
+        # Init application again
+        processed_count = 0
+        app, sdf, topic = get_app()
+
+        # Produce messages from the "failed" set
+        with app.get_producer() as producer:
+            for key, value in failed_messages:
+                serialized = topic.serialize(key=key.encode(), value={"number": value})
+                producer.produce(topic.name, key=serialized.key, value=serialized.value)
+
+        # Run the app second time and fail the consumer commit
+        with patch.object(
+            RowConsumer, "commit", side_effect=ValueError("commit failed")
+        ):
+            done = Future()
+            executor.submit(_stop_app_on_future, app, done, 10.0)
+            with contextlib.suppress(PartitionAssignmentError):
+                app.run(sdf)
+
+            validate_state()
+
+        # Run the app again to recover the state
+        app, sdf, topic = get_app()
+        # Clear the state to recover from scratch
+        app.clear_state()
+
+        # Run app for the third time and fail on commit to prevent state changes
+        with patch.object(
+            RowConsumer, "commit", side_effect=ValueError("commit failed")
+        ):
+            done = Future()
+            executor.submit(_stop_app_on_future, app, done, 10.0)
+            with contextlib.suppress(PartitionAssignmentError):
+                app.run(sdf)
+
+        # The app should be recovered
         validate_state()

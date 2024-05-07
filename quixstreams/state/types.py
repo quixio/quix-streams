@@ -1,8 +1,5 @@
-import contextlib
-
-from typing import Protocol, Any, Optional, Iterator, Callable, Dict, ClassVar
-
-from typing_extensions import Self
+import enum
+from typing import Protocol, Any, Optional, Callable, Dict, ClassVar, Tuple
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.models.types import MessageHeadersMapping
@@ -60,9 +57,7 @@ class Store(Protocol):
         """
         ...
 
-    def start_partition_transaction(
-        self, partition: int
-    ) -> Optional["PartitionTransaction"]:
+    def start_partition_transaction(self, partition: int) -> "PartitionTransaction":
         """
         Start a new partition transaction.
 
@@ -103,23 +98,13 @@ class StorePartition(Protocol):
         """
 
     def recover_from_changelog_message(
-        self, changelog_message: ConfluentKafkaMessageProto
+        self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
     ):
         """
         Updates state from a given changelog message.
 
         :param changelog_message: A raw Confluent message read from a changelog topic.
-        """
-        ...
-
-    def produce_to_changelog(
-        self,
-        key: bytes,
-        value: Optional[bytes] = None,
-        headers: Optional[MessageHeadersMapping] = None,
-    ):
-        """
-        Produce a message to the StorePartitions respective changelog.
+        :param committed_offset: latest committed offset for the partition
         """
         ...
 
@@ -189,17 +174,59 @@ class State(Protocol):
         ...
 
 
-class PartitionTransaction(State):
+class PartitionTransaction(Protocol):
     """
     A transaction class to perform simple key-value operations like
     "get", "set", "delete" and "exists" on a single storage partition.
     """
 
-    @property
-    def state(self) -> State:
+    def as_state(self, prefix: Any) -> State:
         """
-        An instance of State to be provided to `StreamingDataFrame` functions
-        :return:
+        Create an instance implementing the `State` protocol to be provided
+        to `StreamingDataFrame` functions.
+        All operations called on this State object will be prefixed with
+        the supplied `prefix`.
+
+        :return: an instance implementing the `State` protocol
+        """
+        ...
+
+    def get(self, key: Any, prefix: bytes, default: Any = None) -> Optional[Any]:
+        """
+        Get the value for key if key is present in the state, else default
+
+        :param key: key
+        :param prefix: a key prefix
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    def set(self, key: Any, prefix: bytes, value: Any):
+        """
+        Set value for the key.
+        :param key: key
+        :param prefix: a key prefix
+        :param value: value
+        """
+        ...
+
+    def delete(self, key: Any, prefix: bytes):
+        """
+        Delete value for the key.
+
+        This function always returns `None`, even if value is not found.
+        :param key: key
+        :param prefix: a key prefix
+        """
+        ...
+
+    def exists(self, key: Any, prefix: bytes) -> bool:
+        """
+        Check if the key exists in state.
+        :param key: key
+        :param prefix: a key prefix
+        :return: True if key exists, False otherwise
         """
         ...
 
@@ -216,29 +243,59 @@ class PartitionTransaction(State):
     @property
     def completed(self) -> bool:
         """
-        Return `True` if transaction is completed.
+        Return `True` if transaction is successfully completed.
 
         Completed transactions cannot be re-used.
         :return: bool
         """
         ...
 
-    @contextlib.contextmanager
-    def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
+    @property
+    def prepared(self) -> bool:
         """
-        A context manager set the prefix for all keys in the scope.
+        Return `True` if transaction is prepared completed.
 
-        Normally, it's called by `StreamingDataFrame` internals to ensure that every
-        message key is stored separately.
-        :param prefix: key prefix
-        :return: context manager
+        Prepared transactions cannot receive new updates, but can be flushed.
+        :return: bool
         """
         ...
 
-    def maybe_flush(self, offset: Optional[int] = None):
+    def prepare(self, processed_offset: int):
         """
-        Flush the recent updates and last processed offset to the storage.
-        :param offset: offset of the last processed message, optional.
+        Produce changelog messages to the changelog topic for all changes accumulated
+        in this transaction and prepare transcation to flush its state to the state
+        store.
+
+        After successful `prepare()`, the transaction status is changed to PREPARED,
+        and it cannot receive updates anymore.
+
+        If changelog is disabled for this application, no updates will be produced
+        to the changelog topic.
+
+        :param processed_offset: the offset of the latest processed message
+        """
+
+    @property
+    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
+        """
+        Return the changelog topic-partition for the StorePartition of this transaction.
+
+        Returns `None` if changelog_producer is not provided.
+
+        :return: (topic, partition) or None
+        """
+
+    def flush(
+        self,
+        processed_offset: Optional[int] = None,
+        changelog_offset: Optional[int] = None,
+    ):
+        """
+        Flush the recent updates to the storage.
+
+        :param processed_offset: offset of the last processed message, optional.
+        :param changelog_offset: offset of the last produced changelog message,
+            optional.
         """
 
     def __enter__(self): ...
@@ -305,9 +362,7 @@ class WindowedState(Protocol):
         ...
 
 
-class WindowedPartitionTransaction(WindowedState):
-    @property
-    def state(self) -> WindowedState: ...
+class WindowedPartitionTransaction(Protocol):
 
     @property
     def failed(self) -> bool:
@@ -322,28 +377,123 @@ class WindowedPartitionTransaction(WindowedState):
     @property
     def completed(self) -> bool:
         """
-        Return `True` if transaction is completed.
+        Return `True` if transaction is successfully completed.
 
         Completed transactions cannot be re-used.
         :return: bool
         """
         ...
 
-    def with_prefix(self, prefix: Any = b"") -> Iterator[Self]:
+    @property
+    def prepared(self) -> bool:
         """
-        A context manager set the prefix for all keys in the scope.
+        Return `True` if transaction is prepared completed.
 
-        Normally, it's called by `StreamingDataFrame` internals to ensure that every
-        message key is stored separately.
-        :param prefix: key prefix
-        :return: context manager
+        Prepared transactions cannot receive new updates, but can be flushed.
+        :return: bool
         """
         ...
 
-    def maybe_flush(self, offset: Optional[int] = None):
+    def prepare(self, processed_offset: int):
         """
-        Flush the recent updates and last processed offset to the storage.
-        :param offset: offset of the last processed message, optional.
+        Produce changelog messages to the changelog topic for all changes accumulated
+        in this transaction and prepare transcation to flush its state to the state
+        store.
+
+        After successful `prepare()`, the transaction status is changed to PREPARED,
+        and it cannot receive updates anymore.
+
+        If changelog is disabled for this application, no updates will be produced
+        to the changelog topic.
+
+        :param processed_offset: the offset of the latest processed message
+        """
+
+    def as_state(self, prefix: Any) -> WindowedState: ...
+
+    def get_window(
+        self,
+        start_ms: int,
+        end_ms: int,
+        prefix: bytes,
+        default: Any = None,
+    ) -> Optional[Any]:
+        """
+        Get the value of the window defined by `start` and `end` timestamps
+        if the window is present in the state, else default
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param prefix: a key prefix
+        :param default: default value to return if the key is not found
+        :return: value or None if the key is not found and `default` is not provided
+        """
+        ...
+
+    def update_window(
+        self, start_ms: int, end_ms: int, value: Any, timestamp_ms: int, prefix: bytes
+    ):
+        """
+        Set a value for the window.
+
+        This method will also update the latest observed timestamp in state partition
+        using the provided `timestamp`.
+
+        :param start_ms: start of the window in milliseconds
+        :param end_ms: end of the window in milliseconds
+        :param value: value of the window
+        :param timestamp_ms: current message timestamp in milliseconds
+        :param prefix: a key prefix
+        """
+        ...
+
+    def get_latest_timestamp(self) -> int:
+        """
+        Get the latest observed timestamp for the current state partition.
+
+        Use this timestamp to determine if the arriving event is late and should be
+        discarded from the processing.
+
+        :return: latest observed event timestamp in milliseconds
+        """
+        ...
+
+    def expire_windows(self, duration_ms: int, prefix: bytes, grace_ms: int = 0):
+        """
+        Get a list of expired windows from RocksDB considering the current
+        latest timestamp, window duration and grace period.
+
+        It also marks the latest found window as expired in the expiration index, so
+        calling this method multiple times will yield different results for the same
+        "latest timestamp".
+
+        :param duration_ms: duration of the windows in milliseconds
+        :param prefix: a key prefix
+        :param grace_ms: grace period in milliseconds. Default - "0"
+        """
+        ...
+
+    def flush(
+        self,
+        processed_offset: Optional[int] = None,
+        changelog_offset: Optional[int] = None,
+    ):
+        """
+        Flush the recent updates to the storage.
+
+        :param processed_offset: offset of the last processed message, optional.
+        :param changelog_offset: offset of the last produced changelog message,
+            optional.
+        """
+
+    @property
+    def changelog_topic_partition(self) -> Optional[Tuple[str, int]]:
+        """
+        Return the changelog topic-partition for the StorePartition of this transaction.
+
+        Returns `None` if changelog_producer is not provided.
+
+        :return: (topic, partition) or None
         """
 
     def __enter__(self): ...
@@ -360,6 +510,17 @@ class PartitionRecoveryTransaction(Protocol):
 
     def flush(self):
         """
-        Flush the recovery update and last processed offset to the storage.
+        Flush the recovery update to the storage.
         """
         ...
+
+
+class PartitionTransactionStatus(enum.Enum):
+    STARTED = 1  # Transaction is started and accepts updates
+
+    PREPARED = 2  # Transaction is prepared, it can no longer receive updates
+    # and can only be flushed
+
+    COMPLETE = 3  # Transaction is fully completed, it cannot be used anymore
+
+    FAILED = 4  # Transaction is failed, it cannot be used anymore
