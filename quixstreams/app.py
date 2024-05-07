@@ -134,8 +134,9 @@ class Application:
             Linked Environment Variable: `Quix__Consumer__Group`.
             Default - "quixstreams-default" (set during init)
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
+        :param commit_interval: How often to commit the processed messages in seconds.
+            Default - 5.0.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-
         :param partitioner: A function to be used to determine the outgoing message
             partition.
         :param consumer_extra_config: A dictionary with additional options that
