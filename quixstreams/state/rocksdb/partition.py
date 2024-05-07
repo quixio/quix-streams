@@ -99,7 +99,7 @@ class RocksDBStorePartition(StorePartition):
         )
         self.write(batch)
 
-    def _should_skip_changelog(
+    def _should_apply_changelog(
         self, headers: Dict[str, bytes], committed_offset: int
     ) -> bool:
         """
@@ -107,7 +107,7 @@ class RocksDBStorePartition(StorePartition):
 
         :param headers: changelog message headers
         :param committed_offset: latest committed offset of the source topic partition
-        :return: True if update should be skipped, else False.
+        :return: True if update should be applied, else False.
         """
         # Parse the processed topic-partition-offset info from the changelog message
         # headers to determine whether the update should be applied or skipped.
@@ -122,8 +122,8 @@ class RocksDBStorePartition(StorePartition):
             # This way it will recover to a consistent state if the checkpointing code
             # produced the changelog messages but failed to commit
             # the source topic offset.
-            return processed_offset >= committed_offset
-        return False
+            return processed_offset < committed_offset
+        return True
 
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto, committed_offset: int
@@ -155,7 +155,7 @@ class RocksDBStorePartition(StorePartition):
         batch = WriteBatch(raw_mode=True)
         # Determine whether the update should be applied or skipped based on the
         # latest committed offset and processed offset from the changelog message header
-        if not self._should_skip_changelog(
+        if self._should_apply_changelog(
             headers=headers, committed_offset=committed_offset
         ):
             key = changelog_message.key()
