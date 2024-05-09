@@ -167,10 +167,14 @@ sdf = sdf["new_column"] + "another_append"
 sdf = sdf.to_topic(topic_out)
 ```
 
-## Advanced Usage 
+## Advanced Usage
 
 Most users will likely not need this, but here are more details around how 
 `StreamingDataFrame.group_by()` works, and how to additionally configure it.
+
+### GroupBy limitations
+
+`GroupBy` is limited to one use per `StreamingDataFrame`.
 
 ### How GroupBy works
 Each `GroupBy` operation is facilitated by a unique internal (not intended for users) 

@@ -147,27 +147,23 @@ class TopicManager:
         self,
         topic_type: Literal["changelog", "repartition"],
         topic_name: str,
-        store_name: Optional[str] = None,
-        operation: Optional[str] = None,
+        suffix: str,
     ):
         """
         Generate an "internal" topic name.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
-        Note that store_name and operation are only included if not None.
-
-        The internal format is <{GROUP}__{TYPE}--{TOPIC}--{STORE}--{OPER}>
+        The internal format is <{TYPE}__{GROUP}--{NAME}--{SUFFIX}>
 
         :param topic_type: topic type, added as prefix (changelog, repartition)
         :param topic_name: name of consumed topic (app input topic)
-        :param store_name: optional name of storage type (default, rolling10s, etc.)
-        :param operation: optional name of operation (column_a, my_rekey_func, etc.)
+        :param suffix: a unique descriptor related to topic type, added as suffix
 
         :return: formatted topic name
         """
         return self._resolve_topic_name(
-            f"{topic_type}__{'--'.join(filter(None, [self._consumer_group, self._format_nested_name(topic_name), store_name, operation]))}"
+            f"{topic_type}__{'--'.join([self._consumer_group, self._format_nested_name(topic_name), suffix])}"
         )
 
     def _create_topics(self, topics: List[Topic]):
@@ -273,7 +269,6 @@ class TopicManager:
         self,
         operation: str,
         topic_name: str,
-        store_name: Optional[str] = None,
         value_deserializer: Optional[DeserializerType] = "json",
         key_deserializer: Optional[DeserializerType] = "json",
         value_serializer: Optional[SerializerType] = "json",
@@ -284,14 +279,13 @@ class TopicManager:
 
         :param operation: name of the GroupBy operation (column name or user-defined).
         :param topic_name: name of the topic the GroupBy is sourced from.
-        :param store_name: optional state store name for joins or aggregates.
         :param value_deserializer: a deserializer type for values; default - JSON
         :param key_deserializer: a deserializer type for keys; default - JSON
         :param value_serializer: a serializer type for values; default - JSON
         :param key_serializer: a serializer type for keys; default - JSON
 
         """
-        name = self._internal_name(f"repartition", topic_name, store_name, operation)
+        name = self._internal_name(f"repartition", topic_name, operation)
 
         topic = Topic(
             name=name,

@@ -79,28 +79,23 @@ class QuixTopicManager(TopicManager):
         self,
         topic_type: Literal["changelog", "repartition"],
         topic_name: str,
-        store_name: Optional[str] = None,
-        operation: Optional[str] = None,
+        suffix: str,
     ):
         """
         Generate an "internal" topic name.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
-        Note that store_name and operation are only included if not None.
-
-        The internal format is <{GROUP}__{TYPE}--{TOPIC}--{STORE}--{OPER}>
+        The internal format is <{TYPE}__{GROUP}--{NAME}--{SUFFIX}>
 
         :param topic_type: topic type, added as prefix (changelog, repartition)
         :param topic_name: name of consumed topic (app input topic)
-        :param store_name: optional name of storage type (default, rolling10s, etc.)
-        :param operation: optional name of operation (column_a, my_rekey_func, etc.)
+        :param suffix: a unique descriptor related to topic type, added as suffix
 
         :return: formatted topic name
         """
         return super()._internal_name(
-            topic_type=topic_type,
-            topic_name=self._quix_config_builder.strip_workspace_id_prefix(topic_name),
-            store_name=store_name,
-            operation=operation,
+            topic_type,
+            self._quix_config_builder.strip_workspace_id_prefix(topic_name),
+            suffix,
         )
