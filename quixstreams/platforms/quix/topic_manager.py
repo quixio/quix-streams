@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
 from .config import QuixKafkaConfigsBuilder
@@ -70,29 +70,37 @@ class QuixTopicManager(TopicManager):
         :return: actual cluster topic name to use
         """
         if quix_topic := self._quix_config_builder.get_topic(name):
-            return quix_topic["id"]
-        return self._quix_config_builder.prepend_workspace_id(name)
+            name = quix_topic["id"]
+        else:
+            name = self._quix_config_builder.prepend_workspace_id(name)
+        return super()._resolve_topic_name(name)
 
-    def _internal_topic_name(
+    def _internal_name(
         self,
-        name: str,
+        topic_type: Literal["changelog", "repartition"],
         topic_name: str,
         store_name: Optional[str] = None,
+        operation: Optional[str] = None,
     ):
         """
-        Generate the name of the changelog topic based on the following parameters.
+        Generate an "internal" topic name.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
-        :param name: a unique name for the internal topic (changelog, groupby, etc...)
+        Note that store_name and operation are only included if not None.
+
+        The internal format is <{GROUP}__{TYPE}--{TOPIC}--{STORE}--{OPER}>
+
+        :param topic_type: topic type, added as prefix (changelog, repartition)
         :param topic_name: name of consumed topic (app input topic)
-        :param store_name: name of storage type (default, rolling10s, etc.)
+        :param store_name: optional name of storage type (default, rolling10s, etc.)
+        :param operation: optional name of operation (column_a, my_rekey_func, etc.)
 
         :return: formatted topic name
         """
-        strip_wid = self._quix_config_builder.strip_workspace_id_prefix
-        return super()._internal_topic_name(
-            name=name,
-            topic_name=strip_wid(topic_name),
+        return super()._internal_name(
+            topic_type=topic_type,
+            topic_name=self._quix_config_builder.strip_workspace_id_prefix(topic_name),
             store_name=store_name,
+            operation=operation,
         )

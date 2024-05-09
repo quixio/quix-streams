@@ -712,7 +712,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                dataframe.consumer_topics,
+                dataframe.app_subscription_topics,
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
@@ -747,7 +747,7 @@ class Application:
 
     def _setup_topics(self):
         topics_list = ", ".join(
-            f'"{topic.name}"' for topic in self._topic_manager.all_topics
+            f'"{topic}"' for topic in self._topic_manager.all_topics
         )
         logger.info(f"Topics required for this application: {topics_list}")
         if self._auto_create_topics:

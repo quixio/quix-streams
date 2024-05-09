@@ -555,7 +555,7 @@ class TestAppGroupBy:
         user_1 = "john"
         names = [user_0] * 3 + [user_1] * 3
         expected_message_count = len(names)
-        total_messages = expected_message_count * 2  # groupby reproduces messages...
+        total_messages = expected_message_count * 2  # groupby reproduces each message
         app = app_factory(
             auto_offset_reset="earliest",
             on_message_processed=on_message_processed,
@@ -563,14 +563,14 @@ class TestAppGroupBy:
 
         app_topic_in = app.topic(
             str(uuid.uuid4()),
-            value_deserializer=JSONDeserializer(),
-            value_serializer=JSONSerializer(),
+            value_deserializer="json",
+            value_serializer="json",
             config=app._topic_manager.topic_config(num_partitions=num_partitions),
         )
         app_topic_out = app.topic(
             str(uuid.uuid4()),
-            value_serializer=JSONSerializer(),
-            value_deserializer=JSONDeserializer(),
+            value_deserializer="json",
+            value_serializer="json",
             config=app._topic_manager.topic_config(num_partitions=num_partitions),
         )
 

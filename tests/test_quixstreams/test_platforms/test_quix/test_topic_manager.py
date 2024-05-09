@@ -102,6 +102,30 @@ class TestQuixTopicManager:
         assert topic.name == appended_topic_name
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
 
+    def test_quix_changelog_nested_internal_topic_naming(
+        self, quix_topic_manager_factory
+    ):
+        """
+        Confirm expected formatting for an internal topic that spawns another internal
+        topic (changelog)
+        """
+        topic_name = "my_topic"
+        workspace_id = "my_wid"
+        store = "my_store"
+        group = "my_consumer_group"
+        operation = "my_op"
+        topic_manager = quix_topic_manager_factory(
+            consumer_group=group, workspace_id=workspace_id
+        )
+        topic = topic_manager.topic(name=topic_name)
+        repartition = topic_manager.repartition_topic(operation, topic.name)
+        changelog = topic_manager.changelog_topic(repartition.name, store)
+
+        assert (
+            changelog.name
+            == f"{workspace_id}-changelog__{group}--repartition.{topic_name}.{operation}--{store}"
+        )
+
     def test_quix_topic_custom_config(self, quix_topic_manager_factory):
         topic_name = "my_topic"
         workspace_id = "my_wid"

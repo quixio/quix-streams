@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Literal
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
@@ -60,21 +60,37 @@ class TopicManager:
         self._admin = topic_admin
         self._consumer_group = consumer_group
         self._topics: Dict[str, Topic] = {}
-        self._internal_topics: Dict[str, Topic] = {}
+        self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._create_timeout = create_timeout
+
+    @property
+    def _topics_list(self) -> List[Topic]:
+        return list(self._topics.values())
+
+    @property
+    def _changelog_topics_list(self) -> List[Topic]:
+        return dict_values(self._changelog_topics)
+
+    @property
+    def _non_changelog_topics(self) -> Dict[str, Topic]:
+        return {**self._topics, **self._repartition_topics}
+
+    @property
+    def _all_topics_list(self) -> List[Topic]:
+        return (
+            self._topics_list
+            + list(self._repartition_topics.values())
+            + self._changelog_topics_list
+        )
 
     @property
     def topics(self) -> Dict[str, Topic]:
         return self._topics
 
     @property
-    def topics_list(self) -> List[Topic]:
-        return list(self._topics.values())
-
-    @property
-    def _non_changelog_topics(self) -> Dict[str, Topic]:
-        return {**self._topics, **self._internal_topics}
+    def repartition_topics(self) -> Dict[str, Topic]:
+        return self._repartition_topics
 
     @property
     def changelog_topics(self) -> Dict[str, Dict[str, Topic]]:
@@ -86,51 +102,72 @@ class TopicManager:
         return self._changelog_topics
 
     @property
-    def changelog_topics_list(self) -> List[Topic]:
-        return dict_values(self._changelog_topics)
+    def all_topics(self) -> Dict[str, Topic]:
+        """
+        Every registered topic name mapped to it's respective `Topic`.
 
-    @property
-    def all_topics(self) -> List[Topic]:
-        return (
-            self.topics_list
-            + list(self._internal_topics.values())
-            + self.changelog_topics_list
-        )
+        returns: full topic dict, {topic_name: Topic}
+        """
+        return {topic.name: topic for topic in self._all_topics_list}
 
     def _resolve_topic_name(self, name: str) -> str:
         """
         Here primarily for adjusting the topic name for Quix topics.
 
+        Also validates topic name is not too long.
+
         :return: name, no changes (identity function)
         """
-        return name
-
-    def _validated_topic_name_length(self, name: str):
         if len(name) > self._max_topic_name_len:
             raise TopicNameLengthExceeded(
                 f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
             )
         return name
 
-    def _internal_topic_name(
+    def _format_nested_name(self, topic_name: str):
+        """
+        Reformat an "internal" topic name for its inclusion in _another_ internal topic.
+        Part of this includes removing group name, which should only appear once.
+
+        Goes from <{GROUP}__{TYPE}--{TOPIC}--{STUFF}> to <{TYPE}.{TOPIC}.{STUFF}>
+
+        New "internal" topic uses this result for the {TOPIC} portion of its name.
+
+        :param topic_name: the topic name
+
+        :return: altered (if an "internal" topic name) or unaltered topic name
+        """
+        if f"__{self._consumer_group}--" in topic_name:
+            return topic_name.replace(f"__{self._consumer_group}", "").replace(
+                "--", "."
+            )
+        return topic_name
+
+    def _internal_name(
         self,
-        name: str,
+        topic_type: Literal["changelog", "repartition"],
         topic_name: str,
         store_name: Optional[str] = None,
+        operation: Optional[str] = None,
     ):
         """
+        Generate an "internal" topic name.
+
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
-        :param name: a unique name for the internal topic (changelog, groupby, etc...)
+        Note that store_name and operation are only included if not None.
+
+        The internal format is <{GROUP}__{TYPE}--{TOPIC}--{STORE}--{OPER}>
+
+        :param topic_type: topic type, added as prefix (changelog, repartition)
         :param topic_name: name of consumed topic (app input topic)
-        :param store_name: name of storage type (default, rolling10s, etc.)
+        :param store_name: optional name of storage type (default, rolling10s, etc.)
+        :param operation: optional name of operation (column_a, my_rekey_func, etc.)
 
         :return: formatted topic name
         """
-        return self._validated_topic_name_length(
-            self._resolve_topic_name(
-                f"{name}__{'--'.join(filter(None, [self._consumer_group, topic_name, store_name]))}"
-            )
+        return self._resolve_topic_name(
+            f"{topic_type}__{'--'.join(filter(None, [self._consumer_group, self._format_nested_name(topic_name), store_name, operation]))}"
         )
 
     def _create_topics(self, topics: List[Topic]):
@@ -212,7 +249,7 @@ class TopicManager:
 
         :return: Topic object with creation configs
         """
-        name = self._validated_topic_name_length(self._resolve_topic_name(name))
+        name = self._resolve_topic_name(name)
 
         if not config:
             config = TopicConfig(
@@ -254,9 +291,8 @@ class TopicManager:
         :param key_serializer: a serializer type for keys; default - JSON
 
         """
-        name = self._internal_topic_name(
-            f"repartition--{operation}", topic_name, store_name
-        )
+        name = self._internal_name(f"repartition", topic_name, store_name, operation)
+
         topic = Topic(
             name=name,
             value_deserializer=value_deserializer,
@@ -268,7 +304,7 @@ class TopicManager:
                 extras_imports=self._groupby_extra_config_imports_defaults,
             ),
         )
-        self._internal_topics[name] = topic
+        self._repartition_topics[name] = topic
         return topic
 
     def changelog_topic(
@@ -302,10 +338,6 @@ class TopicManager:
         """
 
         topic_name = self._resolve_topic_name(topic_name)
-        name = self._validated_topic_name_length(
-            self._internal_topic_name("changelog", topic_name, store_name)
-        )
-
         source_topic_config = self._get_source_topic_config(
             topic_name, extras_imports=self._changelog_extra_config_imports_defaults
         )
@@ -318,7 +350,7 @@ class TopicManager:
         )
 
         topic = Topic(
-            name=name,
+            name=self._internal_name("changelog", topic_name, store_name),
             key_serializer="bytes",
             value_serializer="bytes",
             key_deserializer="bytes",
@@ -347,7 +379,7 @@ class TopicManager:
         """
         A convenience method to create all Topic objects stored on this TopicManager.
         """
-        self.create_topics(self.all_topics)
+        self.create_topics(self._all_topics_list)
 
     def validate_all_topics(self):
         """
@@ -356,8 +388,8 @@ class TopicManager:
         Issues are pooled and raised as an Exception once inspections are complete.
         """
         logger.info(f"Validating Kafka topics exist and are configured correctly...")
-        topics = self.all_topics
-        changelog_names = [topic.name for topic in self.changelog_topics_list]
+        topics = self._all_topics_list
+        changelog_names = [topic.name for topic in self._changelog_topics_list]
         actual_configs = self._admin.inspect_topics([t.name for t in topics])
 
         for topic in topics:

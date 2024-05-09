@@ -2,7 +2,11 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
+from quixstreams.models.serializers import (
+    BytesSerializer,
+    BytesDeserializer,
+    JSONSerializer,
+)
 from quixstreams.models.topics import TopicConfig, TopicAdmin
 from quixstreams.models.topics.exceptions import (
     TopicNameLengthExceeded,
@@ -93,9 +97,8 @@ class TestTopicManager:
 
         assert topic_manager.changelog_topics[topic.name][store_name] == changelog
 
-        assert changelog.name == topic_manager._internal_topic_name(
-            "changelog", topic.name, store_name
-        )
+        assert changelog.name == f"changelog__{group}--{topic.name}--{store_name}"
+
         for attr in [
             "_key_serializer",
             "_value_serializer",
@@ -290,3 +293,55 @@ class TestTopicManager:
             topic_manager.changelog_topic(
                 topic_name=topic.name, store_name="store" * 100
             )
+
+    def test_repartition_topic(self, topic_manager_factory):
+        """
+        A repartition `Topic` is created with settings that match the source `Topic`
+        and is added to the repartition topic list stored on the `TopicManager`.
+        """
+        group = "my_consumer_group"
+        topic_manager = topic_manager_factory(consumer_group=group)
+        topic = topic_manager.topic(
+            name="my_topic",
+            config=topic_manager.topic_config(num_partitions=5),
+        )
+
+        operation = "my_op"
+        repartition = topic_manager.repartition_topic(
+            operation=operation,
+            topic_name=topic.name,
+            key_serializer="bytes",
+            value_serializer="bytes",
+        )
+
+        assert topic_manager.repartition_topics[repartition.name] == repartition
+        assert repartition.name == f"repartition__{group}--{topic.name}--{operation}"
+        assert repartition.config.num_partitions == topic.config.num_partitions
+        assert repartition.config.replication_factor == topic.config.replication_factor
+
+    def test_changelog_nested_internal_topic_naming(self, topic_manager_factory):
+        """
+        Confirm expected formatting for an internal topic that spawns another internal
+        topic (changelog)
+        """
+        store = "my_store"
+        group = "my_consumer_group"
+        topic_manager = topic_manager_factory(consumer_group=group)
+        topic = topic_manager.topic(
+            name="my_topic",
+            config=topic_manager.topic_config(num_partitions=5),
+        )
+
+        operation = "my_op"
+        repartition = topic_manager.repartition_topic(
+            operation=operation,
+            topic_name=topic.name,
+            key_serializer="bytes",
+            value_serializer="bytes",
+        )
+        changelog = topic_manager.changelog_topic(repartition.name, store)
+
+        assert (
+            changelog.name
+            == f"changelog__{group}--repartition.{topic.name}.{operation}--{store}"
+        )
