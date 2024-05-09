@@ -2,11 +2,7 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from quixstreams.models.serializers import (
-    BytesSerializer,
-    BytesDeserializer,
-    JSONSerializer,
-)
+from quixstreams.models.serializers import BytesSerializer, BytesDeserializer
 from quixstreams.models.topics import TopicConfig, TopicAdmin
 from quixstreams.models.topics.exceptions import (
     TopicNameLengthExceeded,

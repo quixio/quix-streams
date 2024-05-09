@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal
+from typing import List, Literal
 
 from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
 from .config import QuixKafkaConfigsBuilder

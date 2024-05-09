@@ -530,6 +530,7 @@ class TestAppGroupBy:
     def test_group_by(
         self,
         app_factory,
+        topic_manager_factory,
         row_consumer_factory,
         executor,
         row_factory,
@@ -549,6 +550,7 @@ class TestAppGroupBy:
             if processed_count == total_messages:
                 done.set_result(True)
 
+        topic_manager = topic_manager_factory()  # just to make topic_config objects
         num_partitions = 2
         processed_count = 0
         user_0 = "jane"
@@ -558,6 +560,7 @@ class TestAppGroupBy:
         total_messages = expected_message_count * 2  # groupby reproduces each message
         app = app_factory(
             auto_offset_reset="earliest",
+            topic_manager=topic_manager,
             on_message_processed=on_message_processed,
         )
 
@@ -565,13 +568,13 @@ class TestAppGroupBy:
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
-            config=app._topic_manager.topic_config(num_partitions=num_partitions),
+            config=topic_manager.topic_config(num_partitions=num_partitions),
         )
         app_topic_out = app.topic(
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
-            config=app._topic_manager.topic_config(num_partitions=num_partitions),
+            config=topic_manager.topic_config(num_partitions=num_partitions),
         )
 
         sdf = app.dataframe(topic=app_topic_in)

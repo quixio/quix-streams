@@ -63,7 +63,6 @@ def rocksdb_store(rocksdb_store_factory) -> RocksDBStore:
 @pytest.fixture()
 def changelog_producer_mock():
     producer = MagicMock(spec_set=ChangelogProducer)
-    type(producer).source_topic_name = PropertyMock(return_value="test-source-topic")
     type(producer).changelog_name = PropertyMock(return_value="test-changelog-topic")
     type(producer).partition = PropertyMock(return_value=0)
     return producer

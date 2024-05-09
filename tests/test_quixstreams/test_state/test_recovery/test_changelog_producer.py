@@ -23,7 +23,6 @@ class TestChangelogProducer:
             value_serializer="bytes",
             config=topic_manager.topic_config(num_partitions=3),
         )
-        source_topic_name = "source-topic"
         topic_manager.create_topics([changelog])
 
         producer = ChangelogProducer(
