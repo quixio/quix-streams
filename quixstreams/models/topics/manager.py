@@ -124,7 +124,7 @@ class TopicManager:
             )
         return name
 
-    def _format_nested_name(self, topic_name: str):
+    def _format_nested_name(self, topic_name: str) -> str:
         """
         Reformat an "internal" topic name for its inclusion in _another_ internal topic.
         Part of this includes removing group name, which should only appear once.
@@ -148,7 +148,7 @@ class TopicManager:
         topic_type: Literal["changelog", "repartition"],
         topic_name: str,
         suffix: str,
-    ):
+    ) -> str:
         """
         Generate an "internal" topic name.
 
@@ -182,6 +182,7 @@ class TopicManager:
         not exist in Kafka.
 
         :param topic_name: name of the topic to get configs from
+        :param extras_imports: set of extra configs that should be imported from topic
 
         :return: a TopicConfig
         """
