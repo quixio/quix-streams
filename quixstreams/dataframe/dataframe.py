@@ -24,7 +24,7 @@ from quixstreams.processing_context import ProcessingContext
 from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.state import State
 from .base import BaseStreaming
-from .exceptions import InvalidOperation, GroupByLimitExceeded, MissingReassignment
+from .exceptions import InvalidOperation, GroupByLimitExceeded
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
@@ -111,7 +111,7 @@ class StreamingDataFrame(BaseStreaming):
         return self._topic
 
     @property
-    def app_subscription_topics(self) -> List[Topic]:
+    def topics_to_subscribe(self) -> List[Topic]:
         all_topics = self._topic_manager.all_topics
         topics = [all_topics[name] for name in self._branches]
         if self._topic not in topics:
@@ -438,11 +438,6 @@ class StreamingDataFrame(BaseStreaming):
             and returns a result of StreamingDataFrame
         """
         self._finalize_branch(self)
-        for name in self._topic_manager.repartition_topics:
-            if name not in self._branches:
-                raise MissingReassignment(
-                    ".groupby() call was not reassigned; ex: `sdf = sdf.groupby()`"
-                )
         return {name: stream.compose() for name, stream in self._branches.items()}
 
     def test(

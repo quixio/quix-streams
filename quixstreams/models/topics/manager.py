@@ -129,7 +129,7 @@ class TopicManager:
         Reformat an "internal" topic name for its inclusion in _another_ internal topic.
         Part of this includes removing group name, which should only appear once.
 
-        Goes from <{GROUP}__{TYPE}--{TOPIC}--{STUFF}> to <{TYPE}.{TOPIC}.{STUFF}>
+        Goes from <{GROUP}__{TYPE}--{TOPIC}--{SUFFIX}> to <{TYPE}.{TOPIC}.{SUFFIX}>
 
         New "internal" topic uses this result for the {TOPIC} portion of its name.
 

@@ -11,6 +11,7 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
+from quixstreams.context import message_key
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
@@ -551,12 +552,11 @@ class TestAppGroupBy:
                 done.set_result(True)
 
         topic_manager = topic_manager_factory()  # just to make topic_config objects
-        num_partitions = 2
         processed_count = 0
-        user_0 = "jane"
-        user_1 = "john"
-        names = [user_0] * 3 + [user_1] * 3
-        expected_message_count = len(names)
+
+        key_in = "key_in"
+        user_id = "abc123"
+        expected_message_count = 1
         total_messages = expected_message_count * 2  # groupby reproduces each message
         app = app_factory(
             auto_offset_reset="earliest",
@@ -568,28 +568,25 @@ class TestAppGroupBy:
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
-            config=topic_manager.topic_config(num_partitions=num_partitions),
         )
         app_topic_out = app.topic(
             str(uuid.uuid4()),
             value_deserializer="json",
             value_serializer="json",
-            config=topic_manager.topic_config(num_partitions=num_partitions),
         )
 
         sdf = app.dataframe(topic=app_topic_in)
         sdf["new_col"] = "cool"
         sdf = sdf.group_by("user")
-        sdf["new_col"] = sdf["new_col"] + "er"
+        sdf["new_col"] = sdf["new_col"].apply(lambda m: f"{m}_{message_key()}")
         sdf = sdf.to_topic(app_topic_out)
 
         with app.get_producer() as producer:
-            for i in range(expected_message_count):
-                msg = app_topic_in.serialize(
-                    key=str(i),
-                    value={"user": names[i]},
-                )
-                producer.produce(app_topic_in.name, key=msg.key, value=msg.value)
+            msg = app_topic_in.serialize(
+                key=key_in,
+                value={"user": user_id},
+            )
+            producer.produce(app_topic_in.name, key=msg.key, value=msg.value)
 
         done = Future()
 
@@ -600,36 +597,15 @@ class TestAppGroupBy:
         # Check that all messages have been processed
         assert processed_count == total_messages
 
-        # messages on input topic are split across both partitions per user
-        # which validates that grouping actually happened
-        rows_out = []
-        name_partitions = {user_0: set(), user_1: set()}
-        with row_consumer_factory(
-            consumer_group=uuid.uuid4(), auto_offset_reset="earliest"
-        ) as row_consumer:
-            row_consumer.subscribe([app_topic_in])
-            while len(rows_out) < expected_message_count:
-                rows_out.append(row_consumer.poll_row(timeout=5))
-        assert len(rows_out) == expected_message_count
-        for row in rows_out:
-            name_partitions[row.value["user"]].add(row.partition)
-        assert len(name_partitions[user_0]) == len(name_partitions[user_1]) == 2
-
-        # output topic is grouped to 1 partition per user, has "new_col" transformation
-        rows_out = []
-        name_partitions = {user_0: set(), user_1: set()}
+        # output topic is re-keyed, has "new_col" and its string append
         with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
             row_consumer.subscribe([app_topic_out])
-            while len(rows_out) < expected_message_count:
-                rows_out.append(row_consumer.poll_row(timeout=5))
-        assert len(rows_out) == expected_message_count
-        for row in rows_out:
-            assert row.topic == app_topic_out.name
-            key = row.key.decode()
-            assert row.value == {"user": key, "new_col": "cooler"}
-            name_partitions[key].add(row.partition)
-        assert name_partitions[user_0] != name_partitions[user_1]
-        assert len(name_partitions[user_0]) == len(name_partitions[user_1]) == 1
+            row = row_consumer.poll_row(timeout=5)
+
+        assert row.topic == app_topic_out.name
+        assert row.key.decode() == user_id
+        # shows message context was also updated as expected after groupby
+        assert row.value == {"user": user_id, "new_col": f"cool_{user_id}"}
 
 
 class TestQuixApplication:

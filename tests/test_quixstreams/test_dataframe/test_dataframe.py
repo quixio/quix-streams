@@ -6,11 +6,7 @@ import pytest
 
 from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
-from quixstreams.dataframe.exceptions import (
-    InvalidOperation,
-    MissingReassignment,
-    GroupByLimitExceeded,
-)
+from quixstreams.dataframe.exceptions import InvalidOperation, GroupByLimitExceeded
 from quixstreams.dataframe.windows import WindowResult
 from quixstreams.models import MessageTimestamp
 
@@ -1068,7 +1064,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert [topic, sdf.topic] == sdf.app_subscription_topics
+        assert [topic, sdf.topic] == sdf.topics_to_subscribe
         assert (
             groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
         )
@@ -1120,7 +1116,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert [topic, sdf.topic] == sdf.app_subscription_topics
+        assert [topic, sdf.topic] == sdf.topics_to_subscribe
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1172,7 +1168,7 @@ class TestStreamingDataFrameHoppingWindow:
         sdf[col] = col_update
 
         groupby_topic = sdf.topic
-        assert [topic, sdf.topic] == sdf.app_subscription_topics
+        assert [topic, sdf.topic] == sdf.topics_to_subscribe
         assert (
             groupby_topic.name
             == topic_manager.repartition_topic(op_name, topic.name).name
@@ -1227,17 +1223,3 @@ class TestStreamingDataFrameHoppingWindow:
 
         with pytest.raises(GroupByLimitExceeded):
             sdf.group_by("col_b")
-
-    def test_group_by_require_reassign(self, dataframe_factory, topic_manager_factory):
-        """Like other SDF operations, GroupBy requires re-assignment to propagate"""
-        topic_manager = topic_manager_factory()
-        topic = topic_manager.topic(str(uuid.uuid4()))
-        sdf = dataframe_factory(topic, topic_manager=topic_manager)
-        col = "column_A"
-        sdf.group_by(col)  # not re-assigned!
-
-        assert [sdf.topic] == sdf.app_subscription_topics
-        assert sdf.topic.name == topic.name
-
-        with pytest.raises(MissingReassignment):
-            sdf.compose()

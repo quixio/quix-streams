@@ -712,7 +712,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                dataframe.app_subscription_topics,
+                dataframe.topics_to_subscribe,
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
