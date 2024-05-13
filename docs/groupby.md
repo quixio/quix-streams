@@ -44,8 +44,10 @@ This is why GroupBy is so useful! So, how do we accomplish this using Kafka?
 
 ### Constraints
 
-With Kafka, we of course don't have static tables of data; we have messages on topics, which
-we cannot realistically access on demand. So how is `GroupBy` useful in the context of Kafka?
+With Kafka, rather than compiled tables of data, we have messages on topics that are 
+individually read and independently processed. 
+
+So how is `GroupBy` useful in the context of Kafka?
 
 
 ### How Data is Organized in Kafka
@@ -60,22 +62,20 @@ you have guarantees around message ordering for that key with respect to itself 
 
 ### Repartitioning By Changing Keys
 
-A `GroupBy` for Kafka is simply reorganizing your messages by changing
-their message keys so that the respective data we wish to operate on shows up on the 
-same partition.
+A `GroupBy` for Kafka simply regroups messages by changing their message keys based
+on some aspect of their message value.
 
-This allows you to perform things like stateful aggregations similar to our `SUM()`
-example above.
+This enables stateful aggregations similar to our `SUM()` example above.
 
-In this case, it's easier to understand with an example, like the one below:
+In this case, it's easier to understand with an example, as seen below.
 
 
-## A Kafka "GroupBy" Example
+## Revisiting the SQL "GroupBy" Example
 
-### The Situation
+### Data as Kafka Messages
 
-Imagine you have the same data from the [SQL example above](#a-groupby-example-using-sql), only now each row of the table is 
-instead a message.
+Imagine you have the same data from the [SQL example above](#a-sql-groupby-example), only now each row of the table is 
+instead a Kafka message.
 
 The message key is `store_id`, and the `item` and `quantity` columns are in the message value:
 
@@ -85,34 +85,24 @@ message_1 = {"key": "store_4", "value": {"item": "A", "quantity": 5}}
 message_5 = {"key": "store_2", "value": {"item": "B", "quantity": 1}}
 ```
 
-### Want: Sum per Item
-
-Now imagine you have a `Quix Streams Application` totaling each item's quantities (regardless of store) 
-just like our previous `SUM(quantity)`, ultimately sending each new updated total downstream.
-
-> NOTE: storing/performing aggregations like this requires using [a state store](./processing.md#using-state-store) or [windowing](./windowing.md).
-
 ### Problematic Message Keys
 
-Unfortunately, the results won't be what you expect with the current message format.
+Like before, we want the sum of each quantity per item. Unfortunately, the results won't be what you expect with the current message format.
 
-If you had two consumers, one consumer might process all messages related to `store_4`, while the other processes `store_2`, due to the 
-way Kafka divides partitions across consumers (matching keys end up on 
-the same partition). 
+If you had two consumers, one consumer might process all messages related to `store_4`, while the other processes `store_2` (due to the 
+way Kafka distributes partitions across consumers).
 
-Since these consumers don't share any state between each other, we have a problem.
+Basically, the totals are **actually**:
 
-Basically, your the totals per consumer are **actually**:
-
-- _total quantity per store_ (which ignores `item` name)
+- _total quantity per store_
 
 which is NOT the desired:
 
--  _total quantity per item_ (which ignores `store_id`).
+-  _total quantity per item_
 
-### Re-Keying the Messages
+### Regrouping the Messages
 
-If we repartition or messages where the key is instead the `item` name:
+To fix this, simply repartition the messages so that the `item` name is the message key:
 
 ```python
 message_1 = {"key": "A", "value": {"item": "A", "quantity": 5}}
@@ -120,21 +110,16 @@ message_1 = {"key": "A", "value": {"item": "A", "quantity": 5}}
 message_5 = {"key": "B", "value": {"item": "B", "quantity": 1}}
 ```
 
-then the _per item_ totals will now be accurately generated since each message relating to
-a given `item` will handled by the same consumer instance.
-
-This re-keying can be easily accomplished with the `StreamingDataFrame.group_by()` operation.
+This part can be easily accomplished using `StreamingDataFrame.group_by()`.
 
 ## StreamingDataFrame.group_by()
 
 ### What it Does
 
-`StreamingDataFrame.group_by()` allows you to seamlessly change message keys while also
-including further processing, all with the same `StreamingDataFrame` instance.
+`StreamingDataFrame.group_by()` allows you to seamlessly regroup messages during 
+processing. Basically, ***message keys can be changed within the same application!***
 
-> Note: State-based operations will also use the updated keys!
-
-Re-keying usually requires an additional application, but `.group_by()` eliminates that need.
+> Note: All downstream `StreamingDataFrame` operations will use the updated keys!
 
 ### Using .group_by()
 
@@ -156,33 +141,157 @@ With `StreamingDataFrame.group_by()`, there are two options:
 In either case, the result will be processed onward with the updated key, including
 having it updated in `message.context()`.
 
+### Typical Patterns with .group_by()
 
-### Example (with column name)
+While it can be used just to re-key a topic, `.group_by()` is most often used for aggregation, and thus often 
+followed by some sort of [stateful operation](advanced/stateful-processing.md) or [windowing](windowing.md).
+
+It is recommended to learn about those operations; you can also see how they are commonly 
+used with the following examples below.
+
+## GroupBy Examples
+
+Assume we are a retail store chain, and our Kafka messages are orders from our various store locations.
+
+Our keys are the `store_id`s, and (the same) `store_id`, `item`, and `quantity` columns are in the message value:
+
+```python
+# Kafka Messages
+{"key": "store_4", "value": {"store_id": "store_4", "item": "A", "quantity": 5}}
+# ...etc...
+{"key": "store_2", "value": {"store_id": "store_2", "item": "B", "quantity": 1}}
+```
+
+Assume we are in charge of generating some real-time statistics for our company.
+
+
+### Single Column GroupBy with Aggregation
+
+Imagine we are tasked with getting the total count of each `item` ordered (regardless of
+what `store_id` it came from).
+
+In this case, we need to get totals based on a single column identifier: `item`.
+
+This can be done by simply passing the `item` column name to `.groupby()`, followed by
+a [stateful aggregation](advanced/stateful-processing.md):
+
+```python
+def calculate_total(message, state):
+    current_total = state.get("item_total", 0)
+    current_total += int(message["quantity"])
+    state.set("item_total", current_total)
+    return current_total
+
+sdf = StreamingDataFrame()
+sdf = sdf.group_by("item")
+sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
+sdf = sdf["total_quantity"]
+```
+
+which generates data like:
+
+```python
+{"key": "A", "value": 32}
+# ...etc...
+{"key": "B", "value": 17}
+{"key": "A", "value": 35}
+# ...etc...
+```
+
+### Custom GroupBy (multi-column) with Aggregation
+
+Imagine we are tasked with getting the total count of each `item` ordered ***per*** `store_id`.
+
+Here, we need to be careful: right now our data is only "grouped" by the `store_id`. We need
+to do a multi-column groupby to achieve this.
+
+This can be done by simply passing a custom key generating function to `.group_by()` that 
+concatenates the two field values, creating a unique key combination for them:
+
+```python
+def calculate_total(message, state):
+    current_total = state.get("item_total", 0)
+    current_total += int(message["quantity"])
+    state.set("item_total", current_total)
+    return current_total
+
+def groupby_store_and_item(message):
+    return message["store_id"] + "--" + message["item"]
+
+sdf = StreamingDataFrame()
+sdf = sdf.group_by(key=groupby_store_and_item, name="store_item_gb")
+sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
+sdf = sdf["total_quantity"]
+```
+
+Of course, we follow the `.groupby()` with a [stateful aggregation](advanced/stateful-processing.md).
+
+>***NOTE:*** a `name` is required for a custom `.groupby()` function, as seen here!
+
+Together, this generates data like:
+
+```python
+{"key": "store_2--A", "value": 11}
+{"key": "store_4--A", "value": 13}
+# ...etc...
+{"key": "store_4--B", "value": 9}
+{"key": "store_2--A", "value": 20}
+# ...etc...
+```
+
+### Single Column GroupBy with Windowing
+
+Imagine we are tasked with getting the total count of each `item` ordered (regardless of
+what `store_id` it came from) ***over the past hour***.
+
+In this case, we need to get a windowed sum based on a single column identifier: `item`.
+
+This can be done by simply passing the `item` column name to `.groupby()`, followed by 
+a [`tumbling_window()`](windowing.md#tumbling-windows) [`.sum()`](windowing.md#min-max-mean-and-sum) over the past `3600` seconds:
 
 ```python
 sdf = StreamingDataFrame()
-sdf["new_column"] = sdf["a_column"] + "append_me"
-sdf = sdf.group_by("column_x")  # uses "column_x" as new message key
-sdf = sdf["new_column"] + "another_append"
-sdf = sdf.to_topic(topic_out)
+sdf = sdf.group_by("item")
+sdf = sdf.tumbling_window(duration_ms=3600).sum().final()
+sdf = sdf.apply(lambda window_result: {"total_quantity": window_result["value"]})
+```
+which generates data like:
+
+```python
+{"key": "A", "value": 9}
+# ...etc...
+{"key": "B", "value": 4}
+# ...etc...
 ```
 
-## Advanced Usage
+>***NOTE***: refer to the [windowing documentation](windowing.md) to learn more about window results, including 
+> their output format and when they are generated.
 
-Most users will likely not need this, but here are more details around how 
-`StreamingDataFrame.group_by()` works, and how to additionally configure it.
+## Advanced Usage and Details
+
+Here is some supplemental information around how 
+`StreamingDataFrame.group_by()` works and any advanced configuration details.
 
 ### GroupBy limitations
 
 `GroupBy` is limited to one use per `StreamingDataFrame`.
 
 ### How GroupBy works
-Each `GroupBy` operation is facilitated by a unique internal (not intended for users) 
+Each `GroupBy` operation is facilitated by a unique, internally managed 
 "repartition" topic. By default, its settings are inherited from its origin topic and 
-is automatically created for you.
+is created automatically.
 
-The `Application` basically subscribes to it and knows where in the `StreamingDataFrame` 
-pipeline it should start from based on what topic a given message was consumed from.
+The `Application` automatically subscribes to it and knows where in the `StreamingDataFrame` 
+pipeline to start from based on a consumed message's topic origin.
+
+### Message Processing Order
+
+Because `GroupBy` uses an internal topic, there are three (related) side effects to be aware of: 
+
+- message processing will likely begin on one application instance and finish on another
+- messages will likely finish processing in a different order than they arrived
+  >NOTE: remember in Kafka, message ordering is only guaranteed per key.
+- The regrouped message may be processed much later than its pre-grouped counterpart
 
 ### Configuring the Internal Topic
 
