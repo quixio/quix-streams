@@ -7,8 +7,6 @@ Quix Streams supports multiple serialization formats to exchange data between Ka
 - `integer`
 - `double`
 - `json`
-- `quix` - for deserializers only
-- `quix_events` & `quix_timeseries` - for serializers only.
 
 The serialization settings are defined per-topic using these parameters of `Application.topic()` function:
 
@@ -18,6 +16,8 @@ The serialization settings are defined per-topic using these parameters of `Appl
 - `value_deserializer`
 
 By default, message values are serialized with `json` and message keys are serialized with `bytes` (i.e. passed as they are received from Kafka).
+
+Note: The legacy `quix` serializer and legacy `quix_events` and `quix_timeseries` deserializers are still supported but may be deprecated in future. New stream processing applications should avoid using these 3 formats.
 
 ## Configuring Serialization
 To set a serializer, you may either pass a string shorthand for it, or an instance of `quixstreams.models.serializers.Serializer` and `quixstreams.models.serializers.Deserializer` directly 
