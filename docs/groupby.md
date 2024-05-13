@@ -167,7 +167,7 @@ Assume we are in charge of generating some real-time statistics for our company.
 
 ### Single Column GroupBy with Aggregation
 
-Imagine we are tasked with getting the total count of each `item` ordered (regardless of
+Imagine we are tasked with getting the **total** `quantity` of each `item` ordered (regardless of
 what `store_id` it came from).
 
 In this case, we need to get totals based on a single column identifier: `item`.
@@ -200,7 +200,7 @@ which generates data like:
 
 ### Custom GroupBy (multi-column) with Aggregation
 
-Imagine we are tasked with getting the total count of each `item` ordered ***per*** `store_id`.
+Imagine we are tasked with getting the **total** `quantity` of each `item` ordered ***per*** `store_id`.
 
 Here, we need to be careful: right now our data is only "grouped" by the `store_id`. We need
 to do a multi-column groupby to achieve this.
@@ -241,7 +241,7 @@ Together, this generates data like:
 
 ### Single Column GroupBy with Windowing
 
-Imagine we are tasked with getting the total count of each `item` ordered (regardless of
+Imagine we are tasked with getting the **total** `quantity` of each `item` ordered (regardless of
 what `store_id` it came from) ***over the past hour***.
 
 In this case, we need to get a windowed sum based on a single column identifier: `item`.
