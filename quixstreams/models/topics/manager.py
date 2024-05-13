@@ -162,8 +162,9 @@ class TopicManager:
 
         :return: formatted topic name
         """
+        nested_name = self._format_nested_name(topic_name)
         return self._resolve_topic_name(
-            f"{topic_type}__{'--'.join([self._consumer_group, self._format_nested_name(topic_name), suffix])}"
+            f"{topic_type}__{'--'.join([self._consumer_group, nested_name, suffix])}"
         )
 
     def _create_topics(self, topics: List[Topic]):
