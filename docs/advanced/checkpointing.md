@@ -48,7 +48,7 @@ changelog update will not be applied to the state.
 
 This way, all stateful operations will work with a consistent snapshot of the state and produce the same outputs in case of reprocessing.
 
-For more information about changelog topics, see the [**How Changelog Topics Work**](./advanced/stateful-processing.md#how-changelog-topics-work) section.
+For more information about changelog topics, see the [**How Changelog Topics Work**](stateful-processing.md#how-changelog-topics-work) section.
 
 ## Example Failure Scenarios
 Below are some examples of what can go wrong during processing and how application will be recovering from it.  

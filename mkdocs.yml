@@ -35,6 +35,7 @@ nav:
   - Windows & Aggregations: windowing.md
   - Configuration: configuration.md
   - Advanced Usage:
+    - Checkpointing: advanced/checkpointing.md
     - Serialization Formats: advanced/serialization.md
     - Stateful Processing: advanced/stateful-processing.md
     - Managing Kafka Topics: advanced/topics.md
