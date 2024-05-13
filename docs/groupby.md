@@ -60,9 +60,9 @@ you have guarantees around message ordering for that key with respect to itself 
 
 > NOTE: Understanding keys is also very important for [stateful operations with Quix Streams](./advanced/stateful-processing.md)
 
-### Repartitioning By Changing Keys
+### Regrouping By Changing Keys
 
-A `GroupBy` for Kafka simply regroups messages by changing their message keys based
+A `GroupBy` for Kafka simply re-partitions messages by changing their message keys based
 on some aspect of their message value.
 
 This enables stateful aggregations similar to our `SUM()` example above.
@@ -70,7 +70,7 @@ This enables stateful aggregations similar to our `SUM()` example above.
 In this case, it's easier to understand with an example, as seen below.
 
 
-## Revisiting the SQL "GroupBy" Example
+## Revisiting SQL "GroupBy" Example, with Kafka
 
 ### Data as Kafka Messages
 
