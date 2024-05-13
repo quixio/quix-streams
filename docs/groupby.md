@@ -185,16 +185,16 @@ def calculate_total(message, state):
 sdf = StreamingDataFrame()
 sdf = sdf.group_by("item")
 sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
-sdf = sdf["total_quantity"]
+sdf = sdf[["total_quantity"]]
 ```
 
 which generates data like:
 
 ```python
-{"key": "A", "value": 32}
+{"key": "A", "value": {"total_quantity": 32}}
 # ...etc...
-{"key": "B", "value": 17}
-{"key": "A", "value": 35}
+{"key": "B", "value": {"total_quantity": 17}}
+{"key": "A", "value": {"total_quantity": 35}}
 # ...etc...
 ```
 
@@ -221,7 +221,7 @@ def groupby_store_and_item(message):
 sdf = StreamingDataFrame()
 sdf = sdf.group_by(key=groupby_store_and_item, name="store_item_gb")
 sdf["total_quantity"] = sdf.apply(calculate_total, stateful=True)
-sdf = sdf["total_quantity"]
+sdf = sdf[["total_quantity"]]
 ```
 
 Of course, we follow the `.groupby()` with a [stateful aggregation](advanced/stateful-processing.md).
@@ -231,11 +231,11 @@ Of course, we follow the `.groupby()` with a [stateful aggregation](advanced/sta
 Together, this generates data like:
 
 ```python
-{"key": "store_2--A", "value": 11}
-{"key": "store_4--A", "value": 13}
+{"key": "store_2--A", "value": {"total_quantity": 11}}
+{"key": "store_4--A", "value": {"total_quantity": 13}}
 # ...etc...
-{"key": "store_4--B", "value": 9}
-{"key": "store_2--A", "value": 20}
+{"key": "store_4--B", "value": {"total_quantity": 9}}
+{"key": "store_2--A", "value": {"total_quantity": 20}}
 # ...etc...
 ```
 
@@ -258,9 +258,9 @@ sdf = sdf.apply(lambda window_result: {"total_quantity": window_result["value"]}
 which generates data like:
 
 ```python
-{"key": "A", "value": 9}
+{"key": "A", "value": {"total_quantity": 9}}
 # ...etc...
-{"key": "B", "value": 4}
+{"key": "B", "value": {"total_quantity": 4}}
 # ...etc...
 ```
 
