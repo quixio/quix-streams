@@ -62,7 +62,7 @@ you have guarantees around message ordering for that key with respect to itself 
 
 ### Regrouping By Changing Keys
 
-A `GroupBy` for Kafka simply re-partitions messages by changing their message keys based
+A `GroupBy` for Kafka simply repartitions messages by changing their message keys based
 on some aspect of their message value.
 
 This enables stateful aggregations similar to our `SUM()` example above.
