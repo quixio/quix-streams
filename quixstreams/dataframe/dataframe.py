@@ -255,7 +255,7 @@ class StreamingDataFrame(BaseStreaming):
         self, key: Union[str, DataFrameFunc]
     ) -> Callable[[object], object]:
         """
-        PEP8 hates when you assign lambdas to variables...so this is here.
+        Generate the underlying groupby key function based on users provided input.
         """
         if isinstance(key, str):
             return lambda row: row[key]
@@ -333,7 +333,8 @@ class StreamingDataFrame(BaseStreaming):
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
         )
-        self._finalize_branch(self.to_topic(groupby_topic, key=self._groupby_key(key)))
+        sdf_to_finalize = self.to_topic(groupby_topic, key=self._groupby_key(key))
+        self._finalize_branch(sdf_to_finalize)
         return self._clone(topic=groupby_topic)
 
     @staticmethod
