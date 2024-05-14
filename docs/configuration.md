@@ -134,7 +134,9 @@ app = Application(
 ## Topic Management
 - **`auto_create_topics`** - whether to create all defined topics automatically when starting the app.  
 Only topics made using `Application.topic()` call are tracked.  
-**Default** - `True`
+**Default** - `True`.
+- **`topic_create_timeout`** - timeout in seconds to wait for newly created topics to finalize. 
+**Default** - `60.0`.
 
 ## Advanced Kafka Configuration
 
@@ -149,7 +151,11 @@ Values in this dictionary cannot override settings already defined by other para
 Values in the dictionary cannot override settings already defined by other parameters, like `broker_address`, `auto_offset_reset` and `consumer_group`.
 
 - **`consumer_poll_timeout`** - a timeout in seconds for the internal Consumer `.poll()`.  
-**Default** - `1.0`
+**Default** - `1.0`.
 
-- `producer_poll_timeout` - a timeout in seconds for the internal Producer.  
-**Default** - `0`.
+- **`producer_poll_timeout`** - a timeout in seconds for the internal Producer.  
+**Default** - `0.0`.
+
+- **`request_timeout`** - request timeout in seconds for any API-related calls, mostly 
+around topic management. 
+**Default** - `30.0`.
