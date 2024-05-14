@@ -360,8 +360,18 @@ class TestStreamingDataFrameToTopic:
             assert row.key == ctx.key
             assert row.value == value
 
+    @pytest.mark.parametrize(
+        "value, key_func, expected_key",
+        [
+            ({"x": 1}, lambda value: value["x"], 1),
+            ({"x": 0}, lambda value: value["x"], 0),
+        ],
+    )
     def test_to_topic_custom_key(
         self,
+        value,
+        key_func,
+        expected_key,
         dataframe_factory,
         row_consumer_factory,
         row_producer_factory,
@@ -378,9 +388,8 @@ class TestStreamingDataFrameToTopic:
         sdf = dataframe_factory(producer=producer)
 
         # Use value["x"] as a new key
-        sdf = sdf.to_topic(topic, key=lambda v: v["x"])
+        sdf = sdf.to_topic(topic, key=key_func)
 
-        value = {"x": 1, "y": 2}
         ctx = MessageContext(
             topic="test",
             partition=0,
@@ -399,7 +408,7 @@ class TestStreamingDataFrameToTopic:
         assert consumed_row
         assert consumed_row.topic == topic.name
         assert consumed_row.value == value
-        assert consumed_row.key == value["x"]
+        assert consumed_row.key == expected_key
 
     def test_to_topic_multiple_topics_out(
         self,

@@ -2,8 +2,8 @@ from concurrent.futures import Future
 
 import pytest
 from confluent_kafka import KafkaException as ConfluentKafkaException
-from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 
+from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
 from quixstreams.models import (
     JSONSerializer,
     SerializationError,
@@ -45,8 +45,19 @@ class TestRowProducer:
         # We don't forward row headers for now
         assert not row.headers
 
+    @pytest.mark.parametrize(
+        "init_key, new_key, expected_key",
+        [
+            (b"key", b"new_key", b"new_key"),
+            (b"key", b"", b""),
+            (b"key", None, None),
+        ],
+    )
     def test_produce_row_custom_key(
         self,
+        init_key,
+        new_key,
+        expected_key,
         row_consumer_factory,
         row_producer_factory,
         topic_json_serdes_factory,
@@ -54,8 +65,6 @@ class TestRowProducer:
     ):
         topic = topic_json_serdes_factory()
 
-        key = b"key"
-        custom_key = b"custom_key"
         value = {"field": "value"}
         headers = [("header1", b"1")]
 
@@ -65,15 +74,15 @@ class TestRowProducer:
             row = row_factory(
                 topic=topic.name,
                 value=value,
-                key=key,
+                key=init_key,
                 headers=headers,
             )
-            producer.produce_row(topic=topic, row=row, key=custom_key)
+            producer.produce_row(topic=topic, row=row, key=new_key)
             consumer.subscribe([topic])
             row = consumer.poll_row(timeout=5.0)
 
         assert row
-        assert row.key == custom_key
+        assert row.key == expected_key
         assert row.value == value
         # We don't forward row headers for now
         assert not row.headers

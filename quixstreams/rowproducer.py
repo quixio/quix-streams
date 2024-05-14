@@ -11,6 +11,9 @@ from .models import Topic, Row, Headers
 logger = logging.getLogger(__name__)
 
 
+_KEY_UNSET = object()
+
+
 class RowProducer:
     """
     A producer class that is capable of serializing Rows to bytes and send them to Kafka.
@@ -56,7 +59,7 @@ class RowProducer:
         self,
         row: Row,
         topic: Topic,
-        key: Optional[Any] = None,
+        key: Optional[Any] = _KEY_UNSET,
         partition: Optional[int] = None,
         timestamp: Optional[int] = None,
     ):
@@ -74,6 +77,9 @@ class RowProducer:
         """
 
         try:
+            # Use existing key only if no other key is provided.
+            # If key is provided - use it, even if it's None
+            key = row.key if key is _KEY_UNSET else key
             message = topic.row_serialize(row=row, key=key)
             self.produce(
                 topic=topic.name,

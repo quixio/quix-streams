@@ -397,7 +397,7 @@ class StreamingDataFrame(BaseStreaming):
 
         """
         return self.update(
-            lambda value: self._produce(topic, value, key=key(value) if key else None)
+            lambda value: self._produce(topic=topic, value=value, key_func=key)
         )
 
     def _finalize_branch(self, branch: Self):
@@ -647,10 +647,15 @@ class StreamingDataFrame(BaseStreaming):
         )
         return clone
 
-    def _produce(self, topic: Topic, value: object, key: Optional[object] = None):
+    def _produce(
+        self,
+        topic: Topic,
+        value: object,
+        key_func: Optional[Callable[[object], object]] = None,
+    ):
         ctx = message_context()
-        key = key or ctx.key
-        row = Row(value=value, context=ctx)  # noqa
+        key = ctx.key if key_func is None else key_func(value)
+        row = Row(value=value, context=ctx)
         self._producer.produce_row(row, topic, key=key)
 
     def _register_store(self):

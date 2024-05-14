@@ -1,7 +1,12 @@
 from quixstreams.exceptions.base import QuixException
 
 
-__all__ = ("InvalidOperation",)
+__all__ = (
+    "InvalidOperation",
+    "GroupByLimitExceeded",
+    "InvalidColumnReference",
+    "ColumnDoesNotExist",
+)
 
 
 class InvalidOperation(QuixException): ...

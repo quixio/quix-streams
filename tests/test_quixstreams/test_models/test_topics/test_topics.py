@@ -305,49 +305,8 @@ class TestTopic:
             )
 
     @pytest.mark.parametrize(
-        "key_serializer, value_serializer, key, value, expected_key, expected_value",
-        [
-            (
-                BytesSerializer(),
-                BytesSerializer(),
-                b"key",
-                b"value",
-                b"key",
-                b"value",
-            ),
-            (
-                BytesSerializer(),
-                JSONSerializer(),
-                b"key",
-                {"field": "value"},
-                b"key",
-                b'{"field":"value"}',
-            ),
-        ],
-    )
-    def test_row_serialize_success(
-        self,
-        key_serializer: Serializer,
-        value_serializer: Serializer,
-        key: Any,
-        value: Any,
-        expected_key: Optional[bytes],
-        expected_value: Optional[bytes],
-        row_factory: pytest.fixture,
-        topic_manager_topic_factory,
-    ):
-        topic = topic_manager_topic_factory(
-            key_serializer=key_serializer,
-            value_serializer=value_serializer,
-        )
-        row = row_factory(key=key, value=value)
-        message = topic.row_serialize(row=row)
-        assert message.key == expected_key
-        assert message.value == expected_value
-        assert not message.headers
-
-    @pytest.mark.parametrize(
-        "key_serializer, value_serializer, key, value, new_key, expected_key, expected_value",
+        "key_serializer, value_serializer, key, value, new_key, expected_key, "
+        "expected_value",
         [
             (
                 BytesSerializer(),
@@ -356,6 +315,15 @@ class TestTopic:
                 b"value",
                 b"new_key",
                 b"new_key",
+                b"value",
+            ),
+            (
+                BytesSerializer(),
+                BytesSerializer(),
+                b"key",
+                b"value",
+                None,
+                None,
                 b"value",
             ),
             (
@@ -367,9 +335,18 @@ class TestTopic:
                 b"new_key",
                 b'{"field":"value"}',
             ),
+            (
+                JSONSerializer(),
+                JSONSerializer(),
+                "key",
+                {"field": "value"},
+                None,
+                None,
+                b'{"field":"value"}',
+            ),
         ],
     )
-    def test_row_serialize_new_key(
+    def test_row_serialize(
         self,
         key_serializer: Serializer,
         value_serializer: Serializer,
@@ -389,6 +366,7 @@ class TestTopic:
         message = topic.row_serialize(row=row, key=new_key)
         assert message.key == expected_key
         assert message.value == expected_value
+        assert not message.headers
 
     def test_row_serialize_extra_headers(
         self, row_factory: pytest.fixture, topic_manager_topic_factory
@@ -404,7 +382,7 @@ class TestTopic:
             value_serializer=value_serializer,
         )
         row = row_factory(key=b"key", value=b"value")  # noqa
-        message = topic.row_serialize(row=row)
+        message = topic.row_serialize(row=row, key=row.key)
         assert message.key == b"key"
         assert message.value == b"value"
         assert message.headers == value_serializer.extra_headers
@@ -517,7 +495,7 @@ class TestTopic:
 
         row = row_factory(key=key, value=value)
         with pytest.raises(SerializationError):
-            topic.row_serialize(row=row)
+            topic.row_serialize(row=row, key=row.key)
 
     @pytest.mark.parametrize(
         "serializer_str, expected_type", [(k, v) for k, v in SERIALIZERS.items()]
