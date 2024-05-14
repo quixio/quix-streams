@@ -22,6 +22,11 @@ Example - `"localhost:9092"`
 Consumer group is also used in the state directory path and as a prefix for changelog topics to ensure the applications from different consumer groups don't access the same state.      
 **Default** - `"quixstreams-default"`.
 
+- **`commit_interval`** - How often to commit the processed offsets and state in seconds.  
+**Default** - `5.0`.    
+See the [Checkpointing](advanced/checkpointing.md) page for more information about 
+the `commit_interval` parameter.
+
 - **`auto_offset_reset`** - Consumer `auto.offset.reset` setting.  
 It determines where the consumer should start reading messages from.  
 See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls#the-auto-offset-reset-configuration).  
