@@ -1,11 +1,12 @@
 import operator
+import uuid
 from datetime import timedelta
 
 import pytest
 
 from quixstreams import MessageContext, State
 from quixstreams.core.stream import Filtered
-from quixstreams.dataframe.exceptions import InvalidOperation
+from quixstreams.dataframe.exceptions import InvalidOperation, GroupByLimitExceeded
 from quixstreams.dataframe.windows import WindowResult
 from quixstreams.models import MessageTimestamp
 
@@ -1038,3 +1039,187 @@ class TestStreamingDataFrameHoppingWindow:
             WindowResult(value=1, start=0, end=10),
             WindowResult(value=3, start=0, end=10),
         ]
+
+    def test_group_by_column(
+        self,
+        dataframe_factory,
+        topic_manager_factory,
+        message_context_factory,
+        row_producer_factory,
+        row_consumer_factory,
+    ):
+        """GroupBy can accept a string (column name) as its grouping method."""
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        producer = row_producer_factory()
+
+        col = "column_A"
+        orig_key = "original_key"
+        new_key = "woo"
+        value = {col: new_key}
+        col_update = "updated_col"
+
+        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf = sdf.group_by(col)
+        sdf[col] = col_update
+
+        groupby_topic = sdf.topic
+        assert [topic, sdf.topic] == sdf.topics_to_subscribe
+        assert (
+            groupby_topic.name == topic_manager.repartition_topic(col, topic.name).name
+        )
+
+        topic_manager.create_all_topics()
+        with producer:
+            pre_groupby_branch_result = sdf.test(
+                value=value, topic=topic, ctx=message_context_factory(key=orig_key)
+            )
+
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([groupby_topic])
+            consumed_row = consumer.poll_row(timeout=5.0)
+
+        assert consumed_row
+        assert consumed_row.topic == groupby_topic.name
+        assert consumed_row.key == new_key
+
+        # the column update should only happen once on new topic
+        assert consumed_row.value == value
+        assert pre_groupby_branch_result == value
+        assert sdf.test(value=value)[col] == col_update
+
+    def test_group_by_column_with_name(
+        self,
+        dataframe_factory,
+        topic_manager_factory,
+        message_context_factory,
+        row_producer_factory,
+        row_consumer_factory,
+    ):
+        """
+        GroupBy can accept a string (column name) as its grouping method and use
+        a custom name for it (instead of the column name)
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        producer = row_producer_factory()
+
+        col = "column_A"
+        op_name = "get_col_A"
+        orig_key = "original_key"
+        new_key = "woo"
+        value = {col: new_key}
+        col_update = "updated_col"
+
+        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf = sdf.group_by(col, name=op_name)
+        sdf[col] = col_update
+
+        groupby_topic = sdf.topic
+        assert [topic, sdf.topic] == sdf.topics_to_subscribe
+        assert (
+            groupby_topic.name
+            == topic_manager.repartition_topic(op_name, topic.name).name
+        )
+
+        topic_manager.create_all_topics()
+        with producer:
+            pre_groupby_branch_result = sdf.test(
+                value=value, topic=topic, ctx=message_context_factory(key=orig_key)
+            )
+
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([groupby_topic])
+            consumed_row = consumer.poll_row(timeout=5.0)
+
+        assert consumed_row
+        assert consumed_row.topic == groupby_topic.name
+        assert consumed_row.key == new_key
+
+        # the column update should only happen once on new topic
+        assert consumed_row.value == value
+        assert pre_groupby_branch_result == value
+        assert sdf.test(value=value)[col] == col_update
+
+    def test_group_by_func(
+        self,
+        dataframe_factory,
+        topic_manager_factory,
+        message_context_factory,
+        row_producer_factory,
+        row_consumer_factory,
+    ):
+        """
+        GroupBy can accept a Callable as its grouping method (requires a name too).
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        producer = row_producer_factory()
+
+        col = "column_A"
+        op_name = "get_col_A"
+        orig_key = "original_key"
+        new_key = "woo"
+        value = {col: new_key}
+        col_update = "updated_col"
+
+        sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
+        sdf = sdf.group_by(lambda v: v[col], name=op_name)
+        sdf[col] = col_update
+
+        groupby_topic = sdf.topic
+        assert [topic, sdf.topic] == sdf.topics_to_subscribe
+        assert (
+            groupby_topic.name
+            == topic_manager.repartition_topic(op_name, topic.name).name
+        )
+
+        topic_manager.create_all_topics()
+        with producer:
+            pre_groupby_branch_result = sdf.test(
+                value=value, topic=topic, ctx=message_context_factory(key=orig_key)
+            )
+
+        with row_consumer_factory(auto_offset_reset="earliest") as consumer:
+            consumer.subscribe([groupby_topic])
+            consumed_row = consumer.poll_row(timeout=5.0)
+
+        assert consumed_row
+        assert consumed_row.topic == groupby_topic.name
+        assert consumed_row.key == new_key
+
+        # the column update should only happen once on new topic
+        assert consumed_row.value == value
+        assert pre_groupby_branch_result == value
+        assert sdf.test(value=value)[col] == col_update
+
+    def test_group_by_func_name_missing(self, dataframe_factory, topic_manager_factory):
+        """Using a Callable for groupby requires giving a name"""
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+
+        with pytest.raises(ValueError):
+            sdf.group_by(lambda v: "do_stuff")
+
+    def test_group_by_invalid_key_func(self, dataframe_factory, topic_manager_factory):
+        """GroupBy can only use a string (column name) or Callable to group with"""
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+
+        with pytest.raises(TypeError):
+            sdf.group_by({"um": "what is this"})
+
+    def test_group_by_limit_exceeded(self, dataframe_factory, topic_manager_factory):
+        """
+        Only 1 GroupBy operation per SDF instance (or, what appears to end users
+        as a "single" SDF instance).
+        """
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+        sdf = sdf.group_by("col_a")
+
+        with pytest.raises(GroupByLimitExceeded):
+            sdf.group_by("col_b")

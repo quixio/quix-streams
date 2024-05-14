@@ -261,7 +261,6 @@ class Application:
             extra_config=producer_extra_config,
             on_error=on_producer_error,
         )
-
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._on_processing_error = on_processing_error or default_on_processing_error
@@ -275,7 +274,8 @@ class Application:
                 topic_admin=TopicAdmin(
                     broker_address=broker_address,
                     extra_config=producer_extra_config,
-                )
+                ),
+                consumer_group=consumer_group,
             )
         self._topic_manager = topic_manager
         self._state_manager = StateStoreManager(
@@ -549,7 +549,9 @@ class Application:
         :return: `StreamingDataFrame` object
         """
         sdf = StreamingDataFrame(
-            topic=topic, processing_context=self._processing_context
+            topic=topic,
+            topic_manager=self._topic_manager,
+            processing_context=self._processing_context,
         )
         return sdf
 
@@ -710,7 +712,7 @@ class Application:
         with exit_stack:
             # Subscribe to topics in Kafka and start polling
             self._consumer.subscribe(
-                [dataframe.topic],
+                dataframe.topics_to_subscribe,
                 on_assign=self._on_assign,
                 on_revoke=self._on_revoke,
                 on_lost=self._on_lost,
@@ -745,7 +747,7 @@ class Application:
 
     def _setup_topics(self):
         topics_list = ", ".join(
-            f'"{topic.name}"' for topic in self._topic_manager.all_topics
+            f'"{topic}"' for topic in self._topic_manager.all_topics
         )
         logger.info(f"Topics required for this application: {topics_list}")
         if self._auto_create_topics:
@@ -777,7 +779,7 @@ class Application:
             context.run(set_message_context, row.context)
             try:
                 # Execute StreamingDataFrame in a context
-                context.run(dataframe_composed, row.value)
+                context.run(dataframe_composed[topic_name], row.value)
             except Filtered:
                 # The message was filtered by StreamingDataFrame
                 continue

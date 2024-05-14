@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Literal
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
 from quixstreams.utils.dicts import dict_values
@@ -42,30 +42,55 @@ class TopicManager:
     _max_topic_name_len = 255
 
     _topic_extra_config_defaults = {}
+    _groupby_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
     _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
     _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
 
     def __init__(
         self,
         topic_admin: TopicAdmin,
+        consumer_group: str,
         create_timeout: int = 60,
     ):
         """
         :param topic_admin: an `Admin` instance (required for some functionality)
+        :param consumer_group: the consumer group (of the `Application`)
         :param create_timeout: timeout for topic creation
         """
         self._admin = topic_admin
+        self._consumer_group = consumer_group
         self._topics: Dict[str, Topic] = {}
+        self._repartition_topics: Dict[str, Topic] = {}
         self._changelog_topics: Dict[str, Dict[str, Topic]] = {}
         self._create_timeout = create_timeout
+
+    @property
+    def _topics_list(self) -> List[Topic]:
+        return list(self._topics.values())
+
+    @property
+    def _changelog_topics_list(self) -> List[Topic]:
+        return dict_values(self._changelog_topics)
+
+    @property
+    def _non_changelog_topics(self) -> Dict[str, Topic]:
+        return {**self._topics, **self._repartition_topics}
+
+    @property
+    def _all_topics_list(self) -> List[Topic]:
+        return (
+            self._topics_list
+            + list(self._repartition_topics.values())
+            + self._changelog_topics_list
+        )
 
     @property
     def topics(self) -> Dict[str, Topic]:
         return self._topics
 
     @property
-    def topics_list(self) -> List[Topic]:
-        return dict_values(self._topics)
+    def repartition_topics(self) -> Dict[str, Topic]:
+        return self._repartition_topics
 
     @property
     def changelog_topics(self) -> Dict[str, Dict[str, Topic]]:
@@ -77,36 +102,70 @@ class TopicManager:
         return self._changelog_topics
 
     @property
-    def changelog_topics_list(self) -> List[Topic]:
-        return dict_values(self._changelog_topics)
+    def all_topics(self) -> Dict[str, Topic]:
+        """
+        Every registered topic name mapped to it's respective `Topic`.
 
-    @property
-    def all_topics(self) -> List[Topic]:
-        return self.topics_list + self.changelog_topics_list
+        returns: full topic dict, {topic_name: Topic}
+        """
+        return {topic.name: topic for topic in self._all_topics_list}
 
     def _resolve_topic_name(self, name: str) -> str:
         """
         Here primarily for adjusting the topic name for Quix topics.
 
+        Also validates topic name is not too long.
+
         :return: name, no changes (identity function)
         """
+        if len(name) > self._max_topic_name_len:
+            raise TopicNameLengthExceeded(
+                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
+            )
         return name
 
-    def _format_changelog_name(
-        self, consumer_group: str, topic_name: str, store_name: str
-    ):
+    def _format_nested_name(self, topic_name: str) -> str:
         """
-        Generate the name of the changelog topic based on the following parameters.
+        Reformat an "internal" topic name for its inclusion in _another_ internal topic.
+        Part of this includes removing group name, which should only appear once.
+
+        Goes from <{GROUP}__{TYPE}--{TOPIC}--{SUFFIX}> to <{TYPE}.{TOPIC}.{SUFFIX}>
+
+        New "internal" topic uses this result for the {TOPIC} portion of its name.
+
+        :param topic_name: the topic name
+
+        :return: altered (if an "internal" topic name) or unaltered topic name
+        """
+        if f"__{self._consumer_group}--" in topic_name:
+            return topic_name.replace(f"__{self._consumer_group}", "").replace(
+                "--", "."
+            )
+        return topic_name
+
+    def _internal_name(
+        self,
+        topic_type: Literal["changelog", "repartition"],
+        topic_name: str,
+        suffix: str,
+    ) -> str:
+        """
+        Generate an "internal" topic name.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
-        :param consumer_group: name of consumer group (for this app)
+        The internal format is <{TYPE}__{GROUP}--{NAME}--{SUFFIX}>
+
+        :param topic_type: topic type, added as prefix (changelog, repartition)
         :param topic_name: name of consumed topic (app input topic)
-        :param store_name: name of storage type (default, rolling10s, etc.)
+        :param suffix: a unique descriptor related to topic type, added as suffix
 
         :return: formatted topic name
         """
-        return f"changelog__{consumer_group}--{topic_name}--{store_name}"
+        nested_name = self._format_nested_name(topic_name)
+        return self._resolve_topic_name(
+            f"{topic_type}__{'--'.join([self._consumer_group, nested_name, suffix])}"
+        )
 
     def _create_topics(self, topics: List[Topic]):
         """
@@ -115,6 +174,32 @@ class TopicManager:
         :param topics: list of `Topic`s
         """
         self._admin.create_topics(topics, timeout=self._create_timeout)
+
+    def _get_source_topic_config(
+        self, topic_name: str, extras_imports: Optional[Set[str]] = None
+    ) -> TopicConfig:
+        """
+        Retrieve configs for a topic, defaulting to stored Topic objects if topic does
+        not exist in Kafka.
+
+        :param topic_name: name of the topic to get configs from
+        :param extras_imports: set of extra configs that should be imported from topic
+
+        :return: a TopicConfig
+        """
+        topic_config = (
+            self._admin.inspect_topics([topic_name])[topic_name]
+            or self._non_changelog_topics[topic_name].config
+        )
+
+        # Copy only certain configuration values from original topic
+        if extras_imports:
+            topic_config.extra_config = {
+                k: v
+                for k, v in topic_config.extra_config.items()
+                if k in extras_imports
+            }
+        return topic_config
 
     def topic_config(
         self,
@@ -163,10 +248,6 @@ class TopicManager:
         :return: Topic object with creation configs
         """
         name = self._resolve_topic_name(name)
-        if len(name) > self._max_topic_name_len:
-            raise TopicNameLengthExceeded(
-                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
-            )
 
         if not config:
             config = TopicConfig(
@@ -186,11 +267,46 @@ class TopicManager:
         self._topics[name] = topic
         return topic
 
+    def repartition_topic(
+        self,
+        operation: str,
+        topic_name: str,
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "json",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "json",
+    ) -> Topic:
+        """
+        Create an internal repartition topic.
+
+        :param operation: name of the GroupBy operation (column name or user-defined).
+        :param topic_name: name of the topic the GroupBy is sourced from.
+        :param value_deserializer: a deserializer type for values; default - JSON
+        :param key_deserializer: a deserializer type for keys; default - JSON
+        :param value_serializer: a serializer type for values; default - JSON
+        :param key_serializer: a serializer type for keys; default - JSON
+
+        """
+        name = self._internal_name(f"repartition", topic_name, operation)
+
+        topic = Topic(
+            name=name,
+            value_deserializer=value_deserializer,
+            key_deserializer=key_deserializer,
+            value_serializer=value_serializer,
+            key_serializer=key_serializer,
+            config=self._get_source_topic_config(
+                topic_name,
+                extras_imports=self._groupby_extra_config_imports_defaults,
+            ),
+        )
+        self._repartition_topics[name] = topic
+        return topic
+
     def changelog_topic(
         self,
         topic_name: str,
         store_name: str,
-        consumer_group: str,
     ) -> Topic:
         """
         Performs all the logic necessary to generate a changelog topic based on a
@@ -209,7 +325,6 @@ class TopicManager:
         generate changelog topics. To turn off changelogs, init an Application with
         "use_changelog_topics"=`False`.
 
-        :param consumer_group: name of consumer group (for this app)
         :param topic_name: name of consumed topic (app input topic)
             > NOTE: normally contain any prefixes added by TopicManager.topic()
         :param store_name: name of the store this changelog belongs to
@@ -219,35 +334,19 @@ class TopicManager:
         """
 
         topic_name = self._resolve_topic_name(topic_name)
-        name = self._format_changelog_name(consumer_group, topic_name, store_name)
-        if len(name) > self._max_topic_name_len:
-            raise TopicNameLengthExceeded(
-                f"Topic {name} exceeds the {self._max_topic_name_len} character limit"
-            )
-        # Get a configuration of the source topic
-        source_topic_config = (
-            self._admin.inspect_topics([topic_name])[topic_name]
-            or self._topics[topic_name].config
+        source_topic_config = self._get_source_topic_config(
+            topic_name, extras_imports=self._changelog_extra_config_imports_defaults
         )
-
-        # Copy only certain configuration values from original topic
-        # to the changelog topic
-        settings_to_import = {
-            k: v
-            for k, v in source_topic_config.extra_config.items()
-            if k in self._changelog_extra_config_imports_defaults
-        }
-        extra_config = dict(settings_to_import)
-        extra_config.update(self._changelog_extra_config_defaults)
+        source_topic_config.extra_config.update(self._changelog_extra_config_defaults)
 
         changelog_config = self.topic_config(
             num_partitions=source_topic_config.num_partitions,
             replication_factor=source_topic_config.replication_factor,
-            extra_config=extra_config,
+            extra_config=source_topic_config.extra_config,
         )
 
         topic = Topic(
-            name=name,
+            name=self._internal_name("changelog", topic_name, store_name),
             key_serializer="bytes",
             value_serializer="bytes",
             key_deserializer="bytes",
@@ -276,7 +375,7 @@ class TopicManager:
         """
         A convenience method to create all Topic objects stored on this TopicManager.
         """
-        self.create_topics(self.all_topics)
+        self.create_topics(self._all_topics_list)
 
     def validate_all_topics(self):
         """
@@ -285,8 +384,8 @@ class TopicManager:
         Issues are pooled and raised as an Exception once inspections are complete.
         """
         logger.info(f"Validating Kafka topics exist and are configured correctly...")
-        topics = self.all_topics
-        changelog_names = [topic.name for topic in self.changelog_topics_list]
+        topics = self._all_topics_list
+        changelog_names = [topic.name for topic in self._changelog_topics_list]
         actual_configs = self._admin.inspect_topics([t.name for t in topics])
 
         for topic in topics:

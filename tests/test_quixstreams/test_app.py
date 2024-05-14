@@ -11,6 +11,7 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
+from quixstreams.context import message_key
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
@@ -523,6 +524,88 @@ class TestApplication:
         with patch.dict(os.environ, {}, clear=True):
             app = Application(broker_address="my_address")
         assert app._consumer_group == "quixstreams-default"
+
+
+class TestAppGroupBy:
+
+    def test_group_by(
+        self,
+        app_factory,
+        topic_manager_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
+    ):
+        """
+        Test that StreamingDataFrame processes 6 messages from Kafka and groups them
+        by each record's specified column value.
+        """
+
+        def on_message_processed(topic_, partition, offset):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        topic_manager = topic_manager_factory()  # just to make topic_config objects
+        processed_count = 0
+
+        key_in = "key_in"
+        user_id = "abc123"
+        expected_message_count = 1
+        total_messages = expected_message_count * 2  # groupby reproduces each message
+        app = app_factory(
+            auto_offset_reset="earliest",
+            topic_manager=topic_manager,
+            on_message_processed=on_message_processed,
+        )
+
+        app_topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        app_topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        sdf = app.dataframe(topic=app_topic_in)
+        sdf["new_col"] = "cool"
+        sdf = sdf.group_by("user")
+        sdf["new_col"] = sdf["new_col"].apply(lambda m: f"{m}_{message_key()}")
+        sdf = sdf.to_topic(app_topic_out)
+
+        with app.get_producer() as producer:
+            msg = app_topic_in.serialize(
+                key=key_in,
+                value={"user": user_id},
+            )
+            producer.produce(app_topic_in.name, key=msg.key, value=msg.value)
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 25.0)
+        app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # output topic is re-keyed, has "new_col" and its string append
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([app_topic_out])
+            row = row_consumer.poll_row(timeout=5)
+
+        assert row.topic == app_topic_out.name
+        assert row.key.decode() == user_id
+        # shows message context was also updated as expected after groupby
+        assert row.value == {"user": user_id, "new_col": f"cool_{user_id}"}
 
 
 class TestQuixApplication:

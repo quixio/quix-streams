@@ -256,20 +256,16 @@ class RecoveryManager:
         """
         return self.has_assignments and self._running
 
-    def register_changelog(
-        self, topic_name: str, store_name: str, consumer_group: str
-    ) -> Topic:
+    def register_changelog(self, topic_name: str, store_name: str) -> Topic:
         """
         Register a changelog Topic with the TopicManager.
 
         :param topic_name: source topic name
         :param store_name: name of the store
-        :param consumer_group: name of the consumer group
         """
         return self._topic_manager.changelog_topic(
             topic_name=topic_name,
             store_name=store_name,
-            consumer_group=consumer_group,
         )
 
     def do_recovery(self):

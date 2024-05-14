@@ -3,8 +3,9 @@ from __future__ import annotations
 import contextvars
 import functools
 import operator
+from copy import deepcopy
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, TypeVar, Any, overload
+from typing import Optional, Callable, Union, List, TypeVar, Any, overload, Dict
 
 from typing_extensions import Self
 
@@ -13,14 +14,21 @@ from quixstreams.context import (
     set_message_context,
 )
 from quixstreams.core.stream import StreamCallable, Stream
-from quixstreams.models import Topic, Row, MessageContext
+from quixstreams.models import (
+    Topic,
+    TopicManager,
+    Row,
+    MessageContext,
+)
 from quixstreams.processing_context import ProcessingContext
+from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.state import State
 from .base import BaseStreaming
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, GroupByLimitExceeded
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
+
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -78,11 +86,15 @@ class StreamingDataFrame(BaseStreaming):
     def __init__(
         self,
         topic: Topic,
+        topic_manager: TopicManager,
         processing_context: ProcessingContext,
         stream: Optional[Stream] = None,
+        branches: Optional[Dict[str, Stream]] = None,
     ):
         self._stream: Stream = stream or Stream()
         self._topic = topic
+        self._topic_manager = topic_manager
+        self._branches = branches or {}
         self._processing_context = processing_context
         self._producer = processing_context.producer
 
@@ -97,6 +109,16 @@ class StreamingDataFrame(BaseStreaming):
     @property
     def topic(self) -> Topic:
         return self._topic
+
+    @property
+    def topics_to_subscribe(self) -> List[Topic]:
+        all_topics = self._topic_manager.all_topics
+        topics = [all_topics[name] for name in self._branches]
+        if self._topic not in topics:
+            # enables getting a full topic list before compose() is called,
+            # allowing independence from app runtime call ordering
+            topics.append(self._topic)
+        return topics
 
     def __bool__(self):
         raise InvalidOperation(
@@ -229,6 +251,92 @@ class StreamingDataFrame(BaseStreaming):
         stream = self.stream.add_filter(func)
         return self._clone(stream=stream)
 
+    def _groupby_key(
+        self, key: Union[str, DataFrameFunc]
+    ) -> Callable[[object], object]:
+        """
+        Generate the underlying groupby key function based on users provided input.
+        """
+        if isinstance(key, str):
+            return lambda row: row[key]
+        elif callable(key):
+            return lambda row: key(row)
+        else:
+            raise TypeError("group_by 'key' must be callable or string (column name)")
+
+    def group_by(
+        self,
+        key: Union[str, DataFrameFunc],
+        name: Optional[str] = None,
+        value_deserializer: Optional[DeserializerType] = "json",
+        key_deserializer: Optional[DeserializerType] = "json",
+        value_serializer: Optional[SerializerType] = "json",
+        key_serializer: Optional[SerializerType] = "json",
+    ) -> Self:
+        """
+        "Groups" messages by re-keying them via the provided group_by operation
+        on their message values.
+
+        This enables things like aggregations on messages with non-matching keys.
+
+        You can provide a column name (uses the column's value) or a custom function
+        to generate this new key.
+
+        `.groupby()` can only be performed once per `StreamingDataFrame` instance.
+
+        >**NOTE:** group_by generates a topic that copies the original topic's settings.
+
+        Example Snippet:
+
+        ```python
+        # We have customer purchase events where the message key is the "store_id",
+        # but we want to calculate sales per customer (by "customer_account_id").
+
+        def func(d: dict, state: State):
+            current_total = state.get("customer_sum", 0)
+            new_total = current_total + d["customer_spent"]
+            state.set("customer_sum", new_total)
+            d["customer_total"] = new_total
+            return d
+
+        sdf = StreamingDataframe()
+        sdf = sdf.group_by("customer_account_id")
+        sdf = sdf.apply(func, stateful=True)
+        ```
+
+
+        :param key: how the new key should be generated from the message value;
+            requires a column name (string) or a callable that takes the message value.
+        :param name: a name for the op (must be unique per group-by), required if `key`
+            is a custom callable.
+        :param value_deserializer: a deserializer type for values; default - JSON
+        :param key_deserializer: a deserializer type for keys; default - JSON
+        :param value_serializer: a serializer type for values; default - JSON
+        :param key_serializer: a serializer type for keys; default - JSON
+
+        :return: a clone with this operation added (assign to keep its effect).
+        """
+        # >= 1 since branches are only added once finalized
+        if len(self._branches) >= 1:
+            raise GroupByLimitExceeded(
+                "Only one GroupBy operation is allowed per StreamingDataFrame"
+            )
+        if callable(key) and not name:
+            raise ValueError(
+                "group_by requires 'name' parameter when 'key' is a function"
+            )
+        groupby_topic = self._topic_manager.repartition_topic(
+            operation=name or key,
+            topic_name=self._topic.name,
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
+            key_deserializer=key_deserializer,
+            value_deserializer=value_deserializer,
+        )
+        sdf_to_finalize = self.to_topic(groupby_topic, key=self._groupby_key(key))
+        self._finalize_branch(sdf_to_finalize)
+        return self._clone(topic=groupby_topic)
+
     @staticmethod
     def contains(key: str) -> StreamingSeries:
         """
@@ -247,7 +355,7 @@ class StreamingDataFrame(BaseStreaming):
 
 
         :param key: a column name to check.
-        :returns: a Column object that evaluates to True if the key is present
+        :return: a Column object that evaluates to True if the key is present
             or False otherwise.
         """
 
@@ -292,7 +400,17 @@ class StreamingDataFrame(BaseStreaming):
             lambda value: self._produce(topic, value, key=key(value) if key else None)
         )
 
-    def compose(self) -> StreamCallable:
+    def _finalize_branch(self, branch: Self):
+        """
+        Add a StreamingDataFrame to the branch cache via its corresponding topic name.
+
+        Implies no further operations will be added to that branch.
+
+        :param branch: a StreamingDataFrame instance
+        """
+        self._branches[self._topic.name] = branch.stream
+
+    def compose(self) -> Dict[str, StreamCallable]:
         """
         Compose all functions of this StreamingDataFrame into one big closure.
 
@@ -320,9 +438,15 @@ class StreamingDataFrame(BaseStreaming):
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
-        return self.stream.compose()
+        self._finalize_branch(self)
+        return {name: stream.compose() for name, stream in self._branches.items()}
 
-    def test(self, value: object, ctx: Optional[MessageContext] = None) -> Any:
+    def test(
+        self,
+        value: object,
+        ctx: Optional[MessageContext] = None,
+        topic: Optional[Topic] = None,
+    ) -> Any:
         """
         A shorthand to test `StreamingDataFrame` with provided value
         and `MessageContext`.
@@ -332,13 +456,16 @@ class StreamingDataFrame(BaseStreaming):
             Provide it if the StreamingDataFrame instance calls `to_topic()`,
             has stateful functions or functions calling `get_current_key()`.
             Default - `None`.
+        :param topic: optionally, a topic branch to test with
 
         :return: result of `StreamingDataFrame`
         """
+        if not topic:
+            topic = self._topic
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
         composed = self.compose()
-        return context.run(composed, value)
+        return context.run(composed[topic.name], value)
 
     def tumbling_window(
         self,
@@ -506,11 +633,17 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
-    def _clone(self, stream: Stream) -> Self:
+    def _clone(
+        self,
+        stream: Optional[Stream] = None,
+        topic: Optional[Topic] = None,
+    ) -> Self:
         clone = self.__class__(
             stream=stream,
-            topic=self._topic,
+            topic=topic or self._topic,
             processing_context=self._processing_context,
+            topic_manager=self._topic_manager,
+            branches=deepcopy(self._branches),
         )
         return clone
 

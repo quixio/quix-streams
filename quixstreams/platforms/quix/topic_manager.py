@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 
 from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
 from .config import QuixKafkaConfigsBuilder
@@ -19,17 +19,14 @@ class QuixTopicManager(TopicManager):
     See methods for details.
     """
 
-    _topic_partitions = 1
     # Setting it to None to use defaults defined in Quix Cloud
     _topic_replication = None
     _max_topic_name_len = 249
 
-    _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
-    _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
-
     def __init__(
         self,
         topic_admin: TopicAdmin,
+        consumer_group: str,
         quix_config_builder: QuixKafkaConfigsBuilder,
         create_timeout: int = 60,
     ):
@@ -39,7 +36,13 @@ class QuixTopicManager(TopicManager):
         :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
             generated for you.
         """
-        super().__init__(create_timeout=create_timeout, topic_admin=topic_admin)
+        super().__init__(
+            topic_admin=topic_admin,
+            consumer_group=quix_config_builder.strip_workspace_id_prefix(
+                consumer_group
+            ),
+            create_timeout=create_timeout,
+        )
         self._quix_config_builder = quix_config_builder
 
     def _create_topics(self, topics: List[Topic]):
@@ -67,27 +70,32 @@ class QuixTopicManager(TopicManager):
         :return: actual cluster topic name to use
         """
         if quix_topic := self._quix_config_builder.get_topic(name):
-            return quix_topic["id"]
-        return self._quix_config_builder.prepend_workspace_id(name)
+            name = quix_topic["id"]
+        else:
+            name = self._quix_config_builder.prepend_workspace_id(name)
+        return super()._resolve_topic_name(name)
 
-    def _format_changelog_name(
-        self, consumer_group: str, topic_name: str, store_name: str
+    def _internal_name(
+        self,
+        topic_type: Literal["changelog", "repartition"],
+        topic_name: str,
+        suffix: str,
     ):
         """
-        Generate the name of the changelog topic based on the following parameters.
+        Generate an "internal" topic name.
 
         This naming scheme guarantees uniqueness across all independent `Application`s.
 
-        :param consumer_group: name of consumer group (for this app)
+        The internal format is <{TYPE}__{GROUP}--{NAME}--{SUFFIX}>
+
+        :param topic_type: topic type, added as prefix (changelog, repartition)
         :param topic_name: name of consumed topic (app input topic)
-        :param store_name: name of storage type (default, rolling10s, etc.)
+        :param suffix: a unique descriptor related to topic type, added as suffix
 
         :return: formatted topic name
         """
-        strip_wid = self._quix_config_builder.strip_workspace_id_prefix
-        base_format = super()._format_changelog_name(
-            consumer_group=strip_wid(consumer_group),
-            topic_name=strip_wid(topic_name),
-            store_name=store_name,
+        return super()._internal_name(
+            topic_type,
+            self._quix_config_builder.strip_workspace_id_prefix(topic_name),
+            suffix,
         )
-        return self._quix_config_builder.prepend_workspace_id(base_format)

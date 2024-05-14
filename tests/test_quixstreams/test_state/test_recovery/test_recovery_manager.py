@@ -13,16 +13,12 @@ from tests.utils import ConfluentKafkaMessageStub
 class TestRecoveryManager:
     def test_register_changelog(self, recovery_manager_factory):
         recovery_manager = recovery_manager_factory()
-
         store_name = "my_store"
-        kwargs = dict(
-            topic_name="my_topic_name",
-            consumer_group="my_group",
-        )
+        topic = "my_topic_name"
         with patch.object(TopicManager, "changelog_topic") as make_changelog:
-            recovery_manager.register_changelog(**kwargs, store_name=store_name)
+            recovery_manager.register_changelog(topic_name=topic, store_name=store_name)
 
-        make_changelog.assert_called_with(**kwargs, store_name=store_name)
+        make_changelog.assert_called_with(topic_name=topic, store_name=store_name)
 
     def test_assign_partition(
         self, state_manager_factory, recovery_manager_factory, topic_manager_factory
@@ -110,15 +106,12 @@ class TestRecoveryManager:
         topic_name = "topic_name"
         partition_num = 0
         store_name = "default"
-        consumer_group = "group"
         lowwater, highwater = 0, 20
 
         # Register a source topic and a changelog topic with one partition
         topic_manager = topic_manager_factory()
         topic_manager.topic(topic_name)
-        topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name, consumer_group=consumer_group
-        )
+        topic_manager.changelog_topic(topic_name=topic_name, store_name=store_name)
 
         # Mock Consumer
         consumer = MagicMock(spec_set=Consumer)
@@ -161,9 +154,7 @@ class TestRecoveryManager:
         """
 
         topic_name = "topic_name"
-        consumer_group = "group"
         store_name = "default"
-        changelog_name = f"changelog__{consumer_group}--{topic_name}--{store_name}"
         changelog_offset = 5
         lowwater, highwater = 0, 10
         assignment = [0, 1]
@@ -173,8 +164,8 @@ class TestRecoveryManager:
         topic_manager.topic(
             topic_name, config=TopicConfig(num_partitions=2, replication_factor=1)
         )
-        topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name, consumer_group=consumer_group
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name, store_name=store_name
         )
 
         # Create a RecoveryManager
@@ -195,7 +186,7 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
-        assert recovery_manager.partitions[0][changelog_name].needs_recovery
+        assert recovery_manager.partitions[0][changelog_topic.name].needs_recovery
 
         # Put a RecoveryManager into "recovering" state
         recovery_manager._running = True
@@ -211,7 +202,7 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
-        assert recovery_manager.partitions[1][changelog_name].needs_recovery
+        assert recovery_manager.partitions[1][changelog_topic.name].needs_recovery
 
         # Check that consumer first paused all partitions
         assert consumer.pause.call_args_list[0].args[0] == assignment
@@ -231,20 +222,19 @@ class TestRecoveryManager:
         Revoke a topic partition's respective recovery partitions.
         """
         topic_name = "topic_name"
-        consumer_group = "group"
         store_name = "default"
         changelog_offset = 5
         lowwater, highwater = 0, 10
         assignment = [0, 1]
-        changelog_name = f"changelog__{consumer_group}--{topic_name}--{store_name}"
 
         # Register a source topic and a changelog topic with two partitions
         topic_manager = topic_manager_factory()
         topic_manager.topic(
             topic_name, config=TopicConfig(num_partitions=2, replication_factor=1)
         )
-        topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name, consumer_group=consumer_group
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name,
+            store_name=store_name,
         )
 
         # Create a RecoveryManager
@@ -277,14 +267,14 @@ class TestRecoveryManager:
         assert len(recovery_manager.partitions) == 1
         # Check that consumer unassigned the changelog topic partition as well
         assert consumer.incremental_unassign.call_args.args[0] == [
-            ConfluentPartition(topic=changelog_name, partition=0)
+            ConfluentPartition(topic=changelog_topic.name, partition=0)
         ]
 
         # Revoke second partition
         recovery_manager.revoke_partition(1)
         # Check that consumer unassigned the changelog topic partition as well
         assert consumer.incremental_unassign.call_args.args[0] == [
-            ConfluentPartition(topic=changelog_name, partition=1)
+            ConfluentPartition(topic=changelog_topic.name, partition=1)
         ]
         # Check that no partitions are assigned
         assert not recovery_manager.partitions
@@ -311,26 +301,25 @@ class TestRecoveryManager:
          - unpauses source topic partitions
         """
         topic_name = "topic_name"
-        consumer_group = "group"
         store_name = "default"
         lowwater, highwater = 0, 10
         assignment = [0, 1]
-        changelog_name = f"changelog__{consumer_group}--{topic_name}--{store_name}"
+
+        # Register a source topic and a changelog topic with one partition
+        topic_manager = topic_manager_factory()
+        topic_manager.topic(topic_name)
+        changelog_topic = topic_manager.changelog_topic(
+            topic_name=topic_name,
+            store_name=store_name,
+        )
 
         changelog_message = ConfluentKafkaMessageStub(
-            topic=changelog_name,
+            topic=changelog_topic.name,
             partition=0,
             offset=highwater - 1,
             key=b"key",
             value=b"value",
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
-        )
-
-        # Register a source topic and a changelog topic with one partition
-        topic_manager = topic_manager_factory()
-        topic_manager.topic(topic_name)
-        topic_manager.changelog_topic(
-            topic_name=topic_name, store_name=store_name, consumer_group=consumer_group
         )
 
         # Create a RecoveryManager
@@ -356,7 +345,7 @@ class TestRecoveryManager:
         # Check that consumer first resumed the changelog topic partition
         consumer_resume_calls = consumer.resume.call_args_list
         assert consumer_resume_calls[0].args[0] == [
-            ConfluentPartition(topic=changelog_name, partition=0)
+            ConfluentPartition(topic=changelog_topic.name, partition=0)
         ]
         # Check that consumer resumed all assigned partitions after recovery is done
         assert consumer_resume_calls[1].args[0] == assignment

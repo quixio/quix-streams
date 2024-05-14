@@ -379,15 +379,20 @@ def quix_topic_manager_factory(
 
     def factory(
         workspace_id: Optional[str] = None,
+        consumer_group: str = "test_group",
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ):
-        topic_manager = topic_manager_factory(topic_admin)
+        topic_manager = topic_manager_factory(
+            topic_admin_=topic_admin, consumer_group=consumer_group
+        )
         if not quix_config_builder:
             quix_config_builder = quix_mock_config_builder_factory(
                 workspace_id=workspace_id
             )
         quix_topic_manager = QuixTopicManager(
-            topic_admin=topic_admin, quix_config_builder=quix_config_builder
+            topic_admin=topic_admin,
+            consumer_group=consumer_group,
+            quix_config_builder=quix_config_builder,
         )
         quix_topic_manager._create_topics = topic_manager._create_topics
         return quix_topic_manager
@@ -526,16 +531,20 @@ def topic_admin(kafka_container):
 
 
 @pytest.fixture()
-def topic_manager_factory(topic_admin):
+def topic_manager_factory(topic_admin, random_consumer_group):
     """
     TopicManager with option to add an TopicAdmin (which uses Kafka Broker)
     """
 
     def factory(
-        topic_admin_: Optional[TopicAdmin] = None, create_timeout: int = 10
+        topic_admin_: Optional[TopicAdmin] = None,
+        consumer_group: str = random_consumer_group,
+        create_timeout: int = 10,
     ) -> TopicManager:
         return TopicManager(
-            topic_admin=topic_admin_ or topic_admin, create_timeout=create_timeout
+            topic_admin=topic_admin_ or topic_admin,
+            consumer_group=consumer_group,
+            create_timeout=create_timeout,
         )
 
     return factory
