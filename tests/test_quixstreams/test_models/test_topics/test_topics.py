@@ -105,6 +105,14 @@ class TestTopic:
                 b"key",
                 [1, 2, 3],
             ),
+            (
+                JSONDeserializer(),
+                JSONDeserializer(),
+                None,
+                b"[1,2,3]",
+                None,
+                [1, 2, 3],
+            ),
         ],
     )
     def test_row_deserialize_success(
