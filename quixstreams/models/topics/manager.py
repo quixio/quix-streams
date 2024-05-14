@@ -111,7 +111,7 @@ class TopicManager:
     @property
     def all_topics(self) -> Dict[str, Topic]:
         """
-        Every registered topic name mapped to it's respective `Topic`.
+        Every registered topic name mapped to its respective `Topic`.
 
         returns: full topic dict, {topic_name: Topic}
         """
@@ -189,19 +189,24 @@ class TopicManager:
         )
 
     def _get_source_topic_config(
-        self, topic_name: str, extras_imports: Optional[Set[str]] = None
+        self,
+        topic_name: str,
+        timeout: float,
+        extras_imports: Optional[Set[str]] = None,
     ) -> TopicConfig:
         """
         Retrieve configs for a topic, defaulting to stored Topic objects if topic does
         not exist in Kafka.
 
         :param topic_name: name of the topic to get configs from
+        :param timeout: config lookup timeout (seconds); Default 30
         :param extras_imports: set of extra configs that should be imported from topic
 
         :return: a TopicConfig
         """
-        topic_config = self._admin.inspect_topics([topic_name])[topic_name] or deepcopy(
-            self._non_changelog_topics[topic_name].config
+        topic_config = (
+            self._admin.inspect_topics([topic_name], timeout=timeout)[topic_name]
+            or deepcopy(self._non_changelog_topics[topic_name].config)
         )
 
         # Copy only certain configuration values from original topic
@@ -287,6 +292,7 @@ class TopicManager:
         key_deserializer: Optional[DeserializerType] = "json",
         value_serializer: Optional[SerializerType] = "json",
         key_serializer: Optional[SerializerType] = "json",
+        timeout: Optional[float] = None,
     ) -> Topic:
         """
         Create an internal repartition topic.
@@ -297,7 +303,9 @@ class TopicManager:
         :param key_deserializer: a deserializer type for keys; default - JSON
         :param value_serializer: a serializer type for values; default - JSON
         :param key_serializer: a serializer type for keys; default - JSON
+        :param timeout: config lookup timeout (seconds); Default 30
 
+        :return: `Topic` object (which is also stored on the TopicManager)
         """
         name = self._internal_name(f"repartition", topic_name, operation)
 
@@ -310,6 +318,7 @@ class TopicManager:
             config=self._get_source_topic_config(
                 topic_name,
                 extras_imports=self._groupby_extra_config_imports_defaults,
+                timeout=timeout if timeout is not None else self._timeout,
             ),
         )
         self._repartition_topics[name] = topic
@@ -344,13 +353,14 @@ class TopicManager:
             (default, rolling10s, etc.)
         :param timeout: config lookup timeout (seconds); Default 30
 
-
         :return: `Topic` object (which is also stored on the TopicManager)
         """
 
         topic_name = self._resolve_topic_name(topic_name)
         source_topic_config = self._get_source_topic_config(
-            topic_name, extras_imports=self._changelog_extra_config_imports_defaults
+            topic_name,
+            extras_imports=self._changelog_extra_config_imports_defaults,
+            timeout=timeout if timeout is not None else self._timeout,
         )
         source_topic_config.extra_config.update(self._changelog_extra_config_defaults)
 
@@ -392,7 +402,7 @@ class TopicManager:
             return
         affirm_ready_for_create(topics)
         self._create_topics(
-            self.all_topics,
+            topics,
             timeout=timeout if timeout is not None else self._timeout,
             create_timeout=(
                 create_timeout if create_timeout is not None else self._create_timeout
