@@ -37,8 +37,6 @@ TimestampExtractor = Callable[
     int,
 ]
 
-_KEY_UNSET = object()
-
 
 @dataclasses.dataclass(eq=True)
 class TopicConfig:
