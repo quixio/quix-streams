@@ -32,11 +32,12 @@ __all__ = ("Topic", "TopicConfig", "TimestampExtractor")
 
 logger = logging.getLogger(__name__)
 
-
 TimestampExtractor = Callable[
     [Any, Optional[MessageHeadersTuples], int, TimestampType],
     int,
 ]
+
+_KEY_UNSET = object()
 
 
 @dataclasses.dataclass(eq=True)
@@ -129,11 +130,11 @@ class Topic:
     def config(self) -> TopicConfig:
         return self._config
 
-    def row_serialize(self, row: Row, key: Optional[Any] = None) -> KafkaMessage:
+    def row_serialize(self, row: Row, key: Any) -> KafkaMessage:
         """
         Serialize Row to a Kafka message structure
         :param row: Row to serialize
-        :param key: message key to serialize, optional. Default - current Row key.
+        :param key: message key to serialize
         :return: KafkaMessage object with serialized values
         """
         ctx = SerializationContext(topic=self.name, headers=row.headers)
@@ -145,9 +146,12 @@ class Topic:
             raise SerializerIsNotProvidedError(
                 f'Value serializer is not provided for topic "{self.name}"'
             )
-
+        # Try to serialize the key only if it's not None
+        # If key is None then pass it as is
+        # Otherwise, different serializers may serialize None differently
+        key_serialized = None if key is None else self._key_serializer(key, ctx=ctx)
         return KafkaMessage(
-            key=self._key_serializer(key or row.key, ctx=ctx),
+            key=key_serialized,
             value=self._value_serializer(row.value, ctx=ctx),
             headers=self._value_serializer.extra_headers,
         )
