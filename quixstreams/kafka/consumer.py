@@ -30,12 +30,7 @@ logger = logging.getLogger(__name__)
 
 def _default_error_cb(error: KafkaError):
     error_code = error.code()
-    if error.fatal():
-        logger.error(
-            f'Kafka consumer fatal error: {error.str()} code="{error_code}"',
-        )
-        return
-    logger.warning(f'Kafka consumer error: {error.str()} code="{error_code}"')
+    logger.error(f'Kafka consumer error: {error.str()} code="{error_code}"')
 
 
 def _default_on_commit_cb(

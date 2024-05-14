@@ -23,17 +23,12 @@ logger = logging.getLogger(__name__)
 
 def _default_error_cb(error: KafkaError):
     error_code = error.code()
-    if str(error_code) == str(KafkaError._ALL_BROKERS_DOWN):
+    if error_code == KafkaError._ALL_BROKERS_DOWN:
         # This error seems to be thrown despite brokers being available.
         # Seems linked to `connections.max.idle.ms`.
         logger.debug(error.str())
         return
-    if error.fatal():
-        logger.error(
-            f'Kafka producer fatal error: {error.str()} code="{error_code}"',
-        )
-        return
-    logger.warning(f'Kafka producer error: {error.str()} code="{error_code}"')
+    logger.error(f'Kafka producer error: {error.str()} code="{error_code}"')
 
 
 def _on_delivery_cb(err: Optional[KafkaError], msg: Message):

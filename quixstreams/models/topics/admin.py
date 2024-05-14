@@ -23,13 +23,11 @@ __all__ = ("TopicAdmin",)
 
 def _default_error_cb(error: KafkaError):
     error_code = error.code()
-    if str(error_code) == str(KafkaError._DESTROY):
+    if error_code == KafkaError._DESTROY:
         # Broker handle destroyed - common/typical behavior
         logger.debug(error.str())
         return
-    logger.warning(
-        f'Kafka Admin error: {error.str()} code="{error_code}"',
-    )
+    logger.error(f'Kafka Admin error: {error.str()} code="{error_code}"')
 
 
 def convert_topic_list(topics: List[Topic]) -> List[ConfluentTopic]:
