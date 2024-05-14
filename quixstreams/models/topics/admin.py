@@ -4,7 +4,6 @@ import time
 from asyncio import Future
 from typing import List, Dict, Mapping, Optional
 
-from confluent_kafka import KafkaError
 from confluent_kafka.admin import (
     AdminClient,
     ConfigResource,
@@ -19,15 +18,6 @@ from .topic import Topic, TopicConfig
 logger = logging.getLogger(__name__)
 
 __all__ = ("TopicAdmin",)
-
-
-def _default_error_cb(error: KafkaError):
-    error_code = error.code()
-    if error_code == KafkaError._DESTROY:
-        # Broker handle destroyed - common/typical behavior
-        logger.debug(error.str())
-        return
-    logger.error(f'Kafka Admin error: {error.str()} code="{error_code}"')
 
 
 def convert_topic_list(topics: List[Topic]) -> List[ConfluentTopic]:
@@ -73,7 +63,6 @@ class TopicAdmin:
         self._config = {
             "bootstrap.servers": broker_address,
             **(extra_config or {}),
-            "error_cb": _default_error_cb,
             "logger": logger,
         }
 

@@ -28,6 +28,10 @@ def _default_error_cb(error: KafkaError):
         # Seems linked to `connections.max.idle.ms`.
         logger.debug(error.str())
         return
+    if error_code == KafkaError._DESTROY:
+        # Broker handle destroyed - common/typical behavior
+        logger.debug(error.str())
+        return
     logger.error(f'Kafka producer error: {error.str()} code="{error_code}"')
 
 
