@@ -1,6 +1,6 @@
 # Checkpointing
 
-To perform stateful operations reliably and with consistent outputs, Quix Streams applications need to periodically save their state stores to disk and commit processed offsets to Kafka.
+To process data reliably and with consistent outputs, Quix Streams applications need to periodically save their state stores to disk and commit processed offsets to Kafka.
 
 We call this process a “checkpointing”.
 
@@ -14,23 +14,10 @@ Currently, Quix Streams provides *At-Least-Once* processing guarantees, which me
 - The `Checkpoint` object is responsible for keeping track of processed Kafka offsets and pending state transactions.
 - After the message is successfully processed, its offset is marked as processed in the current checkpoint.
 - When checkpoint commits, it will:
-    1. *Produce changelog messages for every pending state update to the changelog topics.*
-
-        Changelog topics are used to back up state stores in case of failures, and they contain records for every updated state key.
-        
+    1. *Produce changelog messages for every pending state update to the changelog topics (if they are enabled).*
     2. *Flush the Kafka Producer and verify the delivery of every outgoing message both to output and changelog topics.*
-        
-        If some messages are not delivered, the checkpoint will fail.
-        
-        In this case, the messages need to be reprocessed again starting from the previous committed offset.
-        
     3. *Synchronously commit the topic offsets to Kafka.*
-        
-        If some offsets fail to commit, the checkpoint will fail as well.
-        
     4. *Flush the pending state transactions to the durable state stores.*
-        
-        If some state stores fail to update, the checkpoint will fail too.
         
 - After the checkpoint is fully committed, a new one is created and the processing continues.
 - Besides the regular intervals, the checkpoint is also committed when Kafka partitions are rebalanced.
@@ -50,7 +37,7 @@ This way, all stateful operations will work with a consistent snapshot of the st
 
 For more information about changelog topics, see the [**How Changelog Topics Work**](stateful-processing.md#how-changelog-topics-work) section.
 
-## Example Failure Scenarios
+## Common Failure Scenarios
 Below are some examples of what can go wrong during processing and how application will be recovering from it.  
 In all the cases, the application stops, and it needs to be restarted.
 
@@ -106,3 +93,6 @@ In the At-Least-Once setting, it is still possible that unwanted changelog chang
 - The checkpoint fails to commit the input topic offsets to Kafka.
 - The application code changes and some of the input messages get filtered during reprocessing.
 - Since the changelogs are already produced, during recovery from scratch they will be applied to the state even though the messages are now filtered.
+
+Though this case is rare, the best way to avoid it is to stop the application clean and ensure the latest checkpoint successfully commits before updating the processing code.
+
