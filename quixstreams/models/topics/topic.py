@@ -174,10 +174,20 @@ class Topic:
 
         headers = message.headers()
         ctx = SerializationContext(topic=message.topic(), headers=headers)
-        key = self._key_deserializer(value=message.key(), ctx=ctx)
 
+        key_bytes = message.key()
+        key_deserialized = (
+            None
+            if key_bytes is None
+            else self._key_deserializer(value=key_bytes, ctx=ctx)
+        )
+        value_bytes = message.value()
         try:
-            value = self._value_deserializer(value=message.value(), ctx=ctx)
+            value_deserialized = (
+                None
+                if value_bytes is None
+                else self._value_deserializer(value=message.value(), ctx=ctx)
+            )
         except IgnoreMessage:
             # Ignore message completely if deserializer raised IgnoreValueError.
             logger.debug(
@@ -192,21 +202,27 @@ class Topic:
             # The expected value from this serializer is Iterable and each item
             # should be processed as a separate message
             rows = []
-            for item in value:
+            for item in value_deserialized:
                 rows.append(
                     Row(
                         value=item,
                         context=self._create_message_context(
-                            message=message, key=key, headers=headers, value=item
+                            message=message,
+                            key=key_deserialized,
+                            headers=headers,
+                            value=item,
                         ),
                     )
                 )
             return rows
 
         return Row(
-            value=value,
+            value=value_deserialized,
             context=self._create_message_context(
-                message=message, key=key, headers=headers, value=value
+                message=message,
+                key=key_deserialized,
+                headers=headers,
+                value=value_deserialized,
             ),
         )
 
@@ -239,14 +255,18 @@ class Topic:
 
     def deserialize(self, message: ConfluentKafkaMessageProto):
         ctx = SerializationContext(topic=message.topic(), headers=message.headers())
+        key_bytes = message.key()
+        value_bytes = message.value()
         return KafkaMessage(
             key=(
-                self._key_deserializer(key, ctx=ctx) if (key := message.key()) else None
+                None
+                if key_bytes is None
+                else self._key_deserializer(key_bytes, ctx=ctx)
             ),
             value=(
-                self._value_serializer(value, ctx=ctx)
-                if (value := message.value())
-                else None
+                None
+                if value_bytes is None
+                else self._value_serializer(value_bytes, ctx=ctx)
             ),
             headers=message.headers(),
             timestamp=message.timestamp()[1],
