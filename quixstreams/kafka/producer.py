@@ -23,15 +23,21 @@ DeliveryCallback = Callable[[Optional[KafkaError], Message], None]
 
 logger = logging.getLogger(__name__)
 
+IGNORED_KAFKA_ERRORS = (
+    # This error seems to be thrown despite brokers being available.
+    # Seems linked to `connections.max.idle.ms`.
+    KafkaError._ALL_BROKERS_DOWN,
+    # Broker handle destroyed - common/typical behavior, often seen via AdminClient
+    KafkaError._DESTROY,
+)
+
 
 def _default_error_cb(error: KafkaError):
     error_code = error.code()
-    if str(error_code) == str(KafkaError._ALL_BROKERS_DOWN):
+    if error_code in IGNORED_KAFKA_ERRORS:
         logger.debug(error.str())
         return
-    logger.error(
-        f'Kafka producer error: {error.str()} code="{error_code}"',
-    )
+    logger.error(f'Kafka producer error: {error.str()} code="{error_code}"')
 
 
 class Producer:

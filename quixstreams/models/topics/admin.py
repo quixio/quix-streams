@@ -63,6 +63,7 @@ class TopicAdmin:
         self._config = {
             "bootstrap.servers": broker_address,
             **(extra_config or {}),
+            "logger": logger,
         }
 
     @property
