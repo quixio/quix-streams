@@ -1064,6 +1064,7 @@ class TestStreamingDataFrameHoppingWindow:
 
         col = "column_A"
         orig_key = "original_key"
+        orig_timestamp_ms = 1000
         new_key = "woo"
         value = {col: new_key}
         col_update = "updated_col"
@@ -1081,7 +1082,11 @@ class TestStreamingDataFrameHoppingWindow:
         topic_manager.create_all_topics()
         with producer:
             pre_groupby_branch_result = sdf.test(
-                value=value, topic=topic, ctx=message_context_factory(key=orig_key)
+                value=value,
+                topic=topic,
+                ctx=message_context_factory(
+                    key=orig_key, timestamp_ms=orig_timestamp_ms
+                ),
             )
 
         with row_consumer_factory(auto_offset_reset="earliest") as consumer:
@@ -1091,6 +1096,7 @@ class TestStreamingDataFrameHoppingWindow:
         assert consumed_row
         assert consumed_row.topic == groupby_topic.name
         assert consumed_row.key == new_key
+        assert consumed_row.timestamp.milliseconds == orig_timestamp_ms
 
         # the column update should only happen once on new topic
         assert consumed_row.value == value
@@ -1116,6 +1122,7 @@ class TestStreamingDataFrameHoppingWindow:
         col = "column_A"
         op_name = "get_col_A"
         orig_key = "original_key"
+        orig_timestamp_ms = 1000
         new_key = "woo"
         value = {col: new_key}
         col_update = "updated_col"
@@ -1134,7 +1141,9 @@ class TestStreamingDataFrameHoppingWindow:
         topic_manager.create_all_topics()
         with producer:
             pre_groupby_branch_result = sdf.test(
-                value=value, topic=topic, ctx=message_context_factory(key=orig_key)
+                value=value,
+                topic=topic,
+                ctx=message_context_factory(key=orig_key, timestamp_ms=1000),
             )
 
         with row_consumer_factory(auto_offset_reset="earliest") as consumer:
@@ -1144,6 +1153,7 @@ class TestStreamingDataFrameHoppingWindow:
         assert consumed_row
         assert consumed_row.topic == groupby_topic.name
         assert consumed_row.key == new_key
+        assert consumed_row.timestamp.milliseconds == orig_timestamp_ms
 
         # the column update should only happen once on new topic
         assert consumed_row.value == value
@@ -1168,6 +1178,8 @@ class TestStreamingDataFrameHoppingWindow:
         col = "column_A"
         op_name = "get_col_A"
         orig_key = "original_key"
+        orig_timestamp_ms = 1000
+
         new_key = "woo"
         value = {col: new_key}
         col_update = "updated_col"
@@ -1186,7 +1198,11 @@ class TestStreamingDataFrameHoppingWindow:
         topic_manager.create_all_topics()
         with producer:
             pre_groupby_branch_result = sdf.test(
-                value=value, topic=topic, ctx=message_context_factory(key=orig_key)
+                value=value,
+                topic=topic,
+                ctx=message_context_factory(
+                    key=orig_key, timestamp_ms=orig_timestamp_ms
+                ),
             )
 
         with row_consumer_factory(auto_offset_reset="earliest") as consumer:
@@ -1196,6 +1212,7 @@ class TestStreamingDataFrameHoppingWindow:
         assert consumed_row
         assert consumed_row.topic == groupby_topic.name
         assert consumed_row.key == new_key
+        assert consumed_row.timestamp.milliseconds == orig_timestamp_ms
 
         # the column update should only happen once on new topic
         assert consumed_row.value == value
