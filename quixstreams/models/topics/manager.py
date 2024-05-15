@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 from typing import Dict, List, Optional, Set, Literal
 
 from quixstreams.models.serializers import DeserializerType, SerializerType
@@ -187,9 +188,8 @@ class TopicManager:
 
         :return: a TopicConfig
         """
-        topic_config = (
-            self._admin.inspect_topics([topic_name])[topic_name]
-            or self._non_changelog_topics[topic_name].config
+        topic_config = self._admin.inspect_topics([topic_name])[topic_name] or deepcopy(
+            self._non_changelog_topics[topic_name].config
         )
 
         # Copy only certain configuration values from original topic
