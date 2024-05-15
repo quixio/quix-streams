@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Literal, Type
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -33,6 +33,8 @@ from .models import (
     SerializerType,
     DeserializerType,
     TimestampExtractor,
+    SASLConfig,
+    SSLConfig,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -97,6 +99,11 @@ class Application:
     def __init__(
         self,
         broker_address: Optional[str] = None,
+        security_protocol: Optional[
+            Literal["plaintext", "ssl", "sasl_plaintext", "sasl_ssl"]
+        ] = None,
+        ssl_config: Optional[SSLConfig] = None,
+        sasl_config: Optional[SASLConfig] = None,
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
@@ -187,6 +194,12 @@ class Application:
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
+        security_protocol = (
+            {"security.protocol": security_protocol} if security_protocol else {}
+        )
+        ssl_config = ssl_config or SSLConfig()
+        sasl_config = sasl_config or SASLConfig()
+
         # Add default values to the producer config, but allow them to be overwritten
         # by the provided producer_extra_config dict
         producer_extra_config = {
@@ -244,6 +257,8 @@ class Application:
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
+            consumer_extra_config = {**ssl_config, **consumer_extra_config}
+            producer_extra_config = {**quix_configs, **producer_extra_config}
 
         self._is_quix_app = bool(quix_config_builder)
 
@@ -308,6 +323,14 @@ class Application:
             consumer=self._consumer,
             state_manager=self._state_manager,
         )
+
+    @classmethod
+    def ssl_config_setter(cls) -> Type[SSLConfig]:
+        return SSLConfig
+
+    @classmethod
+    def sasl_config_setter(cls) -> Type[SASLConfig]:
+        return SASLConfig
 
     @classmethod
     def Quix(
