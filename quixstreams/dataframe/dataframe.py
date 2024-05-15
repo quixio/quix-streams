@@ -333,7 +333,18 @@ class StreamingDataFrame(BaseStreaming):
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
         )
-        sdf_to_finalize = self.to_topic(groupby_topic, key=self._groupby_key(key))
+        # Copy-paste the "to_topic()" code for now to forward original timestamps
+        # to repartition topics without changing "to_topic()".
+        # This needs to be refactored, of course.
+        sdf_to_finalize = self.update(
+            lambda value: self._produce(
+                topic=groupby_topic,
+                value=value,
+                key_func=self._groupby_key(key),
+                timestamp=message_context().timestamp.milliseconds,
+            )
+        )
+
         self._finalize_branch(sdf_to_finalize)
         return self._clone(topic=groupby_topic)
 
@@ -652,11 +663,12 @@ class StreamingDataFrame(BaseStreaming):
         topic: Topic,
         value: object,
         key_func: Optional[Callable[[object], object]] = None,
+        timestamp: Optional[int] = None,
     ):
         ctx = message_context()
         key = ctx.key if key_func is None else key_func(value)
         row = Row(value=value, context=ctx)
-        self._producer.produce_row(row, topic, key=key)
+        self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
     def _register_store(self):
         """

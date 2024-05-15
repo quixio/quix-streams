@@ -11,7 +11,7 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
-from quixstreams.context import message_key
+from quixstreams.context import message_key, message_context
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
@@ -541,7 +541,7 @@ class TestAppGroupBy:
         by each record's specified column value.
         """
 
-        def on_message_processed(topic_, partition, offset):
+        def on_message_processed(*_):
             # Set the callback to track total messages processed
             # The callback is not triggered if processing fails
             nonlocal processed_count
@@ -554,8 +554,9 @@ class TestAppGroupBy:
         topic_manager = topic_manager_factory()  # just to make topic_config objects
         processed_count = 0
 
-        key_in = "key_in"
+        timestamp = 1000
         user_id = "abc123"
+        value_in = {"user": user_id}
         expected_message_count = 1
         total_messages = expected_message_count * 2  # groupby reproduces each message
         app = app_factory(
@@ -576,36 +577,129 @@ class TestAppGroupBy:
         )
 
         sdf = app.dataframe(topic=app_topic_in)
-        sdf["new_col"] = "cool"
         sdf = sdf.group_by("user")
-        sdf["new_col"] = sdf["new_col"].apply(lambda m: f"{m}_{message_key()}")
+        # Capture original message timestamp to ensure it's forwarded
+        # to the repartition topic
+        sdf["groupby_timestamp"] = sdf.apply(
+            lambda v: message_context().timestamp.milliseconds
+        )
         sdf = sdf.to_topic(app_topic_out)
 
         with app.get_producer() as producer:
             msg = app_topic_in.serialize(
-                key=key_in,
-                value={"user": user_id},
+                key="some_key", value=value_in, timestamp_ms=timestamp
             )
-            producer.produce(app_topic_in.name, key=msg.key, value=msg.value)
+            producer.produce(
+                app_topic_in.name, key=msg.key, value=msg.value, timestamp=msg.timestamp
+            )
 
         done = Future()
 
         # Stop app when the future is resolved
-        executor.submit(_stop_app_on_future, app, done, 25.0)
+        executor.submit(_stop_app_on_future, app, done, 10.0)
         app.run(sdf)
 
         # Check that all messages have been processed
         assert processed_count == total_messages
 
-        # output topic is re-keyed, has "new_col" and its string append
+        # Consume the message from the output topic
         with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
             row_consumer.subscribe([app_topic_out])
             row = row_consumer.poll_row(timeout=5)
 
-        assert row.topic == app_topic_out.name
+        # Check that "user_id" is now used as a message key
         assert row.key.decode() == user_id
-        # shows message context was also updated as expected after groupby
-        assert row.value == {"user": user_id, "new_col": f"cool_{user_id}"}
+        # Check that message timestamp of the repartitioned message is the same
+        # as original one
+        assert row.value == {
+            "user": user_id,
+            "groupby_timestamp": timestamp,
+        }
+
+    def test_group_by_with_window(
+        self,
+        app_factory,
+        topic_manager_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
+    ):
+        """
+        Test that StreamingDataFrame processes 6 messages from Kafka and groups them
+        by each record's specified column value.
+        """
+
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        topic_manager = topic_manager_factory()  # just to make topic_config objects
+        processed_count = 0
+
+        timestamp = 1000
+        user_id = "abc123"
+        value_in = {"user": user_id}
+        expected_message_count = 1
+        total_messages = expected_message_count * 2  # groupby reproduces each message
+        app = app_factory(
+            auto_offset_reset="earliest",
+            topic_manager=topic_manager,
+            on_message_processed=on_message_processed,
+        )
+
+        app_topic_in = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+        app_topic_out = app.topic(
+            str(uuid.uuid4()),
+            value_deserializer="json",
+            value_serializer="json",
+        )
+
+        sdf = app.dataframe(topic=app_topic_in)
+        sdf = sdf.group_by("user")
+        # Capture original message timestamp to ensure it's forwarded
+        # to the repartition topic
+        sdf["groupby_timestamp"] = sdf.apply(
+            lambda v: message_context().timestamp.milliseconds
+        )
+        sdf = sdf.tumbling_window(duration_ms=1000).count().current()
+        sdf = sdf.to_topic(app_topic_out)
+
+        with app.get_producer() as producer:
+            msg = app_topic_in.serialize(
+                key="some_key", value=value_in, timestamp_ms=timestamp
+            )
+            producer.produce(
+                app_topic_in.name, key=msg.key, value=msg.value, timestamp=msg.timestamp
+            )
+
+        done = Future()
+
+        # Stop app when the future is resolved
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+
+        # Check that all messages have been processed
+        assert processed_count == total_messages
+
+        # Consume the message from the output topic
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([app_topic_out])
+            row = row_consumer.poll_row(timeout=5)
+
+        # Check that "user_id" is now used as a message key
+        assert row.key.decode() == user_id
+        # Check that window is calculated based on the original timestamp
+        assert row.value == {"start": 1000, "end": 2000, "value": 1}
 
 
 class TestQuixApplication:
