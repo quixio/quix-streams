@@ -191,8 +191,11 @@ Now we "and" these steps, which translates to your typical `A and B`
 (and returns a boolean).
 
 A few notes around `&` (and): 
+
 - It is considered an SDF operation.
+
 - You MUST use `&` for and, `|` for or
+
 - Your respective objects (i.e. `A`, `B`) must be wrapped in parentheses.
 
 Ultimately, when executed, the result of `&` will be _boolean_. This is important for...
@@ -206,7 +209,9 @@ sdf = sdf[X]
 Ultimately, this is a filtering operation: whenever `X` is an SDF operation(s) result, it acts like Pandas row filtering.
 
 As such, SDF filtering interprets the SDF operation `&` _boolean_ result as follows:
+
 - `True` -> continue processing this event
+
 - `False` -> stop ALL further processing of this event (including produces!)
 
 So, any events that don't satisfy these conditions will be filtered as desired!

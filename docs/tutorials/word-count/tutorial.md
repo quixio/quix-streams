@@ -144,7 +144,9 @@ to this:
 
 
 NOTE: two VERY important and related points around the `expand=True` argument:
+
 1. it tells SDF "hey, this .apply() returns _**multiple independent**_ events!"
+
 2. Our `F` returns a `list` (or a non-dict iterable of some kind), hence the "expand"!
 
 
@@ -161,7 +163,9 @@ sdf = sdf.filter(should_skip)
 Now we filter out some "filler" words using [`SDF.filter(F)`](../../processing.md#streamingdataframefilter), where `F` is our `should_skip` function. 
 
 For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
+
 - `True` -> continue processing this event
+
 - `False` -> stop ALL further processing of this event (including produces!)
 
 Remember that each word is now an independent event now due to our previous expand, so our
