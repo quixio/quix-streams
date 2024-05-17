@@ -101,11 +101,11 @@ class Topic:
     ):
         """
         :param name: topic name
+        :param config: topic configs via `TopicConfig` (creation/validation)
         :param value_deserializer: a deserializer type for values
         :param key_deserializer: a deserializer type for keys
         :param value_serializer: a serializer type for values
         :param key_serializer: a serializer type for keys
-        :param config: optional topic configs via `TopicConfig` (creation/validation)
         :param timestamp_extractor: a callable that returns a timestamp in
             milliseconds from a deserialized message.
         """
