@@ -3,7 +3,7 @@ from pydantic import Field, AliasChoices, ConfigDict, AliasGenerator
 import json
 
 from typing import Literal, Optional, Callable, Tuple
-
+from typing_extensions import Self
 
 # notes:
 # multiple aliases: Field(validation_alias=AliasChoices("sasl_mechanism", "sasl_mechanisms", "mechanisms", "mechanism"), default=None)
@@ -11,28 +11,24 @@ from typing import Literal, Optional, Callable, Tuple
 __all__ = ("SASLConfig", "SSLConfig")
 
 
-class SASLConfig(BaseSettings):
+class KafkaConfig(BaseSettings):
     model_config = SettingsConfigDict(
         alias_generator=AliasGenerator(
+            # used during model_dump
             serialization_alias=lambda field_name: field_name.replace("_", "."),
         )
     )
 
     @classmethod
-    def from_confluent_dict(cls, d, ignore_extras=False):
+    def from_confluent_dict(cls, d: dict, ignore_extras: bool = False) -> Self:
+        d = {name.replace(".", "_").lower(): v for name, v in d.items()}
         if ignore_extras:
             allowed = list(cls.model_fields.keys())
-            return cls(
-                **{
-                    name.replace(".", "_"): v
-                    for name, v in d.items()
-                    if name in allowed
-                }
-            )
-        return cls(**{name.replace(".", "_"): v for name, v in d.items()})
+            return cls(**{name: v for name, v in d.items() if name in allowed})
+        return cls(**d)
 
     @classmethod
-    def from_file(cls, filepath: str, ignore_extras=False):
+    def from_file(cls, filepath: str, ignore_extras: bool = False) -> Self:
         if filepath.endswith("json"):
             with open(filepath, "r") as f:
                 settings = json.load(f)
@@ -41,12 +37,11 @@ class SASLConfig(BaseSettings):
             return cls(_env_file=filepath)
         raise ValueError("only '.env' and '.json' file types supported")
 
-    def as_confluent_dict(self):
+    def as_confluent_dict(self) -> dict:
         return self.model_dump(by_alias=True, exclude_none=True)
 
-    security_protocol: Optional[
-        Literal["plaintext", "ssl", "sasl_plaintext", "sasl_ssl"]
-    ] = None
+
+class SASLConfig(KafkaConfig):
     sasl_mechanism: Optional[
         Literal["GSSAPI", "PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512", "OAUTHBEARER"]
     ] = None
@@ -72,29 +67,26 @@ class SASLConfig(BaseSettings):
     sasl_oauthbearer_token_endpoint_url: Optional[str] = None
 
 
-class SSLConfig(BaseSettings):
-    security_protocol: Optional[
-        Literal["plaintext", "ssl", "sasl_plaintext", "sasl_ssl"]
-    ]
-    ssl_cipher_suites: Optional[str]
-    ssl_curves_list: Optional[str]
-    ssl_sigalgs_list: Optional[str]
-    ssl_key_location: Optional[str]
-    ssl_key_password: Optional[str]
-    ssl_key_pem: Optional[str]
-    ssl_certificate_location: Optional[str]
-    ssl_certificate_pem: Optional[str]
-    ssl_ca_location: Optional[str]
-    ssl_ca_pem: Optional[str]
-    ssl_ca_certificate_stores: Optional[str]
-    ssl_crl_location: Optional[str]
-    ssl_keystore_location: Optional[str]
-    ssl_keystore_password: Optional[str]
-    ssl_providers: Optional[str]
-    ssl_engine_location: Optional[str]
-    ssl_engine_id: Optional[str]
-    enable_ssl_certificate_verification: Optional[bool]
-    ssl_endpoint_identification_algorithm: Optional[Literal["none", "https"]]
+class SSLConfig(KafkaConfig):
+    ssl_cipher_suites: Optional[str] = None
+    ssl_curves_list: Optional[str] = None
+    ssl_sigalgs_list: Optional[str] = None
+    ssl_key_location: Optional[str] = None
+    ssl_key_password: Optional[str] = None
+    ssl_key_pem: Optional[str] = None
+    ssl_certificate_location: Optional[str] = None
+    ssl_certificate_pem: Optional[str] = None
+    ssl_ca_location: Optional[str] = None
+    ssl_ca_pem: Optional[str] = None
+    ssl_ca_certificate_stores: Optional[str] = None
+    ssl_crl_location: Optional[str] = None
+    ssl_keystore_location: Optional[str] = None
+    ssl_keystore_password: Optional[str] = None
+    ssl_providers: Optional[str] = None
+    ssl_engine_location: Optional[str] = None
+    ssl_engine_id: Optional[str] = None
+    enable_ssl_certificate_verification: Optional[bool] = None
+    ssl_endpoint_identification_algorithm: Optional[Literal["none", "https"]] = None
 
     # not sure how/if these are used (seem to be more for librdkafka)
     # ssl_key
