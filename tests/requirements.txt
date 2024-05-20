@@ -1,2 +1,3 @@
 testcontainers==3.7.1
 pytest
+docker>=7.0.0
