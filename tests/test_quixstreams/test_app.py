@@ -11,7 +11,7 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
-from quixstreams.context import message_key, message_context
+from quixstreams.context import message_context
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
@@ -903,7 +903,8 @@ class TestQuixApplication:
         assert topic.name == expected_name
         assert expected_name in topic_manager.topics
         assert (
-            expected_topic.config.replication_factor == topic_manager._topic_replication
+            expected_topic.config.replication_factor
+            == topic_manager.default_replication_factor
         )
         assert expected_topic.config.num_partitions == topic_partitions
 
@@ -1034,7 +1035,8 @@ class TestDeprecatedApplicationDotQuix:
         assert topic.name == expected_name
         assert expected_name in topic_manager.topics
         assert (
-            expected_topic.config.replication_factor == topic_manager._topic_replication
+            expected_topic.config.replication_factor
+            == topic_manager.default_replication_factor
         )
         assert expected_topic.config.num_partitions == topic_partitions
 
