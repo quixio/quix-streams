@@ -1,5 +1,5 @@
 confluent-kafka>=2.2,<2.4
-requests>=2.28,<2.32
+requests>=2.28
 rocksdict>=0.3, <0.4
 typing_extensions>=4.8,<4.9
 orjson>=3.9,<4
