@@ -1,12 +1,11 @@
 # Quix Streams Tutorials
 
-This folder contains a few basic application patterns with accompanying walkthroughs 
+Here are a few basic application patterns with accompanying walkthroughs 
 to get you started with the Quix Streams library.
 
 ## Running a Tutorial
 
-Should you wish to run one of the tutorials, follow the instructions as
-listed at the bottom of it's `./tutorial.md`.
+Should you wish to run one of the tutorials, follow its instructions at the bottom.
 
 Besides a Kafka instance to connect to, most of them likely fit the pattern of:
 

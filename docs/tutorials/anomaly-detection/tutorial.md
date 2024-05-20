@@ -178,7 +178,9 @@ Now we get a window result (mean) along with its start/end timestamp:
 We don't particularly care about the window itself in our case, just the result...so we extract the "value" with `SDF.apply()` and [`SDF.filter(F)`](../../processing.md#streamingdataframefilter), where `F` is our "should_alert" function. 
 
 For `SDF.filter(F)`, if the (_**boolean**_-ed) return value of `F` is: 
+
 - `True` -> continue processing this event
+
 - `False` -> stop ALL further processing of this event (including produces!)
 
 In our case, this example event would then stop since `bool(None)` is `False`.
