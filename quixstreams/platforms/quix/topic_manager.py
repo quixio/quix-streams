@@ -32,32 +32,39 @@ class QuixTopicManager(TopicManager):
         topic_admin: TopicAdmin,
         consumer_group: str,
         quix_config_builder: QuixKafkaConfigsBuilder,
-        create_timeout: int = 60,
+        timeout: float = 30,
+        create_timeout: float = 60,
     ):
         """
         :param topic_admin: an `Admin` instance
-        :param create_timeout: timeout for topic creation
         :param quix_config_builder: A QuixKafkaConfigsBuilder instance, else one is
             generated for you.
+        :param timeout: response timeout (seconds)
+        :param create_timeout: timeout for topic creation
         """
         super().__init__(
             topic_admin=topic_admin,
             consumer_group=quix_config_builder.strip_workspace_id_prefix(
                 consumer_group
             ),
+            timeout=timeout,
             create_timeout=create_timeout,
         )
         self._quix_config_builder = quix_config_builder
 
-    def _create_topics(self, topics: List[Topic]):
+    def _create_topics(
+        self, topics: List[Topic], timeout: float, create_timeout: float
+    ):
         """
         Method that actually creates the topics in Kafka via the
         QuixConfigBuilder instance.
 
         :param topics: list of `Topic`s
+        :param timeout: creation acknowledge timeout (seconds)
+        :param create_timeout: topic finalization timeout (seconds)
         """
         self._quix_config_builder.create_topics(
-            topics, finalize_timeout_seconds=self._create_timeout
+            topics, timeout=timeout, finalize_timeout=create_timeout
         )
 
     def _resolve_topic_name(self, name: str) -> str:

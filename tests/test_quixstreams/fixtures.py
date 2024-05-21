@@ -529,7 +529,9 @@ def message_context_factory():
 
 @pytest.fixture()
 def topic_admin(kafka_container):
-    return TopicAdmin(broker_address=kafka_container.broker_address)
+    t = TopicAdmin(broker_address=kafka_container.broker_address)
+    t.admin_client  # init the underlying admin so mocks can be applied whenever
+    return t
 
 
 @pytest.fixture()
@@ -541,11 +543,13 @@ def topic_manager_factory(topic_admin, random_consumer_group):
     def factory(
         topic_admin_: Optional[TopicAdmin] = None,
         consumer_group: str = random_consumer_group,
-        create_timeout: int = 10,
+        timeout: float = 10,
+        create_timeout: float = 20,
     ) -> TopicManager:
         return TopicManager(
             topic_admin=topic_admin_ or topic_admin,
             consumer_group=consumer_group,
+            timeout=timeout,
             create_timeout=create_timeout,
         )
 

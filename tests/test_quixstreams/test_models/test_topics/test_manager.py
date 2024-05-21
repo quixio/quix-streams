@@ -157,12 +157,18 @@ class TestTopicManager:
         assert "ignore.this" not in changelog.config.extra_config
 
     def test_create_all_topics(self, topic_manager_factory, topic_admin_mock):
-        topic_manager = topic_manager_factory(topic_admin_mock)
+        timeout = 1
+        create_timeout = 2
+        topic_manager = topic_manager_factory(
+            topic_admin_mock, timeout=timeout, create_timeout=create_timeout
+        )
         topics = [topic_manager.topic(name=n) for n in ["topic1", "topic2"]]
         topic_manager.create_topics(topics)
 
         topic_admin_mock.create_topics.assert_called_with(
-            topics, timeout=topic_manager._create_timeout
+            topics,
+            timeout=timeout,
+            finalize_timeout=create_timeout,
         )
 
     def test_validate_all_topics(self, topic_manager_factory, topic_admin_mock):
@@ -170,6 +176,7 @@ class TestTopicManager:
         Validation succeeds, even when a source topic's Topic.config or extra_config
         differs from its kafka topic settings.
         """
+        timeout = 1
         topic_manager = topic_manager_factory(topic_admin_mock)
         topics = [
             topic_manager.topic(
@@ -184,7 +191,7 @@ class TestTopicManager:
             topic_manager.changelog_topic(topic_name=topic_name, store_name="default")
             for topic_name in topic_manager.topics
         ]
-        topic_admin_mock.inspect_topics.return_value = {
+        inspect_topics_return = {
             topics[0].name: topics[0].config,
             topics[1].name: topics[0].config,
             topics[2].name: topic_manager.topic_config(
@@ -192,7 +199,11 @@ class TestTopicManager:
             ),
             **{changelog.name: changelog.config for changelog in changelogs},
         }
-        topic_manager.validate_all_topics()
+        topic_admin_mock.inspect_topics.return_value = inspect_topics_return
+        topic_manager.validate_all_topics(timeout=timeout)
+        topic_admin_mock.inspect_topics.assert_called_with(
+            [k for k in inspect_topics_return], timeout=timeout
+        )
 
     def test_validate_all_topics_topic_not_found(
         self, topic_manager_factory, topic_admin_mock

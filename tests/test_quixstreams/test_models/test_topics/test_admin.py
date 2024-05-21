@@ -1,12 +1,13 @@
-import pytest
 import logging
-from confluent_kafka.admin import TopicMetadata
 from unittest.mock import patch
 from uuid import uuid4
 
-from quixstreams.models.topics import TopicConfig
-from quixstreams.models.topics.exceptions import CreateTopicTimeout, CreateTopicFailure
+import pytest
+from confluent_kafka.admin import TopicMetadata
 
+from confluent_kafka.error import KafkaException
+from quixstreams.models.topics import TopicConfig, TopicAdmin
+from quixstreams.models.topics.exceptions import CreateTopicTimeout, CreateTopicFailure
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,11 @@ class TestTopicAdmin:
         assert isinstance(result[topic_name], TopicConfig)
         assert result[not_a_topic] is None
 
-    def test_create_topics(self, topic_admin, topic_factory, topic_manager_factory):
+    def test_inspect_topics_timeout(self):
+        with pytest.raises(KafkaException):
+            TopicAdmin("bad_address").inspect_topics(["my_topic"], timeout=1)
+
+    def test_create_topics(self, topic_admin, topic_manager_factory):
         topic_manager = topic_manager_factory()
         topic1 = topic_manager.topic(name=str(uuid4()))
         topic2 = topic_manager.topic(name=str(uuid4()))
@@ -39,7 +44,18 @@ class TestTopicAdmin:
         assert topic1.name in topics
         assert topic2.name in topics
 
+    def test_create_topics_timeout(self, topic_manager_factory):
+        admin = TopicAdmin("bad_address")
+        topic_manager = topic_manager_factory(topic_admin_=admin)
+        topic = topic_manager.topic(str(uuid4()))
+
+        with pytest.raises(KafkaException):
+            admin.create_topics([topic], timeout=1)
+
     def test_create_topics_finalize_timeout(self, topic_admin, topic_manager_factory):
+        """
+        Finalize timeout raises as expected (not a request-based timeout).
+        """
         topic_manager = topic_manager_factory()
         create = topic_manager.topic(name="create_me_timeout")
         with pytest.raises(CreateTopicTimeout) as e:
