@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import MagicMock
 
 from quixstreams.models import TopicConfig, TopicAdmin
@@ -177,3 +178,43 @@ class TestQuixTopicManager:
 
         assert topic.config.replication_factor == config.replication_factor
         assert topic.config.num_partitions == config.num_partitions
+
+    def test_quix_validate_none_config(self, quix_mock_config_builder_factory):
+        """
+        When validating changelog topics, None values for partition and replication
+        factor should be set to their actual cluster values as part of validation.
+        """
+        p_count = 2
+        rep_factor = 1
+        topic_admin = MagicMock(spec_set=TopicAdmin)
+        config_builder = quix_mock_config_builder_factory(workspace_id="my_wid")
+        topic_manager = QuixTopicManager(
+            topic_admin=topic_admin,
+            consumer_group="my_group",
+            quix_config_builder=config_builder,
+        )
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        changelog = topic_manager.changelog_topic(
+            topic_name=topic.name, store_name="default"
+        )
+
+        # replace mocked values from mocked API call placeholder result
+        assert topic_manager.default_num_partitions is None
+        assert topic_manager.default_replication_factor is None
+        changelog.config.num_partitions = topic_manager.default_num_partitions
+        changelog.config.replication_factor = topic_manager.default_replication_factor
+
+        changelog_inspect = {
+            changelog.name: topic_manager.topic_config(p_count, rep_factor)
+        }
+        topic_admin.inspect_topics.side_effect = [
+            changelog_inspect,
+            {
+                topic.name: topic_manager.topic_config(p_count, rep_factor),
+                **changelog_inspect,
+            },
+        ]
+
+        topic_manager.validate_all_topics(timeout=5)
+        assert changelog.config.num_partitions == p_count
+        assert changelog.config.replication_factor == rep_factor
