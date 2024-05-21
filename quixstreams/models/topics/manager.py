@@ -38,11 +38,14 @@ class TopicManager:
     See methods for details.
     """
 
-    _topic_partitions = 1
-    _topic_replication = 1
+    # Default topic params
+    default_num_partitions = 1
+    default_replication_factor = 1
+    default_extra_config = {}
+
+    # Max topic name length for the new topics
     _max_topic_name_len = 255
 
-    _topic_extra_config_defaults = {}
     _groupby_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
     _changelog_extra_config_defaults = {"cleanup.policy": "compact"}
     _changelog_extra_config_imports_defaults = {"retention.bytes", "retention.ms"}
@@ -217,9 +220,9 @@ class TopicManager:
         :return: a TopicConfig object
         """
         return TopicConfig(
-            num_partitions=num_partitions or self._topic_partitions,
-            replication_factor=replication_factor or self._topic_replication,
-            extra_config=extra_config or self._topic_extra_config_defaults,
+            num_partitions=num_partitions or self.default_num_partitions,
+            replication_factor=replication_factor or self.default_replication_factor,
+            extra_config=extra_config or self.default_extra_config,
         )
 
     def topic(
@@ -251,9 +254,9 @@ class TopicManager:
 
         if not config:
             config = TopicConfig(
-                num_partitions=self._topic_partitions,
-                replication_factor=self._topic_replication,
-                extra_config=self._topic_extra_config_defaults,
+                num_partitions=self.default_num_partitions,
+                replication_factor=self.default_replication_factor,
+                extra_config=self.default_extra_config,
             )
         topic = Topic(
             name=name,

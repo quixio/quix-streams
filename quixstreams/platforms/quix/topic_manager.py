@@ -19,8 +19,12 @@ class QuixTopicManager(TopicManager):
     See methods for details.
     """
 
-    # Setting it to None to use defaults defined in Quix Cloud
-    _topic_replication = None
+    # Default topic params
+    # Set these to None to use defaults defined in Quix Cloud
+    default_num_partitions = None
+    default_replication_factor = None
+
+    # Max topic name length for the new topics
     _max_topic_name_len = 249
 
     def __init__(

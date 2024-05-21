@@ -394,7 +394,14 @@ def quix_topic_manager_factory(
             consumer_group=consumer_group,
             quix_config_builder=quix_config_builder,
         )
-        quix_topic_manager._create_topics = topic_manager._create_topics
+        # Patch the instance of QuixTopicManager to use Kafka Admin API
+        # create topics instead of Quix Portal API
+        patch.multiple(
+            quix_topic_manager,
+            default_num_partitions=1,
+            default_replication_factor=1,
+            _create_topics=topic_manager._create_topics,
+        ).start()
         return quix_topic_manager
 
     return factory
@@ -431,11 +438,6 @@ def app_dot_quix_factory(
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         topic_manager = quix_topic_manager_factory(workspace_id=workspace_id)
-        # Patch the topic manager to always set replication_factor to 1
-        # (normally QuixTopicManager will set it to None which is invalid for
-        # Kafka Admin API)
-        patcher = patch.object(topic_manager, "_topic_replication", 1)
-        patcher.start()
 
         return Application.Quix(
             consumer_group=random_consumer_group,

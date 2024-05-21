@@ -22,7 +22,7 @@ class TestTopicManager:
         `TopicConfig` is created with expected defaults where necessary.
         """
         topic_manager = topic_manager_factory()
-        topic_manager._topic_extra_config_defaults = {
+        topic_manager.default_extra_config = {
             "a.config": "a_default",
             "another.config": "value",
         }
@@ -69,8 +69,10 @@ class TestTopicManager:
         topic = topic_manager.topic(name=topic_name)
 
         assert topic.name == topic_name
-        assert topic.config.num_partitions == topic_manager._topic_partitions
-        assert topic.config.replication_factor == topic_manager._topic_replication
+        assert topic.config.num_partitions == topic_manager.default_num_partitions
+        assert (
+            topic.config.replication_factor == topic_manager.default_replication_factor
+        )
 
     def test_changelog_topic(self, topic_manager_factory):
         """
