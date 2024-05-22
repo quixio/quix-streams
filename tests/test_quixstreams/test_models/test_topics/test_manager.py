@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import create_autospec
 
 import pytest
@@ -171,39 +172,37 @@ class TestTopicManager:
             finalize_timeout=create_timeout,
         )
 
-    def test_validate_all_topics(self, topic_manager_factory, topic_admin_mock):
+    def test_validate_all_topics(self, topic_manager_factory):
         """
-        Validation succeeds, even when a source topic's Topic.config or extra_config
-        differs from its kafka topic settings.
+        Validation succeeds, regardless of whether a Topic.config matches its actual
+        kafka settings.
+
+        Tests a "happy path" fresh creation + validation, followed by a config update.
         """
-        timeout = 1
-        topic_manager = topic_manager_factory(topic_admin_mock)
-        topics = [
-            topic_manager.topic(
-                name=f"topic{n}",
-                config=topic_manager.topic_config(
-                    num_partitions=n, extra_config={"my.setting": "woo"}
-                ),
-            )
-            for n in range(3)
-        ]
-        changelogs = [
-            topic_manager.changelog_topic(topic_name=topic_name, store_name="default")
-            for topic_name in topic_manager.topics
-        ]
-        inspect_topics_return = {
-            topics[0].name: topics[0].config,
-            topics[1].name: topics[0].config,
-            topics[2].name: topic_manager.topic_config(
-                extra_config={"my.setting": "derp"}
-            ),
-            **{changelog.name: changelog.config for changelog in changelogs},
-        }
-        topic_admin_mock.inspect_topics.return_value = inspect_topics_return
-        topic_manager.validate_all_topics(timeout=timeout)
-        topic_admin_mock.inspect_topics.assert_called_with(
-            [k for k in inspect_topics_return], timeout=timeout
+        timeout = 5
+
+        # happy path with new topics
+        _topic_manager = topic_manager_factory()
+        topic_config = _topic_manager.topic_config(
+            num_partitions=5, extra_config={"max.message.bytes": "1234567"}
         )
+        topic = _topic_manager.topic(name=str(uuid.uuid4()), config=topic_config)
+        _topic_manager.changelog_topic(topic_name=topic.name, store_name="default")
+        _topic_manager.create_all_topics(timeout=timeout)
+        _topic_manager.validate_all_topics(timeout=timeout)
+
+        # assume attempt to recreate topics with altered configs (it ignores them).
+        topic_manager = topic_manager_factory()
+        topic_updated = topic_manager.topic(
+            name=topic.name,
+            config=topic_manager.topic_config(num_partitions=20),
+        )
+        changelog = topic_manager.changelog_topic(
+            topic_name=topic_updated.name, store_name="default"
+        )
+        changelog.config.num_partitions = None  # proves ignored during validation
+        changelog.config.replication_factor = None
+        topic_manager.validate_all_topics(timeout=timeout)
 
     def test_validate_all_topics_topic_not_found(
         self, topic_manager_factory, topic_admin_mock

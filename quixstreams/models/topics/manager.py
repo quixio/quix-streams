@@ -428,40 +428,33 @@ class TopicManager:
         Issues are pooled and raised as an Exception once inspections are complete.
         """
         logger.info(f"Validating Kafka topics exist and are configured correctly...")
-        topics = self._all_topics_list
-        changelog_names = [topic.name for topic in self._changelog_topics_list]
+        all_topic_names = [t.name for t in self._all_topics_list]
         actual_configs = self._admin.inspect_topics(
-            [t.name for t in topics],
+            all_topic_names,
             timeout=timeout if timeout is not None else self._timeout,
         )
 
-        for topic in topics:
-            # Validate that topic exists
-            actual_topic_config = actual_configs[topic.name]
-            if actual_topic_config is None:
-                raise TopicNotFoundError(
-                    f'Topic "{topic.name}" is not found on the broker'
-                )
+        if missing := [t for t in all_topic_names if actual_configs[t] is None]:
+            raise TopicNotFoundError(f"Topics {missing} not found on the broker")
 
-            # For changelog topics, validate the amount of partitions and
-            # a replication factor match with the source topic
-            if topic.name in changelog_names:
-                # Ensure that changelog topic has the same amount of partitions and
-                # replication factor as the source topic
-                if topic.config.num_partitions != actual_topic_config.num_partitions:
+        for source_name in self._non_changelog_topics.keys():
+            source_cfg = actual_configs[source_name]
+            # For any changelog topics, validate the amount of partitions and
+            # replication factor match with the source topic
+            for changelog in self.changelog_topics.get(source_name, {}).values():
+                changelog_cfg = actual_configs[changelog.name]
+
+                if changelog_cfg.num_partitions != source_cfg.num_partitions:
                     raise TopicConfigurationMismatch(
-                        f'Invalid partition count for the topic "{topic.name}": '
-                        f"expected {topic.config.num_partitions}, "
-                        f"got {actual_topic_config.num_partitions}"
+                        f'Invalid partition count for the topic "{source_name}": '
+                        f"expected {source_cfg.num_partitions}, "
+                        f"got {changelog_cfg.num_partitions}"
+                    )
+                if changelog_cfg.replication_factor != source_cfg.replication_factor:
+                    raise TopicConfigurationMismatch(
+                        f'Invalid replication factor for the topic "{source_name}": '
+                        f"expected {source_cfg.replication_factor}, "
+                        f"got {changelog_cfg.num_partitions}"
                     )
 
-                if (
-                    topic.config.replication_factor
-                    != actual_topic_config.replication_factor
-                ):
-                    raise TopicConfigurationMismatch(
-                        f'Invalid replication factor for the topic "{topic.name}": '
-                        f"expected {topic.config.replication_factor}, "
-                        f"got {actual_topic_config.replication_factor}"
-                    )
         logger.info(f"Kafka topics validation complete")

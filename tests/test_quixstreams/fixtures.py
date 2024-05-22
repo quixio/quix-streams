@@ -371,7 +371,10 @@ def quix_mock_config_builder_factory(kafka_container):
 
 @pytest.fixture()
 def quix_topic_manager_factory(
-    quix_mock_config_builder_factory, topic_admin, topic_manager_factory
+    quix_mock_config_builder_factory,
+    topic_admin,
+    topic_manager_factory,
+    random_consumer_group,
 ):
     """
     Allows for creating topics with a test cluster while keeping the workspace aspects
@@ -379,7 +382,7 @@ def quix_topic_manager_factory(
 
     def factory(
         workspace_id: Optional[str] = None,
-        consumer_group: str = "test_group",
+        consumer_group: str = random_consumer_group,
         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
     ):
         topic_manager = topic_manager_factory(
