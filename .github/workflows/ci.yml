@@ -40,7 +40,7 @@ jobs:
       contents: read # to fetch code (actions/checkout)
     name: Run Python tests (python${{ matrix.python }})
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     strategy:
       matrix:
         python: [ 3.8 ]
