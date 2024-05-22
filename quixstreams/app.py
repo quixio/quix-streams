@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable, Literal, Union
+from typing import Optional, List, Callable
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -33,8 +33,6 @@ from .models import (
     SerializerType,
     DeserializerType,
     TimestampExtractor,
-    SASLConfig,
-    SSLConfig,
 )
 from .platforms.quix import (
     QuixKafkaConfigsBuilder,
@@ -96,17 +94,10 @@ class Application:
     ```
     """
 
-    sasl_configure = SASLConfig
-    ssl_configure = SSLConfig
-
     def __init__(
         self,
         broker_address: Optional[str] = None,
-        security_protocol: Optional[
-            Literal["plaintext", "ssl", "sasl_plaintext", "sasl_ssl"]
-        ] = None,
-        ssl_config: Optional[Union[SSLConfig, dict]] = None,
-        sasl_config: Optional[Union[SASLConfig, dict]] = None,
+        broker_connect_config: Optional[dict] = None,
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
@@ -194,20 +185,12 @@ class Application:
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
         configure_logging(loglevel=loglevel)
+        broker_connect_config = broker_connect_config or {}
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
-        security_protocol = (
-            {"security.protocol": security_protocol} if security_protocol else {}
-        )
-
-        if isinstance(ssl_config, dict):
-            ssl_config = self.ssl_configure.from_confluent_dict(ssl_config)
-        if isinstance(sasl_config, dict):
-            sasl_config = self.sasl_configure.from_confluent_dict(sasl_config)
-
-        ssl_config = ssl_config or self.ssl_configure()
-        sasl_config = sasl_config or self.sasl_configure()
+        if not broker_address:
+            broker_address = broker_connect_config.pop("bootstrap.servers", None)
 
         # Add default values to the producer config, but allow them to be overwritten
         # by the provided producer_extra_config dict
@@ -267,13 +250,8 @@ class Application:
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
-            auth_dict = {
-                **security_protocol,
-                **ssl_config.as_confluent_dict(),
-                **sasl_config.as_confluent_dict(),
-            }
-            consumer_extra_config = {**auth_dict, **consumer_extra_config}
-            producer_extra_config = {**auth_dict, **producer_extra_config}
+            consumer_extra_config = {**broker_connect_config, **consumer_extra_config}
+            producer_extra_config = {**broker_connect_config, **producer_extra_config}
 
         self._is_quix_app = bool(quix_config_builder)
 
