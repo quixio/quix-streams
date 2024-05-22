@@ -1,4 +1,3 @@
-import uuid
 from unittest.mock import MagicMock
 
 from quixstreams.models import TopicConfig, TopicAdmin
@@ -178,29 +177,3 @@ class TestQuixTopicManager:
 
         assert topic.config.replication_factor == config.replication_factor
         assert topic.config.num_partitions == config.num_partitions
-
-    def test_quix_validate_none_config(
-        self, quix_mock_config_builder_factory, quix_topic_manager_factory, topic_admin
-    ):
-        """
-        When validating changelog topics, None values for partition and replication
-        factor should be set to their actual cluster values as part of validation.
-        """
-        p_count = 2
-        rep_factor = 1
-        topic_manager = quix_topic_manager_factory()
-        topic = topic_manager.topic(
-            str(uuid.uuid4()), config=topic_manager.topic_config(p_count, rep_factor)
-        )
-        changelog = topic_manager.changelog_topic(
-            topic_name=topic.name, store_name="default"
-        )
-        topic_manager.create_all_topics(timeout=5, create_timeout=5)
-
-        # set to None like it would normally have if using Quix API
-        changelog.config.num_partitions = None
-        changelog.config.replication_factor = None
-
-        topic_manager.validate_all_topics(timeout=5)
-        assert changelog.config.num_partitions == p_count
-        assert changelog.config.replication_factor == rep_factor

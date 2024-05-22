@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 from quixstreams.models.topics import TopicManager, TopicAdmin, Topic
 from .config import QuixKafkaConfigsBuilder
@@ -110,23 +110,3 @@ class QuixTopicManager(TopicManager):
             self._quix_config_builder.strip_workspace_id_prefix(topic_name),
             suffix,
         )
-
-    def validate_all_topics(self, timeout: Optional[float] = None):
-        """
-        Validates all topics exist and changelogs have correct topic and rep factor.
-
-        Issues are pooled and raised as an Exception once inspections are complete.
-        """
-        # Since Quix allows `None` settings (uses Quix API defaults), must pull the
-        # actual topic configs (if newly created) before beginning validation.
-        changelog_nones = [
-            t
-            for t in self._changelog_topics_list
-            if not all((t.config.num_partitions, t.config.replication_factor))
-        ]
-        if changelog_nones:
-            actual_cfgs = self._admin.inspect_topics([t.name for t in changelog_nones])
-            for t in changelog_nones:
-                t.config.num_partitions = actual_cfgs[t.name].num_partitions
-                t.config.replication_factor = actual_cfgs[t.name].replication_factor
-        super().validate_all_topics(timeout=timeout)
