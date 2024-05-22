@@ -172,43 +172,6 @@ class TestTopicManager:
             finalize_timeout=create_timeout,
         )
 
-    # def test_validate_all_topics(self, topic_manager_factory, topic_admin_mock):
-    #     """
-    #     Validation succeeds, regardless of whether a Topic.config matches its actual
-    #     kafka settings.
-    #
-    #     Tests a "happy path" fresh creation + validation, followed by a config update.
-    #     """
-    #     timeout = 1
-    #     topic_admin = topic_admin_mock
-    #
-    #     # our topics, which we will assume were created and now exist with these cfgs
-    #     _topic_manager = topic_manager_factory(topic_admin_=topic_admin_mock)
-    #     topic_config = _topic_manager.topic_config(
-    #         num_partitions=5, extra_config={"max.message.bytes": "1234567"}
-    #     )
-    #     topic = _topic_manager.topic(name=str(uuid.uuid4()), config=topic_config)
-    #     topic_admin.inspect_topics.return_value = {topic.name: topic_config}
-    #     changelog = _topic_manager.changelog_topic(
-    #         topic_name=topic.name, store_name="default"
-    #     )
-    #     topic_admin.inspect_topics.return_value = {
-    #         topic.name: topic.config,
-    #         changelog.name: changelog.config,
-    #     }
-    #     _topic_manager.validate_all_topics(timeout=timeout)
-    #
-    #     # an attempt to recreate existing topics with altered configs (it ignores them).
-    #     topic_manager = topic_manager_factory(topic_admin_=topic_admin)
-    #     topic_updated = topic_manager.topic(
-    #         name=topic.name,
-    #         config=topic_manager.topic_config(num_partitions=20),
-    #     )
-    #     topic_manager.changelog_topic(
-    #         topic_name=topic_updated.name, store_name="default"
-    #     )
-    #     topic_manager.validate_all_topics(timeout=timeout)
-
     def test_validate_all_topics(self, topic_manager_factory):
         """
         Validation succeeds, regardless of whether a Topic.config matches its actual
