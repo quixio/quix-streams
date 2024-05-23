@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Union
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -18,12 +18,7 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import (
-    AutoOffsetReset,
-    Partitioner,
-    Producer,
-    Consumer,
-)
+from .kafka import AutoOffsetReset, Partitioner, Producer, Consumer, ConnectionConfig
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
@@ -94,10 +89,11 @@ class Application:
     ```
     """
 
+    connection_configure = ConnectionConfig
+
     def __init__(
         self,
-        broker_address: Optional[str] = None,
-        broker_connect_config: Optional[dict] = None,
+        broker_address: Optional[Union[str, ConnectionConfig]] = None,
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
@@ -122,8 +118,10 @@ class Application:
         topic_create_timeout: float = 60,
     ):
         """
-        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-            Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+        :param broker_address: Connection settings for Kafka.
+            Used by Producer, Consumer, and Admin clients.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
             Either this OR `quix_sdk_token` must be set to use `Application` (not both).
             Linked Environment Variable: `Quix__Broker__Address`.
             Default: `None`
@@ -185,12 +183,8 @@ class Application:
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
         configure_logging(loglevel=loglevel)
-        broker_connect_config = broker_connect_config or {}
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
-
-        if not broker_address:
-            broker_address = broker_connect_config.pop("bootstrap.servers", None)
 
         # Add default values to the producer config, but allow them to be overwritten
         # by the provided producer_extra_config dict
@@ -241,7 +235,14 @@ class Application:
             # Check if the state dir points to the mounted PVC while running on Quix
             check_state_dir(state_dir=state_dir)
 
-            broker_address = quix_configs.pop("bootstrap.servers")
+            broker_address = self.connection_configure.from_confluent_dict(
+                quix_configs, ignore_extras=True
+            )
+            quix_configs = {
+                k: v
+                for k, v in quix_configs.items()
+                if k not in self.connection_configure.model_fields
+            }
 
             # Quix Cloud prefixes consumer group with workspace id
             consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
@@ -250,8 +251,10 @@ class Application:
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
-            consumer_extra_config = {**broker_connect_config, **consumer_extra_config}
-            producer_extra_config = {**broker_connect_config, **producer_extra_config}
+            if isinstance(broker_address, str):
+                broker_address = self.connection_configure(
+                    bootstrap_servers=broker_address
+                )
 
         self._is_quix_app = bool(quix_config_builder)
 

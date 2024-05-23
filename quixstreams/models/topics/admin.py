@@ -2,7 +2,7 @@ import logging
 import pprint
 import time
 from asyncio import Future
-from typing import List, Dict, Mapping, Optional
+from typing import List, Dict, Mapping, Optional, Union
 
 from confluent_kafka.admin import (
     AdminClient,
@@ -14,6 +14,7 @@ from confluent_kafka.admin import (
 
 from .exceptions import CreateTopicFailure, CreateTopicTimeout
 from .topic import Topic, TopicConfig
+from quixstreams.kafka import ConnectionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +53,24 @@ class TopicAdmin:
 
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Union[str, ConnectionConfig],
         extra_config: Optional[Mapping] = None,
     ):
         """
-        :param broker_address: the address for the broker
+        :param broker_address: Connection settings for Kafka.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
         :param extra_config: optional configs (generally accepts producer configs)
         """
+        if isinstance(broker_address, str):
+            broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+
         self._inner_admin: Optional[AdminClient] = None
-        self._config = {
-            "bootstrap.servers": broker_address,
+        self._config = dict(
+            broker_address.as_confluent_dict(),
+            logger=logger,
             **(extra_config or {}),
-            "logger": logger,
-        }
+        )
 
     @property
     def admin_client(self) -> AdminClient:

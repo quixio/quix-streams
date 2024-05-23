@@ -1,7 +1,7 @@
 import functools
 import logging
 import typing
-from typing import List, Optional, Callable, Tuple
+from typing import List, Optional, Callable, Tuple, Union
 
 from confluent_kafka import (
     TopicPartition,
@@ -11,6 +11,7 @@ from confluent_kafka import (
 )
 from confluent_kafka.admin import ClusterMetadata
 
+from .configuration import ConnectionConfig
 from quixstreams.exceptions import PartitionAssignmentError, KafkaPartitionError
 
 __all__ = (
@@ -65,7 +66,7 @@ def _wrap_assignment_errors(func):
 class Consumer:
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Union[str, ConnectionConfig],
         consumer_group: Optional[str],
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
@@ -82,8 +83,9 @@ class Consumer:
         avoiding network calls during `__init__`, provides typing info for methods
         and some reasonable defaults.
 
-        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-            Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+        :param broker_address: Connection settings for Kafka.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`
         :param auto_offset_reset: Consumer `auto.offset.reset` setting.
@@ -102,13 +104,13 @@ class Consumer:
             will be passed to `confluent_kafka.Consumer` as is.
             Note: values passed as arguments override values in `extra_config`.
         """
+        if isinstance(broker_address, str):
+            broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+
         self._consumer_config = dict(
-            {
-                "enable.auto.offset.store": False,
-                **(extra_config or {}),
-            },
+            broker_address.as_confluent_dict(),
             **{
-                "bootstrap.servers": broker_address,
+                "enable.auto.offset.store": False,
                 "group.id": consumer_group,
                 "enable.auto.commit": auto_commit_enable,
                 "auto.offset.reset": auto_offset_reset,
@@ -119,6 +121,7 @@ class Consumer:
                     _default_on_commit_cb, on_commit=on_commit
                 ),
             },
+            **(extra_config or {}),
         )
         self._inner_consumer: Optional[ConfluentConsumer] = None
 

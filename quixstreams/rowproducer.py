@@ -6,6 +6,7 @@ from confluent_kafka import KafkaError, Message
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 from .kafka.exceptions import KafkaProducerDeliveryError
 from .kafka.producer import Producer, Partitioner
+from .kafka.configuration import ConnectionConfig
 from .models import Topic, Row, Headers
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,9 @@ class RowProducer:
     A producer class that is capable of serializing Rows to bytes and send them to Kafka.
     The serialization is performed according to the Topic serialization settings.
 
-    :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-        Passed as `bootstrap.servers` to `confluent_kafka.Producer`.
+        :param broker_address: Connection settings for Kafka.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
     :param partitioner: A function to be used to determine the outgoing message
         partition.
         Available values: "random", "consistent_random", "murmur2", "murmur2_random",
@@ -38,7 +40,7 @@ class RowProducer:
 
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Union[str, ConnectionConfig],
         partitioner: Partitioner = "murmur2",
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,

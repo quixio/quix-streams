@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError, TopicPartition
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
-from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset
+from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset, ConnectionConfig
 from .kafka.consumer import RebalancingCallback
 from .kafka.exceptions import KafkaConsumerException
 from .models import Topic, Row
@@ -19,7 +19,7 @@ __all__ = ("RowConsumer",)
 class RowConsumer(Consumer):
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Union[str, ConnectionConfig],
         consumer_group: str,
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
@@ -36,8 +36,9 @@ class RowConsumer(Consumer):
         objects instead of strings.
 
 
-        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-            Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+        :param broker_address: Connection settings for Kafka.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`
         :param auto_offset_reset: Consumer `auto.offset.reset` setting.

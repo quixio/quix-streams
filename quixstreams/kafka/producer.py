@@ -8,6 +8,7 @@ from confluent_kafka import (
 )
 from typing_extensions import Literal
 
+from .configuration import ConnectionConfig
 from quixstreams.models.types import Headers
 
 __all__ = (
@@ -43,7 +44,7 @@ def _default_error_cb(error: KafkaError):
 class Producer:
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Union[str, ConnectionConfig],
         partitioner: Partitioner = "murmur2",
         extra_config: Optional[dict] = None,
     ):
@@ -54,8 +55,9 @@ class Producer:
         avoiding network calls during `__init__`, provides typing info for methods
         and some reasonable defaults.
 
-        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-            Passed as `bootstrap.servers` to `confluent_kafka.Producer`.
+        :param broker_address: Connection settings for Kafka.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
         :param partitioner: A function to be used to determine the outgoing message
             partition.
             Available values: "random", "consistent_random", "murmur2", "murmur2_random",
@@ -65,16 +67,18 @@ class Producer:
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
         """
-        config = dict(
-            extra_config or {},
+        if isinstance(broker_address, str):
+            broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+
+        self._producer_config = dict(
+            broker_address.as_confluent_dict(),
             **{
-                "bootstrap.servers": broker_address,
                 "partitioner": partitioner,
                 "logger": logger,
                 "error_cb": _default_error_cb,
             },
+            **(extra_config or {}),
         )
-        self._producer_config = config
         self._inner_producer: Optional[ConfluentProducer] = None
 
     def produce(
