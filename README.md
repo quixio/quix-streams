@@ -184,9 +184,7 @@ If you run into any problems, please create an [issue](https://github.com/quixio
 
 ## Community 👭
 
-Join other software engineers in [The Stream](https://quix.io/slack-invite), an online community of people interested in all things data streaming. This is a space to both listen to and share learnings.
-
-🙌  [Join our Slack community!](https://quix.io/slack-invite)
+Join the [Quix Community on Slack](https://quix.io/slack-invite), a vibrant group of Python developers, data enthusiasts and newcomers to Apache Kafka, who are learning and leveraging Quix Streams for real-time data processing.
 
 ## License
 
