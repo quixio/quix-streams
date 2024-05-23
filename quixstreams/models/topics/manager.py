@@ -446,15 +446,17 @@ class TopicManager:
 
                 if changelog_cfg.num_partitions != source_cfg.num_partitions:
                     raise TopicConfigurationMismatch(
-                        f'Invalid partition count for the topic "{source_name}": '
+                        f'changelog topic "{changelog.name}" partition count '
+                        f'does not match its source topic "{source_name}": '
                         f"expected {source_cfg.num_partitions}, "
-                        f"got {changelog_cfg.num_partitions}"
+                        f'got {changelog_cfg.num_partitions}"'
                     )
                 if changelog_cfg.replication_factor != source_cfg.replication_factor:
                     raise TopicConfigurationMismatch(
-                        f'Invalid replication factor for the topic "{source_name}": '
+                        f'changelog topic "{changelog.name}" replication factor '
+                        f'does not match its source topic "{source_name}": '
                         f"expected {source_cfg.replication_factor}, "
-                        f"got {changelog_cfg.num_partitions}"
+                        f'got {changelog_cfg.replication_factor}"'
                     )
 
         logger.info(f"Kafka topics validation complete")
