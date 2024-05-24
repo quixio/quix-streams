@@ -51,7 +51,7 @@ First, [get your SDK Token](https://quix.io/docs/develop/authentication/streamin
 
 <br>
 
-#### 2. Pass SDK to Application
+#### 2. Pass SDK Token to Application
 With your `SDK Token` and a Quix Streams `Application`, you can pass it using one of
 these approaches:
 
