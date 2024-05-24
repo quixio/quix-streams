@@ -2,7 +2,7 @@ from typing import Any
 
 import orjson
 
-_ORJSON_OPTIONS = orjson.OPT_PASSTHROUGH_DATETIME | orjson.OPT_PASSTHROUGH_DATACLASS
+_ORJSON_OPTIONS = orjson.OPT_PASSTHROUGH_DATETIME | orjson.OPT_PASSTHROUGH_DATACLASS | orjson.OPT_SERIALIZE_NUMPY
 
 
 def dumps(value: Any) -> bytes:
