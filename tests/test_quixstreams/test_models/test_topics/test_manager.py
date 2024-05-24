@@ -249,7 +249,7 @@ class TestTopicManager:
             ),
         }
 
-        with pytest.raises(TopicConfigurationMismatch, match="Invalid partition count"):
+        with pytest.raises(TopicConfigurationMismatch, match="partition count"):
             topic_manager.validate_all_topics()
 
     def test_validate_all_topics_changelog_replication_factor_mismatch(
@@ -281,9 +281,7 @@ class TestTopicManager:
             ),
         }
 
-        with pytest.raises(
-            TopicConfigurationMismatch, match="Invalid replication factor"
-        ):
+        with pytest.raises(TopicConfigurationMismatch, match="replication factor"):
             topic_manager.validate_all_topics()
 
     def test_topic_name_len_exceeded(self, topic_manager_factory):
