@@ -1,7 +1,7 @@
 import abc
 from typing import Optional, Any
 
-from quixstreams.core.stream import Stream, StreamCallable
+from quixstreams.core.stream import Stream, VoidExecutor
 from quixstreams.models.messagecontext import MessageContext
 
 
@@ -11,7 +11,9 @@ class BaseStreaming:
     def stream(self) -> Stream: ...
 
     @abc.abstractmethod
-    def compose(self, *args, **kwargs) -> StreamCallable: ...
+    def compose(self, *args, **kwargs) -> VoidExecutor: ...
 
     @abc.abstractmethod
-    def test(self, value: Any, ctx: Optional[MessageContext] = None) -> Any: ...
+    def test(
+        self, value: Any, key: Any, timestamp: int, ctx: Optional[MessageContext] = None
+    ) -> Any: ...

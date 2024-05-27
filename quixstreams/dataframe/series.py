@@ -5,7 +5,14 @@ from typing import Optional, Union, Callable, Container, Any, Mapping
 from typing_extensions import Self
 
 from quixstreams.context import set_message_context
-from quixstreams.core.stream.functions import StreamCallable, ApplyFunction
+from quixstreams.core.stream.functions import (
+    ApplyCallback,
+    ApplyFunction,
+    VoidExecutor,
+    ReturningExecutor,
+    ApplyWithMetadataCallback,
+    ApplyWithMetadataFunction,
+)
 from quixstreams.core.stream.stream import Stream
 from quixstreams.models.messagecontext import MessageContext
 from .base import BaseStreaming
@@ -97,7 +104,7 @@ class StreamingSeries(BaseStreaming):
         self._stream = stream or Stream(func=ApplyFunction(lambda v: _getitem(v, name)))
 
     @classmethod
-    def from_func(cls, func: StreamCallable) -> Self:
+    def from_apply_callback(cls, func: ApplyWithMetadataCallback) -> Self:
         """
         Create a StreamingSeries from a function.
 
@@ -105,13 +112,13 @@ class StreamingSeries(BaseStreaming):
         :param func: a function to apply
         :return: instance of `StreamingSeries`
         """
-        return cls(stream=Stream(ApplyFunction(func)))
+        return cls(stream=Stream(ApplyWithMetadataFunction(func)))
 
     @property
     def stream(self) -> Stream:
         return self._stream
 
-    def apply(self, func: StreamCallable) -> Self:
+    def apply(self, func: ApplyCallback) -> Self:
         """
         Add a callable to the execution list for this series.
 
@@ -145,16 +152,27 @@ class StreamingSeries(BaseStreaming):
         child = self._stream.add_apply(func)
         return self.__class__(stream=child)
 
+    def compose_returning(self) -> ReturningExecutor:
+        """
+        Compose a list of functions from this StreamingSeries and its parents into one
+        big closure that always returns the transformed record.
+
+        This closure is to be used to execute the functions in the stream and to get
+        the result of the transformations.
+
+        Stream may only contain simple "apply" functions to be able to compose itself
+        into a returning function.
+        :return: a callable accepting value, key and timestamp and
+            returning a tuple "(value, key, timestamp)
+        """
+        return self._stream.compose_returning()
+
     def compose(
         self,
-        allow_filters: bool = True,
-        allow_updates: bool = True,
-    ) -> StreamCallable:
+        sink: Optional[Callable[[Any, Any, int], None]] = None,
+    ) -> VoidExecutor:
         """
         Compose all functions of this StreamingSeries into one big closure.
-
-        Closures are more performant than calling all the functions in the
-        `StreamingDataFrame` one-by-one.
 
         Generally not required by users; the `quixstreams.app.Application` class will
         do this automatically.
@@ -176,23 +194,26 @@ class StreamingSeries(BaseStreaming):
         result_1 = sdf({"other": "record"})
         ```
 
-        :param allow_filters: If False, this function will fail with ValueError if
-            the stream has filter functions in the tree. Default - True.
-        :param allow_updates: If False, this function will fail with ValueError if
-            the stream has update functions in the tree. Default - True.
+        :param sink: callable to accumulate the results of the execution.
 
         :raises ValueError: if disallowed functions are present in the tree of
             underlying `Stream`.
 
-        :return: a function that accepts "value"
-            and returns a result of `StreamingSeries`
+        :return: a callable accepting value, key and timestamp and
+            returning None
         """
 
         return self._stream.compose(
-            allow_filters=allow_filters, allow_updates=allow_updates
+            allow_filters=False,
+            allow_updates=False,
+            allow_transforms=False,
+            allow_expands=False,
+            sink=sink,
         )
 
-    def test(self, value: Any, ctx: Optional[MessageContext] = None) -> Any:
+    def test(
+        self, value: Any, key: Any, timestamp: int, ctx: Optional[MessageContext] = None
+    ) -> Any:
         """
         A shorthand to test `StreamingSeries` with provided value
         and `MessageContext`.
@@ -206,8 +227,14 @@ class StreamingSeries(BaseStreaming):
         """
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        composed = self.compose()
-        return context.run(composed, value)
+        result = []
+        composed = self.compose(
+            sink=lambda value_, key_, timestamp_: result.append(
+                (value_, key_, timestamp_)
+            )
+        )
+        context.run(composed, value, key, timestamp)
+        return result
 
     def _operation(
         self,
@@ -217,15 +244,21 @@ class StreamingSeries(BaseStreaming):
             Union[bool, object],
         ],
     ) -> Self:
-        self_composed = self.compose()
+        self_composed = self.compose_returning()
         if isinstance(other, self.__class__):
-            other_composed = other.compose()
-            return self.from_func(
-                func=lambda v, op=operator_: op(self_composed(v), other_composed(v))
+            other_composed = other.compose_returning()
+
+            return self.from_apply_callback(
+                func=lambda value, key, timestamp, op=operator_: op(
+                    self_composed(value, key, timestamp)[0],
+                    other_composed(value, key, timestamp)[0],
+                )
             )
         else:
-            return self.from_func(
-                func=lambda v, op=operator_: op(self_composed(v), other)
+            return self.from_apply_callback(
+                func=lambda value, key, timestamp, op=operator_: op(
+                    self_composed(value, key, timestamp)[0], other
+                )
             )
 
     def isin(self, other: Container) -> Self:
@@ -451,12 +484,23 @@ class StreamingSeries(BaseStreaming):
         # Otherwise, it always evaluates both left and right side of the expression
         # to compute the result which is not always desired.
         # See https://docs.python.org/3/reference/expressions.html#boolean-operations
-        self_composed = self.compose()
+        self_composed = self.compose_returning()
+
         if isinstance(other, self.__class__):
-            other_composed = other.compose()
-            return self.from_func(func=lambda v: self_composed(v) and other_composed(v))
+            other_composed = other.compose_returning()
+            return self.from_apply_callback(
+                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
+                    0
+                ]
+                and other_composed(value, key, timestamp)[0]
+            )
         else:
-            return self.from_func(func=lambda v: self_composed(v) and other)
+            return self.from_apply_callback(
+                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
+                    0
+                ]
+                and other
+            )
 
     def __or__(self, other: Union[Self, object]) -> Self:
         """
@@ -472,12 +516,22 @@ class StreamingSeries(BaseStreaming):
         # Otherwise, it always evaluates both left and right side of the expression
         # to compute the result which is not always desired.
         # See https://docs.python.org/3/reference/expressions.html#boolean-operations
-        self_composed = self.compose()
+        self_composed = self.compose_returning()
         if isinstance(other, self.__class__):
-            other_composed = other.compose()
-            return self.from_func(func=lambda v: self_composed(v) or other_composed(v))
+            other_composed = other.compose_returning()
+            return self.from_apply_callback(
+                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
+                    0
+                ]
+                or other_composed(value, key, timestamp)[0]
+            )
         else:
-            return self.from_func(func=lambda v: self_composed(v) or other)
+            return self.from_apply_callback(
+                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
+                    0
+                ]
+                or other
+            )
 
     def __invert__(self) -> Self:
         """
