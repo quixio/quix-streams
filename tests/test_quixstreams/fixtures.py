@@ -6,8 +6,8 @@ from unittest.mock import create_autospec, patch
 import pytest
 from confluent_kafka.admin import (
     AdminClient,
-    NewTopic,  # type: ignore
-    NewPartitions,  # type: ignore
+    NewTopic,
+    NewPartitions,
 )
 
 from quixstreams.app import Application, MessageProcessedCallback
@@ -29,10 +29,6 @@ from quixstreams.models.serializers import (
     Deserializer,
     JSONSerializer,
     JSONDeserializer,
-)
-from quixstreams.models.timestamps import (
-    TimestampType,
-    MessageTimestamp,
 )
 from quixstreams.models.topics import (
     Topic,
@@ -256,21 +252,20 @@ def row_factory():
         value,
         topic="input-topic",
         key=b"key",
+        timestamp: int = 0,
         headers=None,
         partition: int = 0,
         offset: int = 0,
     ) -> Row:
         headers = headers or {}
         context = MessageContext(
-            key=key,
             headers=headers,
             topic=topic,
             partition=partition,
             offset=offset,
             size=0,
-            timestamp=MessageTimestamp(0, TimestampType.TIMESTAMP_NOT_AVAILABLE),
         )
-        return Row(value=value, context=context)
+        return Row(value=value, key=key, timestamp=timestamp, context=context)
 
     return factory
 
@@ -524,15 +519,14 @@ def quix_app_factory(
 
 @pytest.fixture()
 def message_context_factory():
-    def factory(key: object = "test", timestamp_ms: int = 0) -> MessageContext:
-        timestamp_type = 0 if timestamp_ms == 0 else 1
+    def factory(
+        topic: str = "test",
+    ) -> MessageContext:
         return MessageContext(
-            key=key,
-            topic="test",
+            topic=topic,
             partition=0,
             offset=0,
             size=0,
-            timestamp=MessageTimestamp.create(timestamp_type, timestamp_ms),
         )
 
     return factory

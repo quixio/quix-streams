@@ -139,9 +139,7 @@ class TestTopic:
         assert row.key == expected_key
         assert row.value == expected_value
         assert row.headers == message.headers()
-        assert row.timestamp.type == message.timestamp()[0]
-        assert row.timestamp.milliseconds == message.timestamp()[1]
-        assert row.latency == message.latency()
+        assert row.timestamp == message.timestamp()[1]
         assert row.leader_epoch == message.leader_epoch()
 
     @pytest.mark.parametrize(
@@ -191,9 +189,7 @@ class TestTopic:
             assert row.offset == message.offset()
             assert row.key == expected_key
             assert row.headers == message.headers()
-            assert row.timestamp.type == message.timestamp()[0]
-            assert row.timestamp.milliseconds == message.timestamp()[1]
-            assert row.latency == message.latency()
+            assert row.timestamp == message.timestamp()[1]
             assert row.leader_epoch == message.leader_epoch()
 
     def test_row_deserialize_ignorevalueerror_raised(self, topic_manager_topic_factory):
@@ -289,8 +285,7 @@ class TestTopic:
         rows = row_or_rows if isinstance(row_or_rows, list) else [row_or_rows]
 
         for index, row in enumerate(rows):
-            assert row.timestamp.type == TimestampType.TIMESTAMP_CREATE_TIME
-            assert row.timestamp.milliseconds == expected_timestamps[index]
+            assert row.timestamp == expected_timestamps[index]
 
     @pytest.mark.parametrize(
         "key_deserializer, value_deserializer",
