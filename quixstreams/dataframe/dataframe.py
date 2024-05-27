@@ -5,7 +5,7 @@ import functools
 import operator
 from copy import deepcopy
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, Any, overload, Dict
+from typing import Optional, Callable, Union, List, Any, overload, Dict, Tuple
 
 from typing_extensions import Self
 
@@ -544,6 +544,29 @@ class StreamingDataFrame(BaseStreaming):
             ),
             metadata=True,
         )
+
+    def set_timestamp(self, func: Callable[[Any, int], int]) -> Self:
+        """
+        Set a new timestamp based on the value and the current record timestamp.
+
+        The new timestamp will be used in windowed aggregations and when producing
+        messages to the output topics.
+
+        The new timestamp must be in milliseconds to conform Kafka requirements.
+
+        :param func: callable accepting the current value and the current timestamp.
+            It's expected to return a new timestamp as integer in milliseconds.
+        :return a new StreamingDataFrame instance
+        """
+
+        @functools.wraps(func)
+        def _set_timestamp_callback(
+            value: Any, key: Any, timestamp: int
+        ) -> Tuple[Any, Any, int]:
+            return value, key, func(value, timestamp)
+
+        stream = self.stream.add_transform(func=_set_timestamp_callback)
+        return self.__dataframe_clone__(stream=stream)
 
     def compose(
         self,
