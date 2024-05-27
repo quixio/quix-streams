@@ -5,7 +5,7 @@ import functools
 import operator
 from copy import deepcopy
 from datetime import timedelta
-from typing import Optional, Callable, Union, List, TypeVar, Any, overload, Dict
+from typing import Optional, Callable, Union, List, Any, overload, Dict
 
 from typing_extensions import Self
 
@@ -13,27 +13,37 @@ from quixstreams.context import (
     message_context,
     set_message_context,
 )
-from quixstreams.core.stream import StreamCallable, Stream
+from quixstreams.core.stream import (
+    Stream,
+    VoidExecutor,
+    ApplyCallback,
+    FilterCallback,
+    UpdateCallback,
+    ApplyWithMetadataCallback,
+    FilterWithMetadataCallback,
+    UpdateWithMetadataCallback,
+)
 from quixstreams.models import (
     Topic,
     TopicManager,
     Row,
     MessageContext,
 )
-from quixstreams.processing_context import ProcessingContext
 from quixstreams.models.serializers import SerializerType, DeserializerType
-from quixstreams.state import State
+from quixstreams.processing_context import ProcessingContext
+from quixstreams.state.types import State
 from .base import BaseStreaming
 from .exceptions import InvalidOperation, GroupByLimitExceeded
 from .series import StreamingSeries
 from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
 
-
-T = TypeVar("T")
-R = TypeVar("R")
-DataFrameFunc = Callable[[T], R]
-DataFrameStatefulFunc = Callable[[T, State], R]
+ApplyCallbackStateful = Callable[[Any, State], Any]
+ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, State], Any]
+UpdateCallbackStateful = Callable[[Any, State], None]
+UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, State], Any]
+FilterCallbackStateful = Callable[[Any, State], bool]
+FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, State], bool]
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -120,18 +130,53 @@ class StreamingDataFrame(BaseStreaming):
             topics.append(self._topic)
         return topics
 
-    def __bool__(self):
-        raise InvalidOperation(
-            f"Cannot assess truth level of a {self.__class__.__name__} "
-            f"using 'bool()' or any operations that rely on it; "
-            f"use '&' or '|' for logical and/or comparisons"
-        )
+    @overload
+    def apply(
+        self,
+        func: ApplyCallback,
+        stateful: bool = False,
+        expand: bool = ...,
+        metadata: bool = False,
+    ) -> Self: ...
+
+    @overload
+    def apply(
+        self,
+        func: ApplyWithMetadataCallback,
+        stateful: bool = False,
+        expand: bool = ...,
+        metadata: bool = True,
+    ) -> Self: ...
+
+    @overload
+    def apply(
+        self,
+        func: ApplyCallbackStateful,
+        stateful: bool = True,
+        expand: bool = ...,
+        metadata: bool = False,
+    ) -> Self: ...
+
+    @overload
+    def apply(
+        self,
+        func: ApplyWithMetadataCallbackStateful,
+        stateful: bool = True,
+        expand: bool = ...,
+        metadata: bool = True,
+    ) -> Self: ...
 
     def apply(
         self,
-        func: Union[DataFrameFunc, DataFrameStatefulFunc],
+        func: Union[
+            ApplyCallback,
+            ApplyCallbackStateful,
+            ApplyWithMetadataCallback,
+            ApplyWithMetadataCallbackStateful,
+        ],
         stateful: bool = False,
         expand: bool = False,
+        metadata: bool = False,
     ) -> Self:
         """
         Apply a function to transform the value and return a new value.
@@ -162,20 +207,69 @@ class StreamingDataFrame(BaseStreaming):
         :param expand: if True, expand the returned iterable into individual values
             downstream. If returned value is not iterable, `TypeError` will be raised.
             Default - `False`.
+        :param metadata: if True, the callback will receive key and timestamp along with
+            the value.
+            Default - `False`.
         """
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, processing_context=self._processing_context)
+            # Force the callback to accept metadata
+            with_metadata_func = func if metadata else _as_metadata_func(func)
+            stateful_func = _as_stateful(
+                func=with_metadata_func,
+                processing_context=self._processing_context,
+            )
+            stream = self.stream.add_apply(stateful_func, expand=expand, metadata=True)
+        else:
+            stream = self.stream.add_apply(func, expand=expand, metadata=metadata)
+        return self.__dataframe_clone__(stream=stream)
 
-        stream = self.stream.add_apply(func, expand=expand)
-        return self._clone(stream=stream)
+    @overload
+    def update(
+        self,
+        func: UpdateCallback,
+        stateful: bool = False,
+        metadata: bool = False,
+    ) -> Self: ...
+
+    @overload
+    def update(
+        self,
+        func: UpdateWithMetadataCallback,
+        stateful: bool = False,
+        metadata: bool = True,
+    ) -> Self: ...
+
+    @overload
+    def update(
+        self,
+        func: UpdateCallbackStateful,
+        stateful: bool = True,
+        metadata: bool = False,
+    ) -> Self: ...
+
+    @overload
+    def update(
+        self,
+        func: UpdateWithMetadataCallbackStateful,
+        stateful: bool = True,
+        metadata: bool = True,
+    ) -> Self: ...
 
     def update(
-        self, func: Union[DataFrameFunc, DataFrameStatefulFunc], stateful: bool = False
+        self,
+        func: Union[
+            UpdateCallback,
+            UpdateCallbackStateful,
+            UpdateWithMetadataCallback,
+            UpdateWithMetadataCallbackStateful,
+        ],
+        stateful: bool = False,
+        metadata: bool = False,
     ) -> Self:
         """
         Apply a function to mutate value in-place or to perform a side effect
-        that doesn't update the value (e.g. print a value to the console).
+        (e.g., printing a value to the console).
 
         The result of the function will be ignored, and the original value will be
         passed downstream.
@@ -201,25 +295,71 @@ class StreamingDataFrame(BaseStreaming):
         :param func: function to update value
         :param stateful: if `True`, the function will be provided with a second argument
             of type `State` to perform stateful operations.
+        :param metadata: if True, the callback will receive key and timestamp along with
+            the value.
+            Default - `False`.
         """
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, processing_context=self._processing_context)
+            # Force the callback to accept metadata
+            with_metadata_func = func if metadata else _as_metadata_func(func)
+            stateful_func = _as_stateful(
+                func=with_metadata_func,
+                processing_context=self._processing_context,
+            )
+            stream = self.stream.add_update(stateful_func, metadata=True)
+        else:
+            stream = self.stream.add_update(func, metadata=metadata)
+        return self.__dataframe_clone__(stream=stream)
 
-        stream = self.stream.add_update(func)
-        return self._clone(stream=stream)
+    @overload
+    def filter(
+        self,
+        func: FilterCallback,
+        stateful: bool = False,
+        metadata: bool = False,
+    ) -> Self: ...
+
+    @overload
+    def filter(
+        self,
+        func: FilterWithMetadataCallback,
+        stateful: bool = False,
+        metadata: bool = True,
+    ) -> Self: ...
+
+    @overload
+    def filter(
+        self,
+        func: FilterCallbackStateful,
+        stateful: bool = True,
+        metadata: bool = False,
+    ) -> Self: ...
+
+    @overload
+    def filter(
+        self,
+        func: FilterWithMetadataCallbackStateful,
+        stateful: bool = True,
+        metadata: bool = True,
+    ) -> Self: ...
 
     def filter(
-        self, func: Union[DataFrameFunc, DataFrameStatefulFunc], stateful: bool = False
+        self,
+        func: Union[
+            FilterCallback,
+            FilterCallbackStateful,
+            FilterWithMetadataCallback,
+            FilterWithMetadataCallbackStateful,
+        ],
+        stateful: bool = False,
+        metadata: bool = False,
     ) -> Self:
         """
         Filter value using provided function.
 
         If the function returns True-like value, the original value will be
         passed downstream.
-        Otherwise, the `Filtered` exception will be raised (further processing for that
-        message will be skipped).
-
 
         Example Snippet:
 
@@ -242,31 +382,27 @@ class StreamingDataFrame(BaseStreaming):
         :param func: function to filter value
         :param stateful: if `True`, the function will be provided with second argument
             of type `State` to perform stateful operations.
+        :param metadata: if True, the callback will receive key and timestamp along with
+            the value.
+            Default - `False`.
         """
 
         if stateful:
             self._register_store()
-            func = _as_stateful(func=func, processing_context=self._processing_context)
-
-        stream = self.stream.add_filter(func)
-        return self._clone(stream=stream)
-
-    def _groupby_key(
-        self, key: Union[str, DataFrameFunc]
-    ) -> Callable[[object], object]:
-        """
-        Generate the underlying groupby key function based on users provided input.
-        """
-        if isinstance(key, str):
-            return lambda row: row[key]
-        elif callable(key):
-            return lambda row: key(row)
+            # Force the callback to accept metadata
+            with_metadata_func = func if metadata else _as_metadata_func(func)
+            stateful_func = _as_stateful(
+                func=with_metadata_func,
+                processing_context=self._processing_context,
+            )
+            stream = self.stream.add_filter(stateful_func, metadata=True)
         else:
-            raise TypeError("group_by 'key' must be callable or string (column name)")
+            stream = self.stream.add_filter(func, metadata=metadata)
+        return self.__dataframe_clone__(stream=stream)
 
     def group_by(
         self,
-        key: Union[str, DataFrameFunc],
+        key: Union[str, Callable[[Any], Any]],
         name: Optional[str] = None,
         value_deserializer: Optional[DeserializerType] = "json",
         key_deserializer: Optional[DeserializerType] = "json",
@@ -333,20 +469,10 @@ class StreamingDataFrame(BaseStreaming):
             key_deserializer=key_deserializer,
             value_deserializer=value_deserializer,
         )
-        # Copy-paste the "to_topic()" code for now to forward original timestamps
-        # to repartition topics without changing "to_topic()".
-        # This needs to be refactored, of course.
-        sdf_to_finalize = self.update(
-            lambda value: self._produce(
-                topic=groupby_topic,
-                value=value,
-                key_func=self._groupby_key(key),
-                timestamp=message_context().timestamp.milliseconds,
-            )
-        )
 
+        sdf_to_finalize = self.to_topic(topic=groupby_topic, key=self._groupby_key(key))
         self._finalize_branch(sdf_to_finalize)
-        return self._clone(topic=groupby_topic)
+        return self.__dataframe_clone__(topic=groupby_topic)
 
     @staticmethod
     def contains(key: str) -> StreamingSeries:
@@ -370,10 +496,12 @@ class StreamingDataFrame(BaseStreaming):
             or False otherwise.
         """
 
-        return StreamingSeries.from_func(lambda value: key in value)
+        return StreamingSeries.from_apply_callback(
+            lambda value, key_, timestamp: key in value
+        )
 
     def to_topic(
-        self, topic: Topic, key: Optional[Callable[[object], object]] = None
+        self, topic: Topic, key: Optional[Callable[[Any], Any]] = None
     ) -> Self:
         """
         Produce current value to a topic. You can optionally specify a new key.
@@ -408,21 +536,21 @@ class StreamingDataFrame(BaseStreaming):
 
         """
         return self.update(
-            lambda value: self._produce(topic=topic, value=value, key_func=key)
+            lambda value, orig_key, timestamp: self._produce(
+                topic=topic,
+                value=value,
+                key=orig_key if key is None else key(value),
+                timestamp=timestamp,
+            ),
+            metadata=True,
         )
 
-    def _finalize_branch(self, branch: Self):
+    def compose(
+        self,
+        sink: Optional[Callable[[Any, Any, int], None]] = None,
+    ) -> Dict[str, VoidExecutor]:
         """
-        Add a StreamingDataFrame to the branch cache via its corresponding topic name.
 
-        Implies no further operations will be added to that branch.
-
-        :param branch: a StreamingDataFrame instance
-        """
-        self._branches[self._topic.name] = branch.stream
-
-    def compose(self) -> Dict[str, StreamCallable]:
-        """
         Compose all functions of this StreamingDataFrame into one big closure.
 
         Closures are more performant than calling all the functions in the
@@ -445,27 +573,33 @@ class StreamingDataFrame(BaseStreaming):
         result_1 = sdf({"other": "record"})
         ```
 
-
+        :param sink: callable to accumulate the results of the execution, optional.
         :return: a function that accepts "value"
             and returns a result of StreamingDataFrame
         """
         self._finalize_branch(self)
-        return {name: stream.compose() for name, stream in self._branches.items()}
+        return {
+            name: stream.compose(sink=sink) for name, stream in self._branches.items()
+        }
 
     def test(
         self,
-        value: object,
+        value: Any,
+        key: Any,
+        timestamp: int,
         ctx: Optional[MessageContext] = None,
         topic: Optional[Topic] = None,
-    ) -> Any:
+    ) -> List[Any]:
         """
         A shorthand to test `StreamingDataFrame` with provided value
         and `MessageContext`.
 
         :param value: value to pass through `StreamingDataFrame`
+        :param key: key to pass through `StreamingDataFrame`
+        :param timestamp: timestamp to pass through `StreamingDataFrame`
         :param ctx: instance of `MessageContext`, optional.
             Provide it if the StreamingDataFrame instance calls `to_topic()`,
-            has stateful functions or functions calling `get_current_key()`.
+            has stateful functions or windows.
             Default - `None`.
         :param topic: optionally, a topic branch to test with
 
@@ -475,8 +609,14 @@ class StreamingDataFrame(BaseStreaming):
             topic = self._topic
         context = contextvars.copy_context()
         context.run(set_message_context, ctx)
-        composed = self.compose()
-        return context.run(composed[topic.name], value)
+        result = []
+        composed = self.compose(
+            sink=lambda value_, key_, timestamp_: result.append(
+                (value_, key_, timestamp_)
+            )
+        )
+        context.run(composed[topic.name], value, key, timestamp)
+        return result
 
     def tumbling_window(
         self,
@@ -488,11 +628,12 @@ class StreamingDataFrame(BaseStreaming):
         Create a tumbling window transformation on this StreamingDataFrame.
         Tumbling windows divide time into fixed-sized, non-overlapping windows.
 
-        They allow to perform stateful aggregations like `sum`, `reduce`, etc.
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
         on top of the data and emit results downstream.
 
         Notes:
 
+        - The timestamp of the aggregation result is set to the window start timestamp.
         - Every window is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
         - The time windows always use the current event time.
@@ -565,11 +706,12 @@ class StreamingDataFrame(BaseStreaming):
         Hopping windows divide the data stream into overlapping windows based on time.
         The overlap is controlled by the `step_ms` parameter.
 
-        They allow to perform stateful aggregations like `sum`, `reduce`, etc.
+        They allow performing stateful aggregations like `sum`, `reduce`, etc.
         on top of the data and emit results downstream.
 
         Notes:
 
+        - The timestamp of the aggregation result is set to the window start timestamp.
         - Every window is grouped by the current Kafka message key.
         - Messages with `None` key will be ignored.
         - The time windows always use the current event time.
@@ -644,30 +786,15 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
-    def _clone(
-        self,
-        stream: Optional[Stream] = None,
-        topic: Optional[Topic] = None,
-    ) -> Self:
-        clone = self.__class__(
-            stream=stream,
-            topic=topic or self._topic,
-            processing_context=self._processing_context,
-            topic_manager=self._topic_manager,
-            branches=deepcopy(self._branches),
-        )
-        return clone
-
     def _produce(
         self,
         topic: Topic,
         value: object,
-        key_func: Optional[Callable[[object], object]] = None,
-        timestamp: Optional[int] = None,
+        key: Any,
+        timestamp: int,
     ):
         ctx = message_context()
-        key = ctx.key if key_func is None else key_func(value)
-        row = Row(value=value, context=ctx)
+        row = Row(value=value, key=key, timestamp=timestamp, context=ctx)
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
     def _register_store(self):
@@ -678,22 +805,75 @@ class StreamingDataFrame(BaseStreaming):
             topic_name=self._topic.name
         )
 
-    def __setitem__(self, key, value: Union[Self, object]):
-        if isinstance(value, self.__class__):
-            diff = self.stream.diff(value.stream)
-            diff_composed = diff.compose(
-                allow_filters=False, allow_updates=False, allow_expands=False
-            )
+    def _finalize_branch(self, branch: Self):
+        """
+        Add a StreamingDataFrame to the branch cache via its corresponding topic name.
+
+        Implies no further operations will be added to that branch.
+
+        :param branch: a StreamingDataFrame instance
+        """
+        self._branches[self._topic.name] = branch.stream
+
+    def _groupby_key(
+        self, key: Union[str, Callable[[Any], Any]]
+    ) -> Callable[[Any], Any]:
+        """
+        Generate the underlying groupby key function based on users provided input.
+        """
+        if isinstance(key, str):
+            return lambda row: row[key]
+        elif callable(key):
+            return lambda row: key(row)
+        else:
+            raise TypeError("group_by 'key' must be callable or string (column name)")
+
+    def __dataframe_clone__(
+        self,
+        stream: Optional[Stream] = None,
+        topic: Optional[Topic] = None,
+    ) -> Self:
+        """
+        Clone the StreamingDataFrame with a new `stream` and `topic` parameters.
+
+        :param stream: instance of `Stream`, optional.
+        :param topic: instance of `Topic`, optional.
+        :return: a new `StreamingDataFrame`.
+        """
+        clone = self.__class__(
+            stream=stream,
+            topic=topic or self._topic,
+            processing_context=self._processing_context,
+            topic_manager=self._topic_manager,
+            branches=deepcopy(self._branches),
+        )
+        return clone
+
+    def __setitem__(self, item_key: Any, item: Union[Self, object]):
+        if isinstance(item, self.__class__):
+            # Update an item key with a result of another sdf.apply()
+            diff = self.stream.diff(item.stream)
+            other_sdf_composed = diff.compose_returning()
             stream = self.stream.add_update(
-                lambda v: operator.setitem(v, key, diff_composed(v))
+                lambda value, key, timestamp: operator.setitem(
+                    value, item_key, other_sdf_composed(value, key, timestamp)[0]
+                ),
+                metadata=True,
             )
-        elif isinstance(value, StreamingSeries):
-            value_composed = value.compose(allow_filters=False, allow_updates=False)
+        elif isinstance(item, StreamingSeries):
+            # Update an item key with a result of another series
+            series_composed = item.compose_returning()
             stream = self.stream.add_update(
-                lambda v: operator.setitem(v, key, value_composed(v))
+                lambda value, key, timestamp: operator.setitem(
+                    value, item_key, series_composed(value, key, timestamp)[0]
+                ),
+                metadata=True,
             )
         else:
-            stream = self.stream.add_update(lambda v: operator.setitem(v, key, value))
+            # Update an item key with a constant
+            stream = self.stream.add_update(
+                lambda value: operator.setitem(value, item_key, item)
+            )
         self._stream = stream
 
     @overload
@@ -707,37 +887,73 @@ class StreamingDataFrame(BaseStreaming):
     ) -> Union[Self, StreamingSeries]:
         if isinstance(item, StreamingSeries):
             # Filter SDF based on StreamingSeries
-            item_composed = item.compose(allow_filters=False, allow_updates=False)
-            return self.filter(lambda v: item_composed(v))
+            series_composed = item.compose_returning()
+            return self.filter(
+                lambda value, key, timestamp: series_composed(value, key, timestamp)[0],
+                metadata=True,
+            )
         elif isinstance(item, self.__class__):
             # Filter SDF based on another SDF
             diff = self.stream.diff(item.stream)
-            diff_composed = diff.compose(
-                allow_filters=False, allow_updates=False, allow_expands=False
+            other_sdf_composed = diff.compose_returning()
+            return self.filter(
+                lambda value, key, timestamp: other_sdf_composed(value, key, timestamp)[
+                    0
+                ],
+                metadata=True,
             )
-            return self.filter(lambda v: diff_composed(v))
         elif isinstance(item, list):
-            # Take only certain keys from the dict and return a new dict
-            return self.apply(lambda v: {k: v[k] for k in item})
+            # Make a projection and filter keys from the dict
+            return self.apply(lambda value: {k: value[k] for k in item})
         elif isinstance(item, str):
             # Create a StreamingSeries based on a column name
             return StreamingSeries(name=item)
         else:
             raise TypeError(f'Unsupported key type "{type(item)}"')
 
+    def __bool__(self):
+        raise InvalidOperation(
+            f"Cannot assess truth level of a {self.__class__.__name__} "
+            f"using 'bool()' or any operations that rely on it; "
+            f"use '&' or '|' for logical and/or comparisons"
+        )
+
+
+def _as_metadata_func(
+    func: Union[ApplyCallbackStateful, FilterCallbackStateful, UpdateCallbackStateful]
+) -> Union[
+    ApplyWithMetadataCallbackStateful,
+    FilterWithMetadataCallbackStateful,
+    UpdateWithMetadataCallbackStateful,
+]:
+    @functools.wraps(func)
+    def wrapper(value: Any, _key: Any, _timestamp: int, state: State) -> Any:
+        return func(value, state)
+
+    return wrapper
+
 
 def _as_stateful(
-    func: DataFrameStatefulFunc, processing_context: ProcessingContext
-) -> DataFrameFunc:
+    func: Union[
+        ApplyWithMetadataCallbackStateful,
+        FilterWithMetadataCallbackStateful,
+        UpdateWithMetadataCallbackStateful,
+    ],
+    processing_context: ProcessingContext,
+) -> Union[
+    ApplyWithMetadataCallback,
+    FilterWithMetadataCallback,
+    UpdateWithMetadataCallback,
+]:
     @functools.wraps(func)
-    def wrapper(value: object) -> object:
+    def wrapper(value: Any, key: Any, timestamp: int) -> Any:
         ctx = message_context()
         transaction = processing_context.checkpoint.get_store_transaction(
             topic=ctx.topic, partition=ctx.partition
         )
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
-        state = transaction.as_state(prefix=ctx.key)
-        return func(value, state)
+        state = transaction.as_state(prefix=key)
+        return func(value, key, timestamp, state)
 
     return wrapper
