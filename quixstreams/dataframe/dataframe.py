@@ -556,7 +556,7 @@ class StreamingDataFrame(BaseStreaming):
 
         :param func: callable accepting the current value and the current timestamp.
             It's expected to return a new timestamp as integer in milliseconds.
-        :return a new StreamingDataFrame instance
+        :return: a new StreamingDataFrame instance
         """
 
         @functools.wraps(func)
