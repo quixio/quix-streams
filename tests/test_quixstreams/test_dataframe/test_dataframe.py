@@ -333,6 +333,16 @@ class TestStreamingDataFrame:
         with pytest.raises(InvalidOperation):
             sdf["truth"] = sdf[sdf.apply(lambda x: x["a"] > 0)] or sdf[["b"]]
 
+    def test_set_timestamp(self, dataframe_factory):
+        value, key, timestamp = 1, "key", 0
+        expected = (1, "key", 100)
+        sdf = dataframe_factory()
+
+        sdf = sdf.set_timestamp(lambda value_, timestamp_: timestamp_ + 100)
+
+        result = sdf.test(value=value, key=key, timestamp=timestamp)[0]
+        assert result == expected
+
 
 class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):
