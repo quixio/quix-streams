@@ -10,7 +10,6 @@ from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
 from .context import set_message_context, copy_context
-from .core.stream import Filtered
 from .dataframe import StreamingDataFrame
 from .error_callbacks import (
     ConsumerErrorCallback,
@@ -781,10 +780,12 @@ class Application:
             context.run(set_message_context, row.context)
             try:
                 # Execute StreamingDataFrame in a context
-                context.run(dataframe_composed[topic_name], row.value)
-            except Filtered:
-                # The message was filtered by StreamingDataFrame
-                continue
+                context.run(
+                    dataframe_composed[topic_name],
+                    row.value,
+                    row.key,
+                    row.timestamp,
+                )
             except Exception as exc:
                 # TODO: This callback might be triggered because of Producer
                 #  errors too because they happen within ".process()"

@@ -1,5 +1,5 @@
 from contextvars import ContextVar, copy_context
-from typing import Optional, Any
+from typing import Optional
 
 from quixstreams.exceptions import QuixException
 from quixstreams.models.messagecontext import MessageContext
@@ -7,7 +7,6 @@ from quixstreams.models.messagecontext import MessageContext
 __all__ = (
     "MessageContextNotSetError",
     "set_message_context",
-    "message_key",
     "message_context",
     "copy_context",
 )
@@ -78,26 +77,3 @@ def message_context() -> MessageContext:
 
     except LookupError:
         raise MessageContextNotSetError("Message context is not set")
-
-
-def message_key() -> Any:
-    """
-    Get the current message's key.
-
-
-    Example Snippet:
-
-    ```python
-    from quixstreams import Application, message_key
-
-    # Changes the current sdf value based on what the message key is.
-
-    app = Application()
-    sdf = app.dataframe()
-    sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
-    ```
-
-
-    :return: a deserialized message key
-    """
-    return message_context().key

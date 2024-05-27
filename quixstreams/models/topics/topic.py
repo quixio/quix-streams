@@ -2,8 +2,6 @@ import dataclasses
 import logging
 from typing import List, Optional, Any, Callable, Union
 
-from confluent_kafka.admin import NewTopic, ConfigResource  # type: ignore
-
 from quixstreams.models.messagecontext import MessageContext
 from quixstreams.models.messages import KafkaMessage
 from quixstreams.models.rows import Row
@@ -21,7 +19,7 @@ from quixstreams.models.serializers import (
     Serializer,
     Deserializer,
 )
-from quixstreams.models.timestamps import MessageTimestamp, TimestampType
+from quixstreams.models.timestamps import TimestampType
 from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
     Headers,
@@ -198,32 +196,45 @@ class Topic:
             )
             return
 
+        timestamp_type, timestamp_ms = message.timestamp()
+        ctx = MessageContext(
+            headers=headers,
+            topic=message.topic(),
+            partition=message.partition(),
+            offset=message.offset(),
+            size=len(message),
+            leader_epoch=message.leader_epoch(),
+        )
+
         if self._value_deserializer.split_values:
             # The expected value from this serializer is Iterable and each item
             # should be processed as a separate message
             rows = []
             for item in value_deserialized:
+                if self._timestamp_extractor:
+                    timestamp_ms = self._timestamp_extractor(
+                        item, headers, timestamp_ms, TimestampType(timestamp_type)
+                    )
                 rows.append(
                     Row(
                         value=item,
-                        context=self._create_message_context(
-                            message=message,
-                            key=key_deserialized,
-                            headers=headers,
-                            value=item,
-                        ),
+                        key=key_deserialized,
+                        timestamp=timestamp_ms,
+                        context=ctx,
                     )
                 )
             return rows
 
+        if self._timestamp_extractor:
+            timestamp_ms = self._timestamp_extractor(
+                value_deserialized, headers, timestamp_ms, TimestampType(timestamp_type)
+            )
+
         return Row(
             value=value_deserialized,
-            context=self._create_message_context(
-                message=message,
-                key=key_deserialized,
-                headers=headers,
-                value=value_deserialized,
-            ),
+            timestamp=timestamp_ms,
+            key=key_deserialized,
+            context=ctx,
         )
 
     def serialize(
@@ -274,33 +285,3 @@ class Topic:
 
     def __repr__(self):
         return f'<{self.__class__.__name__} name="{self._name}"> '
-
-    def _create_message_context(
-        self,
-        message: ConfluentKafkaMessageProto,
-        key: Any,
-        headers: Optional[MessageHeadersTuples],
-        value: Any,
-    ) -> MessageContext:
-        timestamp_type, timestamp_ms = message.timestamp()
-
-        if self._timestamp_extractor:
-            timestamp_ms = self._timestamp_extractor(
-                value, headers, timestamp_ms, TimestampType(timestamp_type)
-            )
-
-        timestamp = MessageTimestamp.create(
-            timestamp_type=timestamp_type, milliseconds=timestamp_ms
-        )
-
-        return MessageContext(
-            key=key,
-            headers=headers,
-            topic=message.topic(),
-            partition=message.partition(),
-            offset=message.offset(),
-            size=len(message),
-            timestamp=timestamp,
-            latency=message.latency(),
-            leader_epoch=message.leader_epoch(),
-        )

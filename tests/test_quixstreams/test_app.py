@@ -11,7 +11,6 @@ import pytest
 from confluent_kafka import KafkaException, TopicPartition
 
 from quixstreams.app import Application
-from quixstreams.context import message_context
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
@@ -582,7 +581,7 @@ class TestAppGroupBy:
         # Capture original message timestamp to ensure it's forwarded
         # to the repartition topic
         sdf["groupby_timestamp"] = sdf.apply(
-            lambda v: message_context().timestamp.milliseconds
+            lambda value, key, timestamp_: timestamp_, metadata=True
         )
         sdf = sdf.to_topic(app_topic_out)
 
@@ -670,7 +669,7 @@ class TestAppGroupBy:
         # Capture original message timestamp to ensure it's forwarded
         # to the repartition topic
         sdf["groupby_timestamp"] = sdf.apply(
-            lambda v: message_context().timestamp.milliseconds
+            lambda value, key, timestamp_: timestamp_, metadata=True
         )
         sdf = sdf.tumbling_window(duration_ms=1000).count().current()
         sdf = sdf.to_topic(app_topic_out)
