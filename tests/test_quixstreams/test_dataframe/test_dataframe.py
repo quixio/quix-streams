@@ -1519,6 +1519,15 @@ class TestStreamingDataFrameGroupBy:
         with pytest.raises(ValueError):
             sdf.group_by(lambda v: "do_stuff")
 
+    def test_group_by_key_empty_fails(self, dataframe_factory, topic_manager_factory):
+        """Using a Callable for groupby requires giving a name"""
+        topic_manager = topic_manager_factory()
+        topic = topic_manager.topic(str(uuid.uuid4()))
+        sdf = dataframe_factory(topic, topic_manager=topic_manager)
+
+        with pytest.raises(ValueError, match='Parameter "key" cannot be empty'):
+            sdf.group_by(key="")
+
     def test_group_by_invalid_key_func(self, dataframe_factory, topic_manager_factory):
         """GroupBy can only use a string (column name) or Callable to group with"""
         topic_manager = topic_manager_factory()
