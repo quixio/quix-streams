@@ -71,6 +71,7 @@ class Consumer:
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
         assignment_strategy: AssignmentStrategy = "range",
+        error_callback: Callable[[KafkaError], None] = _default_error_cb,
         on_commit: Optional[
             Callable[[Optional[KafkaError], List[TopicPartition]], None]
         ] = None,
@@ -107,22 +108,22 @@ class Consumer:
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
-        self._consumer_config = dict(
-            broker_address.as_confluent_dict(),
+        self._consumer_config = {
+            "enable.auto.offset.store": False,
+            **(extra_config or {}),
+            **broker_address.as_librdkafka_dict(),
             **{
-                "enable.auto.offset.store": False,
                 "group.id": consumer_group,
                 "enable.auto.commit": auto_commit_enable,
                 "auto.offset.reset": auto_offset_reset,
                 "partition.assignment.strategy": assignment_strategy,
                 "logger": logger,
-                "error_cb": _default_error_cb,
+                "error_cb": error_callback,
                 "on_commit": functools.partial(
                     _default_on_commit_cb, on_commit=on_commit
                 ),
             },
-            **(extra_config or {}),
-        )
+        }
         self._inner_consumer: Optional[ConfluentConsumer] = None
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message]:

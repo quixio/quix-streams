@@ -45,7 +45,8 @@ class Producer:
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
-        partitioner: Partitioner = "murmur2",
+        logger: logging.Logger = logger,
+        error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
     ):
         """
@@ -58,11 +59,6 @@ class Producer:
         :param broker_address: Connection settings for Kafka.
             Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
             or a ConnectionConfig object if authentication is required.
-        :param partitioner: A function to be used to determine the outgoing message
-            partition.
-            Available values: "random", "consistent_random", "murmur2", "murmur2_random",
-            "fnv1a", "fnv1a_random"
-            Default - "murmur2".
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
@@ -70,15 +66,12 @@ class Producer:
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
-        self._producer_config = dict(
-            broker_address.as_confluent_dict(),
-            **{
-                "partitioner": partitioner,
-                "logger": logger,
-                "error_cb": _default_error_cb,
-            },
+        self._producer_config = {
+            "partitioner": "murmur2",
             **(extra_config or {}),
-        )
+            **broker_address.as_librdkafka_dict(),
+            **{"logger": logger, "error_cb": error_callback},
+        }
         self._inner_producer: Optional[ConfluentProducer] = None
 
     def produce(

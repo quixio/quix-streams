@@ -350,7 +350,7 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
-        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
+        cfg_builder.get_librdkafka_broker_config.side_effect = lambda: {
             "bootstrap.servers": kafka_container.broker_address
         }
         # Slight change to ws stuff in case you pass a blank workspace (which makes

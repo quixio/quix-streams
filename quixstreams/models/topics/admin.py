@@ -66,11 +66,11 @@ class TopicAdmin:
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
         self._inner_admin: Optional[AdminClient] = None
-        self._config = dict(
-            broker_address.as_confluent_dict(),
-            logger=logger,
+        self._config = {
             **(extra_config or {}),
-        )
+            "logger": logger,
+            **broker_address.as_librdkafka_dict(),
+        }
 
     @property
     def admin_client(self) -> AdminClient:

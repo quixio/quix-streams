@@ -1,3 +1,4 @@
+import base64
 import dataclasses
 import logging
 import time
@@ -9,6 +10,7 @@ from typing import Optional, Tuple, Set, Mapping, Union, List
 from requests import HTTPError
 
 from quixstreams.models.topics import Topic
+from quixstreams.kafka.configuration import ConnectionConfig
 from .api import QuixPortalApiService
 from .exceptions import (
     NoWorkspaceFound,
@@ -321,6 +323,15 @@ class QuixKafkaConfigsBuilder:
             ):
                 return ws
 
+    def _write_ssl_cert(self, cert: bytes, folder: Optional[Path] = None) -> str:
+        folder = folder or Path(gettempdir())
+        full_path = folder / "ca.cert"
+        if not full_path.is_file():
+            folder.mkdir(parents=True, exist_ok=True)
+            with open(full_path, "wb") as f:
+                f.write(cert)
+        return full_path.as_posix()
+
     def get_workspace_ssl_cert(
         self, extract_to_folder: Optional[Path] = None, timeout: Optional[float] = None
     ) -> Optional[str]:
@@ -335,19 +346,11 @@ class QuixKafkaConfigsBuilder:
 
         :return: full cert filepath as string or `None` if certificate is not specified
         """
-        certificate_bytes = self.api.get_workspace_certificate(
-            workspace_id=self._workspace_id,
-            timeout=timeout if timeout is not None else self._timeout,
-        )
-        if certificate_bytes is None:
-            return
-        extract_to_folder = extract_to_folder or Path(gettempdir())
-        full_path = extract_to_folder / "ca.cert"
-        if not full_path.is_file():
-            extract_to_folder.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(certificate_bytes)
-        return full_path.as_posix()
+        if (cert := self.api.get_workspace_certificate(
+                workspace_id=self._workspace_id,
+                timeout=timeout if timeout is not None else self._timeout
+        )) is not None:
+            return self._write_ssl_cert(cert, extract_to_folder)
 
     def _create_topic(self, topic: Topic, timeout: Optional[float] = None):
         """
@@ -515,9 +518,11 @@ class QuixKafkaConfigsBuilder:
         if missing_topics:
             raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
-    def _set_workspace_cert(self, timeout: Optional[float] = None) -> str:
+    def _set_workspace_cert(
+            self, cert: Optional[bytes] = None, timeout: Optional[float] = None
+    ) -> str:
         """
-        Will create a cert and assigns it to the workspace_cert_path property.
+        Will create a cetimeout=timeout if timeout is not None else self._timeoutrt and assigns it to the workspace_cert_path property.
         If there was no path provided at init, one is generated based on the cwd and
         workspace_id.
         Used by this class when generating configs (does some extra folder and class
@@ -531,9 +536,11 @@ class QuixKafkaConfigsBuilder:
                 folder = folder.parent
         else:
             folder = Path(getcwd()) / "certificates" / self.workspace_id
-        self._workspace_cert_path = self.get_workspace_ssl_cert(
-            extract_to_folder=folder, timeout=timeout
-        )
+
+        if cert is not None:
+            self._workspace_cert_path = self._write_ssl_cert(cert, folder)
+        else:
+            self._workspace_cert_path = self.get_workspace_ssl_cert(folder, timeout)
         return self._workspace_cert_path
 
     def get_confluent_broker_config(
@@ -611,4 +618,48 @@ class QuixKafkaConfigsBuilder:
             self.get_confluent_broker_config(topics[0], timeout=timeout),
             [self.prepend_workspace_id(t) for t in topics],
             self.prepend_workspace_id(consumer_group_id) if consumer_group_id else None,
+        )
+
+    def get_librdkafka_broker_config(self) -> ConnectionConfig:
+        """
+        Get the full client config dictionary required to authenticate a confluent-kafka
+        client to a Quix platform broker/workspace as a ConnectionConfig
+
+        :return: a ConnectionConfig object
+        """
+        librdkafka_dict = self.api.get_librdkafka_broker_config(self.workspace_id)
+        if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:
+            cert = base64.b64decode(cert)
+            librdkafka_dict["ssl.ca.location"] = self._set_workspace_cert(cert)
+        return ConnectionConfig.from_librdkafka_dict(librdkafka_dict)
+
+    def get_librdkafka_extra_configs(self) -> dict:
+        # Set the connection idle timeout and metadata max age to be less than
+        # Azure's default 4 minutes.
+        # Azure LB kills the inbound TCP connections after 4 mins and these settings
+        # help to handle that.
+        # More about this issue:
+        # - https://github.com/confluentinc/librdkafka/issues/3109
+        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
+        # These values can be overwritten on the Application level by passing
+        # `extra_consumer_config` or `extra_producer_config` parameters.
+        return {
+            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
+            "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
+        }
+
+    def get_application_config(
+        self, consumer_group_id: str
+    ) -> Tuple[ConnectionConfig, dict, Optional[str]]:
+        """
+        Get all the necessary attributes for an Application to run on Quix Cloud.
+
+        :param consumer_group_id: consumer group id, if needed
+        :return: a tuple with broker configs, extra configs, and consumer_group
+        and consumer group name
+        """
+        return (
+            self.get_librdkafka_broker_config(),
+            self.get_librdkafka_extra_configs(),
+            self.prepend_workspace_id(consumer_group_id),
         )

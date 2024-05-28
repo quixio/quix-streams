@@ -89,8 +89,6 @@ class Application:
     ```
     """
 
-    connection_configure = ConnectionConfig
-
     def __init__(
         self,
         broker_address: Optional[Union[str, ConnectionConfig]] = None,
@@ -98,7 +96,6 @@ class Application:
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         commit_interval: float = 5.0,
-        partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
@@ -138,8 +135,6 @@ class Application:
         :param commit_interval: How often to commit the processed messages in seconds.
             Default - 5.0.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param partitioner: A function to be used to determine the outgoing message
-            partition.
         :param consumer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
@@ -231,37 +226,25 @@ class Application:
             topic_manager_factory = functools.partial(
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
-            quix_configs = quix_config_builder.get_confluent_broker_config()
             # Check if the state dir points to the mounted PVC while running on Quix
             check_state_dir(state_dir=state_dir)
 
-            broker_address = self.connection_configure.from_confluent_dict(
-                quix_configs, ignore_extras=True
+            broker_address, quix_extra_configs, consumer_group = (
+                quix_config_builder.get_application_config(consumer_group)
             )
-            quix_configs = {
-                k: v
-                for k, v in quix_configs.items()
-                if k not in self.connection_configure.model_fields
-            }
-
-            # Quix Cloud prefixes consumer group with workspace id
-            consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
-            consumer_extra_config = {**quix_configs, **consumer_extra_config}
-            producer_extra_config = {**quix_configs, **producer_extra_config}
+            consumer_extra_config = {**consumer_extra_config, **quix_extra_configs}
+            producer_extra_config = {**consumer_extra_config, **quix_extra_configs}
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
             if isinstance(broker_address, str):
-                broker_address = self.connection_configure(
-                    bootstrap_servers=broker_address
-                )
+                broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
         self._is_quix_app = bool(quix_config_builder)
 
         self._broker_address = broker_address
         self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
-        self._partitioner = partitioner
         self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
@@ -276,7 +259,6 @@ class Application:
         )
         self._producer = RowProducer(
             broker_address=broker_address,
-            partitioner=partitioner,
             extra_config=producer_extra_config,
             on_error=on_producer_error,
         )

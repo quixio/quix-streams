@@ -730,7 +730,7 @@ class TestQuixApplication:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.return_value = (
+            cfg_builder.get_librdkafka_broker_config.return_value = (
                 confluent_broker_config
             )
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
@@ -788,7 +788,7 @@ class TestQuixApplication:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.return_value = (
+            cfg_builder.get_librdkafka_broker_config.return_value = (
                 confluent_broker_config
             )
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
@@ -845,7 +845,7 @@ class TestQuixApplication:
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.return_value = (
+            cfg_builder.get_librdkafka_broker_config.return_value = (
                 confluent_broker_config
             )
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
@@ -989,7 +989,7 @@ class TestDeprecatedApplicationDotQuix:
         expected_consumer_extra_config = {**auth_params, **extra_config}
 
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg_builder.get_confluent_broker_config.return_value = confluent_broker_config
+        cfg_builder.get_librdkafka_broker_config.return_value = confluent_broker_config
         cfg_builder.prepend_workspace_id.return_value = "my_ws-c_group"
         cfg_builder.strip_workspace_id_prefix.return_value = "c_group"
         with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(

@@ -510,7 +510,7 @@ class TestQuixKafkaConfigsBuilder:
             ("OAuthBearer", "OAUTHBEARER"),
         ],
     )
-    def test_get_confluent_broker_config(
+    def test_get_librdkafka_broker_config(
         self,
         quix_security_protocol,
         rdkafka_security_protocol,
@@ -535,7 +535,7 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(cfg_builder, "get_workspace_info") as get_ws:
             with patch.object(cfg_builder, "_set_workspace_cert") as set_cert:
                 set_cert.return_value = "/mock/dir/ca.cert"
-                cfg_builder.get_confluent_broker_config(
+                cfg_builder.get_librdkafka_broker_config(
                     known_topic="topic", timeout=timeout
                 )
 
@@ -578,7 +578,7 @@ class TestQuixKafkaConfigsBuilder:
         topics = ["topic_1", "topic_2"]
         group_id = "my_consumer_group"
         with patch.object(
-            cfg_builder, "get_confluent_broker_config", return_value={"cfgs": "here"}
+            cfg_builder, "get_librdkafka_broker_config", return_value={"cfgs": "here"}
         ) as cfg:
             result = cfg_builder.get_confluent_client_configs(
                 topics, group_id, timeout=timeout
