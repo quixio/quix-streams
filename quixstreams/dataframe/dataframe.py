@@ -492,10 +492,13 @@ class StreamingDataFrame(BaseStreaming):
             raise GroupByLimitExceeded(
                 "Only one GroupBy operation is allowed per StreamingDataFrame"
             )
+        if not key:
+            raise ValueError('Parameter "key" cannot be empty')
         if callable(key) and not name:
             raise ValueError(
-                "group_by requires 'name' parameter when 'key' is a function"
+                'group_by requires "name" parameter when "key" is a function'
             )
+
         groupby_topic = self._topic_manager.repartition_topic(
             operation=name or key,
             topic_name=self._topic.name,
