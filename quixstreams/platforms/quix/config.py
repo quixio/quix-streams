@@ -334,10 +334,12 @@ class QuixKafkaConfigsBuilder:
 
         :return: full cert filepath as string or `None` if certificate is not specified
         """
-        if (cert := self.api.get_workspace_certificate(
+        if (
+            cert := self.api.get_workspace_certificate(
                 workspace_id=self._workspace_id,
-                timeout=timeout if timeout is not None else self._timeout
-        )) is not None:
+                timeout=timeout if timeout is not None else self._timeout,
+            )
+        ) is not None:
             return self._write_ssl_cert(cert, extract_to_folder)
 
     def _create_topic(self, topic: Topic, timeout: Optional[float] = None):
@@ -459,7 +461,9 @@ class QuixKafkaConfigsBuilder:
             finalize, timeout=timeout, finalize_timeout=finalize_timeout
         )
 
-    def get_topic(self, topic_name: str) -> Optional[dict]:
+    def get_topic(
+        self, topic_name: str, timeout: Optional[float] = None
+    ) -> Optional[dict]:
         """
         return the topic ID (the actual cluster topic name) if it exists, else None
 
@@ -472,7 +476,11 @@ class QuixKafkaConfigsBuilder:
         :return: response dict of the topic info if topic found, else None
         """
         try:
-            return self.api.get_topic(topic_name, workspace_id=self.workspace_id)
+            return self.api.get_topic(
+                topic_name,
+                workspace_id=self.workspace_id,
+                timeout=timeout if timeout is not None else self._timeout,
+            )
         except QuixApiRequestFailure as e:
             if e.status_code == 404:
                 return
@@ -507,10 +515,10 @@ class QuixKafkaConfigsBuilder:
             raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
     def _set_workspace_cert(
-            self, cert: Optional[bytes] = None, timeout: Optional[float] = None
+        self, cert: Optional[bytes] = None, timeout: Optional[float] = None
     ) -> str:
         """
-        Will create a cetimeout=timeout if timeout is not None else self._timeoutrt and assigns it to the workspace_cert_path property.
+        Will create a cert and assigns it to the workspace_cert_path property.
         If there was no path provided at init, one is generated based on the cwd and
         workspace_id.
         Used by this class when generating configs (does some extra folder and class

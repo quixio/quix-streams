@@ -469,7 +469,7 @@ class TestQuixKafkaConfigsBuilder:
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
             r = cfg_builder._set_workspace_cert(timeout=timeout)
-        get_cert.assert_called_with(path, timeout=timeout)
+        get_cert.assert_called_with(path, timeout)
         assert cfg_builder.workspace_cert_path == r == expected
 
     def test__set_workspace_cert_path(self, tmp_path):
@@ -486,11 +486,10 @@ class TestQuixKafkaConfigsBuilder:
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
             r = cfg_builder._set_workspace_cert(timeout=timeout)
-        get_cert.assert_called_with(tmp_path, timeout=timeout)
+        get_cert.assert_called_with(tmp_path, timeout)
         assert cfg_builder.workspace_cert_path == r == expected
 
     def test_librdkafka_connection_config(self):
-        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
