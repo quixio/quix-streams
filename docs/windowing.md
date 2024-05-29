@@ -73,6 +73,45 @@ def custom_ts_extractor(
 topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 ```
 
+### Timestamps of the aggregation results
+
+Since version 2.6, all windowed aggregations always set timestamps equal to the start of the window.
+
+**Example:**
+
+```python
+from datetime import timedelta
+
+sdf = app.dataframe(...)
+
+# Input:
+# value={"temperature" : 9999}, key="sensor_1", timestamp=10001
+
+sdf = (
+    # Extract the "temperature" column from the dictionary 
+    sdf.apply(lambda value: value['temperature'])
+    
+    # Define a tumbling window of 10 seconds
+    .tumbling_window(timedelta(seconds=10))
+
+    # Calculate the minimum temperature 
+    .min()
+
+    # Emit results for every incoming message
+    .current()
+)
+# Output:
+# value={
+#   'start': 10000, 
+#   'end': 20000, 
+#   'value': 9999  - minimum temperature
+# }, 
+# key="sensor_1",
+# timestamp=10000 - timestamp equals to the window start timestamp
+
+```
+
+
 ## Tumbling Windows
 Tumbling windows slice time into non-overlapping intervals of a fixed size. 
 
