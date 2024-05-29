@@ -162,8 +162,6 @@ class QuixKafkaConfigsBuilder:
         # More about this issue:
         # - https://github.com/confluentinc/librdkafka/issues/3109
         # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
-        # These values can be overwritten on the Application level by passing
-        # `extra_consumer_config` or `extra_producer_config` parameters.
         return {
             "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
             "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
