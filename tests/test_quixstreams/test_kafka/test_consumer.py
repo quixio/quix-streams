@@ -239,7 +239,7 @@ class TestConsumerOnRevoke:
                 assert msg is None
 
                 # Wait until consumer has partitions assigned
-                if not consumer2_subscribed and len(consumer1.assignment()) > 0:
+                if not consumer2_subscribed and len(consumer1.assignment()) == 2:
                     # Start second consumer
                     consumer2 = consumer_factory()
                     exit_stack.enter_context(consumer2)
