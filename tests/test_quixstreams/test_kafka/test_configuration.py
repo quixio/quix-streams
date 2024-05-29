@@ -96,7 +96,7 @@ class TestConnectionConfig:
 
     def test_secret_field(self):
         """
-        Confirm the sasl_password field is obscured
+        Confirm a secret field is obscured
         """
         config = ConnectionConfig(bootstrap_servers="url", sasl_password="blah")
         assert config.sasl_password != "blah"
@@ -124,7 +124,10 @@ class TestConnectionConfig:
 
     def test_as_librdkafka_dict_plain_secret(self):
         password = "my-password"
-        config = ConnectionConfig(bootstrap_servers="url", sasl_password=password)
+        config = ConnectionConfig(
+            bootstrap_servers="url", sasl_password=password, ssl_key_password=password
+        )
         librdkafka_dict = config.as_librdkafka_dict()
 
         assert librdkafka_dict["sasl.password"] == password
+        assert librdkafka_dict["ssl.key.password"] == password
