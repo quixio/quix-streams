@@ -17,12 +17,12 @@ from quixstreams.error_callbacks import (
     ProcessingErrorCallback,
 )
 from quixstreams.kafka import (
-    Partitioner,
     AutoOffsetReset,
     Consumer,
     Producer,
     AssignmentStrategy,
 )
+from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models import MessageContext
 from quixstreams.models.rows import Row
 from quixstreams.models.serializers import (
@@ -226,13 +226,11 @@ def row_consumer_factory(kafka_container, random_consumer_group):
 def row_producer_factory(kafka_container):
     def factory(
         broker_address: str = kafka_container.broker_address,
-        partitioner: Partitioner = "murmur2",
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
     ) -> RowProducer:
         return RowProducer(
             broker_address=broker_address,
-            partitioner=partitioner,
             extra_config=extra_config,
             on_error=on_error,
         )
@@ -350,9 +348,7 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
-        cfg_builder.get_librdkafka_broker_config.side_effect = lambda: {
-            "bootstrap.servers": kafka_container.broker_address
-        }
+
         # Slight change to ws stuff in case you pass a blank workspace (which makes
         #  some things easier
         cfg_builder.prepend_workspace_id.side_effect = lambda s: (
@@ -364,6 +360,16 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder.get_topic.side_effect = lambda topic: {
             "id": cfg_builder.prepend_workspace_id(topic)
         }
+
+        connection = ConnectionConfig(bootstrap_servers=kafka_container.broker_address)
+        cfg_builder._librdkafka_connection_config = connection
+        cfg_builder.librdkafka_connection_config = connection
+        cfg_builder.get_application_config.side_effect = lambda cg: (
+            connection,
+            {"connections.max.idle.ms": 60000},
+            cfg_builder.prepend_workspace_id(cg),
+        )
+
         return cfg_builder
 
     return factory

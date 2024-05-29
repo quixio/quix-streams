@@ -30,33 +30,6 @@ QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
 
 
-# Map Kafka configuration params from Quix format to librdkafka's
-_QUIX_PARAMS_NAMES_MAP = {
-    "saslMechanism": "sasl.mechanisms",
-    "securityMode": "security.protocol",
-    "address": "bootstrap.servers",
-    "username": "sasl.username",
-    "password": "sasl.password",
-}
-
-# Map values of `sasl.mechanisms` from Quix format to librdkafka's
-_QUIX_SASL_MECHANISM_MAP = {
-    "ScramSha256": "SCRAM-SHA-256",
-    "ScramSha512": "SCRAM-SHA-512",
-    "Gssapi": "GSSAPI",
-    "Plain": "PLAIN",
-    "OAuthBearer": "OAUTHBEARER",
-}
-
-# Map values of `security.protocol` from Quix format to librdkafka's
-_QUIX_SECURITY_PROTOCOL_MAP = {
-    "Ssl": "ssl",
-    "SaslSsl": "sasl_ssl",
-    "Sasl": "sasl_plaintext",
-    "PlainText": "plaintext",
-}
-
-
 @dataclasses.dataclass
 class TopicCreationConfigs:
     name: Optional[str] = None  # Required when not created by a Quix App.
@@ -144,8 +117,7 @@ class QuixKafkaConfigsBuilder:
                 "provide a known topic name later on to help find the applicable ID."
             )
         self._workspace_cert_path = workspace_cert_path
-        self._confluent_broker_config = None
-        self._quix_broker_config = None
+        self._librdkafka_connection_config = None
         self._quix_broker_settings = None
         self._workspace_meta = None
         self._timeout = timeout
@@ -159,21 +131,16 @@ class QuixKafkaConfigsBuilder:
 
     @property
     def quix_broker_config(self) -> dict:
-        if not self._quix_broker_config:
-            self.get_workspace_info()
-        return self._quix_broker_config
+        return {
+            **self.librdkafka_connection_config.as_librdkafka_dict(),
+            **self.librdkafka_extra_config,
+        }
 
     @property
     def quix_broker_settings(self) -> dict:
         if not self._quix_broker_settings:
             self.get_workspace_info()
         return self._quix_broker_settings
-
-    @property
-    def confluent_broker_config(self) -> dict:
-        if not self._confluent_broker_config:
-            self.get_confluent_broker_config()
-        return self._confluent_broker_config
 
     @property
     def workspace_cert_path(self) -> str:
@@ -186,6 +153,28 @@ class QuixKafkaConfigsBuilder:
         if not self._workspace_meta:
             self.get_workspace_info()
         return self._workspace_meta
+
+    @property
+    def librdkafka_connection_config(self) -> ConnectionConfig:
+        if not self._librdkafka_connection_config:
+            self._get_librdkafka_connection_config()
+        return self._librdkafka_connection_config
+
+    @property
+    def librdkafka_extra_config(self) -> dict:
+        # Set the connection idle timeout and metadata max age to be less than
+        # Azure's default 4 minutes.
+        # Azure LB kills the inbound TCP connections after 4 mins and these settings
+        # help to handle that.
+        # More about this issue:
+        # - https://github.com/confluentinc/librdkafka/issues/3109
+        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
+        # These values can be overwritten on the Application level by passing
+        # `extra_consumer_config` or `extra_producer_config` parameters.
+        return {
+            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
+            "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
+        }
 
     def strip_workspace_id_prefix(self, s: str) -> str:
         """
@@ -263,7 +252,6 @@ class QuixKafkaConfigsBuilder:
                 "No workspace was found for the given workspace/auth-token/topic combo"
             )
         self._workspace_id = ws_data.pop("workspaceId")
-        self._quix_broker_config = ws_data.pop("broker")
         try:
             self._quix_broker_settings = ws_data.pop("brokerSettings")
         except KeyError:  # hold-over for platform v1
@@ -543,6 +531,37 @@ class QuixKafkaConfigsBuilder:
             self._workspace_cert_path = self.get_workspace_ssl_cert(folder, timeout)
         return self._workspace_cert_path
 
+    def _get_librdkafka_connection_config(self):
+        """
+        Get the full client config dictionary required to authenticate a confluent-kafka
+        client to a Quix platform broker/workspace as a ConnectionConfig
+
+        :return: a ConnectionConfig object
+        """
+        librdkafka_dict = self.api.get_librdkafka_connection_config(self.workspace_id)
+        if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:
+            cert = base64.b64decode(cert)
+            librdkafka_dict["ssl.ca.location"] = self._set_workspace_cert(cert)
+            self._librdkafka_connection_config = ConnectionConfig.from_librdkafka_dict(
+                librdkafka_dict
+            )
+
+    def get_application_config(
+        self, consumer_group_id: str
+    ) -> Tuple[ConnectionConfig, dict, Optional[str]]:
+        """
+        Get all the necessary attributes for an Application to run on Quix Cloud.
+
+        :param consumer_group_id: consumer group id, if needed
+        :return: a tuple with broker configs, extra configs, and consumer_group
+        and consumer group name
+        """
+        return (
+            self.librdkafka_connection_config,
+            self.librdkafka_extra_config,
+            self.prepend_workspace_id(consumer_group_id),
+        )
+
     def get_confluent_broker_config(
         self, known_topic: Optional[str] = None, timeout: Optional[float] = None
     ) -> dict:
@@ -559,38 +578,9 @@ class QuixKafkaConfigsBuilder:
         :return: a dict of confluent-kafka-python client settings (see librdkafka
         config for more details)
         """
+        # do this just for backwards compatibility
         self.get_workspace_info(known_workspace_topic=known_topic, timeout=timeout)
-        cfg_out = {}
-        for quix_param_name, rdkafka_param_name in _QUIX_PARAMS_NAMES_MAP.items():
-            # Map broker config received from Quix to librdkafka format
-            param_value = self.quix_broker_config[quix_param_name]
-
-            # Also map values of "security.protocol" and "sasl.mechanisms" from Quix
-            # to librdkafka format
-            if rdkafka_param_name == "security.protocol":
-                param_value = _QUIX_SECURITY_PROTOCOL_MAP[param_value]
-            elif rdkafka_param_name == "sasl.mechanisms":
-                param_value = _QUIX_SASL_MECHANISM_MAP[param_value]
-            cfg_out[rdkafka_param_name] = param_value
-
-        # Specify SSL certificate if it's provided for the broker
-        ssl_cert_path = self._set_workspace_cert()
-        if ssl_cert_path is not None:
-            cfg_out["ssl.ca.location"] = ssl_cert_path
-
-        # Set the connection idle timeout and metadata max age to be less than
-        # Azure's default 4 minutes.
-        # Azure LB kills the inbound TCP connections after 4 mins and these settings
-        # help to handle that.
-        # More about this issue:
-        # - https://github.com/confluentinc/librdkafka/issues/3109
-        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
-        # These values can be overwritten on the Application level by passing
-        # `extra_consumer_config` or `extra_producer_config` parameters.
-        cfg_out["connections.max.idle.ms"] = QUIX_CONNECTIONS_MAX_IDLE_MS
-        cfg_out["metadata.max.age.ms"] = QUIX_METADATA_MAX_AGE_MS
-        self._confluent_broker_config = cfg_out
-        return self._confluent_broker_config
+        return self.quix_broker_config
 
     def get_confluent_client_configs(
         self,
@@ -618,48 +608,4 @@ class QuixKafkaConfigsBuilder:
             self.get_confluent_broker_config(topics[0], timeout=timeout),
             [self.prepend_workspace_id(t) for t in topics],
             self.prepend_workspace_id(consumer_group_id) if consumer_group_id else None,
-        )
-
-    def get_librdkafka_broker_config(self) -> ConnectionConfig:
-        """
-        Get the full client config dictionary required to authenticate a confluent-kafka
-        client to a Quix platform broker/workspace as a ConnectionConfig
-
-        :return: a ConnectionConfig object
-        """
-        librdkafka_dict = self.api.get_librdkafka_broker_config(self.workspace_id)
-        if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:
-            cert = base64.b64decode(cert)
-            librdkafka_dict["ssl.ca.location"] = self._set_workspace_cert(cert)
-        return ConnectionConfig.from_librdkafka_dict(librdkafka_dict)
-
-    def get_librdkafka_extra_configs(self) -> dict:
-        # Set the connection idle timeout and metadata max age to be less than
-        # Azure's default 4 minutes.
-        # Azure LB kills the inbound TCP connections after 4 mins and these settings
-        # help to handle that.
-        # More about this issue:
-        # - https://github.com/confluentinc/librdkafka/issues/3109
-        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
-        # These values can be overwritten on the Application level by passing
-        # `extra_consumer_config` or `extra_producer_config` parameters.
-        return {
-            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
-            "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
-        }
-
-    def get_application_config(
-        self, consumer_group_id: str
-    ) -> Tuple[ConnectionConfig, dict, Optional[str]]:
-        """
-        Get all the necessary attributes for an Application to run on Quix Cloud.
-
-        :param consumer_group_id: consumer group id, if needed
-        :return: a tuple with broker configs, extra configs, and consumer_group
-        and consumer group name
-        """
-        return (
-            self.get_librdkafka_broker_config(),
-            self.get_librdkafka_extra_configs(),
-            self.prepend_workspace_id(consumer_group_id),
         )

@@ -229,11 +229,11 @@ class Application:
             # Check if the state dir points to the mounted PVC while running on Quix
             check_state_dir(state_dir=state_dir)
 
-            broker_address, quix_extra_configs, consumer_group = (
+            broker_address, quix_extra_config, consumer_group = (
                 quix_config_builder.get_application_config(consumer_group)
             )
-            consumer_extra_config = {**consumer_extra_config, **quix_extra_configs}
-            producer_extra_config = {**consumer_extra_config, **quix_extra_configs}
+            consumer_extra_config = {**consumer_extra_config, **quix_extra_config}
+            producer_extra_config = {**producer_extra_config, **quix_extra_config}
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
@@ -307,7 +307,6 @@ class Application:
         cls,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
@@ -367,8 +366,6 @@ class Application:
             Default - "quixstreams-default" (set during init).
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param partitioner: A function to be used to determine the outgoing message
-            partition.
         :param consumer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
@@ -426,7 +423,6 @@ class Application:
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
             auto_offset_reset=auto_offset_reset,
-            partitioner=partitioner,
             on_consumer_error=on_consumer_error,
             on_processing_error=on_processing_error,
             on_producer_error=on_producer_error,
@@ -614,7 +610,6 @@ class Application:
 
         return Producer(
             broker_address=self._broker_address,
-            partitioner=self._partitioner,
             extra_config=self._producer_extra_config,
         )
 

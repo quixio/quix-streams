@@ -110,7 +110,9 @@ class QuixPortalApiService:
         )
         return s
 
-    def get_librdkafka_broker_config(self, workspace_id: Optional[str] = None) -> dict:
+    def get_librdkafka_connection_config(
+        self, workspace_id: Optional[str] = None
+    ) -> dict:
         workspace_id = workspace_id or self.default_workspace_id
         return self.session.get(f"/workspaces/{workspace_id}/broker/librdkafka").json()
 

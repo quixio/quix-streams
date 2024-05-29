@@ -25,14 +25,15 @@ class ConnectionConfig(BaseSettings):
         d = {name.replace(".", "_"): v for name, v in d.items()}
         if ignore_extras:
             keys = set(cls.model_fields.keys()) | {
-                [a for a in v.choices] for v in _aliases.values()
+                a for v in _aliases.values() for a in v.choices
             }
             d = {k: v for k, v in d.items() if k in keys}
         return cls(**d)
 
     def as_librdkafka_dict(self) -> dict:
         dump = self.model_dump(by_alias=True, exclude_none=True)
-        dump["sasl.password"] = dump["sasl.password"].get_secret_value()
+        if dump.get("sasl.password"):
+            dump["sasl.password"] = dump["sasl.password"].get_secret_value()
         return dump
 
     def as_printable_json(self, indent=2) -> str:

@@ -1,18 +1,16 @@
+import base64
 from contextlib import ExitStack
 from copy import deepcopy
 from os import getcwd
 from pathlib import Path
-from unittest.mock import patch, call, create_autospec
+from unittest.mock import patch, call, create_autospec, PropertyMock
 
 import pytest
 from requests import HTTPError, Response
 
+from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.platforms.quix.api import QuixPortalApiService
-from quixstreams.platforms.quix.config import (
-    QUIX_CONNECTIONS_MAX_IDLE_MS,
-    QUIX_METADATA_MAX_AGE_MS,
-    QuixKafkaConfigsBuilder,
-)
+from quixstreams.platforms.quix.config import QuixKafkaConfigsBuilder
 from quixstreams.platforms.quix.exceptions import (
     NoWorkspaceFound,
     MultipleWorkspaces,
@@ -102,9 +100,9 @@ class TestQuixKafkaConfigsBuilder:
             workspace_name_or_id=cfg_builder.workspace_id, timeout=timeout
         )
         assert cfg_builder.workspace_id == api_data["workspaceId"]
-        assert cfg_builder.quix_broker_config == api_data["broker"]
         assert cfg_builder.quix_broker_settings == api_data["brokerSettings"]
         assert cfg_builder.workspace_meta == {
+            "broker": api_data["broker"],
             "name": "12345",
             "status": "Ready",
             "brokerType": "SharedKafka",
@@ -172,9 +170,9 @@ class TestQuixKafkaConfigsBuilder:
 
         search.assert_called_with("a_topic", timeout=timeout)
         assert cfg_builder.workspace_id == api_data_stub["workspaceId"]
-        assert cfg_builder.quix_broker_config == api_data_stub["broker"]
         assert cfg_builder.quix_broker_settings == api_data_stub["brokerSettings"]
         assert cfg_builder.workspace_meta == {
+            "broker": api_data_stub["broker"],
             "name": "12345",
             "status": "Ready",
             "brokerType": "SharedKafka",
@@ -226,12 +224,12 @@ class TestQuixKafkaConfigsBuilder:
 
         search.assert_called_with("a_topic", timeout=timeout)
         assert cfg_builder.workspace_id == api_data_stub["workspaceId"]
-        assert cfg_builder.quix_broker_config == api_data_stub["broker"]
         assert cfg_builder.quix_broker_settings == {
             "brokerType": "SharedKafka",
             "syncTopics": False,
         }
         assert cfg_builder.workspace_meta == {
+            "broker": api_data_stub["broker"],
             "name": "12345",
             "status": "Ready",
             "brokerType": "SharedKafka",
@@ -471,7 +469,7 @@ class TestQuixKafkaConfigsBuilder:
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
             r = cfg_builder._set_workspace_cert(timeout=timeout)
-        get_cert.assert_called_with(extract_to_folder=path, timeout=timeout)
+        get_cert.assert_called_with(path, timeout=timeout)
         assert cfg_builder.workspace_cert_path == r == expected
 
     def test__set_workspace_cert_path(self, tmp_path):
@@ -488,68 +486,36 @@ class TestQuixKafkaConfigsBuilder:
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
             r = cfg_builder._set_workspace_cert(timeout=timeout)
-        get_cert.assert_called_with(extract_to_folder=tmp_path, timeout=timeout)
+        get_cert.assert_called_with(tmp_path, timeout=timeout)
         assert cfg_builder.workspace_cert_path == r == expected
 
-    @pytest.mark.parametrize(
-        "quix_security_protocol, rdkafka_security_protocol",
-        [
-            ("SaslSsl", "sasl_ssl"),
-            ("PlainText", "plaintext"),
-            ("Sasl", "sasl_plaintext"),
-            ("Ssl", "ssl"),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "quix_sasl_mechanisms, rdkafka_sasl_mechanisms",
-        [
-            ("ScramSha256", "SCRAM-SHA-256"),
-            ("ScramSha512", "SCRAM-SHA-512"),
-            ("Gssapi", "GSSAPI"),
-            ("Plain", "PLAIN"),
-            ("OAuthBearer", "OAUTHBEARER"),
-        ],
-    )
-    def test_get_librdkafka_broker_config(
-        self,
-        quix_security_protocol,
-        rdkafka_security_protocol,
-        quix_sasl_mechanisms,
-        rdkafka_sasl_mechanisms,
-    ):
+    def test_librdkafka_connection_config(self):
         timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
         )
-        cfg_builder._quix_broker_config = {
-            "address": "address1,address2",
-            "securityMode": quix_security_protocol,
-            "sslPassword": "",
-            "saslMechanism": quix_sasl_mechanisms,
-            "username": "my-username",
-            "password": "my-password",
-            "hasCertificate": True,
+        api.get_librdkafka_connection_config.return_value = {
+            "sasl.mechanism": "PLAIN",
+            "security.protocol": "sasl_ssl",
+            "bootstrap.servers": "address1,address2",
+            "sasl.username": "my-username",
+            "sasl.password": "my-password",
+            "ssl.ca.cert": base64.b64encode(b"a_cert"),
         }
 
-        with patch.object(cfg_builder, "get_workspace_info") as get_ws:
-            with patch.object(cfg_builder, "_set_workspace_cert") as set_cert:
-                set_cert.return_value = "/mock/dir/ca.cert"
-                cfg_builder.get_librdkafka_broker_config(
-                    known_topic="topic", timeout=timeout
-                )
+        with patch.object(cfg_builder, "_set_workspace_cert") as set_cert:
+            set_cert.return_value = "/mock/dir/ca.cert"
+            config = cfg_builder.librdkafka_connection_config
 
-        get_ws.assert_called_with(known_workspace_topic="topic", timeout=timeout)
         set_cert.assert_called()
-        assert cfg_builder.confluent_broker_config == {
-            "sasl.mechanisms": rdkafka_sasl_mechanisms,
-            "security.protocol": rdkafka_security_protocol,
+        assert config.as_librdkafka_dict() == {
+            "sasl.mechanism": "PLAIN",
+            "security.protocol": "sasl_ssl",
             "bootstrap.servers": "address1,address2",
             "sasl.username": "my-username",
             "sasl.password": "my-password",
             "ssl.ca.location": "/mock/dir/ca.cert",
-            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
-            "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
         }
 
     def test_prepend_workspace_id(self):
@@ -568,6 +534,27 @@ class TestQuixKafkaConfigsBuilder:
         assert cfg_builder.strip_workspace_id_prefix("12345-topic") == "topic"
         assert cfg_builder.strip_workspace_id_prefix("topic") == "topic"
 
+    def test_get_application_config(self):
+        connection_config = ConnectionConfig(bootstrap_servers="url")
+        workspace_id = "12345"
+        group_id = "my_consumer_group"
+        cfg_builder = QuixKafkaConfigsBuilder(
+            workspace_id=workspace_id,
+            quix_portal_api_service=create_autospec(QuixPortalApiService),
+        )
+        with patch.object(
+            QuixKafkaConfigsBuilder,
+            "librdkafka_connection_config",
+            new_callable=PropertyMock,
+        ) as librdkafka_connection_config:
+            librdkafka_connection_config.return_value = connection_config
+            result = cfg_builder.get_application_config(group_id)
+        assert result == (
+            connection_config,
+            cfg_builder.librdkafka_extra_config,
+            f"{workspace_id}-{group_id}",
+        )
+
     def test_get_confluent_client_config(self):
         timeout = 4.5
         api = create_autospec(QuixPortalApiService)
@@ -578,7 +565,7 @@ class TestQuixKafkaConfigsBuilder:
         topics = ["topic_1", "topic_2"]
         group_id = "my_consumer_group"
         with patch.object(
-            cfg_builder, "get_librdkafka_broker_config", return_value={"cfgs": "here"}
+            cfg_builder, "get_confluent_broker_config", return_value={"cfgs": "here"}
         ) as cfg:
             result = cfg_builder.get_confluent_client_configs(
                 topics, group_id, timeout=timeout
