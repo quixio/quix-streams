@@ -350,6 +350,14 @@ sdf = sdf.to_topic(output_topic)
 sdf = sdf.to_topic(output_topic, key=lambda value: str(value["location_id"]))
 ```
 
+### Timestamps of Produced Messages
+
+Since version 2.6, the `StreamingDataFrame.to_topic()` method always forwards the current timestamp to the output topics.
+
+This way, **the outgoing messages will be produced with the identical timestamps as they were received with** by default. 
+
+To change the timestamp of the message, use the `StreamingDataFrame.set_timestamp()` API, described in [this section](#updating-timestamps).
+
 ## Using Columns and DataFrame API
 
 `StreamingDataFrame` class provides rich API to access and combine individual columns,
@@ -549,36 +557,82 @@ sdf = sdf.update(lambda value: pdb.set_trace())
 sdf = sdf.update(lambda value: print('Value: ', value))
 ```
 
-## Accessing Kafka Keys and Metadata
+## Updating Timestamps
 
-Quix Streams library provides access to the metadata of the current Kafka message
-via `quixstreams.context` module.
+In Quix Streams, each processed item has a timestamp assigned.   
+These timestamps are used in [windowed aggregations](./windowing.md) and when producing messages to the output topics. 
 
-Information like message key, topic, partition, offset, timestamp and more is stored
-globally in `MessageContext` object,
-and it's updated on each incoming message.
+To update the current timestamp, use the `StreamingDataFrame.set_timestamp()` API. 
 
-To get the current message key, use `quixstreams.message_key` function:
+There are several things to note:
+
+- The new timestamp will be used by the `StreamingDataFrame.to_topic()` method when the message is produced (see [here](#timestamps-of-produced-messages)).
+- The timestamp will also determine the applicable window in the windowed aggregations.
+
+**Example:**
 
 ```python
-from quixstreams import message_key
+import time
 
-# Using message key to filter data with invalid keys
-sdf = sdf.filter(lambda value: message_key() == b'INVALID')
+sdf = app.dataframe(...)
+
+# Update the timestamp to be the current epoch using "set_timestamp" 
+# method with a callback.
+# The callback receives two positional arguments: value and current timestamp as integer in milliseconds.
+# It must return a new timestamp as integer in milliseconds as well
+
+sdf = sdf.set_timestamp(lambda value, timestamp: int(time.time() * 1000))
+
 ```
 
-To get the whole `MessageContext` object with all attributes including keys,
-use `quixstreams.message_context`
+
+## Accessing Kafka Keys and Timestamps
+By leveraging the power of custom functions in `apply()`, `update()`, and `filter()` methods of `StreamingDataFrame`, you can conveniently access message keys and timestamps of the records.
+
+To get a key and a timestamp in your callback, you need to pass an additional keyword-only parameter, `metadata=True.`
+
+
+> **_NOTE:_** You should never mutate keys during processing.  
+> If you need to change a message key during processing, use the `StreamingDataFrame.group_by()` method described [here](./groupby.md). 
+
+**Examples:**
+
+```python
+# Using a message key to filter data with invalid keys
+sdf = sdf.filter(lambda value, key, timestamp: key != b'INVALID', metadata=True)
+
+# Assigning a message timestamp to the value as a new column
+sdf['timestamp'] = sdf.apply(lambda value, key, timestamp: timestamp, metadata=True)
+```
+
+## Accessing Topic Name, Partition and Offset
+
+
+To access other metadata for the current Kafka message, like a topic name, partition, or offset, you may use the `message_context()` function
+from the `quixstreams` module.  
+This function returns an instance of `MessageContext` with message-specific fields.
+
+The `MessageContext` is stored as a context variable via the [`contextvars`](https://docs.python.org/3/library/contextvars.html) module.
+It's updated on each incoming message.
+
+The `quixstreams.message_context()` function should be called
+only from the custom functions during processing.
+
+> **_NOTE:_** Before quixstreams==2.6.0, `MessageContext` also provided access to message keys and timestamps.  
+> To access keys and timestamps in `quixstreams>=2.6`, use the approach described in this [section](#accessing-kafka-keys-anad-timestamps)
+
+
+**Example:**
 
 ```python
 from quixstreams import message_context
 
-# Get current message timestamp and set it to a "timestamp" key
-sdf['timestamp'] = sdf.apply(lambda value: message_context().timestamp.milliseconds)
+# Print the offset of the current Kafka message
+sdf = sdf.update(lambda _: print('Current offset: ', message_context().offset))
 ```
 
-Both `quixstreams.message_key()` and `quixstreams.message_context()` should be called
-only from the custom functions during processing.
+
+
 
 ## Using State Store
 
