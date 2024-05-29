@@ -248,7 +248,7 @@ class TestConsumerOnRevoke:
 
                 # Make sure some partitions are revoked
                 if num_partitions_revoked > 0:
-                    return
+                    break
 
 
 class TestConsumerPoll:
