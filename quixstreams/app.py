@@ -18,7 +18,7 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import AutoOffsetReset, Partitioner, Producer, Consumer, ConnectionConfig
+from .kafka import AutoOffsetReset, Producer, Consumer, ConnectionConfig
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
@@ -253,7 +253,6 @@ class Application:
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
-            assignment_strategy="cooperative-sticky",
             extra_config=consumer_extra_config,
             on_error=on_consumer_error,
         )
@@ -653,7 +652,6 @@ class Application:
             consumer_group=self._consumer_group,
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy="cooperative-sticky",
             extra_config=self._consumer_extra_config,
         )
 

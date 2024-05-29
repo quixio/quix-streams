@@ -15,8 +15,10 @@ For the full list of parameters see the [Application API docs](api-reference/app
 
 ## Main Configuration Parameters
 
-- **`broker_address`** - Kafka broker address as a string, required.    
-Example - `"localhost:9092"`
+- **`broker_address` (REQUIRED)** - Kafka connection settings as either:    
+  1. broker url string (`"localhost:9092"`), good for local development    
+***OR***     
+  2. `ConnectionConfig` (see: [Authentication](#authentication) for more details).
 
 - **`consumer_group`** - Kafka consumer group name.  
 Consumer group is also used in the state directory path and as a prefix for changelog topics to ensure the applications from different consumer groups don't access the same state.      
@@ -32,6 +34,54 @@ It determines where the consumer should start reading messages from.
 See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-auto-offset-reset-use-cases-and-pitfalls#the-auto-offset-reset-configuration).  
 **Options**: `"latest"`, `"earliest"`.  
 **Default** - `"latest"`.
+
+
+## Authentication
+
+If you need to provide authentication settings for your broker, you
+can do so with the `broker_address` argument by passing it a `ConnectionConfig`
+object (instead of a string), like so:
+
+```python
+from quixstreams import Application
+from quixstreams.kafka.configuration import ConnectionConfig
+
+connection = ConnectionConfig(
+    bootstrap_servers="my_url",
+    security_protocol="sasl_plaintext",
+    sasl_mechanism="PLAIN",
+    sasl_username="my_user",
+    sasl_password="my_pass"
+)
+
+app = Application(broker_address=connection)
+```
+
+### Using A librdkafka Config (Alternative)
+
+`ConnectionConfig` can also import from an already valid librdkafka dictionary:
+
+```python
+from quixstreams import Application
+from quixstreams.kafka.configuration import ConnectionConfig
+
+librdkafka_config = {
+    "bootstrap.servers": "my.url",
+    "security.protocol": "sasl_plaintext",
+    "sasl.mechanism": "PLAIN",
+    "sasl.username": "my_user",
+    "sasl.password": "my_pass"
+}
+
+# NOTE: use class directly (ConnectionConfig, NOT ConnectionConfig())
+app = Application(
+    broker_address=ConnectionConfig.from_librdkafka_dict(librdkafka_config)
+)
+```
+#### Ignoring Irrelevant librdkafka Settings
+
+`ConnectionConfig.from_librdkafka_dict(config, ignore_extras=True)` will additionally 
+ignore irrelevant settings (but you will lose some validation checks).
 
 
 ## State
@@ -140,12 +190,8 @@ Only topics made using `Application.topic()` call are tracked.
 
 ## Advanced Kafka Configuration
 
-- **`partitioner`** - a partitioner to be used to determine the outgoing message partition in Producer.
-**Options**: `"random"`, `"consistent_random"`, `"murmur2"`, `"murmur2_random"`, `"fnv1a"`, `"fnv1a_random"`.  
-**Default** - `murmur2`.
-
 - **`producer_extra_config`** - a dictionary with additional Producer options in the format of librdkafka.  
-Values in this dictionary cannot override settings already defined by other parameters, like `broker_address` and `partitioner`.
+Values in this dictionary cannot override settings already defined by other parameters, like `broker_address`.
 
 - **`consumer_extra_config`** - a dictionary with additional Consumer options in the format of librdkafka.  
 Values in the dictionary cannot override settings already defined by other parameters, like `broker_address`, `auto_offset_reset` and `consumer_group`.

@@ -20,7 +20,6 @@ from quixstreams.kafka import (
     AutoOffsetReset,
     Consumer,
     Producer,
-    AssignmentStrategy,
 )
 from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models import MessageContext
@@ -70,7 +69,6 @@ def consumer_factory(kafka_container, random_consumer_group):
         broker_address: str = kafka_container.broker_address,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        assignment_strategy: AssignmentStrategy = "range",
         auto_commit_enable: bool = True,
         extra_config: dict = None,
     ) -> Consumer:
@@ -85,7 +83,6 @@ def consumer_factory(kafka_container, random_consumer_group):
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy=assignment_strategy,
             auto_offset_reset=auto_offset_reset,
             extra_config=extra_config,
         )

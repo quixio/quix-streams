@@ -69,6 +69,7 @@ class Producer:
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
         self._producer_config = {
+            # previous Quix Streams defaults
             "partitioner": "murmur2",
             **(extra_config or {}),
             **broker_address.as_librdkafka_dict(),

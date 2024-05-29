@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError, TopicPartition
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
-from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset, ConnectionConfig
+from .kafka import Consumer, AutoOffsetReset, ConnectionConfig
 from .kafka.consumer import RebalancingCallback
 from .kafka.exceptions import KafkaConsumerException
 from .models import Topic, Row
@@ -23,7 +23,6 @@ class RowConsumer(Consumer):
         consumer_group: str,
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
-        assignment_strategy: AssignmentStrategy = "range",
         on_commit: Callable[[Optional[KafkaError], List[TopicPartition]], None] = None,
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
@@ -47,8 +46,6 @@ class RowConsumer(Consumer):
               - "latest" - automatically reset the offset to the largest offset
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
-        :param assignment_strategy: The name of a partition assignment strategy.
-            Available values: "range", "roundrobin", "cooperative-sticky".
         :param on_commit: Offset commit result propagation callback.
             Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
         :param extra_config: A dictionary with additional options that
@@ -64,7 +61,6 @@ class RowConsumer(Consumer):
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy=assignment_strategy,
             on_commit=on_commit,
             extra_config=extra_config,
         )

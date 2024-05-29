@@ -17,14 +17,12 @@ from quixstreams.exceptions import PartitionAssignmentError, KafkaPartitionError
 __all__ = (
     "Consumer",
     "AutoOffsetReset",
-    "AssignmentStrategy",
     "RebalancingCallback",
 )
 
 RebalancingCallback = Callable[[ConfluentConsumer, List[TopicPartition]], None]
 OnCommitCallback = Callable[[Optional[KafkaError], List[TopicPartition]], None]
 AutoOffsetReset = typing.Literal["earliest", "latest", "error"]
-AssignmentStrategy = typing.Literal["range", "roundrobin", "cooperative-sticky"]
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +68,6 @@ class Consumer:
         consumer_group: Optional[str],
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
-        assignment_strategy: AssignmentStrategy = "range",
         logger: logging.Logger = logger,
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         on_commit: Optional[
@@ -98,8 +95,6 @@ class Consumer:
                 by consuming messages (used for testing)
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
-        :param assignment_strategy: The name of a partition assignment strategy.
-            Available values: "range", "roundrobin", "cooperative-sticky".
         :param logger: a Logger instance to attach librdkafka logging to
         :param error_callback: callback used for consumer errors
         :param on_commit: Offset commit result propagation callback.
@@ -112,14 +107,15 @@ class Consumer:
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
         self._consumer_config = {
+            # previous Quix Streams defaults
             "enable.auto.offset.store": False,
+            "partition.assignment.strategy": "cooperative-sticky",
             **(extra_config or {}),
             **broker_address.as_librdkafka_dict(),
             **{
                 "group.id": consumer_group,
                 "enable.auto.commit": auto_commit_enable,
                 "auto.offset.reset": auto_offset_reset,
-                "partition.assignment.strategy": assignment_strategy,
                 "logger": logger,
                 "error_cb": error_callback,
                 "on_commit": functools.partial(
