@@ -459,7 +459,6 @@ class TestQuixKafkaConfigsBuilder:
     def test__set_workspace_cert_has_path(self):
         path = Path(getcwd()) / "certificates" / "12345"
         expected = (path / "ca.cert").as_posix()
-        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345", quix_portal_api_service=api
@@ -468,13 +467,12 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
-            r = cfg_builder._set_workspace_cert(timeout=timeout)
-        get_cert.assert_called_with(path, timeout)
+            r = cfg_builder._set_workspace_cert()
+        get_cert.assert_called_with(path)
         assert cfg_builder.workspace_cert_path == r == expected
 
     def test__set_workspace_cert_path(self, tmp_path):
         expected = (tmp_path / "ca.cert").as_posix()
-        timeout = 4.5
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
             workspace_id="12345",
@@ -485,8 +483,8 @@ class TestQuixKafkaConfigsBuilder:
         with patch.object(
             cfg_builder, "get_workspace_ssl_cert", return_value=expected
         ) as get_cert:
-            r = cfg_builder._set_workspace_cert(timeout=timeout)
-        get_cert.assert_called_with(tmp_path, timeout)
+            r = cfg_builder._set_workspace_cert()
+        get_cert.assert_called_with(tmp_path)
         assert cfg_builder.workspace_cert_path == r == expected
 
     def test_librdkafka_connection_config(self):
@@ -552,28 +550,6 @@ class TestQuixKafkaConfigsBuilder:
             connection_config,
             cfg_builder.librdkafka_extra_config,
             f"{workspace_id}-{group_id}",
-        )
-
-    def test_get_confluent_client_config(self):
-        timeout = 4.5
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345",
-            quix_portal_api_service=api,
-        )
-        topics = ["topic_1", "topic_2"]
-        group_id = "my_consumer_group"
-        with patch.object(
-            cfg_builder, "get_confluent_broker_config", return_value={"cfgs": "here"}
-        ) as cfg:
-            result = cfg_builder.get_confluent_client_configs(
-                topics, group_id, timeout=timeout
-            )
-            cfg.assert_called_with("topic_1", timeout=timeout)
-        assert result == (
-            {"cfgs": "here"},
-            ["12345-topic_1", "12345-topic_2"],
-            "12345-my_consumer_group",
         )
 
     def test_get_topics(self):

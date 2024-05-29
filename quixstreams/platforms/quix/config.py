@@ -130,13 +130,6 @@ class QuixKafkaConfigsBuilder:
         return self._workspace_id
 
     @property
-    def quix_broker_config(self) -> dict:
-        return {
-            **self.librdkafka_connection_config.as_librdkafka_dict(),
-            **self.librdkafka_extra_config,
-        }
-
-    @property
     def quix_broker_settings(self) -> dict:
         if not self._quix_broker_settings:
             self.get_workspace_info()
@@ -472,6 +465,7 @@ class QuixKafkaConfigsBuilder:
         Quix API.
 
         :param topic_name: name of the topic
+        :param timeout: response timeout (seconds); Default 30
 
         :return: response dict of the topic info if topic found, else None
         """
@@ -514,15 +508,13 @@ class QuixKafkaConfigsBuilder:
         if missing_topics:
             raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
-    def _set_workspace_cert(
-        self, cert: Optional[bytes] = None, timeout: Optional[float] = None
-    ) -> str:
+    def _set_workspace_cert(self, cert: Optional[bytes] = None) -> str:
         """
-        Will create a cert and assigns it to the workspace_cert_path property.
-        If there was no path provided at init, one is generated based on the cwd and
+        Dump a cert to a filepath, which is assigned to workspace_cert_path.
+        If no path was provided at init, generates one based on the cwd and
         workspace_id.
-        Used by this class when generating configs (does some extra folder and class
-        config stuff that's not needed if you just want to get the cert only)
+
+        :param cert: a base64 encoded byte str (via _get_librkafka_connection_config)
 
         :return: full cert filepath as string
         """
@@ -536,7 +528,7 @@ class QuixKafkaConfigsBuilder:
         if cert is not None:
             self._workspace_cert_path = self._write_ssl_cert(cert, folder)
         else:
-            self._workspace_cert_path = self.get_workspace_ssl_cert(folder, timeout)
+            self._workspace_cert_path = self.get_workspace_ssl_cert(folder)
         return self._workspace_cert_path
 
     def _get_librdkafka_connection_config(self):
@@ -566,52 +558,4 @@ class QuixKafkaConfigsBuilder:
             self.librdkafka_connection_config,
             self.librdkafka_extra_config,
             self.prepend_workspace_id(consumer_group_id),
-        )
-
-    def get_confluent_broker_config(
-        self, known_topic: Optional[str] = None, timeout: Optional[float] = None
-    ) -> dict:
-        """
-        Get the full client config dictionary required to authenticate a confluent-kafka
-        client to a Quix platform broker/workspace.
-
-        The returned config can be used directly by any confluent-kafka-python consumer/
-        producer (add your producer/consumer-specific configs afterward).
-
-        :param known_topic: a topic known to exist in some workspace
-        :param timeout: response timeout (seconds); Default 30
-
-        :return: a dict of confluent-kafka-python client settings (see librdkafka
-        config for more details)
-        """
-        # do this just for backwards compatibility
-        self.get_workspace_info(known_workspace_topic=known_topic, timeout=timeout)
-        return self.quix_broker_config
-
-    def get_confluent_client_configs(
-        self,
-        topics: list,
-        consumer_group_id: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> Tuple[dict, List[str], Optional[str]]:
-        """
-        Get all the values you need in order to use a confluent_kafka-based client
-        with a topic on a Quix platform broker/workspace.
-
-        The returned config can be used directly by any confluent-kafka-python consumer/
-        producer (add your producer/consumer-specific configs afterward).
-
-        The topics and consumer group are appended with any necessary values.
-
-        :param topics: list of topics
-        :param consumer_group_id: consumer group id, if needed
-        :param timeout: response timeout (seconds); Default 30
-
-        :return: a tuple with configs and altered versions of the topics
-        and consumer group name
-        """
-        return (
-            self.get_confluent_broker_config(topics[0], timeout=timeout),
-            [self.prepend_workspace_id(t) for t in topics],
-            self.prepend_workspace_id(consumer_group_id) if consumer_group_id else None,
         )
