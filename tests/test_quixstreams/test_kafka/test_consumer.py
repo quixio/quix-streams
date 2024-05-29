@@ -216,15 +216,8 @@ class TestConsumerOnRevoke:
         """
         topic_name, num_partitions = topic_factory(num_partitions=2)
 
-        num_partitions_assigned = 0
         num_partitions_revoked = 0
-
-        def on_assign(
-            _: confluent_kafka.Consumer,
-            partitions: List[confluent_kafka.TopicPartition],
-        ):
-            nonlocal num_partitions_assigned
-            num_partitions_assigned = len(partitions)
+        consumer2_subscribed = False
 
         def on_revoke(
             _: confluent_kafka.Consumer,
@@ -239,21 +232,19 @@ class TestConsumerOnRevoke:
         consumer1 = consumer_factory()
         exit_stack.enter_context(consumer1)
         with exit_stack:
-            consumer1.subscribe(
-                topics=[topic_name], on_assign=on_assign, on_revoke=on_revoke
-            )
+            consumer1.subscribe(topics=[topic_name], on_revoke=on_revoke)
 
             while Timeout():
                 msg = consumer1.poll(timeout=0.1)
                 assert msg is None
 
                 # Wait until consumer has partitions assigned
-                if num_partitions_assigned > 0:
+                if not consumer2_subscribed and len(consumer1.assignment()) > 0:
                     # Start second consumer
                     consumer2 = consumer_factory()
                     exit_stack.enter_context(consumer2)
                     consumer2.subscribe(topics=[topic_name])
-                    num_partitions_assigned = 0
+                    consumer2_subscribed = True
 
                 # Make sure some partitions are revoked
                 if num_partitions_revoked > 0:
