@@ -84,6 +84,9 @@ Now let's go over our [**>>> Anomaly Detector Application <<<**](application.py)
 ### Create Application
 
 ```python
+import os
+from quixstreams import Application
+
 app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
     consumer_group="temperature_alerter",
@@ -162,12 +165,12 @@ Now we do a (5 second) windowing operation on our temperature value. A few very 
 ### Using Window Result
 
 ```python
-def should_alert(window_value):
+def should_alert(window_value: int, key, timestamp) -> bool:
     if window_value >= 90:
-        print(f'Alerting for MID {message_key()}: Average Temperature {window_value}')
+        print(f'Alerting for MID {key}: Average Temperature {window_value}')
         return True
 
-sdf = sdf.apply(lambda result: round(result['value'], 2)).filter(should_alert)
+sdf = sdf.apply(lambda result: round(result['value'], 2)).filter(should_alert, metadata=True)
 
 ```
 
