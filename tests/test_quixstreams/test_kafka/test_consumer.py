@@ -244,11 +244,12 @@ class TestConsumerOnRevoke:
                     consumer2 = consumer_factory()
                     exit_stack.enter_context(consumer2)
                     consumer2.subscribe(topics=[topic_name])
+                    consumer2.poll(timeout=0.1)
                     consumer2_subscribed = True
 
                 # Make sure some partitions are revoked
                 if num_partitions_revoked > 0:
-                    break
+                    return
 
 
 class TestConsumerPoll:
