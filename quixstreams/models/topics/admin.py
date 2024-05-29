@@ -54,12 +54,14 @@ class TopicAdmin:
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
+        logger: logging.Logger = logger,
         extra_config: Optional[Mapping] = None,
     ):
         """
         :param broker_address: Connection settings for Kafka.
             Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
             or a ConnectionConfig object if authentication is required.
+        :param logger: a Logger instance to attach librdkafka logging to
         :param extra_config: optional configs (generally accepts producer configs)
         """
         if isinstance(broker_address, str):
@@ -68,8 +70,8 @@ class TopicAdmin:
         self._inner_admin: Optional[AdminClient] = None
         self._config = {
             **(extra_config or {}),
-            "logger": logger,
             **broker_address.as_librdkafka_dict(),
+            "logger": logger,
         }
 
     @property

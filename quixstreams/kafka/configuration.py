@@ -16,7 +16,7 @@ class ConnectionConfig(BaseSettings):
 
     Allows converting to or from a librdkafka dictionary.
 
-    Also obscures secrets and handles any string casing issues.
+    Also obscures secrets and handles any case sensitivity issues.
     """
 
     model_config = SettingsConfigDict(
@@ -29,9 +29,9 @@ class ConnectionConfig(BaseSettings):
     @classmethod
     def secret_fields(cls) -> List[str]:
         """
-        Get all the fields that are of the type "SecretStr"
+        Get all the fields that are of the type "SecretStr" (passwords)
 
-        :return: a list of field names
+        :return: a list of secret field names
         """
         fields = []
         for name, info in ConnectionConfig.model_fields.items():
@@ -51,8 +51,8 @@ class ConnectionConfig(BaseSettings):
         """
         config = {name.replace(".", "_"): v for name, v in config.items()}
         if ignore_extras:
-            keys = set(cls.model_fields.keys()) | set(MECHANISM_ALIAS.choices)
-            config = {k: v for k, v in config.items() if k in keys}
+            valid_keys = set(cls.model_fields.keys()) | set(MECHANISM_ALIAS.choices)
+            config = {k: v for k, v in config.items() if k in valid_keys}
         return cls(**config)
 
     def as_librdkafka_dict(self) -> dict:
@@ -74,7 +74,7 @@ class ConnectionConfig(BaseSettings):
         """
         Dump any non-empty config values as a librdkafka-formatted JSON string.
 
-        Safely obscures the "sasl_password" field.
+        Safely obscures the any "secret" fields (passwords).
 
         :param indent: the indent of the JSON
 

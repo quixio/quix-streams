@@ -232,8 +232,8 @@ class Application:
             broker_address, quix_extra_config, consumer_group = (
                 quix_config_builder.get_application_config(consumer_group)
             )
-            consumer_extra_config = {**consumer_extra_config, **quix_extra_config}
-            producer_extra_config = {**producer_extra_config, **quix_extra_config}
+            consumer_extra_config.update(quix_extra_config)
+            producer_extra_config.update(quix_extra_config)
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager

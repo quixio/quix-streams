@@ -71,6 +71,7 @@ class Consumer:
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
         assignment_strategy: AssignmentStrategy = "range",
+        logger: logging.Logger = logger,
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         on_commit: Optional[
             Callable[[Optional[KafkaError], List[TopicPartition]], None]
@@ -99,6 +100,8 @@ class Consumer:
             the last message handed to the application. Default - `True`.
         :param assignment_strategy: The name of a partition assignment strategy.
             Available values: "range", "roundrobin", "cooperative-sticky".
+        :param logger: a Logger instance to attach librdkafka logging to
+        :param error_callback: callback used for consumer errors
         :param on_commit: Offset commit result propagation callback.
             Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
         :param extra_config: A dictionary with additional options that

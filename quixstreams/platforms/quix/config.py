@@ -541,10 +541,8 @@ class QuixKafkaConfigsBuilder:
 
     def _get_librdkafka_connection_config(self):
         """
-        Get the full client config dictionary required to authenticate a confluent-kafka
+        Get the full client config required to authenticate a confluent-kafka
         client to a Quix platform broker/workspace as a ConnectionConfig
-
-        :return: a ConnectionConfig object
         """
         librdkafka_dict = self.api.get_librdkafka_connection_config(self.workspace_id)
         if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:

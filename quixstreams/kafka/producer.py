@@ -59,6 +59,8 @@ class Producer:
         :param broker_address: Connection settings for Kafka.
             Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
             or a ConnectionConfig object if authentication is required.
+        :param logger: a Logger instance to attach librdkafka logging to
+        :param error_callback: callback used for producer errors
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
