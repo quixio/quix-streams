@@ -76,6 +76,9 @@ Now let's go over our [**>>> Word Counter Application <<<**](application.py) lin
 ### Create Application
 
 ```python
+import os
+from quixstreams import Application
+
 app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
     consumer_group="product_review_word_counter",
@@ -118,6 +121,8 @@ After initializing, we continue re-assigning to the same `sdf` variable as we ad
 ### Tokenizing Text
 
 ```python
+from collections import Counter
+
 def tokenize_and_count(text):
     words = Counter(text.lower().replace(".", " ").split()).items()
     return words
