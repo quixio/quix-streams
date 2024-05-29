@@ -9,7 +9,7 @@ from os import environ
 
 from dotenv import load_dotenv
 
-from quixstreams import Application, State, message_key
+from quixstreams import Application, State
 
 load_dotenv("./env_vars.env")
 
@@ -25,20 +25,6 @@ def count_transactions(value: dict, state: State):
     total += 1
     state.set("total_transactions", total)
     return total
-
-
-def uppercase_source(value: dict):
-    """
-    Upper-case field "transaction_source" for each processed message
-
-    :param value: message value, a dictionary with all deserialized message data
-
-
-    :return: this function must either return None or a new dictionary
-    """
-    print(f'Processing message with key "{message_key()}"')
-    value["transaction_source"] = value["transaction_source"].upper()
-    return value
 
 
 # Define your application and settings
