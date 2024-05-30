@@ -79,6 +79,9 @@ def consumer_factory(kafka_container, random_consumer_group):
         # to react on re-assignment changes faster
         extra_config["topic.metadata.refresh.interval.ms"] = 3000
 
+        # Keep rebalances as simple as possible for testing
+        extra_config["partition.assignment.strategy"] = "range"
+
         return Consumer(
             broker_address=broker_address,
             consumer_group=consumer_group,

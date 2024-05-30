@@ -92,14 +92,21 @@ class TestConsumerSubscribe:
         topic1, _ = topic_factory()
         topic2, _ = topic_factory()
 
-        with consumer:
-            consumer.subscribe(topics=[topic1])
-            consumer.poll(timeout=5)
-            assert len(consumer.assignment()) == 1
+        assigned_partitions = []
 
-            consumer.subscribe(topics=[topic1, topic2])
+        def on_assign(_, partitions: List[TopicPartition]):
+            nonlocal assigned_partitions
+            assigned_partitions = partitions
+
+        with consumer:
+            consumer.subscribe(topics=[topic1], on_assign=on_assign)
             consumer.poll(timeout=5)
-            assert len(consumer.assignment()) == 2
+            assert len(assigned_partitions) == 1
+
+            assigned_partitions = []
+            consumer.subscribe(topics=[topic1, topic2], on_assign=on_assign)
+            consumer.poll(timeout=5)
+            assert len(assigned_partitions) == 2
 
 
 class TestConsumerOnAssign:
@@ -128,21 +135,30 @@ class TestConsumerOnAssign:
         self, consumer, topic_factory, set_topic_partitions
     ):
         topic_name, num_partitions = topic_factory()
-        partitions_increased = False
+
+        num_partitions_assigned = 0
+
+        def on_assign(
+            _: confluent_kafka.Consumer,
+            partitions: List[confluent_kafka.TopicPartition],
+        ):
+            nonlocal num_partitions_assigned
+            num_partitions_assigned = len(partitions)
 
         with consumer:
-            consumer.subscribe(topics=[topic_name])
+            consumer.subscribe(topics=[topic_name], on_assign=on_assign)
 
             while Timeout():
                 msg = consumer.poll(timeout=0.1)
                 assert msg is None
                 # Wait for the initial partition assignment
-                if not partitions_increased and len(consumer.assignment()) == 1:
+                if num_partitions_assigned == 1:
                     # Increase topic partitions count to 10
                     set_topic_partitions(topic=topic_name, num_partitions=10)
-                    partitions_increased = True
+                    # Reset variable back to 0
+                    num_partitions_assigned = 0
                 # Validate that new partitions are assigned to a consumer
-                if len(consumer.assignment()) == 10:
+                if num_partitions_assigned == 10:
                     return
 
     def test_cooperative_pause_during_on_assign_callback_remains_paused(
@@ -167,10 +183,8 @@ class TestConsumerOnAssign:
 
         consumer_args = dict(
             auto_offset_reset="earliest",
-            extra_config={
-                "partition.assignment.strategy": "cooperative-sticky",
-                "max.poll.interval.ms": 60000,
-            },
+            assignment_strategy="cooperative-sticky",
+            extra_config={"max.poll.interval.ms": 60000},
         )
         consumer_0 = consumer_factory(**consumer_args)
         stack.enter_context(consumer_0)
@@ -216,8 +230,15 @@ class TestConsumerOnRevoke:
         """
         topic_name, num_partitions = topic_factory(num_partitions=2)
 
+        num_partitions_assigned = 0
         num_partitions_revoked = 0
-        consumer2_subscribed = False
+
+        def on_assign(
+            _: confluent_kafka.Consumer,
+            partitions: List[confluent_kafka.TopicPartition],
+        ):
+            nonlocal num_partitions_assigned
+            num_partitions_assigned = len(partitions)
 
         def on_revoke(
             _: confluent_kafka.Consumer,
@@ -232,20 +253,21 @@ class TestConsumerOnRevoke:
         consumer1 = consumer_factory()
         exit_stack.enter_context(consumer1)
         with exit_stack:
-            consumer1.subscribe(topics=[topic_name], on_revoke=on_revoke)
+            consumer1.subscribe(
+                topics=[topic_name], on_assign=on_assign, on_revoke=on_revoke
+            )
 
             while Timeout():
                 msg = consumer1.poll(timeout=0.1)
                 assert msg is None
 
                 # Wait until consumer has partitions assigned
-                if not consumer2_subscribed and len(consumer1.assignment()) == 2:
+                if num_partitions_assigned > 0:
                     # Start second consumer
                     consumer2 = consumer_factory()
                     exit_stack.enter_context(consumer2)
                     consumer2.subscribe(topics=[topic_name])
-                    consumer2.poll(timeout=0.1)
-                    consumer2_subscribed = True
+                    num_partitions_assigned = 0
 
                 # Make sure some partitions are revoked
                 if num_partitions_revoked > 0:
