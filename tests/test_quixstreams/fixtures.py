@@ -73,21 +73,21 @@ def consumer_factory(kafka_container, random_consumer_group):
         extra_config: dict = None,
     ) -> Consumer:
         consumer_group = consumer_group or random_consumer_group
-        extra_config = extra_config or {}
-
-        # Make consumers to refresh cluster metadata often
-        # to react on re-assignment changes faster
-        extra_config["topic.metadata.refresh.interval.ms"] = 3000
-
-        # Keep rebalances as simple as possible for testing
-        extra_config["partition.assignment.strategy"] = "range"
+        extras = {
+            # Make consumers to refresh cluster metadata often
+            # to react on re-assignment changes faster
+            "topic.metadata.refresh.interval.ms": 3000,
+            # Keep rebalances as simple as possible for testing
+            "partition.assignment.strategy": "range",
+        }
+        extras.update((extra_config or {}))
 
         return Consumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_commit_enable=auto_commit_enable,
             auto_offset_reset=auto_offset_reset,
-            extra_config=extra_config,
+            extra_config=extras,
         )
 
     return factory
