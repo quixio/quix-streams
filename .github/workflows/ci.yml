@@ -60,4 +60,4 @@ jobs:
           python -m pip install -U -r requirements.txt
       - name: Run tests
         run: |
-          python -m pytest -s -v
+          python -m pytest -v --log-cli-level=ERROR
