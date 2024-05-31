@@ -54,8 +54,9 @@ line_length = 88
 [tool.pytest.ini_options]
 minversion = "6.0"
 # Ignore manual tests by and some loggers by default
-addopts = "--log-disable=urllib3.connectionpool --log-disable=parso --log-disable=docker"
+addopts = "--log-disable=urllib3.connectionpool --log-disable=parso --log-disable=docker --log-disable=asyncio"
 
 # Print debug logs to the console in tests
 log_cli = true
-log_cli_level = "DEBUG"
+log_cli_level = "INFO"
+log_cli_format = "[%(levelname)s] %(name)s: %(message)s"
