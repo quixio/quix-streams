@@ -72,9 +72,11 @@ class ProcessingContext:
         """
         if not self._checkpoint.empty() and (self._checkpoint.expired() or force):
 
-            logger.info(f"Committing a checkpoint force={force}")
+            logger.debug(f"Committing a checkpoint force={force}")
             start = time.monotonic()
             self._checkpoint.commit()
             elapsed = round(time.monotonic() - start, 2)
-            logger.info(f"Committed a checkpoint force={force} time_elapsed={elapsed}s")
+            logger.debug(
+                f"Committed a checkpoint force={force} time_elapsed={elapsed}s"
+            )
             self.init_checkpoint()
