@@ -1,7 +1,8 @@
+import base64
 import datetime
-import os
 import random
 import time
+import uuid
 from typing import Tuple
 
 from testcontainers.core.container import DockerContainer
@@ -9,38 +10,41 @@ from testcontainers.core.container import DockerContainer
 
 class ContainerHelper:
     @staticmethod
-    def create_kafka_container() -> Tuple[DockerContainer, str, int, int]:
+    def create_kafka_container() -> Tuple[DockerContainer, str, int]:
         """
-        Returns (kafka container, broker list, kafka port, zookeper port) tuple
+        Returns (kafka container, broker list, kafka port) tuple
         """
         kafka_address = "127.0.0.1"
-        zookeeper_port = random.randint(12000, 15000)
         kafka_port = random.randint(16000, 20000)
-        broker_list = "{0}:{1}".format(kafka_address, kafka_port)
+        broker_list = f"{kafka_address}:{kafka_port}"
+        docker_hostname = uuid.uuid4().hex
+        docker_image_name = "confluentinc/cp-kafka:7.6.1"
+        kraft_cluster_id = base64.urlsafe_b64encode(uuid.uuid4().bytes).decode()
 
-        archname = os.uname().machine
-        if archname == "arm64":
-            kafka_container = DockerContainer(image="dougdonohoe/fast-data-dev:latest")
-        else:
-            kafka_container = DockerContainer(image="lensesio/fast-data-dev:3.3.1")
-        kafka_container = kafka_container.with_env("BROKER_PORT", kafka_port)
-        kafka_container = kafka_container.with_bind_ports(kafka_port, kafka_port)
-        kafka_container = kafka_container.with_env("ZK_PORT", zookeeper_port)
-        kafka_container = kafka_container.with_bind_ports(
-            zookeeper_port, zookeeper_port
+        kafka_container = (
+            DockerContainer(image=docker_image_name, hostname=docker_hostname)
+            .with_env("KAFKA_NODE_ID", "0")
+            .with_env("KAFKA_PROCESS_ROLES", "controller,broker")
+            .with_env(
+                "KAFKA_LISTENERS",
+                f"PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:{kafka_port}",
+            )
+            .with_env(
+                "KAFKA_ADVERTISED_LISTENERS",
+                f"PLAINTEXT://localhost:9092,EXTERNAL://{broker_list}",
+            )
+            .with_env(
+                "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP",
+                "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+            )
+            .with_env("KAFKA_CONTROLLER_QUORUM_VOTERS", f"0@{docker_hostname}:9093")
+            .with_env("KAFKA_CONTROLLER_LISTENER_NAMES", "CONTROLLER")
+            .with_env("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
+            .with_env("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "10")
+            .with_env("CLUSTER_ID", kraft_cluster_id)
+            .with_bind_ports(kafka_port, kafka_port)
         )
-        kafka_container = kafka_container.with_env("ADV_HOST", kafka_address)
-        # disable rest
-        kafka_container = kafka_container.with_env("REST_PORT", 0)
-        kafka_container = kafka_container.with_env("WEB_PORT", 0)
-        kafka_container = kafka_container.with_env("CONNECT_PORT", 0)
-        kafka_container = kafka_container.with_env("REGISTRY_PORT", 0)
-        kafka_container = kafka_container.with_env("RUNTESTS", 0)
-        kafka_container = kafka_container.with_env("SAMPLEDATA", 0)
-        kafka_container = kafka_container.with_env("FORWARDLOGS", 0)
-        kafka_container = kafka_container.with_env("SUPERVISORWEB", 0)
-
-        return (kafka_container, broker_list, kafka_port, zookeeper_port)
+        return kafka_container, broker_list, kafka_port
 
     @staticmethod
     def start_kafka_container(kafka_container: DockerContainer) -> None:
@@ -50,8 +54,8 @@ class ContainerHelper:
         while cut_off > datetime.datetime.utcnow():
             time.sleep(0.5)
             logs = kafka_container.get_logs()
-            if "success: broker entered RUNNING state" in logs[0].decode(
-                "utf-8"
-            ) and "success: zookeeper entered RUNNING state" in logs[0].decode("utf-8"):
-                return
-        raise Exception("Failed to start container")
+            for line in logs:
+                line = line.decode()
+                if "Kafka Server started" in line:
+                    return
+        raise TimeoutError("Failed to start container")

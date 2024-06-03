@@ -933,7 +933,7 @@ class TestQuixApplicationWithState:
         )
 
         with pytest.warns(RuntimeWarning) as warned:
-            executor.submit(_stop_app_on_timeout, app, 10.0)
+            executor.submit(_stop_app_on_timeout, app, 5.0)
             app.run(sdf)
 
         warnings = [w for w in warned.list if w.category is RuntimeWarning]
@@ -1063,7 +1063,7 @@ class TestDeprecatedApplicationDotQuix:
         )
 
         with pytest.warns(RuntimeWarning) as warned:
-            executor.submit(_stop_app_on_timeout, app, 10.0)
+            executor.submit(_stop_app_on_timeout, app, 5.0)
             app.run(sdf)
 
         warnings = [w for w in warned.list if w.category is RuntimeWarning]

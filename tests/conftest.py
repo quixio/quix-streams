@@ -39,10 +39,9 @@ def kafka_container() -> KafkaContainer:
         kafka_container,
         broker_address,
         kafka_port,
-        zookeeper_port,
     ) = ContainerHelper.create_kafka_container()
-    print(f"Starting Kafka container on {broker_address}")
+    test_logger.debug(f"Starting Kafka container on {broker_address}")
     ContainerHelper.start_kafka_container(kafka_container)
-    print(f"Started Kafka container on {broker_address}")
+    test_logger.debug(f"Started Kafka container on {broker_address}")
     yield KafkaContainer(broker_address=broker_address)
     kafka_container.stop()
