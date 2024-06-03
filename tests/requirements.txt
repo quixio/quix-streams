@@ -1,3 +1,5 @@
-testcontainers==3.7.1
+testcontainers==3.7.1; python_version < '3.9'
+testcontainers==4.5.1; python_version >= '3.9'
 pytest
-docker>=7.0.0
+requests>=2.32
+docker>=7.1.0 # Required to use requests>=2.32
