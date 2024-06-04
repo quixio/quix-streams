@@ -1,8 +1,12 @@
-from typing import Literal, Optional, Callable, Tuple, List, get_args
+from typing import Literal, Optional, Callable, Tuple, List, get_args, Type
 
 from pydantic import AliasGenerator, SecretStr, AliasChoices, Field
 from pydantic.functional_validators import BeforeValidator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+    PydanticBaseSettingsSource,
+)
 from typing_extensions import Self, Annotated
 
 __all__ = ("ConnectionConfig",)
@@ -25,65 +29,6 @@ class ConnectionConfig(BaseSettings):
             serialization_alias=lambda field_name: field_name.replace("_", "."),
         ),
     )
-
-    @classmethod
-    def secret_fields(cls) -> List[str]:
-        """
-        Get all the fields that are of the type "SecretStr" (passwords)
-
-        :return: a list of secret field names
-        """
-        fields = []
-        for name, info in ConnectionConfig.model_fields.items():
-            if SecretStr in get_args(info.annotation):
-                fields.append(name)
-        return fields
-
-    @classmethod
-    def from_librdkafka_dict(cls, config: dict, ignore_extras: bool = False) -> Self:
-        """
-        Create a `ConnectionConfig` from a librdkafka config dictionary.
-
-        :param config: a dict of configs (like {"bootstrap.servers": "url"})
-        :param ignore_extras: Ignore non-connection settings (else raise exception)
-
-        :return: a ConnectionConfig
-        """
-        config = {name.replace(".", "_"): v for name, v in config.items()}
-        if ignore_extras:
-            valid_keys = set(cls.model_fields.keys()) | set(MECHANISM_ALIAS.choices)
-            config = {k: v for k, v in config.items() if k in valid_keys}
-        return cls(**config)
-
-    def as_librdkafka_dict(self) -> dict:
-        """
-        Dump any non-empty config values as a librdkafka dictionary.
-
-        >***NOTE***: Dumps all secret fields in plaintext.
-
-        :return: a librdkafka-compatible dictionary
-        """
-        dump = self.model_dump(by_alias=True, exclude_none=True)
-        for field in self.secret_fields():
-            field = field.replace("_", ".")
-            if dump.get(field):
-                dump[field] = dump[field].get_secret_value()
-        return dump
-
-    def as_printable_json(self, indent: int = 2) -> str:
-        """
-        Dump any non-empty config values as a librdkafka-formatted JSON string.
-
-        Safely obscures the any "secret" fields (passwords).
-
-        :param indent: the indent of the JSON
-
-        :return: a string-dumped JSON
-        """
-        return self.model_dump_json(by_alias=True, exclude_none=True, indent=indent)
-
-    def __str__(self) -> str:
-        return self.as_printable_json()
 
     bootstrap_servers: str
     security_protocol: Annotated[
@@ -145,3 +90,66 @@ class ConnectionConfig(BaseSettings):
         Optional[Literal["none", "https"]],
         BeforeValidator(lambda v: v.lower() if v is not None else v),
     ] = None
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """
+        Included to ignore reading/setting values from the environment
+        """
+        return (init_settings,)
+
+    @classmethod
+    def from_librdkafka_dict(cls, config: dict, ignore_extras: bool = False) -> Self:
+        """
+        Create a `ConnectionConfig` from a librdkafka config dictionary.
+
+        :param config: a dict of configs (like {"bootstrap.servers": "url"})
+        :param ignore_extras: Ignore non-connection settings (else raise exception)
+
+        :return: a ConnectionConfig
+        """
+        config = {name.replace(".", "_"): v for name, v in config.items()}
+        if ignore_extras:
+            valid_keys = set(cls.model_fields.keys()) | set(MECHANISM_ALIAS.choices)
+            config = {k: v for k, v in config.items() if k in valid_keys}
+        return cls(**config)
+
+    @property
+    def _secret_fields(self) -> List[str]:
+        """
+        Get all the fields that are of the type "SecretStr" (passwords)
+
+        :return: a list of secret field names
+        """
+        fields = []
+        for name, info in self.model_fields.items():
+            if SecretStr in get_args(info.annotation):
+                fields.append(name)
+        return fields
+
+    def as_librdkafka_dict(self, plaintext_secrets=True) -> dict:
+        """
+        Dump any non-empty config values as a librdkafka dictionary.
+
+        >***NOTE***: All secret values will be dumped in PLAINTEXT by default.
+
+        :param plaintext_secrets: whether secret values are plaintext or obscured (***)
+        :return: a librdkafka-compatible dictionary
+        """
+        dump = self.model_dump(by_alias=True, exclude_none=True)
+        if plaintext_secrets:
+            for field in self._secret_fields:
+                field = field.replace("_", ".")
+                if dump.get(field):
+                    dump[field] = dump[field].get_secret_value()
+        return dump
+
+    def __str__(self) -> str:
+        return str(self.as_librdkafka_dict(plaintext_secrets=False))

@@ -5,7 +5,7 @@ import time
 from os import getcwd
 from pathlib import Path
 from tempfile import gettempdir
-from typing import Optional, Tuple, Set, Mapping, Union, List
+from typing import Optional, Set, Union, List
 
 from requests import HTTPError
 
@@ -24,20 +24,10 @@ from .exceptions import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("QuixKafkaConfigsBuilder",)
+__all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
-
-
-@dataclasses.dataclass
-class TopicCreationConfigs:
-    name: Optional[str] = None  # Required when not created by a Quix App.
-    num_partitions: int = 1
-    replication_factor: Optional[int] = None
-    retention_bytes: Optional[int] = None
-    retention_minutes: Optional[int] = None
-    optionals: Optional[Mapping] = None
 
 
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
@@ -62,6 +52,17 @@ def prepend_workspace_id(workspace_id: str, s: str) -> str:
     :return: the string with workspace_id prepended
     """
     return f"{workspace_id}-{s}" if not s.startswith(workspace_id) else s
+
+
+@dataclasses.dataclass
+class QuixApplicationConfig:
+    """
+    A convenience container class for Quix Application configs.
+    """
+
+    librdkafka_connection_config: ConnectionConfig
+    librdkafka_extra_config: dict
+    consumer_group: Optional[str] = None
 
 
 class QuixKafkaConfigsBuilder:
@@ -110,11 +111,11 @@ class QuixKafkaConfigsBuilder:
         except UndefinedQuixWorkspaceId:
             self._workspace_id = None
             logger.warning(
-                "No workspace ID was provided directly or found via environment; "
-                "if there happens to be only one valid workspace for your provided "
-                "auth token (often the case with 'streaming' aka 'SDK' tokens), "
-                "then this will find and use that ID. Otherwise, you may need to "
-                "provide a known topic name later on to help find the applicable ID."
+                "'workspace_id' argument was not provided nor set with "
+                "'Quix__Workspace__Id' environment; if only one Workspace ID for the "
+                "provided auth token exists (often true with SDK tokens), "
+                "then that ID will be used. Otherwise, provide a known topic name to "
+                "method 'get_workspace_info(topic)' to obtain desired Workspace ID."
             )
         self._workspace_cert_path = workspace_cert_path
         self._librdkafka_connection_config = None
@@ -542,17 +543,14 @@ class QuixKafkaConfigsBuilder:
                 librdkafka_dict
             )
 
-    def get_application_config(
-        self, consumer_group_id: str
-    ) -> Tuple[ConnectionConfig, dict, Optional[str]]:
+    def get_application_config(self, consumer_group_id: str) -> QuixApplicationConfig:
         """
         Get all the necessary attributes for an Application to run on Quix Cloud.
 
         :param consumer_group_id: consumer group id, if needed
-        :return: a tuple with broker configs, extra configs, and consumer_group
-        and consumer group name
+        :return: a QuixApplicationConfig instance
         """
-        return (
+        return QuixApplicationConfig(
             self.librdkafka_connection_config,
             self.librdkafka_extra_config,
             self.prepend_workspace_id(consumer_group_id),

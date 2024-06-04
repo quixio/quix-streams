@@ -228,12 +228,12 @@ class Application:
             )
             # Check if the state dir points to the mounted PVC while running on Quix
             check_state_dir(state_dir=state_dir)
+            quix_app_config = quix_config_builder.get_application_config(consumer_group)
 
-            broker_address, quix_extra_config, consumer_group = (
-                quix_config_builder.get_application_config(consumer_group)
-            )
-            consumer_extra_config.update(quix_extra_config)
-            producer_extra_config.update(quix_extra_config)
+            broker_address = quix_app_config.librdkafka_connection_config
+            consumer_group = quix_app_config.consumer_group
+            consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
+            producer_extra_config.update(quix_app_config.librdkafka_extra_config)
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager

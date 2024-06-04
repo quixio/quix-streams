@@ -26,7 +26,7 @@ class TestQuixKafkaConfigsBuilder:
         QuixKafkaConfigsBuilder(
             quix_portal_api_service=QuixPortalApiService(auth_token="12345")
         )
-        assert "No workspace ID was provided" in caplog.text
+        assert "'workspace_id' argument was not provided" in caplog.text
 
     def test_search_for_workspace_id(self):
         api_data_stub = {"workspaceId": "myworkspace12345", "name": "my workspace"}
@@ -546,11 +546,9 @@ class TestQuixKafkaConfigsBuilder:
         ) as librdkafka_connection_config:
             librdkafka_connection_config.return_value = connection_config
             result = cfg_builder.get_application_config(group_id)
-        assert result == (
-            connection_config,
-            cfg_builder.librdkafka_extra_config,
-            f"{workspace_id}-{group_id}",
-        )
+        assert result.librdkafka_connection_config == connection_config
+        assert result.librdkafka_extra_config == cfg_builder.librdkafka_extra_config
+        assert result.consumer_group == f"{workspace_id}-{group_id}"
 
     def test_get_topics(self):
         api_data_stub = [

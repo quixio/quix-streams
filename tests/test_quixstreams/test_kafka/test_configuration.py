@@ -102,16 +102,12 @@ class TestConnectionConfig:
         assert config.sasl_password != "blah"
         assert config.sasl_password.get_secret_value() == "blah"
 
-    def test_as_printable_json(self):
-        config = ConnectionConfig(bootstrap_servers="url", sasl_username="user")
-        assert (
-            config.as_printable_json(2)
-            == '{\n  "bootstrap.servers": "url",\n  "sasl.username": "user"\n}'
-        )
-
-    def test_as_printable_json_obscure_secret(self):
+    def test_str(self):
+        """
+        String representation has obscured secrets
+        """
         config = ConnectionConfig(bootstrap_servers="url", sasl_password="blah")
-        print_cfg = config.as_printable_json()
+        print_cfg = str(config)
         assert "blah" not in print_cfg
         assert "****" in print_cfg
 

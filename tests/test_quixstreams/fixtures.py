@@ -46,6 +46,7 @@ from quixstreams.platforms.quix.config import (
     QuixKafkaConfigsBuilder,
     prepend_workspace_id,
     strip_workspace_id_prefix,
+    QuixApplicationConfig,
 )
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
@@ -362,12 +363,13 @@ def quix_mock_config_builder_factory(kafka_container):
         }
 
         connection = ConnectionConfig(bootstrap_servers=kafka_container.broker_address)
-        cfg_builder._librdkafka_connection_config = connection
         cfg_builder.librdkafka_connection_config = connection
         cfg_builder.get_application_config.side_effect = lambda cg: (
-            connection,
-            {"connections.max.idle.ms": 60000},
-            cfg_builder.prepend_workspace_id(cg),
+            QuixApplicationConfig(
+                connection,
+                {"connections.max.idle.ms": 60000},
+                cfg_builder.prepend_workspace_id(cg),
+            )
         )
 
         return cfg_builder

@@ -25,7 +25,7 @@ from quixstreams.models import (
     JSONSerializer,
     TopicConfig,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixApplicationConfig
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state import State
@@ -736,9 +736,9 @@ class TestQuixApplication:
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
             cfg_builder.get_application_config.side_effect = lambda cg: (
-                cfg_builder.librdkafka_connection_config,
-                quix_extras,
-                cfg_builder.prepend_workspace_id(cg),
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
             )
             return cfg_builder
 
@@ -798,9 +798,9 @@ class TestQuixApplication:
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
             cfg_builder.get_application_config.side_effect = lambda cg: (
-                cfg_builder.librdkafka_connection_config,
-                quix_extras,
-                cfg_builder.prepend_workspace_id(cg),
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
             )
             return cfg_builder
 
@@ -859,9 +859,9 @@ class TestQuixApplication:
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
             cfg_builder.get_application_config.side_effect = lambda cg: (
-                cfg_builder.librdkafka_connection_config,
-                quix_extras,
-                cfg_builder.prepend_workspace_id(cg),
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
             )
             return cfg_builder
 
@@ -1007,9 +1007,9 @@ class TestDeprecatedApplicationDotQuix:
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
             cfg_builder.get_application_config.side_effect = lambda cg: (
-                cfg_builder.librdkafka_connection_config,
-                quix_extras,
-                cfg_builder.prepend_workspace_id(cg),
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
             )
             return cfg_builder
 
