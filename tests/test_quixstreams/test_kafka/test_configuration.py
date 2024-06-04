@@ -1,6 +1,8 @@
-import pytest
+import os
+from unittest.mock import patch
 
 import pydantic
+import pytest
 
 from quixstreams.kafka.configuration import ConnectionConfig
 
@@ -114,7 +116,6 @@ class TestConnectionConfig:
     def test_as_librdkafka_dict(self):
         config = ConnectionConfig(bootstrap_servers="url", sasl_mechanism="PLAIN")
         librdkafka_dict = config.as_librdkafka_dict()
-
         assert librdkafka_dict["bootstrap.servers"] == config.bootstrap_servers
         assert librdkafka_dict["sasl.mechanism"] == config.sasl_mechanism
 
@@ -123,7 +124,11 @@ class TestConnectionConfig:
         config = ConnectionConfig(
             bootstrap_servers="url", sasl_password=password, ssl_key_password=password
         )
-        librdkafka_dict = config.as_librdkafka_dict()
-
+        librdkafka_dict = config.as_librdkafka_dict(plaintext_secrets=True)
         assert librdkafka_dict["sasl.password"] == password
         assert librdkafka_dict["ssl.key.password"] == password
+
+    def test_environment_not_read(self):
+        with patch.dict(os.environ, {"SASL_PASSWORD": "cool_pw"}):
+            config = ConnectionConfig(bootstrap_servers="url")
+        assert config.sasl_password is None

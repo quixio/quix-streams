@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Callable, Tuple, List, get_args, Type
+from typing import Literal, Optional, Callable, Tuple, Type
 
 from pydantic import AliasGenerator, SecretStr, AliasChoices, Field
 from pydantic.functional_validators import BeforeValidator
@@ -121,19 +121,6 @@ class ConnectionConfig(BaseSettings):
             config = {k: v for k, v in config.items() if k in valid_keys}
         return cls(**config)
 
-    @property
-    def _secret_fields(self) -> List[str]:
-        """
-        Get all the fields that are of the type "SecretStr" (passwords)
-
-        :return: a list of secret field names
-        """
-        fields = []
-        for name, info in self.model_fields.items():
-            if SecretStr in get_args(info.annotation):
-                fields.append(name)
-        return fields
-
     def as_librdkafka_dict(self, plaintext_secrets=True) -> dict:
         """
         Dump any non-empty config values as a librdkafka dictionary.
@@ -145,9 +132,8 @@ class ConnectionConfig(BaseSettings):
         """
         dump = self.model_dump(by_alias=True, exclude_none=True)
         if plaintext_secrets:
-            for field in self._secret_fields:
-                field = field.replace("_", ".")
-                if dump.get(field):
+            for field, value in dump.items():
+                if isinstance(value, SecretStr):
                     dump[field] = dump[field].get_secret_value()
         return dump
 
