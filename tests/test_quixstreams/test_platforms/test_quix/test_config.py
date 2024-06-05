@@ -434,59 +434,6 @@ class TestQuixKafkaConfigsBuilder:
         )
         assert result is None
 
-    def test_get_workspace_ssl_cert(self, tmp_path):
-        api_data_stub = b"my cool cert stuff"
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345",
-            quix_portal_api_service=api,
-        )
-        api.get_workspace_certificate.return_value = api_data_stub
-        cfg_builder.get_workspace_ssl_cert(extract_to_folder=tmp_path)
-
-        with open(tmp_path / "ca.cert", "r") as f:
-            s = f.read()
-        assert s == api_data_stub.decode()
-
-    def test_get_workspace_ssl_cert_empty(self, tmp_path):
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
-        )
-        api.get_workspace_certificate.return_value = None
-        assert cfg_builder.get_workspace_ssl_cert(extract_to_folder=tmp_path) is None
-
-    def test__set_workspace_cert_has_path(self):
-        path = Path(getcwd()) / "certificates" / "12345"
-        expected = (path / "ca.cert").as_posix()
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345", quix_portal_api_service=api
-        )
-
-        with patch.object(
-            cfg_builder, "get_workspace_ssl_cert", return_value=expected
-        ) as get_cert:
-            r = cfg_builder._set_workspace_cert()
-        get_cert.assert_called_with(path)
-        assert cfg_builder.workspace_cert_path == r == expected
-
-    def test__set_workspace_cert_path(self, tmp_path):
-        expected = (tmp_path / "ca.cert").as_posix()
-        api = create_autospec(QuixPortalApiService)
-        cfg_builder = QuixKafkaConfigsBuilder(
-            workspace_id="12345",
-            quix_portal_api_service=api,
-            workspace_cert_path=expected,
-        )
-
-        with patch.object(
-            cfg_builder, "get_workspace_ssl_cert", return_value=expected
-        ) as get_cert:
-            r = cfg_builder._set_workspace_cert()
-        get_cert.assert_called_with(tmp_path)
-        assert cfg_builder.workspace_cert_path == r == expected
-
     def test_librdkafka_connection_config(self):
         api = create_autospec(QuixPortalApiService)
         cfg_builder = QuixKafkaConfigsBuilder(
@@ -501,18 +448,14 @@ class TestQuixKafkaConfigsBuilder:
             "ssl.ca.cert": base64.b64encode(b"a_cert"),
         }
 
-        with patch.object(cfg_builder, "_set_workspace_cert") as set_cert:
-            set_cert.return_value = "/mock/dir/ca.cert"
-            config = cfg_builder.librdkafka_connection_config
-
-        set_cert.assert_called()
-        assert config.as_librdkafka_dict() == {
+        config = cfg_builder.librdkafka_connection_config
+        assert config.as_librdkafka_dict(plaintext_secrets=True) == {
             "sasl.mechanism": "PLAIN",
             "security.protocol": "sasl_ssl",
             "bootstrap.servers": "address1,address2",
             "sasl.username": "my-username",
             "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
+            "ssl.ca.pem": "a_cert",
         }
 
     def test_prepend_workspace_id(self):

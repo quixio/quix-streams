@@ -2,15 +2,13 @@ import base64
 import dataclasses
 import logging
 import time
-from os import getcwd
-from pathlib import Path
-from tempfile import gettempdir
+from copy import deepcopy
 from typing import Optional, Set, Union, List
 
 from requests import HTTPError
 
-from quixstreams.models.topics import Topic
 from quixstreams.kafka.configuration import ConnectionConfig
+from quixstreams.models.topics import Topic
 from .api import QuixPortalApiService
 from .exceptions import (
     NoWorkspaceFound,
@@ -85,7 +83,6 @@ class QuixKafkaConfigsBuilder:
         self,
         quix_sdk_token: Optional[str] = None,
         workspace_id: Optional[str] = None,
-        workspace_cert_path: Optional[str] = None,
         quix_portal_api_service: Optional[QuixPortalApiService] = None,
         timeout: float = 30,
         topic_create_timeout: float = 60,
@@ -93,7 +90,6 @@ class QuixKafkaConfigsBuilder:
         """
         :param quix_portal_api_service: A QuixPortalApiService instance (else generated)
         :param workspace_id: A valid Quix Workspace ID (else searched for)
-        :param workspace_cert_path: path to an existing workspace cert (else retrieved)
         """
         if quix_sdk_token:
             self.api = QuixPortalApiService(
@@ -117,8 +113,7 @@ class QuixKafkaConfigsBuilder:
                 "then that ID will be used. Otherwise, provide a known topic name to "
                 "method 'get_workspace_info(topic)' to obtain desired Workspace ID."
             )
-        self._workspace_cert_path = workspace_cert_path
-        self._librdkafka_connection_config = None
+        self._librdkafka_connect_config = None
         self._quix_broker_settings = None
         self._workspace_meta = None
         self._timeout = timeout
@@ -137,12 +132,6 @@ class QuixKafkaConfigsBuilder:
         return self._quix_broker_settings
 
     @property
-    def workspace_cert_path(self) -> str:
-        if not self._workspace_cert_path:
-            self._set_workspace_cert()
-        return self._workspace_cert_path
-
-    @property
     def workspace_meta(self) -> dict:
         if not self._workspace_meta:
             self.get_workspace_info()
@@ -150,9 +139,9 @@ class QuixKafkaConfigsBuilder:
 
     @property
     def librdkafka_connection_config(self) -> ConnectionConfig:
-        if not self._librdkafka_connection_config:
-            self._get_librdkafka_connection_config()
-        return self._librdkafka_connection_config
+        if not self._librdkafka_connect_config:
+            self._librdkafka_connect_config = self._get_librdkafka_connection_config()
+        return self._librdkafka_connect_config
 
     @property
     def librdkafka_extra_config(self) -> dict:
@@ -218,11 +207,23 @@ class QuixKafkaConfigsBuilder:
                 if ws["name"] == workspace_name_or_id:
                     return ws
 
+    def _set_workspace_info(self, workspace_data: dict):
+        ws_data = deepcopy(workspace_data)
+        self._workspace_id = ws_data.pop("workspaceId")
+        try:
+            self._quix_broker_settings = ws_data.pop("brokerSettings")
+        except KeyError:  # hold-over for platform v1
+            self._quix_broker_settings = {
+                "brokerType": ws_data["brokerType"],
+                "syncTopics": False,
+            }
+        self._workspace_meta = ws_data
+
     def get_workspace_info(
         self,
         known_workspace_topic: Optional[str] = None,
         timeout: Optional[float] = None,
-    ):
+    ) -> dict:
         """
         Queries for workspace data from the Quix API, regardless of instance cache,
         and updates instance attributes from query result.
@@ -243,15 +244,8 @@ class QuixKafkaConfigsBuilder:
             raise NoWorkspaceFound(
                 "No workspace was found for the given workspace/auth-token/topic combo"
             )
-        self._workspace_id = ws_data.pop("workspaceId")
-        try:
-            self._quix_broker_settings = ws_data.pop("brokerSettings")
-        except KeyError:  # hold-over for platform v1
-            self._quix_broker_settings = {
-                "brokerType": ws_data["brokerType"],
-                "syncTopics": False,
-            }
-        self._workspace_meta = ws_data
+        self._set_workspace_info(ws_data)
+        return ws_data
 
     def search_workspace_for_topic(
         self, workspace_id: str, topic: str, timeout: Optional[float] = None
@@ -302,37 +296,6 @@ class QuixKafkaConfigsBuilder:
                 ws["workspaceId"], topic, timeout=timeout
             ):
                 return ws
-
-    def _write_ssl_cert(self, cert: bytes, folder: Optional[Path] = None) -> str:
-        folder = folder or Path(gettempdir())
-        full_path = folder / "ca.cert"
-        if not full_path.is_file():
-            folder.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(cert)
-        return full_path.as_posix()
-
-    def get_workspace_ssl_cert(
-        self, extract_to_folder: Optional[Path] = None, timeout: Optional[float] = None
-    ) -> Optional[str]:
-        """
-        Gets and extracts zipped certificate from the API to provided folder if the
-        SSL certificate is specified in broker configuration.
-
-        If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
-
-        :param extract_to_folder: path to folder to dump zipped cert file to
-        :param timeout: response timeout (seconds); Default 30
-
-        :return: full cert filepath as string or `None` if certificate is not specified
-        """
-        if (
-            cert := self.api.get_workspace_certificate(
-                workspace_id=self._workspace_id,
-                timeout=timeout if timeout is not None else self._timeout,
-            )
-        ) is not None:
-            return self._write_ssl_cert(cert, extract_to_folder)
 
     def _create_topic(self, topic: Topic, timeout: Optional[float] = None):
         """
@@ -507,41 +470,15 @@ class QuixKafkaConfigsBuilder:
         if missing_topics:
             raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
-    def _set_workspace_cert(self, cert: Optional[bytes] = None) -> str:
-        """
-        Dump a cert to a filepath, which is assigned to workspace_cert_path.
-        If no path was provided at init, generates one based on the cwd and
-        workspace_id.
-
-        :param cert: a base64 encoded byte str (via _get_librkafka_connection_config)
-
-        :return: full cert filepath as string
-        """
-        if self._workspace_cert_path:
-            folder = Path(self._workspace_cert_path)
-            if folder.name.endswith("cert"):
-                folder = folder.parent
-        else:
-            folder = Path(getcwd()) / "certificates" / self.workspace_id
-
-        if cert is not None:
-            self._workspace_cert_path = self._write_ssl_cert(cert, folder)
-        else:
-            self._workspace_cert_path = self.get_workspace_ssl_cert(folder)
-        return self._workspace_cert_path
-
-    def _get_librdkafka_connection_config(self):
+    def _get_librdkafka_connection_config(self) -> ConnectionConfig:
         """
         Get the full client config required to authenticate a confluent-kafka
         client to a Quix platform broker/workspace as a ConnectionConfig
         """
         librdkafka_dict = self.api.get_librdkafka_connection_config(self.workspace_id)
         if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:
-            cert = base64.b64decode(cert)
-            librdkafka_dict["ssl.ca.location"] = self._set_workspace_cert(cert)
-            self._librdkafka_connection_config = ConnectionConfig.from_librdkafka_dict(
-                librdkafka_dict
-            )
+            librdkafka_dict["ssl.ca.pem"] = base64.b64decode(cert)
+        return ConnectionConfig.from_librdkafka_dict(librdkafka_dict)
 
     def get_application_config(self, consumer_group_id: str) -> QuixApplicationConfig:
         """

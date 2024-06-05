@@ -77,7 +77,7 @@ class ConnectionConfig(BaseSettings):
     ssl_certificate_location: Optional[str] = None
     ssl_certificate_pem: Optional[str] = None
     ssl_ca_location: Optional[str] = None
-    ssl_ca_pem: Optional[str] = None
+    ssl_ca_pem: Optional[SecretStr] = None
     ssl_ca_certificate_stores: Optional[str] = None
     ssl_crl_location: Optional[str] = None
     ssl_keystore_location: Optional[str] = None
