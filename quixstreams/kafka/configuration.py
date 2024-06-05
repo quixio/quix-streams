@@ -35,6 +35,7 @@ class ConnectionConfig(BaseSettings):
         Optional[Literal["plaintext", "ssl", "sasl_plaintext", "sasl_ssl"]],
         BeforeValidator(lambda v: v.lower() if v is not None else v),
     ] = None
+    client_id: Optional[str] = None
 
     # ----------------- SASL SETTINGS -----------------
     # Allows "sasl_mechanisms" (or "." if librdkafka) and sets it to sasl_mechanism
