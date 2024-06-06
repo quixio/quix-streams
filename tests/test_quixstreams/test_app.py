@@ -15,6 +15,7 @@ from quixstreams.context import message_context
 from quixstreams.dataframe import StreamingDataFrame
 from quixstreams.dataframe.windows.base import get_window_ranges
 from quixstreams.exceptions import PartitionAssignmentError
+from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.kafka.exceptions import KafkaConsumerException
 from quixstreams.models import (
     DoubleDeserializer,
@@ -24,7 +25,7 @@ from quixstreams.models import (
     JSONSerializer,
     TopicConfig,
 )
-from quixstreams.platforms.quix import QuixKafkaConfigsBuilder
+from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixApplicationConfig
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.state import State
@@ -707,34 +708,38 @@ class TestQuixApplication:
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
-        broker_address = "address1,address2"
-
+        quix_extras = {"quix": "extras"}
         extra_config = {"extra": "config"}
-        auth_params = {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
-            "sasl.username": "my-username",
-            "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
-        }
-        confluent_broker_config = {
-            **auth_params,
-            "bootstrap.servers": broker_address,
-        }
+        connection_config = ConnectionConfig.from_librdkafka_dict(
+            {
+                "bootstrap.servers": "address1,address2",
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+        )
         expected_producer_extra_config = {
             "enable.idempotence": True,
-            **auth_params,
             **extra_config,
+            **quix_extras,
         }
-        expected_consumer_extra_config = {**auth_params, **extra_config}
+        expected_consumer_extra_config = {
+            **extra_config,
+            **quix_extras,
+        }
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.return_value = (
-                confluent_broker_config
-            )
+            cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
+            cfg_builder.get_application_config.side_effect = lambda cg: (
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
+            )
             return cfg_builder
 
         # Mock consumer and producer to check the init args
@@ -753,11 +758,11 @@ class TestQuixApplication:
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
-        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
-        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["broker_address"] == connection_config
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
@@ -765,34 +770,38 @@ class TestQuixApplication:
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
-        broker_address = "address1,address2"
-
         extra_config = {"extra": "config"}
-        auth_params = {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
-            "sasl.username": "my-username",
-            "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
-        }
-        confluent_broker_config = {
-            **auth_params,
-            "bootstrap.servers": broker_address,
-        }
+        quix_extras = {"quix": "extras"}
+        connection_config = ConnectionConfig.from_librdkafka_dict(
+            {
+                "bootstrap.servers": "address1,address2",
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+        )
         expected_producer_extra_config = {
             "enable.idempotence": True,
-            **auth_params,
             **extra_config,
+            **quix_extras,
         }
-        expected_consumer_extra_config = {**auth_params, **extra_config}
+        expected_consumer_extra_config = {
+            **extra_config,
+            **quix_extras,
+        }
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.return_value = (
-                confluent_broker_config
-            )
+            cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
+            cfg_builder.get_application_config.side_effect = lambda cg: (
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
+            )
             return cfg_builder
 
         monkeypatch.setenv("Quix__Sdk__Token", quix_sdk_token)
@@ -810,11 +819,11 @@ class TestQuixApplication:
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
-        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
-        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["broker_address"] == connection_config
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
@@ -822,34 +831,38 @@ class TestQuixApplication:
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
         quix_sdk_token = "my_sdk_token"
-        broker_address = "address1,address2"
-
         extra_config = {"extra": "config"}
-        auth_params = {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
-            "sasl.username": "my-username",
-            "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
-        }
-        confluent_broker_config = {
-            **auth_params,
-            "bootstrap.servers": broker_address,
-        }
+        quix_extras = {"quix": "extras"}
+        connection_config = ConnectionConfig.from_librdkafka_dict(
+            {
+                "bootstrap.servers": "address1,address2",
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+        )
         expected_producer_extra_config = {
             "enable.idempotence": True,
-            **auth_params,
             **extra_config,
+            **quix_extras,
         }
-        expected_consumer_extra_config = {**auth_params, **extra_config}
+        expected_consumer_extra_config = {
+            **extra_config,
+            **quix_extras,
+        }
 
         def get_cfg_builder(quix_sdk_token):
             cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-            cfg_builder.get_confluent_broker_config.return_value = (
-                confluent_broker_config
-            )
+            cfg_builder.librdkafka_connection_config = connection_config
             cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
             cfg_builder.quix_sdk_token = quix_sdk_token
+            cfg_builder.get_application_config.side_effect = lambda cg: (
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
+            )
             return cfg_builder
 
         with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(
@@ -858,18 +871,18 @@ class TestQuixApplication:
             Application(
                 consumer_group=consumer_group,
                 quix_config_builder=get_cfg_builder(quix_sdk_token),
-                consumer_extra_config={"extra": "config"},
-                producer_extra_config={"extra": "config"},
+                consumer_extra_config=extra_config,
+                producer_extra_config=extra_config,
             )
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
-        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
-        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["broker_address"] == connection_config
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
@@ -882,9 +895,7 @@ class TestQuixApplication:
         error_str = 'Cannot provide both "broker_address" and "quix_sdk_token"'
         assert error_str in e_info.value.args
 
-    def test_topic_name_and_config(
-        self, quix_app_factory, quix_mock_config_builder_factory
-    ):
+    def test_topic_name_and_config(self, quix_app_factory):
         """
         Topic names created with Quix API have workspace id prefixed
         Topic config has provided values else defaults
@@ -967,53 +978,61 @@ class TestDeprecatedApplicationDotQuix:
     def test_init(self):
         consumer_group = "c_group"
         expected_workspace_cgroup = f"my_ws-{consumer_group}"
-        broker_address = "address1,address2"
-
+        quix_sdk_token = "my_sdk_token"
         extra_config = {"extra": "config"}
-        auth_params = {
-            "sasl.mechanisms": "SCRAM-SHA-256",
-            "security.protocol": "SASL_SSL",
-            "sasl.username": "my-username",
-            "sasl.password": "my-password",
-            "ssl.ca.location": "/mock/dir/ca.cert",
-        }
-        confluent_broker_config = {
-            **auth_params,
-            "bootstrap.servers": broker_address,
-        }
+        quix_extras = {"quix": "extras"}
+        connection_config = ConnectionConfig.from_librdkafka_dict(
+            {
+                "bootstrap.servers": "address1,address2",
+                "sasl.mechanisms": "SCRAM-SHA-256",
+                "security.protocol": "SASL_SSL",
+                "sasl.username": "my-username",
+                "sasl.password": "my-password",
+                "ssl.ca.location": "/mock/dir/ca.cert",
+            }
+        )
         expected_producer_extra_config = {
             "enable.idempotence": True,
-            **auth_params,
             **extra_config,
+            **quix_extras,
         }
-        expected_consumer_extra_config = {**auth_params, **extra_config}
+        expected_consumer_extra_config = {
+            **extra_config,
+            **quix_extras,
+        }
 
-        cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
-        cfg_builder.get_confluent_broker_config.return_value = confluent_broker_config
-        cfg_builder.prepend_workspace_id.return_value = "my_ws-c_group"
-        cfg_builder.strip_workspace_id_prefix.return_value = "c_group"
+        def get_cfg_builder(quix_sdk_token):
+            cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
+            cfg_builder.librdkafka_connection_config = connection_config
+            cfg_builder.prepend_workspace_id.return_value = expected_workspace_cgroup
+            cfg_builder.quix_sdk_token = quix_sdk_token
+            cfg_builder.get_application_config.side_effect = lambda cg: (
+                QuixApplicationConfig(
+                    connection_config, quix_extras, cfg_builder.prepend_workspace_id(cg)
+                )
+            )
+            return cfg_builder
+
         with patch("quixstreams.app.RowConsumer") as consumer_init_mock, patch(
             "quixstreams.app.RowProducer"
         ) as producer_init_mock:
             Application.Quix(
-                quix_config_builder=cfg_builder,
+                quix_config_builder=get_cfg_builder(quix_sdk_token),
                 consumer_group="c_group",
-                consumer_extra_config={"extra": "config"},
-                producer_extra_config={"extra": "config"},
+                consumer_extra_config=extra_config,
+                producer_extra_config=extra_config,
             )
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
         producer_call_kwargs = producer_init_mock.call_args.kwargs
-        assert producer_call_kwargs["broker_address"] == broker_address
+        assert producer_call_kwargs["broker_address"] == connection_config
         assert producer_call_kwargs["extra_config"] == expected_producer_extra_config
 
         consumer_call_kwargs = consumer_init_mock.call_args.kwargs
-        assert consumer_call_kwargs["broker_address"] == broker_address
+        assert consumer_call_kwargs["broker_address"] == connection_config
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
-
-        cfg_builder.prepend_workspace_id.assert_called_with("c_group")
 
     def test_topic_name_and_config(self, app_dot_quix_factory):
         """

@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Union
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -18,12 +18,7 @@ from .error_callbacks import (
     ProducerErrorCallback,
     default_on_processing_error,
 )
-from .kafka import (
-    AutoOffsetReset,
-    Partitioner,
-    Producer,
-    Consumer,
-)
+from .kafka import AutoOffsetReset, Producer, Consumer, ConnectionConfig
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
@@ -96,12 +91,11 @@ class Application:
 
     def __init__(
         self,
-        broker_address: Optional[str] = None,
+        broker_address: Optional[Union[str, ConnectionConfig]] = None,
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
         commit_interval: float = 5.0,
-        partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
@@ -121,8 +115,10 @@ class Application:
         topic_create_timeout: float = 60,
     ):
         """
-        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-            Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+        :param broker_address: Connection settings for Kafka.
+            Used by Producer, Consumer, and Admin clients.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
             Either this OR `quix_sdk_token` must be set to use `Application` (not both).
             Linked Environment Variable: `Quix__Broker__Address`.
             Default: `None`
@@ -139,8 +135,6 @@ class Application:
         :param commit_interval: How often to commit the processed messages in seconds.
             Default - 5.0.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param partitioner: A function to be used to determine the outgoing message
-            partition.
         :param consumer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
@@ -232,25 +226,25 @@ class Application:
             topic_manager_factory = functools.partial(
                 QuixTopicManager, quix_config_builder=quix_config_builder
             )
-            quix_configs = quix_config_builder.get_confluent_broker_config()
             # Check if the state dir points to the mounted PVC while running on Quix
             check_state_dir(state_dir=state_dir)
+            quix_app_config = quix_config_builder.get_application_config(consumer_group)
 
-            broker_address = quix_configs.pop("bootstrap.servers")
-            # Quix Cloud prefixes consumer group with workspace id
-            consumer_group = quix_config_builder.prepend_workspace_id(consumer_group)
-            consumer_extra_config = {**quix_configs, **consumer_extra_config}
-            producer_extra_config = {**quix_configs, **producer_extra_config}
+            broker_address = quix_app_config.librdkafka_connection_config
+            consumer_group = quix_app_config.consumer_group
+            consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
+            producer_extra_config.update(quix_app_config.librdkafka_extra_config)
         else:
             # Only broker address is provided
             topic_manager_factory = TopicManager
+            if isinstance(broker_address, str):
+                broker_address = ConnectionConfig(bootstrap_servers=broker_address)
 
         self._is_quix_app = bool(quix_config_builder)
 
         self._broker_address = broker_address
         self._consumer_group = consumer_group
         self._auto_offset_reset = auto_offset_reset
-        self._partitioner = partitioner
         self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
@@ -259,13 +253,11 @@ class Application:
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
             auto_commit_enable=False,  # Disable auto commit and manage commits manually
-            assignment_strategy="cooperative-sticky",
             extra_config=consumer_extra_config,
             on_error=on_consumer_error,
         )
         self._producer = RowProducer(
             broker_address=broker_address,
-            partitioner=partitioner,
             extra_config=producer_extra_config,
             on_error=on_producer_error,
         )
@@ -314,7 +306,6 @@ class Application:
         cls,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        partitioner: Partitioner = "murmur2",
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
@@ -374,8 +365,6 @@ class Application:
             Default - "quixstreams-default" (set during init).
               >***NOTE:*** Quix Applications will prefix it with the Quix workspace id.
         :param auto_offset_reset: Consumer `auto.offset.reset` setting
-        :param partitioner: A function to be used to determine the outgoing message
-            partition.
         :param consumer_extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Consumer` as is.
         :param producer_extra_config: A dictionary with additional options that
@@ -433,7 +422,6 @@ class Application:
             consumer_extra_config=consumer_extra_config,
             producer_extra_config=producer_extra_config,
             auto_offset_reset=auto_offset_reset,
-            partitioner=partitioner,
             on_consumer_error=on_consumer_error,
             on_processing_error=on_processing_error,
             on_producer_error=on_producer_error,
@@ -621,7 +609,6 @@ class Application:
 
         return Producer(
             broker_address=self._broker_address,
-            partitioner=self._partitioner,
             extra_config=self._producer_extra_config,
         )
 
@@ -665,7 +652,6 @@ class Application:
             consumer_group=self._consumer_group,
             auto_offset_reset=self._auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy="cooperative-sticky",
             extra_config=self._consumer_extra_config,
         )
 

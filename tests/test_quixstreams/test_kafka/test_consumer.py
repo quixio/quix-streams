@@ -183,8 +183,10 @@ class TestConsumerOnAssign:
 
         consumer_args = dict(
             auto_offset_reset="earliest",
-            assignment_strategy="cooperative-sticky",
-            extra_config={"max.poll.interval.ms": 60000},
+            extra_config={
+                "max.poll.interval.ms": 60000,
+                "partition.assignment.strategy": "cooperative-sticky",
+            },
         )
         consumer_0 = consumer_factory(**consumer_args)
         stack.enter_context(consumer_0)

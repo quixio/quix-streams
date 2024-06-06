@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError, TopicPartition
 
 from .error_callbacks import ConsumerErrorCallback, default_on_consumer_error
 from .exceptions import PartitionAssignmentError
-from .kafka import Consumer, AssignmentStrategy, AutoOffsetReset
+from .kafka import Consumer, AutoOffsetReset, ConnectionConfig
 from .kafka.consumer import RebalancingCallback
 from .kafka.exceptions import KafkaConsumerException
 from .models import Topic, Row
@@ -19,11 +19,10 @@ __all__ = ("RowConsumer",)
 class RowConsumer(Consumer):
     def __init__(
         self,
-        broker_address: str,
+        broker_address: Union[str, ConnectionConfig],
         consumer_group: str,
         auto_offset_reset: AutoOffsetReset,
         auto_commit_enable: bool = True,
-        assignment_strategy: AssignmentStrategy = "range",
         on_commit: Callable[[Optional[KafkaError], List[TopicPartition]], None] = None,
         extra_config: Optional[dict] = None,
         on_error: Optional[ConsumerErrorCallback] = None,
@@ -36,8 +35,9 @@ class RowConsumer(Consumer):
         objects instead of strings.
 
 
-        :param broker_address: Kafka broker host and port in format `<host>:<port>`.
-            Passed as `bootstrap.servers` to `confluent_kafka.Consumer`.
+        :param broker_address: Connection settings for Kafka.
+            Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
+            or a ConnectionConfig object if authentication is required.
         :param consumer_group: Kafka consumer group.
             Passed as `group.id` to `confluent_kafka.Consumer`
         :param auto_offset_reset: Consumer `auto.offset.reset` setting.
@@ -46,8 +46,6 @@ class RowConsumer(Consumer):
               - "latest" - automatically reset the offset to the largest offset
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
-        :param assignment_strategy: The name of a partition assignment strategy.
-            Available values: "range", "roundrobin", "cooperative-sticky".
         :param on_commit: Offset commit result propagation callback.
             Passed as "offset_commit_cb" to `confluent_kafka.Consumer`.
         :param extra_config: A dictionary with additional options that
@@ -63,7 +61,6 @@ class RowConsumer(Consumer):
             consumer_group=consumer_group,
             auto_offset_reset=auto_offset_reset,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy=assignment_strategy,
             on_commit=on_commit,
             extra_config=extra_config,
         )

@@ -17,12 +17,11 @@ from quixstreams.error_callbacks import (
     ProcessingErrorCallback,
 )
 from quixstreams.kafka import (
-    Partitioner,
     AutoOffsetReset,
     Consumer,
     Producer,
-    AssignmentStrategy,
 )
+from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models import MessageContext
 from quixstreams.models.rows import Row
 from quixstreams.models.serializers import (
@@ -47,6 +46,7 @@ from quixstreams.platforms.quix.config import (
     QuixKafkaConfigsBuilder,
     prepend_workspace_id,
     strip_workspace_id_prefix,
+    QuixApplicationConfig,
 )
 from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
@@ -70,24 +70,25 @@ def consumer_factory(kafka_container, random_consumer_group):
         broker_address: str = kafka_container.broker_address,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        assignment_strategy: AssignmentStrategy = "range",
         auto_commit_enable: bool = True,
         extra_config: dict = None,
     ) -> Consumer:
         consumer_group = consumer_group or random_consumer_group
-        extra_config = extra_config or {}
-
-        # Make consumers to refresh cluster metadata often
-        # to react on re-assignment changes faster
-        extra_config["topic.metadata.refresh.interval.ms"] = 3000
+        extras = {
+            # Make consumers to refresh cluster metadata often
+            # to react on re-assignment changes faster
+            "topic.metadata.refresh.interval.ms": 3000,
+            # Keep rebalances as simple as possible for testing
+            "partition.assignment.strategy": "range",
+        }
+        extras.update((extra_config or {}))
 
         return Consumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
             auto_commit_enable=auto_commit_enable,
-            assignment_strategy=assignment_strategy,
             auto_offset_reset=auto_offset_reset,
-            extra_config=extra_config,
+            extra_config=extras,
         )
 
     return factory
@@ -226,13 +227,11 @@ def row_consumer_factory(kafka_container, random_consumer_group):
 def row_producer_factory(kafka_container):
     def factory(
         broker_address: str = kafka_container.broker_address,
-        partitioner: Partitioner = "murmur2",
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
     ) -> RowProducer:
         return RowProducer(
             broker_address=broker_address,
-            partitioner=partitioner,
             extra_config=extra_config,
             on_error=on_error,
         )
@@ -350,9 +349,7 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder = create_autospec(QuixKafkaConfigsBuilder)
         cfg_builder._workspace_id = workspace_id
         cfg_builder.workspace_id = workspace_id
-        cfg_builder.get_confluent_broker_config.side_effect = lambda: {
-            "bootstrap.servers": kafka_container.broker_address
-        }
+
         # Slight change to ws stuff in case you pass a blank workspace (which makes
         #  some things easier
         cfg_builder.prepend_workspace_id.side_effect = lambda s: (
@@ -364,6 +361,17 @@ def quix_mock_config_builder_factory(kafka_container):
         cfg_builder.get_topic.side_effect = lambda topic: {
             "id": cfg_builder.prepend_workspace_id(topic)
         }
+
+        connection = ConnectionConfig(bootstrap_servers=kafka_container.broker_address)
+        cfg_builder.librdkafka_connection_config = connection
+        cfg_builder.get_application_config.side_effect = lambda cg: (
+            QuixApplicationConfig(
+                connection,
+                {"connections.max.idle.ms": 60000},
+                cfg_builder.prepend_workspace_id(cg),
+            )
+        )
+
         return cfg_builder
 
     return factory

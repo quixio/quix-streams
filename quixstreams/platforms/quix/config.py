@@ -1,13 +1,13 @@
+import base64
 import dataclasses
 import logging
 import time
-from os import getcwd
-from pathlib import Path
-from tempfile import gettempdir
-from typing import Optional, Tuple, Set, Mapping, Union, List
+from copy import deepcopy
+from typing import Optional, Set, Union, List
 
 from requests import HTTPError
 
+from quixstreams.kafka.configuration import ConnectionConfig
 from quixstreams.models.topics import Topic
 from .api import QuixPortalApiService
 from .exceptions import (
@@ -22,47 +22,10 @@ from .exceptions import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ("QuixKafkaConfigsBuilder",)
+__all__ = ("QuixKafkaConfigsBuilder", "QuixApplicationConfig")
 
 QUIX_CONNECTIONS_MAX_IDLE_MS = 3 * 60 * 1000
 QUIX_METADATA_MAX_AGE_MS = 3 * 60 * 1000
-
-
-# Map Kafka configuration params from Quix format to librdkafka's
-_QUIX_PARAMS_NAMES_MAP = {
-    "saslMechanism": "sasl.mechanisms",
-    "securityMode": "security.protocol",
-    "address": "bootstrap.servers",
-    "username": "sasl.username",
-    "password": "sasl.password",
-}
-
-# Map values of `sasl.mechanisms` from Quix format to librdkafka's
-_QUIX_SASL_MECHANISM_MAP = {
-    "ScramSha256": "SCRAM-SHA-256",
-    "ScramSha512": "SCRAM-SHA-512",
-    "Gssapi": "GSSAPI",
-    "Plain": "PLAIN",
-    "OAuthBearer": "OAUTHBEARER",
-}
-
-# Map values of `security.protocol` from Quix format to librdkafka's
-_QUIX_SECURITY_PROTOCOL_MAP = {
-    "Ssl": "ssl",
-    "SaslSsl": "sasl_ssl",
-    "Sasl": "sasl_plaintext",
-    "PlainText": "plaintext",
-}
-
-
-@dataclasses.dataclass
-class TopicCreationConfigs:
-    name: Optional[str] = None  # Required when not created by a Quix App.
-    num_partitions: int = 1
-    replication_factor: Optional[int] = None
-    retention_bytes: Optional[int] = None
-    retention_minutes: Optional[int] = None
-    optionals: Optional[Mapping] = None
 
 
 def strip_workspace_id_prefix(workspace_id: str, s: str) -> str:
@@ -89,6 +52,17 @@ def prepend_workspace_id(workspace_id: str, s: str) -> str:
     return f"{workspace_id}-{s}" if not s.startswith(workspace_id) else s
 
 
+@dataclasses.dataclass
+class QuixApplicationConfig:
+    """
+    A convenience container class for Quix Application configs.
+    """
+
+    librdkafka_connection_config: ConnectionConfig
+    librdkafka_extra_config: dict
+    consumer_group: Optional[str] = None
+
+
 class QuixKafkaConfigsBuilder:
     """
     Retrieves all the necessary information from the Quix API and builds all the
@@ -109,7 +83,6 @@ class QuixKafkaConfigsBuilder:
         self,
         quix_sdk_token: Optional[str] = None,
         workspace_id: Optional[str] = None,
-        workspace_cert_path: Optional[str] = None,
         quix_portal_api_service: Optional[QuixPortalApiService] = None,
         timeout: float = 30,
         topic_create_timeout: float = 60,
@@ -117,7 +90,6 @@ class QuixKafkaConfigsBuilder:
         """
         :param quix_portal_api_service: A QuixPortalApiService instance (else generated)
         :param workspace_id: A valid Quix Workspace ID (else searched for)
-        :param workspace_cert_path: path to an existing workspace cert (else retrieved)
         """
         if quix_sdk_token:
             self.api = QuixPortalApiService(
@@ -135,15 +107,13 @@ class QuixKafkaConfigsBuilder:
         except UndefinedQuixWorkspaceId:
             self._workspace_id = None
             logger.warning(
-                "No workspace ID was provided directly or found via environment; "
-                "if there happens to be only one valid workspace for your provided "
-                "auth token (often the case with 'streaming' aka 'SDK' tokens), "
-                "then this will find and use that ID. Otherwise, you may need to "
-                "provide a known topic name later on to help find the applicable ID."
+                "'workspace_id' argument was not provided nor set with "
+                "'Quix__Workspace__Id' environment; if only one Workspace ID for the "
+                "provided auth token exists (often true with SDK tokens), "
+                "then that ID will be used. Otherwise, provide a known topic name to "
+                "method 'get_workspace_info(topic)' to obtain desired Workspace ID."
             )
-        self._workspace_cert_path = workspace_cert_path
-        self._confluent_broker_config = None
-        self._quix_broker_config = None
+        self._librdkafka_connect_config = None
         self._quix_broker_settings = None
         self._workspace_meta = None
         self._timeout = timeout
@@ -156,34 +126,36 @@ class QuixKafkaConfigsBuilder:
         return self._workspace_id
 
     @property
-    def quix_broker_config(self) -> dict:
-        if not self._quix_broker_config:
-            self.get_workspace_info()
-        return self._quix_broker_config
-
-    @property
     def quix_broker_settings(self) -> dict:
         if not self._quix_broker_settings:
             self.get_workspace_info()
         return self._quix_broker_settings
 
     @property
-    def confluent_broker_config(self) -> dict:
-        if not self._confluent_broker_config:
-            self.get_confluent_broker_config()
-        return self._confluent_broker_config
-
-    @property
-    def workspace_cert_path(self) -> str:
-        if not self._workspace_cert_path:
-            self._set_workspace_cert()
-        return self._workspace_cert_path
-
-    @property
     def workspace_meta(self) -> dict:
         if not self._workspace_meta:
             self.get_workspace_info()
         return self._workspace_meta
+
+    @property
+    def librdkafka_connection_config(self) -> ConnectionConfig:
+        if not self._librdkafka_connect_config:
+            self._librdkafka_connect_config = self._get_librdkafka_connection_config()
+        return self._librdkafka_connect_config
+
+    @property
+    def librdkafka_extra_config(self) -> dict:
+        # Set the connection idle timeout and metadata max age to be less than
+        # Azure's default 4 minutes.
+        # Azure LB kills the inbound TCP connections after 4 mins and these settings
+        # help to handle that.
+        # More about this issue:
+        # - https://github.com/confluentinc/librdkafka/issues/3109
+        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
+        return {
+            "connections.max.idle.ms": QUIX_CONNECTIONS_MAX_IDLE_MS,
+            "metadata.max.age.ms": QUIX_METADATA_MAX_AGE_MS,
+        }
 
     def strip_workspace_id_prefix(self, s: str) -> str:
         """
@@ -235,11 +207,23 @@ class QuixKafkaConfigsBuilder:
                 if ws["name"] == workspace_name_or_id:
                     return ws
 
+    def _set_workspace_info(self, workspace_data: dict):
+        ws_data = deepcopy(workspace_data)
+        self._workspace_id = ws_data.pop("workspaceId")
+        try:
+            self._quix_broker_settings = ws_data.pop("brokerSettings")
+        except KeyError:  # hold-over for platform v1
+            self._quix_broker_settings = {
+                "brokerType": ws_data["brokerType"],
+                "syncTopics": False,
+            }
+        self._workspace_meta = ws_data
+
     def get_workspace_info(
         self,
         known_workspace_topic: Optional[str] = None,
         timeout: Optional[float] = None,
-    ):
+    ) -> dict:
         """
         Queries for workspace data from the Quix API, regardless of instance cache,
         and updates instance attributes from query result.
@@ -260,16 +244,8 @@ class QuixKafkaConfigsBuilder:
             raise NoWorkspaceFound(
                 "No workspace was found for the given workspace/auth-token/topic combo"
             )
-        self._workspace_id = ws_data.pop("workspaceId")
-        self._quix_broker_config = ws_data.pop("broker")
-        try:
-            self._quix_broker_settings = ws_data.pop("brokerSettings")
-        except KeyError:  # hold-over for platform v1
-            self._quix_broker_settings = {
-                "brokerType": ws_data["brokerType"],
-                "syncTopics": False,
-            }
-        self._workspace_meta = ws_data
+        self._set_workspace_info(ws_data)
+        return ws_data
 
     def search_workspace_for_topic(
         self, workspace_id: str, topic: str, timeout: Optional[float] = None
@@ -320,34 +296,6 @@ class QuixKafkaConfigsBuilder:
                 ws["workspaceId"], topic, timeout=timeout
             ):
                 return ws
-
-    def get_workspace_ssl_cert(
-        self, extract_to_folder: Optional[Path] = None, timeout: Optional[float] = None
-    ) -> Optional[str]:
-        """
-        Gets and extracts zipped certificate from the API to provided folder if the
-        SSL certificate is specified in broker configuration.
-
-        If no path was provided, will dump to /tmp. Expects cert named 'ca.cert'.
-
-        :param extract_to_folder: path to folder to dump zipped cert file to
-        :param timeout: response timeout (seconds); Default 30
-
-        :return: full cert filepath as string or `None` if certificate is not specified
-        """
-        certificate_bytes = self.api.get_workspace_certificate(
-            workspace_id=self._workspace_id,
-            timeout=timeout if timeout is not None else self._timeout,
-        )
-        if certificate_bytes is None:
-            return
-        extract_to_folder = extract_to_folder or Path(gettempdir())
-        full_path = extract_to_folder / "ca.cert"
-        if not full_path.is_file():
-            extract_to_folder.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(certificate_bytes)
-        return full_path.as_posix()
 
     def _create_topic(self, topic: Topic, timeout: Optional[float] = None):
         """
@@ -468,7 +416,9 @@ class QuixKafkaConfigsBuilder:
             finalize, timeout=timeout, finalize_timeout=finalize_timeout
         )
 
-    def get_topic(self, topic_name: str) -> Optional[dict]:
+    def get_topic(
+        self, topic_name: str, timeout: Optional[float] = None
+    ) -> Optional[dict]:
         """
         return the topic ID (the actual cluster topic name) if it exists, else None
 
@@ -477,11 +427,16 @@ class QuixKafkaConfigsBuilder:
         Quix API.
 
         :param topic_name: name of the topic
+        :param timeout: response timeout (seconds); Default 30
 
         :return: response dict of the topic info if topic found, else None
         """
         try:
-            return self.api.get_topic(topic_name, workspace_id=self.workspace_id)
+            return self.api.get_topic(
+                topic_name,
+                workspace_id=self.workspace_id,
+                timeout=timeout if timeout is not None else self._timeout,
+            )
         except QuixApiRequestFailure as e:
             if e.status_code == 404:
                 return
@@ -515,100 +470,25 @@ class QuixKafkaConfigsBuilder:
         if missing_topics:
             raise MissingQuixTopics(f"Topics do no exist: {missing_topics}")
 
-    def _set_workspace_cert(self, timeout: Optional[float] = None) -> str:
+    def _get_librdkafka_connection_config(self) -> ConnectionConfig:
         """
-        Will create a cert and assigns it to the workspace_cert_path property.
-        If there was no path provided at init, one is generated based on the cwd and
-        workspace_id.
-        Used by this class when generating configs (does some extra folder and class
-        config stuff that's not needed if you just want to get the cert only)
-
-        :return: full cert filepath as string
+        Get the full client config required to authenticate a confluent-kafka
+        client to a Quix platform broker/workspace as a ConnectionConfig
         """
-        if self._workspace_cert_path:
-            folder = Path(self._workspace_cert_path)
-            if folder.name.endswith("cert"):
-                folder = folder.parent
-        else:
-            folder = Path(getcwd()) / "certificates" / self.workspace_id
-        self._workspace_cert_path = self.get_workspace_ssl_cert(
-            extract_to_folder=folder, timeout=timeout
-        )
-        return self._workspace_cert_path
+        librdkafka_dict = self.api.get_librdkafka_connection_config(self.workspace_id)
+        if (cert := librdkafka_dict.pop("ssl.ca.cert", None)) is not None:
+            librdkafka_dict["ssl.ca.pem"] = base64.b64decode(cert)
+        return ConnectionConfig.from_librdkafka_dict(librdkafka_dict)
 
-    def get_confluent_broker_config(
-        self, known_topic: Optional[str] = None, timeout: Optional[float] = None
-    ) -> dict:
+    def get_application_config(self, consumer_group_id: str) -> QuixApplicationConfig:
         """
-        Get the full client config dictionary required to authenticate a confluent-kafka
-        client to a Quix platform broker/workspace.
+        Get all the necessary attributes for an Application to run on Quix Cloud.
 
-        The returned config can be used directly by any confluent-kafka-python consumer/
-        producer (add your producer/consumer-specific configs afterward).
-
-        :param known_topic: a topic known to exist in some workspace
-        :param timeout: response timeout (seconds); Default 30
-
-        :return: a dict of confluent-kafka-python client settings (see librdkafka
-        config for more details)
-        """
-        self.get_workspace_info(known_workspace_topic=known_topic, timeout=timeout)
-        cfg_out = {}
-        for quix_param_name, rdkafka_param_name in _QUIX_PARAMS_NAMES_MAP.items():
-            # Map broker config received from Quix to librdkafka format
-            param_value = self.quix_broker_config[quix_param_name]
-
-            # Also map values of "security.protocol" and "sasl.mechanisms" from Quix
-            # to librdkafka format
-            if rdkafka_param_name == "security.protocol":
-                param_value = _QUIX_SECURITY_PROTOCOL_MAP[param_value]
-            elif rdkafka_param_name == "sasl.mechanisms":
-                param_value = _QUIX_SASL_MECHANISM_MAP[param_value]
-            cfg_out[rdkafka_param_name] = param_value
-
-        # Specify SSL certificate if it's provided for the broker
-        ssl_cert_path = self._set_workspace_cert()
-        if ssl_cert_path is not None:
-            cfg_out["ssl.ca.location"] = ssl_cert_path
-
-        # Set the connection idle timeout and metadata max age to be less than
-        # Azure's default 4 minutes.
-        # Azure LB kills the inbound TCP connections after 4 mins and these settings
-        # help to handle that.
-        # More about this issue:
-        # - https://github.com/confluentinc/librdkafka/issues/3109
-        # - https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#producer-and-consumer-configurations-1
-        # These values can be overwritten on the Application level by passing
-        # `extra_consumer_config` or `extra_producer_config` parameters.
-        cfg_out["connections.max.idle.ms"] = QUIX_CONNECTIONS_MAX_IDLE_MS
-        cfg_out["metadata.max.age.ms"] = QUIX_METADATA_MAX_AGE_MS
-        self._confluent_broker_config = cfg_out
-        return self._confluent_broker_config
-
-    def get_confluent_client_configs(
-        self,
-        topics: list,
-        consumer_group_id: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> Tuple[dict, List[str], Optional[str]]:
-        """
-        Get all the values you need in order to use a confluent_kafka-based client
-        with a topic on a Quix platform broker/workspace.
-
-        The returned config can be used directly by any confluent-kafka-python consumer/
-        producer (add your producer/consumer-specific configs afterward).
-
-        The topics and consumer group are appended with any necessary values.
-
-        :param topics: list of topics
         :param consumer_group_id: consumer group id, if needed
-        :param timeout: response timeout (seconds); Default 30
-
-        :return: a tuple with configs and altered versions of the topics
-        and consumer group name
+        :return: a QuixApplicationConfig instance
         """
-        return (
-            self.get_confluent_broker_config(topics[0], timeout=timeout),
-            [self.prepend_workspace_id(t) for t in topics],
-            self.prepend_workspace_id(consumer_group_id) if consumer_group_id else None,
+        return QuixApplicationConfig(
+            self.librdkafka_connection_config,
+            self.librdkafka_extra_config,
+            self.prepend_workspace_id(consumer_group_id),
         )
