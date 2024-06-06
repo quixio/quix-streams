@@ -817,7 +817,7 @@ class TestStreamingDataFrameTumblingWindow:
             RecordStub(2, "test", 20),
             # Late message - it belongs to window [0,10) but this window
             # is already closed. This message should be skipped from processing
-            RecordStub(3, "test", 9),
+            RecordStub(3, "test", 19),
         ]
 
         results = []
@@ -1168,7 +1168,7 @@ class TestStreamingDataFrameHoppingWindow:
             # Create windows [30, 40) and [35, 45)
             RecordStub(4, "test", 35),
             # Timestamp "10" is late and should not be processed
-            RecordStub(3, "test", 10),
+            RecordStub(3, "test", 26),
         ]
 
         results = []
