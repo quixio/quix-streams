@@ -45,6 +45,7 @@ def configure_logging(
 
     # Configuring logger
     logger.setLevel(loglevel)
+    logger.propagate = False
     _DEFAULT_HANDLER.setFormatter(_DEFAULT_FORMATTER)
     _DEFAULT_HANDLER.setLevel(loglevel)
     logger.addHandler(_DEFAULT_HANDLER)
