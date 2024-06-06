@@ -73,18 +73,27 @@ class FixedTimeWindow:
 
         updated_windows = []
         for start, end in ranges:
-            # TODO: Log when the value is late and no window is updated
-            if not self._stale(window_end=end, latest_timestamp=latest_timestamp):
-                aggregated = self._aggregate_func(
-                    start, end, timestamp_ms, value, state
+            min_valid_window_end = latest_timestamp - self._grace_ms + 1
+            if end < min_valid_window_end:
+                ctx = message_context()
+                logger.warning(
+                    f"Skipping window processing for expired window "
+                    f"timestamp={timestamp_ms} "
+                    f"window=[{start},{end}) "
+                    f"min_valid_window_end={min_valid_window_end} "
+                    f"partition={ctx.topic}[{ctx.partition}] "
+                    f"offset={ctx.offset}"
                 )
-                updated_windows.append(
-                    {
-                        "start": start,
-                        "end": end,
-                        "value": self._merge_func(aggregated),
-                    }
-                )
+                continue
+
+            aggregated = self._aggregate_func(start, end, timestamp_ms, value, state)
+            updated_windows.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "value": self._merge_func(aggregated),
+                }
+            )
 
         expired_windows = []
         for (start, end), aggregated in state.expire_windows(
@@ -166,8 +175,8 @@ class FixedTimeWindow:
             topic_name=self._dataframe.topic.name, store_name=self._name
         )
 
-    def _stale(self, window_end: int, latest_timestamp: int) -> bool:
-        return latest_timestamp > window_end + self._grace_ms
+    # def _stale(self, window_end: int, latest_timestamp: int) -> bool:
+    #     return latest_timestamp > window_end + self._grace_ms
 
     def _apply_window(
         self,
