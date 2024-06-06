@@ -1,5 +1,5 @@
 import enum
-from typing import Protocol, Any, Optional, Callable, Dict, ClassVar, Tuple
+from typing import Protocol, Any, Optional, Callable, Dict, ClassVar, Tuple, List
 
 from quixstreams.models import ConfluentKafkaMessageProto
 from quixstreams.models.types import MessageHeadersMapping
@@ -347,7 +347,9 @@ class WindowedState(Protocol):
         """
         ...
 
-    def expire_windows(self, duration_ms: int, grace_ms: int = 0):
+    def expire_windows(
+        self, duration_ms: int, grace_ms: int = 0
+    ) -> List[Tuple[Tuple[int, int], Any]]:
         """
         Get a list of expired windows from RocksDB considering the current
         latest timestamp, window duration and grace period.
