@@ -15,7 +15,9 @@ LogLevel = Literal[
 
 _LOGGER_NAME = "quixstreams"
 
-_DEFAULT_FORMATTER = logging.Formatter("[%(asctime)s] [%(levelname)s] : %(message)s")
+_DEFAULT_FORMATTER = logging.Formatter(
+    f"[%(asctime)s] [%(levelname)s] [{_LOGGER_NAME}] : %(message)s"
+)
 _DEFAULT_HANDLER = logging.StreamHandler(stream=sys.stderr)
 
 logger = logging.getLogger(_LOGGER_NAME)
