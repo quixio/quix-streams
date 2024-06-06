@@ -31,6 +31,7 @@ class RowProducer:
         If producer fails and the callback returns `True`, the exception
         will be logged but not propagated.
         The default callback logs an exception and returns `False`.
+    :param flush_timeout: The time the producer is waiting for all messages to be delivered.
     """
 
     def __init__(
@@ -38,10 +39,12 @@ class RowProducer:
         broker_address: Union[str, ConnectionConfig],
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
+        flush_timeout: Optional[int] = None,
     ):
         self._producer = Producer(
             broker_address=broker_address,
             extra_config=extra_config,
+            flush_timeout=flush_timeout,
         )
 
         self._on_error: Optional[ProducerErrorCallback] = (

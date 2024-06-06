@@ -6,6 +6,7 @@ import pytest
 from confluent_kafka import TopicPartition
 
 from quixstreams.checkpointing import Checkpoint, InvalidStoredOffset
+from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
 from quixstreams.kafka import Consumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
@@ -29,6 +30,13 @@ def checkpoint_factory(state_manager, consumer, row_producer):
         )
 
     return factory
+
+
+@pytest.fixture()
+def rowproducer_mock(request):
+    p = MagicMock(spec_set=RowProducer)
+    p.flush.return_value = getattr(request, "param", 0)
+    return p
 
 
 class TestCheckpoint:
@@ -68,13 +76,18 @@ class TestCheckpoint:
         assert tp.offset == processed_offset + 1
 
     def test_commit_with_state_no_changelog_success(
-        self, checkpoint_factory, consumer, state_manager_factory, topic_factory
+        self,
+        checkpoint_factory,
+        consumer,
+        state_manager_factory,
+        topic_factory,
+        rowproducer_mock,
     ):
         topic_name, _ = topic_factory()
-        producer_mock = MagicMock(spec_set=RowProducer)
-        state_manager = state_manager_factory(producer=producer_mock)
+
+        state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
-            consumer_=consumer, state_manager_=state_manager, producer_=producer_mock
+            consumer_=consumer, state_manager_=state_manager, producer_=rowproducer_mock
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -95,7 +108,7 @@ class TestCheckpoint:
         assert tp.offset == processed_offset + 1
 
         # Check the producer is flushed
-        assert producer_mock.flush.call_count == 1
+        assert rowproducer_mock.flush.call_count == 1
 
         # Check the state is flushed
         assert tx.completed
@@ -186,34 +199,32 @@ class TestCheckpoint:
         assert not store_partition.get_processed_offset()
 
     def test_commit_no_offsets_stored_noop(
-        self, checkpoint_factory, state_manager_factory, topic_factory
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
     ):
         topic_name, _ = topic_factory()
-        producer_mock = MagicMock(spec_set=RowProducer)
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=producer_mock)
+        state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=producer_mock,
+            producer_=rowproducer_mock,
         )
         # Commit the checkpoint without processing any messages
         checkpoint.commit()
 
         # Check nothing is committed
         assert not consumer_mock.commit.call_count
-        assert not producer_mock.flush.call_count
+        assert not rowproducer_mock.flush.call_count
 
     def test_commit_has_failed_transactions_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
     ):
-        producer_mock = MagicMock(spec_set=RowProducer)
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=producer_mock)
+        state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=producer_mock,
+            producer_=rowproducer_mock,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -240,20 +251,19 @@ class TestCheckpoint:
             checkpoint.commit()
 
         # The producer should not flush
-        assert not producer_mock.flush.call_count
+        assert not rowproducer_mock.flush.call_count
         # Consumer should not commit
         assert not consumer_mock.commit.call_count
 
     def test_commit_producer_flush_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
     ):
-        producer_mock = MagicMock(spec_set=RowProducer)
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=producer_mock)
+        state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=producer_mock,
+            producer_=rowproducer_mock,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -266,7 +276,7 @@ class TestCheckpoint:
         tx.set(key=key, value=value, prefix=prefix)
         checkpoint.store_offset("topic", 0, processed_offset)
 
-        producer_mock.flush.side_effect = ValueError("Flush failure")
+        rowproducer_mock.flush.side_effect = ValueError("Flush failure")
         # Checkpoint commit should fail if producer failed to flush
         with pytest.raises(ValueError):
             checkpoint.commit()
@@ -278,15 +288,14 @@ class TestCheckpoint:
         assert not tx.completed
 
     def test_commit_consumer_commit_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
     ):
-        producer_mock = MagicMock(spec_set=RowProducer)
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=producer_mock)
+        state_manager = state_manager_factory(producer=rowproducer_mock)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
-            producer_=producer_mock,
+            producer_=rowproducer_mock,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -305,7 +314,7 @@ class TestCheckpoint:
             checkpoint.commit()
 
         # Producer should flush
-        assert producer_mock.flush.call_count
+        assert rowproducer_mock.flush.call_count
         # The transaction should remain prepared, but not completed
         assert tx.prepared
         assert not tx.completed
@@ -326,3 +335,22 @@ class TestCheckpoint:
         assert tx
         tx2 = checkpoint.get_store_transaction("topic", 0, "default")
         assert tx2 is tx
+
+    @pytest.mark.parametrize("rowproducer_mock", [1], indirect=True)
+    def test_incomplete_flush(
+        self, checkpoint_factory, consumer, state_manager_factory, rowproducer_mock
+    ):
+
+        state_manager = state_manager_factory(producer=rowproducer_mock)
+        checkpoint = checkpoint_factory(
+            consumer_=consumer, state_manager_=state_manager, producer_=rowproducer_mock
+        )
+        checkpoint.store_offset("topic", 0, 0)
+
+        with pytest.raises(CheckpointProducerTimeout) as err:
+            checkpoint.commit()
+
+        assert (
+            str(err.value)
+            == "'1' messages failed to be produced before the producer flush timeout"
+        )

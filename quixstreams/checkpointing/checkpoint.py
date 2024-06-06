@@ -12,7 +12,7 @@ from quixstreams.state import (
     DEFAULT_STATE_STORE_NAME,
 )
 from quixstreams.state.exceptions import StoreTransactionFailed
-from .exceptions import InvalidStoredOffset
+from .exceptions import InvalidStoredOffset, CheckpointProducerTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,13 @@ class Checkpoint:
 
         # Step 2. Flush producer to trigger all delivery callbacks and ensure that
         # all messages are produced
-        self._producer.flush()
+        logger.debug("Checkpoint: flushing producer")
+        unproduced_msg_count = self._producer.flush()
+        if unproduced_msg_count > 0:
+            raise CheckpointProducerTimeout(
+                f"'{unproduced_msg_count}' messages failed to be produced before the producer flush timeout"
+            )
+
         # Get produced offsets after flushing the producer
         produced_offsets = self._producer.offsets
 
@@ -138,6 +144,7 @@ class Checkpoint:
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
             for (topic, partition), offset in self._tp_offsets.items()
         ]
+        logger.debug("Checkpoint: commiting consumer")
         self._consumer.commit(offsets=offsets, asynchronous=False)
 
         # Step 4. Flush state store partitions to the disk together with changelog
