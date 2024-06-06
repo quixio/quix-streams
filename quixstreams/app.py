@@ -4,8 +4,10 @@ import logging
 import os
 import signal
 import warnings
+from itertools import chain
 from typing import Optional, List, Callable
 
+import orjson
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
 
@@ -23,6 +25,7 @@ from .kafka import (
     Producer,
     Consumer,
 )
+from .kafka.buffering import MessageBuffer
 from .logging import configure_logging, LogLevel
 from .models import (
     Topic,
@@ -253,6 +256,12 @@ class Application:
         self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
+
+        # Testing the message buffer
+        self._message_buffer = MessageBuffer()
+        consumer_extra_config["statistics.interval.ms"] = 1000
+        consumer_extra_config["stats_cb"] = self._stats_callback
+
         self._consumer = RowConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -307,6 +316,25 @@ class Application:
             consumer=self._consumer,
             state_manager=self._state_manager,
         )
+
+    def _stats_callback(self, json_str: str):
+        # TODO: This code fails with SystemError after exception is raised
+        #  from the rebalancing callback.
+        #  Probably due to a bug in confluent_kafka
+        stats = orjson.loads(json_str)
+        topics = list(self._topic_manager.topics.keys()) + list(
+            self._topic_manager.repartition_topics.keys()
+        )
+
+        topics_stats = stats.get("topics", {})
+        for topic in topics:
+            partitions_stats = topics_stats.get(topic, {}).get("partitions", {})
+            for partition, stats_dict in partitions_stats.items():
+                partition = int(partition)
+                highwater = stats_dict["hi_offset"]
+                self._message_buffer.update_highwater(
+                    topic=topic, partition=partition, highwater=highwater
+                )
 
     @classmethod
     def Quix(
@@ -789,28 +817,45 @@ class Application:
             first_row.offset,
         )
 
+        buffer = self._message_buffer
         for row in rows:
-            context = copy_context()
-            context.run(set_message_context, row.context)
-            try:
-                # Execute StreamingDataFrame in a context
-                context.run(
-                    dataframe_composed[topic_name],
-                    row.value,
-                    row.key,
-                    row.timestamp,
-                )
-            except Exception as exc:
-                # TODO: This callback might be triggered because of Producer
-                #  errors too because they happen within ".process()"
-                to_suppress = self._on_processing_error(exc, row, logger)
-                if not to_suppress:
-                    raise
+            is_full = buffer.add_item(
+                topic=row.topic, partition=row.partition, item=row
+            )
+            if is_full:
+                tp = TopicPartition(topic=row.topic, partition=row.partition)
+                self._consumer.pause([tp])
 
-        # Store the message offset after it's successfully processed
-        self._processing_context.store_offset(
-            topic=topic_name, partition=partition, offset=offset
-        )
+        if buffer.ready():
+            for row, is_empty in buffer.read():
+                if is_empty:
+                    self._consumer.resume(
+                        [TopicPartition(topic=row.topic, partition=row.partition)]
+                    )
+                if not buffer.ready():
+                    break
+
+                context = copy_context()
+                context.run(set_message_context, row.context)
+                try:
+                    # Execute StreamingDataFrame in a context
+                    context.run(
+                        dataframe_composed[row.topic],
+                        row.value,
+                        row.key,
+                        row.timestamp,
+                    )
+                except Exception as exc:
+                    # TODO: This callback might be triggered because of Producer
+                    #  errors too because they happen within ".process()"
+                    to_suppress = self._on_processing_error(exc, row, logger)
+                    if not to_suppress:
+                        raise
+
+                # Store the message offset after it's successfully processed
+                self._processing_context.store_offset(
+                    topic=row.topic, partition=row.partition, offset=row.offset
+                )
 
         if self._on_message_processed is not None:
             self._on_message_processed(topic_name, partition, offset)
@@ -832,6 +877,8 @@ class Application:
         # assigning manually here (instead of allowing it handle it automatically)
         # enables pausing them during recovery to work as expected
         self._consumer.incremental_assign(topic_partitions)
+        for tp in topic_partitions:
+            self._message_buffer.add_partition(topic=tp.topic, partition=tp.partition)
 
         if self._state_manager.stores:
             logger.debug(f"Rebalancing: assigning state store partitions")
@@ -885,6 +932,8 @@ class Application:
             self._processing_context.commit_checkpoint(force=True)
 
         self._consumer.incremental_unassign(topic_partitions)
+        for tp in topic_partitions:
+            self._message_buffer.drop_partition(topic=tp.topic, partition=tp.partition)
         if self._state_manager.stores:
             logger.debug(f"Rebalancing: revoking state store partitions")
             for tp in topic_partitions:
