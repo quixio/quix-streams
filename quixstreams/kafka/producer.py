@@ -1,24 +1,18 @@
 import logging
-from typing import Union, Optional, Callable
+from typing import Union, Optional, Callable, List
 
 from confluent_kafka import (
     Producer as ConfluentProducer,
     KafkaError,
     Message,
+    TopicPartition,
 )
-from typing_extensions import Literal
+from confluent_kafka.admin import GroupMetadata
 
 from .configuration import ConnectionConfig
 from quixstreams.models.types import Headers
 
-__all__ = (
-    "Producer",
-    "Partitioner",
-)
-
-Partitioner = Literal[
-    "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
-]
+__all__ = ("Producer",)
 
 DeliveryCallback = Callable[[Optional[KafkaError], Message], None]
 
@@ -178,3 +172,45 @@ class Producer:
         logger.debug("Flushing kafka producer")
         self.flush()
         logger.debug("Kafka producer flushed")
+
+
+class TransactionalProducer(Producer):
+    def __init__(
+        self,
+        broker_address: str,
+        transactional_id: str,
+        extra_config: Optional[dict] = None,
+    ):
+        super().__init__(
+            broker_address=broker_address,
+            extra_config=extra_config,
+        )
+        self._producer_config.update(
+            {"enable.idempotence": True, "transactional.id": transactional_id}
+        )
+
+    @property
+    def _producer(self) -> ConfluentProducer:
+        if not self._inner_producer:
+            self._inner_producer = ConfluentProducer(self._producer_config)
+            self._inner_producer.init_transactions()
+        return self._inner_producer
+
+    def begin_transaction(self):
+        self._producer.begin_transaction()
+
+    def send_offsets_to_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._producer.send_offsets_to_transaction(
+            positions, group_metadata, timeout if timeout is not None else -1
+        )
+
+    def abort_transaction(self, timeout: Optional[float] = None):
+        self._producer.abort_transaction(timeout if timeout is not None else -1)
+
+    def commit_transaction(self, timeout: Optional[float] = None):
+        self._producer.commit_transaction(timeout if timeout is not None else -1)

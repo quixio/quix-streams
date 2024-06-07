@@ -1,12 +1,14 @@
-from typing import Optional, Any, Union, Dict, Tuple
+from typing import Optional, Any, Union, Dict, Tuple, List, cast
 
+from confluent_kafka.admin import GroupMetadata
 from confluent_kafka import KafkaError, Message
 
 import logging
+
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 from .kafka.configuration import ConnectionConfig
 from .kafka.exceptions import KafkaProducerDeliveryError
-from .kafka.producer import Producer
+from .kafka.producer import Producer, TransactionalProducer
 from .models import Topic, Row, Headers
 
 logger = logging.getLogger(__name__)
@@ -41,10 +43,10 @@ class RowProducer:
         on_error: Optional[ProducerErrorCallback] = None,
         flush_timeout: Optional[int] = None,
     ):
-        self._producer = Producer(
-            broker_address=broker_address,
-            extra_config=extra_config,
-            flush_timeout=flush_timeout,
+        self._producer = self._get_producer(
+            broker_address,
+            extra_config,
+            flush_timeout,
         )
 
         self._on_error: Optional[ProducerErrorCallback] = (
@@ -52,6 +54,13 @@ class RowProducer:
         )
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
         self._error: Optional[KafkaError] = None
+
+    def _get_producer(self, broker_address, extra_config, flush_timeout) -> Producer:
+        return Producer(
+            broker_address=broker_address,
+            extra_config=extra_config,
+            flush_timeout=flush_timeout,
+        )
 
     def produce_row(
         self,
@@ -165,3 +174,46 @@ class RowProducer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.flush()
+
+
+class TransactionalRowProducer(RowProducer):
+    def __init__(
+        self,
+        broker_address: Union[str, ConnectionConfig],
+        transactional_id: str,
+        extra_config: dict = None,
+        on_error: Optional[ProducerErrorCallback] = None,
+    ):
+        self._transactional_id = transactional_id
+        super().__init__(
+            broker_address=broker_address, extra_config=extra_config, on_error=on_error
+        )
+        self._producer = cast(TransactionalProducer, self._producer)
+
+    def _get_producer(self, broker_address, extra_config) -> TransactionalProducer:
+        return TransactionalProducer(
+            broker_address=broker_address,
+            extra_config=extra_config,
+            transactional_id=self._transactional_id,
+        )
+
+    def begin_transaction(self):
+        self._producer.begin_transaction()
+
+    def send_offsets_to_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._producer.send_offsets_to_transaction(
+            positions, group_metadata, timeout=timeout if timeout is not None else -1
+        )
+
+    def abort_transaction(self, timeout: Optional[float] = None):
+        self._producer.abort_transaction(timeout=timeout if timeout is not None else -1)
+
+    def commit_transaction(self, timeout: Optional[float] = None):
+        self._producer.commit_transaction(
+            timeout=timeout if timeout is not None else -1
+        )

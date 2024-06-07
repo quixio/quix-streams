@@ -1,11 +1,11 @@
 import logging
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, cast
 
 from confluent_kafka import TopicPartition, KafkaException
 
 from quixstreams.kafka import Consumer
-from quixstreams.rowproducer import RowProducer
+from quixstreams.rowproducer import RowProducer, TransactionalRowProducer
 from quixstreams.state import (
     StateStoreManager,
     PartitionTransaction,
@@ -114,7 +114,7 @@ class Checkpoint:
         """
 
         if not self._tp_offsets:
-            # No messages have been processed during this checkpoint, return
+            logger.debug("Nothing to commit")
             return
 
         # Step 1. Produce the changelogs
@@ -179,6 +179,88 @@ class Checkpoint:
                 # Increment the changelog offset by one to match the high watermark
                 # in Kafka
                 changelog_offset += 1
+            transaction.flush(
+                processed_offset=offset, changelog_offset=changelog_offset
+            )
+
+
+class EOSCheckpoint(Checkpoint):
+    def __init__(
+        self,
+        commit_interval: float,
+        producer: TransactionalRowProducer,
+        consumer: Consumer,
+        state_manager: StateStoreManager,
+    ):
+        super().__init__(commit_interval, producer, consumer, state_manager)
+        self._producer = cast(TransactionalRowProducer, self._producer)
+        self._producer.begin_transaction()
+
+    def commit(self):
+        """
+        Commit the checkpoint.
+
+        This method will:
+         1. Produce the changelogs for each state store
+         2. Flush the producer to ensure everything is delivered.
+         3. Commit topic offsets.
+         4. Flush each state store partition to the disk.
+        """
+
+        if not self._tp_offsets:
+            logger.debug("Nothing to commit; aborting unused producer transaction...")
+            self._producer.abort_transaction()
+            return
+
+        # Step 1. Produce the changelogs
+        for (
+            topic,
+            partition,
+            store_name,
+        ), transaction in self._store_transactions.items():
+            offset = self._tp_offsets[(topic, partition)]
+            if transaction.failed:
+                self._producer.abort_transaction()
+                raise StoreTransactionFailed(
+                    f'Detected a failed transaction for store "{store_name}", '
+                    f"the checkpoint is aborted"
+                )
+            transaction.prepare(processed_offset=offset)
+
+        # Step 3. Commit offsets to Kafka
+        offsets = [
+            TopicPartition(topic=topic, partition=partition, offset=offset + 1)
+            for (topic, partition), offset in self._tp_offsets.items()
+        ]
+        self._producer.send_offsets_to_transaction(
+            offsets,
+            self._consumer.consumer_group_metadata(),
+        )
+        self._producer.commit_transaction()
+
+        produced_offsets = self._producer.offsets
+
+        # Step 4. Flush state store partitions to the disk together with changelog
+        # offsets
+        for (
+            topic,
+            partition,
+            store_name,
+        ), transaction in self._store_transactions.items():
+            offset = self._tp_offsets[(topic, partition)]
+
+            # Get the changelog topic-partition for the given transaction
+            # It can be None if changelog topics are disabled in the app config
+            changelog_tp = transaction.changelog_topic_partition
+            # The changelog offset also can be None if no updates happened
+            # during transaction
+            changelog_offset = (
+                produced_offsets.get(changelog_tp) if changelog_tp is not None else None
+            )
+            if changelog_offset is not None:
+                # Increment the changelog offset by two to match the high watermark
+                # in Kafka (+1 for normal offset diff, +1 for transactional marker)
+                changelog_offset += 2
             transaction.flush(
                 processed_offset=offset, changelog_offset=changelog_offset
             )
