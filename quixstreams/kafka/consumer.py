@@ -9,7 +9,7 @@ from confluent_kafka import (
     Consumer as ConfluentConsumer,
     KafkaError,
 )
-from confluent_kafka.admin import ClusterMetadata
+from confluent_kafka.admin import ClusterMetadata, GroupMetadata
 
 from .configuration import ConnectionConfig
 from quixstreams.exceptions import PartitionAssignmentError, KafkaPartitionError
@@ -547,6 +547,12 @@ class Consumer:
         logger.debug("Closing Kafka consumer")
         self._consumer.close()
         logger.debug("Kafka consumer closed")
+
+    def consumer_group_metadata(self) -> GroupMetadata:
+        """
+        Used by the producer during consumer offset sending for an EOS transaction.
+        """
+        return self._consumer.consumer_group_metadata()
 
     @property
     def _consumer(self) -> ConfluentConsumer:

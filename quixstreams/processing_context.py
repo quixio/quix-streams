@@ -1,12 +1,12 @@
 import dataclasses
 import logging
 import time
-from typing import Optional
+from typing import Optional, Union, Type, cast
 
-from quixstreams.checkpointing import Checkpoint
+from quixstreams.checkpointing import Checkpoint, EOSCheckpoint
 from quixstreams.exceptions import QuixException
 from quixstreams.rowconsumer import RowConsumer
-from quixstreams.rowproducer import RowProducer
+from quixstreams.rowproducer import RowProducer, TransactionalRowProducer
 from quixstreams.state import StateStoreManager
 
 __all__ = ("ProcessingContext",)
@@ -25,12 +25,19 @@ class ProcessingContext:
     """
 
     commit_interval: float
-    producer: RowProducer
+    producer: Union[RowProducer, TransactionalRowProducer]
     consumer: RowConsumer
     state_manager: StateStoreManager
+    _checkpointer: Optional[Type[Checkpoint]] = dataclasses.field(init=False)
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
+
+    def __post_init__(self):
+        if isinstance(self.producer, TransactionalRowProducer):
+            self._checkpointer = EOSCheckpoint
+        else:
+            self._checkpointer = Checkpoint
 
     @property
     def checkpoint(self) -> Checkpoint:
@@ -52,7 +59,7 @@ class ProcessingContext:
         """
         Initialize a new checkpoint
         """
-        self._checkpoint = Checkpoint(
+        self._checkpoint = self._checkpointer(
             commit_interval=self.commit_interval,
             state_manager=self.state_manager,
             producer=self.producer,
@@ -70,13 +77,12 @@ class ProcessingContext:
 
         :param force: if `True`, commit the checkpoint before its expiration deadline.
         """
-        if not self._checkpoint.empty() and (self._checkpoint.expired() or force):
-
-            logger.debug(f"Committing a checkpoint force={force}")
+        if self._checkpoint.expired() or force:
+            logger.debug(f"Attempting checkpoint commit; forced={force}")
             start = time.monotonic()
             self._checkpoint.commit()
             elapsed = round(time.monotonic() - start, 2)
             logger.debug(
-                f"Committed a checkpoint force={force} time_elapsed={elapsed}s"
+                f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
             )
             self.init_checkpoint()

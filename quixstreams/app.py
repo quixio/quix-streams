@@ -36,7 +36,7 @@ from .platforms.quix import (
 )
 from .processing_context import ProcessingContext
 from .rowconsumer import RowConsumer
-from .rowproducer import RowProducer
+from .rowproducer import RowProducer, TransactionalRowProducer
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
@@ -114,6 +114,7 @@ class Application:
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
+        exactly_once_guarantees: bool = True,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -256,15 +257,22 @@ class Application:
             extra_config=consumer_extra_config,
             on_error=on_consumer_error,
         )
-        self._producer = RowProducer(
-            broker_address=broker_address,
-            extra_config=producer_extra_config,
-            on_error=on_producer_error,
-            flush_timeout=consumer_extra_config.get(
-                "max.poll.interval.ms", _default_max_poll_interval_ms
+        if exactly_once_guarantees:
+            self._producer = TransactionalRowProducer(
+                broker_address=broker_address,
+                extra_config=producer_extra_config,
+                transactional_id=consumer_group,
             )
-            / 1000,  # convert to seconds
-        )
+        else:
+            self._producer = RowProducer(
+                broker_address=broker_address,
+                extra_config=producer_extra_config,
+                on_error=on_producer_error,
+                flush_timeout=consumer_extra_config.get(
+                    "max.poll.interval.ms", _default_max_poll_interval_ms
+                )
+                / 1000,  # convert to seconds
+            )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._on_processing_error = on_processing_error or default_on_processing_error
