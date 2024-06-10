@@ -10,7 +10,6 @@ from .functions import (
     FilterFunction,
     UpdateFunction,
     StreamFunction,
-    compose,
     VoidExecutor,
     ReturningExecutor,
     FilterCallback,
@@ -315,14 +314,30 @@ class Stream:
 
         tree = self.tree()
         functions = [node.func for node in tree]
-        return compose(
-            functions=functions,
-            allow_filters=allow_filters,
-            allow_updates=allow_updates,
-            allow_expands=allow_expands,
-            allow_transforms=allow_transforms,
-            sink=sink,
-        )
+
+        composed = sink or self._default_sink
+
+        # Iterate over a reversed list of functions
+        for func in reversed(functions):
+            # Validate that only allowed functions are passed
+            if not allow_updates and isinstance(
+                func, (UpdateFunction, UpdateWithMetadataFunction)
+            ):
+                raise ValueError("Update functions are not allowed")
+            elif not allow_filters and isinstance(
+                func, (FilterFunction, FilterWithMetadataFunction)
+            ):
+                raise ValueError("Filter functions are not allowed")
+            elif not allow_transforms and isinstance(func, TransformFunction):
+                raise ValueError("Transform functions are not allowed")
+            elif not allow_expands and func.expand:
+                raise ValueError("Expand functions are not allowed")
+
+            # Compose functions from the tree together so the top function calls
+            # the bottom one
+            composed = func.get_executor(composed)
+
+        return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
         nodes_self = self.tree()
@@ -344,3 +359,5 @@ class Stream:
 
     def _add(self, func: StreamFunction) -> Self:
         return self.__class__(func=func, parent=self)
+
+    def _default_sink(self, value: Any, key: Any, timestamp: int): ...
