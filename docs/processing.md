@@ -557,7 +557,7 @@ sdf = sdf.update(lambda value: pdb.set_trace())
 sdf = sdf.update(lambda value: print('Value: ', value))
 ```
 
-## Updating Timestamps
+## Updating Kafka Timestamps
 
 In Quix Streams, each processed item has a timestamp assigned.   
 These timestamps are used in [windowed aggregations](./windowing.md) and when producing messages to the output topics. 
