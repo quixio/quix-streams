@@ -592,6 +592,20 @@ class StreamingDataFrame(BaseStreaming):
 
         The new timestamp must be in milliseconds to conform Kafka requirements.
 
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+
+
+        app = Application()
+        input_topic = app.topic("data")
+
+        sdf = app.dataframe(input_topic)
+        # Updating the record's timestamp based on the value
+        sdf = sdf.set_timestamp(lambda value, timestamp: value['new_timestamp'])
+        ```
+
         :param func: callable accepting the current value and the current timestamp.
             It's expected to return a new timestamp as integer in milliseconds.
         :return: a new StreamingDataFrame instance
