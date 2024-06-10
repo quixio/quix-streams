@@ -175,9 +175,6 @@ class FixedTimeWindow:
             topic_name=self._dataframe.topic.name, store_name=self._name
         )
 
-    # def _stale(self, window_end: int, latest_timestamp: int) -> bool:
-    #     return latest_timestamp > window_end + self._grace_ms
-
     def _apply_window(
         self,
         func: TransformRecordCallbackExpandedWindowed,
