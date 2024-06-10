@@ -1,6 +1,5 @@
 import abc
-from itertools import zip_longest
-from typing import Callable, List, Optional, Any, Tuple, Union, Protocol, Iterable
+from typing import Callable, Any, Tuple, Union, Protocol, Iterable
 
 __all__ = (
     "StreamCallback",
@@ -24,7 +23,6 @@ __all__ = (
     "TransformFunction",
     "TransformCallback",
     "TransformExpandedCallback",
-    "compose",
 )
 
 
@@ -62,10 +60,6 @@ VoidExecutor = Callable[[Any, Any, int], None]
 ReturningExecutor = Callable[[Any, Any, int], Tuple[Any, Any, int]]
 
 
-def _default_sink(value: Any, key: Any, timestamp: int):
-    pass
-
-
 class StreamFunction(abc.ABC):
     """
     A base class for all the streaming operations in Quix Streams.
@@ -82,7 +76,7 @@ class StreamFunction(abc.ABC):
     @abc.abstractmethod
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
         """
-        Returns a wrapper to be called on a single value.
+        Returns a wrapper to be called on a value, key and timestamp.
         """
 
 
@@ -298,69 +292,3 @@ class TransformFunction(StreamFunction):
                 child_executor(new_value, new_key, new_timestamp)
 
         return wrapper
-
-
-def compose(
-    functions: List[StreamFunction],
-    allow_filters: bool = True,
-    allow_updates: bool = True,
-    allow_expands: bool = True,
-    allow_transforms: bool = True,
-    sink: Optional[Callable[[Any, Any, int], None]] = None,
-) -> VoidExecutor:
-    """
-    Composes a list of functions and its parents into a single
-    big closure like this:
-    ```
-    [func, func, func] -> func(func(func()))
-    ```
-
-    Closures are more performant than calling all functions one by one in a loop.
-
-    :param functions: list of `StreamFunction` objects to compose
-    :param allow_filters: If False, will fail with `ValueError` if
-        the list has `FilterFunction`. Default - True.
-    :param allow_updates: If False, will fail with `ValueError` if
-        the list has `UpdateFunction`. Default - True.
-    :param allow_expands: If False, will fail with `ValueError` if
-        the list has `ApplyFunction` with "expand=True". Default - True.
-    :param allow_transforms: If False, will fail with `ValueError` if
-        the list has `TransformRecordFunction`. Default - True.
-    :param sink: callable to accumulate the results of the execution.
-
-    :raises ValueError: if disallowed functions are present in the list of functions.
-    """
-    composed = None
-
-    # Create a reversed zipped list of functions to chain them together.
-    # Example:
-    #  Input: [func1, func2, func3, func4]
-    #  Zipped: [(func4, None), (func3, func4), (func2, func3), (func1, func2)]
-    functions_zipped = list(zip_longest(functions, functions[1:]))
-    functions_zipped.reverse()
-
-    # Iterate over a reversed zipped list of functions
-    for func, child_func in functions_zipped:
-        # Validate that only allowed functions are passed
-        if not allow_updates and isinstance(
-            func, (UpdateFunction, UpdateWithMetadataFunction)
-        ):
-            raise ValueError("Update functions are not allowed")
-        elif not allow_filters and isinstance(
-            func, (FilterFunction, FilterWithMetadataFunction)
-        ):
-            raise ValueError("Filter functions are not allowed")
-        elif not allow_transforms and isinstance(func, TransformFunction):
-            raise ValueError("Transform functions are not allowed")
-        elif not allow_expands and func.expand:
-            raise ValueError("Expand functions are not allowed")
-
-        if child_func is None:
-            child_func = sink or _default_sink
-
-        if composed is None:
-            composed = func.get_executor(child_func)
-        else:
-            composed = func.get_executor(composed)
-
-    return composed
