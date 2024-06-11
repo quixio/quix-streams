@@ -1,10 +1,11 @@
 from typing import Optional, Any, Union, Dict, Tuple, List, cast
 
+from confluent_kafka import TopicPartition, KafkaException, KafkaError, Message
 from confluent_kafka.admin import GroupMetadata
-from confluent_kafka import KafkaError, Message
 
 import logging
 
+from quixstreams.exceptions import QuixException
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
 from .kafka.configuration import ConnectionConfig
 from .kafka.exceptions import KafkaProducerDeliveryError
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 _KEY_UNSET = object()
+
+
+class KafkaProducerTransactionCommitFailed(QuixException): ...
 
 
 class RowProducer:
@@ -42,25 +46,28 @@ class RowProducer:
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
         flush_timeout: Optional[int] = None,
+        transactional: bool = False,
     ):
-        self._producer = self._get_producer(
-            broker_address,
-            extra_config,
-            flush_timeout,
-        )
+
+        if transactional:
+            self._producer = TransactionalProducer(
+                broker_address=broker_address,
+                extra_config=extra_config,
+                flush_timeout=flush_timeout,
+            )
+        else:
+            self._producer = Producer(
+                broker_address=broker_address,
+                extra_config=extra_config,
+                flush_timeout=flush_timeout,
+            )
 
         self._on_error: Optional[ProducerErrorCallback] = (
             on_error or default_on_producer_error
         )
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
         self._error: Optional[KafkaError] = None
-
-    def _get_producer(self, broker_address, extra_config, flush_timeout) -> Producer:
-        return Producer(
-            broker_address=broker_address,
-            extra_config=extra_config,
-            flush_timeout=flush_timeout,
-        )
+        self._transactional = transactional
 
     def produce_row(
         self,
@@ -169,51 +176,70 @@ class RowProducer:
     def offsets(self) -> Dict[Tuple[str, int], int]:
         return self._tp_offsets
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.flush()
-
-
-class TransactionalRowProducer(RowProducer):
-    def __init__(
-        self,
-        broker_address: Union[str, ConnectionConfig],
-        transactional_id: str,
-        extra_config: dict = None,
-        on_error: Optional[ProducerErrorCallback] = None,
-    ):
-        self._transactional_id = transactional_id
-        super().__init__(
-            broker_address=broker_address, extra_config=extra_config, on_error=on_error
-        )
-        self._producer = cast(TransactionalProducer, self._producer)
-
-    def _get_producer(self, broker_address, extra_config) -> TransactionalProducer:
-        return TransactionalProducer(
-            broker_address=broker_address,
-            extra_config=extra_config,
-            transactional_id=self._transactional_id,
-        )
-
     def begin_transaction(self):
         self._producer.begin_transaction()
 
-    def send_offsets_to_transaction(
+    def abort_transaction(self, timeout: Optional[float] = None):
+        # Skip abort if no active transaction since it throws an exception if at least
+        # one transaction was successfully completed at some point.
+        # This avoids polluting the stack trace in the case where a transaction was
+        # not active as expected (because of some other exception already raised).
+        if self._producer.active_transaction:
+            self._producer.abort_transaction(timeout)
+        else:
+            logger.debug(
+                "No Kafka transaction to abort, "
+                "likely due to some other exception occurring"
+            )
+
+    def commit_transaction(
         self,
         positions: List[TopicPartition],
         group_metadata: GroupMetadata,
         timeout: Optional[float] = None,
     ):
-        self._producer.send_offsets_to_transaction(
-            positions, group_metadata, timeout=timeout if timeout is not None else -1
+        attempts_remaining = 3
+        backoff_seconds = 1
+        failed = False
+        while attempts_remaining:
+            try:
+                self._producer.send_offsets_to_transaction(
+                    positions, group_metadata, timeout=timeout
+                )
+                self._producer.commit_transaction(timeout=timeout)
+                return
+            # Errors do not manifest from these calls via producer error_cb.
+            # NOTE: Manual flushing earlier keeps error handling here to a minimum.
+            except KafkaException as e:
+                error: KafkaError = e.args[0]
+                if error.retriable():
+                    attempts_remaining -= 1
+                    logger.debug(
+                        f"Kafka Transaction commit attempt failed, but is retriable; "
+                        f"attempts remaining: {attempts_remaining}. "
+                    )
+                    if attempts_remaining:
+                        logger.debug(
+                            f"Sleeping for {backoff_seconds} seconds before retrying."
+                        )
+                        sleep(backoff_seconds)
+                    else:
+                        failed = True
+                else:
+                    # Just treat all errors besides retriable as fatal.
+                    logger.error("Error while attempting to commit Kafka transaction.")
+                    failed = True
+                    raise
+            finally:
+                if failed:
+                    self.abort_transaction(5)
+        raise KafkaProducerTransactionCommitFailed(
+            "All Kafka transaction commit attempts failed; "
+            "aborting transaction and shutting down Application..."
         )
 
-    def abort_transaction(self, timeout: Optional[float] = None):
-        self._producer.abort_transaction(timeout=timeout if timeout is not None else -1)
+    def __enter__(self):
+        return self
 
-    def commit_transaction(self, timeout: Optional[float] = None):
-        self._producer.commit_transaction(
-            timeout=timeout if timeout is not None else -1
-        )
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.flush()

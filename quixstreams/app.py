@@ -36,7 +36,7 @@ from .platforms.quix import (
 )
 from .processing_context import ProcessingContext
 from .rowconsumer import RowConsumer
-from .rowproducer import RowProducer, TransactionalRowProducer
+from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
@@ -163,6 +163,7 @@ class Application:
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
+        :param exactly_once_guarantees: Use "exactly-once" processing (vs at-least-once)
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -257,22 +258,16 @@ class Application:
             extra_config=consumer_extra_config,
             on_error=on_consumer_error,
         )
-        if exactly_once_guarantees:
-            self._producer = TransactionalRowProducer(
-                broker_address=broker_address,
-                extra_config=producer_extra_config,
-                transactional_id=consumer_group,
+        self._producer = RowProducer(
+            broker_address=broker_address,
+            extra_config=producer_extra_config,
+            on_error=on_producer_error,
+            flush_timeout=consumer_extra_config.get(
+                "max.poll.interval.ms", _default_max_poll_interval_ms
             )
-        else:
-            self._producer = RowProducer(
-                broker_address=broker_address,
-                extra_config=producer_extra_config,
-                on_error=on_producer_error,
-                flush_timeout=consumer_extra_config.get(
-                    "max.poll.interval.ms", _default_max_poll_interval_ms
-                )
-                / 1000,  # convert to seconds
-            )
+            / 1000,  # convert to seconds
+            transactional=exactly_once_guarantees,
+        )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
         self._on_processing_error = on_processing_error or default_on_processing_error
@@ -280,6 +275,7 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._running = False
         self._failed = False
+        self._exactly_once = exactly_once_guarantees
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -311,6 +307,7 @@ class Application:
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
+            exactly_once=exactly_once_guarantees,
         )
 
     @property
@@ -339,6 +336,7 @@ class Application:
         topic_manager: Optional[QuixTopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
+        exactly_once_guarantees: bool = True,
     ) -> Self:
         """
         >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
@@ -406,6 +404,7 @@ class Application:
         :param topic_manager: A `QuixTopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
+        :param exactly_once_guarantees: Use "Exactly Once" processing (vs At Least Once)
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -453,6 +452,7 @@ class Application:
             request_timeout=request_timeout,
             topic_create_timeout=topic_create_timeout,
             quix_config_builder=quix_config_builder,
+            exactly_once_guarantees=exactly_once_guarantees,
         )
         return app
 
@@ -708,12 +708,14 @@ class Application:
         """
         self._setup_signal_handlers()
 
+        guarantee = "exactly-once" if self._exactly_once else "at-least-once"
         logger.info(
             f"Starting the Application with the config: "
             f'broker_address="{self._broker_address}" '
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}" '
-            f"commit_interval={self._commit_interval}s"
+            f"commit_interval={self._commit_interval}s "
+            f'processing_guaranties="{guarantee}"'
         )
         if self.is_quix_app:
             self._quix_runtime_init()
@@ -721,6 +723,7 @@ class Application:
         self._setup_topics()
 
         exit_stack = contextlib.ExitStack()
+        exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
         exit_stack.enter_context(self._consumer)
         exit_stack.push(

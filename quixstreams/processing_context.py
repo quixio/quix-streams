@@ -1,12 +1,12 @@
 import dataclasses
 import logging
 import time
-from typing import Optional, Union, Type, cast
+from typing import Optional
 
-from quixstreams.checkpointing import Checkpoint, EOSCheckpoint
+from quixstreams.checkpointing import Checkpoint
 from quixstreams.exceptions import QuixException
 from quixstreams.rowconsumer import RowConsumer
-from quixstreams.rowproducer import RowProducer, TransactionalRowProducer
+from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
 
 __all__ = ("ProcessingContext",)
@@ -25,19 +25,13 @@ class ProcessingContext:
     """
 
     commit_interval: float
-    producer: Union[RowProducer, TransactionalRowProducer]
+    producer: RowProducer
     consumer: RowConsumer
     state_manager: StateStoreManager
-    _checkpointer: Optional[Type[Checkpoint]] = dataclasses.field(init=False)
+    exactly_once: bool = False
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
-
-    def __post_init__(self):
-        if isinstance(self.producer, TransactionalRowProducer):
-            self._checkpointer = EOSCheckpoint
-        else:
-            self._checkpointer = Checkpoint
 
     @property
     def checkpoint(self) -> Checkpoint:
@@ -53,17 +47,19 @@ class ProcessingContext:
         :param partition: partition number
         :param offset: message offset
         """
-        self._checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
+        self.checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
 
     def init_checkpoint(self):
         """
         Initialize a new checkpoint
         """
-        self._checkpoint = self._checkpointer(
+        logger.debug(f"Starting a checkpoint...")
+        self._checkpoint = Checkpoint(
             commit_interval=self.commit_interval,
             state_manager=self.state_manager,
             producer=self.producer,
             consumer=self.consumer,
+            exactly_once=self.exactly_once,
         )
 
     def commit_checkpoint(self, force: bool = False):
@@ -86,3 +82,10 @@ class ProcessingContext:
                 f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
             )
             self.init_checkpoint()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.exactly_once:
+            self.producer.abort_transaction(5)
