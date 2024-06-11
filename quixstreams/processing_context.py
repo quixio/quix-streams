@@ -47,7 +47,7 @@ class ProcessingContext:
         :param partition: partition number
         :param offset: message offset
         """
-        self.checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
+        self._checkpoint.store_offset(topic=topic, partition=partition, offset=offset)
 
     def init_checkpoint(self):
         """
