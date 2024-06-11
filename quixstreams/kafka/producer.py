@@ -176,6 +176,11 @@ class Producer:
 
 
 class TransactionalProducer(Producer):
+    """
+    A separate producer class used only internally for transactions
+    (transactions are only needed when using a consumer).
+    """
+
     def __init__(
         self,
         broker_address: Union[str, ConnectionConfig],
