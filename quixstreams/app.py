@@ -114,7 +114,7 @@ class Application:
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
-        exactly_once_guarantees: bool = True,
+        exactly_once_guarantees: bool = False,
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -715,7 +715,7 @@ class Application:
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}" '
             f"commit_interval={self._commit_interval}s "
-            f'processing_guaranties="{guarantee}"'
+            f'processing_guarantee="{guarantee}"'
         )
         if self.is_quix_app:
             self._quix_runtime_init()
