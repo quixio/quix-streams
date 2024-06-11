@@ -748,12 +748,13 @@ class TestQuixApplication:
         ) as consumer_init_mock, patch(
             "quixstreams.app.RowProducer"
         ) as producer_init_mock:
-            Application(
+            app = Application(
                 consumer_group=consumer_group,
                 quix_sdk_token=quix_sdk_token,
                 consumer_extra_config=extra_config,
                 producer_extra_config=extra_config,
             )
+            assert app.is_quix_app
 
         # Check if items from the Quix config have been passed
         # to the low-level configs of producer and consumer
@@ -886,14 +887,13 @@ class TestQuixApplication:
         assert consumer_call_kwargs["consumer_group"] == expected_workspace_cgroup
         assert consumer_call_kwargs["extra_config"] == expected_consumer_extra_config
 
-    def test_init_with_broker_id_raises(self):
-        with pytest.raises(ValueError) as e_info:
-            Application(
-                broker_address="address",
-                quix_config_builder=create_autospec(QuixKafkaConfigsBuilder),
-            )
-        error_str = 'Cannot provide both "broker_address" and "quix_sdk_token"'
-        assert error_str in e_info.value.args
+    def test_init_with_broker_id_dont_raises(self):
+        app = Application(
+            broker_address="address",
+            quix_config_builder=create_autospec(QuixKafkaConfigsBuilder),
+        )
+
+        assert not app.is_quix_app
 
     def test_topic_name_and_config(self, quix_app_factory):
         """
