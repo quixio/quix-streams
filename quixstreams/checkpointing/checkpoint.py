@@ -33,7 +33,7 @@ class Checkpoint:
         producer: RowProducer,
         consumer: Consumer,
         state_manager: StateStoreManager,
-        exactly_once: bool = True,
+        exactly_once: bool = False,
     ):
         self._created_at = time.monotonic()
         # A mapping of <(topic, partition): processed offset>
