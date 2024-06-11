@@ -200,7 +200,6 @@ class RowProducer:
     ):
         attempts_remaining = 3
         backoff_seconds = 1
-        failed = False
         while attempts_remaining:
             try:
                 self._producer.send_offsets_to_transaction(
@@ -223,16 +222,10 @@ class RowProducer:
                             f"Sleeping for {backoff_seconds} seconds before retrying."
                         )
                         sleep(backoff_seconds)
-                    else:
-                        failed = True
                 else:
                     # Just treat all errors besides retriable as fatal.
                     logger.error("Error while attempting to commit Kafka transaction.")
-                    failed = True
                     raise
-            finally:
-                if failed:
-                    self.abort_transaction(5)
         raise KafkaProducerTransactionCommitFailed(
             "All Kafka transaction commit attempts failed; "
             "aborting transaction and shutting down Application..."
