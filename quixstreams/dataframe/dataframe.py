@@ -619,6 +619,17 @@ class StreamingDataFrame(BaseStreaming):
 
         stream = self.stream.add_transform(func=_set_timestamp_callback)
         return self.__dataframe_clone__(stream=stream)
+    
+    def sql(self, query: str, tables: Dict[str, StreamingDataFrame] = None, table_schemas: Dict[str, Dict] = None) -> Self:
+        from .sql import StreamingSQLExecutor
+
+        sql = StreamingSQLExecutor(query=query)
+        if not tables:
+            tables = {}
+        if "__self" in tables:
+            raise InvalidOperation("Reserved table name '__self' is not allowed")
+        df = sql.add_to_stream(tables={"__self": self, **tables}, table_schemas=table_schemas)
+        return df
 
     def compose(
         self,
