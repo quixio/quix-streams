@@ -42,6 +42,9 @@ class ContainerHelper:
             .with_env("KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "1")
             .with_env("KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS", "10")
             .with_env("CLUSTER_ID", kraft_cluster_id)
+            .with_env("KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS", "1")
+            .with_env("KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR", "1")
+            .with_env("KAFKA_TRANSACTION_STATE_LOG_MIN_ISR", "1")
             .with_bind_ports(kafka_port, kafka_port)
         )
         return kafka_container, broker_list, kafka_port

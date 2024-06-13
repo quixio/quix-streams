@@ -195,9 +195,13 @@ class TransactionalProducer(Producer):
             error_callback=error_callback,
             extra_config=extra_config,
         )
-        self._producer_config.update(
-            {"enable.idempotence": True, "transactional.id": transactional_id}
-        )
+        # remake config to avoid overriding anything in the Application's
+        # producer config, which is used in Application.get_producer().
+        self._producer_config = {
+            **self._producer_config,
+            "enable.idempotence": True,
+            "transactional.id": transactional_id,
+        }
         self._active_transaction = False
 
     @property

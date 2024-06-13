@@ -123,9 +123,9 @@ class Checkpoint:
         """
 
         if not self._tp_offsets:
+            logger.debug("Nothing to commit")
             if self._exactly_once:
                 self._producer.abort_transaction()
-            logger.debug("Nothing to commit")
             return
 
         # Step 1. Produce the changelogs
@@ -192,8 +192,7 @@ class Checkpoint:
                 produced_offsets.get(changelog_tp) if changelog_tp is not None else None
             )
             if changelog_offset is not None:
-                # Increment the changelog offset by one to match the high watermark
-                # in Kafka
+                # Increment the changelog offset to match the high watermark in Kafka
                 changelog_offset += self._changelog_offset_update
             transaction.flush(
                 processed_offset=offset, changelog_offset=changelog_offset

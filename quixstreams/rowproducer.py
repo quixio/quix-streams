@@ -192,29 +192,21 @@ class RowProducer:
                 "likely due to some other exception occurring"
             )
 
-    def commit_transaction(
-        self,
-        positions: List[TopicPartition],
-        group_metadata: GroupMetadata,
-        timeout: Optional[float] = None,
-    ):
-        attempts_remaining = 3
+    def _retriable_commit_op(self, operation, args):
+        attempts_remaining = 5
         backoff_seconds = 1
+        op_name = operation.__name__
         while attempts_remaining:
             try:
-                self._producer.send_offsets_to_transaction(
-                    positions, group_metadata, timeout=timeout
-                )
-                self._producer.commit_transaction(timeout=timeout)
-                return
+                return operation(*args)
             # Errors do not manifest from these calls via producer error_cb.
             # NOTE: Manual flushing earlier keeps error handling here to a minimum.
             except KafkaException as e:
-                error: KafkaError = e.args[0]
+                error = e.args[0]
                 if error.retriable():
                     attempts_remaining -= 1
                     logger.debug(
-                        f"Kafka Transaction commit attempt failed, but is retriable; "
+                        f"Kafka transaction operation {op_name} failed, but can retry; "
                         f"attempts remaining: {attempts_remaining}. "
                     )
                     if attempts_remaining:
@@ -224,12 +216,26 @@ class RowProducer:
                         sleep(backoff_seconds)
                 else:
                     # Just treat all errors besides retriable as fatal.
-                    logger.error("Error while attempting to commit Kafka transaction.")
+                    logger.error(
+                        f"Error occurred during Kafka transaction operation {op_name}"
+                    )
                     raise
         raise KafkaProducerTransactionCommitFailed(
-            "All Kafka transaction commit attempts failed; "
+            f"All Kafka {op_name} attempts failed; "
             "aborting transaction and shutting down Application..."
         )
+
+    def commit_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._retriable_commit_op(
+            self._producer.send_offsets_to_transaction,
+            [positions, group_metadata, timeout],
+        )
+        self._retriable_commit_op(self._producer.commit_transaction, [timeout])
 
     def __enter__(self):
         return self
