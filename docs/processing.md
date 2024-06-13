@@ -350,11 +350,11 @@ sdf = sdf.to_topic(output_topic)
 sdf = sdf.to_topic(output_topic, key=lambda value: str(value["location_id"]))
 ```
 
-### Timestamps of Produced Messages
+### Timestamps and Headers of Produced Messages
 
-Since version 2.6, the `StreamingDataFrame.to_topic()` method always forwards the current timestamp to the output topics.
+Since version 2.6, the `StreamingDataFrame.to_topic()` method always forwards the current timestamp and message headers to the output topics.
 
-This way, **the outgoing messages will be produced with the identical timestamps as they were received with** by default. 
+This way, **the outgoing messages will be produced with the identical timestamps and headers as they were received with** by default. 
 
 To change the timestamp of the message, use the `StreamingDataFrame.set_timestamp()` API, described in [this section](#updating-timestamps).
 
