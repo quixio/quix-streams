@@ -193,14 +193,12 @@ class RowProducer:
             )
 
     def _retriable_commit_op(self, operation, args):
-        attempts_remaining = 5
+        attempts_remaining = 3
         backoff_seconds = 1
         op_name = operation.__name__
         while attempts_remaining:
             try:
                 return operation(*args)
-            # Errors do not manifest from these calls via producer error_cb.
-            # NOTE: Manual flushing earlier keeps error handling here to a minimum.
             except KafkaException as e:
                 error = e.args[0]
                 if error.retriable():
