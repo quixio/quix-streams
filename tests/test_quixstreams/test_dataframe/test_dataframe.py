@@ -341,7 +341,9 @@ class TestStreamingDataFrame:
         expected = (1, "key", 100, headers)
         sdf = dataframe_factory()
 
-        sdf = sdf.set_timestamp(lambda value_, timestamp_: timestamp_ + 100)
+        sdf = sdf.set_timestamp(
+            lambda value_, key_, timestamp_, headers_: timestamp_ + 100
+        )
 
         result = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[0]
         assert result == expected
