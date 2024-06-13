@@ -791,6 +791,7 @@ class Application:
                     row.value,
                     row.key,
                     row.timestamp,
+                    row.headers,
                 )
             except Exception as exc:
                 # TODO: This callback might be triggered because of Producer

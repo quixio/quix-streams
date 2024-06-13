@@ -50,11 +50,11 @@ from .utils import ensure_milliseconds
 from .windows import TumblingWindowDefinition, HoppingWindowDefinition
 
 ApplyCallbackStateful = Callable[[Any, State], Any]
-ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, State], Any]
+ApplyWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], Any]
 UpdateCallbackStateful = Callable[[Any, State], None]
-UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, State], None]
+UpdateWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], None]
 FilterCallbackStateful = Callable[[Any, State], bool]
-FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, State], bool]
+FilterWithMetadataCallbackStateful = Callable[[Any, Any, int, Any, State], bool]
 
 
 class StreamingDataFrame(BaseStreaming):
@@ -214,8 +214,8 @@ class StreamingDataFrame(BaseStreaming):
         :param expand: if True, expand the returned iterable into individual values
             downstream. If returned value is not iterable, `TypeError` will be raised.
             Default - `False`.
-        :param metadata: if True, the callback will receive key and timestamp along with
-            the value.
+        :param metadata: if True, the callback will receive key, timestamp and headers
+            along with the value.
             Default - `False`.
         """
         if stateful:
@@ -301,8 +301,8 @@ class StreamingDataFrame(BaseStreaming):
         :param func: function to update value
         :param stateful: if `True`, the function will be provided with a second argument
             of type `State` to perform stateful operations.
-        :param metadata: if True, the callback will receive key and timestamp along with
-            the value.
+        :param metadata: if True, the callback will receive key, timestamp and headers
+            along with the value.
             Default - `False`.
         """
         if stateful:
@@ -388,8 +388,8 @@ class StreamingDataFrame(BaseStreaming):
         :param func: function to filter value
         :param stateful: if `True`, the function will be provided with second argument
             of type `State` to perform stateful operations.
-        :param metadata: if True, the callback will receive key and timestamp along with
-            the value.
+        :param metadata: if True, the callback will receive key, timestamp and headers
+            along with the value.
             Default - `False`.
         """
 
@@ -535,7 +535,7 @@ class StreamingDataFrame(BaseStreaming):
         """
 
         return StreamingSeries.from_apply_callback(
-            lambda value, key_, timestamp: key in value
+            lambda value, key_, timestamp, headers: key in value
         )
 
     def to_topic(
@@ -543,11 +543,6 @@ class StreamingDataFrame(BaseStreaming):
     ) -> Self:
         """
         Produce current value to a topic. You can optionally specify a new key.
-
-        >***NOTE:*** A `RowProducer` instance must be assigned to
-        `StreamingDataFrame.producer` if not using :class:`quixstreams.app.Application`
-         to facilitate the execution of StreamingDataFrame.
-
 
         Example Snippet:
 
@@ -574,11 +569,12 @@ class StreamingDataFrame(BaseStreaming):
 
         """
         return self.update(
-            lambda value, orig_key, timestamp: self._produce(
+            lambda value, orig_key, timestamp, headers: self._produce(
                 topic=topic,
                 value=value,
                 key=orig_key if key is None else key(value),
                 timestamp=timestamp,
+                headers=headers,
             ),
             metadata=True,
         )
@@ -613,16 +609,19 @@ class StreamingDataFrame(BaseStreaming):
 
         @functools.wraps(func)
         def _set_timestamp_callback(
-            value: Any, key: Any, timestamp: int
-        ) -> Tuple[Any, Any, int]:
-            return value, key, func(value, timestamp)
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Any,
+        ) -> Tuple[Any, Any, int, Any]:
+            return value, key, func(value, timestamp), headers
 
         stream = self.stream.add_transform(func=_set_timestamp_callback)
         return self.__dataframe_clone__(stream=stream)
 
     def compose(
         self,
-        sink: Optional[Callable[[Any, Any, int], None]] = None,
+        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
     ) -> Dict[str, VoidExecutor]:
         """
 
@@ -662,6 +661,7 @@ class StreamingDataFrame(BaseStreaming):
         value: Any,
         key: Any,
         timestamp: int,
+        headers: Optional[Any] = None,
         ctx: Optional[MessageContext] = None,
         topic: Optional[Topic] = None,
     ) -> List[Any]:
@@ -686,11 +686,11 @@ class StreamingDataFrame(BaseStreaming):
         context.run(set_message_context, ctx)
         result = []
         composed = self.compose(
-            sink=lambda value_, key_, timestamp_: result.append(
-                (value_, key_, timestamp_)
+            sink=lambda value_, key_, timestamp_, headers_: result.append(
+                (value_, key_, timestamp_, headers_)
             )
         )
-        context.run(composed[topic.name], value, key, timestamp)
+        context.run(composed[topic.name], value, key, timestamp, headers)
         return result
 
     def tumbling_window(
@@ -867,9 +867,12 @@ class StreamingDataFrame(BaseStreaming):
         value: object,
         key: Any,
         timestamp: int,
+        headers: Any,
     ):
         ctx = message_context()
-        row = Row(value=value, key=key, timestamp=timestamp, context=ctx)
+        row = Row(
+            value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
+        )
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
     def _register_store(self):
@@ -930,8 +933,10 @@ class StreamingDataFrame(BaseStreaming):
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
             stream = self.stream.add_update(
-                lambda value, key, timestamp: operator.setitem(
-                    value, item_key, other_sdf_composed(value, key, timestamp)[0]
+                lambda value, key, timestamp, headers: operator.setitem(
+                    value,
+                    item_key,
+                    other_sdf_composed(value, key, timestamp, headers)[0],
                 ),
                 metadata=True,
             )
@@ -939,8 +944,8 @@ class StreamingDataFrame(BaseStreaming):
             # Update an item key with a result of another series
             series_composed = item.compose_returning()
             stream = self.stream.add_update(
-                lambda value, key, timestamp: operator.setitem(
-                    value, item_key, series_composed(value, key, timestamp)[0]
+                lambda value, key, timestamp, headers: operator.setitem(
+                    value, item_key, series_composed(value, key, timestamp, headers)[0]
                 ),
                 metadata=True,
             )
@@ -964,7 +969,9 @@ class StreamingDataFrame(BaseStreaming):
             # Filter SDF based on StreamingSeries
             series_composed = item.compose_returning()
             return self.filter(
-                lambda value, key, timestamp: series_composed(value, key, timestamp)[0],
+                lambda value, key, timestamp, headers: series_composed(
+                    value, key, timestamp, headers
+                )[0],
                 metadata=True,
             )
         elif isinstance(item, self.__class__):
@@ -972,9 +979,9 @@ class StreamingDataFrame(BaseStreaming):
             diff = self.stream.diff(item.stream)
             other_sdf_composed = diff.compose_returning()
             return self.filter(
-                lambda value, key, timestamp: other_sdf_composed(value, key, timestamp)[
-                    0
-                ],
+                lambda value, key, timestamp, headers: other_sdf_composed(
+                    value, key, timestamp, headers
+                )[0],
                 metadata=True,
             )
         elif isinstance(item, list):
@@ -1002,7 +1009,9 @@ def _as_metadata_func(
     UpdateWithMetadataCallbackStateful,
 ]:
     @functools.wraps(func)
-    def wrapper(value: Any, _key: Any, _timestamp: int, state: State) -> Any:
+    def wrapper(
+        value: Any, _key: Any, _timestamp: int, _headers: Any, state: State
+    ) -> Any:
         return func(value, state)
 
     return wrapper
@@ -1021,7 +1030,7 @@ def _as_stateful(
     UpdateWithMetadataCallback,
 ]:
     @functools.wraps(func)
-    def wrapper(value: Any, key: Any, timestamp: int) -> Any:
+    def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
         ctx = message_context()
         transaction = processing_context.checkpoint.get_store_transaction(
             topic=ctx.topic, partition=ctx.partition
@@ -1029,6 +1038,6 @@ def _as_stateful(
         # Pass a State object with an interface limited to the key updates only
         # and prefix all the state keys by the message key
         state = transaction.as_state(prefix=key)
-        return func(value, key, timestamp, state)
+        return func(value, key, timestamp, headers, state)
 
     return wrapper

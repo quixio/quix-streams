@@ -42,8 +42,7 @@ class TestRowProducer:
         assert row
         assert row.key == key
         assert row.value == value
-        # We don't forward row headers for now
-        assert not row.headers
+        assert row.headers == headers
 
     @pytest.mark.parametrize(
         "init_key, new_key, expected_key",
@@ -84,8 +83,7 @@ class TestRowProducer:
         assert row
         assert row.key == expected_key
         assert row.value == value
-        # We don't forward row headers for now
-        assert not row.headers
+        assert row.headers == headers
 
     def test_produce_row_serialization_error_raise(
         self, row_producer_factory, row_factory, topic_manager_topic_factory

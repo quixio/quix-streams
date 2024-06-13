@@ -12,7 +12,7 @@ temperature_readings_topic = app.topic(name="temperature_readings")
 alerts_topic = app.topic(name="alerts")
 
 
-def should_alert(window_value: int, key, timestamp):
+def should_alert(window_value: int, key, timestamp, headers):
     if window_value >= 90:
         print(f"Alerting for MID {key}: Average Temperature {window_value}")
         return True

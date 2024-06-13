@@ -1,11 +1,12 @@
-from typing import Union, List, Tuple, Optional, Mapping
+from typing import Union, List, Tuple, Optional, Dict
+
 from typing_extensions import Protocol
 
 MessageKey = Union[str, bytes]
 MessageValue = Union[str, bytes]
 HeaderValue = Optional[Union[str, bytes]]
 MessageHeadersTuples = List[Tuple[str, HeaderValue]]
-MessageHeadersMapping = Mapping[str, HeaderValue]
+MessageHeadersMapping = Dict[str, HeaderValue]
 Headers = Union[MessageHeadersTuples, MessageHeadersMapping]
 
 

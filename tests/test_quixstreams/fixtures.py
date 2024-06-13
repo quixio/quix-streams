@@ -257,15 +257,15 @@ def row_factory():
         partition: int = 0,
         offset: int = 0,
     ) -> Row:
-        headers = headers or {}
         context = MessageContext(
-            headers=headers,
             topic=topic,
             partition=partition,
             offset=offset,
             size=0,
         )
-        return Row(value=value, key=key, timestamp=timestamp, context=context)
+        return Row(
+            value=value, key=key, timestamp=timestamp, context=context, headers=headers
+        )
 
     return factory
 

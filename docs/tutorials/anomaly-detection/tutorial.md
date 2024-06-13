@@ -165,7 +165,7 @@ Now we do a (5 second) windowing operation on our temperature value. A few very 
 ### Using Window Result
 
 ```python
-def should_alert(window_value: int, key, timestamp) -> bool:
+def should_alert(window_value: int, key, timestamp, headers) -> bool:
     if window_value >= 90:
         print(f'Alerting for MID {key}: Average Temperature {window_value}')
         return True

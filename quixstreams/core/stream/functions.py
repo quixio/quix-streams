@@ -35,13 +35,15 @@ ApplyExpandedCallback = Callable[[Any], Iterable[Any]]
 UpdateCallback = Callable[[Any], None]
 FilterCallback = Callable[[Any], bool]
 
-ApplyWithMetadataCallback = Callable[[Any, Any, int], Any]
-ApplyWithMetadataExpandedCallback = Callable[[Any, Any, int], Iterable[Any]]
-UpdateWithMetadataCallback = Callable[[Any, Any, int], None]
-FilterWithMetadataCallback = Callable[[Any, Any, int], SupportsBool]
+ApplyWithMetadataCallback = Callable[[Any, Any, int, Any], Any]
+ApplyWithMetadataExpandedCallback = Callable[[Any, Any, int, Any], Iterable[Any]]
+UpdateWithMetadataCallback = Callable[[Any, Any, int, Any], None]
+FilterWithMetadataCallback = Callable[[Any, Any, int, Any], SupportsBool]
 
-TransformCallback = Callable[[Any, Any, int], Tuple[Any, Any, int]]
-TransformExpandedCallback = Callable[[Any, Any, int], Iterable[Tuple[Any, Any, int]]]
+TransformCallback = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
+TransformExpandedCallback = Callable[
+    [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
+]
 
 StreamCallback = Union[
     ApplyCallback,
@@ -56,8 +58,8 @@ StreamCallback = Union[
     TransformExpandedCallback,
 ]
 
-VoidExecutor = Callable[[Any, Any, int], None]
-ReturningExecutor = Callable[[Any, Any, int], Tuple[Any, Any, int]]
+VoidExecutor = Callable[[Any, Any, int, Any], None]
+ReturningExecutor = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
 
 
 class StreamFunction(abc.ABC):
@@ -99,19 +101,23 @@ class ApplyFunction(StreamFunction):
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
         if self.expand:
 
-            def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream
                 result = func(value)
                 for item in result:
-                    child_executor(item, key, timestamp)
+                    child_executor(item, key, timestamp, headers)
 
         else:
 
-            def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
                 # Execute a function on a single value and return its result
                 result = func(value)
-                child_executor(result, key, timestamp)
+                child_executor(result, key, timestamp, headers)
 
         return wrapper
 
@@ -136,19 +142,23 @@ class ApplyWithMetadataFunction(StreamFunction):
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
         if self.expand:
 
-            def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
                 # Execute a function on a single value and wrap results into a list
                 # to expand them downstream
-                result = func(value, key, timestamp)
+                result = func(value, key, timestamp, headers)
                 for item in result:
-                    child_executor(item, key, timestamp)
+                    child_executor(item, key, timestamp, headers)
 
         else:
 
-            def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
                 # Execute a function on a single value and return its result
-                result = func(value, key, timestamp)
-                child_executor(result, key, timestamp)
+                result = func(value, key, timestamp, headers)
+                child_executor(result, key, timestamp, headers)
 
         return wrapper
 
@@ -166,10 +176,10 @@ class FilterFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
-        def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
             if func(value):
-                child_executor(value, key, timestamp)
+                child_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -189,10 +199,10 @@ class FilterWithMetadataFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
-        def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
-            if func(value, key, timestamp):
-                child_executor(value, key, timestamp)
+            if func(value, key, timestamp, headers):
+                child_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -212,10 +222,10 @@ class UpdateFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
-        def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
             func(value)
-            child_executor(value, key, timestamp)
+            child_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -235,10 +245,10 @@ class UpdateWithMetadataFunction(StreamFunction):
         super().__init__(func)
 
     def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
-        def wrapper(value: Any, key: Any, timestamp: int, func=self.func):
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Update a single value and forward it
-            func(value, key, timestamp)
-            child_executor(value, key, timestamp)
+            func(value, key, timestamp, headers)
+            child_executor(value, key, timestamp, headers)
 
         return wrapper
 
@@ -273,11 +283,12 @@ class TransformFunction(StreamFunction):
                 value: Any,
                 key: Any,
                 timestamp: int,
+                headers: Any,
                 func: TransformExpandedCallback = self.func,
             ):
-                result = func(value, key, timestamp)
-                for new_value, new_key, new_timestamp in result:
-                    child_executor(new_value, new_key, new_timestamp)
+                result = func(value, key, timestamp, headers)
+                for new_value, new_key, new_timestamp, new_headers in result:
+                    child_executor(new_value, new_key, new_timestamp, new_headers)
 
         else:
 
@@ -285,10 +296,13 @@ class TransformFunction(StreamFunction):
                 value: Any,
                 key: Any,
                 timestamp: int,
+                headers: Any,
                 func: TransformCallback = self.func,
             ):
                 # Execute a function on a single value and return its result
-                new_value, new_key, new_timestamp = func(value, key, timestamp)
-                child_executor(new_value, new_key, new_timestamp)
+                new_value, new_key, new_timestamp, new_headers = func(
+                    value, key, timestamp, headers
+                )
+                child_executor(new_value, new_key, new_timestamp, new_headers)
 
         return wrapper
