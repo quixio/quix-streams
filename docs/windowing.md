@@ -112,6 +112,11 @@ sdf = (
 ```
 
 
+### Message headers of the aggregation results
+
+Currently, windowed aggregations do not store the original headers of the messages.  
+The results of the windowed aggregations will have headers set to `None`.
+
 ## Tumbling Windows
 Tumbling windows slice time into non-overlapping intervals of a fixed size. 
 
