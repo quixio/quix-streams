@@ -3,10 +3,13 @@ from typing import Optional
 from unittest.mock import patch, MagicMock
 
 import pytest
-from confluent_kafka import TopicPartition
+from confluent_kafka import TopicPartition, KafkaException, KafkaError
 
 from quixstreams.checkpointing import Checkpoint, InvalidStoredOffset
-from quixstreams.checkpointing.exceptions import CheckpointProducerTimeout
+from quixstreams.checkpointing.exceptions import (
+    CheckpointProducerTimeout,
+    CheckpointConsumerCommitError,
+)
 from quixstreams.kafka import Consumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
@@ -353,4 +356,51 @@ class TestCheckpoint:
         assert (
             str(err.value)
             == "'1' messages failed to be produced before the producer flush timeout"
+        )
+
+    def test_failed_commit(
+        self, checkpoint_factory, state_manager_factory, rowproducer_mock
+    ):
+        consumer_mock = MagicMock(spec_set=Consumer)
+        consumer_mock.commit.side_effect = KafkaException(KafkaError(1, "test error"))
+
+        state_manager = state_manager_factory(producer=rowproducer_mock)
+        checkpoint = checkpoint_factory(
+            consumer_=consumer_mock,
+            state_manager_=state_manager,
+            producer_=rowproducer_mock,
+        )
+        checkpoint.store_offset("topic", 0, 0)
+
+        with pytest.raises(CheckpointConsumerCommitError) as err:
+            checkpoint.commit()
+
+        assert (
+            str(err.value)
+            == '<CheckpointConsumerCommitError code="1" description="test error">'
+        )
+
+    def test_failed_commit_partition(
+        self, checkpoint_factory, state_manager_factory, rowproducer_mock
+    ):
+        consumer_mock = MagicMock(spec_set=Consumer)
+
+        topic_partition = MagicMock(spec=TopicPartition)
+        topic_partition.error = KafkaError(1, "test error")
+
+        consumer_mock.commit.return_value = [topic_partition]
+        state_manager = state_manager_factory(producer=rowproducer_mock)
+        checkpoint = checkpoint_factory(
+            consumer_=consumer_mock,
+            state_manager_=state_manager,
+            producer_=rowproducer_mock,
+        )
+        checkpoint.store_offset("topic", 0, 0)
+
+        with pytest.raises(CheckpointConsumerCommitError) as err:
+            checkpoint.commit()
+
+        assert (
+            str(err.value)
+            == '<CheckpointConsumerCommitError code="1" description="test error">'
         )
