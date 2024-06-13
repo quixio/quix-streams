@@ -50,6 +50,8 @@ MessageProcessedCallback = Callable[[str, int, int], None]
 # Enforce idempotent producing for the internal RowProducer
 _default_producer_extra_config = {"enable.idempotence": True}
 
+_default_max_poll_interval_ms = 300000
+
 
 class Application:
     """
@@ -260,6 +262,10 @@ class Application:
             broker_address=broker_address,
             extra_config=producer_extra_config,
             on_error=on_producer_error,
+            flush_timeout=consumer_extra_config.get(
+                "max.poll.interval.ms", _default_max_poll_interval_ms
+            )
+            / 1000,  # convert to seconds
         )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout

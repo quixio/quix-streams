@@ -48,6 +48,7 @@ class Producer:
         logger: logging.Logger = logger,
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
+        flush_timeout: Optional[int] = None,
     ):
         """
         A wrapper around `confluent_kafka.Producer`.
@@ -64,6 +65,7 @@ class Producer:
         :param extra_config: A dictionary with additional options that
             will be passed to `confluent_kafka.Producer` as is.
             Note: values passed as arguments override values in `extra_config`.
+        :param flush_timeout: The time the producer is waiting for all messages to be delivered.
         """
         if isinstance(broker_address, str):
             broker_address = ConnectionConfig(bootstrap_servers=broker_address)
@@ -76,6 +78,7 @@ class Producer:
             **{"logger": logger, "error_cb": error_callback},
         }
         self._inner_producer: Optional[ConfluentProducer] = None
+        self._flush_timeout = flush_timeout or -1
 
     def produce(
         self,
@@ -151,11 +154,13 @@ class Producer:
         Wait for all messages in the Producer queue to be delivered.
 
         :param float timeout: time to attempt flushing (seconds).
-            None or -1 is infinite. Default: None
+            None use producer default or -1 is infinite. Default: None
 
         :return: number of messages remaining to flush
         """
-        return self._producer.flush(timeout=timeout if timeout is not None else -1)
+        return self._producer.flush(
+            timeout=timeout if timeout is not None else self._flush_timeout
+        )
 
     @property
     def _producer(self) -> ConfluentProducer:
