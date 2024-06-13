@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Dict, Tuple
 
-from confluent_kafka import TopicPartition
+from confluent_kafka import TopicPartition, KafkaException
 
 from quixstreams.kafka import Consumer
 from quixstreams.rowproducer import RowProducer
@@ -12,7 +12,11 @@ from quixstreams.state import (
     DEFAULT_STATE_STORE_NAME,
 )
 from quixstreams.state.exceptions import StoreTransactionFailed
-from .exceptions import InvalidStoredOffset, CheckpointProducerTimeout
+from .exceptions import (
+    InvalidStoredOffset,
+    CheckpointProducerTimeout,
+    CheckpointConsumerCommitError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +149,14 @@ class Checkpoint:
             for (topic, partition), offset in self._tp_offsets.items()
         ]
         logger.debug("Checkpoint: commiting consumer")
-        self._consumer.commit(offsets=offsets, asynchronous=False)
+        try:
+            partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
+        except KafkaException as e:
+            raise CheckpointConsumerCommitError(e.args[0]) from None
+
+        for partition in partitions:
+            if partition.error:
+                raise CheckpointConsumerCommitError(partition.error)
 
         # Step 4. Flush state store partitions to the disk together with changelog
         # offsets
