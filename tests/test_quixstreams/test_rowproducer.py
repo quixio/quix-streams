@@ -411,10 +411,10 @@ class TestTransactionalRowProducer:
             producer.flush(2)
 
             # try to commit after sleeping past the transaction timeout window
-            sleep(8)
+            sleep(15)
             # there seems to be a significant grace period on transaction timeouts
             # despite changing related settings (socket.timeout, message.timeout)
-            # which is why sleep is 8s; might be worth investigating later
+            # which is why sleep is long; might be worth investigating later
             with pytest.raises(ConfluentKafkaException) as e:
                 producer.commit_transaction(
                     [TopicPartition(topic_in.name, 0, consumer_end_offset)],
