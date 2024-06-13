@@ -1,7 +1,7 @@
 import functools
-import logging
 from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple, Callable
 
+import logging
 from quixstreams.context import message_context
 from quixstreams.core.stream import (
     TransformExpandedCallback,
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TransformRecordCallbackExpandedWindowed = Callable[
-    [Any, Any, int, WindowedState], List[Tuple[WindowResult, Any, int]]
+    [Any, Any, int, Any, WindowedState], List[Tuple[WindowResult, Any, int, Any]]
 ]
 
 
@@ -129,13 +129,13 @@ class FixedTimeWindow:
         """
 
         def window_callback(
-            value: Any, key: Any, timestamp_ms: int, state: WindowedState
-        ) -> List[Tuple[WindowResult, Any, int]]:
+            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
+        ) -> List[Tuple[WindowResult, Any, int, Any]]:
             _, expired_windows = self.process_window(
                 value=value, timestamp_ms=timestamp_ms, state=state
             )
             # Use window start timestamp as a new record timestamp
-            return [(window, key, window["start"]) for window in expired_windows]
+            return [(window, key, window["start"], None) for window in expired_windows]
 
         return self._apply_window(
             func=window_callback,
@@ -161,12 +161,12 @@ class FixedTimeWindow:
         """
 
         def window_callback(
-            value: Any, key: Any, timestamp_ms: int, state: WindowedState
-        ) -> List[Tuple[WindowResult, Any, int]]:
+            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
+        ) -> List[Tuple[WindowResult, Any, int, Any]]:
             updated_windows, _ = self.process_window(
                 value=value, timestamp_ms=timestamp_ms, state=state
             )
-            return [(window, key, window["start"]) for window in updated_windows]
+            return [(window, key, window["start"], None) for window in updated_windows]
 
         return self._apply_window(func=window_callback, name=self._name)
 
@@ -212,8 +212,8 @@ def _as_windowed(
 ) -> TransformExpandedCallback:
     @functools.wraps(func)
     def wrapper(
-        value: Any, key: Any, timestamp: int
-    ) -> List[Tuple[WindowResult, Any, int]]:
+        value: Any, key: Any, timestamp: int, headers: Any
+    ) -> List[Tuple[WindowResult, Any, int, Any]]:
         ctx = message_context()
         transaction = cast(
             WindowedPartitionTransaction,
@@ -228,6 +228,6 @@ def _as_windowed(
             )
             return _noop()
         state = transaction.as_state(prefix=key)
-        return func(value, key, timestamp, state)
+        return func(value, key, timestamp, headers, state)
 
     return wrapper

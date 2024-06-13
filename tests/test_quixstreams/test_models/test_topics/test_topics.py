@@ -358,7 +358,7 @@ class TestTopic:
         new_key: Any,
         expected_key: Optional[bytes],
         expected_value: Optional[bytes],
-        row_factory: pytest.fixture,
+        row_factory,
         topic_manager_topic_factory,
     ):
         topic = topic_manager_topic_factory(
@@ -372,7 +372,7 @@ class TestTopic:
         assert not message.headers
 
     def test_row_serialize_extra_headers(
-        self, row_factory: pytest.fixture, topic_manager_topic_factory
+        self, row_factory, topic_manager_topic_factory
     ):
         class BytesSerializerWithHeaders(BytesSerializer):
             extra_headers = {"header": b"value"}
@@ -388,7 +388,45 @@ class TestTopic:
         message = topic.row_serialize(row=row, key=row.key)
         assert message.key == b"key"
         assert message.value == b"value"
-        assert message.headers == value_serializer.extra_headers
+        assert message.headers == list(value_serializer.extra_headers.items())
+
+    @pytest.mark.parametrize(
+        "headers, headers_extra, expected_headers",
+        [
+            (None, {}, []),
+            ([], {}, []),
+            ([("key", b"value")], {}, [("key", b"value")]),
+            ([("key", b"value")], {"key": b"value2"}, [("key", b"value2")]),
+            (
+                [("key", b"value")],
+                {"key2": b"value2"},
+                [("key", b"value"), ("key2", b"value2")],
+            ),
+        ],
+    )
+    def test_row_serialize_extra_headers_with_original_headers(
+        self,
+        headers,
+        headers_extra,
+        expected_headers,
+        row_factory,
+        topic_manager_topic_factory,
+    ):
+        class BytesSerializerWithHeaders(BytesSerializer):
+            extra_headers = headers_extra
+
+        key_serializer = BytesSerializer()
+        value_serializer = BytesSerializerWithHeaders()
+
+        topic = topic_manager_topic_factory(
+            key_serializer=key_serializer,
+            value_serializer=value_serializer,
+        )
+        row = row_factory(key=b"key", value=b"value", headers=headers)  # noqa
+        message = topic.row_serialize(row=row, key=row.key)
+        assert message.key == b"key"
+        assert message.value == b"value"
+        assert message.headers == expected_headers
 
     def test_serialize(self, topic_json_serdes_factory, topic_manager_topic_factory):
         topic = topic_manager_topic_factory(

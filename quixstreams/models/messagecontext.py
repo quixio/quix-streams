@@ -1,6 +1,4 @@
-from typing import Optional, Union, Mapping
-
-from .types import MessageHeadersTuples
+from typing import Optional
 
 
 class MessageContext:
@@ -26,14 +24,12 @@ class MessageContext:
         partition: int,
         offset: int,
         size: int,
-        headers: Optional[Union[Mapping, MessageHeadersTuples]] = None,
         leader_epoch: Optional[int] = None,
     ):
         self._topic = topic
         self._partition = partition
         self._offset = offset
         self._size = size
-        self._headers = headers
         self._leader_epoch = leader_epoch
 
     @property
@@ -51,10 +47,6 @@ class MessageContext:
     @property
     def size(self) -> int:
         return self._size
-
-    @property
-    def headers(self) -> Optional[Union[Mapping, MessageHeadersTuples]]:
-        return self._headers
 
     @property
     def leader_epoch(self) -> Optional[int]:

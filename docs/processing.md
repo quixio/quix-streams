@@ -586,8 +586,8 @@ sdf = sdf.set_timestamp(lambda value, timestamp: int(time.time() * 1000))
 ```
 
 
-## Accessing Kafka Keys and Timestamps
-By leveraging the power of custom functions in `apply()`, `update()`, and `filter()` methods of `StreamingDataFrame`, you can conveniently access message keys and timestamps of the records.
+## Accessing Kafka Keys, Timestamps and Headers
+By leveraging the power of custom functions in `apply()`, `update()`, and `filter()` methods of `StreamingDataFrame`, you can conveniently access message keys, timestamps and headers of the records.
 
 To get a key and a timestamp in your callback, you need to pass an additional keyword-only parameter, `metadata=True.`
 
@@ -599,10 +599,10 @@ To get a key and a timestamp in your callback, you need to pass an additional ke
 
 ```python
 # Using a message key to filter data with invalid keys
-sdf = sdf.filter(lambda value, key, timestamp: key != b'INVALID', metadata=True)
+sdf = sdf.filter(lambda value, key, timestamp, headers: key != b'INVALID', metadata=True)
 
 # Assigning a message timestamp to the value as a new column
-sdf['timestamp'] = sdf.apply(lambda value, key, timestamp: timestamp, metadata=True)
+sdf['timestamp'] = sdf.apply(lambda value, key, timestamp, headers: timestamp, metadata=True)
 ```
 
 ## Accessing Topic Name, Partition and Offset

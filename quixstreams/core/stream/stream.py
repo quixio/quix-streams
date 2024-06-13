@@ -265,15 +265,15 @@ class Stream:
             allow_expands=False,
             allow_updates=False,
             allow_transforms=False,
-            sink=lambda value, key, timestamp: buffer.appendleft(
-                (value, key, timestamp)
+            sink=lambda value, key, timestamp, headers: buffer.appendleft(
+                (value, key, timestamp, headers)
             ),
         )
 
-        def wrapper(value: Any, key: Any, timestamp: int) -> Any:
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
             try:
                 # Execute the stream and return the result from the queue
-                composed(value, key, timestamp)
+                composed(value, key, timestamp, headers)
                 return buffer.popleft()
             finally:
                 # Always clean the queue after the Stream is executed
@@ -287,7 +287,7 @@ class Stream:
         allow_updates: bool = True,
         allow_expands: bool = True,
         allow_transforms: bool = True,
-        sink: Optional[Callable[[Any, Any, int], None]] = None,
+        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
     ) -> VoidExecutor:
         """
         Compose a list of functions from this `Stream` and its parents into one
@@ -360,4 +360,4 @@ class Stream:
     def _add(self, func: StreamFunction) -> Self:
         return self.__class__(func=func, parent=self)
 
-    def _default_sink(self, value: Any, key: Any, timestamp: int): ...
+    def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...

@@ -581,7 +581,7 @@ class TestAppGroupBy:
         # Capture original message timestamp to ensure it's forwarded
         # to the repartition topic
         sdf["groupby_timestamp"] = sdf.apply(
-            lambda value, key, timestamp_: timestamp_, metadata=True
+            lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
         sdf = sdf.to_topic(app_topic_out)
 
@@ -669,7 +669,7 @@ class TestAppGroupBy:
         # Capture original message timestamp to ensure it's forwarded
         # to the repartition topic
         sdf["groupby_timestamp"] = sdf.apply(
-            lambda value, key, timestamp_: timestamp_, metadata=True
+            lambda value, key, timestamp_, headers: timestamp_, metadata=True
         )
         sdf = sdf.tumbling_window(duration_ms=1000).count().current()
         sdf = sdf.to_topic(app_topic_out)

@@ -1,6 +1,7 @@
 import dataclasses
 import logging
-from typing import List, Optional, Any, Callable, Union
+from typing import List, Any, Callable, Union
+from typing import Optional
 
 from quixstreams.models.messagecontext import MessageContext
 from quixstreams.models.messages import KafkaMessage
@@ -20,6 +21,7 @@ from quixstreams.models.serializers import (
     Deserializer,
 )
 from quixstreams.models.timestamps import TimestampType
+from quixstreams.models.topics.utils import merge_headers
 from quixstreams.models.types import (
     ConfluentKafkaMessageProto,
     Headers,
@@ -146,10 +148,15 @@ class Topic:
         # If key is None then pass it as is
         # Otherwise, different serializers may serialize None differently
         key_serialized = None if key is None else self._key_serializer(key, ctx=ctx)
+
+        # Update message headers with headers supplied by the value serializer.
+        extra_headers = self._value_serializer.extra_headers
+        headers = merge_headers(row.headers, extra_headers)
+
         return KafkaMessage(
             key=key_serialized,
             value=self._value_serializer(row.value, ctx=ctx),
-            headers=self._value_serializer.extra_headers,
+            headers=headers,
         )
 
     def row_deserialize(
@@ -198,7 +205,6 @@ class Topic:
 
         timestamp_type, timestamp_ms = message.timestamp()
         ctx = MessageContext(
-            headers=headers,
             topic=message.topic(),
             partition=message.partition(),
             offset=message.offset(),
@@ -220,6 +226,7 @@ class Topic:
                         value=item,
                         key=key_deserialized,
                         timestamp=timestamp_ms,
+                        headers=headers,
                         context=ctx,
                     )
                 )
@@ -234,6 +241,7 @@ class Topic:
             value=value_deserialized,
             timestamp=timestamp_ms,
             key=key_deserialized,
+            headers=headers,
             context=ctx,
         )
 

@@ -30,22 +30,25 @@ class TestStreamingDataFrame:
             return expected
 
         sdf = sdf.apply(_apply)
-        key, timestamp = b"key", 0
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_apply_with_metadata(self, dataframe_factory):
         sdf = dataframe_factory()
         value = 1
-        key, timestamp = b"key", 0
-        expected = (2, key, timestamp)
+        key, timestamp, headers = b"key", 0, []
+        expected = (2, key, timestamp, headers)
 
-        sdf = sdf.apply(lambda value_, _key, _timestamp: value + 1, metadata=True)
+        sdf = sdf.apply(
+            lambda value_, _key, _timestamp, _headers: value + 1, metadata=True
+        )
 
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[0]
+            == expected
+        )
 
     @pytest.mark.parametrize(
         "value, mutation, expected",
@@ -57,193 +60,188 @@ class TestStreamingDataFrame:
     def test_update(self, dataframe_factory, value, mutation, expected):
         sdf = dataframe_factory()
         sdf = sdf.update(mutation)
-        key, timestamp = b"key", 0
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_update_with_metadata(self, dataframe_factory):
         sdf = dataframe_factory()
         value = [1]
-        key, timestamp = b"key", 0
-        expected = ([1, 2], key, timestamp)
+        key, timestamp, headers = b"key", 0, []
+        expected = ([1, 2], key, timestamp, headers)
 
         sdf = sdf.update(
-            lambda value_, _key, _timestamp: value_.append(2), metadata=True
+            lambda value_, _key, _timestamp, _headers: value_.append(2), metadata=True
         )
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[0]
+            == expected
+        )
 
     def test_apply_multiple(self, dataframe_factory):
         sdf = dataframe_factory()
         value = 1
         expected = 4
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         sdf = sdf.apply(lambda v: v + 1).apply(lambda v: v + 2)
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_apply_update_multiple(self, dataframe_factory):
         sdf = dataframe_factory()
         value = {"x": 1}
         expected = {"x": 3, "y": 3}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         sdf = (
             sdf.apply(lambda v: {"x": v["x"] + 1})
             .update(lambda v: operator.setitem(v, "y", 3))
             .apply(lambda v: {**v, "x": v["x"] + 1})
         )
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_setitem_primitive(self, dataframe_factory):
         value = {"x": 1}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = {"x": 2}
         sdf = dataframe_factory()
         sdf["x"] = 2
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_setitem_series(self, dataframe_factory):
         value = {"x": 1, "y": 2}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = {"x": 2, "y": 2}
         sdf = dataframe_factory()
         sdf["x"] = sdf["y"]
 
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_setitem_series_apply(self, dataframe_factory):
         value = {"x": 1}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = {"x": 1, "y": 2}
         sdf = dataframe_factory()
         sdf["y"] = sdf["x"].apply(lambda v: v + 1)
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_setitem_series_with_operations(self, dataframe_factory):
         value = {"x": 1, "y": 2}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = {"x": 1, "y": 2, "z": 5}
         sdf = dataframe_factory()
         sdf["z"] = (sdf["x"] + sdf["y"]).apply(lambda v: v + 1) + 1
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_setitem_another_dataframe_apply(self, dataframe_factory):
         value = {"x": 1}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = {"x": 1, "y": 2}
         sdf = dataframe_factory()
         sdf["y"] = sdf.apply(lambda v: v["x"] + 1)
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_column_subset(self, dataframe_factory):
         value = {"x": 1, "y": 2, "z": 3}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = {"x": 1, "y": 2}
         sdf = dataframe_factory()
         sdf = sdf[["x", "y"]]
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_column_subset_and_apply(self, dataframe_factory):
         value = {"x": 1, "y": 2, "z": 3}
-        key, timestamp = b"key", 0
+        key, timestamp, headers = b"key", 0, []
         expected = 2
         sdf = dataframe_factory()
         sdf = sdf[["x", "y"]]
         sdf = sdf.apply(lambda v: v["y"])
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     @pytest.mark.parametrize(
-        "value, key, timestamp, expected",
+        "value, key, timestamp, headers, expected",
         [
-            ({"x": 1, "y": 2}, b"key", 0, [({"x": 1, "y": 2}, b"key", 0)]),
-            ({"x": 0, "y": 2}, b"key", 0, []),
+            ({"x": 1, "y": 2}, b"key", 0, None, [({"x": 1, "y": 2}, b"key", 0, None)]),
+            ({"x": 0, "y": 2}, b"key", 0, None, []),
         ],
     )
     def test_filter_with_series(
-        self, dataframe_factory, value, key, timestamp, expected
+        self, dataframe_factory, value, key, timestamp, headers, expected
     ):
         sdf = dataframe_factory()
         sdf = sdf[sdf["x"] > 0]
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     @pytest.mark.parametrize(
-        "value, key, timestamp, expected",
+        "value, key, timestamp, headers, expected",
         [
-            ({"x": 1, "y": 2}, b"key", 0, [({"x": 1, "y": 2}, b"key", 0)]),
-            ({"x": 0, "y": 2}, b"key", 0, []),
+            ({"x": 1, "y": 2}, b"key", 0, None, [({"x": 1, "y": 2}, b"key", 0, None)]),
+            ({"x": 0, "y": 2}, b"key", 0, None, []),
         ],
     )
     def test_filter_with_series_apply(
-        self, dataframe_factory, value, key, timestamp, expected
+        self, dataframe_factory, value, key, timestamp, headers, expected
     ):
         sdf = dataframe_factory()
         sdf = sdf[sdf["x"].apply(lambda v: v > 0)]
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     @pytest.mark.parametrize(
-        "value, key, timestamp, expected",
+        "value, key, timestamp, headers, expected",
         [
-            ({"x": 1, "y": 2}, b"key", 0, [({"x": 1, "y": 2}, b"key", 0)]),
-            ({"x": 0, "y": 2}, b"key", 0, []),
+            ({"x": 1, "y": 2}, b"key", 0, None, [({"x": 1, "y": 2}, b"key", 0, None)]),
+            ({"x": 0, "y": 2}, b"key", 0, None, []),
         ],
     )
     def test_filter_with_multiple_series(
-        self, dataframe_factory, value, key, timestamp, expected
+        self, dataframe_factory, value, key, timestamp, headers, expected
     ):
         sdf = dataframe_factory()
         sdf = sdf[(sdf["x"] > 0) & (sdf["y"] > 0)]
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     @pytest.mark.parametrize(
-        "value, key, timestamp, expected",
+        "value, key, timestamp, headers, expected",
         [
-            ({"x": 1, "y": 2}, b"key", 0, [({"x": 1, "y": 2}, b"key", 0)]),
-            ({"x": 0, "y": 2}, b"key", 0, []),
+            ({"x": 1, "y": 2}, b"key", 0, None, [({"x": 1, "y": 2}, b"key", 0, None)]),
+            ({"x": 0, "y": 2}, b"key", 0, None, []),
         ],
     )
     def test_filter_with_another_sdf_apply(
-        self, dataframe_factory, value, key, timestamp, expected
+        self, dataframe_factory, value, key, timestamp, headers, expected
     ):
         sdf = dataframe_factory()
         sdf = sdf[sdf.apply(lambda v: v["x"] > 0)]
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     def test_filter_with_another_sdf_with_filters_fails(self, dataframe_factory):
         sdf = dataframe_factory()
@@ -258,70 +256,75 @@ class TestStreamingDataFrame:
             _ = sdf[sdf2]
 
     @pytest.mark.parametrize(
-        "value, key, timestamp, expected",
+        "value, key, timestamp, headers, expected",
         [
-            ({"x": 1, "y": 2}, b"key", 0, [({"x": 1, "y": 2}, b"key", 0)]),
-            ({"x": 0, "y": 2}, b"key", 0, []),
+            ({"x": 1, "y": 2}, b"key", 0, None, [({"x": 1, "y": 2}, b"key", 0, None)]),
+            ({"x": 0, "y": 2}, b"key", 0, None, []),
         ],
     )
     def test_filter_with_function(
-        self, dataframe_factory, value, key, timestamp, expected
+        self, dataframe_factory, value, key, timestamp, headers, expected
     ):
         sdf = dataframe_factory()
         sdf = sdf.filter(lambda v: v["x"] > 0)
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     @pytest.mark.parametrize(
-        "value, key, timestamp, expected",
+        "value, key, timestamp, headers, expected",
         [
-            ({"x": 1, "y": 2}, b"key", 0, [({"x": 1, "y": 2}, b"key", 0)]),
-            ({"x": 0, "y": 2}, b"key", 0, []),
+            ({"x": 1, "y": 2}, b"key", 0, None, [({"x": 1, "y": 2}, b"key", 0, None)]),
+            ({"x": 0, "y": 2}, b"key", 0, None, []),
         ],
     )
     def test_filter_with_metadata(
-        self, dataframe_factory, value, key, timestamp, expected
+        self, dataframe_factory, value, key, timestamp, headers, expected
     ):
         sdf = dataframe_factory()
         sdf = sdf.filter(
-            lambda value_, _key, _timestamp: value_["x"] > 0, metadata=True
+            lambda value_, _key, _timestamp, _headers: value_["x"] > 0, metadata=True
         )
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     def test_contains_on_existing_column(self, dataframe_factory):
         sdf = dataframe_factory()
         sdf["has_column"] = sdf.contains("x")
         value = {"x": 1}
         expected = {"x": 1, "has_column": True}
-        key, timestamp = b"key", 0
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_contains_on_missing_column(self, dataframe_factory):
         sdf = dataframe_factory()
         sdf["has_column"] = sdf.contains("wrong_column")
         value = {"x": 1}
         expected = {"x": 1, "has_column": False}
-        key, timestamp = b"key", 0
-        assert sdf.test(value=value, key=key, timestamp=timestamp)[0] == (
-            expected,
-            key,
-            timestamp,
-        )
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
 
     def test_contains_as_filter(self, dataframe_factory):
         sdf = dataframe_factory()
         sdf = sdf[sdf.contains("x")]
 
         valid_value = {"x": 1, "y": 2}
-        key, timestamp = b"key", 0
-        assert sdf.test(value=valid_value, key=key, timestamp=timestamp) == [
-            (valid_value, key, timestamp)
-        ]
+        key, timestamp, headers = b"key", 0, []
+        assert sdf.test(
+            value=valid_value, key=key, timestamp=timestamp, headers=headers
+        ) == [(valid_value, key, timestamp, headers)]
         invalid_value = {"y": 2}
-        assert sdf.test(value=invalid_value, key=key, timestamp=timestamp) == []
+        assert (
+            sdf.test(value=invalid_value, key=key, timestamp=timestamp, headers=headers)
+            == []
+        )
 
     def test_cannot_use_logical_and(self, dataframe_factory):
         sdf = dataframe_factory()
@@ -334,13 +337,13 @@ class TestStreamingDataFrame:
             sdf["truth"] = sdf[sdf.apply(lambda x: x["a"] > 0)] or sdf[["b"]]
 
     def test_set_timestamp(self, dataframe_factory):
-        value, key, timestamp = 1, "key", 0
-        expected = (1, "key", 100)
+        value, key, timestamp, headers = 1, "key", 0, None
+        expected = (1, "key", 100, headers)
         sdf = dataframe_factory()
 
         sdf = sdf.set_timestamp(lambda value_, timestamp_: timestamp_ + 100)
 
-        result = sdf.test(value=value, key=key, timestamp=timestamp)[0]
+        result = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[0]
         assert result == expected
 
 
@@ -348,29 +351,38 @@ class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):
         sdf = dataframe_factory()
         value = 1
-        key, timestamp = b"key", 0
-        expected = [(1, key, timestamp), (2, key, timestamp)]
+        key, timestamp, headers = b"key", 0, []
+        expected = [(1, key, timestamp, headers), (2, key, timestamp, headers)]
         sdf = sdf.apply(lambda v: [v, v + 1], expand=True)
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     def test_apply_expand_filter(self, dataframe_factory):
         value = 1
-        key, timestamp = b"key", 0
-        expected = [(1, key, timestamp)]
+        key, timestamp, headers = b"key", 0, []
+        expected = [(1, key, timestamp, headers)]
         sdf = dataframe_factory()
         sdf = sdf.apply(lambda v: [v, v + 1], expand=True)
         sdf = sdf[sdf.apply(lambda v: v != 2)]
-        result = sdf.test(value=value, key=key, timestamp=timestamp)
+        result = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
         assert result == expected
 
     def test_apply_expand_update(self, dataframe_factory):
         value = {"x": 1}
-        key, timestamp = b"key", 0
-        expected = [({"x": 2}, key, timestamp), ({"x": 2}, key, timestamp)]
+        key, timestamp, headers = b"key", 0, []
+        expected = [
+            ({"x": 2}, key, timestamp, headers),
+            ({"x": 2}, key, timestamp, headers),
+        ]
         sdf = dataframe_factory()
         sdf = sdf.apply(lambda v: [v, v], expand=True)
         sdf["x"] = 2
-        assert sdf.test(value=value, key=key, timestamp=timestamp) == expected
+        assert (
+            sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)
+            == expected
+        )
 
     def test_apply_expand_as_filter_not_allowed(self, dataframe_factory):
         sdf = dataframe_factory()
@@ -577,13 +589,15 @@ class TestStreamingDataframeStateful:
             {"number": 10},
             {"number": 3},
         ]
-        key, timestamp = b"test", 0
+        key, timestamp, headers = b"test", 0, []
         result = None
         ctx = message_context_factory(topic=topic.name)
         for value in values:
-            result = sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)[0]
+            result = sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )[0]
 
-        assert result == (10, key, timestamp)
+        assert result == (10, key, timestamp, headers)
 
     def test_update_stateful(
         self,
@@ -615,12 +629,14 @@ class TestStreamingDataframeStateful:
             {"number": 10},
             {"number": 3},
         ]
-        key, timestamp = b"test", 0
+        key, timestamp, headers = b"test", 0, None
         ctx = message_context_factory(topic=topic.name)
         for value in values:
-            result = sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)[0]
+            result = sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )[0]
 
-        assert result == ({"number": 3, "max": 10}, key, timestamp)
+        assert result == ({"number": 3, "max": 10}, key, timestamp, headers)
 
     def test_filter_stateful(
         self,
@@ -652,14 +668,16 @@ class TestStreamingDataframeStateful:
             {"number": 1},
             {"number": 3},
         ]
-        key, timestamp = b"test", 0
+        key, timestamp, headers = b"test", 0, None
         ctx = message_context_factory(topic=topic.name)
         results = []
         for value in values:
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 1
-        assert results[0] == ({"number": 3, "max": 3}, key, timestamp)
+        assert results[0] == ({"number": 3, "max": 3}, key, timestamp, headers)
 
     def test_filter_with_another_sdf_apply_stateful(
         self,
@@ -691,13 +709,15 @@ class TestStreamingDataframeStateful:
             {"number": 1},
             {"number": 3},
         ]
-        key, timestamp = b"test", 0
+        key, timestamp, headers = b"test", 0, None
         ctx = message_context_factory(topic=topic.name)
         results = []
         for value in values:
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
         assert len(results) == 1
-        assert results[0] == ({"max": 3, "number": 3}, key, timestamp)
+        assert results[0] == ({"max": 3, "number": 3}, key, timestamp, headers)
 
 
 class TestStreamingDataFrameTumblingWindow:
@@ -765,27 +785,23 @@ class TestStreamingDataFrameTumblingWindow:
             # Should start a new window
             RecordStub(3, "key", 20010),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
         assert len(results) == 3
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=10000),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=3, start=0, end=10000),
-                records[1].key,
-                0,
-            ),
+            (WindowResult(value=1, start=0, end=10000), records[0].key, 0, None),
+            (WindowResult(value=3, start=0, end=10000), records[1].key, 0, None),
             (
                 WindowResult(value=3, start=20000, end=30000),
                 records[2].key,
                 20000,
+                None,
             ),
         ]
 
@@ -819,25 +835,20 @@ class TestStreamingDataFrameTumblingWindow:
             # is already closed. This message should be skipped from processing
             RecordStub(3, "test", 19),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            result = sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            result = sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
             results += result
 
         assert len(results) == 2
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=10),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=2, start=20, end=30),
-                records[1].key,
-                20,
-            ),
+            (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
+            (WindowResult(value=2, start=20, end=30), records[1].key, 20, None),
         ]
 
     def test_tumbling_window_final(
@@ -869,24 +880,19 @@ class TestStreamingDataFrameTumblingWindow:
             # Update window [30, 40). Nothing should be returned.
             RecordStub(4, "test", 38),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 2
         assert results == [
-            (
-                WindowResult(value=2, start=0, end=10),
-                records[2].key,
-                0,
-            ),
-            (
-                WindowResult(value=2, start=20, end=30),
-                records[3].key,
-                20,
-            ),
+            (WindowResult(value=2, start=0, end=10), records[2].key, 0, None),
+            (WindowResult(value=2, start=20, end=30), records[3].key, 20, None),
         ]
 
     def test_tumbling_window_none_key_messages(
@@ -912,25 +918,20 @@ class TestStreamingDataFrameTumblingWindow:
             # Update window [0,10)
             RecordStub(2, "test", 2),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 2
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=10),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=3, start=0, end=10),
-                records[2].key,
-                0,
-            ),
+            (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
+            (WindowResult(value=3, start=0, end=10), records[2].key, 0, None),
         ]
 
     def test_tumbling_window_two_windows(
@@ -968,27 +969,23 @@ class TestStreamingDataFrameTumblingWindow:
             # Should start a new window
             RecordStub(3, "key", 90010),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
         assert len(results) == 3
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=30000),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=4, start=0, end=30000),
-                records[1].key,
-                0,
-            ),
+            (WindowResult(value=1, start=0, end=30000), records[0].key, 0, None),
+            (WindowResult(value=4, start=0, end=30000), records[1].key, 0, None),
             (
                 WindowResult(value=3, start=90000, end=120000),
                 records[2].key,
                 90000,
+                None,
             ),
         ]
 
@@ -1088,61 +1085,28 @@ class TestStreamingDataFrameHoppingWindow:
             # Update windows [30, 40) and [35, 45)
             RecordStub(5, "test", 35),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 9
 
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=10),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=3, start=0, end=10),
-                records[1].key,
-                0,
-            ),
-            (
-                WindowResult(value=2, start=5, end=15),
-                records[1].key,
-                5,
-            ),
-            (
-                WindowResult(value=5, start=5, end=15),
-                records[2].key,
-                5,
-            ),
-            (
-                WindowResult(value=3, start=10, end=20),
-                records[2].key,
-                10,
-            ),
-            (
-                WindowResult(value=4, start=30, end=40),
-                records[3].key,
-                30,
-            ),
-            (
-                WindowResult(value=4, start=35, end=45),
-                records[3].key,
-                35,
-            ),
-            (
-                WindowResult(value=9, start=30, end=40),
-                records[4].key,
-                30,
-            ),
-            (
-                WindowResult(value=9, start=35, end=45),
-                records[4].key,
-                35,
-            ),
+            (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
+            (WindowResult(value=3, start=0, end=10), records[1].key, 0, None),
+            (WindowResult(value=2, start=5, end=15), records[1].key, 5, None),
+            (WindowResult(value=5, start=5, end=15), records[2].key, 5, None),
+            (WindowResult(value=3, start=10, end=20), records[2].key, 10, None),
+            (WindowResult(value=4, start=30, end=40), records[3].key, 30, None),
+            (WindowResult(value=4, start=35, end=45), records[3].key, 35, None),
+            (WindowResult(value=9, start=30, end=40), records[4].key, 30, None),
+            (WindowResult(value=9, start=35, end=45), records[4].key, 35, None),
         ]
 
     def test_hopping_window_current_out_of_order_late(
@@ -1170,40 +1134,23 @@ class TestStreamingDataFrameHoppingWindow:
             # Timestamp "10" is late and should not be processed
             RecordStub(3, "test", 26),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 5
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=10),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=3, start=0, end=10),
-                records[1].key,
-                0,
-            ),
-            (
-                WindowResult(value=2, start=5, end=15),
-                records[1].key,
-                5,
-            ),
-            (
-                WindowResult(value=4, start=30, end=40),
-                records[2].key,
-                30,
-            ),
-            (
-                WindowResult(value=4, start=35, end=45),
-                records[2].key,
-                35,
-            ),
+            (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
+            (WindowResult(value=3, start=0, end=10), records[1].key, 0, None),
+            (WindowResult(value=2, start=5, end=15), records[1].key, 5, None),
+            (WindowResult(value=4, start=30, end=40), records[2].key, 30, None),
+            (WindowResult(value=4, start=35, end=45), records[2].key, 35, None),
         ]
 
     def test_hopping_window_final(
@@ -1235,31 +1182,22 @@ class TestStreamingDataFrameHoppingWindow:
             # Update windows [30, 40) and [35, 45)
             RecordStub(5, "test", 35),
         ]
+        headers = [("key", b"value")]
 
         results = []
 
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 3
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (
-                WindowResult(value=3, start=0, end=10),
-                records[2].key,
-                0,
-            ),
-            (
-                WindowResult(value=5, start=5, end=15),
-                records[3].key,
-                5,
-            ),
-            (
-                WindowResult(value=3, start=10, end=20),
-                records[3].key,
-                10,
-            ),
+            (WindowResult(value=3, start=0, end=10), records[2].key, 0, None),
+            (WindowResult(value=5, start=5, end=15), records[3].key, 5, None),
+            (WindowResult(value=3, start=10, end=20), records[3].key, 10, None),
         ]
 
     def test_hopping_window_none_key_messages(
@@ -1285,25 +1223,20 @@ class TestStreamingDataFrameHoppingWindow:
             # Update window [0,10)
             RecordStub(2, "test", 2),
         ]
+        headers = [("key", b"value")]
 
         results = []
         for value, key, timestamp in records:
             ctx = message_context_factory(topic=topic.name)
-            results += sdf.test(value=value, key=key, timestamp=timestamp, ctx=ctx)
+            results += sdf.test(
+                value=value, key=key, timestamp=timestamp, headers=headers, ctx=ctx
+            )
 
         assert len(results) == 2
         # Ensure that the windows are returned with correct values and order
         assert results == [
-            (
-                WindowResult(value=1, start=0, end=10),
-                records[0].key,
-                0,
-            ),
-            (
-                WindowResult(value=3, start=0, end=10),
-                records[2].key,
-                0,
-            ),
+            (WindowResult(value=1, start=0, end=10), records[0].key, 0, None),
+            (WindowResult(value=3, start=0, end=10), records[2].key, 0, None),
         ]
 
 
@@ -1327,6 +1260,7 @@ class TestStreamingDataFrameGroupBy:
         new_key = "woo"
         value = {col: new_key}
         col_update = "updated_col"
+        headers = [("key", b"value")]
 
         sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
         sdf = sdf.group_by(col)
@@ -1345,6 +1279,7 @@ class TestStreamingDataFrameGroupBy:
                 topic=topic,
                 key=orig_key,
                 timestamp=orig_timestamp_ms,
+                headers=headers,
                 ctx=message_context_factory(topic=topic.name),
             )
 
@@ -1357,19 +1292,27 @@ class TestStreamingDataFrameGroupBy:
         assert consumed_row.key == new_key
         assert consumed_row.timestamp == orig_timestamp_ms
         assert consumed_row.value == value
-        assert pre_groupby_branch_result[0] == (value, orig_key, orig_timestamp_ms)
+        assert consumed_row.headers == headers
+        assert pre_groupby_branch_result[0] == (
+            value,
+            orig_key,
+            orig_timestamp_ms,
+            headers,
+        )
 
         # Check that the value is updated after record passed the groupby
         post_groupby_branch_result = sdf.test(
             value=value,
             key=new_key,
             timestamp=orig_timestamp_ms,
+            headers=headers,
             ctx=message_context_factory(topic=groupby_topic.name),
         )
         assert post_groupby_branch_result[0] == (
             {col: col_update},
             new_key,
             orig_timestamp_ms,
+            headers,
         )
 
     def test_group_by_column_with_name(
@@ -1395,6 +1338,7 @@ class TestStreamingDataFrameGroupBy:
         new_key = "woo"
         value = {col: new_key}
         col_update = "updated_col"
+        headers = [("key", b"value")]
 
         sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
         sdf = sdf.group_by(col, name=op_name)
@@ -1414,6 +1358,7 @@ class TestStreamingDataFrameGroupBy:
                 topic=topic,
                 key=orig_key,
                 timestamp=orig_timestamp_ms,
+                headers=headers,
                 ctx=message_context_factory(topic=topic.name),
             )
 
@@ -1426,19 +1371,27 @@ class TestStreamingDataFrameGroupBy:
         assert consumed_row.key == new_key
         assert consumed_row.timestamp == orig_timestamp_ms
         assert consumed_row.value == value
-        assert pre_groupby_branch_result[0] == (value, orig_key, orig_timestamp_ms)
+        assert consumed_row.headers == headers
+        assert pre_groupby_branch_result[0] == (
+            value,
+            orig_key,
+            orig_timestamp_ms,
+            headers,
+        )
 
         # Check that the value is updated after record passed the groupby
         post_groupby_branch_result = sdf.test(
             value=value,
             key=new_key,
             timestamp=orig_timestamp_ms,
+            headers=headers,
             ctx=message_context_factory(topic=groupby_topic.name),
         )
         assert post_groupby_branch_result[0] == (
             {col: col_update},
             new_key,
             orig_timestamp_ms,
+            headers,
         )
 
     def test_group_by_func(
@@ -1464,6 +1417,7 @@ class TestStreamingDataFrameGroupBy:
         new_key = "woo"
         value = {col: new_key}
         col_update = "updated_col"
+        headers = [("key", b"value")]
 
         sdf = dataframe_factory(topic, topic_manager=topic_manager, producer=producer)
         sdf = sdf.group_by(lambda v: v[col], name=op_name)
@@ -1483,6 +1437,7 @@ class TestStreamingDataFrameGroupBy:
                 topic=topic,
                 key=orig_key,
                 timestamp=orig_timestamp_ms,
+                headers=headers,
                 ctx=message_context_factory(topic=topic.name),
             )
 
@@ -1495,19 +1450,27 @@ class TestStreamingDataFrameGroupBy:
         assert consumed_row.key == new_key
         assert consumed_row.timestamp == orig_timestamp_ms
         assert consumed_row.value == value
-        assert pre_groupby_branch_result[0] == (value, orig_key, orig_timestamp_ms)
+        assert consumed_row.headers == headers
+        assert pre_groupby_branch_result[0] == (
+            value,
+            orig_key,
+            orig_timestamp_ms,
+            headers,
+        )
 
         # Check that the value is updated after record passed the groupby
         post_groupby_branch_result = sdf.test(
             value=value,
             key=new_key,
             timestamp=orig_timestamp_ms,
+            headers=headers,
             ctx=message_context_factory(topic=groupby_topic.name),
         )
         assert post_groupby_branch_result[0] == (
             {col: col_update},
             new_key,
             orig_timestamp_ms,
+            headers,
         )
 
     def test_group_by_func_name_missing(self, dataframe_factory, topic_manager_factory):

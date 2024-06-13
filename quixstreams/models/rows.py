@@ -1,18 +1,15 @@
-from typing import Optional, Union, Any, Mapping
+from typing import Optional, Any
 
 from .messagecontext import MessageContext
 from .types import MessageHeadersTuples
 
 
 class Row:
-    """
-    Row is a dict-like interface on top of the message data + some Kafka props
-    """
-
     __slots__ = (
         "value",
         "key",
         "timestamp",
+        "headers",
         "context",
     )
 
@@ -22,11 +19,13 @@ class Row:
         key: Optional[Any],
         timestamp: int,
         context: MessageContext,
+        headers: Optional[MessageHeadersTuples] = None,
     ):
         self.value = value
         self.key = key
         self.timestamp = timestamp
         self.context = context
+        self.headers = headers
 
     @property
     def topic(self) -> str:
@@ -43,10 +42,6 @@ class Row:
     @property
     def size(self) -> int:
         return self.context.size
-
-    @property
-    def headers(self) -> Optional[Union[Mapping, MessageHeadersTuples]]:
-        return self.context.headers
 
     @property
     def leader_epoch(self) -> Optional[int]:

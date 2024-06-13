@@ -169,7 +169,7 @@ class StreamingSeries(BaseStreaming):
 
     def compose(
         self,
-        sink: Optional[Callable[[Any, Any, int], None]] = None,
+        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
     ) -> VoidExecutor:
         """
         Compose all functions of this StreamingSeries into one big closure.
@@ -211,8 +211,14 @@ class StreamingSeries(BaseStreaming):
             sink=sink,
         )
 
+    # TODO: Rename to __series_test__
     def test(
-        self, value: Any, key: Any, timestamp: int, ctx: Optional[MessageContext] = None
+        self,
+        value: Any,
+        key: Any,
+        timestamp: int,
+        headers: Optional[Any] = None,
+        ctx: Optional[MessageContext] = None,
     ) -> Any:
         """
         A shorthand to test `StreamingSeries` with provided value
@@ -229,11 +235,11 @@ class StreamingSeries(BaseStreaming):
         context.run(set_message_context, ctx)
         result = []
         composed = self.compose(
-            sink=lambda value_, key_, timestamp_: result.append(
-                (value_, key_, timestamp_)
+            sink=lambda value_, key_, timestamp_, headers_: result.append(
+                (value_, key_, timestamp_, headers_)
             )
         )
-        context.run(composed, value, key, timestamp)
+        context.run(composed, value, key, timestamp, headers)
         return result
 
     def _operation(
@@ -249,15 +255,15 @@ class StreamingSeries(BaseStreaming):
             other_composed = other.compose_returning()
 
             return self.from_apply_callback(
-                func=lambda value, key, timestamp, op=operator_: op(
-                    self_composed(value, key, timestamp)[0],
-                    other_composed(value, key, timestamp)[0],
+                func=lambda value, key, timestamp, headers, op=operator_: op(
+                    self_composed(value, key, timestamp, headers)[0],
+                    other_composed(value, key, timestamp, headers)[0],
                 )
             )
         else:
             return self.from_apply_callback(
-                func=lambda value, key, timestamp, op=operator_: op(
-                    self_composed(value, key, timestamp)[0], other
+                func=lambda value, key, timestamp, headers, op=operator_: op(
+                    self_composed(value, key, timestamp, headers)[0], other
                 )
             )
 
@@ -489,16 +495,16 @@ class StreamingSeries(BaseStreaming):
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
             return self.from_apply_callback(
-                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
-                    0
-                ]
-                and other_composed(value, key, timestamp)[0]
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
+                and other_composed(value, key, timestamp, headers)[0]
             )
         else:
             return self.from_apply_callback(
-                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
-                    0
-                ]
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
                 and other
             )
 
@@ -520,16 +526,16 @@ class StreamingSeries(BaseStreaming):
         if isinstance(other, self.__class__):
             other_composed = other.compose_returning()
             return self.from_apply_callback(
-                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
-                    0
-                ]
-                or other_composed(value, key, timestamp)[0]
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
+                or other_composed(value, key, timestamp, headers)[0]
             )
         else:
             return self.from_apply_callback(
-                func=lambda value, key, timestamp: self_composed(value, key, timestamp)[
-                    0
-                ]
+                func=lambda value, key, timestamp, headers: self_composed(
+                    value, key, timestamp, headers
+                )[0]
                 or other
             )
 

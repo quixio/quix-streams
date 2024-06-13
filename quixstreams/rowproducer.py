@@ -1,12 +1,12 @@
-import logging
 from typing import Optional, Any, Union, Dict, Tuple
 
 from confluent_kafka import KafkaError, Message
 
+import logging
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
-from .kafka.exceptions import KafkaProducerDeliveryError
-from .kafka.producer import Producer, Partitioner
 from .kafka.configuration import ConnectionConfig
+from .kafka.exceptions import KafkaProducerDeliveryError
+from .kafka.producer import Producer
 from .models import Topic, Row, Headers
 
 logger = logging.getLogger(__name__)
