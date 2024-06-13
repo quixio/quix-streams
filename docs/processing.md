@@ -585,6 +585,37 @@ sdf = sdf.set_timestamp(lambda value, key, timestamp, headers: int(time.time() *
 
 ```
 
+## Updating Kafka Headers
+
+Kafka headers are key-value pairs that can provide additional information about a message without modifying its payload.  
+
+The message headers are represented as lists of ("header", "value") tuples, where "header" is a string, and "value" is bytes.  
+The same header can have multiple values.
+
+Example of the headers:
+```[('clientID', b'client-123'), ('source', b'source-123')]```
+
+
+To set or update the Kafka message headers, use the `StreamingDataFrame.set_headers()` API. 
+
+The updated headers will be attached when producing messages to the output topics.
+
+**Example:**
+
+```python
+sdf = app.dataframe(...)
+
+APP_VERSION = "v0.1.1"
+
+# Add the value of APP_VERSION to the message headers for debugging purposes.  
+# The callback receives four positional arguments: value, key, current timestamp, and headers. 
+# It must return a new set of headers as a list of (header, value) tuples.
+
+sdf = sdf.set_headers(
+    lambda value, key, timestamp, headers: [('APP_VERSION', APP_VERSION.encode())]
+)
+```
+
 
 ## Accessing Kafka Keys, Timestamps and Headers
 By leveraging the power of custom functions in `apply()`, `update()`, and `filter()` methods of `StreamingDataFrame`, you can conveniently access message keys, timestamps and headers of the records.

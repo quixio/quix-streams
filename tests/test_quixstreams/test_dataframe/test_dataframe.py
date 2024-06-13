@@ -348,6 +348,27 @@ class TestStreamingDataFrame:
         result = sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[0]
         assert result == expected
 
+    @pytest.mark.parametrize(
+        "original_headers, new_headers",
+        [
+            (None, None),
+            ([], []),
+            ([], [("key", b"value")]),
+            ([[("key", b"value")]], [("key2", b"value2")]),
+        ],
+    )
+    def test_set_headers(self, original_headers, new_headers, dataframe_factory):
+        value, key, timestamp = 1, "key", 0
+        expected = (1, "key", 0, new_headers)
+        sdf = dataframe_factory()
+
+        sdf = sdf.set_headers(lambda value_, key_, timestamp_, headers_: new_headers)
+
+        result = sdf.test(
+            value=value, key=key, timestamp=timestamp, headers=original_headers
+        )[0]
+        assert result == expected
+
 
 class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):
