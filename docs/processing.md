@@ -578,10 +578,10 @@ sdf = app.dataframe(...)
 
 # Update the timestamp to be the current epoch using "set_timestamp" 
 # method with a callback.
-# The callback receives two positional arguments: value and current timestamp as integer in milliseconds.
+# The callback receives four positional arguments: value, key, current timestamp, and headers. 
 # It must return a new timestamp as integer in milliseconds as well
 
-sdf = sdf.set_timestamp(lambda value, timestamp: int(time.time() * 1000))
+sdf = sdf.set_timestamp(lambda value, key, timestamp, headers: int(time.time() * 1000))
 
 ```
 

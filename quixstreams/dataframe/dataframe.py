@@ -579,9 +579,9 @@ class StreamingDataFrame(BaseStreaming):
             metadata=True,
         )
 
-    def set_timestamp(self, func: Callable[[Any, int], int]) -> Self:
+    def set_timestamp(self, func: Callable[[Any, Any, int, Any], int]) -> Self:
         """
-        Set a new timestamp based on the value and the current record timestamp.
+        Set a new timestamp based on the current message value and its metadata.
 
         The new timestamp will be used in windowed aggregations and when producing
         messages to the output topics.
@@ -599,7 +599,7 @@ class StreamingDataFrame(BaseStreaming):
 
         sdf = app.dataframe(input_topic)
         # Updating the record's timestamp based on the value
-        sdf = sdf.set_timestamp(lambda value, timestamp: value['new_timestamp'])
+        sdf = sdf.set_timestamp(lambda value, key, timestamp, headers: value['new_timestamp'])
         ```
 
         :param func: callable accepting the current value and the current timestamp.
@@ -614,7 +614,8 @@ class StreamingDataFrame(BaseStreaming):
             timestamp: int,
             headers: Any,
         ) -> Tuple[Any, Any, int, Any]:
-            return value, key, func(value, timestamp), headers
+            new_timestamp = func(value, key, timestamp, headers)
+            return value, key, new_timestamp, headers
 
         stream = self.stream.add_transform(func=_set_timestamp_callback)
         return self.__dataframe_clone__(stream=stream)

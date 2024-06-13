@@ -211,7 +211,6 @@ class StreamingSeries(BaseStreaming):
             sink=sink,
         )
 
-    # TODO: Rename to __series_test__
     def test(
         self,
         value: Any,
