@@ -533,104 +533,6 @@ class TestApplication:
         assert app._consumer_group == "quixstreams-default"
 
 
-class TestAppExactlyOnce:
-
-    def test_exactly_once(
-        self,
-        app_factory,
-        topic_manager_factory,
-        row_consumer_factory,
-        executor,
-        row_factory,
-    ):
-        """
-        An Application that forwards messages to a new topic crashes after producing 2
-        messages, then restarts (will reprocess all 3 messages again).
-
-        The second run succeeds in processing all 3 messages and commits transaction.
-
-        The 2 non-committed produces should be ignored by a downstream consumer.
-        """
-        processed_count = 0
-        total_messages = 3
-        fail_idx = 1
-        done = Future()
-
-        def on_message_processed(*_):
-            # Set the callback to track total messages processed
-            # The callback is not triggered if processing fails
-            nonlocal processed_count
-            processed_count += 1
-            # Stop processing after consuming all the messages
-            # if (processed_count % total_messages) == 0:
-            if processed_count == total_messages:
-                done.set_result(True)
-
-        class ForceFail(Exception): ...
-
-        def fail_once(value):
-            # sleep here to ensure produced messages make it to topic
-            time.sleep(2)
-            if processed_count == fail_idx:
-                raise ForceFail
-            return value
-
-        consumer_group = str(uuid.uuid4())
-        topic_in_name = str(uuid.uuid4())
-        topic_out_name = str(uuid.uuid4())
-
-        def get_app(fail: bool):
-            app = app_factory(
-                commit_interval=30,
-                auto_offset_reset="earliest",
-                on_message_processed=on_message_processed,
-                consumer_group=consumer_group,
-                exactly_once_guarantees=True,
-            )
-            topic_in = app.topic(topic_in_name, value_deserializer="json")
-            topic_out = app.topic(topic_out_name, value_serializer="json")
-            sdf = app.dataframe(topic_in)
-            sdf = sdf.to_topic(topic_out)
-            if fail:
-                sdf = sdf.apply(fail_once)
-            return app, sdf, topic_in, topic_out
-
-        # first run of app that encounters an error during processing
-        app, sdf, topic_in, topic_out = get_app(fail=True)
-
-        # produce initial messages to consume
-        with app.get_producer() as producer:
-            for i in range(total_messages):
-                msg = topic_in.serialize(key=str(i), value={"my_val": str(i)})
-                producer.produce(topic=topic_in.name, key=msg.key, value=msg.value)
-
-        with pytest.raises(ForceFail):
-            app.run(sdf)
-        assert processed_count == fail_idx
-
-        # re-init the app, only this time it won't fail
-        processed_count = 0
-        app, sdf, topic_in, topic_out = get_app(fail=False)
-        executor.submit(_stop_app_on_future, app, done, 10.0)
-        app.run(sdf)
-
-        # only committed messages are read by a downstream consumer
-        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
-            row_consumer.subscribe([topic_out])
-            rows = []
-            while (row := row_consumer.poll_row(timeout=5)) is not None:
-                rows.append(row)
-            lowwater, highwater = row_consumer.get_watermark_offsets(
-                TopicPartition(topic_out.name, 0), 3
-            )
-        assert len(rows) == total_messages
-
-        # Sanity check that non-committed messages actually made it to topic
-        assert lowwater == 0
-        assert rows[0].offset == fail_idx + 2 == 3
-        assert highwater == rows[-1].offset + 2 == 7
-
-
 class TestAppGroupBy:
 
     def test_group_by(
@@ -800,6 +702,104 @@ class TestAppGroupBy:
         assert row.key.decode() == user_id
         # Check that window is calculated based on the original timestamp
         assert row.value == {"start": 1000, "end": 2000, "value": 1}
+
+
+class TestAppExactlyOnce:
+
+    def test_exactly_once(
+        self,
+        app_factory,
+        topic_manager_factory,
+        row_consumer_factory,
+        executor,
+        row_factory,
+    ):
+        """
+        An Application that forwards messages to a new topic crashes after producing 2
+        messages, then restarts (will reprocess all 3 messages again).
+
+        The second run succeeds in processing all 3 messages and commits transaction.
+
+        The 2 non-committed produces should be ignored by a downstream consumer.
+        """
+        processed_count = 0
+        total_messages = 3
+        fail_idx = 1
+        done = Future()
+
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            # if (processed_count % total_messages) == 0:
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        class ForceFail(Exception): ...
+
+        def fail_once(value):
+            # sleep here to ensure produced messages make it to topic
+            time.sleep(2)
+            if processed_count == fail_idx:
+                raise ForceFail
+            return value
+
+        consumer_group = str(uuid.uuid4())
+        topic_in_name = str(uuid.uuid4())
+        topic_out_name = str(uuid.uuid4())
+
+        def get_app(fail: bool):
+            app = app_factory(
+                commit_interval=30,
+                auto_offset_reset="earliest",
+                on_message_processed=on_message_processed,
+                consumer_group=consumer_group,
+                exactly_once_guarantees=True,
+            )
+            topic_in = app.topic(topic_in_name, value_deserializer="json")
+            topic_out = app.topic(topic_out_name, value_serializer="json")
+            sdf = app.dataframe(topic_in)
+            sdf = sdf.to_topic(topic_out)
+            if fail:
+                sdf = sdf.apply(fail_once)
+            return app, sdf, topic_in, topic_out
+
+        # first run of app that encounters an error during processing
+        app, sdf, topic_in, topic_out = get_app(fail=True)
+
+        # produce initial messages to consume
+        with app.get_producer() as producer:
+            for i in range(total_messages):
+                msg = topic_in.serialize(key=str(i), value={"my_val": str(i)})
+                producer.produce(topic=topic_in.name, key=msg.key, value=msg.value)
+
+        with pytest.raises(ForceFail):
+            app.run(sdf)
+        assert processed_count == fail_idx
+
+        # re-init the app, only this time it won't fail
+        processed_count = 0
+        app, sdf, topic_in, topic_out = get_app(fail=False)
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+
+        # only committed messages are read by a downstream consumer
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([topic_out])
+            rows = []
+            while (row := row_consumer.poll_row(timeout=5)) is not None:
+                rows.append(row)
+            lowwater, highwater = row_consumer.get_watermark_offsets(
+                TopicPartition(topic_out.name, 0), 3
+            )
+        assert len(rows) == total_messages
+
+        # Sanity check that non-committed messages actually made it to topic
+        assert lowwater == 0
+        assert rows[0].offset == fail_idx + 2 == 3
+        assert highwater == rows[-1].offset + 2 == 7
 
 
 class TestQuixApplication:
