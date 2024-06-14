@@ -1,4 +1,4 @@
-from typing import Optional, Any, Union, Dict, Tuple, List, cast
+from typing import Optional, Any, Union, Dict, Tuple, List, cast, Callable
 
 from confluent_kafka import TopicPartition, KafkaException, KafkaError, Message
 from confluent_kafka.admin import GroupMetadata
@@ -48,26 +48,21 @@ class RowProducer:
         flush_timeout: Optional[int] = None,
         transactional: bool = False,
     ):
-
+        self._producer = Producer(
+            broker_address=broker_address,
+            extra_config=extra_config,
+            flush_timeout=flush_timeout
+        )
         if transactional:
-            self._producer = TransactionalProducer(
-                broker_address=broker_address,
-                extra_config=extra_config,
-                flush_timeout=flush_timeout,
-            )
-        else:
-            self._producer = Producer(
-                broker_address=broker_address,
-                extra_config=extra_config,
-                flush_timeout=flush_timeout,
-            )
+            self._producer.__use_transactions__()
+
 
         self._on_error: Optional[ProducerErrorCallback] = (
             on_error or default_on_producer_error
         )
         self._tp_offsets: Dict[Tuple[str, int], int] = {}
         self._error: Optional[KafkaError] = None
-        self._transactional = transactional
+        self._active_transaction = False
 
     def produce_row(
         self,
@@ -177,22 +172,41 @@ class RowProducer:
         return self._tp_offsets
 
     def begin_transaction(self):
-        self._producer.begin_transaction()
+        self._producer.__begin_transaction__()
+        self._active_transaction = True
 
     def abort_transaction(self, timeout: Optional[float] = None):
-        # Skip abort if no active transaction since it throws an exception if at least
-        # one transaction was successfully completed at some point.
-        # This avoids polluting the stack trace in the case where a transaction was
-        # not active as expected (because of some other exception already raised).
-        if self._producer.active_transaction:
-            self._producer.abort_transaction(timeout)
+        """
+        Attempt an abort if an active transaction.
+
+        Else, skip since it throws an exception if at least
+        one transaction was successfully completed at some point.
+
+        This avoids polluting the stack trace in the case where a transaction was
+        not active as expected (because of some other exception already raised)
+        and a cleanup abort is attempted.
+
+        NOTE: under normal circumstances a transaction will be open due to how
+        the Checkpoint inits another immediately after committing.
+        """
+        if self._active_transaction:
+            self._producer.__abort_transaction__(timeout)
+            self._active_transaction = False
         else:
             logger.debug(
                 "No Kafka transaction to abort, "
                 "likely due to some other exception occurring"
             )
 
-    def _retriable_commit_op(self, operation, args):
+    def _retriable_commit_op(self, operation: Callable, args: list):
+        """
+        Some specific failure cases from sending offsets or committing a transaction
+        are retriable, which is worth re-attempting since the transaction is
+        almost complete (we flushed before attempting to commit).
+
+        NOTE: During testing, most other operations (including producing)
+        did not generate "retriable" errors.
+        """
         attempts_remaining = 3
         backoff_seconds = 1
         op_name = operation.__name__
@@ -230,10 +244,11 @@ class RowProducer:
         timeout: Optional[float] = None,
     ):
         self._retriable_commit_op(
-            self._producer.send_offsets_to_transaction,
+            self._producer.__send_offsets_to_transaction__,
             [positions, group_metadata, timeout],
         )
-        self._retriable_commit_op(self._producer.commit_transaction, [timeout])
+        self._retriable_commit_op(self._producer.__commit_transaction__, [timeout])
+        self._active_transaction = False
 
     def __enter__(self):
         return self

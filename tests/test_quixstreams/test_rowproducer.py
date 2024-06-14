@@ -11,7 +11,7 @@ from confluent_kafka import (
 from confluent_kafka import TopicPartition
 
 from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
-from quixstreams.kafka.producer import TransactionalProducer
+from quixstreams.kafka.producer import Producer
 from quixstreams.models import (
     JSONSerializer,
     SerializationError,
@@ -186,6 +186,9 @@ class TestTransactionalRowProducer:
         topic_manager_topic_factory,
         row_consumer_factory,
     ):
+        """
+        Simplest transactional consume + produce pattern
+        """
         topic_args = dict(
             create_topic=True,
             value_serializer="json",
@@ -229,7 +232,7 @@ class TestTransactionalRowProducer:
                 == consumer_end_offset
             )
 
-        # downstream consumer should only get the committed messages
+        # downstream consumer gets the committed messages
         rows = []
         with row_consumer_factory(auto_offset_reset="earliest") as consumer:
             consumer.subscribe([topic_out])
@@ -240,28 +243,6 @@ class TestTransactionalRowProducer:
             assert row.key == key
             assert row.value == value
 
-    def test_retriable_op_error(self):
-        class MockKafkaError(Exception):
-            def retriable(self):
-                return True
-
-        call_args = [["my", "offsets"], "consumer_metadata", 1]
-        error = ConfluentKafkaException(MockKafkaError())
-
-        mock_producer = create_autospec(TransactionalProducer)
-        mock_producer.send_offsets_to_transaction.__name__ = "send_offsets"
-        mock_producer.send_offsets_to_transaction.side_effect = [error, None]
-        with patch(
-            "quixstreams.rowproducer.TransactionalProducer", return_value=mock_producer
-        ):
-            row_producer = RowProducer(broker_address="lol", transactional=True)
-            row_producer.commit_transaction(*call_args)
-
-        mock_producer.send_offsets_to_transaction.assert_has_calls(
-            [call(*call_args)] * 2
-        )
-        mock_producer.commit_transaction.assert_called_once()
-
     def test_produce_after_aborted_transaction(
         self,
         row_producer,
@@ -269,6 +250,14 @@ class TestTransactionalRowProducer:
         topic_manager_topic_factory,
         row_consumer_factory,
     ):
+        """
+        transactional consume + produce pattern, but we mimic a failed transaction by
+        aborting it directly (after producing + flushing to the downstream topic).
+
+        Then, redo the consume + produce (and successfully commit the transaction).
+
+        We confirm offset behavior from both failed and successful transactions.
+        """
         topic_args = dict(
             create_topic=True,
             value_serializer="json",
@@ -348,7 +337,7 @@ class TestTransactionalRowProducer:
         # as further proof the initial messages actually made it to the topic
         # (and thus were ignored) we can inspect our message offsets.
 
-        # Produced offsets 0-2 were aborted; all aborts (direct or timeout) are followed
+        # Produced offsets 0-2 were aborted; all direct aborts are followed
         # by an abort marker (offset 3).
         # The next valid offset (which is our first successful message) should be 4.
         # Note that the lowwater is still 0, meaning the messages were successfully added
@@ -369,6 +358,13 @@ class TestTransactionalRowProducer:
         topic_manager_topic_factory,
         row_consumer_factory,
     ):
+        """
+        Validate the behavior around a transaction that times out via the producer
+        config transaction.timeout.ms
+
+        A timeout should invalidate that producer from further transactions
+        (which also raises an exception to cause the Application to terminate).
+        """
         topic_args = dict(
             create_topic=True,
             value_serializer="json",
@@ -445,3 +441,29 @@ class TestTransactionalRowProducer:
             producer.begin_transaction()
         kafka_error = e.value.args[0]
         assert kafka_error.code() == ConfluentKafkaError._FENCED
+
+    def test_retriable_op_error(self):
+        """
+        Some specific failure cases from sending offsets or committing a transaction
+        are retriable.
+        """
+
+        class MockKafkaError(Exception):
+            def retriable(self):
+                return True
+
+        call_args = [["my", "offsets"], "consumer_metadata", 1]
+        error = ConfluentKafkaException(MockKafkaError())
+
+        mock_producer = create_autospec(Producer)
+        mock_producer.__send_offsets_to_transaction__.__name__ = "send_offsets"
+        mock_producer.__commit_transaction__.__name__ = "commit"
+        mock_producer.__send_offsets_to_transaction__.side_effect = [error, None]
+        with patch("quixstreams.rowproducer.Producer", return_value=mock_producer):
+            row_producer = RowProducer(broker_address="lol", transactional=True)
+            row_producer.commit_transaction(*call_args)
+
+        mock_producer.__send_offsets_to_transaction__.assert_has_calls(
+            [call(*call_args)] * 2
+        )
+        mock_producer.__commit_transaction__.assert_called_once()
