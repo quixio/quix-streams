@@ -169,7 +169,7 @@ class StreamingSQLExecutor:
         dataframe = (
             getattr(dataframe, WINDOW_TYPES[window.alias_or_name])(duration_ms=interval)
             .reduce(reducer=reducer, initializer=initializer)
-            .current()
+            .final()
         )
 
         for projection in step.projections:
@@ -218,7 +218,6 @@ class StreamingSQLExecutor:
 
 # The default COUNT function doesn't work incrementally
 def _sql_count(args):
-    print("Test")
     if len(args) == 1:
         return 1  # initialize
     return args[0] + 1
