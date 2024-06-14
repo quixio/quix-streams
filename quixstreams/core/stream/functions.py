@@ -1,61 +1,84 @@
 import abc
-import functools
-from itertools import chain
-from typing import TypeVar, Callable, List
+from typing import Callable, Any, Tuple, Union, Protocol, Iterable
 
 __all__ = (
-    "StreamCallable",
+    "StreamCallback",
+    "VoidExecutor",
+    "ReturningExecutor",
     "StreamFunction",
     "ApplyFunction",
-    "ApplyExpandFunction",
     "UpdateFunction",
     "FilterFunction",
-    "Filtered",
-    "compose",
+    "ApplyCallback",
+    "ApplyExpandedCallback",
+    "FilterCallback",
+    "UpdateCallback",
+    "ApplyWithMetadataCallback",
+    "ApplyWithMetadataExpandedCallback",
+    "ApplyWithMetadataFunction",
+    "UpdateWithMetadataCallback",
+    "UpdateWithMetadataFunction",
+    "FilterWithMetadataCallback",
+    "FilterWithMetadataFunction",
+    "TransformFunction",
+    "TransformCallback",
+    "TransformExpandedCallback",
 )
 
-R = TypeVar("R")
-T = TypeVar("T")
 
-StreamCallable = Callable[[T], R]
+class SupportsBool(Protocol):
+    def __bool__(self) -> bool: ...
 
 
-class Filtered(Exception): ...
+ApplyCallback = Callable[[Any], Any]
+ApplyExpandedCallback = Callable[[Any], Iterable[Any]]
+UpdateCallback = Callable[[Any], None]
+FilterCallback = Callable[[Any], bool]
+
+ApplyWithMetadataCallback = Callable[[Any, Any, int, Any], Any]
+ApplyWithMetadataExpandedCallback = Callable[[Any, Any, int, Any], Iterable[Any]]
+UpdateWithMetadataCallback = Callable[[Any, Any, int, Any], None]
+FilterWithMetadataCallback = Callable[[Any, Any, int, Any], SupportsBool]
+
+TransformCallback = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
+TransformExpandedCallback = Callable[
+    [Any, Any, int, Any], Iterable[Tuple[Any, Any, int, Any]]
+]
+
+StreamCallback = Union[
+    ApplyCallback,
+    ApplyExpandedCallback,
+    UpdateCallback,
+    FilterCallback,
+    ApplyWithMetadataCallback,
+    ApplyWithMetadataExpandedCallback,
+    UpdateWithMetadataCallback,
+    FilterWithMetadataCallback,
+    TransformCallback,
+    TransformExpandedCallback,
+]
+
+VoidExecutor = Callable[[Any, Any, int, Any], None]
+ReturningExecutor = Callable[[Any, Any, int, Any], Tuple[Any, Any, int, Any]]
 
 
 class StreamFunction(abc.ABC):
     """
     A base class for all the streaming operations in Quix Streams.
 
-    It provides two methods that return closures to be called on the input values:
-    - `get_executor` - a wrapper to execute on a single value
-    - `get_executor_expanded` - a wrapper to execute on an expanded value.
-        Expanded value is a list, where each item should be treated as a separate value.
+    It provides a `get_executor` method to return a closure to be called with the input
+    values.
     """
 
     expand: bool = False
 
-    def __init__(self, func: StreamCallable):
-        self._func = func
-        self._expand = False
-
-    @property
-    def func(self) -> StreamCallable:
-        """
-        The original function
-        """
-        return self._func
+    def __init__(self, func: StreamCallback):
+        self.func = func
 
     @abc.abstractmethod
-    def get_executor(self) -> StreamCallable:
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
         """
-        Returns a wrapper to be called on a single value.
-        """
-
-    @abc.abstractmethod
-    def get_executor_expanded(self) -> StreamCallable:
-        """
-        Returns a wrapper to be called on a list of expanded values.
+        Returns a wrapper to be called on a value, key and timestamp.
         """
 
 
@@ -63,52 +86,81 @@ class ApplyFunction(StreamFunction):
     """
     Wrap a function into "Apply" function.
 
-    The provided function is expected to return a new value based on input,
+    The provided callback is expected to return a new value based on input,
     and its result will always be passed downstream.
     """
 
-    def get_executor(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> R:
-            # Execute a function on a single value and return its result
-            return func(value)
+    def __init__(
+        self,
+        func: ApplyCallback,
+        expand: bool = False,
+    ):
+        super().__init__(func)
+        self.expand = expand
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        if self.expand:
 
-    def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: List[T], func=self._func) -> List[R]:
-            # Execute a function on an expanded value and return a list with results
-            return [func(i) for i in value]
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
+                # Execute a function on a single value and wrap results into a list
+                # to expand them downstream
+                result = func(value)
+                for item in result:
+                    child_executor(item, key, timestamp, headers)
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+        else:
+
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
+                # Execute a function on a single value and return its result
+                result = func(value)
+                child_executor(result, key, timestamp, headers)
+
+        return wrapper
 
 
-class ApplyExpandFunction(StreamFunction):
+class ApplyWithMetadataFunction(StreamFunction):
     """
-    Wrap a function into "Apply" function and expand the returned iterable
-    into separate values downstream.
+    Wrap a function into "Apply" function.
 
-    The provided function is expected to return an `Iterable`.
-    If the returned value is not `Iterable`, `TypeError` will be raised.
+    The provided function is expected to accept value, and timestamp and return
+    a new value based on input,
+    and its result will always be passed downstream.
     """
 
-    expand = True
+    def __init__(
+        self,
+        func: ApplyWithMetadataCallback,
+        expand: bool = False,
+    ):
+        super().__init__(func)
+        self.expand = expand
 
-    def get_executor(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> List[object]:
-            # Execute a function on a single value and wrap results into a list
-            # to expand them downstream
-            return list(func(value))
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        if self.expand:
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
+                # Execute a function on a single value and wrap results into a list
+                # to expand them downstream
+                result = func(value, key, timestamp, headers)
+                for item in result:
+                    child_executor(item, key, timestamp, headers)
 
-    def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: List[T], func=self._func) -> List[R]:
-            # Execute a function on an expanded value and flatten the results
-            # (expanded value is an iterable, and the function itself
-            # also returns an iterable)
-            return list(chain.from_iterable(func(i) for i in value))
+        else:
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+            def wrapper(
+                value: Any, key: Any, timestamp: int, headers: Any, func=self.func
+            ):
+                # Execute a function on a single value and return its result
+                result = func(value, key, timestamp, headers)
+                child_executor(result, key, timestamp, headers)
+
+        return wrapper
 
 
 class FilterFunction(StreamFunction):
@@ -120,122 +172,137 @@ class FilterFunction(StreamFunction):
     value is filtered out.
     """
 
-    def get_executor(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> T:
+    def __init__(self, func: FilterCallback):
+        super().__init__(func)
+
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
             # Filter a single value
             if func(value):
-                return value
-            raise Filtered()
+                child_executor(value, key, timestamp, headers)
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+        return wrapper
 
-    def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: List[T], func=self._func) -> List[T]:
-            # Filter an expanded value.
-            # If all items from expanded list are filtered, raise Filtered()
-            # exception to abort the function chain
 
-            value = [i for i in value if func(i)]
-            if not value:
-                raise Filtered()
-            return value
+class FilterWithMetadataFunction(StreamFunction):
+    """
+    Wraps a function into a "Filter" function.
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+    The passed callback must accept value, key, and timestamp, and it's expected to
+    return a boolean-like result.
+
+    If the result is `True`, the input will be passed downstream.
+    Otherwise, the value will be filtered out.
+    """
+
+    def __init__(self, func: FilterWithMetadataCallback):
+        super().__init__(func)
+
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+            # Filter a single value
+            if func(value, key, timestamp, headers):
+                child_executor(value, key, timestamp, headers)
+
+        return wrapper
 
 
 class UpdateFunction(StreamFunction):
     """
     Wrap a function into an "Update" function.
 
-    The provided function is expected to mutate the value
+    The provided function must accept a value, and it's expected to mutate it
     or to perform some side effect.
-    Its result will always be ignored, and its input is passed
+
+    The result of the callback is always ignored, and the original input is passed
     downstream.
     """
 
-    def get_executor(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> T:
-            # Update a single value and return it
+    def __init__(self, func: UpdateCallback):
+        super().__init__(func)
+
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+            # Update a single value and forward it
             func(value)
-            return value
+            child_executor(value, key, timestamp, headers)
 
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
-
-    def get_executor_expanded(self) -> StreamCallable:
-        def wrapper(value: T, func=self._func) -> T:
-            # Apply the function to each item in expanded value and return the
-            # original list
-            for i in value:
-                func(i)
-            return value
-
-        return functools.update_wrapper(wrapper=wrapper, wrapped=self._func)
+        return wrapper
 
 
-def compose(
-    functions: List[StreamFunction],
-    allow_filters: bool = True,
-    allow_updates: bool = True,
-    allow_expands: bool = True,
-) -> StreamCallable:
+class UpdateWithMetadataFunction(StreamFunction):
     """
-    Composes a list of functions and its parents into a single
-    big closure like this:
-    ```
-    [func, func, func] -> func(func(func()))
-    ```
+    Wrap a function into an "Update" function.
 
-    Closures are more performant than calling all functions one by one in a loop.
+    The provided function must accept a value, a key, and a timestamp.
+    The callback is expected to mutate the value or to perform some side effect with it.
 
-    :param functions: list of `StreamFunction` objects to compose
-    :param allow_filters: If False, will fail with `ValueError` if
-        the list has `FilterFunction`. Default - True.
-    :param allow_updates: If False, will fail with `ValueError` if
-        the list has `UpdateFunction`. Default - True.
-    :param allow_expands: If False, will fail with `ValueError` if
-        the list has `ApplyFunction` with "expand=True". Default - True.
-
-    :raises ValueError: if disallowed functions are present in the list of functions.
+    The result of the callback is always ignored, and the original input is passed
+    downstream.
     """
-    composed = None
-    has_expanded = False
-    for func in functions:
-        if not allow_updates and isinstance(func, UpdateFunction):
-            raise ValueError("Update functions are not allowed")
-        elif not allow_filters and isinstance(func, FilterFunction):
-            raise ValueError("Filter functions are not allowed")
-        elif not allow_expands and func.expand:
-            raise ValueError("Expand functions are not allowed")
 
-        if composed is None:
-            composed = func.get_executor()
+    def __init__(self, func: UpdateWithMetadataCallback):
+        super().__init__(func)
+
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any, func=self.func):
+            # Update a single value and forward it
+            func(value, key, timestamp, headers)
+            child_executor(value, key, timestamp, headers)
+
+        return wrapper
+
+
+class TransformFunction(StreamFunction):
+    """
+    Wrap a function into a "Transform" function.
+
+    The provided callback must accept a value, a key and a timestamp.
+    It's expected to return a new value, new key and new timestamp.
+
+    This function must be used with caution, because it can technically change the
+    key.
+    It's supposed to be used by the library internals and not be a part of the public
+    API.
+
+    The result of the callback will always be passed downstream.
+    """
+
+    def __init__(
+        self,
+        func: Union[TransformCallback, TransformExpandedCallback],
+        expand: bool = False,
+    ):
+        super().__init__(func)
+        self.expand = expand
+
+    def get_executor(self, child_executor: VoidExecutor) -> VoidExecutor:
+        if self.expand:
+
+            def wrapper(
+                value: Any,
+                key: Any,
+                timestamp: int,
+                headers: Any,
+                func: TransformExpandedCallback = self.func,
+            ):
+                result = func(value, key, timestamp, headers)
+                for new_value, new_key, new_timestamp, new_headers in result:
+                    child_executor(new_value, new_key, new_timestamp, new_headers)
+
         else:
-            composed = composer(
-                (
-                    func.get_executor()
-                    if not has_expanded
-                    else func.get_executor_expanded()
-                ),
-                composed,
-            )
 
-        has_expanded = has_expanded or func.expand
+            def wrapper(
+                value: Any,
+                key: Any,
+                timestamp: int,
+                headers: Any,
+                func: TransformCallback = self.func,
+            ):
+                # Execute a function on a single value and return its result
+                new_value, new_key, new_timestamp, new_headers = func(
+                    value, key, timestamp, headers
+                )
+                child_executor(new_value, new_key, new_timestamp, new_headers)
 
-    return composed
-
-
-def composer(
-    outer_func: StreamCallable,
-    inner_func: StreamCallable,
-) -> Callable[[T], R]:
-    """
-    A function that wraps two other functions into a closure.
-    It passes the result of the inner function as an input to the outer function.
-
-    :return: a function with one argument (value)
-    """
-
-    def wrapper(v: T) -> R:
-        return outer_func(inner_func(v))
-
-    return functools.update_wrapper(wrapper, outer_func)
+        return wrapper

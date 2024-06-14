@@ -12,7 +12,7 @@
 def set_message_context(context: Optional[MessageContext])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/e4fe9845a6b3ae9985af686f3d54f5c78074c770/quixstreams/context.py#L21)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/context.py#L20)
 
 Set a MessageContext for the current message in the given `contextvars.Context`
 
@@ -55,7 +55,7 @@ sdf = sdf.update(lambda value: alter_context(value))
 def message_context() -> MessageContext
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/e4fe9845a6b3ae9985af686f3d54f5c78074c770/quixstreams/context.py#L52)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/context.py#L51)
 
 Get a MessageContext for the current message, which houses most of the message
 
@@ -85,38 +85,4 @@ sdf = sdf.apply(lambda value: 1 if message_context().partition == 2 else 0)
 ***Returns:***
 
 instance of `MessageContext`
-
-<a id="quixstreams.context.message_key"></a>
-
-<br><br>
-
-#### message\_key
-
-```python
-def message_key() -> Any
-```
-
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/e4fe9845a6b3ae9985af686f3d54f5c78074c770/quixstreams/context.py#L83)
-
-Get the current message's key.
-
-
-<br>
-***Example Snippet:***
-
-```python
-from quixstreams import Application, message_key
-
-# Changes the current sdf value based on what the message key is.
-
-app = Application()
-sdf = app.dataframe()
-sdf = sdf.apply(lambda value: 1 if message_key() == b'1' else 0)
-```
-
-
-<br>
-***Returns:***
-
-a deserialized message key
 

@@ -65,25 +65,24 @@ An outgoing Kafka message looks something like:
 ```python
 # ...
 kafka_key: "CUSTOMER_ID_123"
-kafka_value: 
-    {
-        "First Name": "Jane",
-        "Last Name": "Doe",
-        "Email": "jdoe@mail.com",
-        "Membership Type": "Gold",
-        "Purchases": [
-            {
-                "Item ID": "abc123",
-                "Price": 13.99,
-                "Quantity": 12
-            },
-            {
-                "Item ID": "def456",
-                "Price": 12.59,
-                "Quantity": 2
-            },
-        ]
-    }
+kafka_value: {
+      "First Name": "Jane",
+      "Last Name": "Doe",
+      "Email": "jdoe@mail.com",
+      "Membership Type": "Gold",
+      "Purchases": [
+          {
+              "Item ID": "abc123",
+              "Price": 13.99,
+              "Quantity": 12
+          },
+          {
+              "Item ID": "def456",
+              "Price": 12.59,
+              "Quantity": 2
+          },
+      ]
+  }
 ```
 
 
@@ -96,6 +95,9 @@ Now let's go over our [**>>> Purchase Filtering Application <<<**](application.p
 ### Create Application
 
 ```python
+import os
+from quixstreams import Application
+
 app = Application(
     broker_address=os.environ.get("BROKER_ADDRESS", "localhost:9092"),
     consumer_group="purchase_summing",

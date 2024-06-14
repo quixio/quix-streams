@@ -13,10 +13,6 @@ class WindowResult(TypedDict):
 
 WindowAggregateFunc = Callable[[int, int, int, Any, WindowedState], Any]
 WindowMergeFunc = Callable[[Any], Any]
-WindowedDataFrameFunc = Callable[
-    [Any, WindowedState],
-    Tuple[List[WindowResult], List[WindowResult]],
-]
 
 
 def get_window_ranges(

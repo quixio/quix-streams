@@ -11,10 +11,11 @@ from quixstreams.dataframe.series import StreamingSeries
 class TestStreamingSeries:
     def test_apply(self):
         value = {"x": 5, "y": 20, "z": 110}
-        expected = {"x": 6}
+        key, timestamp, headers = "key", 0, []
+        expected = ({"x": 6}, key, timestamp, headers)
         result = StreamingSeries("x").apply(lambda v: {"x": v + 1})
         assert isinstance(result, StreamingSeries)
-        assert result.test(value) == expected
+        assert result.test(value, key, timestamp, headers)[0] == expected
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -25,7 +26,13 @@ class TestStreamingSeries:
     )
     def test_add(self, value, series, other, expected):
         result = series + other
-        assert result.test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -36,7 +43,13 @@ class TestStreamingSeries:
     )
     def test_subtract(self, value, series, other, expected):
         result = series - other
-        assert result.test(value) == expected
+        key, timestamp, headers = "key", 0, None
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -47,7 +60,13 @@ class TestStreamingSeries:
     )
     def test_multiply(self, value, series, other, expected):
         result = series * other
-        assert result.test(value) == expected
+        key, timestamp, headers = "key", 0, None
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -58,7 +77,13 @@ class TestStreamingSeries:
     )
     def test_div(self, value, series, other, expected):
         result = series / other
-        assert result.test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -69,7 +94,13 @@ class TestStreamingSeries:
     )
     def test_mod(self, value, series, other, expected):
         result = series % other
-        assert result.test(value) == expected
+        key, timestamp, headers = "key", 0, None
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -82,7 +113,13 @@ class TestStreamingSeries:
     )
     def test_equal(self, value, series, other, expected):
         result = series == other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -95,7 +132,13 @@ class TestStreamingSeries:
     )
     def test_not_equal(self, value, series, other, expected):
         result = series != other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, 1
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -108,7 +151,13 @@ class TestStreamingSeries:
     )
     def test_less_than(self, value, series, other, expected):
         result = series < other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -122,7 +171,13 @@ class TestStreamingSeries:
     )
     def test_less_than_equal(self, value, series, other, expected):
         result = series <= other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, None
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -136,7 +191,13 @@ class TestStreamingSeries:
     )
     def test_greater_than(self, value, series, other, expected):
         result = series > other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, None
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -151,7 +212,13 @@ class TestStreamingSeries:
     )
     def test_greater_than_equal(self, value, series, other, expected):
         result = series >= other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -170,7 +237,13 @@ class TestStreamingSeries:
     )
     def test_and(self, value, series, other, expected):
         result = series & other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -196,16 +269,29 @@ class TestStreamingSeries:
     )
     def test_or(self, value, series, other, expected):
         result = series | other
-        assert result.test(value) is expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     def test_multiple_conditions(self):
         value = {"x": 5, "y": 20, "z": 110}
+        key, timestamp, headers = "key", 0, []
         expected = True
+
         result = (StreamingSeries("x") <= StreamingSeries("y")) & (
             StreamingSeries("x") <= StreamingSeries("z")
         )
 
-        assert result.test(value) is expected
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, expected",
@@ -216,8 +302,14 @@ class TestStreamingSeries:
     )
     def test_invert(self, value, series, expected):
         result = ~series
+        key, timestamp, headers = "key", 0, []
 
-        assert result.test(value) == expected
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -228,7 +320,13 @@ class TestStreamingSeries:
         ],
     )
     def test_isin(self, value, series, other, expected):
-        assert series.isin(other).test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert series.isin(other).test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -240,7 +338,13 @@ class TestStreamingSeries:
         ],
     )
     def test_contains(self, series, value, other, expected):
-        assert series.contains(other).test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert series.contains(other).test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, expected",
@@ -250,7 +354,13 @@ class TestStreamingSeries:
         ],
     )
     def test_isnull(self, value, series, expected):
-        assert series.isnull().test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert series.isnull().test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, expected",
@@ -260,7 +370,13 @@ class TestStreamingSeries:
         ],
     )
     def test_notnull(self, value, series, expected):
-        assert series.notnull().test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert series.notnull().test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -271,7 +387,13 @@ class TestStreamingSeries:
         ],
     )
     def test_is_(self, value, series, other, expected):
-        assert series.is_(other).test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert series.is_(other).test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, series, other, expected",
@@ -282,7 +404,13 @@ class TestStreamingSeries:
         ],
     )
     def test_isnot(self, value, series, other, expected):
-        assert series.isnot(other).test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert series.isnot(other).test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize(
         "value, item, expected",
@@ -293,13 +421,26 @@ class TestStreamingSeries:
     )
     def test_getitem(self, value, item, expected):
         result = StreamingSeries("x")[item]
-        assert result.test(value) == expected
+        key, timestamp, headers = "key", 0, []
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     def test_getitem_with_apply(self):
         value = {"x": {"y": {"z": 110}}, "k": 0}
+        key, timestamp, headers = "key", 0, []
+        expected = 120
         result = StreamingSeries("x")["y"]["z"].apply(lambda v: v + 10)
 
-        assert result.test(value) == 120
+        assert result.test(value, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     @pytest.mark.parametrize("value, expected", [(10, 10), (-10, 10), (10.0, 10.0)])
     def test_abs_success(
@@ -308,24 +449,34 @@ class TestStreamingSeries:
         expected,
     ):
         result = StreamingSeries("x").abs()
+        key, timestamp, headers = "key", 0, []
 
-        assert result.test({"x": value}) == expected
+        assert result.test({"x": value}, key, timestamp, headers)[0] == (
+            expected,
+            key,
+            timestamp,
+            headers,
+        )
 
     def test_abs_not_a_number_fails(self):
         result = StreamingSeries("x").abs()
+        key, timestamp, headers = "key", 0, []
 
         with pytest.raises(TypeError, match="bad operand type for abs()"):
-            assert result.test({"x": "string"})
+            assert result.test({"x": "string"}, key, timestamp)
 
     def test_and_is_lazy(self):
         series = StreamingSeries("x") & StreamingSeries("y")
+        key, timestamp, headers = "key", 0, []
+
         # Ensure it doesn't fail with KeyError ("y" is not present in value)
-        series.test({"x": False})
+        series.test({"x": False}, key, timestamp, headers)
 
     def test_or_is_lazy(self):
         series = StreamingSeries("x") | StreamingSeries("y")
+        key, timestamp, headers = "key", 0, []
         # Ensure it doesn't fail with KeyError ("y" is not present in value)
-        series.test({"x": True})
+        series.test({"x": True}, key, timestamp, headers)
 
     def test_cannot_use_logical_and(self):
         with pytest.raises(InvalidOperation):
@@ -340,13 +491,16 @@ class TestStreamingSeries:
         Throw exception when user attempts an initial (SDF) column reference
         and key is missing.
         """
+        key, timestamp, headers = "key", 0, []
+
         with pytest.raises(ColumnDoesNotExist):
-            StreamingSeries("x").test({"y": 2})
+            StreamingSeries("x").test({"y": 2}, key, timestamp, headers)
 
     def test_sdf_value_invalid_type(self):
         """
         Raise special TypeError when the initial (SDF) data is not a dict and user
         attempts a column reference.
         """
+        key, timestamp, headers = "key", 0, []
         with pytest.raises(InvalidColumnReference):
-            StreamingSeries("x").test(2)
+            StreamingSeries("x").test(2, key, timestamp, headers)

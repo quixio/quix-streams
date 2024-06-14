@@ -1,6 +1,7 @@
+import collections
 import copy
 import itertools
-from typing import List, Callable, Optional, TypeVar, Any
+from typing import List, Callable, Optional, Any, Union
 
 from typing_extensions import Self
 
@@ -9,14 +10,25 @@ from .functions import (
     FilterFunction,
     UpdateFunction,
     StreamFunction,
-    compose,
-    ApplyExpandFunction,
+    VoidExecutor,
+    ReturningExecutor,
+    FilterCallback,
+    ApplyCallback,
+    UpdateCallback,
+    ApplyWithMetadataCallback,
+    ApplyWithMetadataFunction,
+    UpdateWithMetadataCallback,
+    UpdateWithMetadataFunction,
+    FilterWithMetadataCallback,
+    FilterWithMetadataFunction,
+    TransformCallback,
+    TransformFunction,
+    TransformExpandedCallback,
+    ApplyWithMetadataExpandedCallback,
+    ApplyExpandedCallback,
 )
 
 __all__ = ("Stream",)
-
-R = TypeVar("R")
-T = TypeVar("T")
 
 
 class Stream:
@@ -33,7 +45,8 @@ class Stream:
         When adding new function to the stream, it creates a new `Stream` object and
         sets "parent" to the previous `Stream` to maintain an order of execution.
 
-        Streams supports 3 types of functions:
+        Streams supports four types of functions:
+
         - "Apply" - generate new values based on a previous one.
             The result of an Apply function is passed downstream to the next functions.
             If "expand=True" is passed and the function returns an `Iterable`,
@@ -44,23 +57,28 @@ class Stream:
         - "Filter" - to filter values from the Stream.
             The result of a Filter function is interpreted as boolean.
             If it's `True`, the input will be passed downstream.
-            If it's `False`, the `Filtered` exception will be raised to signal that the
-            value is filtered out.
+            If it's `False`, the record will be filtered from the stream.
+        - "Transform" - to transform keys and timestamps along with the values.
+            "Transform" functions may change the keys and should be used with caution.
+            The result of the Transform function is passed downstream to the next
+            functions.
+            If "expand=True" is passed and the function returns an `Iterable`,
+            each item of it will be treated as a separate value downstream.
 
         To execute the functions on the `Stream`, call `.compose()` method, and
         it will return a closure to execute all the functions accumulated in the Stream
         and its parents.
 
         :param func: a function to be called on the stream.
-            It is expected to be wrapped into one of "Apply", "Filter" or "Update" from
-            `quixstreams.core.stream.functions` package.
-            Default - "Apply(lambda v: v)".
+            It is expected to be wrapped into one of "Apply", "Filter", "Update" or
+            "Trasform" from `quixstreams.core.stream.functions` package.
+            Default - "ApplyFunction(lambda value: value)".
         :param parent: a parent `Stream`
         """
         if func is not None and not isinstance(func, StreamFunction):
             raise ValueError("Provided function must be a subclass of StreamFunction")
 
-        self.func = func if func is not None else ApplyFunction(lambda x: x)
+        self.func = func if func is not None else ApplyFunction(lambda value: value)
         self.parent = parent
 
     def __repr__(self) -> str:
@@ -76,7 +94,12 @@ class Stream:
         )
         return f"<{self.__class__.__name__} [{len(tree_funcs)}]: {funcs_repr}>"
 
-    def add_filter(self, func: Callable[[T], R]) -> Self:
+    def add_filter(
+        self,
+        func: Union[FilterCallback, FilterWithMetadataCallback],
+        *,
+        metadata: bool = False,
+    ) -> Self:
         """
         Add a function to filter values from the Stream.
 
@@ -85,11 +108,29 @@ class Stream:
         exception during execution.
 
         :param func: a function to filter values from the stream
+        :param metadata: if True, the callback will receive key and timestamp along with
+            the value.
+            Default - `False`.
         :return: a new `Stream` derived from the current one
         """
-        return self._add(FilterFunction(func))
+        if metadata:
+            filter_func = FilterWithMetadataFunction(func)
+        else:
+            filter_func = FilterFunction(func)
+        return self._add(filter_func)
 
-    def add_apply(self, func: Callable[[T], R], expand: bool = False) -> Self:
+    def add_apply(
+        self,
+        func: Union[
+            ApplyCallback,
+            ApplyExpandedCallback,
+            ApplyWithMetadataCallback,
+            ApplyWithMetadataExpandedCallback,
+        ],
+        *,
+        expand: bool = False,
+        metadata: bool = False,
+    ) -> Self:
         """
         Add an "apply" function to the Stream.
 
@@ -100,13 +141,23 @@ class Stream:
         :param expand: if True, expand the returned iterable into individual values
             downstream. If returned value is not iterable, `TypeError` will be raised.
             Default - `False`.
+        :param metadata: if True, the callback will receive key and timestamp along with
+            the value.
+            Default - `False`.
         :return: a new `Stream` derived from the current one
         """
-        if expand:
-            return self._add(ApplyExpandFunction(func))
-        return self._add(ApplyFunction(func))
+        if metadata:
+            apply_func = ApplyWithMetadataFunction(func, expand=expand)
+        else:
+            apply_func = ApplyFunction(func, expand=expand)
+        return self._add(apply_func)
 
-    def add_update(self, func: Callable[[T], object]) -> Self:
+    def add_update(
+        self,
+        func: Union[UpdateCallback, UpdateWithMetadataCallback],
+        *,
+        metadata: bool = False,
+    ) -> Self:
         """
         Add an "update" function to the Stream, that will mutate the input value.
 
@@ -114,9 +165,41 @@ class Stream:
         will be passed downstream.
 
         :param func: a function to mutate the value
+        :param metadata: if True, the callback will receive key and timestamp along with
+            the value.
+            Default - `False`.
         :return: a new Stream derived from the current one
         """
-        return self._add((UpdateFunction(func)))
+        if metadata:
+            update_func = UpdateWithMetadataFunction(func)
+        else:
+            update_func = UpdateFunction(func)
+        return self._add(update_func)
+
+    def add_transform(
+        self,
+        func: Union[TransformCallback, TransformExpandedCallback],
+        *,
+        expand: bool = False,
+    ) -> Self:
+        """
+        Add a "transform" function to the Stream, that will mutate the input value.
+
+        The callback must accept a value, a key, and a timestamp.
+        It's expected to return a new value, new key and new timestamp.
+
+        The result of the callback which will be passed downstream
+        during execution.
+
+
+        :param func: a function to mutate the value
+        :param expand: if True, expand the returned iterable into individual items
+            downstream. If returned value is not iterable, `TypeError` will be raised.
+            Default - `False`.
+        :return: a new Stream derived from the current one
+        """
+
+        return self._add(TransformFunction(func, expand=expand))
 
     def diff(
         self,
@@ -161,18 +244,60 @@ class Stream:
             node = node.parent
         return tree_
 
+    def compose_returning(self) -> ReturningExecutor:
+        """
+        Compose a list of functions from this `Stream` and its parents into one
+        big closure that always returns the transformed record.
+
+        This closure is to be used to execute the functions in the stream and to get
+        the result of the transformations.
+
+        Stream may only contain simple "apply" functions to be able to compose itself
+        into a returning function.
+        """
+        # Sink results of the Stream to a single-item queue, and read from this queue
+        # after executing the Stream.
+        # The composed stream must have only the "apply" functions,
+        # which always return a single.
+        buffer = collections.deque(maxlen=1)
+        composed = self.compose(
+            allow_filters=False,
+            allow_expands=False,
+            allow_updates=False,
+            allow_transforms=False,
+            sink=lambda value, key, timestamp, headers: buffer.appendleft(
+                (value, key, timestamp, headers)
+            ),
+        )
+
+        def wrapper(value: Any, key: Any, timestamp: int, headers: Any) -> Any:
+            try:
+                # Execute the stream and return the result from the queue
+                composed(value, key, timestamp, headers)
+                return buffer.popleft()
+            finally:
+                # Always clean the queue after the Stream is executed
+                buffer.clear()
+
+        return wrapper
+
     def compose(
         self,
         allow_filters: bool = True,
         allow_updates: bool = True,
         allow_expands: bool = True,
-    ) -> Callable[[T], R]:
+        allow_transforms: bool = True,
+        sink: Optional[Callable[[Any, Any, int, Any], None]] = None,
+    ) -> VoidExecutor:
         """
         Compose a list of functions from this `Stream` and its parents into one
         big closure using a "composer" function.
 
-        Closures are more performant than calling all the functions in the
-        `Stream.tree()` one-by-one.
+        This "executor" closure is to be used to execute all functions in the stream for the given
+        key, value and timestamps.
+
+        By default, executor doesn't return the result of the execution.
+        To accumulate the results, pass the `sink` parameter.
 
         :param allow_filters: If False, this function will fail with `ValueError` if
             the stream has filter functions in the tree. Default - True.
@@ -180,18 +305,39 @@ class Stream:
             the stream has update functions in the tree. Default - True.
         :param allow_expands: If False, this function will fail with `ValueError` if
             the stream has functions with "expand=True" in the tree. Default - True.
+        :param allow_transforms: If False, this function will fail with `ValueError` if
+            the stream has transform functions in the tree. Default - True.
+        :param sink: callable to accumulate the results of the execution, optional.
 
         :raises ValueError: if disallowed functions are present in the stream tree.
         """
 
         tree = self.tree()
         functions = [node.func for node in tree]
-        return compose(
-            functions=functions,
-            allow_filters=allow_filters,
-            allow_updates=allow_updates,
-            allow_expands=allow_expands,
-        )
+
+        composed = sink or self._default_sink
+
+        # Iterate over a reversed list of functions
+        for func in reversed(functions):
+            # Validate that only allowed functions are passed
+            if not allow_updates and isinstance(
+                func, (UpdateFunction, UpdateWithMetadataFunction)
+            ):
+                raise ValueError("Update functions are not allowed")
+            elif not allow_filters and isinstance(
+                func, (FilterFunction, FilterWithMetadataFunction)
+            ):
+                raise ValueError("Filter functions are not allowed")
+            elif not allow_transforms and isinstance(func, TransformFunction):
+                raise ValueError("Transform functions are not allowed")
+            elif not allow_expands and func.expand:
+                raise ValueError("Expand functions are not allowed")
+
+            # Compose functions from the tree together so the top function calls
+            # the bottom one
+            composed = func.get_executor(composed)
+
+        return composed
 
     def _diff_from_last_common_parent(self, other: Self) -> List[Self]:
         nodes_self = self.tree()
@@ -213,3 +359,5 @@ class Stream:
 
     def _add(self, func: StreamFunction) -> Self:
         return self.__class__(func=func, parent=self)
+
+    def _default_sink(self, value: Any, key: Any, timestamp: int, headers: Any): ...

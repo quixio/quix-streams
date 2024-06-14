@@ -8,24 +8,12 @@ purchase events larger than $1000
 
 from dotenv import load_dotenv
 
-from quixstreams import Application, State, message_key
+from quixstreams import Application, State
 
 
 # Reminder: the platform will have these values available by default so loading the
 # environment would be unnecessary there.
 load_dotenv("./bank_example/quix_platform_version/quix_vars.env")
-
-
-def uppercase_source(value: dict):
-    """
-    Upper-case field "transaction_source" for each processed message
-
-    :param value: message value, a dictionary with all deserialized message data
-
-    :return: this function must either return None or a new dictionary
-    """
-    print(f'Processing message with key "{message_key()}"')
-    value["transaction_source"] = value["transaction_source"].upper()
 
 
 def count_transactions(value: dict, state: State):

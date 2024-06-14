@@ -1,12 +1,14 @@
 import functools
-import logging
-from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple
+from typing import Any, Optional, List, TYPE_CHECKING, cast, Tuple, Callable
 
+import logging
 from quixstreams.context import message_context
+from quixstreams.core.stream import (
+    TransformExpandedCallback,
+)
 from quixstreams.processing_context import ProcessingContext
 from quixstreams.state import WindowedPartitionTransaction, WindowedState
 from .base import (
-    WindowedDataFrameFunc,
     WindowAggregateFunc,
     WindowMergeFunc,
     WindowResult,
@@ -14,9 +16,13 @@ from .base import (
 )
 
 if TYPE_CHECKING:
-    from quixstreams.dataframe.dataframe import StreamingDataFrame, DataFrameFunc
+    from quixstreams.dataframe.dataframe import StreamingDataFrame
 
 logger = logging.getLogger(__name__)
+
+TransformRecordCallbackExpandedWindowed = Callable[
+    [Any, Any, int, Any, WindowedState], List[Tuple[WindowResult, Any, int, Any]]
+]
 
 
 def _default_merge_func(state_value: Any) -> Any:
@@ -50,7 +56,10 @@ class FixedTimeWindow:
         return self._name
 
     def process_window(
-        self, value: Any, state: WindowedState, timestamp_ms: int
+        self,
+        value: Any,
+        timestamp_ms: int,
+        state: WindowedState,
     ) -> Tuple[List[WindowResult], List[WindowResult]]:
         duration_ms = self._duration_ms
         grace_ms = self._grace_ms
@@ -64,18 +73,27 @@ class FixedTimeWindow:
 
         updated_windows = []
         for start, end in ranges:
-            # TODO: Log when the value is late and no window is updated
-            if not self._stale(window_end=end, latest_timestamp=latest_timestamp):
-                aggregated = self._aggregate_func(
-                    start, end, timestamp_ms, value, state
+            min_valid_window_end = latest_timestamp - self._grace_ms + 1
+            if end < min_valid_window_end:
+                ctx = message_context()
+                logger.warning(
+                    f"Skipping window processing for expired window "
+                    f"timestamp={timestamp_ms} "
+                    f"window=[{start},{end}) "
+                    f"min_valid_window_end={min_valid_window_end} "
+                    f"partition={ctx.topic}[{ctx.partition}] "
+                    f"offset={ctx.offset}"
                 )
-                updated_windows.append(
-                    {
-                        "start": start,
-                        "end": end,
-                        "value": self._merge_func(aggregated),
-                    }
-                )
+                continue
+
+            aggregated = self._aggregate_func(start, end, timestamp_ms, value, state)
+            updated_windows.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "value": self._merge_func(aggregated),
+                }
+            )
 
         expired_windows = []
         for (start, end), aggregated in state.expire_windows(
@@ -86,7 +104,7 @@ class FixedTimeWindow:
             )
         return updated_windows, expired_windows
 
-    def final(self, expand: bool = True) -> "StreamingDataFrame":
+    def final(self) -> "StreamingDataFrame":
         """
         Apply the window aggregation and return results only when the windows are
         closed.
@@ -108,22 +126,23 @@ class FixedTimeWindow:
         >***NOTE:*** Windows can be closed only within the same message key.
         If some message keys appear irregularly in the stream, the latest windows
         can remain unprocessed until the message the same key is received.
-
-        :param expand: if `True`, each window result will be sent downstream as
-            an individual item. Otherwise, the list of window results will be sent.
-            Default - `True`
         """
+
+        def window_callback(
+            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
+        ) -> List[Tuple[WindowResult, Any, int, Any]]:
+            _, expired_windows = self.process_window(
+                value=value, timestamp_ms=timestamp_ms, state=state
+            )
+            # Use window start timestamp as a new record timestamp
+            return [(window, key, window["start"], None) for window in expired_windows]
+
         return self._apply_window(
-            lambda value, state, process_window=self.process_window: process_window(
-                value=value,
-                state=state,
-                timestamp_ms=message_context().timestamp.milliseconds,
-            )[1],
-            expand=expand,
+            func=window_callback,
             name=self._name,
         )
 
-    def current(self, expand: bool = True) -> "StreamingDataFrame":
+    def current(self) -> "StreamingDataFrame":
         """
         Apply the window transformation to the StreamingDataFrame to return results
         for each updated window.
@@ -139,44 +158,41 @@ class FixedTimeWindow:
 
         This method processes streaming data and returns results as they come,
         regardless of whether the window is closed or not.
-
-        :param expand: if `True`, each window result will be sent downstream as
-            an individual item. Otherwise, the list of window results will be sent.
-            Default - `True`
         """
-        return self._apply_window(
-            lambda value, state, process_window=self.process_window: process_window(
-                value=value,
-                state=state,
-                timestamp_ms=message_context().timestamp.milliseconds,
-            )[0],
-            expand=expand,
-            name=self._name,
-        )
+
+        def window_callback(
+            value: Any, key: Any, timestamp_ms: int, _headers: Any, state: WindowedState
+        ) -> List[Tuple[WindowResult, Any, int, Any]]:
+            updated_windows, _ = self.process_window(
+                value=value, timestamp_ms=timestamp_ms, state=state
+            )
+            return [(window, key, window["start"], None) for window in updated_windows]
+
+        return self._apply_window(func=window_callback, name=self._name)
 
     def register_store(self):
         self._dataframe.processing_context.state_manager.register_windowed_store(
             topic_name=self._dataframe.topic.name, store_name=self._name
         )
 
-    def _stale(self, window_end: int, latest_timestamp: int) -> bool:
-        return latest_timestamp > window_end + self._grace_ms
-
     def _apply_window(
         self,
-        func: WindowedDataFrameFunc,
+        func: TransformRecordCallbackExpandedWindowed,
         name: str,
-        expand: bool = False,
     ) -> "StreamingDataFrame":
         self.register_store()
 
-        func = _as_windowed(
+        windowed_func = _as_windowed(
             func=func,
             processing_context=self._dataframe.processing_context,
             store_name=name,
         )
-
-        return self._dataframe.apply(func=func, expand=expand)
+        # Manually modify the Stream and clone the source StreamingDataFrame
+        # to avoid adding "transform" API to it.
+        # Transform callbacks can modify record key and timestamp,
+        # and it's prone to misuse.
+        stream = self._dataframe.stream.add_transform(func=windowed_func, expand=True)
+        return self._dataframe.__dataframe_clone__(stream=stream)
 
 
 def _noop() -> Any:
@@ -190,12 +206,15 @@ def _noop() -> Any:
 
 
 def _as_windowed(
-    func: WindowedDataFrameFunc, processing_context: ProcessingContext, store_name: str
-) -> "DataFrameFunc":
+    func: TransformRecordCallbackExpandedWindowed,
+    processing_context: ProcessingContext,
+    store_name: str,
+) -> TransformExpandedCallback:
     @functools.wraps(func)
-    def wrapper(value: object) -> object:
+    def wrapper(
+        value: Any, key: Any, timestamp: int, headers: Any
+    ) -> List[Tuple[WindowResult, Any, int, Any]]:
         ctx = message_context()
-        key = ctx.key
         transaction = cast(
             WindowedPartitionTransaction,
             processing_context.checkpoint.get_store_transaction(
@@ -209,6 +228,6 @@ def _as_windowed(
             )
             return _noop()
         state = transaction.as_state(prefix=key)
-        return func(value, state)
+        return func(value, key, timestamp, headers, state)
 
     return wrapper

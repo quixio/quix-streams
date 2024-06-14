@@ -1,5 +1,5 @@
 from .app import Application
-from .context import message_context, message_key
+from .context import message_context
 from .models import MessageContext
 from .state import State
 
