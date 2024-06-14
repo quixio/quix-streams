@@ -138,7 +138,15 @@ class TestApplication:
         processed_count = 0
         total_messages = 3
         # Produce messages to the topic and flush
-        data = {"key": b"key", "value": b'"value"', "partition": partition_num}
+        timestamp_ms = int(time.time() / 1000)
+        headers = [("header", b"value")]
+        data = {
+            "key": b"key",
+            "value": b'"value"',
+            "partition": partition_num,
+            "timestamp": timestamp_ms,
+            "headers": headers,
+        }
         with app.get_producer() as producer:
             for _ in range(total_messages):
                 producer.produce(topic_in.name, **data)
@@ -171,6 +179,8 @@ class TestApplication:
             assert row.topic == topic_out.name
             assert row.key == data["key"]
             assert row.value == {column_name: loads(data["value"].decode())}
+            assert row.timestamp == timestamp_ms
+            assert row.headers == headers
 
     def test_run_fails_no_commit(
         self,

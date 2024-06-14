@@ -16,6 +16,7 @@ from typing import (
     Dict,
     Tuple,
     Literal,
+    Collection,
 )
 
 from typing_extensions import Self
@@ -39,6 +40,7 @@ from quixstreams.models import (
     TopicManager,
     Row,
     MessageContext,
+    HeaderValue,
 )
 from quixstreams.models.serializers import SerializerType, DeserializerType
 from quixstreams.processing_context import ProcessingContext
@@ -602,7 +604,7 @@ class StreamingDataFrame(BaseStreaming):
         sdf = sdf.set_timestamp(lambda value, key, timestamp, headers: value['new_timestamp'])
         ```
 
-        :param func: callable accepting the current value and the current timestamp.
+        :param func: callable accepting the current value, key, timestamp, and headers.
             It's expected to return a new timestamp as integer in milliseconds.
         :return: a new StreamingDataFrame instance
         """
@@ -618,6 +620,57 @@ class StreamingDataFrame(BaseStreaming):
             return value, key, new_timestamp, headers
 
         stream = self.stream.add_transform(func=_set_timestamp_callback)
+        return self.__dataframe_clone__(stream=stream)
+
+    def set_headers(
+        self,
+        func: Callable[
+            [Any, Any, int, List[Tuple[str, HeaderValue]]],
+            Collection[Tuple[str, HeaderValue]],
+        ],
+    ) -> Self:
+        """
+        Set new message headers based on the current message value and metadata.
+
+        The new headers will be used when producing messages to the output topics.
+
+        The provided callback must accept value, key, timestamp, and headers,
+        and return a new collection of (header, value) tuples.
+
+        Example Snippet:
+
+        ```python
+        from quixstreams import Application
+
+
+        app = Application()
+        input_topic = app.topic("data")
+
+        sdf = app.dataframe(input_topic)
+        # Updating the record's headers based on the value and metadata
+        sdf = sdf.set_headers(lambda value, key, timestamp, headers: [('id', value['id'])])
+        ```
+
+        :param func: callable accepting the current value, key, timestamp, and headers.
+            It's expected to return a new set of headers
+            as a collection of (header, value) tuples.
+        :return: a new StreamingDataFrame instance
+        """
+
+        @functools.wraps(func)
+        def _set_headers_callback(
+            value: Any,
+            key: Any,
+            timestamp: int,
+            headers: Collection[Tuple[str, HeaderValue]],
+        ) -> Tuple[Any, Any, int, Collection[Tuple[str, HeaderValue]]]:
+            # Create a shallow copy of original headers to prevent potential mutations
+            # of the same collection
+            headers = list(headers) if headers else []
+            new_headers = func(value, key, timestamp, headers)
+            return value, key, timestamp, new_headers
+
+        stream = self.stream.add_transform(func=_set_headers_callback)
         return self.__dataframe_clone__(stream=stream)
 
     def compose(
