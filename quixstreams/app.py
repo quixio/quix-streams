@@ -121,6 +121,7 @@ class Application:
             Accepts string with Kafka broker host and port formatted as `<host>:<port>`,
             or a ConnectionConfig object if authentication is required.
             Either this OR `quix_sdk_token` must be set to use `Application` (not both).
+            Takes priority over quix auto-configuration.
             Linked Environment Variable: `Quix__Broker__Address`.
             Default: `None`
         :param quix_sdk_token: If using the Quix Cloud, the SDK token to connect with.
@@ -198,27 +199,32 @@ class Application:
             "Quix__Consumer_Group", "quixstreams-default"
         )
 
-        if quix_config_builder:
-            quix_app_source = "Quix Config Builder"
-        if quix_config_builder and quix_sdk_token:
-            raise warnings.warn(
-                "'quix_config_builder' is not necessary when an SDK token is defined; "
-                "we recommend letting the Application generate it automatically"
-            )
+        if broker_address:
+            # If broker_address is passed to the app it takes priority over any quix configuration
+            self._is_quix_app = False
+            topic_manager_factory = TopicManager
+            if isinstance(broker_address, str):
+                broker_address = ConnectionConfig(bootstrap_servers=broker_address)
+        else:
+            self._is_quix_app = True
 
-        if quix_sdk_token and not quix_config_builder:
-            quix_app_source = "Quix SDK Token"
-            quix_config_builder = QuixKafkaConfigsBuilder(quix_sdk_token=quix_sdk_token)
+            if quix_config_builder:
+                quix_app_source = "Quix Config Builder"
+                if quix_sdk_token:
+                    warnings.warn(
+                        "'quix_config_builder' is not necessary when an SDK token is defined; "
+                        "we recommend letting the Application generate it automatically"
+                    )
+            elif quix_sdk_token:
+                quix_app_source = "Quix SDK Token"
+                quix_config_builder = QuixKafkaConfigsBuilder(
+                    quix_sdk_token=quix_sdk_token
+                )
+            else:
+                raise ValueError(
+                    'Either "broker_address" or "quix_sdk_token" must be provided'
+                )
 
-        if broker_address and quix_config_builder:
-            raise ValueError(
-                'Cannot provide both "broker_address" and "quix_sdk_token"'
-            )
-        elif not (broker_address or quix_config_builder):
-            raise ValueError(
-                'Either "broker_address" or "quix_sdk_token" must be provided'
-            )
-        elif quix_config_builder:
             # SDK Token or QuixKafkaConfigsBuilder were provided
             logger.info(
                 f"{quix_app_source} detected; "
@@ -235,13 +241,6 @@ class Application:
             consumer_group = quix_app_config.consumer_group
             consumer_extra_config.update(quix_app_config.librdkafka_extra_config)
             producer_extra_config.update(quix_app_config.librdkafka_extra_config)
-        else:
-            # Only broker address is provided
-            topic_manager_factory = TopicManager
-            if isinstance(broker_address, str):
-                broker_address = ConnectionConfig(bootstrap_servers=broker_address)
-
-        self._is_quix_app = bool(quix_config_builder)
 
         self._broker_address = broker_address
         self._consumer_group = consumer_group
@@ -305,6 +304,10 @@ class Application:
             consumer=self._consumer,
             state_manager=self._state_manager,
         )
+
+    @property
+    def is_quix_app(self):
+        return self._is_quix_app
 
     @classmethod
     def Quix(
@@ -704,7 +707,7 @@ class Application:
             f'auto_offset_reset="{self._auto_offset_reset}" '
             f"commit_interval={self._commit_interval}s"
         )
-        if self._is_quix_app:
+        if self.is_quix_app:
             self._quix_runtime_init()
 
         self._setup_topics()
