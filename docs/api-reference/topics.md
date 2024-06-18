@@ -16,7 +16,7 @@
 def convert_topic_list(topics: List[Topic]) -> List[ConfluentTopic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/admin.py#L24)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/admin.py#L24)
 
 Converts `Topic`s to `ConfluentTopic`s as required for Confluent's
 
@@ -42,7 +42,7 @@ list of confluent_kafka `ConfluentTopic`s
 class TopicAdmin()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/admin.py#L47)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/admin.py#L47)
 
 For performing "admin"-level operations on a Kafka cluster, mostly around topics.
 
@@ -60,7 +60,7 @@ def __init__(broker_address: Union[str, ConnectionConfig],
              extra_config: Optional[Mapping] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/admin.py#L54)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/admin.py#L54)
 
 
 <br>
@@ -82,7 +82,7 @@ or a ConnectionConfig object if authentication is required.
 def list_topics(timeout: float = -1) -> Dict[str, ConfluentTopicMetadata]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/admin.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/admin.py#L83)
 
 Get a list of topics and their metadata from a Kafka cluster
 
@@ -109,7 +109,7 @@ def inspect_topics(topic_names: List[str],
                    timeout: float = 30) -> Dict[str, Optional[TopicConfig]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/admin.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/admin.py#L94)
 
 A simplified way of getting the topic configurations of the provided topics
 
@@ -141,7 +141,7 @@ def create_topics(topics: List[Topic],
                   finalize_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/admin.py#L176)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/admin.py#L176)
 
 Create the given list of topics and confirm they are ready.
 
@@ -170,7 +170,7 @@ fail (it ignores issues for a topic already existing).
 class TopicConfig()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/topic.py#L42)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/topic.py#L42)
 
 Represents all kafka-level configuration for a kafka topic.
 
@@ -184,7 +184,7 @@ Generally used by Topic and any topic creation procedures.
 class Topic()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/topic.py#L83)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/topic.py#L83)
 
 A definition of a Kafka topic.
 
@@ -209,7 +209,7 @@ def __init__(
         timestamp_extractor: Optional[TimestampExtractor] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/topic.py#L92)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/topic.py#L92)
 
 
 <br>
@@ -235,7 +235,7 @@ milliseconds from a deserialized message.
 def name() -> str
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/topic.py#L121)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/topic.py#L121)
 
 Topic name
 
@@ -249,7 +249,7 @@ Topic name
 def row_serialize(row: Row, key: Any) -> KafkaMessage
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/topic.py#L131)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/topic.py#L131)
 
 Serialize Row to a Kafka message structure
 
@@ -277,7 +277,7 @@ def row_deserialize(
         message: ConfluentKafkaMessageProto) -> Union[Row, List[Row], None]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/topic.py#L162)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/topic.py#L162)
 
 Deserialize incoming Kafka message to a Row.
 
@@ -307,7 +307,7 @@ Row, list of Rows or None if the message is ignored.
 def affirm_ready_for_create(topics: List[Topic])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L20)
 
 Validate a list of topics is ready for creation attempt
 
@@ -325,7 +325,7 @@ Validate a list of topics is ready for creation attempt
 class TopicManager()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L30)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L30)
 
 The source of all topic management with quixstreams.
 
@@ -348,7 +348,7 @@ def __init__(topic_admin: TopicAdmin,
              create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L53)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L53)
 
 
 <br>
@@ -370,7 +370,7 @@ def __init__(topic_admin: TopicAdmin,
 def changelog_topics() -> Dict[str, Dict[str, Topic]]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L103)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L103)
 
 Note: `Topic`s are the changelogs.
 
@@ -387,7 +387,7 @@ returns: the changelog topic dict, {topic_name: {suffix: Topic}}
 def all_topics() -> Dict[str, Topic]
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L112)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L112)
 
 Every registered topic name mapped to its respective `Topic`.
 
@@ -405,7 +405,7 @@ def topic_config(num_partitions: Optional[int] = None,
                  extra_config: Optional[dict] = None) -> TopicConfig
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L220)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L220)
 
 Convenience method for generating a `TopicConfig` with default settings
 
@@ -439,7 +439,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L241)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L241)
 
 A convenience method for generating a `Topic`. Will use default config options
 
@@ -480,7 +480,7 @@ def repartition_topic(operation: str,
                       timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L286)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L286)
 
 Create an internal repartition topic.
 
@@ -514,7 +514,7 @@ def changelog_topic(topic_name: str,
                     timeout: Optional[float] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L326)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L326)
 
 Performs all the logic necessary to generate a changelog topic based on a
 
@@ -561,7 +561,7 @@ def create_topics(topics: List[Topic],
                   create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L383)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L383)
 
 Creates topics via an explicit list of provided `Topics`.
 
@@ -587,7 +587,7 @@ def create_all_topics(timeout: Optional[float] = None,
                       create_timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L411)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L411)
 
 A convenience method to create all Topic objects stored on this TopicManager.
 
@@ -608,7 +608,7 @@ A convenience method to create all Topic objects stored on this TopicManager.
 def validate_all_topics(timeout: Optional[float] = None)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/4c9a9ea1533d8d925d1d33952dc650e142cb6e62/quixstreams/models/topics/manager.py#L424)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/models/topics/manager.py#L424)
 
 Validates all topics exist and changelogs have correct topic and rep factor.
 
