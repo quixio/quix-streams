@@ -11,7 +11,7 @@ from confluent_kafka import (
 from confluent_kafka import TopicPartition
 
 from quixstreams.kafka.exceptions import KafkaProducerDeliveryError
-from quixstreams.kafka.producer import Producer
+from quixstreams.kafka.producer import TransactionalProducer
 from quixstreams.models import (
     JSONSerializer,
     SerializationError,
@@ -455,15 +455,17 @@ class TestTransactionalRowProducer:
         call_args = [["my", "offsets"], "consumer_metadata", 1]
         error = ConfluentKafkaException(MockKafkaError())
 
-        mock_producer = create_autospec(Producer)
-        mock_producer.__send_offsets_to_transaction__.__name__ = "send_offsets"
-        mock_producer.__commit_transaction__.__name__ = "commit"
-        mock_producer.__send_offsets_to_transaction__.side_effect = [error, None]
-        with patch("quixstreams.rowproducer.Producer", return_value=mock_producer):
+        mock_producer = create_autospec(TransactionalProducer)
+        mock_producer.send_offsets_to_transaction.__name__ = "send_offsets"
+        mock_producer.commit_transaction.__name__ = "commit"
+        mock_producer.send_offsets_to_transaction.side_effect = [error, None]
+        with patch(
+            "quixstreams.rowproducer.TransactionalProducer", return_value=mock_producer
+        ):
             row_producer = RowProducer(broker_address="lol", transactional=True)
             row_producer.commit_transaction(*call_args)
 
-        mock_producer.__send_offsets_to_transaction__.assert_has_calls(
+        mock_producer.send_offsets_to_transaction.assert_has_calls(
             [call(*call_args)] * 2
         )
-        mock_producer.__commit_transaction__.assert_called_once()
+        mock_producer.commit_transaction.assert_called_once()

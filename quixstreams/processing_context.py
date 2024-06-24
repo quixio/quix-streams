@@ -76,7 +76,7 @@ class ProcessingContext:
         if self._checkpoint.expired() or force:
             logger.debug(f"Attempting checkpoint commit; forced={force}")
             start = time.monotonic()
-            self._checkpoint.commit()
+            self._checkpoint.commit(offset_adjust=force)
             elapsed = round(time.monotonic() - start, 2)
             logger.debug(
                 f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"

@@ -159,8 +159,9 @@ class TestCheckpoint:
         assert tx.completed
 
         # Check the changelog offset
-        # The changelog offset must be equal to a number of updated keys
-        assert store_partition.get_changelog_offset() == 2
+        # The changelog offset should increase by number of updated keys
+        # Since no offset recorded yet, an increase of 2 from no offset is 1
+        assert store_partition.get_changelog_offset() == 1
         assert store_partition.get_processed_offset() == 999
 
     def test_commit_with_state_and_changelog_no_updates_success(
@@ -197,7 +198,7 @@ class TestCheckpoint:
         assert tx.completed
 
         # The changelog and processed offsets should be empty because no updates
-        # happend during the transaction
+        # happened during the transaction
         assert not store_partition.get_changelog_offset()
         assert not store_partition.get_processed_offset()
 

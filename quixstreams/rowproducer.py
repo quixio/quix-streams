@@ -48,14 +48,20 @@ class RowProducer:
         flush_timeout: Optional[int] = None,
         transactional: bool = False,
     ):
-        self._producer = Producer(
-            broker_address=broker_address,
-            extra_config=extra_config,
-            flush_timeout=flush_timeout
-        )
-        if transactional:
-            self._producer.__use_transactions__()
 
+        if transactional:
+            self._producer = TransactionalProducer(
+                broker_address=broker_address,
+                extra_config=extra_config,
+                flush_timeout=flush_timeout
+
+            )
+        else:
+            self._producer = Producer(
+                broker_address=broker_address,
+                extra_config=extra_config,
+                flush_timeout=flush_timeout
+            )
 
         self._on_error: Optional[ProducerErrorCallback] = (
             on_error or default_on_producer_error
@@ -172,7 +178,7 @@ class RowProducer:
         return self._tp_offsets
 
     def begin_transaction(self):
-        self._producer.__begin_transaction__()
+        self._producer.begin_transaction()
         self._active_transaction = True
 
     def abort_transaction(self, timeout: Optional[float] = None):
@@ -190,7 +196,7 @@ class RowProducer:
         the Checkpoint inits another immediately after committing.
         """
         if self._active_transaction:
-            self._producer.__abort_transaction__(timeout)
+            self._producer.abort_transaction(timeout)
             self._active_transaction = False
         else:
             logger.debug(
@@ -244,10 +250,10 @@ class RowProducer:
         timeout: Optional[float] = None,
     ):
         self._retriable_commit_op(
-            self._producer.__send_offsets_to_transaction__,
+            self._producer.send_offsets_to_transaction,
             [positions, group_metadata, timeout],
         )
-        self._retriable_commit_op(self._producer.__commit_transaction__, [timeout])
+        self._retriable_commit_op(self._producer.commit_transaction, [timeout])
         self._active_transaction = False
 
     def __enter__(self):
