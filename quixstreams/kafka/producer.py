@@ -74,7 +74,6 @@ class Producer:
         }
         self._inner_producer: Optional[ConfluentProducer] = None
         self._flush_timeout = flush_timeout or -1
-        self._transactional: bool = False
 
     def produce(
         self,
@@ -162,41 +161,7 @@ class Producer:
     def _producer(self) -> ConfluentProducer:
         if not self._inner_producer:
             self._inner_producer = ConfluentProducer(self._producer_config)
-            if self._transactional:
-                self._inner_producer.init_transactions()
         return self._inner_producer
-
-    def __use_transactions__(self, transactional_id: str = str(uuid.uuid4())):
-        self._producer_config = {
-            **self._producer_config,
-            "enable.idempotence": True,
-            "transactional.id": transactional_id,
-        }
-        self._transactional = True
-
-    def __begin_transaction__(self):
-        logger.debug("Starting Kafka transaction...")
-        self._producer.begin_transaction()
-
-    def __send_offsets_to_transaction__(
-        self,
-        positions: List[TopicPartition],
-        group_metadata: GroupMetadata,
-        timeout: Optional[float] = None,
-    ):
-        self._producer.send_offsets_to_transaction(
-            positions, group_metadata, timeout if timeout is not None else -1
-        )
-
-    def __abort_transaction__(self, timeout: Optional[float] = None):
-        logger.debug("Aborting Kafka transaction...")
-        self._producer.abort_transaction(timeout if timeout is not None else -1)
-        logger.debug("Kafka transaction aborted successfully!")
-
-    def __commit_transaction__(self, timeout: Optional[float] = None):
-        logger.debug("Committing Kafka transaction...")
-        self._producer.commit_transaction(timeout if timeout is not None else -1)
-        logger.debug("Kafka transaction committed successfully!")
 
     def __len__(self):
         return len(self._producer)
@@ -208,3 +173,71 @@ class Producer:
         logger.debug("Flushing kafka producer")
         self.flush()
         logger.debug("Kafka producer flushed")
+
+
+class TransactionalProducer(Producer):
+    """
+    A separate producer class used only internally for transactions
+    (transactions are only needed when using a consumer).
+    """
+
+    def __init__(
+        self,
+        broker_address: Union[str, ConnectionConfig],
+        logger: logging.Logger = logger,
+        error_callback: Callable[[KafkaError], None] = _default_error_cb,
+        extra_config: Optional[dict] = None,
+        transactional_id: str = str(uuid.uuid4()),
+    ):
+        super().__init__(
+            broker_address=broker_address,
+            logger=logger,
+            error_callback=error_callback,
+            extra_config=extra_config,
+        )
+        # remake config to avoid overriding anything in the Application's
+        # producer config, which is used in Application.get_producer().
+        self._producer_config = {
+            **self._producer_config,
+            "enable.idempotence": True,
+            "transactional.id": transactional_id,
+        }
+        self._active_transaction = False
+
+    @property
+    def active_transaction(self):
+        return self._active_transaction
+
+    @property
+    def _producer(self) -> ConfluentProducer:
+        if not self._inner_producer:
+            self._inner_producer = super()._producer
+            self._inner_producer.init_transactions()
+        return self._inner_producer
+
+    def begin_transaction(self):
+        logger.debug("Starting Kafka transaction...")
+        self._producer.begin_transaction()
+        self._active_transaction = True
+
+    def send_offsets_to_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._producer.send_offsets_to_transaction(
+            positions, group_metadata, timeout if timeout is not None else -1
+        )
+
+    def abort_transaction(self, timeout: Optional[float] = None):
+        logger.debug("Aborting Kafka transaction...")
+        self._producer.abort_transaction(timeout if timeout is not None else -1)
+        self._active_transaction = False
+        logger.debug("Kafka transaction aborted successfully!")
+
+    def commit_transaction(self, timeout: Optional[float] = None):
+        logger.debug("Committing Kafka transaction...")
+        self._producer.commit_transaction(timeout if timeout is not None else -1)
+        self._active_transaction = False
+        logger.debug("Kafka transaction committed successfully!")

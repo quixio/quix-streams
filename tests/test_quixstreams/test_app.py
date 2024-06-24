@@ -567,7 +567,6 @@ class TestAppGroupBy:
         app = app_factory(
             auto_offset_reset="earliest",
             on_message_processed=on_message_processed,
-            exactly_once_guarantees=True,
         )
 
         app_topic_in = app.topic(
@@ -740,9 +739,9 @@ class TestAppExactlyOnce:
         class ForceFail(Exception): ...
 
         def fail_once(value):
-            # sleep here to ensure produced messages make it to topic
-            time.sleep(2)
             if processed_count == fail_idx:
+                # sleep here to ensure produced messages actually make it to topic
+                time.sleep(2)
                 raise ForceFail
             return value
 
@@ -756,7 +755,7 @@ class TestAppExactlyOnce:
                 auto_offset_reset="earliest",
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
-                exactly_once_guarantees=True,
+                processing_guarantee="EOS",
             )
             topic_in = app.topic(topic_in_name, value_deserializer="json")
             topic_out = app.topic(topic_out_name, value_serializer="json")
@@ -1576,7 +1575,7 @@ class TestApplicationRecovery:
                         topic=topic.name, store_name=store_name
                     )
                     partition = store.partitions[p_num]
-                    assert partition.get_changelog_offset() == count
+                    assert partition.get_changelog_offset() == count - 1
                     with partition.begin() as tx:
                         # All keys in state must be prefixed with the message key
                         prefix = f"key{p_num}".encode()
@@ -1716,9 +1715,11 @@ class TestApplicationRecovery:
 
                     # in this test, each expiration check only deletes one window,
                     # simplifying the offset counting.
-                    expected_offset = sum(
-                        expected_window_updates[p_num].values()
-                    ) + 2 * len(expected_expired_windows[p_num])
+                    expected_offset = (
+                        sum(expected_window_updates[p_num].values())
+                        + 2 * len(expected_expired_windows[p_num])
+                        - 1
+                    )
                     assert (
                         expected_offset
                         == store.partitions[p_num].get_changelog_offset()

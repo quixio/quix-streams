@@ -49,11 +49,7 @@ class Checkpoint:
         self._exactly_once = exactly_once
 
         if self._exactly_once:
-            # account for transaction markers
-            self._changelog_offset_update = 2
             self._producer.begin_transaction()
-        else:
-            self._changelog_offset_update = 1
 
     def expired(self) -> bool:
         """
@@ -111,7 +107,7 @@ class Checkpoint:
         self._store_transactions[(topic, partition, store_name)] = transaction
         return transaction
 
-    def commit(self):
+    def commit(self, offset_adjust: bool = False):
         """
         Commit the checkpoint.
 
@@ -186,14 +182,23 @@ class Checkpoint:
             # Get the changelog topic-partition for the given transaction
             # It can be None if changelog topics are disabled in the app config
             changelog_tp = transaction.changelog_topic_partition
-            # The changelog offset also can be None if no updates happened
-            # during transaction
-            changelog_offset = (
-                produced_offsets.get(changelog_tp) if changelog_tp is not None else None
-            )
-            if changelog_offset is not None:
-                # Increment the changelog offset to match the high watermark in Kafka
-                changelog_offset += self._changelog_offset_update
+            if offset_adjust:
+                # Set the changelog offset to its highwater - 1 in Kafka
+                # As part of graceful revoke.
+                # This helps avoid unnecessary recovery attempts (mostly with
+                # exactly-once, where the highwater is at least >=2 from last message).
+                _, highwater = self._consumer.get_watermark_offsets(
+                    TopicPartition(*changelog_tp)
+                )
+                changelog_offset = highwater - 1
+            else:
+                # The changelog offset also can be None if no updates happened
+                # during transaction
+                changelog_offset = (
+                    produced_offsets.get(changelog_tp)
+                    if changelog_tp is not None
+                    else None
+                )
             transaction.flush(
                 processed_offset=offset, changelog_offset=changelog_offset
             )

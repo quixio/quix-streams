@@ -316,7 +316,7 @@ class TestRecoveryManager:
         changelog_message = ConfluentKafkaMessageStub(
             topic=changelog_topic.name,
             partition=0,
-            offset=highwater - 1,
+            offset=highwater - 2,
             key=b"key",
             value=b"value",
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
@@ -324,7 +324,7 @@ class TestRecoveryManager:
 
         # Create a RecoveryManager
         consumer = MagicMock(spec_set=Consumer)
-        consumer.poll.return_value = changelog_message
+        consumer.poll.side_effect = [changelog_message, None]
         consumer.assignment.return_value = assignment
         recovery_manager = recovery_manager_factory(
             consumer=consumer, topic_manager=topic_manager
@@ -332,6 +332,9 @@ class TestRecoveryManager:
 
         # Assign a partition that needs recovery
         consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        consumer.position.return_value = [
+            ConfluentPartition(changelog_topic.name, 0, highwater)
+        ]
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
@@ -344,6 +347,8 @@ class TestRecoveryManager:
 
         # Check that consumer first resumed the changelog topic partition
         consumer_resume_calls = consumer.resume.call_args_list
+
+        assert len(consumer.poll.call_args_list) == 2
         assert consumer_resume_calls[0].args[0] == [
             ConfluentPartition(topic=changelog_topic.name, partition=0)
         ]

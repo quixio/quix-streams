@@ -48,6 +48,7 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
 from quixstreams.state.recovery import RecoveryManager
+from quixstreams.types import ProcessingGuarantee
 
 
 @pytest.fixture()
@@ -293,7 +294,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_manager: Optional[TopicManager] = None,
-        exactly_once_guarantees: bool = False,
+        processing_guarantee: ProcessingGuarantee = "ALOS",
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -311,7 +312,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
-            exactly_once_guarantees=exactly_once_guarantees,
+            processing_guarantee=processing_guarantee,
         )
 
     return factory

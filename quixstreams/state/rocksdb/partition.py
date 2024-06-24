@@ -94,7 +94,7 @@ class RocksDBStorePartition(StorePartition):
         """
         batch.put(
             CHANGELOG_OFFSET_KEY,
-            int_to_int64_bytes(changelog_offset + 1),
+            int_to_int64_bytes(changelog_offset),
             self.get_column_family_handle(METADATA_CF_NAME),
         )
         self.write(batch)

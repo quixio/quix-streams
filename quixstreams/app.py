@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable, Union
+from typing import Optional, List, Callable, Union, get_args
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -40,6 +40,7 @@ from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
+from .types import ProcessingGuarantee, ExactlyOnceSemantics, AtLeastOnceSemantics
 
 __all__ = ("Application",)
 
@@ -114,7 +115,7 @@ class Application:
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
-        exactly_once_guarantees: bool = False,
+        processing_guarantee: ProcessingGuarantee = "exactly-once",
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -163,7 +164,7 @@ class Application:
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
-        :param exactly_once_guarantees: Use "exactly-once" processing (vs at-least-once)
+        :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -182,6 +183,18 @@ class Application:
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
         configure_logging(loglevel=loglevel)
+
+        if processing_guarantee in get_args(ExactlyOnceSemantics):
+            use_kafka_transactions = True
+        elif processing_guarantee in get_args(AtLeastOnceSemantics):
+            use_kafka_transactions = False
+        else:
+            raise ValueError(
+                f'Must provide a valid "processing_guarantee"; expected: '
+                f"{[*get_args(ExactlyOnceSemantics), *get_args(AtLeastOnceSemantics)]}"
+                f', got "{processing_guarantee}"'
+            )
+
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
@@ -266,7 +279,7 @@ class Application:
                 "max.poll.interval.ms", _default_max_poll_interval_ms
             )
             / 1000,  # convert to seconds
-            transactional=exactly_once_guarantees,
+            transactional=use_kafka_transactions,
         )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
@@ -275,7 +288,7 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._running = False
         self._failed = False
-        self._exactly_once = exactly_once_guarantees
+        self._exactly_once = processing_guarantee
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -307,7 +320,7 @@ class Application:
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
-            exactly_once=exactly_once_guarantees,
+            exactly_once=use_kafka_transactions,
         )
 
     @property
@@ -336,7 +349,7 @@ class Application:
         topic_manager: Optional[QuixTopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
-        exactly_once_guarantees: bool = True,
+        processing_guarantee: ProcessingGuarantee = "exactly-once",
     ) -> Self:
         """
         >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
@@ -404,7 +417,7 @@ class Application:
         :param topic_manager: A `QuixTopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
-        :param exactly_once_guarantees: Use "Exactly Once" processing (vs At Least Once)
+        :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -452,7 +465,7 @@ class Application:
             request_timeout=request_timeout,
             topic_create_timeout=topic_create_timeout,
             quix_config_builder=quix_config_builder,
-            exactly_once_guarantees=exactly_once_guarantees,
+            processing_guarantee=processing_guarantee,
         )
         return app
 
