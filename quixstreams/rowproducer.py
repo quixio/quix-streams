@@ -38,6 +38,8 @@ class RowProducer:
         will be logged but not propagated.
         The default callback logs an exception and returns `False`.
     :param flush_timeout: The time the producer is waiting for all messages to be delivered.
+    :param transactional: whether to use Kafka transactions or not.
+        Note this changes which underlying `Producer` class is used.
     """
 
     def __init__(
