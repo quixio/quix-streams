@@ -414,6 +414,8 @@ class RecoveryManager:
                 for p in recovery_partitions
             ]
         )
+        for rp in recovery_partitions:
+            self._recovery_partitions[partition_num].pop(rp.changelog_name)
         if not self._recovery_partitions[partition_num]:
             del self._recovery_partitions[partition_num]
         if self.recovering:
@@ -427,30 +429,23 @@ class RecoveryManager:
         """
         if changelogs := self._recovery_partitions.get(partition_num, {}):
             logger.debug(f"Stopping recovery for {changelogs}")
-            self._revoke_recovery_partitions(
-                [changelogs.pop(changelog) for changelog in list(changelogs.keys())],
-                partition_num,
-            )
+            self._revoke_recovery_partitions(list(changelogs.values()), partition_num)
 
     def _update_recovery_status(self):
-        revokes = []
+        revokes = {}
         for rp in dict_values(self._recovery_partitions):
             position = self._consumer.position(
                 [ConfluentPartition(rp.changelog_name, rp.partition_num)]
             )[0].offset
             rp.set_recovery_consume_position(position)
             if rp.finished_recovery_check:
-                revokes.append(rp)
-        while revokes:
-            rp = revokes.pop()
-            if rp.had_recovery_changes:
-                logger.info(f"Finished recovering {rp}")
-            else:
-                logger.debug(f"No recovery required for {rp}")
-            self._revoke_recovery_partitions(
-                [self._recovery_partitions[rp.partition_num].pop(rp.changelog_name)],
-                rp.partition_num,
-            )
+                revokes.setdefault(rp.partition_num, []).append(rp)
+                if rp.had_recovery_changes:
+                    logger.info(f"Finished recovering {rp}")
+                else:
+                    logger.debug(f"No recovery was required for {rp}")
+        for partition_num, rp_list in revokes.items():
+            self._revoke_recovery_partitions(rp_list, partition_num)
 
     def _recovery_loop(self):
         """
