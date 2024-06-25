@@ -1,9 +1,9 @@
-from typing import Optional, Any, Union, Dict, Tuple, List, cast, Callable
+import logging
+from time import sleep
+from typing import Optional, Any, Union, Dict, Tuple, List, Callable
 
 from confluent_kafka import TopicPartition, KafkaException, KafkaError, Message
 from confluent_kafka.admin import GroupMetadata
-
-import logging
 
 from quixstreams.exceptions import QuixException
 from .error_callbacks import ProducerErrorCallback, default_on_producer_error
@@ -55,14 +55,13 @@ class RowProducer:
             self._producer = TransactionalProducer(
                 broker_address=broker_address,
                 extra_config=extra_config,
-                flush_timeout=flush_timeout
-
+                flush_timeout=flush_timeout,
             )
         else:
             self._producer = Producer(
                 broker_address=broker_address,
                 extra_config=extra_config,
-                flush_timeout=flush_timeout
+                flush_timeout=flush_timeout,
             )
 
         self._on_error: Optional[ProducerErrorCallback] = (

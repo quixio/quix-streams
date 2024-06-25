@@ -79,8 +79,9 @@ class RecoveryPartition:
 
         This does NOT mean that anything actually requires recovering.
         """
-        is_behind = self.offset < self._changelog_highwater - 1
-        return (self._changelog_lowwater != self._changelog_highwater) and is_behind
+        has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
+        state_potentially_behind = self._changelog_highwater - 1 > self.offset
+        return has_consumable_offsets and state_potentially_behind
 
     @property
     def needs_offset_update(self) -> bool:
