@@ -217,7 +217,12 @@ class TestCheckpoint:
 
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_no_offsets_stored_noop(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock, exactly_once
+        self,
+        checkpoint_factory,
+        state_manager_factory,
+        topic_factory,
+        rowproducer_mock,
+        exactly_once,
     ):
         topic_name, _ = topic_factory()
         consumer_mock = MagicMock(spec_set=Consumer)
@@ -232,20 +237,24 @@ class TestCheckpoint:
         checkpoint.commit()
 
         # The producer should not flush
-        assert not producer_mock.flush.call_count
+        assert not rowproducer_mock.flush.call_count
 
         # Check nothing is committed
         if exactly_once:
             # transaction should also be aborted
             assert rowproducer_mock.abort_transaction.call_count
-            assert not producer_mock.commit_transaction.call_count
+            assert not rowproducer_mock.commit_transaction.call_count
         else:
             assert not consumer_mock.commit.call_count
-            assert not rowproducer_mock.flush.call_count
 
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_has_failed_transactions_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock, exactly_once
+        self,
+        checkpoint_factory,
+        state_manager_factory,
+        topic_factory,
+        rowproducer_mock,
+        exactly_once,
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
@@ -283,12 +292,17 @@ class TestCheckpoint:
         assert not rowproducer_mock.flush.call_count
 
         # Check nothing is committed
-        assert not producer_mock.commit_transaction.call_count
+        assert not rowproducer_mock.commit_transaction.call_count
         assert not consumer_mock.commit.call_count
 
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_producer_flush_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock, exactly_once
+        self,
+        checkpoint_factory,
+        state_manager_factory,
+        topic_factory,
+        rowproducer_mock,
+        exactly_once,
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
@@ -315,7 +329,7 @@ class TestCheckpoint:
             checkpoint.commit()
 
         # Nothing should commit
-        assert not producer_mock.commit_transaction.call_count
+        assert not rowproducer_mock.commit_transaction.call_count
         assert not consumer_mock.commit.call_count
         # The transaction should remain prepared, but not completed
         assert tx.prepared

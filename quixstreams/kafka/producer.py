@@ -187,6 +187,7 @@ class TransactionalProducer(Producer):
         logger: logging.Logger = logger,
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
+        flush_timeout: Optional[int] = None,
         transactional_id: str = str(uuid.uuid4()),
     ):
         super().__init__(
@@ -194,6 +195,7 @@ class TransactionalProducer(Producer):
             logger=logger,
             error_callback=error_callback,
             extra_config=extra_config,
+            flush_timeout=flush_timeout,
         )
         # remake config to avoid overriding anything in the Application's
         # producer config, which is used in Application.get_producer().
