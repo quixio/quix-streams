@@ -186,7 +186,7 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
-        assert recovery_manager.partitions[0][changelog_topic.name].needs_recovery
+        assert recovery_manager.partitions[0][changelog_topic.name].needs_recovery_check
 
         # Put a RecoveryManager into "recovering" state
         recovery_manager._running = True
@@ -202,7 +202,7 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
-        assert recovery_manager.partitions[1][changelog_topic.name].needs_recovery
+        assert recovery_manager.partitions[1][changelog_topic.name].needs_recovery_check
 
         # Check that consumer first paused all partitions
         assert consumer.pause.call_args_list[0].args[0] == assignment
@@ -295,8 +295,9 @@ class TestRecoveryManager:
         """
         Test that RecoveryManager.do_recovery():
          - resumes the recovering changelog partition
-         - applies changes to the StorePartition
-         - revokes the RecoveryPartition after recovery is done
+         - applies the 1 missing changelog recovery message to the StorePartition
+         - handles a None consumer poll to check for finished recovery (which it is)
+         - revokes the RecoveryPartition
          - unassigns the changelog partition
          - unpauses source topic partitions
         """
@@ -316,7 +317,7 @@ class TestRecoveryManager:
         changelog_message = ConfluentKafkaMessageStub(
             topic=changelog_topic.name,
             partition=0,
-            offset=highwater - 2,
+            offset=highwater - 2,  # <highwater-1 ensures recovery check will be made
             key=b"key",
             value=b"value",
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
@@ -324,6 +325,7 @@ class TestRecoveryManager:
 
         # Create a RecoveryManager
         consumer = MagicMock(spec_set=Consumer)
+        # note how the poll returns None, which signifies no more messages to recover
         consumer.poll.side_effect = [changelog_message, None]
         consumer.assignment.return_value = assignment
         recovery_manager = recovery_manager_factory(
@@ -332,6 +334,7 @@ class TestRecoveryManager:
 
         # Assign a partition that needs recovery
         consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        # this will get called after a "None" consumer poll result
         consumer.position.return_value = [
             ConfluentPartition(changelog_topic.name, 0, highwater)
         ]

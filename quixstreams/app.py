@@ -185,9 +185,9 @@ class Application:
         configure_logging(loglevel=loglevel)
 
         if processing_guarantee in get_args(ExactlyOnceSemantics):
-            use_kafka_transactions = True
+            exactly_once = True
         elif processing_guarantee in get_args(AtLeastOnceSemantics):
-            use_kafka_transactions = False
+            exactly_once = False
         else:
             raise ValueError(
                 f'Must provide a valid "processing_guarantee"; expected: '
@@ -279,7 +279,7 @@ class Application:
                 "max.poll.interval.ms", _default_max_poll_interval_ms
             )
             / 1000,  # convert to seconds
-            transactional=use_kafka_transactions,
+            transactional=exactly_once,
         )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
@@ -288,7 +288,7 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._running = False
         self._failed = False
-        self._exactly_once = processing_guarantee
+        self._exactly_once = exactly_once
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -320,7 +320,7 @@ class Application:
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
-            exactly_once=use_kafka_transactions,
+            exactly_once=exactly_once,
         )
 
     @property

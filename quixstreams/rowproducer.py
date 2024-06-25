@@ -199,10 +199,7 @@ class RowProducer:
             self._producer.abort_transaction(timeout)
             self._active_transaction = False
         else:
-            logger.debug(
-                "No Kafka transaction to abort, "
-                "likely due to some other exception occurring"
-            )
+            logger.debug("No Kafka transaction to abort")
 
     def _retriable_commit_op(self, operation: Callable, args: list):
         """
