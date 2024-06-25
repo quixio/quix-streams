@@ -35,6 +35,11 @@ See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-au
 **Options**: `"latest"`, `"earliest"`.  
 **Default** - `"latest"`.
 
+- **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing 
+guarantees.  
+See [Processing Guarantees](#processing-guarantees) for more information.  
+**Options**: `"at-least-once"`/`"ALO"` or `"exactly-once"`/`"EO"`.  
+**Default** - `"exactly-once"`.
 
 ## Authentication
 
@@ -83,6 +88,36 @@ app = Application(
 `ConnectionConfig.from_librdkafka_dict(config, ignore_extras=True)` will additionally 
 ignore irrelevant settings (but you will lose some validation checks).
 
+## Processing Guarantees
+
+This section concerns the `processing_guarantee` setting.
+
+### What are "processing guarantees"?
+Kafka broadly has three guarantee levels/semantics associated with handling messages.
+
+From weakest to strongest: `at-most-once`, `at-least-once`, and `exactly-once`. 
+Stronger guarantees generally have larger overhead, and thus reduced speed. 
+
+These guarantees can be read literally: when consuming Kafka messages, you can 
+guarantee each will be processed `X` times.
+
+Many users expect that Kafka processing is `exactly-once` by nature, but this is often
+not the case for many client libraries, which frequently leads to confusing results.
+
+### What options does Quix Streams offer?
+
+Currently, Quix Streams offers `at-least-once` and `exactly-once`.
+
+Also, `exactly-once` is the default in order to give new Kafka users the behavior they
+likely expect out of the box.
+
+### What is right for me?
+If unsure or processing speed has not been an issue, the safe answer is `exactly-once` 
+(the default). 
+
+Otherwise, it's a case-by-case determination, ultimately weighing an increase of speed 
+vs the potential to double-process a result, which may require other infrastructural
+considerations to handle appropriately.
 
 ## State
 - **`state_dir`** - path to the application state directory.  

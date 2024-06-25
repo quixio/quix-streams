@@ -1,42 +1,49 @@
 import logging
 from unittest.mock import MagicMock
 
+import pytest
+
 from quixstreams.state.rocksdb import RocksDBStorePartition
 from tests.utils import ConfluentKafkaMessageStub
 
 
 class TestRecoveryPartition:
-    def test_set_watermarks(self, recovery_partition_factory):
-        recovery_partition = recovery_partition_factory()
-        recovery_partition.set_watermarks(50, 100)
-        assert recovery_partition.changelog_lowwater == 50
-        assert recovery_partition.changelog_highwater == 100
-
-    def test_needs_recovery(self, recovery_partition_factory):
+    @pytest.mark.parametrize(
+        "offset, needs_check",
+        ([21, False], [20, False], [19, False], [18, True], [17, True]),
+    )
+    def test_needs_recovery_check(
+        self, recovery_partition_factory, offset, needs_check
+    ):
         store_partition = MagicMock(RocksDBStorePartition)
-        store_partition.get_changelog_offset.return_value = 10
+        store_partition.get_changelog_offset.return_value = offset
 
         recovery_partition = recovery_partition_factory(store_partition=store_partition)
         recovery_partition.set_watermarks(0, 20)
-        assert recovery_partition.needs_recovery
 
-    def test_needs_recovery_caught_up(self, recovery_partition_factory):
-        store_partition = MagicMock(RocksDBStorePartition)
-        store_partition.get_changelog_offset.return_value = 10
-        recovery_partition = recovery_partition_factory(store_partition=store_partition)
-        recovery_partition.set_watermarks(0, 20)
-        store_partition.get_changelog_offset.return_value = 20
-        assert not recovery_partition.needs_recovery
+        assert recovery_partition.needs_recovery_check == needs_check
 
-    def test_needs_recovery_no_valid_offsets(self, recovery_partition_factory):
+    @pytest.mark.parametrize(
+        "offset, needs_check, needs_update",
+        (
+            [21, False, True],
+            [20, False, True],
+            [19, False, False],
+            [18, False, False],
+            [17, False, False],
+        ),
+    )
+    def test_needs_recovery_check_no_valid_offsets(
+        self, recovery_partition_factory, offset, needs_check, needs_update
+    ):
         # Create a RecoveryPartition with the offset ahead of the watermark
         store_partition = MagicMock(RocksDBStorePartition)
-        store_partition.get_changelog_offset.return_value = 101
-
+        store_partition.get_changelog_offset.return_value = offset
         recovery_partition = recovery_partition_factory(store_partition=store_partition)
-        recovery_partition.set_watermarks(100, 100)
-        assert not recovery_partition.needs_recovery
-        assert recovery_partition.needs_offset_update
+        recovery_partition.set_watermarks(20, 20)
+
+        assert recovery_partition.needs_recovery_check == needs_check
+        assert recovery_partition.needs_offset_update == needs_update
 
     def test_recover_from_changelog_message(self, recovery_partition_factory):
         store_partition = MagicMock(RocksDBStorePartition)

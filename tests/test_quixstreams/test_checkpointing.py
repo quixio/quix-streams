@@ -18,18 +18,20 @@ from quixstreams.state.rocksdb import RocksDBPartitionTransaction
 
 
 @pytest.fixture()
-def checkpoint_factory(state_manager, consumer, row_producer):
+def checkpoint_factory(state_manager, consumer, row_producer_factory):
     def factory(
         commit_interval: float = 1,
         consumer_: Optional[Consumer] = None,
         producer_: Optional[RowProducer] = None,
         state_manager_: Optional[StateStoreManager] = None,
+        exactly_once: bool = False,
     ):
         return Checkpoint(
             commit_interval=commit_interval,
-            producer=producer_ or row_producer,
+            producer=producer_ or row_producer_factory(transactional=exactly_once),
             consumer=consumer_ or consumer,
             state_manager=state_manager_ or state_manager,
+            exactly_once=exactly_once,
         )
 
     return factory
@@ -52,6 +54,11 @@ class TestCheckpoint:
         checkpoint.store_offset("topic", 0, 0)
         assert not checkpoint.empty()
 
+    def test_exactly_once_init(self, checkpoint_factory):
+        mock_producer = MagicMock()
+        checkpoint_factory(producer_=mock_producer, exactly_once=True)
+        mock_producer.begin_transaction.assert_called()
+
     @pytest.mark.parametrize("commit_interval, expired", [(0, True), (999, False)])
     def test_expired(self, commit_interval, expired, checkpoint_factory):
         checkpoint = checkpoint_factory(commit_interval=commit_interval)
@@ -63,12 +70,13 @@ class TestCheckpoint:
         with pytest.raises(InvalidStoredOffset):
             checkpoint.store_offset("topic", 0, 9)
 
+    @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_no_state_success(
-        self, checkpoint_factory, consumer, state_manager, topic_factory
+        self, checkpoint_factory, consumer, state_manager, topic_factory, exactly_once
     ):
         topic_name, _ = topic_factory()
         checkpoint = checkpoint_factory(
-            consumer_=consumer, state_manager_=state_manager
+            consumer_=consumer, state_manager_=state_manager, exactly_once=exactly_once
         )
         processed_offset = 999
         # Store the processed offset to simulate processing
@@ -164,25 +172,30 @@ class TestCheckpoint:
         assert store_partition.get_changelog_offset() == 1
         assert store_partition.get_processed_offset() == 999
 
+    @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_with_state_and_changelog_no_updates_success(
         self,
         checkpoint_factory,
-        row_producer,
+        row_producer_factory,
         consumer,
         state_manager_factory,
         recovery_manager_factory,
         topic_factory,
+        exactly_once,
     ):
         topic_name, _ = topic_factory()
+        row_producer = row_producer_factory(transactional=exactly_once)
         recovery_manager = recovery_manager_factory(consumer=consumer)
         state_manager = state_manager_factory(
             producer=row_producer, recovery_manager=recovery_manager
         )
         checkpoint = checkpoint_factory(
-            consumer_=consumer, state_manager_=state_manager, producer_=row_producer
+            consumer_=consumer,
+            state_manager_=state_manager,
+            producer_=row_producer,
+            exactly_once=exactly_once,
         )
         processed_offset = 999
-        value, prefix = "value", b"__key__"
         state_manager.register_store(topic_name, "default")
         store = state_manager.get_store(topic_name, "default")
         store_partition = store.assign_partition(0)
@@ -202,8 +215,9 @@ class TestCheckpoint:
         assert not store_partition.get_changelog_offset()
         assert not store_partition.get_processed_offset()
 
+    @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_no_offsets_stored_noop(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock, exactly_once
     ):
         topic_name, _ = topic_factory()
         consumer_mock = MagicMock(spec_set=Consumer)
@@ -212,16 +226,26 @@ class TestCheckpoint:
             consumer_=consumer_mock,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
+            exactly_once=exactly_once,
         )
         # Commit the checkpoint without processing any messages
         checkpoint.commit()
 
-        # Check nothing is committed
-        assert not consumer_mock.commit.call_count
-        assert not rowproducer_mock.flush.call_count
+        # The producer should not flush
+        assert not producer_mock.flush.call_count
 
+        # Check nothing is committed
+        if exactly_once:
+            # transaction should also be aborted
+            assert rowproducer_mock.abort_transaction.call_count
+            assert not producer_mock.commit_transaction.call_count
+        else:
+            assert not consumer_mock.commit.call_count
+            assert not rowproducer_mock.flush.call_count
+
+    @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_has_failed_transactions_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock, exactly_once
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
@@ -229,6 +253,7 @@ class TestCheckpoint:
             consumer_=consumer_mock,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
+            exactly_once=exactly_once,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -256,11 +281,14 @@ class TestCheckpoint:
 
         # The producer should not flush
         assert not rowproducer_mock.flush.call_count
-        # Consumer should not commit
+
+        # Check nothing is committed
+        assert not producer_mock.commit_transaction.call_count
         assert not consumer_mock.commit.call_count
 
+    @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_producer_flush_fails(
-        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock
+        self, checkpoint_factory, state_manager_factory, topic_factory, rowproducer_mock, exactly_once
     ):
         consumer_mock = MagicMock(spec_set=Consumer)
         state_manager = state_manager_factory(producer=rowproducer_mock)
@@ -268,6 +296,7 @@ class TestCheckpoint:
             consumer_=consumer_mock,
             state_manager_=state_manager,
             producer_=rowproducer_mock,
+            exactly_once=exactly_once,
         )
         processed_offset = 999
         key, value, prefix = "key", "value", b"__key__"
@@ -285,7 +314,8 @@ class TestCheckpoint:
         with pytest.raises(ValueError):
             checkpoint.commit()
 
-        # Consumer should not commit
+        # Nothing should commit
+        assert not producer_mock.commit_transaction.call_count
         assert not consumer_mock.commit.call_count
         # The transaction should remain prepared, but not completed
         assert tx.prepared
