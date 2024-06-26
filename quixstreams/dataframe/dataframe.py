@@ -241,21 +241,24 @@ class StreamingDataFrame(BaseStreaming):
             )
         return self.__dataframe_clone__(stream=stream)
 
-    @overload
-    def update(self, func: UpdateCallback) -> Self: ...
+    def print(self, metadata: bool = False) -> Self:
+        return self.peek(_print, metadata=metadata)
 
     @overload
-    def update(
+    def peek(self, func: UpdateCallback) -> Self: ...
+
+    @overload
+    def peek(
         self, func: UpdateWithMetadataCallback, *, metadata: Literal[True]
     ) -> Self: ...
 
     @overload
-    def update(
+    def peek(
         self, func: UpdateCallbackStateful, *, stateful: Literal[True]
     ) -> Self: ...
 
     @overload
-    def update(
+    def peek(
         self,
         func: UpdateWithMetadataCallbackStateful,
         *,
@@ -263,7 +266,7 @@ class StreamingDataFrame(BaseStreaming):
         metadata: Literal[True],
     ) -> Self: ...
 
-    def update(
+    def peek(
         self,
         func: Union[
             UpdateCallback,
@@ -327,7 +330,7 @@ class StreamingDataFrame(BaseStreaming):
                 cast(Union[UpdateCallback, UpdateWithMetadataCallback], func),
                 metadata=metadata,
             )
-        return self.__dataframe_clone__(stream=stream)
+        return self.__dataframe_inplace__(stream)
 
     @overload
     def filter(self, func: FilterCallback) -> Self: ...
@@ -570,7 +573,7 @@ class StreamingDataFrame(BaseStreaming):
             By default, the current message key will be used.
 
         """
-        return self.update(
+        return self.peek(
             lambda value, orig_key, timestamp, headers: self._produce(
                 topic=topic,
                 value=value,
@@ -927,6 +930,7 @@ class StreamingDataFrame(BaseStreaming):
         row = Row(
             value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
         )
+        print("PRODUCE!!!")
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
     def _register_store(self):
@@ -959,6 +963,10 @@ class StreamingDataFrame(BaseStreaming):
             return lambda row: key(row)
         else:
             raise TypeError("group_by 'key' must be callable or string (column name)")
+
+    def __dataframe_inplace__(self, stream: Stream):
+        self._stream = stream
+        return self
 
     def __dataframe_clone__(
         self,
@@ -1069,6 +1077,15 @@ def _as_metadata_func(
         return func(value, state)
 
     return wrapper
+
+
+import pprint
+
+_PRINT_ARGS = ["value", "key", "timestamp", "headers"]
+
+
+def _print(*args):
+    pprint.pprint({_PRINT_ARGS[i]: args[i] for i in range(len(args))}, indent=2)
 
 
 def _as_stateful(
