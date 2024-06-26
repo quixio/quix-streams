@@ -930,7 +930,6 @@ class StreamingDataFrame(BaseStreaming):
         row = Row(
             value=value, key=key, timestamp=timestamp, context=ctx, headers=headers
         )
-        print("PRODUCE!!!")
         self._producer.produce_row(row=row, topic=topic, key=key, timestamp=timestamp)
 
     def _register_store(self):
