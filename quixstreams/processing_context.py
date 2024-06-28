@@ -64,23 +64,25 @@ class ProcessingContext:
 
     def commit_checkpoint(self, force: bool = False):
         """
-        Commit the current checkpoint.
+        Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
+        or `force=True` is passed, otherwise do nothing.
 
-        The actual commit will happen only when:
+        To finalize: the Checkpoint will be committed if it has any stored offsets,
+        else just close it. A new Checkpoint is then created.
 
-        1. The checkpoint has at least one stored offset
-        2. The checkpoint is expired or `force=True` is passed
-
-        :param force: if `True`, commit the checkpoint before its expiration deadline.
+        :param force: if `True`, commit the Checkpoint before its expiration deadline.
         """
         if self._checkpoint.expired() or force:
-            logger.debug(f"Attempting checkpoint commit; forced={force}")
-            start = time.monotonic()
-            self._checkpoint.commit()
-            elapsed = round(time.monotonic() - start, 2)
-            logger.debug(
-                f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
-            )
+            if self._checkpoint.empty():
+                self._checkpoint.close()
+            else:
+                logger.debug(f"Committing a checkpoint; forced={force}")
+                start = time.monotonic()
+                self._checkpoint.commit()
+                elapsed = round(time.monotonic() - start, 2)
+                logger.debug(
+                    f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
+                )
             self.init_checkpoint()
 
     def __enter__(self):

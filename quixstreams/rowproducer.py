@@ -1,4 +1,5 @@
 import logging
+from functools import wraps
 from time import sleep
 from typing import Optional, Any, Union, Dict, Tuple, List, Callable
 
@@ -16,6 +17,52 @@ logger = logging.getLogger(__name__)
 
 
 _KEY_UNSET = object()
+
+
+def _retriable_transaction_op(attempts: int, backoff_seconds: float):
+    """
+    Some specific failure cases from sending offsets or committing a transaction
+    are retriable, which is worth re-attempting since the transaction is
+    almost complete (we flushed before attempting to commit).
+
+    Intended as a wrapper for these methods.
+    """
+
+    def decorator(kafka_op: Callable):
+        @wraps(kafka_op)
+        def wrapper(*args, **kwargs):
+            attempts_remaining = attempts
+            op_name = kafka_op.__name__
+            while attempts_remaining:
+                try:
+                    return kafka_op(*args, **kwargs)
+                except KafkaException as e:
+                    error = e.args[0]
+                    if error.retriable():
+                        attempts_remaining -= 1
+                        logger.debug(
+                            f"Kafka transaction operation {op_name} failed, but "
+                            f"can retry; attempts remaining: {attempts_remaining}. "
+                        )
+                        if attempts_remaining:
+                            logger.debug(
+                                f"Sleeping for {backoff_seconds}s before retrying."
+                            )
+                            sleep(backoff_seconds)
+                    else:
+                        # Just treat all errors besides retriable as fatal.
+                        logger.error(
+                            f"Error during Kafka transaction operation {op_name}"
+                        )
+                        raise
+            raise KafkaProducerTransactionCommitFailed(
+                f"All Kafka {op_name} attempts failed; "
+                "aborting transaction and shutting down Application..."
+            )
+
+        return wrapper
+
+    return decorator
 
 
 class KafkaProducerTransactionCommitFailed(QuixException): ...
@@ -47,7 +94,7 @@ class RowProducer:
         broker_address: Union[str, ConnectionConfig],
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
-        flush_timeout: Optional[int] = None,
+        flush_timeout: Optional[float] = None,
         transactional: bool = False,
     ):
 
@@ -197,12 +244,16 @@ class RowProducer:
         the Checkpoint inits another immediately after committing.
         """
         if self._active_transaction:
+            if self._tp_offsets:
+                # Only log here to avoid polluting logging with empty checkpoint aborts
+                logger.debug("Aborting Kafka transaction and clearing producer offsets")
+                self._tp_offsets = {}
             self._producer.abort_transaction(timeout)
             self._active_transaction = False
         else:
             logger.debug("No Kafka transaction to abort")
 
-    def _retriable_commit_op(self, operation: Callable, args: list):
+    def _retriable_op(self, attempts: int, backoff_seconds: float):
         """
         Some specific failure cases from sending offsets or committing a transaction
         are retriable, which is worth re-attempting since the transaction is
@@ -211,35 +262,56 @@ class RowProducer:
         NOTE: During testing, most other operations (including producing)
         did not generate "retriable" errors.
         """
-        attempts_remaining = 3
-        backoff_seconds = 1
-        op_name = operation.__name__
-        while attempts_remaining:
-            try:
-                return operation(*args)
-            except KafkaException as e:
-                error = e.args[0]
-                if error.retriable():
-                    attempts_remaining -= 1
-                    logger.debug(
-                        f"Kafka transaction operation {op_name} failed, but can retry; "
-                        f"attempts remaining: {attempts_remaining}. "
-                    )
-                    if attempts_remaining:
-                        logger.debug(
-                            f"Sleeping for {backoff_seconds} seconds before retrying."
-                        )
-                        sleep(backoff_seconds)
-                else:
-                    # Just treat all errors besides retriable as fatal.
-                    logger.error(
-                        f"Error occurred during Kafka transaction operation {op_name}"
-                    )
-                    raise
-        raise KafkaProducerTransactionCommitFailed(
-            f"All Kafka {op_name} attempts failed; "
-            "aborting transaction and shutting down Application..."
-        )
+
+        def decorator(kafka_op: Callable):
+            @wraps(kafka_op)
+            def wrapper(*args, **kwargs):
+                attempts_remaining = attempts
+                op_name = kafka_op.__name__
+                while attempts_remaining:
+                    try:
+                        return kafka_op(*args, **kwargs)
+                    except KafkaException as e:
+                        error = e.args[0]
+                        if error.retriable():
+                            attempts_remaining -= 1
+                            logger.debug(
+                                f"Kafka transaction operation {op_name} failed, but "
+                                f"can retry; attempts remaining: {attempts_remaining}. "
+                            )
+                            if attempts_remaining:
+                                logger.debug(
+                                    f"Sleeping for {backoff_seconds}s before retrying."
+                                )
+                                sleep(backoff_seconds)
+                        else:
+                            # Just treat all errors besides retriable as fatal.
+                            logger.error(
+                                f"Error during Kafka transaction operation {op_name}"
+                            )
+                            raise
+                raise KafkaProducerTransactionCommitFailed(
+                    f"All Kafka {op_name} attempts failed; "
+                    "aborting transaction and shutting down Application..."
+                )
+
+            return wrapper
+
+        return decorator
+
+    @_retriable_transaction_op(attempts=3, backoff_seconds=1.0)
+    def _send_offsets_to_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._producer.send_offsets_to_transaction(positions, group_metadata, timeout)
+
+    @_retriable_transaction_op(attempts=3, backoff_seconds=1.0)
+    def _commit_transaction(self, timeout: Optional[float] = None):
+        self._producer.commit_transaction(timeout)
+        self._active_transaction = False
 
     def commit_transaction(
         self,
@@ -247,12 +319,8 @@ class RowProducer:
         group_metadata: GroupMetadata,
         timeout: Optional[float] = None,
     ):
-        self._retriable_commit_op(
-            self._producer.send_offsets_to_transaction,
-            [positions, group_metadata, timeout],
-        )
-        self._retriable_commit_op(self._producer.commit_transaction, [timeout])
-        self._active_transaction = False
+        self._send_offsets_to_transaction(positions, group_metadata, timeout)
+        self._commit_transaction(timeout)
 
     def __enter__(self):
         return self

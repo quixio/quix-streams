@@ -216,17 +216,14 @@ class TestCheckpoint:
         assert not store_partition.get_processed_offset()
 
     @pytest.mark.parametrize("exactly_once", [False, True])
-    def test_commit_no_offsets_stored_noop(
+    def test_close_no_offsets(
         self,
         checkpoint_factory,
-        state_manager_factory,
-        topic_factory,
         rowproducer_mock,
         exactly_once,
     ):
-        topic_name, _ = topic_factory()
         consumer_mock = MagicMock(spec_set=Consumer)
-        state_manager = state_manager_factory(producer=rowproducer_mock)
+        state_manager = MagicMock(spec_set=StateStoreManager)
         checkpoint = checkpoint_factory(
             consumer_=consumer_mock,
             state_manager_=state_manager,
@@ -234,18 +231,13 @@ class TestCheckpoint:
             exactly_once=exactly_once,
         )
         # Commit the checkpoint without processing any messages
-        checkpoint.commit()
+        checkpoint.close()
 
-        # The producer should not flush
-        assert not rowproducer_mock.flush.call_count
-
-        # Check nothing is committed
         if exactly_once:
             # transaction should also be aborted
             assert rowproducer_mock.abort_transaction.call_count
-            assert not rowproducer_mock.commit_transaction.call_count
         else:
-            assert not consumer_mock.commit.call_count
+            assert not rowproducer_mock.abort_transaction.call_count
 
     @pytest.mark.parametrize("exactly_once", [False, True])
     def test_commit_has_failed_transactions_fails(

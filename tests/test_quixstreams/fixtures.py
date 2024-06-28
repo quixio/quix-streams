@@ -10,7 +10,7 @@ from confluent_kafka.admin import (
     NewPartitions,
 )
 
-from quixstreams.app import Application, MessageProcessedCallback
+from quixstreams.app import Application, MessageProcessedCallback, ProcessingGuarantee
 from quixstreams.error_callbacks import (
     ConsumerErrorCallback,
     ProducerErrorCallback,
@@ -48,7 +48,6 @@ from quixstreams.rowconsumer import RowConsumer
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state import StateStoreManager
 from quixstreams.state.recovery import RecoveryManager
-from quixstreams.types import ProcessingGuarantee
 
 
 @pytest.fixture()
@@ -294,7 +293,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_manager: Optional[TopicManager] = None,
-        processing_guarantee: ProcessingGuarantee = "ALOS",
+        processing_guarantee: ProcessingGuarantee = "at-least-once",
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
