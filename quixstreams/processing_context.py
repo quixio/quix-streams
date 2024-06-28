@@ -28,6 +28,7 @@ class ProcessingContext:
     producer: RowProducer
     consumer: RowConsumer
     state_manager: StateStoreManager
+    exactly_once: bool = False
     _checkpoint: Optional[Checkpoint] = dataclasses.field(
         init=False, repr=False, default=None
     )
@@ -52,31 +53,41 @@ class ProcessingContext:
         """
         Initialize a new checkpoint
         """
+        logger.debug(f"Starting a checkpoint...")
         self._checkpoint = Checkpoint(
             commit_interval=self.commit_interval,
             state_manager=self.state_manager,
             producer=self.producer,
             consumer=self.consumer,
+            exactly_once=self.exactly_once,
         )
 
     def commit_checkpoint(self, force: bool = False):
         """
-        Commit the current checkpoint.
+        Attempts finalizing the current Checkpoint only if the Checkpoint is "expired",
+        or `force=True` is passed, otherwise do nothing.
 
-        The actual commit will happen only when:
+        To finalize: the Checkpoint will be committed if it has any stored offsets,
+        else just close it. A new Checkpoint is then created.
 
-        1. The checkpoint has at least one stored offset
-        2. The checkpoint is expired or `force=True` is passed
-
-        :param force: if `True`, commit the checkpoint before its expiration deadline.
+        :param force: if `True`, commit the Checkpoint before its expiration deadline.
         """
-        if not self._checkpoint.empty() and (self._checkpoint.expired() or force):
-
-            logger.debug(f"Committing a checkpoint force={force}")
-            start = time.monotonic()
-            self._checkpoint.commit()
-            elapsed = round(time.monotonic() - start, 2)
-            logger.debug(
-                f"Committed a checkpoint force={force} time_elapsed={elapsed}s"
-            )
+        if self._checkpoint.expired() or force:
+            if self._checkpoint.empty():
+                self._checkpoint.close()
+            else:
+                logger.debug(f"Committing a checkpoint; forced={force}")
+                start = time.monotonic()
+                self._checkpoint.commit()
+                elapsed = round(time.monotonic() - start, 2)
+                logger.debug(
+                    f"Committed a checkpoint; forced={force}, time_elapsed={elapsed}s"
+                )
             self.init_checkpoint()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.exactly_once:
+            self.producer.abort_transaction(5)

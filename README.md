@@ -18,7 +18,7 @@ Quix Streams has the following benefits:
 - Support for many serialization formats, including JSON (and Quix-specific).
 - Support for stateful operations using RocksDB.
 - Support for aggregations over tumbling and hopping time windows.
-- "At-least-once" Kafka processing guarantees.
+- "At-least-once" and "exactly-once" Kafka processing guarantees.
 - Designed to run and scale resiliently via container orchestration (like Kubernetes).
 - Easily runs locally and in Jupyter Notebook for convenient development and debugging.
 - Seamless integration with the fully managed [Quix Cloud](https://quix.io/product) platform.
@@ -160,9 +160,9 @@ Here are some of the planned improvements:
 - [x] [Windowed aggregations over Tumbling & Hopping windows](https://quix.io/docs/quix-streams/v2-0-latest/windowing.html)
 - [x] [State recovery based on Kafka changelog topics](https://quix.io/docs/quix-streams/advanced/stateful-processing.html#fault-tolerance-recovery)
 - [x] [Group-by operation](https://quix.io/docs/quix-streams/groupby.html)
+- [X] ["Exactly Once" delivery guarantees for Kafka message processing (AKA transactions)](https://quix.io/docs/quix-streams/configuration.html#processing-guarantees)
 - [ ] Joins
 - [ ] Windowed aggregations over Sliding windows
-- [ ] "Exactly Once" delivery guarantees for Kafka message processing (AKA transactions)
 - [ ] Support for Avro and Protobuf formats
 - [ ] Schema Registry support
 

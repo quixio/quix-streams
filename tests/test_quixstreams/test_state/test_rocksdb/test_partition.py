@@ -183,7 +183,7 @@ class TestRocksDBStorePartitionChangelog:
 
         with rocksdb_partition.begin() as tx:
             assert tx.get(user_store_key, prefix=kafka_key) == store_value
-        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset()
 
     @pytest.mark.parametrize(
         ("headers", "error"),
@@ -238,7 +238,7 @@ class TestRocksDBStorePartitionChangelog:
 
         with rocksdb_partition.begin() as tx:
             assert tx.get(user_store_key, prefix=kafka_key) == 10
-        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset()
 
     def test_recover_from_changelog_message_with_processed_offset_ahead_committed(
         self, rocksdb_partition
@@ -284,4 +284,4 @@ class TestRocksDBStorePartitionChangelog:
         # increased
         with rocksdb_partition.begin() as tx:
             assert tx.get(user_store_key, prefix=kafka_key) is None
-        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset() + 1
+        assert rocksdb_partition.get_changelog_offset() == changelog_msg.offset()

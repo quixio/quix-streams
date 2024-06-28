@@ -1,2 +1,2 @@
-from .checkpoint import Checkpoint as Checkpoint
-from .exceptions import InvalidStoredOffset as InvalidStoredOffset
+from .checkpoint import Checkpoint
+from .exceptions import InvalidStoredOffset
