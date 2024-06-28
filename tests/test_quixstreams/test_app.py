@@ -121,11 +121,10 @@ class TestApplication:
             on_message_processed=on_message_processed,
         )
 
-        column_name = "root"
         partition_num = 0
         topic_in = app.topic(
             str(uuid.uuid4()),
-            value_deserializer=JSONDeserializer(column_name=column_name),
+            value_deserializer=JSONDeserializer(),
         )
         topic_out = app.topic(
             str(uuid.uuid4()),
@@ -178,7 +177,7 @@ class TestApplication:
         for row in rows_out:
             assert row.topic == topic_out.name
             assert row.key == data["key"]
-            assert row.value == {column_name: loads(data["value"].decode())}
+            assert row.value == loads(data["value"].decode())
             assert row.timestamp == timestamp_ms
             assert row.headers == headers
 
@@ -240,9 +239,7 @@ class TestApplication:
     def test_run_consumer_error_raised(self, app_factory, executor):
         # Set "auto_offset_reset" to "error" to simulate errors in Consumer
         app = app_factory(auto_offset_reset="error")
-        topic = app.topic(
-            str(uuid.uuid4()), value_deserializer=JSONDeserializer(column_name="root")
-        )
+        topic = app.topic(str(uuid.uuid4()), value_deserializer=JSONDeserializer())
         sdf = app.dataframe(topic)
 
         # Stop app after 10s if nothing failed
