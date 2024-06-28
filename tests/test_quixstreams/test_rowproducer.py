@@ -302,6 +302,7 @@ class TestTransactionalRowProducer:
         ) as consumer:
             _ = consume_and_produce(consumer, producer)
             producer.abort_transaction(2)
+        assert not producer.offsets
 
         # repeat, only this time we commit the transaction
         with row_consumer_factory(

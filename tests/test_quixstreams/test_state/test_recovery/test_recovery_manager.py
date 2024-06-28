@@ -1,10 +1,11 @@
 from unittest.mock import patch, MagicMock
 
+import pytest
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager, TopicConfig
-from quixstreams.state import RecoveryPartition
+from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.rocksdb import RocksDBStorePartition
 from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from tests.utils import ConfluentKafkaMessageStub
@@ -92,7 +93,7 @@ class TestRecoveryManager:
         # Check that consumer paused all assigned partitions
         consumer.pause.assert_called_with(assignment)
 
-    def test_assign_partition_fix_offset_only(
+    def test_assign_partition_invalid_offset(
         self,
         recovery_manager_factory,
         recovery_partition_factory,
@@ -100,7 +101,7 @@ class TestRecoveryManager:
     ):
         """
         Try to recover store partition with changelog offset AHEAD of the watermark.
-        The offset should be adjusted in this case, but recovery should not be triggered
+        This is invalid and should raise exception.
         """
 
         topic_name = "topic_name"
@@ -127,16 +128,13 @@ class TestRecoveryManager:
             consumer=consumer, topic_manager=topic_manager
         )
 
-        with patch.object(RecoveryPartition, "update_offset") as update_offset:
+        with pytest.raises(InvalidStoreChangelogOffset):
             recovery_manager.assign_partition(
                 topic=topic_name,
                 partition=partition_num,
                 store_partitions={store_name: store_partition},
                 committed_offset=-1001,
             )
-
-        # "update_offset()" should be called
-        update_offset.assert_called()
 
         # No pause or assignments should happen
         consumer.pause.assert_not_called()

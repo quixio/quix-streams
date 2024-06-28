@@ -754,7 +754,7 @@ class TestAppExactlyOnce:
                 auto_offset_reset="earliest",
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
-                processing_guarantee="EOS",
+                processing_guarantee="exactly-once",
             )
             topic_in = app.topic(topic_in_name, value_deserializer="json")
             topic_out = app.topic(topic_out_name, value_serializer="json")

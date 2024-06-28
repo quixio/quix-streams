@@ -107,6 +107,15 @@ class Checkpoint:
         self._store_transactions[(topic, partition, store_name)] = transaction
         return transaction
 
+    def close(self):
+        """
+        Perform cleanup (when the checkpoint is empty) instead of committing.
+
+        Needed for exactly-once, as Kafka transactions are timeboxed.
+        """
+        if self._exactly_once:
+            self._producer.abort_transaction()
+
     def commit(self):
         """
         Commit the checkpoint.
@@ -117,12 +126,6 @@ class Checkpoint:
          3. Commit topic offsets.
          4. Flush each state store partition to the disk.
         """
-
-        if not self._tp_offsets:
-            logger.debug("Nothing to commit")
-            if self._exactly_once:
-                self._producer.abort_transaction()
-            return
 
         # Step 1. Produce the changelogs
         for (
@@ -160,7 +163,7 @@ class Checkpoint:
                 offsets, self._consumer.consumer_group_metadata()
             )
         else:
-            logger.debug("Checkpoint: commiting consumer")
+            logger.debug("Checkpoint: committing consumer")
             try:
                 partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
             except KafkaException as e:

@@ -10,6 +10,7 @@ from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.types import StorePartition
 from quixstreams.utils.dicts import dict_values
+from .exceptions import InvalidStoreChangelogOffset
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +85,9 @@ class RecoveryPartition:
         return has_consumable_offsets and state_potentially_behind
 
     @property
-    def needs_offset_update(self) -> bool:
+    def has_invalid_offset(self) -> bool:
         """
-        Determine if an offset update is required.
-
-        Usually checked during assign if recovery was not required.
+        Determine if the current changelog offset stored in state is invalid.
         """
         return self._changelog_highwater and (self._changelog_highwater <= self.offset)
 
@@ -99,26 +98,6 @@ class RecoveryPartition:
     @property
     def had_recovery_changes(self) -> bool:
         return self._initial_offset != self.offset
-
-    def update_offset(self):
-        """
-        Update only the changelog offset of a StorePartition.
-        """
-        logger.info(
-            f"changelog partition {self.changelog_name}[{self.partition_num}] "
-            f"requires an offset update"
-        )
-        if self.offset >= self._changelog_highwater:
-            logger.warning(
-                f"{self} - the changelog offset "
-                f"{self.offset} in state was greater or equal to its actual highwater "
-                f"{self._changelog_highwater}, possibly due to previous Kafka or "
-                f"network issues. State may be inaccurate for any affected keys. "
-                f"The offset will now be set to its highwater - 1."
-            )
-        self._store_partition.set_changelog_offset(
-            changelog_offset=self._changelog_highwater - 1
-        )
 
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto
@@ -379,10 +358,14 @@ class RecoveryManager:
                 self._consumer.incremental_assign(
                     [ConfluentPartition(changelog_name, partition, rp.offset)]
                 )
-            elif rp.needs_offset_update:
-                # nothing to recover, but offset is off...likely that offset >
-                # highwater due to At Least Once processing behavior.
-                rp.update_offset()
+            elif rp.has_invalid_offset:
+                raise InvalidStoreChangelogOffset(
+                    "The offset in the state store is greater than or equal to its "
+                    "respective changelog highwater. This can happen if the changelog "
+                    "was deleted (and recreated) but the state store was not. The "
+                    "invalid state store can be deleted by manually calling "
+                    "Application.clear_state() before running the application again."
+                )
 
         # Figure out if we need to pause any topic partitions
         if self._recovery_partitions:
@@ -426,8 +409,9 @@ class RecoveryManager:
         :param partition_num: partition number of source topic
         """
         if changelogs := self._recovery_partitions.get(partition_num, {}):
-            logger.debug(f"Stopping recovery for {changelogs}")
-            self._revoke_recovery_partitions(list(changelogs.values()))
+            recovery_partitions = list(changelogs.values())
+            logger.debug(f"Stopping recovery for {list(map(str, recovery_partitions))}")
+            self._revoke_recovery_partitions(recovery_partitions)
 
     def _update_recovery_status(self):
         rp_revokes = []

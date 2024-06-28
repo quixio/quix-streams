@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable, Union, get_args
+from typing import Optional, List, Callable, Union, Literal, get_args
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -40,11 +40,11 @@ from .rowproducer import RowProducer
 from .state import StateStoreManager
 from .state.recovery import RecoveryManager
 from .state.rocksdb import RocksDBOptionsType
-from .types import ProcessingGuarantee, ExactlyOnceSemantics, AtLeastOnceSemantics
 
 __all__ = ("Application",)
 
 logger = logging.getLogger(__name__)
+ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
 MessageProcessedCallback = Callable[[str, int, int], None]
 
 # Enforce idempotent producing for the internal RowProducer
@@ -184,15 +184,10 @@ class Application:
         """
         configure_logging(loglevel=loglevel)
 
-        if processing_guarantee in get_args(ExactlyOnceSemantics):
-            exactly_once = True
-        elif processing_guarantee in get_args(AtLeastOnceSemantics):
-            exactly_once = False
-        else:
+        if processing_guarantee not in get_args(ProcessingGuarantee):
             raise ValueError(
-                f'Must provide a valid "processing_guarantee"; expected: '
-                f"{[*get_args(ExactlyOnceSemantics), *get_args(AtLeastOnceSemantics)]}"
-                f', got "{processing_guarantee}"'
+                f'Must provide a valid "processing_guarantee"; expected one of: '
+                f'{get_args(ProcessingGuarantee)}, got "{processing_guarantee}"'
             )
 
         producer_extra_config = producer_extra_config or {}
@@ -263,6 +258,7 @@ class Application:
         self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
+        self._processing_guarantee = processing_guarantee
         self._consumer = RowConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -279,7 +275,7 @@ class Application:
                 "max.poll.interval.ms", _default_max_poll_interval_ms
             )
             / 1000,  # convert to seconds
-            transactional=exactly_once,
+            transactional=self._uses_exactly_once,
         )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
@@ -288,7 +284,6 @@ class Application:
         self._auto_create_topics = auto_create_topics
         self._running = False
         self._failed = False
-        self._exactly_once = exactly_once
 
         if not topic_manager:
             topic_manager = topic_manager_factory(
@@ -320,12 +315,16 @@ class Application:
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
-            exactly_once=exactly_once,
+            exactly_once=self._uses_exactly_once,
         )
 
     @property
-    def is_quix_app(self):
+    def is_quix_app(self) -> bool:
         return self._is_quix_app
+
+    @property
+    def _uses_exactly_once(self) -> bool:
+        return self._processing_guarantee == "exactly-once"
 
     @classmethod
     def Quix(
@@ -349,7 +348,7 @@ class Application:
         topic_manager: Optional[QuixTopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
-        processing_guarantee: ProcessingGuarantee = "exactly-once",
+        processing_guarantee: Literal["at-least-once", "exactly-once"] = "exactly-once",
     ) -> Self:
         """
         >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
@@ -721,14 +720,13 @@ class Application:
         """
         self._setup_signal_handlers()
 
-        guarantee = "exactly-once" if self._exactly_once else "at-least-once"
         logger.info(
             f"Starting the Application with the config: "
             f'broker_address="{self._broker_address}" '
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}" '
             f"commit_interval={self._commit_interval}s "
-            f'processing_guarantee="{guarantee}"'
+            f'processing_guarantee="{self._processing_guarantee}"'
         )
         if self.is_quix_app:
             self._quix_runtime_init()

@@ -213,7 +213,6 @@ class TransactionalProducer(Producer):
         return self._inner_producer
 
     def begin_transaction(self):
-        logger.debug("Starting Kafka transaction...")
         self._producer.begin_transaction()
 
     def send_offsets_to_transaction(
@@ -227,11 +226,7 @@ class TransactionalProducer(Producer):
         )
 
     def abort_transaction(self, timeout: Optional[float] = None):
-        logger.debug("Aborting Kafka transaction...")
         self._producer.abort_transaction(timeout if timeout is not None else -1)
-        logger.debug("Kafka transaction aborted successfully!")
 
     def commit_transaction(self, timeout: Optional[float] = None):
-        logger.debug("Committing Kafka transaction...")
         self._producer.commit_transaction(timeout if timeout is not None else -1)
-        logger.debug("Kafka transaction committed successfully!")
