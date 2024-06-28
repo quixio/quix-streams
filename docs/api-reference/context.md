@@ -12,7 +12,7 @@
 def set_message_context(context: Optional[MessageContext])
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/context.py#L20)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/context.py#L20)
 
 Set a MessageContext for the current message in the given `contextvars.Context`
 
@@ -55,7 +55,7 @@ sdf = sdf.update(lambda value: alter_context(value))
 def message_context() -> MessageContext
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/context.py#L51)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/context.py#L51)
 
 Get a MessageContext for the current message, which houses most of the message
 

@@ -35,25 +35,21 @@ class JSONSerializer(Serializer):
 class JSONDeserializer(Deserializer):
     def __init__(
         self,
-        column_name: Optional[str] = None,
         loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
     ):
         """
         Deserializer that parses data from JSON
 
-        :param column_name: if provided, the deserialized value will be wrapped into
-            dictionary with `column_name` as a key.
         :param loads: function to parse json from bytes.
             Default - :py:func:`quixstreams.utils.json.loads`.
         """
-        super().__init__(column_name=column_name)
+        super().__init__()
         self._loads = loads
 
     def __call__(
         self, value: bytes, ctx: SerializationContext
     ) -> Union[Iterable[Mapping], Mapping]:
         try:
-            deserialized = self._loads(value)
-            return self._to_dict(deserialized)
+            return self._loads(value)
         except (ValueError, TypeError) as exc:
             raise SerializationError(str(exc)) from exc

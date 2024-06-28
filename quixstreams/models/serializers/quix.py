@@ -79,16 +79,13 @@ class QuixDeserializer(JSONDeserializer):
 
     def __init__(
         self,
-        column_name: Optional[str] = None,
         loads: Callable[[Union[bytes, bytearray]], Any] = default_loads,
     ):
         """
-        :param column_name: if provided, the deserialized value will be wrapped into
-            dictionary with `column_name` as a key.
         :param loads: function to parse json from bytes.
             Default - :py:func:`quixstreams.utils.json.loads`.
         """
-        super().__init__(column_name=column_name, loads=loads)
+        super().__init__(loads=loads)
         self._deserializers = {
             QModelKey.TIMESERIESDATA: self.deserialize_timeseries,
             QModelKey.PARAMETERDATA: self.deserialize_timeseries,
@@ -148,7 +145,7 @@ class QuixDeserializer(JSONDeserializer):
             row_value["Tags"] = {tag: next(values) for tag, values in tags}
 
             row_value[Q_TIMESTAMP_KEY] = timestamp_ns
-            yield self._to_dict(row_value)
+            yield row_value
 
     def deserialize(
         self, model_key: str, value: Union[List[Mapping], Mapping]
@@ -163,11 +160,11 @@ class QuixDeserializer(JSONDeserializer):
         return self._deserializers[model_key](value)
 
     def deserialize_event_data(self, value: Mapping) -> Iterable[Mapping]:
-        yield self._to_dict(self._parse_event_data(value))
+        yield self._parse_event_data(value)
 
     def deserialize_event_data_list(self, value: List[Mapping]) -> Iterable[Mapping]:
         for item in value:
-            yield self._to_dict(self._parse_event_data(item))
+            yield self._parse_event_data(item)
 
     def _parse_event_data(self, value: Mapping) -> Mapping:
         if not isinstance(value, Mapping):

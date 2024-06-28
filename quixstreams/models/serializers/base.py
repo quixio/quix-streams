@@ -45,14 +45,10 @@ class SerializationContext:
 
 
 class Deserializer(abc.ABC):
-    def __init__(self, column_name: Optional[str] = None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         A base class for all Deserializers
-
-        :param column_name: if provided, the deserialized value will be wrapped into
-            dictionary with `column_name` as a key.
         """
-        self.column_name = column_name
 
     @property
     def split_values(self) -> bool:
@@ -61,11 +57,6 @@ class Deserializer(abc.ABC):
         and each item in it should be processed as a separate message.
         """
         return False
-
-    def _to_dict(self, value: Any) -> Union[Any, dict]:
-        if self.column_name:
-            return {self.column_name: value}
-        return value
 
     @abc.abstractmethod
     def __call__(self, *args, **kwargs) -> Any: ...

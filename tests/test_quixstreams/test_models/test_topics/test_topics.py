@@ -40,8 +40,6 @@ class IgnoreDivisibleBy3Deserializer(IntegerDeserializer):
         deserialized = self._deserializer(value=value)
         if not deserialized % 3:
             raise IgnoreMessage("Ignore numbers divisible by 3")
-        if self.column_name:
-            return {self.column_name: deserialized}
         return deserialized
 
 
@@ -51,11 +49,11 @@ class TestTopic:
         [
             (
                 IntegerDeserializer(),
-                IntegerDeserializer("column"),
+                IntegerDeserializer(),
                 int_to_bytes(1),
                 int_to_bytes(2),
                 1,
-                {"column": 2},
+                2,
             ),
             (
                 DoubleDeserializer(),
@@ -75,11 +73,11 @@ class TestTopic:
             ),
             (
                 DoubleDeserializer(),
-                JSONDeserializer(column_name="root"),
+                JSONDeserializer(),
                 float_to_bytes(1.1),
                 json.dumps({"key": "value"}).encode(),
                 1.1,
-                {"root": {"key": "value"}},
+                {"key": "value"},
             ),
             (
                 BytesDeserializer(),
@@ -194,13 +192,13 @@ class TestTopic:
 
     def test_row_deserialize_ignorevalueerror_raised(self, topic_manager_topic_factory):
         topic = topic_manager_topic_factory(
-            value_deserializer=IgnoreDivisibleBy3Deserializer(column_name="value"),
+            value_deserializer=IgnoreDivisibleBy3Deserializer(),
         )
         row = topic.row_deserialize(
             message=ConfluentKafkaMessageStub(key=b"key", value=int_to_bytes(4))
         )
         assert row
-        assert row.value == {"value": 4}
+        assert row.value == 4
 
         row = topic.row_deserialize(
             message=ConfluentKafkaMessageStub(key=b"key", value=int_to_bytes(3))

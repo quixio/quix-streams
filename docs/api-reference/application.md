@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L55)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L55)
 
 The main Application class.
 
@@ -82,7 +82,7 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              topic_create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L93)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L93)
 
 
 <br>
@@ -180,7 +180,7 @@ def Quix(cls,
          topic_create_timeout: float = 60) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L313)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L313)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -290,7 +290,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L451)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L451)
 
 Create a topic definition.
 
@@ -371,7 +371,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L531)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L531)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -421,7 +421,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L570)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L570)
 
 Stop the internal poll loop and the message processing.
 
@@ -448,7 +448,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L593)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L593)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -483,7 +483,7 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L623)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L623)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
@@ -528,7 +528,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L666)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L666)
 
 Clear the state of the application.
 
@@ -542,7 +542,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/51c8064d2623b13b3e11c5acbb33409643f66f3c/quixstreams/app.py#L672)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/ea3d07177df3f11deb3c51e8337534408f5f68c1/quixstreams/app.py#L672)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
