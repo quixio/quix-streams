@@ -390,6 +390,29 @@ class TestStreamingDataFrame:
 
         assert expected in capsys.readouterr().out
 
+    @pytest.mark.parametrize(
+        "columns, expected",
+        [
+            ("col_a", {"col_b": 2, "col_c": 3}),
+            (["col_a"], {"col_b": 2, "col_c": 3}),
+            (["col_a", "col_b"], {"col_c": 3}),
+        ],
+    )
+    def test_drop(self, dataframe_factory, columns, expected):
+        value = {"col_a": 1, "col_b": 2, "col_c": 3}
+        key, timestamp, headers = b"key", 0, []
+        sdf = dataframe_factory()
+        sdf = sdf.drop(columns)
+        assert sdf.test(value=value, key=key, timestamp=timestamp, headers=headers)[
+            0
+        ] == (expected, key, timestamp, headers)
+
+    @pytest.mark.parametrize("columns", [["col_a", 3], b"col_d", {"col_a"}])
+    def test_drop_invalid_columns(self, dataframe_factory, columns):
+        sdf = dataframe_factory()
+        with pytest.raises(TypeError):
+            sdf.drop(columns)
+
 
 class TestStreamingDataFrameApplyExpand:
     def test_apply_expand(self, dataframe_factory):

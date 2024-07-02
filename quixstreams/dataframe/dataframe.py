@@ -966,6 +966,35 @@ class StreamingDataFrame(BaseStreaming):
             name=name,
         )
 
+    def drop(self, columns: Union[str, List[str]]) -> Self:
+        """
+        Drop column(s) from the message value (value must support `del`, like a dict).
+
+        Example Snippet:
+
+        ```python
+        # Remove columns "x" and "y" from the value.
+        # This would transform {"x": 1, "y": 2, "z": 3} to {"z": 3}
+
+        sdf = StreamingDataframe()
+        sdf = sdf.drop(["x", "y"])
+        ```
+
+        :param columns: a single column name or a list of names, where names are `str`
+        :return: a new StreamingDataFrame instance
+        """
+        if isinstance(columns, list):
+            if not all(isinstance(s, str) for s in columns):
+                raise TypeError(f"column list must contain strings only")
+        elif isinstance(columns, str):
+            columns = [columns]
+        else:
+            raise TypeError(
+                f"Expected a string or a list of strings, not {type(columns)}"
+            )
+        stream = self.stream.add_update(lambda value: _drop(value, columns))
+        return self.__dataframe_clone__(stream)
+
     def _produce(
         self,
         topic: Topic,
@@ -1109,6 +1138,16 @@ class StreamingDataFrame(BaseStreaming):
             f"using 'bool()' or any operations that rely on it; "
             f"use '&' or '|' for logical and/or comparisons"
         )
+
+
+def _drop(value: Dict, columns: List[str]):
+    """
+    remove columns from the value, inplace
+    :param value: a dict or something that supports `del`
+    :param columns: a list of column names
+    """
+    for column in columns:
+        del value[column]
 
 
 def _as_metadata_func(
