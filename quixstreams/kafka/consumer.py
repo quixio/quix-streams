@@ -89,10 +89,10 @@ class Consumer:
             Passed as `group.id` to `confluent_kafka.Consumer`
         :param auto_offset_reset: Consumer `auto.offset.reset` setting.
             Available values:
-              - "earliest" - automatically reset the offset to the smallest offset
-              - "latest" - automatically reset the offset to the largest offset
-              - "error" - trigger an error (ERR__AUTO_OFFSET_RESET) which is retrieved
-                by consuming messages (used for testing)
+                <br>"earliest" - automatically reset the offset to the smallest offset
+                <br>"latest" - automatically reset the offset to the largest offset
+                <br>"error" - trigger an error (`ERR__AUTO_OFFSET_RESET`) which is
+                    retrieved by consuming messages (used for testing)
         :param auto_commit_enable: If true, periodically commit offset of
             the last message handed to the application. Default - `True`.
         :param logger: a Logger instance to attach librdkafka logging to
@@ -133,12 +133,12 @@ class Consumer:
         object's :py:func:`Message.error()` method to distinguish between proper
         messages (error() returns None), or an event or error.
 
-        Note: a RebalancingCallback may be called from this method (
+        Note: a `RebalancingCallback` may be called from this method (
         `on_assign`, `on_revoke`, or `on_lost`).
 
         :param float timeout: Maximum time in seconds to block waiting for message,
             event or callback. None or -1 is infinite. Default: None.
-        :return: A Message object or None on timeout
+        :return: A `Message` object or `None` on timeout
         :rtype: Optional[Message]
         :raises RuntimeError: if called on a closed consumer
         """
@@ -373,16 +373,16 @@ class Consumer:
             topic=topic, timeout=timeout if timeout is not None else -1
         )
 
-    def memberid(self) -> str:
+    def memberid(self) -> Optional[str]:
         """
         Return this client's broker-assigned group member id.
 
         The member id is assigned by the group coordinator and is propagated to
         the consumer during rebalance.
 
-         :return: Member id string or None
-         :rtype: string
-         :raises RuntimeError: if called on a closed consumer
+        :return: Member id string or None
+        :rtype: Optional[string]
+        :raises RuntimeError: if called on a closed consumer
         """
         return self._consumer.memberid()
 
@@ -398,14 +398,14 @@ class Consumer:
         corresponding partition. If the provided timestamp exceeds that of the
         last message in the partition, a value of -1 will be returned.
 
-         :param List[TopicPartition] partitions: topic+partitions with timestamps
+        :param List[TopicPartition] partitions: topic+partitions with timestamps
             in the TopicPartition.offset field.
-         :param float timeout: The maximum response time before timing out.
+        :param float timeout: The maximum response time before timing out.
             None or -1 is infinite. Default: None
-         :return: List of topic+partition with offset field set and possibly error set
-         :rtype: List[TopicPartition]
-         :raises KafkaException: if a Kafka-based error occurs
-         :raises RuntimeError: if called on a closed consumer
+        :return: List of topic+partition with offset field set and possibly error set
+        :rtype: List[TopicPartition]
+        :raises KafkaException: if a Kafka-based error occurs
+        :raises RuntimeError: if called on a closed consumer
         """
 
         return self._consumer.offsets_for_times(
@@ -418,7 +418,7 @@ class Consumer:
 
         Paused partitions must be tracked manually.
 
-        Does NOT affect the result of Consumer.assignment().
+        Does NOT affect the result of `Consumer.assignment()`.
 
         :param List[TopicPartition] partitions: List of topic+partitions to pause.
         :raises KafkaException: if a Kafka-based error occurs
@@ -455,7 +455,7 @@ class Consumer:
         The offset may be an absolute (>=0) or a
         logical offset like `OFFSET_BEGINNING`.
 
-        seek() may only be used to update the consume offset of an
+        `seek()` may only be used to update the consume offset of an
         actively consumed partition (i.e., after `Consumer.assign()`),
         to set the starting offset of partition not being consumed instead
         pass the offset in an `assign()` call.
@@ -481,13 +481,15 @@ class Consumer:
 
     def set_sasl_credentials(self, username: str, password: str):
         """
-
         Sets the SASL credentials used for this client.
         These credentials will overwrite the old ones, and will be used the next
         time the client needs to authenticate.
         This method will not disconnect existing broker connections that have been
         established with the old credentials.
         This method is applicable only to SASL PLAIN and SCRAM mechanisms.
+
+        :param str username: your username
+        :param str password: your password
         """
         return self._consumer.set_sasl_credentials(username, password)
 
@@ -500,6 +502,8 @@ class Consumer:
 
         Any additional partitions besides the ones passed during the `Consumer`
         `on_assign` callback will NOT be associated with the consumer group.
+
+        :param List[TopicPartition] partitions: a list of topic partitions
         """
         return self._consumer.incremental_assign(partitions)
 
@@ -508,6 +512,8 @@ class Consumer:
         Revoke partitions.
 
         Can be called outside an on_revoke callback.
+
+        :param List[TopicPartition] partitions: a list of topic partitions
         """
         return self._consumer.incremental_unassign(partitions)
 

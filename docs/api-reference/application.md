@@ -10,7 +10,7 @@
 class Application()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L56)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L55)
 
 The main Application class.
 
@@ -40,7 +40,7 @@ Most functionality is explained the various methods, except for
 ```python
 from quixstreams import Application
 
-# Set up an `app = Application` and `sdf = StreamingDataFrame`;
+# Set up an `app = Application` and  `sdf = StreamingDataFrame`;
 # add some operations to `sdf` and then run everything.
 
 app = Application(broker_address='localhost:9092', consumer_group='group')
@@ -79,11 +79,10 @@ def __init__(broker_address: Optional[Union[str, ConnectionConfig]] = None,
              quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
              topic_manager: Optional[TopicManager] = None,
              request_timeout: float = 30,
-             topic_create_timeout: float = 60,
-             processing_guarantee: ProcessingGuarantee = "at-least-once")
+             topic_create_timeout: float = 60)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L94)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L93)
 
 
 <br>
@@ -135,7 +134,6 @@ Default - `True`
 - `topic_manager`: A `TopicManager` instance
 - `request_timeout`: timeout (seconds) for REST-based requests
 - `topic_create_timeout`: timeout (seconds) for topic create finalization
-- `processing_guarantee`: Use "exactly-once" or "at-least-once" processing.
 <br><br>***Error Handlers***<br>
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
@@ -160,33 +158,29 @@ instead of the default one.
 
 ```python
 @classmethod
-def Quix(
-    cls,
-    consumer_group: Optional[str] = None,
-    auto_offset_reset: AutoOffsetReset = "latest",
-    consumer_extra_config: Optional[dict] = None,
-    producer_extra_config: Optional[dict] = None,
-    state_dir: str = "state",
-    rocksdb_options: Optional[RocksDBOptionsType] = None,
-    on_consumer_error: Optional[ConsumerErrorCallback] = None,
-    on_processing_error: Optional[ProcessingErrorCallback] = None,
-    on_producer_error: Optional[ProducerErrorCallback] = None,
-    on_message_processed: Optional[MessageProcessedCallback] = None,
-    consumer_poll_timeout: float = 1.0,
-    producer_poll_timeout: float = 0.0,
-    loglevel: Optional[LogLevel] = "INFO",
-    quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
-    auto_create_topics: bool = True,
-    use_changelog_topics: bool = True,
-    topic_manager: Optional[QuixTopicManager] = None,
-    request_timeout: float = 30,
-    topic_create_timeout: float = 60,
-    processing_guarantee: Literal["at-least-once",
-                                  "exactly-once"] = "exactly-once"
-) -> Self
+def Quix(cls,
+         consumer_group: Optional[str] = None,
+         auto_offset_reset: AutoOffsetReset = "latest",
+         consumer_extra_config: Optional[dict] = None,
+         producer_extra_config: Optional[dict] = None,
+         state_dir: str = "state",
+         rocksdb_options: Optional[RocksDBOptionsType] = None,
+         on_consumer_error: Optional[ConsumerErrorCallback] = None,
+         on_processing_error: Optional[ProcessingErrorCallback] = None,
+         on_producer_error: Optional[ProducerErrorCallback] = None,
+         on_message_processed: Optional[MessageProcessedCallback] = None,
+         consumer_poll_timeout: float = 1.0,
+         producer_poll_timeout: float = 0.0,
+         loglevel: Optional[LogLevel] = "INFO",
+         quix_config_builder: Optional[QuixKafkaConfigsBuilder] = None,
+         auto_create_topics: bool = True,
+         use_changelog_topics: bool = True,
+         topic_manager: Optional[QuixTopicManager] = None,
+         request_timeout: float = 30,
+         topic_create_timeout: float = 60) -> Self
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L330)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L313)
 
 >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
 
@@ -259,7 +253,6 @@ Default - `True`
 - `topic_manager`: A `QuixTopicManager` instance
 - `request_timeout`: timeout (seconds) for REST-based requests
 - `topic_create_timeout`: timeout (seconds) for topic create finalization
-- `processing_guarantee`: Use "exactly-once" or "at-least-once" processing.
 <br><br>***Error Handlers***<br>
 To handle errors, `Application` accepts callbacks triggered when
     exceptions occur on different stages of stream processing. If the callback
@@ -297,7 +290,7 @@ def topic(name: str,
           timestamp_extractor: Optional[TimestampExtractor] = None) -> Topic
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L471)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L451)
 
 Create a topic definition.
 
@@ -378,7 +371,7 @@ topic = app.topic("input-topic", timestamp_extractor=custom_ts_extractor)
 def dataframe(topic: Topic) -> StreamingDataFrame
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L551)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L531)
 
 A simple helper method that generates a `StreamingDataFrame`, which is used
 
@@ -428,7 +421,7 @@ to be used as an input topic.
 def stop(fail: bool = False)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L590)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L570)
 
 Stop the internal poll loop and the message processing.
 
@@ -455,7 +448,7 @@ to unhandled exception, and it shouldn't commit the current checkpoint.
 def get_producer() -> Producer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L613)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L593)
 
 Create and return a pre-configured Producer instance.
 The Producer is initialized with params passed to Application.
@@ -490,23 +483,19 @@ with app.get_producer() as producer:
 def get_consumer(auto_commit_enable: bool = True) -> Consumer
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L643)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L623)
 
 Create and return a pre-configured Consumer instance.
 The Consumer is initialized with params passed to Application.
 
-It's useful for consuming data from Kafka outside the standard
-Application processing flow.
-(e.g., to consume test data from a topic).
-Using it within the StreamingDataFrame functions is not recommended, as it
-creates a new Consumer instance
+It's useful for consuming data from Kafka outside the standard Application processing flow.
+(e.g. to consume test data from a topic).
+Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
 each time, which is not optimized for repeated use in a streaming pipeline.
 
-Note: By default, this consumer does not autocommit the consumed offsets to allow
-at-least-once processing.
+Note: By default this consumer does not autocommit consumed offsets to allow exactly-once processing.
 To store the offset call store_offsets() after processing a message.
-If autocommit is necessary set `enable.auto.offset.store` to True in
-the consumer config when creating the app.
+If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
 
 
 <br>
@@ -539,7 +528,7 @@ with app.get_consumer() as consumer:
 def clear_state()
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L690)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L666)
 
 Clear the state of the application.
 
@@ -553,7 +542,7 @@ Clear the state of the application.
 def run(dataframe: StreamingDataFrame)
 ```
 
-[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/209d74b1262aa6d90dddd1a01473c83d9d10fdce/quixstreams/app.py#L696)
+[[VIEW SOURCE]](https://github.com/quixio/quix-streams/blob/8dada467a1132f5edcefe85f9cde0d727718d617/quixstreams/app.py#L672)
 
 Start processing data from Kafka using provided `StreamingDataFrame`
 
