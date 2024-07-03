@@ -111,7 +111,36 @@ Currently, Quix Streams offers `at-least-once` and `exactly-once`.
 Also, `exactly-once` is the default in order to give new Kafka users the behavior they
 likely expect out of the box.
 
-### What is right for me?
+### Performance comparison
+
+It is difficult to offer hard numbers for the speed difference between `exactly-once` 
+and `at-least-once` because many factors are at play, though latency is perhaps 
+the main contributor since `exactly-once` requires more communication with the broker.
+
+With default `Application` settings, `exactly-once` will likely perform at worst 
+10% slower than `at-least-once`, but given the nature of infrastructure/architecture, 
+even this is not a guarantee.
+
+You can minimize the impact of latency somewhat by adjusting the [`commit_interval` of 
+the `Application`](#main-configuration-parameters), but be aware of [the
+performance considerations around `commit_interval`](advanced/checkpointing.md)).
+
+
+### Exactly-Once producer buffering
+
+Because `exactly-once` messages do not fully commit or produce until the 
+[checkpoint](advanced/checkpointing.md) successfully completes, any resulting produced 
+messages are not immediately readable like with `at-least-once`.
+
+Basically, the [`commit_interval` of an `Application`](#main-configuration-parameters) 
+can be interpreted as the maximum amount of time before a produced message can be read 
+(depending on how far into the checkpoint a message is processed). If you adjust it, 
+be aware of other [performance considerations around `commit_interval`](advanced/checkpointing.md)).
+
+> NOTE: `groupby` doubles this effect since it produces to another topic under the hood. 
+
+
+### What processing guarantee is right for me?
 If unsure or processing speed has not been an issue, the safe answer is `exactly-once` 
 (the default). 
 

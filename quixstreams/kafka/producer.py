@@ -188,7 +188,6 @@ class TransactionalProducer(Producer):
         error_callback: Callable[[KafkaError], None] = _default_error_cb,
         extra_config: Optional[dict] = None,
         flush_timeout: Optional[int] = None,
-        transactional_id: str = str(uuid.uuid4()),
     ):
         super().__init__(
             broker_address=broker_address,
@@ -202,7 +201,7 @@ class TransactionalProducer(Producer):
         self._producer_config = {
             **self._producer_config,
             "enable.idempotence": True,
-            "transactional.id": transactional_id,
+            "transactional.id": str(uuid.uuid4()),
         }
 
     @property
