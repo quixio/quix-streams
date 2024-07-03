@@ -46,7 +46,7 @@ class RecoveryPartition:
         self._recovery_consume_position: Optional[int] = None
         self._initial_offset: Optional[int] = None
 
-    def __str__(self):
+    def __repr__(self):
         return f"{self.changelog_name}[{self.partition_num}]"
 
     @property

@@ -97,7 +97,7 @@ class Application:
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        commit_interval: float = 5.0,
+        commit_interval: float = 2.0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
