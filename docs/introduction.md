@@ -10,7 +10,7 @@ Quix Streams has the following benefits:
 * Support for stateful operations using RocksDB.
 * Support for aggregations over tumbling and hopping time windows
 * A simple framework with Pandas-like interface to ease newcomers to streaming.
-* "At-least-once" Kafka processing guarantees.
+* "At-least-once" and "exactly-once" Kafka processing guarantees.
 * Designed to run and scale resiliently via container orchestration (like Kubernetes).
 * Easily runs locally and in Jupyter Notebook for convenient development and debugging.
 * Seamless integration with the Quix platform.

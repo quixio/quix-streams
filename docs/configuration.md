@@ -149,13 +149,16 @@ vs. the potential to double-process a result, which may require other infrastruc
 considerations to handle appropriately.
 
 In general, you may consider using `at-least-once` guarantees when:
+
 - The latency and processing speed are the primary concerns.
 - The downstream consumers can gracefully handle duplicated messages.
 
 You may consider using `exactly-once` instead when:
+
 - Consistency and correctness of the outputs are critical.
 - Downstream consumers of the output topics cannot handle duplicated data.
-- Note: you may want to pick a smaller value for the `commit_interval` to commit checkpoints more often and reduce the latency.  
+- Note: you may want to pick a smaller value for the `commit_interval` to commit checkpoints more often and reduce the latency.
+
 For more information about tuning the `commit_interval`, see the ["Configuring the Checkpointing" page](advanced/checkpointing.md). 
 
 
