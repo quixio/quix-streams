@@ -586,8 +586,7 @@ def topic_manager_topic_factory(topic_manager_factory):
         value_deserializer: Optional[Union[Deserializer, str]] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
     ) -> Topic:
-        if not name:
-            name = str(uuid.uuid4())
+        name = name or str(uuid.uuid4())
         topic_manager = topic_manager_factory()
         topic_args = {
             "key_serializer": key_serializer,
