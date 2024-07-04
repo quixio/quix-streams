@@ -79,7 +79,7 @@ class Application:
     ```python
     from quixstreams import Application
 
-    # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+    # Set up an `app = Application` and `sdf = StreamingDataFrame`;
     # add some operations to `sdf` and then run everything.
 
     app = Application(broker_address='localhost:9092', consumer_group='group')
@@ -97,7 +97,7 @@ class Application:
         quix_sdk_token: Optional[str] = None,
         consumer_group: Optional[str] = None,
         auto_offset_reset: AutoOffsetReset = "latest",
-        commit_interval: float = 2.0,
+        commit_interval: float = 5.0,
         consumer_extra_config: Optional[dict] = None,
         producer_extra_config: Optional[dict] = None,
         state_dir: str = "state",
@@ -115,7 +115,7 @@ class Application:
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
-        processing_guarantee: ProcessingGuarantee = "exactly-once",
+        processing_guarantee: ProcessingGuarantee = "at-least-once",
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -645,14 +645,18 @@ class Application:
         Create and return a pre-configured Consumer instance.
         The Consumer is initialized with params passed to Application.
 
-        It's useful for consuming data from Kafka outside the standard Application processing flow.
-        (e.g. to consume test data from a topic).
-        Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
+        It's useful for consuming data from Kafka outside the standard
+        Application processing flow.
+        (e.g., to consume test data from a topic).
+        Using it within the StreamingDataFrame functions is not recommended, as it
+        creates a new Consumer instance
         each time, which is not optimized for repeated use in a streaming pipeline.
 
-        Note: By default this consumer does not autocommit consumed offsets to allow exactly-once processing.
+        Note: By default, this consumer does not autocommit the consumed offsets to allow
+        at-least-once processing.
         To store the offset call store_offsets() after processing a message.
-        If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
+        If autocommit is necessary set `enable.auto.offset.store` to True in
+        the consumer config when creating the app.
 
         Example Snippet:
 

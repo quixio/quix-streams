@@ -35,11 +35,10 @@ See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-au
 **Options**: `"latest"`, `"earliest"`.  
 **Default** - `"latest"`.
 
-- **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing 
-guarantees.  
+- **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing guarantees.  
 See [Processing Guarantees](#processing-guarantees) for more information.  
-**Options**: `"at-least-once"`/`"ALO"` or `"exactly-once"`/`"EO"`.  
-**Default** - `"exactly-once"`.
+**Options**: `"at-least-once"` or `"exactly-once".  
+**Default** - `"at-least-once"`.
 
 ## Authentication
 
@@ -99,17 +98,20 @@ From weakest to strongest: `at-most-once`, `at-least-once`, and `exactly-once`.
 Stronger guarantees generally have larger overhead, and thus reduced speed. 
 
 These guarantees can be read literally: when consuming Kafka messages, you can 
-guarantee each will be processed `X` times.
+guarantee each will be processed `X` times:
 
-Many users expect that Kafka processing is `exactly-once` by nature, but this is often
-not the case for many client libraries, which frequently leads to confusing results.
+- `at-most-once` - a message will be processed not more than once.  
+If the processing fails, the message will not be processed again.
+- `at-least-once` - a message may be processed more than once.  
+It may lead to duplicates in the output topics, but the message won’t be lost and is guaranteed to be processed.
+- `exactly-once` - a message will be processed exactly once.  
+The message is guaranteed to be processed without duplicated outputs but at the cost of higher latency and complexity.
 
 ### What options does Quix Streams offer?
 
 Currently, Quix Streams offers `at-least-once` and `exactly-once`.
 
-Also, `exactly-once` is the default in order to give new Kafka users the behavior they
-likely expect out of the box.
+The default guarantee is `at-least-once`. 
 
 ### Performance comparison
 
@@ -141,12 +143,21 @@ be aware of other [performance considerations around `commit_interval`](advanced
 
 
 ### What processing guarantee is right for me?
-If unsure or processing speed has not been an issue, the safe answer is `exactly-once` 
-(the default). 
 
-Otherwise, it's a case-by-case determination, ultimately weighing an increase of speed 
-vs the potential to double-process a result, which may require other infrastructural
+To pick the right guarantee, you need to weigh an increase in speed 
+vs. the potential to double-process a result, which may require other infrastructural
 considerations to handle appropriately.
+
+In general, you may consider using `at-least-once` guarantees when:
+- The latency and processing speed are the primary concerns.
+- The downstream consumers can gracefully handle duplicated messages.
+
+You may consider using `exactly-once` instead when:
+- Consistency and correctness of the outputs are critical.
+- Downstream consumers of the output topics cannot handle duplicated data.
+- Note: you may want to pick a smaller value for the `commit_interval` to commit checkpoints more often and reduce the latency.  
+For more information about tuning the `commit_interval`, see the ["Configuring the Checkpointing" page](advanced/checkpointing.md). 
+
 
 ## State
 - **`state_dir`** - path to the application state directory.  
