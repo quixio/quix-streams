@@ -159,7 +159,7 @@ You may consider using `exactly-once` instead when:
 - Downstream consumers of the output topics cannot handle duplicated data.
 - Note: you may want to pick a smaller value for the `commit_interval` to commit checkpoints more often and reduce the latency.
 
-For more information about tuning the `commit_interval`, see the ["Configuring the Checkpointing" page](advanced/checkpointing.md). 
+For more information about tuning the `commit_interval`, see the ["Configuring the Checkpointing" page](advanced/checkpointing.md#configuring-the-checkpointing). 
 
 
 ## State
