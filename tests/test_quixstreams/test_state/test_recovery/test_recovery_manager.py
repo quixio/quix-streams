@@ -1,10 +1,11 @@
 from unittest.mock import patch, MagicMock
 
+import pytest
 from confluent_kafka import TopicPartition as ConfluentPartition
 
 from quixstreams.kafka import Consumer
 from quixstreams.models import TopicManager, TopicConfig
-from quixstreams.state import RecoveryPartition
+from quixstreams.state.exceptions import InvalidStoreChangelogOffset
 from quixstreams.state.rocksdb import RocksDBStorePartition
 from quixstreams.state.rocksdb.metadata import CHANGELOG_CF_MESSAGE_HEADER
 from tests.utils import ConfluentKafkaMessageStub
@@ -92,7 +93,7 @@ class TestRecoveryManager:
         # Check that consumer paused all assigned partitions
         consumer.pause.assert_called_with(assignment)
 
-    def test_assign_partition_fix_offset_only(
+    def test_assign_partition_invalid_offset(
         self,
         recovery_manager_factory,
         recovery_partition_factory,
@@ -100,7 +101,7 @@ class TestRecoveryManager:
     ):
         """
         Try to recover store partition with changelog offset AHEAD of the watermark.
-        The offset should be adjusted in this case, but recovery should not be triggered
+        This is invalid and should raise exception.
         """
 
         topic_name = "topic_name"
@@ -127,16 +128,13 @@ class TestRecoveryManager:
             consumer=consumer, topic_manager=topic_manager
         )
 
-        with patch.object(RecoveryPartition, "update_offset") as update_offset:
+        with pytest.raises(InvalidStoreChangelogOffset):
             recovery_manager.assign_partition(
                 topic=topic_name,
                 partition=partition_num,
                 store_partitions={store_name: store_partition},
                 committed_offset=-1001,
             )
-
-        # "update_offset()" should be called
-        update_offset.assert_called()
 
         # No pause or assignments should happen
         consumer.pause.assert_not_called()
@@ -186,7 +184,7 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
-        assert recovery_manager.partitions[0][changelog_topic.name].needs_recovery
+        assert recovery_manager.partitions[0][changelog_topic.name].needs_recovery_check
 
         # Put a RecoveryManager into "recovering" state
         recovery_manager._running = True
@@ -202,7 +200,7 @@ class TestRecoveryManager:
             store_partitions={store_name: store_partition},
         )
         assert recovery_manager.partitions
-        assert recovery_manager.partitions[1][changelog_topic.name].needs_recovery
+        assert recovery_manager.partitions[1][changelog_topic.name].needs_recovery_check
 
         # Check that consumer first paused all partitions
         assert consumer.pause.call_args_list[0].args[0] == assignment
@@ -295,8 +293,9 @@ class TestRecoveryManager:
         """
         Test that RecoveryManager.do_recovery():
          - resumes the recovering changelog partition
-         - applies changes to the StorePartition
-         - revokes the RecoveryPartition after recovery is done
+         - applies the 1 missing changelog recovery message to the StorePartition
+         - handles a None consumer poll to check for finished recovery (which it is)
+         - revokes the RecoveryPartition
          - unassigns the changelog partition
          - unpauses source topic partitions
         """
@@ -316,7 +315,7 @@ class TestRecoveryManager:
         changelog_message = ConfluentKafkaMessageStub(
             topic=changelog_topic.name,
             partition=0,
-            offset=highwater - 1,
+            offset=highwater - 2,  # <highwater-1 ensures recovery check will be made
             key=b"key",
             value=b"value",
             headers=[(CHANGELOG_CF_MESSAGE_HEADER, b"default")],
@@ -324,7 +323,8 @@ class TestRecoveryManager:
 
         # Create a RecoveryManager
         consumer = MagicMock(spec_set=Consumer)
-        consumer.poll.return_value = changelog_message
+        # note how the poll returns None, which signifies no more messages to recover
+        consumer.poll.side_effect = [changelog_message, None]
         consumer.assignment.return_value = assignment
         recovery_manager = recovery_manager_factory(
             consumer=consumer, topic_manager=topic_manager
@@ -332,6 +332,10 @@ class TestRecoveryManager:
 
         # Assign a partition that needs recovery
         consumer.get_watermark_offsets.return_value = (lowwater, highwater)
+        # this will get called after a "None" consumer poll result
+        consumer.position.return_value = [
+            ConfluentPartition(changelog_topic.name, 0, highwater)
+        ]
         recovery_manager.assign_partition(
             topic=topic_name,
             partition=0,
@@ -344,6 +348,8 @@ class TestRecoveryManager:
 
         # Check that consumer first resumed the changelog topic partition
         consumer_resume_calls = consumer.resume.call_args_list
+
+        assert len(consumer.poll.call_args_list) == 2
         assert consumer_resume_calls[0].args[0] == [
             ConfluentPartition(topic=changelog_topic.name, partition=0)
         ]

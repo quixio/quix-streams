@@ -1,24 +1,19 @@
 import logging
-from typing import Union, Optional, Callable
+import uuid
+from typing import Union, Optional, Callable, List
 
 from confluent_kafka import (
     Producer as ConfluentProducer,
     KafkaError,
     Message,
+    TopicPartition,
 )
-from typing_extensions import Literal
+from confluent_kafka.admin import GroupMetadata
 
-from .configuration import ConnectionConfig
 from quixstreams.models.types import Headers
+from .configuration import ConnectionConfig
 
-__all__ = (
-    "Producer",
-    "Partitioner",
-)
-
-Partitioner = Literal[
-    "random", "consistent_random", "murmur2", "murmur2_random", "fnv1a", "fnv1a_random"
-]
+__all__ = ("Producer",)
 
 DeliveryCallback = Callable[[Optional[KafkaError], Message], None]
 
@@ -178,3 +173,59 @@ class Producer:
         logger.debug("Flushing kafka producer")
         self.flush()
         logger.debug("Kafka producer flushed")
+
+
+class TransactionalProducer(Producer):
+    """
+    A separate producer class used only internally for transactions
+    (transactions are only needed when using a consumer).
+    """
+
+    def __init__(
+        self,
+        broker_address: Union[str, ConnectionConfig],
+        logger: logging.Logger = logger,
+        error_callback: Callable[[KafkaError], None] = _default_error_cb,
+        extra_config: Optional[dict] = None,
+        flush_timeout: Optional[int] = None,
+    ):
+        super().__init__(
+            broker_address=broker_address,
+            logger=logger,
+            error_callback=error_callback,
+            extra_config=extra_config,
+            flush_timeout=flush_timeout,
+        )
+        # remake config to avoid overriding anything in the Application's
+        # producer config, which is used in Application.get_producer().
+        self._producer_config = {
+            **self._producer_config,
+            "enable.idempotence": True,
+            "transactional.id": str(uuid.uuid4()),
+        }
+
+    @property
+    def _producer(self) -> ConfluentProducer:
+        if not self._inner_producer:
+            self._inner_producer = super()._producer
+            self._inner_producer.init_transactions()
+        return self._inner_producer
+
+    def begin_transaction(self):
+        self._producer.begin_transaction()
+
+    def send_offsets_to_transaction(
+        self,
+        positions: List[TopicPartition],
+        group_metadata: GroupMetadata,
+        timeout: Optional[float] = None,
+    ):
+        self._producer.send_offsets_to_transaction(
+            positions, group_metadata, timeout if timeout is not None else -1
+        )
+
+    def abort_transaction(self, timeout: Optional[float] = None):
+        self._producer.abort_transaction(timeout if timeout is not None else -1)
+
+    def commit_transaction(self, timeout: Optional[float] = None):
+        self._producer.commit_transaction(timeout if timeout is not None else -1)

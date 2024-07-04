@@ -27,6 +27,7 @@ from quixstreams.models import (
 from quixstreams.platforms.quix import QuixKafkaConfigsBuilder, QuixApplicationConfig
 from quixstreams.platforms.quix.env import QuixEnvironment
 from quixstreams.rowconsumer import RowConsumer
+from quixstreams.rowproducer import RowProducer
 from quixstreams.state import State
 
 
@@ -98,7 +99,6 @@ class TestApplication:
         app_factory,
         row_consumer_factory,
         executor,
-        row_factory,
     ):
         """
         Test that StreamingDataFrame processes 3 messages from Kafka by having the
@@ -186,7 +186,6 @@ class TestApplication:
         app_factory,
         row_consumer_factory,
         executor,
-        row_factory,
     ):
         """
         Test that Application doesn't commit the checkpoint in case of failure
@@ -538,10 +537,8 @@ class TestAppGroupBy:
     def test_group_by(
         self,
         app_factory,
-        topic_manager_factory,
         row_consumer_factory,
         executor,
-        row_factory,
     ):
         """
         Test that StreamingDataFrame processes 6 messages from Kafka and groups them
@@ -558,7 +555,6 @@ class TestAppGroupBy:
             if processed_count == total_messages:
                 done.set_result(True)
 
-        topic_manager = topic_manager_factory()  # just to make topic_config objects
         processed_count = 0
 
         timestamp = 1000
@@ -568,7 +564,6 @@ class TestAppGroupBy:
         total_messages = expected_message_count * 2  # groupby reproduces each message
         app = app_factory(
             auto_offset_reset="earliest",
-            topic_manager=topic_manager,
             on_message_processed=on_message_processed,
         )
 
@@ -623,13 +618,13 @@ class TestAppGroupBy:
             "groupby_timestamp": timestamp,
         }
 
+    @pytest.mark.parametrize("processing_guarantee", ["exactly-once", "at-least-once"])
     def test_group_by_with_window(
         self,
         app_factory,
-        topic_manager_factory,
         row_consumer_factory,
         executor,
-        row_factory,
+        processing_guarantee,
     ):
         """
         Test that StreamingDataFrame processes 6 messages from Kafka and groups them
@@ -646,7 +641,6 @@ class TestAppGroupBy:
             if processed_count == total_messages:
                 done.set_result(True)
 
-        topic_manager = topic_manager_factory()  # just to make topic_config objects
         processed_count = 0
 
         timestamp = 1000
@@ -656,8 +650,8 @@ class TestAppGroupBy:
         total_messages = expected_message_count * 2  # groupby reproduces each message
         app = app_factory(
             auto_offset_reset="earliest",
-            topic_manager=topic_manager,
             on_message_processed=on_message_processed,
+            processing_guarantee=processing_guarantee,
         )
 
         app_topic_in = app.topic(
@@ -707,6 +701,107 @@ class TestAppGroupBy:
         assert row.key.decode() == user_id
         # Check that window is calculated based on the original timestamp
         assert row.value == {"start": 1000, "end": 2000, "value": 1}
+
+
+class TestAppExactlyOnce:
+
+    def test_exactly_once(
+        self,
+        app_factory,
+        topic_manager_factory,
+        row_consumer_factory,
+        executor,
+    ):
+        """
+        An Application that forwards messages to a new topic crashes after producing 2
+        messages, then restarts (will reprocess all 3 messages again).
+
+        The second run succeeds in processing all 3 messages and commits transaction.
+
+        The 2 non-committed produces should be ignored by a downstream consumer.
+        """
+        processed_count = 0
+        total_messages = 3
+        fail_idx = 1
+        done = Future()
+
+        def on_message_processed(*_):
+            # Set the callback to track total messages processed
+            # The callback is not triggered if processing fails
+            nonlocal processed_count
+            processed_count += 1
+            # Stop processing after consuming all the messages
+            # if (processed_count % total_messages) == 0:
+            if processed_count == total_messages:
+                done.set_result(True)
+
+        class ForceFail(Exception): ...
+
+        def fail_once(value):
+            if processed_count == fail_idx:
+                # sleep here to ensure produced messages actually make it to topic
+                time.sleep(2)
+                raise ForceFail
+            return value
+
+        consumer_group = str(uuid.uuid4())
+        topic_in_name = str(uuid.uuid4())
+        topic_out_name = str(uuid.uuid4())
+
+        def get_app(fail: bool):
+            app = app_factory(
+                commit_interval=30,
+                auto_offset_reset="earliest",
+                on_message_processed=on_message_processed,
+                consumer_group=consumer_group,
+                processing_guarantee="exactly-once",
+            )
+            topic_in = app.topic(topic_in_name, value_deserializer="json")
+            topic_out = app.topic(topic_out_name, value_serializer="json")
+            sdf = app.dataframe(topic_in)
+            sdf = sdf.to_topic(topic_out)
+            if fail:
+                sdf = sdf.apply(fail_once)
+            return app, sdf, topic_in, topic_out
+
+        # first run of app that encounters an error during processing
+        app, sdf, topic_in, topic_out = get_app(fail=True)
+
+        # produce initial messages to consume
+        with app.get_producer() as producer:
+            for i in range(total_messages):
+                msg = topic_in.serialize(key=str(i), value={"my_val": str(i)})
+                producer.produce(topic=topic_in.name, key=msg.key, value=msg.value)
+
+        with pytest.raises(ForceFail):
+            app.run(sdf)
+        assert processed_count == fail_idx
+
+        # re-init the app, only this time it won't fail
+        processed_count = 0
+        app, sdf, topic_in, topic_out = get_app(fail=False)
+        executor.submit(_stop_app_on_future, app, done, 10.0)
+        app.run(sdf)
+
+        # only committed messages are read by a downstream consumer
+        with row_consumer_factory(auto_offset_reset="earliest") as row_consumer:
+            row_consumer.subscribe([topic_out])
+            rows = []
+            while (row := row_consumer.poll_row(timeout=5)) is not None:
+                rows.append(row)
+            lowwater, highwater = row_consumer.get_watermark_offsets(
+                TopicPartition(topic_out.name, 0), 3
+            )
+        assert len(rows) == total_messages
+
+        # Sanity check that non-committed messages actually made it to topic
+        assert lowwater == 0
+        # The first message being at offset 3 affirms the first transaction
+        # was successfully aborted, as expected.
+        assert rows[0].offset == fail_idx + 2 == 3
+        # The last message being at offset 7 affirms the second transaction
+        # was successfully committed, as expected.
+        assert highwater == rows[-1].offset + 2 == 7
 
 
 class TestQuixApplication:
@@ -1483,7 +1578,7 @@ class TestApplicationRecovery:
                         topic=topic.name, store_name=store_name
                     )
                     partition = store.partitions[p_num]
-                    assert partition.get_changelog_offset() == count
+                    assert partition.get_changelog_offset() == count - 1
                     with partition.begin() as tx:
                         # All keys in state must be prefixed with the message key
                         prefix = f"key{p_num}".encode()
@@ -1524,8 +1619,14 @@ class TestApplicationRecovery:
         # State should be the same as before deletion
         validate_state()
 
+    @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
     def test_changelog_recovery_window_store(
-        self, app_factory, executor, tmp_path, state_manager_factory
+        self,
+        app_factory,
+        executor,
+        tmp_path,
+        state_manager_factory,
+        processing_guarantee,
     ):
         consumer_group = str(uuid.uuid4())
         state_dir = (tmp_path / "state").absolute()
@@ -1582,6 +1683,7 @@ class TestApplicationRecovery:
                 consumer_group=consumer_group,
                 on_message_processed=on_message_processed,
                 state_dir=state_dir,
+                processing_guarantee=processing_guarantee,
             )
             topic = app.topic(
                 topic_name,
@@ -1623,9 +1725,16 @@ class TestApplicationRecovery:
 
                     # in this test, each expiration check only deletes one window,
                     # simplifying the offset counting.
-                    expected_offset = sum(
-                        expected_window_updates[p_num].values()
-                    ) + 2 * len(expected_expired_windows[p_num])
+                    expected_offset = (
+                        sum(expected_window_updates[p_num].values())
+                        + 2 * len(expected_expired_windows[p_num])
+                        - 1
+                    )
+                    if processing_guarantee == "exactly-once":
+                        # In this test, we commit after each message is processed, so
+                        # must add PMC-1 to our offset calculation since each kafka
+                        # to account for transaction commit markers (except last one)
+                        expected_offset += partition_msg_count[p_num] - 1
                     assert (
                         expected_offset
                         == store.partitions[p_num].get_changelog_offset()
@@ -1680,8 +1789,15 @@ class TestApplicationRecovery:
         # State should be the same as before deletion
         validate_state()
 
+    @pytest.mark.parametrize("processing_guarantee", ["at-least-once", "exactly-once"])
     def test_changelog_recovery_consistent_after_failed_commit(
-        self, app_factory, executor, tmp_path, state_manager_factory, consumer_factory
+        self,
+        app_factory,
+        executor,
+        tmp_path,
+        state_manager_factory,
+        consumer_factory,
+        processing_guarantee,
     ):
         """
         Scenario: application processes messages and successfully produces changelog
@@ -1695,6 +1811,15 @@ class TestApplicationRecovery:
         topic_name = str(uuid.uuid4())
         store_name = "default"
 
+        if processing_guarantee == "exactly-once":
+            commit_patch = patch.object(
+                RowProducer, "commit_transaction", side_effect=ValueError("Fail")
+            )
+        else:
+            commit_patch = patch.object(
+                RowConsumer, "commit", side_effect=ValueError("Fail")
+            )
+
         # Messages to be processed successfully
         succeeded_messages = [
             ("key1", "1"),
@@ -1707,7 +1832,7 @@ class TestApplicationRecovery:
             ("key2", "5"),
             ("key3", "6"),
         ]
-        # Ensure the same number of messages in both sets to simplift testing
+        # Ensure the same number of messages in both sets to simplify testing
         assert len(failed_messages) == len(succeeded_messages)
         total_count = len(succeeded_messages)
         processed_count = 0
@@ -1728,6 +1853,7 @@ class TestApplicationRecovery:
                 on_message_processed=on_message_processed,
                 consumer_group=consumer_group,
                 state_dir=state_dir,
+                processing_guarantee=processing_guarantee,
             )
             topic = app.topic(topic_name)
             sdf = app.dataframe(topic)
@@ -1755,7 +1881,7 @@ class TestApplicationRecovery:
                         state = tx.as_state(prefix=key.encode())
                         assert state.get("latest") == value
 
-        # Produce messages from the "succeded" set
+        # Produce messages from the "succeeded" set
         app, sdf, topic = get_app()
         with app.get_producer() as producer:
             for key, value in succeeded_messages:
@@ -1781,15 +1907,14 @@ class TestApplicationRecovery:
                 producer.produce(topic.name, key=serialized.key, value=serialized.value)
 
         # Run the app second time and fail the consumer commit
-        with patch.object(
-            RowConsumer, "commit", side_effect=ValueError("commit failed")
-        ):
+        with commit_patch:
             done = Future()
             executor.submit(_stop_app_on_future, app, done, 10.0)
             with contextlib.suppress(PartitionAssignmentError):
-                app.run(sdf)
-
-            validate_state()
+                with pytest.raises(ValueError):
+                    app.run(sdf)
+        # state should remain the same
+        validate_state()
 
         # Run the app again to recover the state
         app, sdf, topic = get_app()
@@ -1797,13 +1922,11 @@ class TestApplicationRecovery:
         app.clear_state()
 
         # Run app for the third time and fail on commit to prevent state changes
-        with patch.object(
-            RowConsumer, "commit", side_effect=ValueError("commit failed")
-        ):
+        with commit_patch:
             done = Future()
             executor.submit(_stop_app_on_future, app, done, 10.0)
             with contextlib.suppress(PartitionAssignmentError):
-                app.run(sdf)
-
+                with pytest.raises(ValueError):
+                    app.run(sdf)
         # The app should be recovered
         validate_state()

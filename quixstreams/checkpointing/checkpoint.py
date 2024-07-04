@@ -33,6 +33,7 @@ class Checkpoint:
         producer: RowProducer,
         consumer: Consumer,
         state_manager: StateStoreManager,
+        exactly_once: bool = False,
     ):
         self._created_at = time.monotonic()
         # A mapping of <(topic, partition): processed offset>
@@ -45,6 +46,10 @@ class Checkpoint:
         self._state_manager = state_manager
         self._consumer = consumer
         self._producer = producer
+        self._exactly_once = exactly_once
+
+        if self._exactly_once:
+            self._producer.begin_transaction()
 
     def expired(self) -> bool:
         """
@@ -102,6 +107,15 @@ class Checkpoint:
         self._store_transactions[(topic, partition, store_name)] = transaction
         return transaction
 
+    def close(self):
+        """
+        Perform cleanup (when the checkpoint is empty) instead of committing.
+
+        Needed for exactly-once, as Kafka transactions are timeboxed.
+        """
+        if self._exactly_once:
+            self._producer.abort_transaction()
+
     def commit(self):
         """
         Commit the checkpoint.
@@ -112,10 +126,6 @@ class Checkpoint:
          3. Commit topic offsets.
          4. Flush each state store partition to the disk.
         """
-
-        if not self._tp_offsets:
-            # No messages have been processed during this checkpoint, return
-            return
 
         # Step 1. Produce the changelogs
         for (
@@ -148,15 +158,20 @@ class Checkpoint:
             TopicPartition(topic=topic, partition=partition, offset=offset + 1)
             for (topic, partition), offset in self._tp_offsets.items()
         ]
-        logger.debug("Checkpoint: commiting consumer")
-        try:
-            partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
-        except KafkaException as e:
-            raise CheckpointConsumerCommitError(e.args[0]) from None
+        if self._exactly_once:
+            self._producer.commit_transaction(
+                offsets, self._consumer.consumer_group_metadata()
+            )
+        else:
+            logger.debug("Checkpoint: committing consumer")
+            try:
+                partitions = self._consumer.commit(offsets=offsets, asynchronous=False)
+            except KafkaException as e:
+                raise CheckpointConsumerCommitError(e.args[0]) from None
 
-        for partition in partitions:
-            if partition.error:
-                raise CheckpointConsumerCommitError(partition.error)
+            for partition in partitions:
+                if partition.error:
+                    raise CheckpointConsumerCommitError(partition.error)
 
         # Step 4. Flush state store partitions to the disk together with changelog
         # offsets
@@ -175,10 +190,6 @@ class Checkpoint:
             changelog_offset = (
                 produced_offsets.get(changelog_tp) if changelog_tp is not None else None
             )
-            if changelog_offset is not None:
-                # Increment the changelog offset by one to match the high watermark
-                # in Kafka
-                changelog_offset += 1
             transaction.flush(
                 processed_offset=offset, changelog_offset=changelog_offset
             )

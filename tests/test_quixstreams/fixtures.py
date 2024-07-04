@@ -10,7 +10,7 @@ from confluent_kafka.admin import (
     NewPartitions,
 )
 
-from quixstreams.app import Application, MessageProcessedCallback
+from quixstreams.app import Application, MessageProcessedCallback, ProcessingGuarantee
 from quixstreams.error_callbacks import (
     ConsumerErrorCallback,
     ProducerErrorCallback,
@@ -225,11 +225,13 @@ def row_producer_factory(kafka_container):
         broker_address: str = kafka_container.broker_address,
         extra_config: dict = None,
         on_error: Optional[ProducerErrorCallback] = None,
+        transactional: bool = False,
     ) -> RowProducer:
         return RowProducer(
             broker_address=broker_address,
             extra_config=extra_config,
             on_error=on_error,
+            transactional=transactional,
         )
 
     return factory
@@ -238,6 +240,11 @@ def row_producer_factory(kafka_container):
 @pytest.fixture()
 def row_producer(row_producer_factory):
     return row_producer_factory()
+
+
+@pytest.fixture()
+def transactional_row_producer(row_producer_factory):
+    return row_producer_factory(transactional=True)
 
 
 @pytest.fixture()
@@ -286,6 +293,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
         auto_create_topics: bool = True,
         use_changelog_topics: bool = True,
         topic_manager: Optional[TopicManager] = None,
+        processing_guarantee: ProcessingGuarantee = "at-least-once",
     ) -> Application:
         state_dir = state_dir or (tmp_path / "state").absolute()
         return Application(
@@ -303,6 +311,7 @@ def app_factory(kafka_container, random_consumer_group, tmp_path):
             auto_create_topics=auto_create_topics,
             use_changelog_topics=use_changelog_topics,
             topic_manager=topic_manager,
+            processing_guarantee=processing_guarantee,
         )
 
     return factory
@@ -568,7 +577,7 @@ def topic_manager_topic_factory(topic_manager_factory):
     """
 
     def factory(
-        name: Optional[str] = str(uuid.uuid4()),
+        name: Optional[str] = None,
         partitions: int = 1,
         create_topic: bool = False,
         key_serializer: Optional[Union[Serializer, str]] = None,
@@ -576,7 +585,8 @@ def topic_manager_topic_factory(topic_manager_factory):
         key_deserializer: Optional[Union[Deserializer, str]] = None,
         value_deserializer: Optional[Union[Deserializer, str]] = None,
         timestamp_extractor: Optional[TimestampExtractor] = None,
-    ):
+    ) -> Topic:
+        name = name or str(uuid.uuid4())
         topic_manager = topic_manager_factory()
         topic_args = {
             "key_serializer": key_serializer,

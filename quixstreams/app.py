@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import warnings
-from typing import Optional, List, Callable, Union
+from typing import Optional, List, Callable, Union, Literal, get_args
 
 from confluent_kafka import TopicPartition
 from typing_extensions import Self
@@ -44,6 +44,7 @@ from .state.rocksdb import RocksDBOptionsType
 __all__ = ("Application",)
 
 logger = logging.getLogger(__name__)
+ProcessingGuarantee = Literal["at-least-once", "exactly-once"]
 MessageProcessedCallback = Callable[[str, int, int], None]
 
 # Enforce idempotent producing for the internal RowProducer
@@ -78,7 +79,7 @@ class Application:
     ```python
     from quixstreams import Application
 
-    # Set up an `app = Application` and  `sdf = StreamingDataFrame`;
+    # Set up an `app = Application` and `sdf = StreamingDataFrame`;
     # add some operations to `sdf` and then run everything.
 
     app = Application(broker_address='localhost:9092', consumer_group='group')
@@ -114,6 +115,7 @@ class Application:
         topic_manager: Optional[TopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
+        processing_guarantee: ProcessingGuarantee = "at-least-once",
     ):
         """
         :param broker_address: Connection settings for Kafka.
@@ -162,6 +164,7 @@ class Application:
         :param topic_manager: A `TopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
+        :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -180,6 +183,13 @@ class Application:
             > NOTE: It is recommended to just use `quix_sdk_token` instead.
         """
         configure_logging(loglevel=loglevel)
+
+        if processing_guarantee not in get_args(ProcessingGuarantee):
+            raise ValueError(
+                f'Must provide a valid "processing_guarantee"; expected one of: '
+                f'{get_args(ProcessingGuarantee)}, got "{processing_guarantee}"'
+            )
+
         producer_extra_config = producer_extra_config or {}
         consumer_extra_config = consumer_extra_config or {}
 
@@ -248,6 +258,7 @@ class Application:
         self._commit_interval = commit_interval
         self._producer_extra_config = producer_extra_config
         self._consumer_extra_config = consumer_extra_config
+        self._processing_guarantee = processing_guarantee
         self._consumer = RowConsumer(
             broker_address=broker_address,
             consumer_group=consumer_group,
@@ -264,6 +275,7 @@ class Application:
                 "max.poll.interval.ms", _default_max_poll_interval_ms
             )
             / 1000,  # convert to seconds
+            transactional=self._uses_exactly_once,
         )
         self._consumer_poll_timeout = consumer_poll_timeout
         self._producer_poll_timeout = producer_poll_timeout
@@ -303,11 +315,16 @@ class Application:
             producer=self._producer,
             consumer=self._consumer,
             state_manager=self._state_manager,
+            exactly_once=self._uses_exactly_once,
         )
 
     @property
-    def is_quix_app(self):
+    def is_quix_app(self) -> bool:
         return self._is_quix_app
+
+    @property
+    def _uses_exactly_once(self) -> bool:
+        return self._processing_guarantee == "exactly-once"
 
     @classmethod
     def Quix(
@@ -331,6 +348,7 @@ class Application:
         topic_manager: Optional[QuixTopicManager] = None,
         request_timeout: float = 30,
         topic_create_timeout: float = 60,
+        processing_guarantee: Literal["at-least-once", "exactly-once"] = "exactly-once",
     ) -> Self:
         """
         >***NOTE:*** DEPRECATED: use Application with `quix_sdk_token` argument instead.
@@ -398,6 +416,7 @@ class Application:
         :param topic_manager: A `QuixTopicManager` instance
         :param request_timeout: timeout (seconds) for REST-based requests
         :param topic_create_timeout: timeout (seconds) for topic create finalization
+        :param processing_guarantee: Use "exactly-once" or "at-least-once" processing.
 
         <br><br>***Error Handlers***<br>
         To handle errors, `Application` accepts callbacks triggered when
@@ -445,6 +464,7 @@ class Application:
             request_timeout=request_timeout,
             topic_create_timeout=topic_create_timeout,
             quix_config_builder=quix_config_builder,
+            processing_guarantee=processing_guarantee,
         )
         return app
 
@@ -625,14 +645,18 @@ class Application:
         Create and return a pre-configured Consumer instance.
         The Consumer is initialized with params passed to Application.
 
-        It's useful for consuming data from Kafka outside the standard Application processing flow.
-        (e.g. to consume test data from a topic).
-        Using it within the StreamingDataFrame functions is not recommended, as it creates a new Consumer instance
+        It's useful for consuming data from Kafka outside the standard
+        Application processing flow.
+        (e.g., to consume test data from a topic).
+        Using it within the StreamingDataFrame functions is not recommended, as it
+        creates a new Consumer instance
         each time, which is not optimized for repeated use in a streaming pipeline.
 
-        Note: By default this consumer does not autocommit consumed offsets to allow exactly-once processing.
+        Note: By default, this consumer does not autocommit the consumed offsets to allow
+        at-least-once processing.
         To store the offset call store_offsets() after processing a message.
-        If autocommit is necessary set `enable.auto.offset.store` to True in the consumer config when creating the app.
+        If autocommit is necessary set `enable.auto.offset.store` to True in
+        the consumer config when creating the app.
 
         Example Snippet:
 
@@ -705,7 +729,8 @@ class Application:
             f'broker_address="{self._broker_address}" '
             f'consumer_group="{self._consumer_group}" '
             f'auto_offset_reset="{self._auto_offset_reset}" '
-            f"commit_interval={self._commit_interval}s"
+            f"commit_interval={self._commit_interval}s "
+            f'processing_guarantee="{self._processing_guarantee}"'
         )
         if self.is_quix_app:
             self._quix_runtime_init()
@@ -713,6 +738,7 @@ class Application:
         self._setup_topics()
 
         exit_stack = contextlib.ExitStack()
+        exit_stack.enter_context(self._processing_context)
         exit_stack.enter_context(self._state_manager)
         exit_stack.enter_context(self._consumer)
         exit_stack.push(

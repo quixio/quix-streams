@@ -35,6 +35,10 @@ See more `auto.offset.reset` in this [article](https://www.quix.io/blog/kafka-au
 **Options**: `"latest"`, `"earliest"`.  
 **Default** - `"latest"`.
 
+- **`processing_guarantee`** - Use "at-least-once" or "exactly-once" processing guarantees.  
+See [Processing Guarantees](#processing-guarantees) for more information.  
+**Options**: `"at-least-once"` or `"exactly-once".  
+**Default** - `"at-least-once"`.
 
 ## Authentication
 
@@ -82,6 +86,77 @@ app = Application(
 
 `ConnectionConfig.from_librdkafka_dict(config, ignore_extras=True)` will additionally 
 ignore irrelevant settings (but you will lose some validation checks).
+
+## Processing Guarantees
+
+This section concerns the `processing_guarantee` setting.
+
+### What are "processing guarantees"?
+Kafka broadly has three guarantee levels/semantics associated with handling messages.
+
+From weakest to strongest: `at-most-once`, `at-least-once`, and `exactly-once`. 
+Stronger guarantees generally have larger overhead, and thus reduced speed. 
+
+These guarantees can be read literally: when consuming Kafka messages, you can 
+guarantee each will be processed `X` times:
+
+- `at-most-once` - a message will be processed not more than once.  
+If the processing fails, the message will not be processed again.
+- `at-least-once` - a message may be processed more than once.  
+It may lead to duplicates in the output topics, but the message won’t be lost and is guaranteed to be processed.
+- `exactly-once` - a message will be processed exactly once.  
+The message is guaranteed to be processed without duplicated outputs but at the cost of higher latency and complexity.
+
+### What options does Quix Streams offer?
+
+Currently, Quix Streams offers `at-least-once` and `exactly-once`.
+
+The default guarantee is `at-least-once`. 
+
+### Performance comparison
+
+It is difficult to offer hard numbers for the speed difference between `exactly-once` 
+and `at-least-once` because many factors are at play, though latency is perhaps 
+the main contributor since `exactly-once` requires more communication with the broker.
+
+With default `Application` settings, `exactly-once` will likely perform at worst 
+10% slower than `at-least-once`, but given the nature of infrastructure/architecture, 
+even this is not a guarantee.
+
+You can minimize the impact of latency somewhat by adjusting the [`commit_interval` of 
+the `Application`](#main-configuration-parameters), but be aware of [the
+performance considerations around `commit_interval`](advanced/checkpointing.md)).
+
+
+### Exactly-Once producer buffering
+
+Because `exactly-once` messages do not fully commit or produce until the 
+[checkpoint](advanced/checkpointing.md) successfully completes, any resulting produced 
+messages are not immediately readable like with `at-least-once`.
+
+Basically, the [`commit_interval` of an `Application`](#main-configuration-parameters) 
+can be interpreted as the maximum amount of time before a produced message can be read 
+(depending on how far into the checkpoint a message is processed). If you adjust it, 
+be aware of other [performance considerations around `commit_interval`](advanced/checkpointing.md)).
+
+> NOTE: `groupby` doubles this effect since it produces to another topic under the hood. 
+
+
+### What processing guarantee is right for me?
+
+To pick the right guarantee, you need to weigh an increase in speed 
+vs. the potential to double-process a result, which may require other infrastructural
+considerations to handle appropriately.
+
+In general, you may consider using `at-least-once` guarantees when:
+- The latency and processing speed are the primary concerns.
+- The downstream consumers can gracefully handle duplicated messages.
+
+You may consider using `exactly-once` instead when:
+- Consistency and correctness of the outputs are critical.
+- Downstream consumers of the output topics cannot handle duplicated data.
+- Note: you may want to pick a smaller value for the `commit_interval` to commit checkpoints more often and reduce the latency.  
+For more information about tuning the `commit_interval`, see the ["Configuring the Checkpointing" page](advanced/checkpointing.md). 
 
 
 ## State

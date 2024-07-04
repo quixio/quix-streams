@@ -10,6 +10,7 @@ from quixstreams.models.types import MessageHeadersMapping
 from quixstreams.rowproducer import RowProducer
 from quixstreams.state.types import StorePartition
 from quixstreams.utils.dicts import dict_values
+from .exceptions import InvalidStoreChangelogOffset
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,11 @@ class RecoveryPartition:
         self._changelog_lowwater: Optional[int] = None
         self._changelog_highwater: Optional[int] = None
         self._committed_offset = committed_offset
+        self._recovery_consume_position: Optional[int] = None
+        self._initial_offset: Optional[int] = None
+
+    def __repr__(self):
+        return f"{self.changelog_name}[{self.partition_num}]"
 
     @property
     def changelog_name(self) -> str:
@@ -52,59 +58,46 @@ class RecoveryPartition:
         return self._partition_num
 
     @property
-    def changelog_highwater(self) -> Optional[int]:
-        return self._changelog_highwater
-
-    @property
-    def changelog_lowwater(self) -> Optional[int]:
-        return self._changelog_lowwater
-
-    @property
     def offset(self) -> int:
         """
         Get the changelog offset from the underlying `StorePartition`.
 
         :return: changelog offset (int)
         """
-        return self._store_partition.get_changelog_offset() or 0
+        offset = self._store_partition.get_changelog_offset() or 0
+        if not self._initial_offset:
+            self._initial_offset = offset
+        return offset
 
     @property
-    def needs_recovery(self):
+    def finished_recovery_check(self) -> bool:
+        return self._recovery_consume_position == self._changelog_highwater
+
+    @property
+    def needs_recovery_check(self) -> bool:
         """
-        Determine whether recovery is necessary for underlying `StorePartition`.
+        Determine whether to attempt recovery for underlying `StorePartition`.
+
+        This does NOT mean that anything actually requires recovering.
         """
         has_consumable_offsets = self._changelog_lowwater != self._changelog_highwater
-        state_is_behind = self._changelog_highwater > self.offset
-        return has_consumable_offsets and state_is_behind
+        state_potentially_behind = self._changelog_highwater - 1 > self.offset
+        return has_consumable_offsets and state_potentially_behind
 
     @property
-    def needs_offset_update(self):
+    def has_invalid_offset(self) -> bool:
         """
-        Determine if an offset update is required.
+        Determine if the current changelog offset stored in state is invalid.
+        """
+        return self._changelog_highwater and (self._changelog_highwater <= self.offset)
 
-        Usually checked during assign if recovery was not required.
-        """
-        return self._changelog_highwater and (self._changelog_highwater < self.offset)
+    @property
+    def recovery_consume_position(self) -> Optional[int]:
+        return self._recovery_consume_position
 
-    def update_offset(self):
-        """
-        Update only the changelog offset of a StorePartition.
-        """
-        logger.info(
-            f"changelog partition {self.changelog_name}[{self.partition_num}] "
-            f"requires an offset update"
-        )
-        if self.offset > self._changelog_highwater:
-            logger.warning(
-                f"{self.changelog_name}[{self.partition_num}] - the changelog offset "
-                f"{self.offset} in state was larger than its actual highwater "
-                f"{self._changelog_highwater}, possibly due to previous Kafka or "
-                f"network issues. State may be inaccurate for any affected keys. "
-                f"The offset will now be set to {self._changelog_highwater}."
-            )
-        self._store_partition.set_changelog_offset(
-            changelog_offset=self._changelog_highwater - 1
-        )
+    @property
+    def had_recovery_changes(self) -> bool:
+        return self._initial_offset != self.offset
 
     def recover_from_changelog_message(
         self, changelog_message: ConfluentKafkaMessageProto
@@ -127,6 +120,17 @@ class RecoveryPartition:
         """
         self._changelog_lowwater = lowwater
         self._changelog_highwater = highwater
+
+    def set_recovery_consume_position(self, offset: int):
+        """
+        Update the recovery partition with the consumer's position (whenever
+        an empty poll is returned during recovery).
+
+        It is possible that it may be set more than once.
+
+        :param offset: the consumer's current read position of the changelog
+        """
+        self._recovery_consume_position = offset
 
 
 class ChangelogProducerFactory:
@@ -274,7 +278,7 @@ class RecoveryManager:
 
         After, will resume normal `Application` processing.
         """
-        logger.info("Beginning the recovery process...")
+        logger.info("Beginning recovery check...")
         self._running = True
         self._consumer.resume(
             [
@@ -288,7 +292,7 @@ class RecoveryManager:
             self._running = False
             self._consumer.resume(self._consumer.assignment())
         else:
-            logger.debug("Recovery interrupted; stopping.")
+            logger.debug("Recovery process interrupted; stopping.")
 
     def _generate_recovery_partitions(
         self,
@@ -341,16 +345,27 @@ class RecoveryManager:
         )
         for rp in recovery_partitions:
             changelog_name, partition = rp.changelog_name, rp.partition_num
-            if rp.needs_recovery:
-                logger.info(f"Recovery required for {changelog_name}[{partition}]")
+            if rp.needs_recovery_check:
+                logger.debug(f"Adding a recovery check for {rp}")
                 self._recovery_partitions.setdefault(partition, {})[changelog_name] = rp
+                # note: technically it should be rp.offset + 1, but to remain backwards
+                # compatible with <v2.7 +1 ALOS offsetting, it remains rp.offset.
+                # This means we will always re-write the "first" recovery message.
+                # More specifically, this is only covering for a very edge case:
+                # when first upgrading from <v2.7 AND a recovery was actually needed.
+                # Once on >=v2.7, this is no longer an issue...so we could eventually
+                # remove this, potentially.
                 self._consumer.incremental_assign(
                     [ConfluentPartition(changelog_name, partition, rp.offset)]
                 )
-            elif rp.needs_offset_update:
-                # nothing to recover, but offset is off...likely that offset >
-                # highwater due to At Least Once processing behavior.
-                rp.update_offset()
+            elif rp.has_invalid_offset:
+                raise InvalidStoreChangelogOffset(
+                    "The offset in the state store is greater than or equal to its "
+                    "respective changelog highwater. This can happen if the changelog "
+                    "was deleted (and recreated) but the state store was not. The "
+                    "invalid state store can be deleted by manually calling "
+                    "Application.clear_state() before running the application again."
+                )
 
         # Figure out if we need to pause any topic partitions
         if self._recovery_partitions:
@@ -365,28 +380,27 @@ class RecoveryManager:
                 # and wait for Application to start recovery
                 self._consumer.pause(self._consumer.assignment())
 
-    def _revoke_recovery_partitions(
-        self,
-        recovery_partitions: List[RecoveryPartition],
-        partition_num: int,
-    ):
+    def _revoke_recovery_partitions(self, recovery_partitions: List[RecoveryPartition]):
         """
-        For revoking a specific set of RecoveryPartitions.
-        Also cleans up any remnant empty dictionary references for its partition number.
+        Revokes all provided RecoveryPartition.
+        Also cleans up any remnant empty dictionary references.
 
         :param recovery_partitions: a list of `RecoveryPartition`
-        :param partition_num: partition number
         """
+        partition_nums = {rp.partition_num for rp in recovery_partitions}
         self._consumer.incremental_unassign(
             [
-                ConfluentPartition(p.changelog_name, p.partition_num)
-                for p in recovery_partitions
+                ConfluentPartition(rp.changelog_name, rp.partition_num)
+                for rp in recovery_partitions
             ]
         )
-        if not self._recovery_partitions[partition_num]:
-            del self._recovery_partitions[partition_num]
+        for rp in recovery_partitions:
+            del self._recovery_partitions[rp.partition_num][rp.changelog_name]
+        for partition_num in partition_nums:
+            if not self._recovery_partitions[partition_num]:
+                del self._recovery_partitions[partition_num]
         if self.recovering:
-            logger.debug("Resuming recovery...")
+            logger.debug("Resuming recovery process...")
 
     def revoke_partition(self, partition_num: int):
         """
@@ -395,11 +409,24 @@ class RecoveryManager:
         :param partition_num: partition number of source topic
         """
         if changelogs := self._recovery_partitions.get(partition_num, {}):
-            logger.debug(f"Stopping recovery for {changelogs}")
-            self._revoke_recovery_partitions(
-                [changelogs.pop(changelog) for changelog in list(changelogs.keys())],
-                partition_num,
-            )
+            recovery_partitions = list(changelogs.values())
+            logger.debug(f"Stopping recovery for {list(map(str, recovery_partitions))}")
+            self._revoke_recovery_partitions(recovery_partitions)
+
+    def _update_recovery_status(self):
+        rp_revokes = []
+        for rp in dict_values(self._recovery_partitions):
+            position = self._consumer.position(
+                [ConfluentPartition(rp.changelog_name, rp.partition_num)]
+            )[0].offset
+            rp.set_recovery_consume_position(position)
+            if rp.finished_recovery_check:
+                rp_revokes.append(rp)
+                if rp.had_recovery_changes:
+                    logger.info(f"Recovery successful for {rp}")
+                else:
+                    logger.debug(f"No recovery was required for {rp}")
+        self._revoke_recovery_partitions(rp_revokes)
 
     def _recovery_loop(self):
         """
@@ -410,20 +437,10 @@ class RecoveryManager:
         """
         while self.recovering:
             if (msg := self._consumer.poll(1)) is None:
-                continue
-
-            changelog_name = msg.topic()
-            partition_num = msg.partition()
-
-            partition = self._recovery_partitions[partition_num][changelog_name]
-            partition.recover_from_changelog_message(changelog_message=msg)
-
-            if not partition.needs_recovery:
-                logger.info(f"Finished recovering {changelog_name}[{partition_num}]")
-                self._revoke_recovery_partitions(
-                    [self._recovery_partitions[partition_num].pop(changelog_name)],
-                    partition_num,
-                )
+                self._update_recovery_status()
+            else:
+                rp = self._recovery_partitions[msg.partition()][msg.topic()]
+                rp.recover_from_changelog_message(changelog_message=msg)
 
     def stop_recovery(self):
         self._running = False
